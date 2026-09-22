@@ -8562,15 +8562,27 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
 +| `model.chatCompression.maxRecentImagesToRetain`    | number  | Number of most-recent images reattached at the end of a request once historical image payloads are replaced with text references. `0` reattaches none. Env override: `QWEN_COMPACT_MAX_RECENT_IMAGES`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `3`         |
  | `model.skipNextSpeakerCheck`                       | boolean | Skip the next speaker check.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `true`      |
  | `model.skipLoopDetection`                          | boolean | Disables streaming loop detection checks. Defaults to `true` (loop detection is skipped) to avoid false positives interrupting legitimate workflows. Set to `false` to re-enable streaming loop detection — useful as a guardrail in headless / non-interactive runs where stuck repetition can otherwise waste budget. In daemon/ACP sessions, which run none of the other streaming detectors, re-enabling also activates a global-duplicate tool-call halt; the always-on per-turn tool-call cap and an invalid-tool-params stagnation guard run there regardless of this setting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `true`      |
-@@ -230,29 +224,27 @@
+@@ -224,6 +218,6 @@
  
- Two guards bound a streaming response, each accepting `0` to disable. Neither is implemented by the Anthropic/Gemini generators, which leave the drip-fed shape below unbounded.
+ **timeout (request timeout):**
  
- - `QWEN_STREAM_IDLE_TIMEOUT_MS` (default `240000`) bounds inactivity _between_ streamed chunks: a stream that goes silent for this long is aborted as a retryable `ETIMEDOUT`.
- - `QWEN_STREAM_MAX_LIFETIME_MS` (default `900000`) caps the _total_ upstream-wait time of one streaming response regardless of chunk flow — the bound a drip-fed stream that never completes cannot reset.
+-`timeout` is the per-request timeout in milliseconds (default `120000`). Set it to `0` to disable the request timeout — matching the `QWEN_STREAM_IDLE_TIMEOUT_MS=0` convention — rather than aborting the request. It can also be set via the `QWEN_CODE_API_TIMEOUT_MS` environment variable. This is distinct from the two stream guards below.
++`timeout` is the per-request timeout in milliseconds (default `120000`). Set it to `0` to disable the request timeout rather than aborting the request. It can also be set via the `QWEN_CODE_API_TIMEOUT_MS` environment variable. For a streaming request it is also the stream's first bound, below.
  
+-**stream guards (OpenAI-compatible providers only):**
++**stream bounds (OpenAI-compatible providers only):**
+@@ -230,29 +224,26 @@
+ 
+-Two guards bound a streaming response, each accepting `0` to disable. Neither is implemented by the Anthropic/Gemini generators, which leave the drip-fed shape below unbounded.
++A streaming response is held to three bounds, none of which is configurable or can be disabled. None is implemented by the Anthropic/Gemini generators, which leave the drip-fed shape below unbounded.
+ 
+-- `QWEN_STREAM_IDLE_TIMEOUT_MS` (default `240000`) bounds inactivity _between_ streamed chunks: a stream that goes silent for this long is aborted as a retryable `ETIMEDOUT`.
+-- `QWEN_STREAM_MAX_LIFETIME_MS` (default `900000`) caps the _total_ upstream-wait time of one streaming response regardless of chunk flow — the bound a drip-fed stream that never completes cannot reset.
+-
 -These are **environment variables (or, for embedders, `ContentGeneratorConfig.streamIdleTimeoutMs` / `streamMaxLifetimeMs`) only — there is no settings.json key**; writing `"streamMaxLifetimeMs"` into settings.json has no effect. Upgrade notes: a deployment that previously set `QWEN_STREAM_IDLE_TIMEOUT_MS=0` — or passed `streamIdleTimeoutMs: 0` in `ContentGeneratorConfig` — to opt out of stream aborts now also needs `QWEN_STREAM_MAX_LIFETIME_MS=0` (or `streamMaxLifetimeMs: 0`) to keep that; and the 15-minute lifetime cap bounds even a stream whose idle timeout you raised above it (e.g. `QWEN_STREAM_IDLE_TIMEOUT_MS=1800000`) — raise the cap likewise, or set it to `0`, if you rely on a longer window.
-+These are **environment variables (or, for embedders, `ContentGeneratorConfig.streamIdleTimeoutMs` / `streamMaxLifetimeMs`) only — there is no settings.json key**. Each explicit configuration field takes precedence over its environment variable; a built-in default applies only when both are absent. Selected values must be integers from `0` through `2147483647` milliseconds. Environment values must use decimal digits (surrounding whitespace is accepted). Blank, malformed, negative, fractional, or out-of-range selected values reject pipeline construction before the client is created. Each guard is independent; set both to `0` to disable both.
++- Until its first chunk, the request `timeout`, counted from dispatch. A request queued behind another generation on a backend that runs one at a time, or prefilling a long prompt, sends nothing by design, so no shorter bound applies.
++- From the first chunk, four minutes (`240000` ms) of silence between chunks: a started stream that goes silent that long has stalled, and is aborted as a retryable `ETIMEDOUT`.
++- From the first chunk, the generation itself: its accumulated upstream-wait time may not exceed the request's `max_tokens` at a declared decode floor of 12 tokens per second. An engine decoding below that floor is treated as broken, and the stream is aborted as a retryable `ETIMEDOUT` — the bound a drip-fed stream that never completes cannot reset. A streaming request that states no `max_tokens` has no such bound and is refused before it is sent.
  
  **max_tokens (output token limit):**
  
@@ -8597,7 +8609,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  top-level `model.generationConfig`. Provider model entries are sealed, so
  top-level generation settings do not fill missing provider fields.
  
-@@ -305,41 +297,34 @@
+@@ -305,41 +296,34 @@
  #### voiceModel
  
  | Setting      | Type   | Description                                                                                                                                             | Default |
@@ -8653,7 +8665,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  If you are experiencing performance issues with file searching (e.g., with `@` completions), especially in projects with a very large number of files, here are a few things you can try in order of recommendation:
  
  1. **Use an ignore file:** Create a `.qwenignore` or configured custom ignore file in your project root to exclude directories that contain a large number of files that you don't need to reference (e.g., build artifacts, logs, `node_modules`). Reducing the total number of files crawled is the most effective way to improve performance.
-@@ -365,8 +350,6 @@
+@@ -365,8 +349,6 @@
  | `tools.callCommand`                   | string            | Defines a custom shell command for calling a specific tool that was discovered using `tools.discoveryCommand`. The shell command must meet the following criteria: It must take function `name` (exactly as in [function declaration](https://ai.google.dev/gemini-api/docs/function-calling#function-declarations)) as first command line argument. It must read function arguments as JSON on `stdin`, analogous to [`functionCall.args`](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#functioncall). It must return function output as JSON on `stdout`, analogous to [`functionResponse.response.content`](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#functionresponse). | `undefined` |                                                                                                                                                                                                                                                                                                                             |
  | `tools.useRipgrep`                    | boolean           | Use ripgrep for file content search instead of the fallback implementation. Provides faster search performance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `true`      |                                                                                                                                                                                                                                                                                                                             |
  | `tools.useBuiltinRipgrep`             | boolean           | Use the bundled ripgrep binary. When set to `false`, the system-level `rg` command will be used instead. This setting is only effective when `tools.useRipgrep` is `true`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `true`      |                                                                                                                                                                                                                                                                                                                             |
@@ -8662,7 +8674,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  | `tools.computerUse.enabled`           | boolean           | Enable the built-in Computer Use tools (cua-driver native desktop automation). When `true` (default), the `computer_use__*` tools are registered as deferred built-ins; the first invocation downloads the pinned, signed cua-driver binary into `~/.qwen/computer-use/` and walks through macOS Accessibility / Screen Recording permissions.                                                                                                                                                                                                                                                                                                                                                                                                       | `true`      | Requires restart: Yes                                                                                                                                                                                                                                                                                                       |
  | `tools.computerUse.maxImageDimension` | number            | Longest-edge pixel cap applied to cua-driver screenshots (via `set_config`'s `max_image_dimension`). `-1` (default) keeps cua-driver's built-in default (1568); `0` disables resizing (full resolution); a positive value caps the longest edge. Lower caps cut vision-token cost at the expense of fine detail.                                                                                                                                                                                                                                                                                                                                                                                                                                     | `-1`        | Requires restart: Yes. Env override: `QWEN_COMPUTER_USE_MAX_IMAGE_DIMENSION` (a non-negative integer; takes precedence over this setting)                                                                                                                                                                                   |
  | `tools.computerUse.idleTimeoutMs`     | number            | Milliseconds to keep the cua-driver process alive after the last `computer_use__*` call. The default is `300000` (5 minutes). Set to `0` to keep it running until Qwen Code exits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `300000`    | Requires restart: Yes                                                                                                                                                                                                                                                                                                       |
-@@ -601,13 +584,12 @@
+@@ -601,13 +583,12 @@
  > **Experimental features.** These toggles gate in-development capabilities and may change or be removed in future releases.
  
  | Setting                                | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                  | Default |
@@ -8676,7 +8688,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  | `experimental.emitToolUseSummaries`    | boolean | Generate a short LLM-based label after each tool-call batch completes. See [Tool-Use Summaries](../features/tool-use-summaries). Requires a fast model to be configured (`fastModel`); silently skipped otherwise. Can be overridden per-session with `QWEN_CODE_EMIT_TOOL_USE_SUMMARIES=0` or `=1`.                                                                                                         | `true`  |
  
  #### mcpServers
-@@ -736,42 +718,42 @@
+@@ -736,42 +717,42 @@
  > [!warning]
  >
  > **Loader-affecting variables are always rejected:** Variables that make a spawned Node.js process or OS loader execute an attacker-chosen file — `NODE_OPTIONS`, `npm_config_node_options` (and npm's config-file redirects `npm_config_userconfig`, `npm_config_globalconfig`, `npm_config_script_shell`, `npm_config_prefix`), `NODE_PATH`, `OPENSSL_CONF` (dlopens an attacker OpenSSL engine at startup), `NODE_REPL_EXTERNAL_MODULE`, `npm_config_node_gyp`, `npm_config_init_module`, `LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`, `BASH_ENV`, `ZDOTDIR`, and exported bash function definitions (`BASH_FUNC_*`) — are never loaded from `.env` files (any scope, including `.qwen/.env` and user-level files) or from the top-level `settings.json` `env` section. A workspace-controlled value there could hijack module resolution for every subprocess Qwen Code spawns, so Qwen Code prints a warning when it rejects such a key (once per process, per key and source — in a multi-workspace daemon each workspace's rejection is reported separately). To use one of these variables, export it in the environment you launch Qwen Code from; sessions hosted by a `qwen serve` daemon deliberately do not inherit them, while direct editor (ACP) sessions and the plain CLI keep the exported value. Library _search_ paths (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`) and the interactive-shell-only `ENV` are intentionally not on this list — rejecting them breaks mainstream toolchains (`ENV=production`, conda/CUDA library dirs) — but a project `.env` still cannot apply them on reload. This rejection applies to the top-level `env` section only: per-server `mcpServers[].env` and per-hook `hooks[].env` are intentionally scoped to that server or hook and still apply (both surfaces are gated by folder trust for workspace-provided configs). Separately, a project `.env` can never set `QWEN_CLI_ENTRY` (the daemon's session-process entrypoint), `QWEN_CDP_MCP_COMMAND` (the command the daemon spawns as the browser-automation MCP adapter), `QWEN_SERVE_CDP_TUNNEL_OVER_WS` (switches that tunnel surface on), `DEV` (the dev-harness launch marker), the TLS trust-anchor variables (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH`, `npm_config_cafile`, `npm_config_ca`, `npm_config_strict_ssl`, `PIP_CERT` — an attacker CA there, or `npm_config_strict_ssl=false`, would enable MITM of the token-bearing traffic a session's `git`/`npm`/`pip`/`curl` calls make), the git command-execution variables (`GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_EXEC_PATH`, `GIT_TEMPLATE_DIR`, `GIT_ASKPASS`, `GIT_PROXY_COMMAND`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_EXTERNAL_DIFF`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_PARAMETERS` and the numbered `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` pairs — git runs these on any session `git` invocation — and `XDG_CONFIG_HOME`, which redirects the `$XDG_CONFIG_HOME/git/config` git merges with `~/.gitconfig`), the curl/wget rc-file redirects (`CURL_HOME`, `WGETRC` — their rc files can install an attacker proxy or CA), `PIP_CONFIG_FILE` (redirects all of pip's configuration — `index-url`, `trusted-host`, proxy, or cert settings in an attacker file send session pip traffic or credentials to attacker infrastructure), `SSH_ASKPASS` (git/ssh execute it as the fallback passphrase-prompt program on an auth challenge), `LESSOPEN` and `LESSCLOSE` (`less` executes them as input preprocessors on every file a session views), the node-gyp interpreter-selection variables (`NODE_GYP_FORCE_PYTHON`, `npm_config_python`, `PYTHON` — run as the build Python during native-addon installs — and `npm_config_git`, run as npm's git binary), the editor and startup hooks (`VISUAL`, `EDITOR` — git's editor fallback chain, also spawned by the CLI's own external-editor flows — and `PYTHONSTARTUP`, which CPython executes at interactive startup), or `BROWSER` (the CLI execs it via the secure browser launcher). Those stay settable from the shell environment or a user-level `.env`; unlike the loader list above they are rejected from project files only, so a value you export yourself is preserved. They are also frozen at boot from a user-level `.env`: a settings reload does not apply edits to them there — or their removal — until the process restarts. Upgrade note: before this denylist existed, some of these keys could load from `.env` files or `settings.json` `env` on some paths; they are now rejected everywhere with a warning, and a `qwen serve` daemon no longer passes inherited values of them to session subprocesses.
@@ -119328,7 +119340,7 @@ diff --git a/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts b/pa
  
        try {
          await generator.generateContent(request, 'test-prompt-id');
-@@ -222,12 +228,13 @@
+@@ -222,12 +228,15 @@
    describe('generateContentStream timeout handling', () => {
      it('should handle streaming timeout errors with the shared timeout message', async () => {
        const timeoutError = new Error('Streaming timeout');
@@ -119338,11 +119350,13 @@ diff --git a/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts b/pa
 +        generationContext: new GenerationContext('provider-test-owner'),
          contents: [{ role: 'user' as const, parts: [{ text: 'Hello' }] }],
          model: 'gpt-4',
++        // A stream states its output limit, which bounds its generation.
++        config: { maxOutputTokens: 1000 },
        };
  
        await expect(
          generator.generateContentStream(request, 'test-prompt-id'),
-@@ -238,12 +245,13 @@
+@@ -238,12 +247,15 @@
  
      it('should include the shared troubleshooting tips for streaming timeouts', async () => {
        const timeoutError = new Error('request timed out');
@@ -119352,11 +119366,13 @@ diff --git a/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts b/pa
 +        generationContext: new GenerationContext('provider-test-owner'),
          contents: [{ role: 'user' as const, parts: [{ text: 'Hello' }] }],
          model: 'gpt-4',
++        // A stream states its output limit, which bounds its generation.
++        config: { maxOutputTokens: 1000 },
        };
  
        try {
          await generator.generateContentStream(request, 'test-prompt-id');
-@@ -352,35 +360,17 @@
+@@ -352,35 +364,17 @@
    describe('token estimation on timeout', () => {
      it('should surface a clear timeout error when request times out', async () => {
        const timeoutError = new Error('Request timeout');
@@ -130617,31 +130633,28 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
     */
    promptCacheSharing?: boolean;
  };
-@@ -90,20 +125,16 @@
+@@ -90,20 +125,8 @@
    enableOpenAILogging?: boolean;
    openAILoggingDir?: string;
    timeout?: number; // Timeout configuration in milliseconds
-   // Inactivity timeout for streaming responses: if no chunk arrives for this
-   // many ms, the request is aborted and surfaced as a retryable ETIMEDOUT.
-   // The SDK `timeout` only covers connect + first response, so a stream that
+-  // Inactivity timeout for streaming responses: if no chunk arrives for this
+-  // many ms, the request is aborted and surfaced as a retryable ETIMEDOUT.
+-  // The SDK `timeout` only covers connect + first response, so a stream that
 -  // returns 200 then goes silent is otherwise unbounded. `<= 0` disables it.
-+  // returns 200 then goes silent is otherwise unbounded. `0` disables it.
-   streamIdleTimeoutMs?: number;
+-  streamIdleTimeoutMs?: number;
 -  // Total-lifetime cap for one streaming response, NOT refreshed by chunk
 -  // arrival: a drip-fed stream resets the idle watchdog forever while never
 -  // completing the message (issue #8597), so that shape needs a bound the
 -  // chunks cannot reset. `<= 0` disables it. Honored only by the
 -  // OpenAI-compatible pipeline today — the Anthropic/Gemini generators do not
 -  // implement it, so on those auth types the drip-fed shape stays unbounded.
-+  // Accumulated upstream-wait cap for one streaming response. Chunk arrivals
-+  // do not reset it; consumer processing time is excluded. `0` disables it.
-   streamMaxLifetimeMs?: number;
+-  streamMaxLifetimeMs?: number;
    maxRetries?: number; // Maximum retries for rate-limit errors
    retryInitialDelayMs?: number; // Initial delay for stream rate-limit retries
    retryMaxDelayMs?: number; // Maximum delay for stream rate-limit retries
    retryErrorCodes?: number[]; // Additional error codes that trigger rate-limit retry
    enableCacheControl?: boolean; // Enable provider prompt-cache controls
-@@ -170,12 +201,20 @@
+@@ -170,12 +193,20 @@
    customHeaders?: Record<string, string>;
    // Extra body parameters to be merged into the request body
    extra_body?: Record<string, unknown>;
@@ -130662,7 +130675,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    // When true, media parts in tool responses (including the built-in read_file
    // and MCP tools) are split into a follow-up `role: "user"` message instead of
    // being embedded inside the `role: "tool"` message. The OpenAI Chat
-@@ -297,15 +336,74 @@
+@@ -297,15 +328,74 @@
  export function validateModelConfig(
    config: ContentGeneratorConfig,
    isStrictModelProvider: boolean = false,
@@ -130740,7 +130753,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    if (!config.apiKey) {
      if (isStrictModelProvider) {
        errors.push(
-@@ -336,26 +434,12 @@
+@@ -336,26 +426,12 @@
      } else {
        const envKey = getDefaultModelEnvVar(config.authType);
        errors.push(new MissingModelError({ authType: config.authType, envKey }));
@@ -130767,7 +130780,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
  export function createContentGeneratorConfig(
    config: Config,
    authType: AuthType | undefined,
-@@ -448,16 +532,36 @@
+@@ -448,16 +524,36 @@
      return (await this.getGeneratorForUse()).generateContentStream(
        request,
        userPromptId,
@@ -160482,21 +160495,59 @@ diff --git a/packages/core/src/core/openaiContentGenerator/constants.ts b/packag
  export const DEFAULT_TIMEOUT = 120000;
  /**
   * Sentinel request timeout (ms) representing a *disabled* timeout.
-@@ -31,40 +33,56 @@
- // ingest and long thinking phases room while staying below
- // LoggingContentGenerator's stream-span idle timer, so this watchdog fires first.
- export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 240000;
- // Env override (deployment knob) for the streaming inactivity timeout, so a
- // daemon deployment can tune it without code — the same way the QWEN_SERVE_*
- // params are set. An explicit ContentGeneratorConfig.streamIdleTimeoutMs still
--// takes precedence; a malformed value is ignored (falls back to the default).
-+// takes precedence; malformed selected values reject pipeline construction.
- export const QWEN_STREAM_IDLE_TIMEOUT_MS_ENV = 'QWEN_STREAM_IDLE_TIMEOUT_MS';
- // Maximum JS timer delay (~24.8 days). setTimeout silently compresses larger
- // delays to 1ms, which would make a watchdog fire almost immediately, so a
- // stream-guard timeout above this is treated as invalid.
- export const MAX_STREAM_GUARD_TIMEOUT_MS = 2_147_483_647;
+@@ -4,9 +6,8 @@
+  *
+  * The OpenAI and Anthropic SDKs treat `timeout: 0` as an immediate abort rather
+- * than "no timeout", so a configured `0` (disable — matching the
+- * `QWEN_STREAM_IDLE_TIMEOUT_MS=0` convention) is mapped to the maximum JS timer
+- * delay (2^31 − 1 ms ≈ 24.8 days). `setTimeout` silently compresses larger
+- * delays to 1ms, so this is the effective ceiling.
++ * than "no timeout", so a configured `0` (disable) is mapped to the maximum JS
++ * timer delay (2^31 − 1 ms ≈ 24.8 days). `setTimeout` silently compresses
++ * larger delays to 1ms, so this is the effective ceiling.
+  */
+ export const DISABLED_REQUEST_TIMEOUT_MS = 2_147_483_647;
  
+@@ -28,43 +29,58 @@
+-// Inactivity (no-chunk) timeout for streaming responses. The SDK `timeout`
+-// only bounds connect + first response, so a stream that returns 200 then
+-// goes silent is otherwise unbounded. The 4-minute default gives large-prompt
+-// ingest and long thinking phases room while staying below
+-// LoggingContentGenerator's stream-span idle timer, so this watchdog fires first.
+-export const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 240000;
+-// Env override (deployment knob) for the streaming inactivity timeout, so a
+-// daemon deployment can tune it without code — the same way the QWEN_SERVE_*
+-// params are set. An explicit ContentGeneratorConfig.streamIdleTimeoutMs still
+-// takes precedence; a malformed value is ignored (falls back to the default).
+-export const QWEN_STREAM_IDLE_TIMEOUT_MS_ENV = 'QWEN_STREAM_IDLE_TIMEOUT_MS';
++/**
++ * The longest silence between the chunks of a started stream. It arms at the
++ * first chunk. Before it, a request may be queued behind another generation on
++ * a backend that runs one at a time, or prefilling a long prompt, and sends
++ * nothing by design; the request timeout bounds that wait instead. Once chunks
++ * flow, four minutes without one is a stall no working engine produces: at
++ * {@link DECODE_FLOOR_TPS} a token is due every twelfth of a second.
++ */
++export const STREAM_IDLE_TIMEOUT_MS = 240000;
++
++/**
++ * The slowest decode this client treats as a working engine, in tokens per
++ * second. A started generation is bounded by the most tokens it may generate
++ * at this rate -- `max_tokens / DECODE_FLOOR_TPS` seconds of upstream wait,
++ * counted from its first chunk -- and one still unfinished past that bound is
++ * refused as a broken engine, loudly, rather than waited on. The value is
++ * declared policy, not a measurement, and it is deliberately pessimistic, so
++ * a healthy engine never reaches the bound.
++ */
++export const DECODE_FLOOR_TPS = 12;
++
+ // Maximum JS timer delay (~24.8 days). setTimeout silently compresses larger
+-// delays to 1ms, which would make a watchdog fire almost immediately, so a
+-// stream-guard timeout above this is treated as invalid.
++// delays to 1ms, which would make a guard fire almost immediately, so a stream
++// bound above this is refused rather than armed.
+ export const MAX_STREAM_GUARD_TIMEOUT_MS = 2_147_483_647;
+-
 -// Total-lifetime cap for a single streaming response, measured from the
 -// stream's first iteration (when the response wrapper starts consuming it)
 -// and NOT refreshed by chunk arrival. The idle watchdog above cannot see
@@ -160513,17 +160564,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/constants.ts b/packag
 -// stream (TRANSPORT_STREAM_RETRY_CONFIG), so a pathological upstream's
 -// wall-clock bound per request is a small multiple of this value, not this
 -// value alone.
-+// Accumulated upstream-wait cap for one streaming response. Time spent by
-+// consumers processing delivered chunks is excluded. Incoming chunks reset the
-+// inactivity timer but do not reset this accumulated wait. Each permitted retry
-+// starts a new response with its own wait budget.
- export const DEFAULT_STREAM_MAX_LIFETIME_MS = 900000;
- // Env override (deployment knob) for the stream lifetime cap — same
- // conventions as QWEN_STREAM_IDLE_TIMEOUT_MS: an explicit
- // ContentGeneratorConfig.streamMaxLifetimeMs wins, `0` disables, a malformed
+-export const DEFAULT_STREAM_MAX_LIFETIME_MS = 900000;
+-// Env override (deployment knob) for the stream lifetime cap — same
+-// conventions as QWEN_STREAM_IDLE_TIMEOUT_MS: an explicit
+-// ContentGeneratorConfig.streamMaxLifetimeMs wins, `0` disables, a malformed
 -// value falls back to the default with a warning.
-+// selected value rejects pipeline construction.
- export const QWEN_STREAM_MAX_LIFETIME_MS_ENV = 'QWEN_STREAM_MAX_LIFETIME_MS';
+-export const QWEN_STREAM_MAX_LIFETIME_MS_ENV = 'QWEN_STREAM_MAX_LIFETIME_MS';
  export const DEFAULT_MAX_RETRIES = 3;
  
 +/**
@@ -163986,25 +164032,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,53 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
 + * SPDX-License-Identifier: Apache-2.0
 + */
 +
-+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-+import type OpenAI from 'openai';
-+import type { Config } from '../../config/config.js';
-+import type { ContentGeneratorConfig } from '../contentGenerator.js';
-+import { ContentGenerationPipeline } from './pipeline.js';
-+import type { OpenAICompatibleProvider } from './provider/index.js';
-+import type { PipelineConfig } from './types.js';
-+import {
-+  MAX_STREAM_GUARD_TIMEOUT_MS,
-+  QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
-+  QWEN_STREAM_MAX_LIFETIME_MS_ENV,
-+} from './constants.js';
++import { describe, expect, it, vi } from 'vitest';
++import { streamGenerationBoundMs } from './pipeline.js';
++import { DECODE_FLOOR_TPS, MAX_STREAM_GUARD_TIMEOUT_MS } from './constants.js';
 +
 +vi.mock('./converter.js', () => ({ OpenAIContentConverter: {} }));
 +vi.mock('openai');
@@ -164014,123 +164051,38 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-guard-config
 +  reportOpenAiChunk: vi.fn(),
 +}));
 +
-+const guards = [
-+  ['streamIdleTimeoutMs', QWEN_STREAM_IDLE_TIMEOUT_MS_ENV],
-+  ['streamMaxLifetimeMs', QWEN_STREAM_MAX_LIFETIME_MS_ENV],
-+] as const;
-+
-+const invalidConfigValues: Array<{ label: string; value: unknown }> = [
-+  { label: 'null', value: null },
-+  { label: 'false', value: false },
-+  { label: 'numeric string', value: '10' },
-+  { label: 'object', value: {} },
-+  { label: 'NaN', value: NaN },
-+  { label: 'positive infinity', value: Infinity },
-+  { label: 'negative infinity', value: -Infinity },
-+  { label: 'fraction', value: 0.5 },
-+  { label: 'negative integer', value: -1 },
-+  { label: 'above timer ceiling', value: MAX_STREAM_GUARD_TIMEOUT_MS + 1 },
-+];
-+
-+const invalidEnvValues = [
-+  '',
-+  ' \t ',
-+  'not-a-number',
-+  '-1',
-+  '+1',
-+  '0x10',
-+  '1e3',
-+  '1.5',
-+  'Infinity',
-+  String(MAX_STREAM_GUARD_TIMEOUT_MS + 1),
-+];
-+
-+describe('stream guard configuration admission', () => {
-+  let contentGeneratorConfig: ContentGeneratorConfig;
-+  let provider: OpenAICompatibleProvider;
-+  let config: PipelineConfig;
-+
-+  beforeEach(() => {
-+    vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, undefined);
-+    vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, undefined);
-+    contentGeneratorConfig = { model: 'guard-admission-model' };
-+    provider = {
-+      buildClient: vi.fn().mockReturnValue({} as OpenAI),
-+      buildRequest: vi.fn(),
-+      buildHeaders: vi.fn(),
-+      getDefaultGenerationConfig: vi.fn(),
-+    };
-+    config = {
-+      cliConfig: {} as Config,
-+      contentGeneratorConfig,
-+      provider,
-+      errorHandler: {
-+        handle: vi.fn((error: unknown): never => {
-+          throw error;
-+        }),
-+        shouldSuppressErrorLogging: vi.fn(() => false),
-+      },
-+    };
++describe('stream generation bound', () => {
++  it('is the most tokens the request may generate at the decode floor', () => {
++    expect(DECODE_FLOOR_TPS).toBe(12);
++    expect(streamGenerationBoundMs(12)).toBe(1000);
++    expect(streamGenerationBoundMs(1)).toBe(84);
++    // A turn issued with this deployment's C.
++    expect(streamGenerationBoundMs(69_509)).toBe(5_792_417);
 +  });
 +
-+  afterEach(() => {
-+    vi.unstubAllEnvs();
++  it.each([
++    { label: 'absent', value: undefined },
++    { label: 'null', value: null },
++    { label: 'zero', value: 0 },
++    { label: 'negative', value: -1 },
++    { label: 'fractional', value: 1.5 },
++    { label: 'NaN', value: NaN },
++    { label: 'infinite', value: Infinity },
++    { label: 'a numeric string', value: '1200' },
++  ])('refuses a streaming request whose max_tokens is $label', ({ value }) => {
++    expect(() => streamGenerationBoundMs(value)).toThrow(
++      'Issue it with maxOutputTokens.',
++    );
 +  });
 +
-+  function expectRefusalBeforeClientConstruction(label: string): void {
-+    let rejection: unknown;
-+    try {
-+      new ContentGenerationPipeline(config);
-+    } catch (error) {
-+      rejection = error;
-+    }
-+    expect(provider.buildClient).not.toHaveBeenCalled();
-+    expect(rejection).toBeInstanceOf(Error);
-+    expect((rejection as Error).message).toContain(label);
-+  }
-+
-+  it('admits absent guard settings and constructs the client once', () => {
-+    expect(() => new ContentGenerationPipeline(config)).not.toThrow();
-+    expect(provider.buildClient).toHaveBeenCalledTimes(1);
-+  });
-+
-+  describe.each(guards)('%s', (field, envName) => {
-+    it.each(invalidConfigValues)(
-+      'refuses explicit $label before constructing a client',
-+      ({ value }) => {
-+        vi.stubEnv(envName, '4000');
-+        // Runtime configuration can arrive outside the TypeScript boundary.
-+        contentGeneratorConfig[field] = value as number;
-+        expectRefusalBeforeClientConstruction(field);
-+      },
++  it('refuses a bound no timer can hold rather than arming one that fires at once', () => {
++    const tokens =
++      Math.floor((MAX_STREAM_GUARD_TIMEOUT_MS * DECODE_FLOOR_TPS) / 1000) + 1;
++    expect(() => streamGenerationBoundMs(tokens)).toThrow(
++      'past the longest bound a timer can hold',
 +    );
-+
-+    it.each(invalidEnvValues)(
-+      'refuses provided environment value %j before constructing a client',
-+      (value) => {
-+        vi.stubEnv(envName, value);
-+        expectRefusalBeforeClientConstruction(envName);
-+      },
-+    );
-+
-+    it.each([0, 1, MAX_STREAM_GUARD_TIMEOUT_MS])(
-+      'admits explicit %i before an invalid lower-priority environment value',
-+      (value) => {
-+        contentGeneratorConfig[field] = value;
-+        vi.stubEnv(envName, 'invalid-lower-priority-value');
-+        expect(() => new ContentGenerationPipeline(config)).not.toThrow();
-+        expect(provider.buildClient).toHaveBeenCalledTimes(1);
-+      },
-+    );
-+
-+    it.each(['0', ' 4000 ', String(MAX_STREAM_GUARD_TIMEOUT_MS)])(
-+      'admits environment value %j when the config field is undefined',
-+      (value) => {
-+        contentGeneratorConfig[field] = undefined;
-+        vi.stubEnv(envName, value);
-+        expect(() => new ContentGenerationPipeline(config)).not.toThrow();
-+        expect(provider.buildClient).toHaveBeenCalledTimes(1);
-+      },
++    expect(streamGenerationBoundMs(tokens - 1)).toBeLessThanOrEqual(
++      MAX_STREAM_GUARD_TIMEOUT_MS,
 +    );
 +  });
 +});
@@ -164155,7 +164107,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.concurrent.t
  import type { Config } from '../../config/config.js';
  import type { ContentGeneratorConfig, AuthType } from '../contentGenerator.js';
  import type { OpenAICompatibleProvider } from './provider/index.js';
-@@ -192,12 +193,13 @@
+@@ -192,12 +193,15 @@
        const next = streamQueue.shift();
        if (!next) throw new Error('unexpected extra stream request');
        return next();
@@ -164165,11 +164117,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.concurrent.t
 +      generationContext: new GenerationContext('provider-test-owner'),
        model: 'test-model',
        contents: [{ role: 'user', parts: [{ text: 'read the files' }] }],
++      // Every stream states its output limit, which bounds its generation.
++      config: { maxOutputTokens: 1000 },
      };
  
      // Kick off both streams *before* consuming either, so the two generators
      // are actually alive on the event loop at the same time.
-@@ -294,12 +296,13 @@
+@@ -294,12 +298,15 @@
        const next = streamQueue.shift();
        if (!next) throw new Error('unexpected extra stream request');
        return next();
@@ -164179,6 +164133,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.concurrent.t
 +      generationContext: new GenerationContext('provider-test-owner'),
        model: 'test-model',
        contents: [{ role: 'user', parts: [{ text: 'read the files' }] }],
++      // Every stream states its output limit, which bounds its generation.
++      config: { maxOutputTokens: 1000 },
      };
  
      const [streamA, streamB] = await Promise.all([
@@ -164205,13 +164161,24 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    GenerateContentResponse,
    Type,
  } from '@google/genai';
-@@ -34,13 +35,12 @@
-   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
-   DEFAULT_STREAM_MAX_LIFETIME_MS,
-   MAX_STREAM_GUARD_TIMEOUT_MS,
-   QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
-   QWEN_STREAM_MAX_LIFETIME_MS_ENV,
- } from './constants.js';
+@@ -21,6 +22,8 @@
+   StreamContentError,
+   StreamInactivityTimeoutError,
+   StreamLifetimeExceededError,
++  StreamStartTimeoutError,
++  streamGenerationBoundMs,
+ } from './pipeline.js';
+ import { OpenAIContentConverter } from './converter.js';
+ import { openaiRequestCaptureContext } from './requestCaptureContext.js';
+@@ -33,14 +36,7 @@
+-import {
+-  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+-  DEFAULT_STREAM_MAX_LIFETIME_MS,
+-  MAX_STREAM_GUARD_TIMEOUT_MS,
+-  QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
+-  QWEN_STREAM_MAX_LIFETIME_MS_ENV,
+-} from './constants.js';
++import { DECODE_FLOOR_TPS, STREAM_IDLE_TIMEOUT_MS } from './constants.js';
 -import { logProtocolTagSanitized } from '../../telemetry/loggers.js';
  import {
    getGenAiUsageProvenance,
@@ -164219,7 +164186,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  } from '../../telemetry/gen-ai-usage.js';
  import { setToolCallPreparations } from '../tool-call-preparation.js';
  import { runWithAgentContext } from '../../agents/runtime/agent-context.js';
-@@ -57,15 +57,12 @@
+@@ -57,15 +53,12 @@
      convertOpenAIResponseToGemini: vi.fn(),
      convertOpenAIChunkToGemini: vi.fn(),
      convertGeminiToolsToOpenAI: vi.fn(),
@@ -164235,7 +164202,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    reportOpenAiChunk: mockReportOpenAiChunk,
  }));
  
-@@ -137,16 +134,203 @@
+@@ -137,16 +130,201 @@
    describe('constructor', () => {
      it('should initialize with correct configuration', () => {
        expect(mockProvider.buildClient).toHaveBeenCalled();
@@ -164308,8 +164275,6 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +      mockContentGeneratorConfig.exactTokenCounting = 'vllm';
 +      mockContentGeneratorConfig.baseUrl = 'https://model-selection.invalid/v1';
 +      mockContentGeneratorConfig.contextWindowSize = 1000;
-+      mockContentGeneratorConfig.streamIdleTimeoutMs = 0;
-+      mockContentGeneratorConfig.streamMaxLifetimeMs = 0;
 +      mockProvider.getRequestContextOverrides = vi.fn().mockReturnValue({});
 +      mockProvider.getResponseParsingOptions = vi.fn().mockReturnValue({});
 +      mockClient.post = vi
@@ -164439,7 +164404,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -216,12 +400,13 @@
+@@ -216,12 +394,13 @@
        );
      });
  
@@ -164453,7 +164418,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -265,12 +450,13 @@
+@@ -265,12 +444,13 @@
          expect.any(Object),
        );
      });
@@ -164467,7 +164432,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -307,12 +493,13 @@
+@@ -307,12 +487,13 @@
          }),
        );
      });
@@ -164481,7 +164446,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -350,12 +537,13 @@
+@@ -350,12 +531,13 @@
          }),
        );
      });
@@ -164495,7 +164460,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -394,12 +582,13 @@
+@@ -394,12 +576,13 @@
          }),
        );
      });
@@ -164509,7 +164474,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -435,12 +624,13 @@
+@@ -435,12 +618,13 @@
          }),
        );
      });
@@ -164523,7 +164488,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -476,65 +666,31 @@
+@@ -476,65 +660,31 @@
          expect.objectContaining({
            toolResultContentFormat: 'string',
          }),
@@ -164600,7 +164565,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            tools: [
              {
                functionDeclarations: [
-@@ -602,12 +758,13 @@
+@@ -602,12 +752,13 @@
        );
      });
  
@@ -164614,7 +164579,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'test-prompt-id';
  
-@@ -662,12 +819,13 @@
+@@ -662,12 +813,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -164628,7 +164593,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'forked_query';
  
-@@ -945,12 +1103,13 @@
+@@ -945,12 +1097,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          ...(testCase.extraBody ?? {}),
@@ -164642,7 +164607,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          contents: [{ parts: [{ text: 'Summarize' }], role: 'user' }],
          config: {
            thinkingConfig: { includeThoughts: testCase.includeThoughts },
-@@ -1025,12 +1184,13 @@
+@@ -1025,12 +1178,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:combined-shape'),
@@ -164656,7 +164621,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1066,12 +1226,100 @@
+@@ -1066,12 +1220,100 @@
  
        const apiCall = (mockClient.chat.completions.create as Mock).mock
          .calls[0][0];
@@ -164757,7 +164722,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        // The provider canonicalizes the documented extra_body
        // `enable_thinking: false` escape hatch into the tiered family's
        // canonical disable shape (`reasoning_effort: 'none'`) even when no
-@@ -1101,12 +1349,13 @@
+@@ -1101,12 +1343,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:escape-hatch'),
@@ -164771,7 +164736,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1186,12 +1435,13 @@
+@@ -1186,12 +1429,13 @@
          .mockResolvedValue({
            id: 'r',
            choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
@@ -164785,7 +164750,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: false },
            tools: [
              {
-@@ -1296,12 +1546,13 @@
+@@ -1296,12 +1540,13 @@
              id: 'r',
              choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
            } as OpenAI.Chat.ChatCompletion);
@@ -164799,7 +164764,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            },
            'forked_query',
          );
-@@ -1355,12 +1606,13 @@
+@@ -1355,12 +1600,13 @@
        const retryError = new Error('retry failed');
        (mockClient.chat.completions.create as Mock)
          .mockRejectedValueOnce(requiredThinkingError)
@@ -164813,7 +164778,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        await expect(pipeline.execute(request, 'forked_query')).rejects.toBe(
-@@ -1391,12 +1643,13 @@
+@@ -1391,12 +1637,13 @@
        );
        (mockClient.chat.completions.create as Mock).mockRejectedValueOnce(
          requiredThinkingError,
@@ -164827,7 +164792,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            abortSignal: AbortSignal.abort(),
            thinkingConfig: { includeThoughts: false },
          },
-@@ -1439,12 +1692,13 @@
+@@ -1439,12 +1686,13 @@
          });
          (mockClient.chat.completions.create as Mock).mockRejectedValue(error);
  
@@ -164841,7 +164806,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
              },
              'forked_query',
            ),
-@@ -1458,12 +1712,13 @@
+@@ -1458,12 +1706,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          reasoning: { effort: 'high' },
@@ -164855,7 +164820,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1503,12 +1758,13 @@
+@@ -1503,12 +1752,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164869,7 +164834,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1534,12 +1790,13 @@
+@@ -1534,12 +1784,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true,
@@ -164883,7 +164848,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1583,12 +1840,13 @@
+@@ -1583,12 +1834,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164897,7 +164862,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1622,12 +1880,13 @@
+@@ -1622,12 +1874,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164911,7 +164876,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1659,12 +1918,13 @@
+@@ -1659,12 +1912,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164925,7 +164890,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1699,12 +1959,13 @@
+@@ -1699,12 +1953,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164939,7 +164904,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1744,12 +2005,13 @@
+@@ -1744,12 +1999,13 @@
  
        // Provider passes the request through unchanged — simulates the
        // common case where the user has not configured
@@ -164953,7 +164918,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1783,12 +2045,13 @@
+@@ -1783,12 +2039,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164967,7 +164932,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1825,12 +2088,13 @@
+@@ -1825,12 +2082,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164981,7 +164946,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1866,12 +2130,13 @@
+@@ -1866,12 +2124,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -164995,7 +164960,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1906,12 +2171,13 @@
+@@ -1906,12 +2165,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -165009,7 +164974,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1953,12 +2219,13 @@
+@@ -1953,12 +2213,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -165023,7 +164988,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1993,12 +2260,13 @@
+@@ -1993,12 +2254,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -165037,7 +165002,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2038,12 +2306,13 @@
+@@ -2038,12 +2300,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          chat_template_kwargs: { apply_chat_template: true },
@@ -165051,7 +165016,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2082,12 +2351,13 @@
+@@ -2082,12 +2345,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -165065,7 +165030,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2122,12 +2392,13 @@
+@@ -2122,12 +2386,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -165079,7 +165044,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2161,12 +2432,13 @@
+@@ -2161,12 +2426,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -165093,7 +165058,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2203,12 +2475,13 @@
+@@ -2203,12 +2469,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -165107,7 +165072,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2229,12 +2502,13 @@
+@@ -2229,12 +2496,13 @@
        expect(apiCall.enable_thinking).toBe(false);
      });
  
@@ -165121,7 +165086,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('API Error');
  
-@@ -2252,12 +2526,13 @@
+@@ -2252,12 +2520,13 @@
          request,
        );
      });
@@ -165135,7 +165100,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -2280,12 +2555,13 @@
+@@ -2280,12 +2549,13 @@
        expect(testError.message).not.toContain('token@');
      });
  
@@ -165149,7 +165114,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
-@@ -2307,12 +2583,13 @@
+@@ -2307,12 +2577,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -165163,7 +165128,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -2381,12 +2658,13 @@
+@@ -2381,12 +2652,13 @@
        (mockClient.chat.completions.create as Mock)
          .mockReturnValueOnce(failedCreate)
          .mockReturnValueOnce(successfulCreate);
@@ -165177,7 +165142,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'forked_query',
        );
-@@ -2404,12 +2682,13 @@
+@@ -2404,12 +2676,13 @@
        expect(mockErrorHandler.handle).not.toHaveBeenCalled();
      });
  
@@ -165191,7 +165156,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2439,13 +2718,13 @@
+@@ -2439,13 +2712,13 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIChunkToGemini as Mock)
@@ -165206,7 +165171,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        );
        const telemetryAttempt = {};
        mockReportOpenAiRequest.mockReturnValueOnce(telemetryAttempt);
-@@ -2472,13 +2751,13 @@
+@@ -2472,13 +2745,13 @@
        ).mock.calls[1];
        expect(firstChunkContext).toEqual(
          expect.objectContaining({
@@ -165221,7 +165186,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          firstChunkContext.toolCallParser,
        );
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
-@@ -2505,12 +2784,13 @@
+@@ -2505,12 +2778,13 @@
        );
      });
  
@@ -165235,7 +165200,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2576,539 +2856,516 @@
+@@ -2576,539 +2850,516 @@
  
        // Assert
        expect(results).toHaveLength(1); // Empty response should be filtered out
@@ -166266,7 +166231,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockChunk = {
          id: 'chunk-tool-opener',
          choices: [{ delta: { tool_calls: [] }, finish_reason: null }],
-@@ -3146,12 +3403,13 @@
+@@ -3146,12 +3397,13 @@
        expect(results).toEqual([preparationResponse]);
      });
  
@@ -166280,7 +166245,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('Stream Error');
  
-@@ -3194,12 +3452,13 @@
+@@ -3194,12 +3446,13 @@
          request,
        );
      });
@@ -166294,7 +166259,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('407 via http://user:pass@proxy.local');
  
-@@ -3219,12 +3478,13 @@
+@@ -3219,12 +3472,13 @@
        );
        expect(testError.message).not.toContain('user:pass');
      });
@@ -166308,7 +166273,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -3261,12 +3521,13 @@
+@@ -3261,12 +3515,13 @@
        );
        expect(testError.message).not.toContain('token@');
      });
@@ -166322,7 +166287,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3289,29 +3550,43 @@
+@@ -3289,29 +3544,43 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -166370,7 +166335,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockStream = {
          async *[Symbol.asyncIterator]() {
            yield {
-@@ -3329,28 +3604,36 @@
+@@ -3329,28 +3598,36 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -166411,7 +166376,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3396,12 +3679,13 @@
+@@ -3396,12 +3673,13 @@
        expect(thrownError!.requestId).toBe('req-123');
        expect(thrownError!.request_id).toBe('req-123');
      });
@@ -166425,7 +166390,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const jsonBody = '{"error":"gateway blocked streaming request"}';
        const mockStream = {
-@@ -3449,12 +3733,13 @@
+@@ -3449,12 +3727,13 @@
        expect(thrownError!.bodyPrefix).toContain('gateway blocked');
        expect(thrownError!.requestId).toBe('req-json');
      });
@@ -166439,7 +166404,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const htmlBody = '<html>' + 'x'.repeat(700) + '</html>';
        const mockStream = {
-@@ -3505,12 +3790,13 @@
+@@ -3505,12 +3784,13 @@
        expect(thrownError!.bodyPrefix).toHaveLength(512);
        expect(thrownError!.requestId).toBeNull();
      });
@@ -166453,7 +166418,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockStream = {
          async *[Symbol.asyncIterator]() {},
-@@ -3554,12 +3840,13 @@
+@@ -3554,12 +3834,13 @@
        expect(thrownError).toBeInstanceOf(NonSSEResponseError);
        expect(thrownError!.bodyPrefix).toBe('');
      });
@@ -166467,7 +166432,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3615,12 +3902,13 @@
+@@ -3615,12 +3896,13 @@
        }
        expect(results.length).toBeGreaterThan(0);
      });
@@ -166481,7 +166446,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3661,12 +3949,13 @@
+@@ -3661,12 +3943,13 @@
        expect(results.length).toBeGreaterThan(0);
      });
  
@@ -166495,7 +166460,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3698,12 +3987,13 @@
+@@ -3698,12 +3981,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -166509,7 +166474,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3735,12 +4025,13 @@
+@@ -3735,12 +4019,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -166523,7 +166488,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3775,12 +4066,13 @@
+@@ -3775,12 +4060,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -166537,7 +166502,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -3799,12 +4091,13 @@
+@@ -3799,12 +4085,13 @@
        expect(capturedSignal!.aborted).toBe(true);
      });
  
@@ -166551,7 +166516,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -3928,12 +4221,13 @@
+@@ -3928,12 +4215,13 @@
        }
      });
  
@@ -166565,7 +166530,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -4010,12 +4304,13 @@
+@@ -4010,12 +4298,13 @@
        });
      });
  
@@ -166579,7 +166544,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage (typical for modelscope)
-@@ -4119,12 +4414,13 @@
+@@ -4119,12 +4408,13 @@
        });
      });
  
@@ -166593,7 +166558,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage
-@@ -4211,12 +4507,13 @@
+@@ -4211,12 +4501,13 @@
        // Reproduces the real-world bug: some providers (e.g. bailian/glm-5)
        // send trailing empty chunks AFTER the finish+usage pair. Before the
        // fix, each trailing chunk re-triggered the merge logic and yielded
@@ -166607,7 +166572,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Chunk 1: content text
-@@ -4350,12 +4647,13 @@
+@@ -4350,12 +4641,13 @@
    });
  
    describe('buildRequest', () => {
@@ -166621,7 +166586,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            temperature: 0.8,
            topP: 0.7,
            maxOutputTokens: 500,
-@@ -4396,12 +4694,13 @@
+@@ -4396,12 +4688,13 @@
        );
      });
  
@@ -166635,7 +166600,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4435,12 +4734,13 @@
+@@ -4435,12 +4728,13 @@
        );
      });
  
@@ -166649,7 +166614,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4508,12 +4808,13 @@
+@@ -4508,12 +4802,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -166663,7 +166628,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4542,22 +4843,26 @@
+@@ -4542,22 +4837,26 @@
        );
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
@@ -166700,7 +166665,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123:Explore-a1b2c3d4',
          }),
-@@ -4582,22 +4887,26 @@
+@@ -4582,22 +4881,26 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
          choices: [{ message: { content: 'response' } }],
@@ -166737,7 +166702,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123',
-@@ -4630,12 +4939,13 @@
+@@ -4630,12 +4933,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -166751,21 +166716,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4667,12 +4977,13 @@
-         id: 'test',
-         choices: [{ message: { content: 'response' } }],
-       });
- 
-       await pipeline.execute(
-         {
-+          generationContext: new GenerationContext('provider-test-owner'),
-           model: 'gpt-5.6',
-           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
-           promptCacheSharing: true,
-         },
-         'prompt-id',
-       );
-@@ -4707,12 +5018,13 @@
+@@ -4667,12 +4971,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -166779,7 +166730,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4750,12 +5062,13 @@
+@@ -4707,12 +5012,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -166793,7 +166744,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4797,12 +5110,13 @@
+@@ -4750,12 +5056,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -166807,7 +166758,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4826,12 +5140,13 @@
+@@ -4797,12 +5104,13 @@
+         id: 'test',
+         choices: [{ message: { content: 'response' } }],
+       });
+ 
+       await pipeline.execute(
+         {
++          generationContext: new GenerationContext('provider-test-owner'),
+           model: 'gpt-5.6',
+           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
+           promptCacheSharing: true,
+         },
+         'prompt-id',
+       );
+@@ -4826,12 +5134,13 @@
          reasoning_effort: 'medium',
          verbosity: 'low',
        } as ContentGeneratorConfig['samplingParams'];
@@ -166821,7 +166786,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4867,12 +5182,13 @@
+@@ -4867,12 +5176,13 @@
          max_completion_tokens: 200000,
          reasoning_effort: 'high',
        } as ContentGeneratorConfig['samplingParams'];
@@ -166835,7 +166800,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4907,12 +5223,13 @@
+@@ -4907,12 +5217,13 @@
          max_tokens: 50000,
          max_completion_tokens: 100000,
        } as ContentGeneratorConfig['samplingParams'];
@@ -166849,7 +166814,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4944,12 +5261,13 @@
+@@ -4944,12 +5255,13 @@
        mockContentGeneratorConfig.samplingParams = {
          temperature: 0.7,
        } as ContentGeneratorConfig['samplingParams'];
@@ -166863,7 +166828,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4976,12 +5294,13 @@
+@@ -4976,12 +5288,13 @@
        // Arrange: no samplingParams — request.config.maxOutputTokens must still
        // fall through to max_tokens on the wire (original behavior unchanged).
        mockContentGeneratorConfig.samplingParams = undefined;
@@ -166877,7 +166842,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5008,12 +5327,13 @@
+@@ -5008,12 +5321,13 @@
    });
  
    describe('createRequestContext', () => {
@@ -166891,7 +166856,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockOpenAIResponse = new GenerateContentResponse();
  
-@@ -5032,12 +5352,13 @@
+@@ -5032,12 +5346,13 @@
        // Assert
      });
  
@@ -166905,7 +166870,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -5195,12 +5516,13 @@
+@@ -5195,12 +5510,13 @@
  
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          mockStream,
@@ -166919,7 +166884,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        // Collect responses
        const responses: GenerateContentResponse[] = [];
-@@ -5218,12 +5540,13 @@
+@@ -5218,12 +5534,13 @@
      });
    });
  
@@ -166933,7 +166898,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5271,12 +5594,13 @@
+@@ -5271,12 +5588,13 @@
          }),
        );
      });
@@ -166947,7 +166912,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5322,12 +5646,13 @@
+@@ -5322,12 +5640,13 @@
          }),
        );
      });
@@ -166961,7 +166926,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5457,12 +5782,13 @@
+@@ -5370,7 +5689,7 @@
+     });
+   });
+ 
+-  describe('stream inactivity timeout', () => {
++  describe('stream guards', () => {
+     // A stream whose `next()` is gated by the test: it stays pending until
+     // `push()` / `end()` is called, letting us simulate a silent (stalled)
+     // stream under fake timers.
+@@ -5457,12 +5776,15 @@
          choices: [{ delta: { content: text } }],
        } as OpenAI.Chat.ChatCompletionChunk;
      }
@@ -166975,31 +166949,608 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        } as GenerateContentParameters;
      }
  
-@@ -5783,13 +6109,13 @@
-       const err = (await captured) as { name?: string; code?: string };
-       expect(err.name).toBe('AbortError');
-       expect(err.code).not.toBe('ETIMEDOUT');
-       expect(gated.wasReturned()).toBe(true);
++    // max_tokens 1200 bounds a started generation to 100s at the 12 tokens/s
++    // floor; the request timeout bounds the wait for its first chunk.
+@@ -5469,17 +5791,27 @@
+     function buildPipeline(
+-      streamIdleTimeoutMs?: number,
+-      streamMaxLifetimeMs?: number,
++      options: { timeout?: number; maxTokens?: number } = {},
+     ) {
+       mockContentGeneratorConfig = {
+         ...mockContentGeneratorConfig,
+-        ...(streamIdleTimeoutMs !== undefined ? { streamIdleTimeoutMs } : {}),
+-        ...(streamMaxLifetimeMs !== undefined ? { streamMaxLifetimeMs } : {}),
++        ...(options.timeout !== undefined ? { timeout: options.timeout } : {}),
++        samplingParams: {
++          ...mockContentGeneratorConfig.samplingParams,
++          max_tokens: options.maxTokens ?? 1200,
++        },
+       } as ContentGeneratorConfig;
+       mockConfig = {
+         ...mockConfig,
+         contentGeneratorConfig: mockContentGeneratorConfig,
+       };
+       return new ContentGenerationPipeline(mockConfig);
++    }
++
++    function drain(gen: AsyncGenerator<GenerateContentResponse>) {
++      return (async () => {
++        for await (const _ of gen) {
++          /* drain */
++        }
++      })().catch((e: unknown) => e);
+     }
+ 
+     beforeEach(() => {
+@@ -5493,100 +5825,216 @@
+           return r;
+         },
+       );
+-      // Clean baseline: ignore any ambient QWEN_STREAM_IDLE_TIMEOUT_MS /
+-      // QWEN_STREAM_MAX_LIFETIME_MS from the dev/CI shell so the
+-      // default-timeout tests aren't silently overridden. Env-specific tests
+-      // re-stub them; afterEach unstubs everything.
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, undefined);
+-      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, undefined);
+       vi.useFakeTimers();
+     });
+     afterEach(() => {
+       vi.useRealTimers();
+-      vi.unstubAllEnvs();
      });
  
--    it('is disabled when streamIdleTimeoutMs <= 0 (no timeout fires)', async () => {
-+    it('is disabled when streamIdleTimeoutMs is 0 (no timeout fires)', async () => {
-       const gated = gatedStream(); // silent
+-    it('aborts and throws ETIMEDOUT when the stream is silent past the idle timeout', async () => {
+-      const gated = gatedStream(); // never push/end → silent
++    it('declares the decode floor and the idle bound once, as policy', () => {
++      expect(DECODE_FLOOR_TPS).toBe(12);
++      expect(STREAM_IDLE_TIMEOUT_MS).toBe(240000);
++    });
++
++    it('bounds the wait for the first chunk by the request timeout, not the idle guard', async () => {
++      // A request queued behind another generation sends nothing until it
++      // starts: waiting past the idle bound is its right, the request
++      // timeout its limit.
++      const gated = gatedStream(); // never push/end → queued
++      let sdkSignal: AbortSignal | undefined;
++      (mockClient.chat.completions.create as Mock).mockImplementation(
++        (_req: unknown, opts: { signal?: AbortSignal }) => {
++          sdkSignal = opts.signal;
++          return Promise.resolve(gated.stream);
++        },
++      );
++      const p = buildPipeline({ timeout: 600_000 });
++      const gen = await p.executeStream(streamingRequest(), 'id');
++      let settled = false;
++      const captured = drain(gen).finally(() => (settled = true));
++      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS + 1);
++      expect(settled).toBe(false);
++      await vi.advanceTimersByTimeAsync(600_000 - STREAM_IDLE_TIMEOUT_MS - 1);
++      const err = await captured;
++      expect(err).toBeInstanceOf(StreamStartTimeoutError);
++      expect(err).toMatchObject({
++        code: 'ETIMEDOUT',
++        requestTimeoutMs: 600_000,
++        waitedMs: 600_000,
++      });
++      expect((err as Error).message).toBe(
++        'No chunk arrived within the 600000ms request timeout (waited ' +
++          '600000ms since dispatch): the request never started generating. ' +
++          "Check the serving engine's queue, or raise the request timeout.",
++      );
++      expect(sdkSignal?.aborted).toBe(true);
++      expect(gated.wasReturned()).toBe(true);
++      expect(mockErrorHandler.handle).not.toHaveBeenCalled();
++    });
++
++    it('counts the start deadline from dispatch, not from the response headers', async () => {
++      const gated = gatedStream(); // silent after its headers
++      (mockClient.chat.completions.create as Mock).mockImplementation(
++        () =>
++          new Promise((resolve) =>
++            setTimeout(() => resolve(gated.stream), 100_000),
++          ),
++      );
++      const p = buildPipeline({ timeout: 150_000 });
++      const pending = p.executeStream(streamingRequest(), 'id');
++      await vi.advanceTimersByTimeAsync(100_000);
++      const captured = drain(await pending);
++      await vi.advanceTimersByTimeAsync(50_000);
++      expect(await captured).toMatchObject({
++        name: 'StreamStartTimeoutError',
++        waitedMs: 150_000,
++      });
++    });
++
++    it('arms the idle guard at the first chunk', async () => {
++      const gated = gatedStream();
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
        );
-       const p = buildPipeline(0);
+-      const p = buildPipeline(1000);
++      // 12000 tokens bound the generation to 1000s, so only the idle guard
++      // is in play once it starts.
++      const p = buildPipeline({ timeout: 600_000, maxTokens: 12_000 });
        const gen = await p.executeStream(
-@@ -5882,118 +6208,43 @@
-       expect(settled).toBe(false);
-       await vi.advanceTimersByTimeAsync(4000); // reach the config value (5000)
-       await consume;
-       expect(settled).toBe(true);
+         streamingRequest(new AbortController().signal),
+         'id',
+       );
++      const results: GenerateContentResponse[] = [];
++      const captured = (async () => {
++        for await (const r of gen) results.push(r);
++      })().catch((e: unknown) => e);
++      // The first chunk arrives after longer than the idle bound: still the
++      // wait to start, so nothing fires.
++      await vi.advanceTimersByTimeAsync(300_000);
++      gated.push(chunk('hello'));
++      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS - 1);
++      expect(results).toHaveLength(1);
++      await vi.advanceTimersByTimeAsync(1);
++      const err = await captured;
++      expect(err).toBeInstanceOf(StreamInactivityTimeoutError);
++      expect(err).toMatchObject({
++        code: 'ETIMEDOUT',
++        idleMs: STREAM_IDLE_TIMEOUT_MS,
++        chunksReceived: 1,
++        streamLifetimeMs: 300_000 + STREAM_IDLE_TIMEOUT_MS,
++      });
++      expect((err as Error).message).toBe(
++        'No stream activity for 240000ms after 1 chunks (stream lifetime: ' +
++          '540000ms): the engine stopped mid-generation. Check that the ' +
++          'serving engine is healthy.',
++      );
++      expect(gated.wasReturned()).toBe(true);
++    });
++
++    it('resets the idle guard on each chunk and completes a slow-but-active stream', async () => {
++      const gated = gatedStream();
++      (mockClient.chat.completions.create as Mock).mockResolvedValue(
++        gated.stream,
++      );
++      // 12000 tokens bound the generation to 1000s, so only the idle guard
++      // is in play.
++      const p = buildPipeline({ maxTokens: 12_000 });
++      const gen = await p.executeStream(streamingRequest(), 'id');
++      const results: GenerateContentResponse[] = [];
++      const consume = (async () => {
++        for await (const r of gen) results.push(r);
++      })();
++      gated.push(chunk('a'));
++      for (const text of ['b', 'c', 'd']) {
++        await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS - 1);
++        gated.push(chunk(text));
++      }
++      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS - 1);
++      gated.end();
++      await consume;
++      expect(results).toHaveLength(4);
++      // Late advance after completion must not produce a delayed throw.
++      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS * 2);
++    });
++
++    it('bounds the generation from its first chunk by max_tokens at the decode floor (issue #8597)', async () => {
++      const gated = gatedStream(); // drip-fed, never ends
++      (mockClient.chat.completions.create as Mock).mockResolvedValue(
++        gated.stream,
++      );
++      const p = buildPipeline({ timeout: 600_000, maxTokens: 1200 });
++      const gen = await p.executeStream(
++        streamingRequest(new AbortController().signal),
++        'id',
++      );
++      const captured = drain(gen);
++      // Queued for 500s: the wait to start is not the generation's.
++      await vi.advanceTimersByTimeAsync(500_000);
++      gated.push(chunk('first'));
++      // A chunk every 30s resets the idle guard, so it can never fire; the
++      // 100s the generation may take does not reset.
++      for (let i = 0; i < 3; i++) {
++        await vi.advanceTimersByTimeAsync(30_000);
++        gated.push(chunk('x'));
++      }
++      await vi.advanceTimersByTimeAsync(10_000); // 100s after the first chunk
++      const err = await captured;
++      expect(err).toBeInstanceOf(StreamLifetimeExceededError);
++      expect(err).toMatchObject({
++        code: 'ETIMEDOUT',
++        maxLifetimeMs: streamGenerationBoundMs(1200),
++        chunksReceived: 4,
++      });
++      expect(streamGenerationBoundMs(1200)).toBe(100_000);
++      expect((err as Error).message).toBe(
++        'Generation did not complete within 100000ms of upstream wait from ' +
++          'its first chunk, the time its max_tokens takes at the 12 ' +
++          'tokens/second decode floor, after 4 chunks (wall clock: 600000ms). ' +
++          'An engine decoding below the floor is broken; check the serving ' +
++          'engine.',
++      );
++      expect(gated.wasReturned()).toBe(true);
++      expect(mockErrorHandler.handle).not.toHaveBeenCalled();
++    });
++
++    it('completes a generation that fits its bound however long it queued', async () => {
++      const gated = gatedStream();
++      (mockClient.chat.completions.create as Mock).mockResolvedValue(
++        gated.stream,
++      );
++      const p = buildPipeline({ timeout: 600_000, maxTokens: 1200 });
++      const gen = await p.executeStream(streamingRequest(), 'id');
++      let error: unknown;
++      let done = false;
+       const consume = (async () => {
+         for await (const _ of gen) {
+           /* drain */
+         }
+-      })();
+-      const captured = consume.catch((e: unknown) => e);
+-      await vi.advanceTimersByTimeAsync(1000);
+-      const err = await captured;
+-      expect(err).toBeInstanceOf(StreamInactivityTimeoutError);
+-      expect((err as Error).message).toBe(
+-        'No stream activity for 1000ms after 0 chunks ' +
+-          '(stream lifetime: 1000ms). Set QWEN_STREAM_IDLE_TIMEOUT_MS ' +
+-          'to increase this window (or 0 to disable it).',
++      })().then(
++        () => (done = true),
++        (e: unknown) => (error = e),
+       );
+-      expect(err).toMatchObject({ code: 'ETIMEDOUT' });
+-      expect((err as StreamInactivityTimeoutError).chunksReceived).toBe(0);
+-      expect((err as StreamInactivityTimeoutError).streamLifetimeMs).toBe(1000);
+-      expect(gated.wasReturned()).toBe(true);
+-      expect(mockErrorHandler.handle).not.toHaveBeenCalled();
++      await vi.advanceTimersByTimeAsync(590_000); // queued almost to the timeout
++      gated.push(chunk('a'));
++      await vi.advanceTimersByTimeAsync(45_000);
++      gated.push(chunk('b'));
++      await vi.advanceTimersByTimeAsync(45_000);
++      gated.end(); // 90s of generation, inside its 100s
++      await vi.advanceTimersByTimeAsync(0);
++      await consume;
++      expect(error).toBeUndefined();
++      expect(done).toBe(true);
      });
  
+-    it('includes the idle detail and env override hint in timeout errors', async () => {
+-      const gated = gatedStream(); // never push/end → silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
++    it('refuses a streaming request that states no max_tokens before sending it', async () => {
++      const p = buildPipeline();
++      mockContentGeneratorConfig.samplingParams = { temperature: 0.7 };
++      await expect(p.executeStream(streamingRequest(), 'id')).rejects.toThrow(
++        'A streaming request must state a positive whole max_tokens, and this one states undefined',
+       );
+-      const p = buildPipeline(1000);
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      const captured = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => e);
+-      await vi.advanceTimersByTimeAsync(1000);
+-      const err = await captured;
+-      expect(err).toBeInstanceOf(StreamInactivityTimeoutError);
+-      const message = (err as Error).message;
+-      expect(message).toContain('No stream activity for 1000ms after 0 chunks');
+-      expect(message).toContain('QWEN_STREAM_IDLE_TIMEOUT_MS');
++      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
+     });
+ 
+-    it('uses the default stream idle timeout when no override is configured', async () => {
+-      const gated = gatedStream(); // never push/end → silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline();
+-      const gen = await p.executeStream(streamingRequest(), 'id');
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })();
+-      const captured = consume.catch((e: unknown) => e);
+-      await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS);
+-      const err = await captured;
+-      expect(err).toBeInstanceOf(StreamInactivityTimeoutError);
+-      expect(err).toMatchObject({
+-        code: 'ETIMEDOUT',
+-        idleMs: DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+-        chunksReceived: 0,
+-        streamLifetimeMs: DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+-      });
+-      expect(gated.wasReturned()).toBe(true);
+-      expect(mockErrorHandler.handle).not.toHaveBeenCalled();
+-    });
+-
+-    it('swallows the orphaned SDK next() rejection after an idle timeout', async () => {
++    it('swallows the orphaned SDK next() rejection after a start timeout', async () => {
+       const pendingSdkNext: {
+         reject?: (err: unknown) => void;
+       } = {};
+@@ -5613,18 +6061,13 @@
+       process.on('unhandledRejection', handler);
+ 
+       try {
+-        const p = buildPipeline(1000);
+-        const gen = await p.executeStream(streamingRequest(), 'id');
+-        const captured = (async () => {
+-          for await (const _ of gen) {
+-            /* drain */
+-          }
+-        })().catch((e: unknown) => e);
++        const p = buildPipeline({ timeout: 1000 });
++        const captured = drain(await p.executeStream(streamingRequest(), 'id'));
+ 
+         await vi.advanceTimersByTimeAsync(1000);
+         expect(await captured).toMatchObject({
+           code: 'ETIMEDOUT',
+-          chunksReceived: 0,
++          requestTimeoutMs: 1000,
+         });
+ 
+         const sdkAbort = new Error('aborted by SDK');
+@@ -5640,91 +6083,13 @@
+       }
+     });
+ 
+-    it('aborts the SDK signal on idle timeout without a parent abort signal', async () => {
+-      const gated = gatedStream(); // never push/end → silent
+-      let sdkSignal: AbortSignal | undefined;
+-      (mockClient.chat.completions.create as Mock).mockImplementation(
+-        (_req: unknown, opts: { signal?: AbortSignal }) => {
+-          sdkSignal = opts.signal;
+-          return Promise.resolve(gated.stream);
+-        },
+-      );
+-      const p = buildPipeline(1000);
+-      const gen = await p.executeStream(streamingRequest(), 'id');
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })();
+-      const captured = consume.catch((e: unknown) => e);
+-      expect(sdkSignal).toBeInstanceOf(AbortSignal);
+-      expect(sdkSignal?.aborted).toBe(false);
+-      await vi.advanceTimersByTimeAsync(1000);
+-      expect(await captured).toMatchObject({ code: 'ETIMEDOUT' });
+-      expect(sdkSignal?.aborted).toBe(true);
+-      expect(gated.wasReturned()).toBe(true);
+-    });
+-
+-    it('delivers chunks then throws ETIMEDOUT when the stream stalls after some output', async () => {
+-      const gated = gatedStream();
+-      gated.push(chunk('hello')); // one chunk, then silence
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000);
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      const results: GenerateContentResponse[] = [];
+-      const consume = (async () => {
+-        for await (const r of gen) results.push(r);
+-      })();
+-      const captured = consume.catch((e: unknown) => e);
+-      await vi.advanceTimersByTimeAsync(1000);
+-      expect(await captured).toMatchObject({
+-        code: 'ETIMEDOUT',
+-        chunksReceived: 1,
+-      });
+-      expect(results).toHaveLength(1);
+-      expect(gated.wasReturned()).toBe(true);
+-    });
+-
+-    it('resets the timer on each chunk and completes a slow-but-active stream', async () => {
+-      const gated = gatedStream();
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000);
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      const results: GenerateContentResponse[] = [];
+-      const consume = (async () => {
+-        for await (const r of gen) results.push(r);
+-      })();
+-      // Three chunks, each 800ms apart (< 1000ms idle) → total 2400ms but
+-      // never idle for a full second, so the watchdog must not trip.
+-      await vi.advanceTimersByTimeAsync(800);
+-      gated.push(chunk('a'));
+-      await vi.advanceTimersByTimeAsync(800);
+-      gated.push(chunk('b'));
+-      await vi.advanceTimersByTimeAsync(800);
+-      gated.end();
+-      await consume;
+-      expect(results).toHaveLength(2);
+-      // Late advance after completion must not produce a delayed throw.
+-      await vi.advanceTimersByTimeAsync(5000);
+-    });
+-
+     it('closes the guarded SDK iterator when the consumer breaks early', async () => {
+       const gated = gatedStream();
+       gated.push(chunk('hello'));
+       (mockClient.chat.completions.create as Mock).mockResolvedValue(
+         gated.stream,
+       );
+-      const p = buildPipeline(1000);
++      const p = buildPipeline();
+       const gen = await p.executeStream(streamingRequest(), 'id');
+       const call = (mockClient.chat.completions.create as Mock).mock.calls[0];
+       const sdkSignal = call[1]?.signal;
+@@ -5742,7 +6107,7 @@
+       (mockClient.chat.completions.create as Mock).mockResolvedValue(
+         gated.stream,
+       );
+-      const p = buildPipeline(1000);
++      const p = buildPipeline();
+       const gen = await p.executeStream(streamingRequest(), 'id');
+       const results: GenerateContentResponse[] = [];
+       gated.push(chunk('hello'));
+@@ -5761,6 +6126,6 @@
+         expect.anything(),
+       );
+ 
+-      await vi.advanceTimersByTimeAsync(5000);
++      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS);
+     });
+ 
+@@ -5767,367 +6132,32 @@
+-    it('propagates a user AbortError (not ETIMEDOUT) when the parent signal is aborted', async () => {
+-      const ac = new AbortController();
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000);
+-      const gen = await p.executeStream(streamingRequest(ac.signal), 'id');
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })();
+-      const captured = consume.catch((e: unknown) => e);
+-      ac.abort();
+-      await vi.advanceTimersByTimeAsync(1000);
+-      const err = (await captured) as { name?: string; code?: string };
+-      expect(err.name).toBe('AbortError');
+-      expect(err.code).not.toBe('ETIMEDOUT');
+-      expect(gated.wasReturned()).toBe(true);
+-    });
++    it.each([
++      ['before the first chunk', false],
++      ['after the first chunk', true],
++    ])(
++      'propagates a user AbortError (not ETIMEDOUT) when the parent signal is aborted %s',
++      async (_label, started) => {
++        const ac = new AbortController();
++        const gated = gatedStream();
++        if (started) gated.push(chunk('hello'));
++        (mockClient.chat.completions.create as Mock).mockResolvedValue(
++          gated.stream,
++        );
++        const p = buildPipeline({ timeout: 1000 });
++        const captured = drain(
++          await p.executeStream(streamingRequest(ac.signal), 'id'),
++        );
++        ac.abort();
++        await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS);
++        const err = (await captured) as { name?: string; code?: string };
++        expect(err.name).toBe('AbortError');
++        expect(err.code).not.toBe('ETIMEDOUT');
++        expect(gated.wasReturned()).toBe(true);
++      },
++    );
+ 
+-    it('is disabled when streamIdleTimeoutMs <= 0 (no timeout fires)', async () => {
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(0);
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().then(
+-        () => (settled = true),
+-        () => (settled = true),
+-      );
+-      await vi.advanceTimersByTimeAsync(600000);
+-      expect(settled).toBe(false);
+-      gated.end(); // unblock so the test doesn't leak a pending stream
+-      await consume;
+-    });
+-
+-    it('honors a custom streamIdleTimeoutMs value', async () => {
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(5000);
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch(() => (settled = true));
+-      // Not yet at 5000ms → must not have tripped.
+-      await vi.advanceTimersByTimeAsync(4000);
+-      expect(settled).toBe(false);
+-      // Cross 5000ms → trips.
+-      await vi.advanceTimersByTimeAsync(1000);
+-      await consume;
+-      expect(settled).toBe(true);
+-      expect(gated.wasReturned()).toBe(true);
+-    });
+-
+-    it('honors QWEN_STREAM_IDLE_TIMEOUT_MS when no explicit config is set', async () => {
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '3000');
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(); // no explicit streamIdleTimeoutMs → env applies
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch(() => (settled = true));
+-      await vi.advanceTimersByTimeAsync(2999);
+-      expect(settled).toBe(false); // not yet at the env value
+-      await vi.advanceTimersByTimeAsync(1);
+-      await consume;
+-      expect(settled).toBe(true); // tripped at 3000ms from the env
+-    });
+-
+-    it('lets an explicit streamIdleTimeoutMs config take precedence over the env', async () => {
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '1000');
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(5000); // config 5000 wins over env 1000
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch(() => (settled = true));
+-      await vi.advanceTimersByTimeAsync(1000); // env value — must NOT trip
+-      expect(settled).toBe(false);
+-      await vi.advanceTimersByTimeAsync(4000); // reach the config value (5000)
+-      await consume;
+-      expect(settled).toBe(true);
+-    });
+-
 -    it('ignores a malformed QWEN_STREAM_IDLE_TIMEOUT_MS and falls back to the default', async () => {
-+    it('refuses malformed QWEN_STREAM_IDLE_TIMEOUT_MS before client construction', () => {
-       vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, 'not-a-number');
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, 'not-a-number');
 -      const gated = gatedStream(); // silent
 -      (mockClient.chat.completions.create as Mock).mockResolvedValue(
 -        gated.stream,
@@ -167032,14 +167583,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      // trip it — asserting it trips AT the default proves the value was
 -      // rejected. (In real Node such a delay is silently compressed to 1ms,
 -      // which would make the watchdog fire almost immediately.)
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline()).toThrow(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV);
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-+    });
-+
-+    it('refuses oversized QWEN_STREAM_IDLE_TIMEOUT_MS before client construction', () => {
-       vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '9999999999');
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '9999999999');
 -      const gated = gatedStream(); // silent
 -      (mockClient.chat.completions.create as Mock).mockResolvedValue(
 -        gated.stream,
@@ -167065,14 +167609,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -    it('rejects a non-decimal QWEN_STREAM_IDLE_TIMEOUT_MS (hex/scientific) and uses the default', async () => {
 -      // Number('0x10') === 16; a strict decimal-integer check must reject it so
 -      // a typo can't silently become a 16ms timeout.
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline()).toThrow(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV);
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-+    });
-+
-+    it('refuses hexadecimal QWEN_STREAM_IDLE_TIMEOUT_MS before client construction', () => {
-       vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '0x10');
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '0x10');
 -      const gated = gatedStream(); // silent
 -      (mockClient.chat.completions.create as Mock).mockResolvedValue(
 -        gated.stream,
@@ -167118,35 +167655,35 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      await vi.advanceTimersByTimeAsync(1);
 -      await consume;
 -      expect(settled).toBe(true); // trips at the default (config rejected)
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline()).toThrow(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV);
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-+    });
-+
-+    it('refuses out-of-range streamIdleTimeoutMs before client construction', () => {
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline(MAX_STREAM_GUARD_TIMEOUT_MS + 1)).toThrow(
-+        'streamIdleTimeoutMs',
-+      );
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-     });
- 
-     it('accepts the exact MAX_STREAM_GUARD_TIMEOUT_MS boundary value', async () => {
-       const gated = gatedStream(); // silent
-       (mockClient.chat.completions.create as Mock).mockResolvedValue(
-         gated.stream,
-@@ -6015,35 +6266,20 @@
-       await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS);
-       expect(settled).toBe(false);
-       gated.end();
-       await consume;
-     });
- 
+-    });
+-
+-    it('accepts the exact MAX_STREAM_GUARD_TIMEOUT_MS boundary value', async () => {
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      // The exact ceiling must be accepted (not rejected as out-of-range).
+-      // Guards against an off-by-one changing `<=` to `<`.
+-      const p = buildPipeline(MAX_STREAM_GUARD_TIMEOUT_MS);
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch(() => (settled = true));
+-      // Must NOT trip at the default (which would mean the ceiling was rejected).
+-      await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS);
+-      expect(settled).toBe(false);
+-      gated.end();
+-      await consume;
+-    });
+-
 -    it('falls back from an invalid config to the env value (config→env cascade)', async () => {
-+    it('refuses invalid streamIdleTimeoutMs even with a valid environment value', () => {
-       vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '4000');
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '4000');
 -      const gated = gatedStream(); // silent
 -      (mockClient.chat.completions.create as Mock).mockResolvedValue(
 -        gated.stream,
@@ -167168,25 +167705,35 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      await vi.advanceTimersByTimeAsync(1);
 -      await consume;
 -      expect(settled).toBe(true); // trips at 4000ms from the env (not default)
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline(MAX_STREAM_GUARD_TIMEOUT_MS + 1)).toThrow(
-+        'streamIdleTimeoutMs',
-+      );
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-     });
- 
-     it('disables the watchdog when QWEN_STREAM_IDLE_TIMEOUT_MS=0', async () => {
-       vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '0');
-       const gated = gatedStream(); // silent
-       (mockClient.chat.completions.create as Mock).mockResolvedValue(
-@@ -6067,35 +6303,17 @@
-       await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS + 60000);
-       expect(settled).toBe(false);
-       gated.end();
-       await consume;
-     });
- 
+-    });
+-
+-    it('disables the watchdog when QWEN_STREAM_IDLE_TIMEOUT_MS=0', async () => {
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '0');
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(); // no config; env=0 → disabled
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().then(
+-        () => (settled = true),
+-        () => (settled = true),
+-      );
+-      // Well past the default — must NOT trip (watchdog disabled).
+-      await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_IDLE_TIMEOUT_MS + 60000);
+-      expect(settled).toBe(false);
+-      gated.end();
+-      await consume;
+-    });
+-
 -    it('disables the watchdog with a negative config value', async () => {
 -      const gated = gatedStream(); // silent
 -      (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -167210,27 +167757,178 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      expect(settled).toBe(false);
 -      gated.end();
 -      await consume;
-+    it('refuses a negative streamIdleTimeoutMs before client construction', () => {
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline(-1)).toThrow('streamIdleTimeoutMs');
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-     });
- 
-     it('caps the total stream lifetime even when chunks keep resetting the idle watchdog (issue #8597)', async () => {
-       const gated = gatedStream(); // drip-fed, never ends
+-    });
+-
+-    it('caps the total stream lifetime even when chunks keep resetting the idle watchdog (issue #8597)', async () => {
+-      const gated = gatedStream(); // drip-fed, never ends
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000, 3000); // idle 1s, lifetime 3s
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => {
+-        error = e;
+-      });
+-      // A chunk every 500ms: every drip resets the 1s idle watchdog, so it can
+-      // never fire — the CI hang shape. The 3s lifetime cap does not reset.
+-      for (let i = 0; i < 5; i++) {
+-        gated.push(chunk('x'));
+-        await vi.advanceTimersByTimeAsync(500);
+-      }
+-      await vi.advanceTimersByTimeAsync(1000); // t=3500 — past the cap
+-      await consume;
+-      expect(error).toBeInstanceOf(StreamLifetimeExceededError);
+-      expect(error).toMatchObject({ code: 'ETIMEDOUT' });
+-      expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(3000);
+-      expect((error as StreamLifetimeExceededError).chunksReceived).toBe(5);
+-      expect((error as Error).message).toContain('QWEN_STREAM_MAX_LIFETIME_MS');
+-      expect(gated.wasReturned()).toBe(true);
+-      expect(mockErrorHandler.handle).not.toHaveBeenCalled();
+-    });
+-
+-    it('does not interrupt a drip-fed stream that completes within the lifetime cap', async () => {
++    it('does not charge the bound for a wall-clock jump — the accounting is monotonic', async () => {
++      // The guard accounts on `performance.now()`, not `Date.now()`: an NTP
++      // step forward (or a laptop waking from a long sleep) must not kill a
++      // healthy stream, and a backward step must not disable the bound. The
++      // jump lands while `it.next()` is pending, so a wall-clock deadline
++      // charged it as upstream wait and threw at the next iteration; the
++      // monotonic clock sees only the 500ms the model actually took.
+@@ -6135,7 +6165,7 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
-@@ -6259,47 +6477,20 @@
-       // t=3200: past the 3s config cap.
+       );
+-      const p = buildPipeline(1000, 3000);
++      const p = buildPipeline({ maxTokens: 36 }); // 3s from the first chunk
+       const gen = await p.executeStream(streamingRequest(), 'id');
+       let done = false;
+       let error: unknown;
+@@ -6147,40 +6177,7 @@
+         () => (done = true),
+         (e: unknown) => (error = e),
+       );
+-      gated.push(chunk('a'));
+-      await vi.advanceTimersByTimeAsync(500);
+-      gated.push(chunk('b'));
+-      await vi.advanceTimersByTimeAsync(500);
+-      gated.end(); // completes at t=1000, well under the 3s cap
+-      await vi.advanceTimersByTimeAsync(0);
+-      await consume;
+-      expect(error).toBeUndefined();
+-      expect(done).toBe(true);
+-    });
+-
+-    it('does not charge the cap for a wall-clock jump — the accounting is monotonic', async () => {
+-      // The guard accounts on `performance.now()`, not `Date.now()`: an NTP
+-      // step forward (or a laptop waking from a long sleep) must not kill a
+-      // healthy stream, and a backward step must not disable the cap. The
+-      // jump lands while `it.next()` is pending, so a wall-clock deadline
+-      // charged it as upstream wait and threw at the next iteration; the
+-      // monotonic clock sees only the 500ms the model actually took.
+-      const gated = gatedStream(); // silent until pushed
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000, 3000); // idle 1s, lifetime 3s
+-      const gen = await p.executeStream(streamingRequest(), 'id');
+-      let done = false;
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().then(
+-        () => (done = true),
+-        (e: unknown) => (error = e),
+-      );
++      gated.push(chunk('first'));
+       await vi.advanceTimersByTimeAsync(500); // next() pending, t=500
+       // The wall clock leaps 20 minutes while monotonic time does not.
+       const dateNow = vi
+@@ -6190,7 +6187,7 @@
+       await vi.advanceTimersByTimeAsync(0);
+       gated.push(chunk('b'));
+       await vi.advanceTimersByTimeAsync(500);
+-      gated.end(); // completes at monotonic t=1000, well under the 3s cap
++      gated.end(); // completes at monotonic t=1000, well under the 3s bound
+       await vi.advanceTimersByTimeAsync(0);
        await consume;
-       expect(error).toBeInstanceOf(StreamLifetimeExceededError);
-       expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(3000);
-     });
- 
+       dateNow.mockRestore();
+@@ -6201,259 +6198,2 @@
+-    it('honours QWEN_STREAM_MAX_LIFETIME_MS when no explicit config is set', async () => {
+-      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, '4000');
+-      const gated = gatedStream(); // drip-fed, never ends
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000); // idle 1s; lifetime from the env
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => {
+-        error = e;
+-      });
+-      for (let i = 0; i < 7; i++) {
+-        gated.push(chunk('x'));
+-        await vi.advanceTimersByTimeAsync(500);
+-      }
+-      await vi.advanceTimersByTimeAsync(1000); // t=4500 — past the 4s env cap
+-      await consume;
+-      expect(error).toBeInstanceOf(StreamLifetimeExceededError);
+-      expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(4000);
+-    });
+-
+-    it('lets an explicit streamMaxLifetimeMs config take precedence over the env', async () => {
+-      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, '1000');
+-      const gated = gatedStream(); // drip-fed, never ends
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(500, 3000); // config 3s wins over env 1s
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => {
+-        error = e;
+-      });
+-      for (let i = 0; i < 4; i++) {
+-        gated.push(chunk('x'));
+-        await vi.advanceTimersByTimeAsync(400);
+-      }
+-      // t=1600: past the env value (1s) — must NOT have tripped yet.
+-      expect(error).toBeUndefined();
+-      for (let i = 0; i < 4; i++) {
+-        gated.push(chunk('x'));
+-        await vi.advanceTimersByTimeAsync(400);
+-      }
+-      // t=3200: past the 3s config cap.
+-      await consume;
+-      expect(error).toBeInstanceOf(StreamLifetimeExceededError);
+-      expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(3000);
+-    });
+-
 -    it('ignores a malformed QWEN_STREAM_MAX_LIFETIME_MS and falls back to the default', async () => {
-+    it('refuses malformed QWEN_STREAM_MAX_LIFETIME_MS before client construction', () => {
-       vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, 'not-a-number');
+-      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, 'not-a-number');
 -      const gated = gatedStream(); // drip-fed, never ends
 -      (mockClient.chat.completions.create as Mock).mockResolvedValue(
 -        gated.stream,
@@ -167264,18 +167962,196 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(
 -        DEFAULT_STREAM_MAX_LIFETIME_MS,
 -      );
-+      vi.mocked(mockProvider.buildClient).mockClear();
-+      expect(() => buildPipeline(1000)).toThrow(
-+        QWEN_STREAM_MAX_LIFETIME_MS_ENV,
-+      );
-+      expect(mockProvider.buildClient).not.toHaveBeenCalled();
-+      expect(mockClient.chat.completions.create).not.toHaveBeenCalled();
-     });
- 
-     it('uses the default lifetime cap when nothing overrides it', async () => {
-       const gated = gatedStream(); // drip-fed, never ends
+-    });
+-
+-    it('uses the default lifetime cap when nothing overrides it', async () => {
+-      const gated = gatedStream(); // drip-fed, never ends
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000); // idle 1s; lifetime default 900s
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => {
+-        error = e;
+-      });
+-      // Drip at 500ms intervals all the way to the default cap: the idle
+-      // watchdog never fires, the 15-minute lifetime cap does.
+-      const drips = Math.ceil(DEFAULT_STREAM_MAX_LIFETIME_MS / 500);
+-      for (let i = 0; i < drips; i++) {
+-        gated.push(chunk('x'));
+-        await vi.advanceTimersByTimeAsync(500);
+-      }
+-      await consume;
+-      expect(error).toBeInstanceOf(StreamLifetimeExceededError);
+-      expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(
+-        DEFAULT_STREAM_MAX_LIFETIME_MS,
+-      );
+-    });
+-
+-    it('keeps the idle guard answering when the lifetime cap is disabled', async () => {
+-      // The guards are independent: disabling the lifetime cap must not
+-      // disable the idle watchdog with it. (The disable itself is pinned by
+-      // the both-guards-0 tests below — a silent stream with the idle guard
+-      // active would trip the idle timer at 1s for ANY lifetime value, so it
+-      // cannot distinguish a working disable.)
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(1000, 0); // lifetime disabled; idle 1s active
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => {
+-        error = e;
+-      });
+-      await vi.advanceTimersByTimeAsync(1000);
+-      await consume;
+-      // The idle guard still answers for a silent stream; no lifetime error.
+-      expect(error).toBeInstanceOf(StreamInactivityTimeoutError);
+-    });
+-
+-    it('caps the lifetime even when the idle watchdog is disabled', async () => {
+-      // The wrap condition's other half: idle off, lifetime on. Deployments
+-      // that set QWEN_STREAM_IDLE_TIMEOUT_MS=0 rely on the cap as their only
+-      // remaining guard, so the cap must still wrap the stream for them.
+-      const gated = gatedStream(); // drip-fed, never ends
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(0, 3000); // idle disabled; lifetime 3s
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let error: unknown;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().catch((e: unknown) => {
+-        error = e;
+-      });
+-      for (let i = 0; i < 5; i++) {
+-        gated.push(chunk('x'));
+-        await vi.advanceTimersByTimeAsync(500);
+-      }
+-      await vi.advanceTimersByTimeAsync(1000); // t=3500 — past the 3s cap
+-      await consume;
+-      expect(error).toBeInstanceOf(StreamLifetimeExceededError);
+-      expect((error as StreamLifetimeExceededError).maxLifetimeMs).toBe(3000);
+-      expect(gated.wasReturned()).toBe(true);
+-    });
+-
+-    it('disables both guards when both are 0 — no wrap, no cap, no idle abort', async () => {
+-      // Pins the both-guards-off OUTCOME: with neither guard positive the
+-      // stream passes through untouched and is never aborted — however far the
+-      // fake clock runs past both defaults. That outcome is now doubly
+-      // provided (the caller's `idleMs > 0 || maxLifetimeMs > 0` skip, plus the
+-      // in-function both-off early return), so this test pins the behaviour,
+-      // not which mechanism supplies it — an always-wrap refactor of the CALLER
+-      // is caught by the function's early return, which is exactly why this
+-      // stream does not die to `setTimeout(Infinity)` clamping to ~1ms.
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(0, 0); // both guards off
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().then(
+-        () => (settled = true),
+-        () => (settled = true),
+-      );
+-      // Well past the default idle window AND the default lifetime cap.
+-      await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_MAX_LIFETIME_MS + 60000);
+-      expect(settled).toBe(false);
+-      gated.end(); // unblock so the test doesn't leak a pending stream
+-      await consume;
+-    });
+-
+-    it('disables both guards when both env knobs are 0', async () => {
+-      // The env-`0` twin of the test above: a `0` on either deployment knob
+-      // must reach the guard, not fall through to the default.
+-      vi.stubEnv(QWEN_STREAM_IDLE_TIMEOUT_MS_ENV, '0');
+-      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, '0');
+-      const gated = gatedStream(); // silent
+-      (mockClient.chat.completions.create as Mock).mockResolvedValue(
+-        gated.stream,
+-      );
+-      const p = buildPipeline(); // no config; both env knobs 0 → both off
+-      const gen = await p.executeStream(
+-        streamingRequest(new AbortController().signal),
+-        'id',
+-      );
+-      let settled = false;
+-      const consume = (async () => {
+-        for await (const _ of gen) {
+-          /* drain */
+-        }
+-      })().then(
+-        () => (settled = true),
+-        () => (settled = true),
+-      );
+-      await vi.advanceTimersByTimeAsync(DEFAULT_STREAM_MAX_LIFETIME_MS + 60000);
+-      expect(settled).toBe(false);
+-      gated.end();
+-      await consume;
+-    });
+-
+-    it('does not cap a buffered, already-complete stream for a slow consumer — consumer time is not upstream wait', async () => {
+-      // The lifetime cap charges only the time the loop is BLOCKED on
++    it('does not bound a buffered, already-complete stream for a slow consumer — consumer time is not upstream wait', async () => {
++      // The generation bound charges only the time the loop is BLOCKED on
+@@ -6461,16 +6201,14 @@
+       // after a yield. An upstream that already finished and buffered
+       // everything owes nothing, however slowly the consumer drains — so all
+       // ten pre-buffered chunks are delivered and the stream completes, even
+-      // with the wall clock racing 2s per chunk past the 3s cap. (The prior
+-      // shape — charging the deadline check at the top of the loop — cut this
+-      // healthy stream at 2 chunks for the consumer's slowness.)
++      // with the wall clock racing 2s per chunk past the 3s bound.
+       const gated = gatedStream();
+       for (let i = 0; i < 10; i++) gated.push(chunk('x')); // all pre-buffered
+       gated.end();
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
+       );
+-      const p = buildPipeline(1000, 3000); // idle 1s, lifetime 3s
++      const p = buildPipeline({ maxTokens: 36 }); // 3s from the first chunk
+       const gen = await p.executeStream(
+         streamingRequest(new AbortController().signal),
+         'id',
+@@ -6481,7 +6219,7 @@
+         for await (const r of gen) {
+           received.push(r);
+           // A slow consumer: the wall clock jumps 2s per chunk (20s total,
+-          // far past the cap) while every next() stays a microtask — no
++          // far past the bound) while every next() stays a microtask — no
+           // upstream wait is charged, so nothing fires.
+           await vi.advanceTimersByTimeAsync(2000);
+         }
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts
@@ -167377,7 +168253,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
  import {
    applyOfficialOpenAIPromptCaching,
-@@ -21,16 +27,22 @@
+@@ -21,17 +27,22 @@
  } from './prefix-caching.js';
  import { isDeepSeekHostname } from './provider/deepseek.js';
  import { openaiRequestCaptureContext } from './requestCaptureContext.js';
@@ -167401,10 +168277,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    isTieredEffortWireModel,
  } from '../modalityDefaults.js';
  import {
-   DEFAULT_STREAM_IDLE_TIMEOUT_MS,
-@@ -39,14 +51,12 @@
-   QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
-   QWEN_STREAM_MAX_LIFETIME_MS_ENV,
+-  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+-  DEFAULT_STREAM_MAX_LIFETIME_MS,
++  DECODE_FLOOR_TPS,
+@@ -39,14 +50,12 @@
+-  QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
+-  QWEN_STREAM_MAX_LIFETIME_MS_ENV,
++  STREAM_IDLE_TIMEOUT_MS,
++  resolveRequestTimeout,
  } from './constants.js';
  import { createDebugLogger } from '../../utils/debugLogger.js';
  import { getToolCallPreparations } from '../tool-call-preparation.js';
@@ -167417,7 +168297,94 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    reportOpenAiChunk,
    reportOpenAiRequest,
    reportOpenAiResponse,
-@@ -180,20 +190,17 @@
+@@ -81,7 +90,31 @@
+ }
+ 
+ /**
+- * Thrown when a streaming response goes silent past the inactivity timeout.
++ * Thrown when a streaming request sends no chunk within the request timeout.
++ * The wait before the first chunk is the request's to spend -- queued behind
++ * another generation, or prefilling its prompt -- and the request timeout,
++ * counted from dispatch, is its bound. `code: 'ETIMEDOUT'` makes
++ * `classifyRetryError` treat it as a retryable transport error.
++ */
++export class StreamStartTimeoutError extends Error {
++  readonly code = 'ETIMEDOUT' as const;
++
++  constructor(
++    readonly requestTimeoutMs: number,
++    readonly waitedMs: number,
++  ) {
++    super(
++      `No chunk arrived within the ${requestTimeoutMs}ms request timeout ` +
++        `(waited ${waitedMs}ms since dispatch): the request never started ` +
++        `generating. Check the serving engine's queue, or raise the request ` +
++        `timeout.`,
++    );
++    this.name = 'StreamStartTimeoutError';
++  }
++}
++
++/**
++ * Thrown when a started stream goes silent past {@link STREAM_IDLE_TIMEOUT_MS}.
+  * `code: 'ETIMEDOUT'` makes `classifyRetryError` treat it as a retryable
+  * transport error, identical to a real socket read timeout.
+  */
+@@ -95,25 +128,23 @@
+   ) {
+     super(
+       `No stream activity for ${idleMs}ms after ${chunksReceived} chunks ` +
+-        `(stream lifetime: ${streamLifetimeMs}ms). Set ` +
+-        `${QWEN_STREAM_IDLE_TIMEOUT_MS_ENV} to increase this window ` +
+-        `(or 0 to disable it).`,
++        `(stream lifetime: ${streamLifetimeMs}ms): the engine stopped ` +
++        `mid-generation. Check that the serving engine is healthy.`,
+     );
+     this.name = 'StreamInactivityTimeoutError';
+   }
+ }
+ 
+ /**
+- * Thrown when a streaming response exceeds its upstream-wait budget without
+- * completing. The cap charges accumulated time blocked in `await it.next()`
+- * (upstream latency), never the consumer's processing, so a buffered,
+- * already-complete stream never trips it — the shape it catches is a
+- * never-completing stream the inactivity watchdog cannot see: a drip-fed
+- * gateway or a model crawling through an oversized response resets that
+- * watchdog forever (issue #8597). Same retryable `ETIMEDOUT` code, so a
+- * text-only generation resumes via the transport-continuation recovery; a
+- * turn that already streamed a functionCall surfaces as a visible,
+- * classified error instead.
++ * Thrown when a started generation outlasts its bound: the most tokens it may
++ * generate at {@link DECODE_FLOOR_TPS}, charged as accumulated time blocked in
++ * `await it.next()` from the first chunk on, never the consumer's processing.
++ * A buffered, already-complete stream never trips it; the shape it catches is
++ * a generation the idle guard cannot see, a drip-fed stream or an engine
++ * crawling below the floor, which resets that guard forever (issue #8597).
++ * Same retryable `ETIMEDOUT` code, so a text-only generation resumes via the
++ * transport-continuation recovery; a turn that already streamed a functionCall
++ * surfaces as a visible, classified error instead.
+  */
+ export class StreamLifetimeExceededError extends Error {
+   readonly code = 'ETIMEDOUT' as const;
+@@ -124,11 +155,11 @@
+     readonly streamLifetimeMs: number,
+   ) {
+     super(
+-      `Stream exceeded its ${maxLifetimeMs}ms upstream-wait cap after ` +
+-        `${chunksReceived} chunks without completing (wall clock: ` +
+-        `${streamLifetimeMs}ms). Set ` +
+-        `${QWEN_STREAM_MAX_LIFETIME_MS_ENV} to increase this cap ` +
+-        `(or 0 to disable it).`,
++      `Generation did not complete within ${maxLifetimeMs}ms of upstream ` +
++        `wait from its first chunk, the time its max_tokens takes at the ` +
++        `${DECODE_FLOOR_TPS} tokens/second decode floor, after ` +
++        `${chunksReceived} chunks (wall clock: ${streamLifetimeMs}ms). An ` +
++        `engine decoding below the floor is broken; check the serving engine.`,
+     );
+     this.name = 'StreamLifetimeExceededError';
+   }
+@@ -180,20 +211,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -167442,7 +168409,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,63 +227,41 @@
+@@ -220,75 +248,40 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -167455,28 +168422,37 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 - * disable) > the env deployment knob > the built-in default. A malformed env
 - * value is ignored (with a `console.warn`) rather than failing the request.
 - */
-+/** Resolve explicit config, then environment, then the absent-setting default. */
- function resolveStreamGuardMs(
-   fromConfig: number | undefined,
-   configLabel: string,
-   envName: string,
-   defaultMs: number,
- ): number {
+-function resolveStreamGuardMs(
+-  fromConfig: number | undefined,
+-  configLabel: string,
+-  envName: string,
+-  defaultMs: number,
+-): number {
 -  // 1. Explicit config field (programmatic) wins:
 -  //    - `<= 0` disables the watchdog (downstream `> 0` guards skip it).
 -  //    - Values above the JS timer ceiling are rejected: setTimeout silently
 -  //      compresses them to 1ms, which would fire near-immediately.
 -  //    - NaN/Infinity/non-integer are invalid.
 -  if (typeof fromConfig === 'number') {
-+  if (fromConfig !== undefined) {
-     if (
-+      typeof fromConfig === 'number' &&
-       Number.isInteger(fromConfig) &&
-+      fromConfig >= 0 &&
-       fromConfig <= MAX_STREAM_GUARD_TIMEOUT_MS
-     ) {
-       return fromConfig;
-     }
+-    if (
+-      Number.isInteger(fromConfig) &&
+-      fromConfig <= MAX_STREAM_GUARD_TIMEOUT_MS
+-    ) {
+-      return fromConfig;
+-    }
++/**
++ * How long a started generation may take, in upstream-wait milliseconds from
++ * its first chunk: the most tokens the request may generate, `max_tokens`, at
++ * {@link DECODE_FLOOR_TPS}. Every streaming request this client issues states
++ * its output limit, so a request without one has no bound to guard and is
++ * refused before it is sent.
++ */
++export function streamGenerationBoundMs(maxTokens: unknown): number {
++  if (
++    typeof maxTokens !== 'number' ||
++    !Number.isSafeInteger(maxTokens) ||
++    maxTokens < 1
++  ) {
 -    // eslint-disable-next-line no-console
 -    console.warn(
 -      `[qwen-code] Ignoring out-of-range ${configLabel}=${fromConfig} ` +
@@ -167488,10 +168464,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  //    notation/floats/signs so a typo can't silently become a surprising
 -  //    timeout. `0` disables; values above the timer ceiling are rejected.
 +    throw new Error(
-+      `${configLabel} must be an integer in [0, ${MAX_STREAM_GUARD_TIMEOUT_MS}] milliseconds.`,
++      `A streaming request must state a positive whole max_tokens, and this one states ${String(maxTokens)}: its generation is bounded by max_tokens at the decode floor, so without one it has no bound. Issue it with maxOutputTokens.`,
 +    );
 +  }
-   const raw = process.env[envName];
+-  const raw = process.env[envName];
 -  const trimmed = raw?.trim();
 -  if (trimmed) {
 -    if (/^\d+$/.test(trimmed)) {
@@ -167508,36 +168484,207 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -    );
 -  }
 -  return defaultMs;
-+  if (raw === undefined) return defaultMs;
-+  if (/^\d+$/.test(raw.trim())) {
-+    const parsed = Number(raw);
-+    if (parsed <= MAX_STREAM_GUARD_TIMEOUT_MS) return parsed;
++  const boundMs = Math.ceil((maxTokens * 1000) / DECODE_FLOOR_TPS);
++  if (boundMs > MAX_STREAM_GUARD_TIMEOUT_MS) {
++    throw new Error(
++      `A streaming request's max_tokens of ${maxTokens} takes ${boundMs}ms at the decode floor, past the longest bound a timer can hold (${MAX_STREAM_GUARD_TIMEOUT_MS}ms). Issue it with a smaller maxOutputTokens.`,
++    );
 +  }
-+  throw new Error(
-+    `${envName} must be a decimal integer in [0, ${MAX_STREAM_GUARD_TIMEOUT_MS}] milliseconds.`,
-+  );
++  return boundMs;
  }
  
- function resolveStreamIdleTimeoutMs(config: ContentGeneratorConfig): number {
-   return resolveStreamGuardMs(
-     config.streamIdleTimeoutMs,
-     'streamIdleTimeoutMs',
-@@ -302,13 +287,13 @@
-  * ETIMEDOUT. The idle timer resets on every chunk (including
-  * thinking/reasoning deltas), so an actively streaming model is never
-  * interrupted by it. The lifetime cap does NOT reset: once the stream has
-  * accumulated `maxLifetimeMs` of upstream-wait time (the time spent blocked
-  * on the source, never the consumer's time after a yield) without
-  * completing, the iterator throws the same way — the bound a drip-fed
+-function resolveStreamIdleTimeoutMs(config: ContentGeneratorConfig): number {
+-  return resolveStreamGuardMs(
+-    config.streamIdleTimeoutMs,
+-    'streamIdleTimeoutMs',
+-    QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
+-    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+-  );
+-}
+-
+-function resolveStreamMaxLifetimeMs(config: ContentGeneratorConfig): number {
+-  return resolveStreamGuardMs(
+-    config.streamMaxLifetimeMs,
+-    'streamMaxLifetimeMs',
+-    QWEN_STREAM_MAX_LIFETIME_MS_ENV,
+-    DEFAULT_STREAM_MAX_LIFETIME_MS,
+-  );
++/** What one streaming response is held to. */
++interface StreamBounds {
++  /** Monotonic time the request was dispatched at. */
++  readonly dispatchedAt: number;
++  /** The request timeout: the most the first chunk may take from dispatch. */
++  readonly requestTimeoutMs: number;
++  /** The upstream wait the generation may take from its first chunk. */
++  readonly generationMs: number;
+@@ -298,17 +291,19 @@
+- * Wraps a streaming chunk source with two guards. The inactivity watchdog: if
+- * no chunk arrives for `idleMs`, `abortRequest()` is invoked (to abort the
+- * underlying request and free the socket) and the iterator throws — a user
+- * `AbortError` when the parent signal was cancelled, otherwise a retryable
+- * ETIMEDOUT. The idle timer resets on every chunk (including
+- * thinking/reasoning deltas), so an actively streaming model is never
+- * interrupted by it. The lifetime cap does NOT reset: once the stream has
+- * accumulated `maxLifetimeMs` of upstream-wait time (the time spent blocked
+- * on the source, never the consumer's time after a yield) without
+- * completing, the iterator throws the same way — the bound a drip-fed
 - * stream cannot reset (issue #8597). `<= 0` disables each guard
-+ * stream cannot reset (issue #8597). `0` disables each guard
-  * independently.
+- * independently.
++ * Wraps a streaming chunk source with the bounds of one response, each of
++ * which, when it passes, invokes `abortRequest()` (to abort the underlying
++ * request and free the socket) and throws -- a user `AbortError` when the
++ * parent signal was cancelled, otherwise a retryable ETIMEDOUT.
++ *
++ * Until the first chunk, only the request timeout bounds the wait, counted
++ * from dispatch: a request queued behind another generation on a backend that
++ * runs one at a time, or prefilling a long prompt, sends nothing by design.
++ * From the first chunk on, two bounds hold. A silence of
++ * {@link STREAM_IDLE_TIMEOUT_MS} between chunks is a stall; the timer resets
++ * on every chunk (including thinking/reasoning deltas), so an actively
++ * streaming model is never interrupted by it. The generation itself may take
++ * `generationMs` of accumulated upstream wait -- the time spent blocked on the
++ * source, never the consumer's time after a yield -- which does NOT reset: the
++ * bound a drip-fed stream cannot reset (issue #8597).
   */
  async function* withStreamGuards(
    source: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
-   idleMs: number,
-   maxLifetimeMs: number,
-@@ -435,30 +420,112 @@
+-  idleMs: number,
+-  maxLifetimeMs: number,
++  bounds: StreamBounds,
+@@ -315,15 +310,9 @@
+   abortRequest: () => void,
+   parentSignal: AbortSignal | undefined,
+ ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
+-  // Both guards off: pass the source through untouched. The caller's
+-  // `idleMs > 0 || maxLifetimeMs > 0` already prevents this, but the invariant
+-  // must live here too — with both `<= 0`, `wait` computes to `Infinity` and
+-  // Node clamps `setTimeout(Infinity)` to ~1ms, so every stream would die
+-  // instantly with a bogus lifetime error.
+-  if (idleMs <= 0 && maxLifetimeMs <= 0) {
+-    yield* source;
+-    return;
+-  }
++  const idleMs = STREAM_IDLE_TIMEOUT_MS;
++  const maxLifetimeMs = bounds.generationMs;
++  const startDeadline = bounds.dispatchedAt + bounds.requestTimeoutMs;
+   const it = source[Symbol.asyncIterator]();
+   // Monotonic, never `Date.now()`: an NTP step must not kill a healthy
+   // generation on the next iteration (a forward jump) nor silently disable
+@@ -331,64 +320,65 @@
+   // guard exists to bound. The setTimeout this races is a monotonic clock
+   // too, so the two agree.
+   const streamStartedAt = performance.now();
+-  // The lifetime cap is on ACCUMULATED UPSTREAM-WAIT — the wall-clock time
+-  // this loop spends blocked in `await it.next()`. It is deliberately NOT
++  // The generation bound is on ACCUMULATED UPSTREAM-WAIT from the first
++  // chunk — the wall-clock time this loop spends blocked in `await
++  // it.next()` once the generation has started. It is deliberately NOT
+   // end-to-end delivery time: an upstream that finished and buffered its
+   // chunks owes nothing, however slowly the consumer drains (a paused IDE
+   // client, a big TUI render), and a stream whose terminal `done` resolves
+-  // at the boundary completes rather than becoming a retry. The cap only
++  // at the boundary completes rather than becoming a retry. The bound only
+   // bites while the consumer is actually waiting on the model — which is
+   // exactly where #8597's drip-fed, never-completing stream spends its time.
+   let upstreamMs = 0;
+   let chunksReceived = 0;
++  const aborted = () => {
++    // Plain Error (not DOMException) so error redaction's prototype clone
++    // cannot corrupt it; name 'AbortError' satisfies isAbortError.
++    const abortErr = new Error('Aborted');
++    abortErr.name = 'AbortError';
++    return abortErr;
++  };
+   try {
+     while (true) {
+-      const remainingMs =
+-        maxLifetimeMs > 0
+-          ? maxLifetimeMs - upstreamMs
+-          : Number.POSITIVE_INFINITY;
+-      // The upstream-wait budget is already spent; a further wait can only
+-      // lose, so fail it here (the lifetime timer below normally wins first).
++      const started = chunksReceived > 0;
++      const remainingMs = started
++        ? maxLifetimeMs - upstreamMs
++        : startDeadline - performance.now();
++      const passed = () =>
++        started
++          ? new StreamLifetimeExceededError(
++              maxLifetimeMs,
++              chunksReceived,
++              performance.now() - streamStartedAt,
++            )
++          : new StreamStartTimeoutError(
++              bounds.requestTimeoutMs,
++              performance.now() - bounds.dispatchedAt,
++            );
++      // The bound is already spent; a further wait can only lose, so fail it
++      // here (the timer below normally wins first).
+       if (remainingMs <= 0) {
+         // Same precedence as the timer below: a user cancellation wins over
+-        // the cap's retryable ETIMEDOUT.
+-        if (parentSignal?.aborted) {
+-          const abortErr = new Error('Aborted');
+-          abortErr.name = 'AbortError';
+-          throw abortErr;
+-        }
++        // the bound's retryable ETIMEDOUT.
++        if (parentSignal?.aborted) throw aborted();
+         abortRequest();
+-        throw new StreamLifetimeExceededError(
+-          maxLifetimeMs,
+-          chunksReceived,
+-          performance.now() - streamStartedAt,
+-        );
++        throw passed();
+       }
+       const nextPromise = it.next();
+       const awaitedAt = performance.now();
+       let timer: ReturnType<typeof setTimeout> | undefined;
+       const timeout = new Promise<never>((_resolve, reject) => {
+-        // The caller wraps only when at least one guard is positive, so at
+-        // least one of these is finite.
+-        const idleIn = idleMs > 0 ? idleMs : Number.POSITIVE_INFINITY;
++        // Before the first chunk only the start deadline holds; after it the
++        // idle guard and the generation bound, whichever passes first.
++        const idleIn = started ? idleMs : Number.POSITIVE_INFINITY;
+         const wait = Math.min(idleIn, remainingMs);
+         timer = setTimeout(
+           () => {
+             if (parentSignal?.aborted) {
+-              // Plain Error (not DOMException) so error redaction's prototype
+-              // clone cannot corrupt it; name 'AbortError' satisfies isAbortError.
+-              const abortErr = new Error('Aborted');
+-              abortErr.name = 'AbortError';
+-              reject(abortErr);
++              reject(aborted());
+             } else if (remainingMs <= idleIn) {
+               abortRequest();
+-              reject(
+-                new StreamLifetimeExceededError(
+-                  maxLifetimeMs,
+-                  chunksReceived,
+-                  performance.now() - streamStartedAt,
+-                ),
+-              );
++              reject(passed());
+             } else {
+               abortRequest();
+               reject(
+@@ -417,8 +407,10 @@
+       }
+       if (result.done) return;
+       // Charge only the time this chunk took to arrive — the upstream
+-      // latency — never the time the consumer spent after the previous yield.
+-      upstreamMs += performance.now() - awaitedAt;
++      // latency — never the time the consumer spent after the previous yield,
++      // and never the wait for the first chunk, which the start deadline
++      // bounds: the generation is counted from its first chunk.
++      if (started) upstreamMs += performance.now() - awaitedAt;
+       chunksReceived += 1;
+       yield result.value;
+     }
+@@ -435,30 +427,103 @@
  export type { PipelineConfig } from './types.js';
  
 +/** Every request this pipeline sends names the model it is for. */
@@ -167553,19 +168700,18 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private readonly requiredThinkingModels = new Set<string>();
 -  // Resolved once (config field > env > default) so the env read + any
 -  // invalid-value warning happen per pipeline, not per streaming request.
-+  // Validate both settings before constructing the provider client.
-   private readonly streamIdleTimeoutMs: number;
-   private readonly streamMaxLifetimeMs: number;
+-  private readonly streamIdleTimeoutMs: number;
+-  private readonly streamMaxLifetimeMs: number;
  
    constructor(private config: PipelineConfig) {
      this.contentGeneratorConfig = config.contentGeneratorConfig;
 -    this.client = this.config.provider.buildClient();
-     this.streamIdleTimeoutMs = resolveStreamIdleTimeoutMs(
-       this.contentGeneratorConfig,
-     );
-     this.streamMaxLifetimeMs = resolveStreamMaxLifetimeMs(
-       this.contentGeneratorConfig,
-     );
+-    this.streamIdleTimeoutMs = resolveStreamIdleTimeoutMs(
+-      this.contentGeneratorConfig,
+-    );
+-    this.streamMaxLifetimeMs = resolveStreamMaxLifetimeMs(
+-      this.contentGeneratorConfig,
+-    );
 +    this.client = this.config.provider.buildClient();
 +  }
 +
@@ -167654,7 +168800,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        false,
-@@ -492,13 +559,13 @@
+@@ -492,13 +557,13 @@
          }
        },
      );
@@ -167669,22 +168815,56 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        true,
-@@ -586,13 +653,13 @@
-         // Two guards wrap the stream (the SDK `timeout` only bounds connect +
-         // first response). The inactivity watchdog aborts + surfaces a
-         // retryable ETIMEDOUT after `idleMs` of no chunks; the lifetime cap
-         // covers what the watchdog cannot — a drip-fed stream resets the idle
-         // timer forever while never completing (issue #8597), so it aborts
-         // once `maxLifetimeMs` of accumulated upstream-wait has passed.
+@@ -505,8 +570,17 @@
+       async (openaiRequest, context, telemetryAttempt) => {
+-        // Always use a per-request controller so the inactivity watchdog can
+-        // abort the SDK request even when the caller did not provide a signal.
++        // The generation's bound comes from the output limit the request
++        // states, and a request that states none is refused before it is
++        // sent. The start deadline is the request timeout the SDK client was
++        // built with, counted from dispatch.
++        const generationMs = streamGenerationBoundMs(openaiRequest.max_tokens);
++        const requestTimeoutMs = resolveRequestTimeout(
++          this.contentGeneratorConfig.timeout,
++        );
++        // Always use a per-request controller so the stream guards can abort
++        // the SDK request even when the caller did not provide a signal.
+         const parentSignal = request.config?.abortSignal;
+         const perRequestAc = createChildAbortController(parentSignal);
++        const dispatchedAt = performance.now();
+         let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
+         try {
+           // Stage 1: Create OpenAI stream. Wrapped in try so a network /
+@@ -586,19 +660,9 @@
+-        // Two guards wrap the stream (the SDK `timeout` only bounds connect +
+-        // first response). The inactivity watchdog aborts + surfaces a
+-        // retryable ETIMEDOUT after `idleMs` of no chunks; the lifetime cap
+-        // covers what the watchdog cannot — a drip-fed stream resets the idle
+-        // timer forever while never completing (issue #8597), so it aborts
+-        // once `maxLifetimeMs` of accumulated upstream-wait has passed.
 -        // `<= 0` disables each guard.
-+        // `0` disables each guard.
-         const idleMs = this.streamIdleTimeoutMs;
-         const maxLifetimeMs = this.streamMaxLifetimeMs;
-         const guarded =
-           idleMs > 0 || maxLifetimeMs > 0
-             ? withStreamGuards(
-                 stream,
-@@ -608,13 +675,12 @@
+-        const idleMs = this.streamIdleTimeoutMs;
+-        const maxLifetimeMs = this.streamMaxLifetimeMs;
+-        const guarded =
+-          idleMs > 0 || maxLifetimeMs > 0
+-            ? withStreamGuards(
+-                stream,
+-                idleMs,
+-                maxLifetimeMs,
+-                () => perRequestAc.abort(),
+-                parentSignal,
+-              )
+-            : stream;
++        // The stream's bounds (the SDK `timeout` only bounds connect + first
++        // response): the request timeout until the first chunk, then the idle
++        // guard between chunks and the generation's bound from the first one.
++        const guarded = withStreamGuards(
++          stream,
++          { dispatchedAt, requestTimeoutMs, generationMs },
++          () => perRequestAc.abort(),
++          parentSignal,
++        );
+@@ -608,13 +672,12 @@
          // once the stream is fully consumed or abandoned, releasing the SDK
          // request and any parent listener.
          const innerStream = this.processStreamWithLogging(
@@ -167698,7 +168878,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
            try {
              yield* innerStream;
            } finally {
-@@ -635,192 +701,95 @@
+@@ -635,192 +698,95 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -167961,13 +169141,22 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +798,12 @@
+@@ -829,16 +795,18 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
-       // its idle/chunk/lifetime metadata for retry telemetry and diagnostics.
-       // Both stream guards share the ETIMEDOUT code and the same retry path
-       // (issue #8597).
+-      // its idle/chunk/lifetime metadata for retry telemetry and diagnostics.
+-      // Both stream guards share the ETIMEDOUT code and the same retry path
+-      // (issue #8597).
++      // its metadata for retry telemetry and diagnostics. Every stream bound
++      // shares the ETIMEDOUT code and the same retry path (issue #8597).
++      if (error instanceof StreamStartTimeoutError) {
++        debugLogger.warn('OpenAI stream start timeout', {
++          requestTimeoutMs: error.requestTimeoutMs,
++          waitedMs: error.waitedMs,
++        });
++        throw redactProxyError(error);
++      }
 -      // Hoisted above the thinking-tag check: a drip-fed gateway cutting the
 -      // model mid-`<think>` would otherwise surface the guard's ETIMEDOUT as a
 -      // PROTOCOL_TAG_LEAK and burn the tag-leak retry budget instead of the
@@ -167978,7 +169167,19 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -858,100 +823,19 @@
+@@ -845,9 +813,9 @@
+           isLifetime
+-            ? 'OpenAI stream lifetime cap exceeded'
++            ? 'OpenAI stream generation bound exceeded'
+             : 'OpenAI stream inactivity timeout',
+           {
+             chunksReceived: error.chunksReceived,
+-            // Wall clock, labelled apart from the cap so the two numbers in
++            // Wall clock, labelled apart from the bound so the two numbers in
+             // the log reconcile the same way the error message does.
+             wallClockMs: error.streamLifetimeMs,
+             ...(isLifetime
+@@ -858,100 +826,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -168080,7 +169281,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -1029,13 +913,13 @@
+@@ -1029,13 +916,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -168095,7 +169296,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +931,14 @@
+@@ -1047,15 +934,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -168113,7 +169314,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1056,20 @@
+@@ -1173,12 +1059,20 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -168134,7 +169335,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,13 +1209,13 @@
+@@ -1318,13 +1212,13 @@
    }
  
    /**
@@ -168149,7 +169350,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        openaiRequest: OpenAI.Chat.ChatCompletionCreateParams,
        context: RequestContext,
        telemetryAttempt: GenAiAttemptHandle | undefined,
-@@ -1400,13 +1291,13 @@
+@@ -1400,13 +1294,13 @@
     * Create request context with common properties
     */
    private createRequestContext(
@@ -168164,7 +169365,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1305,18 @@
+@@ -1414,15 +1308,18 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -236220,6 +237421,26 @@ diff --git a/packages/core/src/tools/web-fetch.ts b/packages/core/src/tools/web-
  import { runSideQuery } from '../utils/sideQuery.js';
  import { ToolErrorType } from './tool-error.js';
  import type {
+@@ -43,13 +42,13 @@
+ // Full-transfer budget: headers AND body must complete within this window.
+ const FETCH_TIMEOUT_MS = 60_000;
+ // Backstop for the post-fetch summarization side query. Deliberately above
+-// the 240s stream idle watchdog so the watchdog's more specific error fires
+-// first on a hung stream; this only catches pathological slow-drip streams.
+-// Expiry does NOT fail the tool — executeDirectFetch falls back to returning
+-// the raw fetched content.
++// the 240s idle guard of a started stream so the guard's more specific error
++// fires first on a stream that stalls mid-generation; this only catches
++// pathological slow-drip streams. Expiry does NOT fail the tool —
++// executeDirectFetch falls back to returning the raw fetched content.
+ const SIDE_QUERY_TIMEOUT_MS = 300_000;
+-// Deployment/test knob (same convention as QWEN_STREAM_IDLE_TIMEOUT_MS):
+-// override the processing backstop without code changes. Malformed or
++// Deployment/test knob: override the processing backstop without code
++// changes. Malformed or
+ // non-positive values fall back to the default. Values above the max timer
+ // delay (2^31-1 ms) are rejected rather than clamped — Node truncates larger
+ // delays to 1ms, which would disable processing instead of extending it.
 @@ -57,38 +56,43 @@
    const value = parsePositiveIntegerEnv(
      process.env['QWEN_WEB_FETCH_PROCESSING_TIMEOUT_MS'],

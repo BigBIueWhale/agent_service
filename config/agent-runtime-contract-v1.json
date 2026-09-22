@@ -136,8 +136,6 @@
     "max_cumulative_tool_calls": -1,
     "max_tool_calls_per_turn": 1000,
     "max_wall_time_seconds": -1,
-    "stream_idle_timeout_ms": 240000,
-    "stream_max_lifetime_ms": 21600000,
     "slash_commands": false,
     "runtime_installation": false,
     "xml_tool_recovery": false,
@@ -168,7 +166,7 @@
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "8aa4379bbf19749f26eaecff549524e7c85300d4235a06baeba4579762cc207b",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "wrapper_sha256": "0fdb2ac4b0f2fa4aafe1ea81322895ad4292ac88919c010f7eeea6f387ebc9d8",
+    "wrapper_sha256": "b16a82ac344ddc3e7b32c610eae505ce0118b8fea7244e027db7c96ecf536e4f",
     "agent_exec_source_sha256": "e6ddbbdc5f78b4e5fdcf3e6f96483e670c02ca50c94a4b5131f2a18d0c9ceb0b"
   }
 }

@@ -764,6 +764,17 @@ record names the prompt the generation was issued at, the room it was given and
 what it generated, so a reader can tell a turn too large for the window from a
 window too full for the turn. Nothing is retried, continued or repaired.
 
+A streaming generation is held to bounds the client derives rather than reads
+from settings, and none of them can be disabled. Until its first chunk, only
+the request timeout bounds it, counted from dispatch (24 hours here): this
+backend runs one generation at a time, so a request queued behind another
+sends nothing until it starts, by design. From its first chunk, four minutes
+without a chunk is a stall, and the generation may take its `max_tokens` at a
+declared decode floor of 12 tokens per second, about 5,792 seconds for a turn
+issued with `C`; an engine still generating past that is treated as broken and
+the stream is refused, loudly. A streaming request that states no `max_tokens`
+has no such bound and is refused before it is sent.
+
 A turn that ends on its own with no tool call is the model's final answer only
 when its visible text is one. The model is a stochastic entity: a message with no
 visible text, or one carrying the served template's own tool-call markup

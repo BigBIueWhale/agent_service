@@ -101,6 +101,36 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                 ):
                     MODULE.verify(paths)
 
+    def test_rejects_a_wrapper_that_sets_stream_bounds_even_if_resealed(self) -> None:
+        # The client derives every stream bound itself; a wrapper that pins one
+        # through the environment is a second source, refused by name.
+        for line in (
+            "export QWEN_STREAM_IDLE_TIMEOUT_MS=240000",
+            "export QWEN_STREAM_MAX_LIFETIME_MS=21600000",
+        ):
+            with self.subTest(line=line), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                source = self.paths[6].read_text(encoding="utf-8")
+                resealed = source.replace(
+                    "export NO_COLOR=1\n", f"{line}\nexport NO_COLOR=1\n"
+                )
+                self.assertNotEqual(source, resealed)
+                wrapper_path = root / "run_agent.sh"
+                wrapper_path.write_text(resealed, encoding="utf-8")
+                contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+                contract["components"]["wrapper_sha256"] = MODULE.sha256(
+                    wrapper_path.read_bytes()
+                )
+                contract_path = root / "contract.json"
+                contract_path.write_text(
+                    json.dumps(contract, indent=2) + "\n", encoding="utf-8"
+                )
+                paths = [contract_path, *self.paths[1:6], wrapper_path, self.paths[7]]
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, "agent wrapper must not set stream bounds"
+                ):
+                    MODULE.verify(paths)
+
     def test_rejects_turn_budget_drift_even_if_settings_are_resealed(self) -> None:
         # The default turn budget is cross-checked in several places. Resealing
         # the settings file and the contract together still leaves the

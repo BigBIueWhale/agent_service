@@ -7215,6 +7215,124 @@ def _validate_compaction_read_evidence_after(state: State) -> None:
     )
 
 
+def _validate_stream_bounds_before(state: State) -> None:
+    label = "stream-bounds precondition"
+    constants = "packages/core/src/core/openaiContentGenerator/constants.ts"
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    # Upstream arms the idle watchdog when the stream is wrapped, sizes both
+    # guards from environment knobs and defaults, and lets 0 disable each.
+    _require_all(
+        state,
+        constants,
+        (
+            "export const QWEN_STREAM_IDLE_TIMEOUT_MS_ENV = 'QWEN_STREAM_IDLE_TIMEOUT_MS';",
+            "export const DEFAULT_STREAM_MAX_LIFETIME_MS = 900000;",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        pipeline,
+        (
+            "function resolveStreamGuardMs(",
+            "async function* withStreamGuards(",
+        ),
+        label=label,
+    )
+
+
+def _validate_stream_bounds_after(state: State) -> None:
+    label = "stream-bounds result"
+    constants = "packages/core/src/core/openaiContentGenerator/constants.ts"
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    content = "packages/core/src/core/contentGenerator.ts"
+    pipeline_test = "packages/core/src/core/openaiContentGenerator/pipeline.test.ts"
+    bound_test = "packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts"
+    settings_doc = "docs/users/configuration/settings.md"
+    # The decode floor is declared once, as policy, with its consequence; the
+    # idle bound is declared once with its reason.
+    _require_all(
+        state,
+        constants,
+        (
+            "export const DECODE_FLOOR_TPS = 12;",
+            " * refused as a broken engine, loudly, rather than waited on. The value is\n"
+            " * declared policy, not a measurement, and it is deliberately pessimistic, so\n",
+            "export const STREAM_IDLE_TIMEOUT_MS = 240000;",
+            " * The longest silence between the chunks of a started stream. It arms at the\n"
+            " * first chunk.",
+        ),
+        label=label,
+    )
+    source = _require_all(
+        state,
+        pipeline,
+        (
+            "export function streamGenerationBoundMs(maxTokens: unknown): number {",
+            "  const boundMs = Math.ceil((maxTokens * 1000) / DECODE_FLOOR_TPS);",
+            "export class StreamStartTimeoutError extends Error {",
+            "  const startDeadline = bounds.dispatchedAt + bounds.requestTimeoutMs;",
+            "        : startDeadline - performance.now();",
+            "        const idleIn = started ? idleMs : Number.POSITIVE_INFINITY;",
+            "      if (started) upstreamMs += performance.now() - awaitedAt;",
+            "      if (error instanceof StreamStartTimeoutError) {",
+        ),
+        label=label,
+    )
+    # The generation's bound comes from the request's own max_tokens, and the
+    # start deadline from the request timeout the SDK client was built with,
+    # counted from the moment the request is dispatched.
+    _require_ordered(
+        source,
+        (
+            "        const generationMs = streamGenerationBoundMs(openaiRequest.max_tokens);",
+            "        const requestTimeoutMs = resolveRequestTimeout(\n"
+            "          this.contentGeneratorConfig.timeout,\n"
+            "        );",
+            "        const dispatchedAt = performance.now();",
+            "          const createPromise = this.client.chat.completions.create(",
+            "          { dispatchedAt, requestTimeoutMs, generationMs },",
+        ),
+        label=label,
+        location=pipeline,
+    )
+    # One mode: no knob, no default beside the derived bound, nothing that
+    # disables a bound, and the retired names do not return.
+    for path in (constants, pipeline, content):
+        for retired in (
+            "QWEN_STREAM_IDLE_TIMEOUT_MS",
+            "QWEN_STREAM_MAX_LIFETIME_MS",
+            "DEFAULT_STREAM_IDLE_TIMEOUT_MS",
+            "DEFAULT_STREAM_MAX_LIFETIME_MS",
+            "streamIdleTimeoutMs",
+            "streamMaxLifetimeMs",
+            "resolveStreamGuardMs",
+            "0 to disable",
+            "idleMs > 0 || maxLifetimeMs > 0",
+        ):
+            forbid_text(state, path, retired, label=label)
+    for path in ("packages/core/src/tools/web-fetch.ts", settings_doc):
+        for retired in ("QWEN_STREAM_IDLE_TIMEOUT_MS", "QWEN_STREAM_MAX_LIFETIME_MS"):
+            forbid_text(state, path, retired, label=label)
+    require_text(
+        state,
+        settings_doc,
+        "at a declared decode floor of 12 tokens per second",
+        label=label,
+    )
+    for path, case in (
+        (pipeline_test, "bounds the wait for the first chunk by the request timeout, not the idle guard"),
+        (pipeline_test, "counts the start deadline from dispatch, not from the response headers"),
+        (pipeline_test, "arms the idle guard at the first chunk"),
+        (pipeline_test, "bounds the generation from its first chunk by max_tokens at the decode floor (issue #8597)"),
+        (pipeline_test, "completes a generation that fits its bound however long it queued"),
+        (pipeline_test, "refuses a streaming request that states no max_tokens before sending it"),
+        (bound_test, "is the most tokens the request may generate at the decode floor"),
+        (bound_test, "refuses a streaming request whose max_tokens is $label"),
+    ):
+        require_text(state, path, case, label=label)
+
+
 CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="shared-stream-admission",
@@ -7732,6 +7850,23 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_served_accounting_before,
         validate_after=_validate_served_accounting_after,
+    ),
+    SemanticConcern(
+        name="stream-bounds",
+        rationale=(
+            "A streaming response is held to bounds the client derives, not settings: until its "
+            "first chunk, the request timeout counted from dispatch, since a request queued behind "
+            "another generation sends nothing by design; from the first chunk, a declared idle bound "
+            "between chunks and the generation's own bound, its max_tokens at a declared decode "
+            "floor, below which the engine is treated as broken. No bound can be disabled, and a "
+            "streaming request that states no max_tokens is refused."
+        ),
+        removal_condition=(
+            "Upstream arms its stall detection at the first chunk, bounds the wait to start by the "
+            "request timeout, and derives the generation bound from the request's output limit."
+        ),
+        validate_before=_validate_stream_bounds_before,
+        validate_after=_validate_stream_bounds_after,
     ),
 )
 
