@@ -8,6 +8,10 @@ pub struct Compilation {
     pub rust: String,
     pub inventory: String,
     pub discriminators: BTreeMap<String, Vec<String>>,
+    /// The terminal table, in the contract's order: every result subtype,
+    /// whether it is an error, and the exit code a process that ended with it
+    /// leaves.
+    pub terminal_outcomes: Vec<(String, bool, u8)>,
     pub success_subtype: String,
     pub error_subtypes: Vec<String>,
 }
@@ -160,43 +164,28 @@ pub fn compile(bytes: &[u8]) -> Result<Compilation, String> {
     .into_iter()
     .map(|(name, values)| (name.to_string(), values))
     .collect();
-    let success_subtype = definitions
-        .get("resultSuccessSubtype")
-        .and_then(|value| value.get("const"))
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| {
-            error(
-                "/definitions/resultSuccessSubtype",
-                "expected one nonempty success name",
-            )
-        })?
-        .to_string();
-    let error_subtypes = definitions
-        .get("resultErrorSubtype")
-        .and_then(|value| value.get("enum"))
-        .and_then(Value::elements)
-        .ok_or_else(|| error("/definitions/resultErrorSubtype", "expected error names"))?
-        .map(|value| {
-            value
-                .as_str()
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-                .ok_or_else(|| {
-                    error(
-                        "/definitions/resultErrorSubtype",
-                        "expected nonempty error name",
-                    )
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    if error_subtypes.is_empty()
-        || error_subtypes.contains(&success_subtype)
-        || error_subtypes.iter().collect::<BTreeSet<_>>().len() != error_subtypes.len()
-    {
+    let terminal_outcomes = terminal_outcomes(definitions)?;
+    let mut successes = terminal_outcomes
+        .iter()
+        .filter(|(_, is_error, _)| !is_error);
+    let success_subtype = match (successes.next(), successes.next()) {
+        (Some((name, _, _)), None) => name.clone(),
+        _ => {
+            return Err(error(
+                "/definitions/terminalOutcome",
+                "expected exactly one terminal outcome that is not an error",
+            ))
+        }
+    };
+    let error_subtypes = terminal_outcomes
+        .iter()
+        .filter(|(_, is_error, _)| *is_error)
+        .map(|(name, _, _)| name.clone())
+        .collect::<Vec<_>>();
+    if error_subtypes.is_empty() {
         return Err(error(
-            "/definitions/resultErrorSubtype",
-            "terminal names must be distinct",
+            "/definitions/terminalOutcome",
+            "expected at least one terminal outcome that is an error",
         ));
     }
     let inventory = serde_json::to_string_pretty(&serde_json::json!({
@@ -213,9 +202,92 @@ pub fn compile(bytes: &[u8]) -> Result<Compilation, String> {
         rust,
         inventory,
         discriminators,
+        terminal_outcomes,
         success_subtype,
         error_subtypes,
     })
+}
+
+/// The terminal table: one alternative per result subtype, each stating the
+/// subtype, whether it is an error, and the exit code a process that ended
+/// with it leaves, all as exact constants. The subtype and error flag are
+/// required, so the same alternatives validate a terminal record's pairing;
+/// the exit code is what the table adds for a reader of the process.
+fn terminal_outcomes(definitions: Value<'_>) -> Result<Vec<(String, bool, u8)>, String> {
+    let path = "/definitions/terminalOutcome";
+    let definition = definitions
+        .get("terminalOutcome")
+        .ok_or_else(|| error(path, "missing the terminal table"))?;
+    if definition.members().map(|members| members.count()) != Some(1) {
+        return Err(error(
+            path,
+            "expected exactly one oneOf of terminal outcomes",
+        ));
+    }
+    let rows = definition
+        .get("oneOf")
+        .and_then(Value::elements)
+        .ok_or_else(|| error(path, "expected a oneOf of terminal outcomes"))?;
+    let mut outcomes = Vec::new();
+    let mut names = BTreeSet::new();
+    for (index, row) in rows.enumerate() {
+        let path = format!("{path}/oneOf/{index}");
+        let keys = row
+            .members()
+            .map(|members| members.map(|(key, _)| key).collect::<BTreeSet<_>>());
+        if keys != Some(BTreeSet::from(["properties", "required"])) {
+            return Err(error(&path, "expected exactly properties and required"));
+        }
+        let required = row
+            .get("required")
+            .map(|value| strings(value, &path))
+            .transpose()?
+            .map(|names| names.into_iter().collect::<BTreeSet<_>>());
+        if required
+            != Some(BTreeSet::from([
+                "subtype".to_string(),
+                "is_error".to_string(),
+            ]))
+        {
+            return Err(error(&path, "expected subtype and is_error to be required"));
+        }
+        let properties = row.get("properties").expect("checked above");
+        let fields = properties
+            .members()
+            .map(|members| members.map(|(key, _)| key).collect::<BTreeSet<_>>());
+        if fields != Some(BTreeSet::from(["subtype", "is_error", "exit_code"])) {
+            return Err(error(
+                &path,
+                "expected exactly subtype, is_error and exit_code",
+            ));
+        }
+        let constant = |field: &str| {
+            let value = properties.get(field).expect("checked above");
+            if value.members().map(|members| members.count()) != Some(1) {
+                return Err(error(&path, format!("{field} must be exactly one const")));
+            }
+            value
+                .get("const")
+                .ok_or_else(|| error(&path, format!("{field} must be exactly one const")))
+        };
+        let name = constant("subtype")?
+            .as_str()
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| error(&path, "subtype must be a nonempty name"))?
+            .to_string();
+        let is_error = constant("is_error")?
+            .as_bool()
+            .ok_or_else(|| error(&path, "is_error must be a boolean"))?;
+        let exit_code = constant("exit_code")?
+            .as_number()
+            .and_then(|number| number.as_unsigned(255).ok())
+            .ok_or_else(|| error(&path, "exit_code must be an integer from 0 to 255"))?;
+        if !names.insert(name.clone()) {
+            return Err(error(&path, "terminal names must be distinct"));
+        }
+        outcomes.push((name, is_error, exit_code as u8));
+    }
+    Ok(outcomes)
 }
 
 fn identifier(name: &str) -> Result<String, String> {
@@ -627,33 +699,96 @@ mod tests {
     fn owned_vocabulary_inventory_is_complete() {
         let compiled = compile(SOURCE).unwrap();
         let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
-        assert_eq!(inventory["object_schemas"], 349);
+        assert_eq!(inventory["object_schemas"], 377);
         assert_eq!(inventory["false_schemas"], 53);
         assert_eq!(inventory["keywords"].as_object().unwrap().len(), 24);
-        assert_eq!(inventory["references"].as_array().unwrap().len(), 21);
+        assert_eq!(inventory["references"].as_array().unwrap().len(), 18);
         assert!(!compiled.rust.is_empty());
         assert_eq!(compiled.discriminators["EventKind"].len(), 5);
         assert_eq!(compiled.success_subtype, crate::SUCCESS_SUBTYPE);
         assert_eq!(compiled.error_subtypes, crate::ERROR_SUBTYPES);
+        assert_eq!(
+            compiled.terminal_outcomes.len(),
+            crate::TERMINAL_OUTCOMES.len()
+        );
+        for ((subtype, is_error, exit_code), generated) in compiled
+            .terminal_outcomes
+            .iter()
+            .zip(crate::TERMINAL_OUTCOMES)
+        {
+            assert_eq!(
+                (subtype.as_str(), *is_error, *exit_code),
+                (generated.subtype, generated.is_error, generated.exit_code)
+            );
+        }
+    }
+
+    fn outcome(subtype: &str, is_error: bool, exit_code: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "properties": {
+                "subtype": {"const": subtype},
+                "is_error": {"const": is_error},
+                "exit_code": {"const": exit_code},
+            },
+            "required": ["subtype", "is_error"],
+        })
     }
 
     #[test]
-    fn terminal_names_come_from_the_definition_and_refuse_ambiguous_identity() {
+    fn terminal_table_comes_from_the_definition_and_refuses_ambiguous_identity() {
         let source: serde_json::Value = serde_json::from_slice(SOURCE).unwrap();
         let mut changed = source.clone();
-        changed["definitions"]["resultSuccessSubtype"]["const"] = serde_json::json!("completed");
-        changed["definitions"]["resultErrorSubtype"]["enum"] = serde_json::json!(["refused"]);
+        changed["definitions"]["terminalOutcome"]["oneOf"] = serde_json::json!([
+            outcome("completed", false, serde_json::json!(0)),
+            outcome("refused", true, serde_json::json!(9)),
+        ]);
         let compiled = compile(&serde_json::to_vec(&changed).unwrap()).unwrap();
         assert_eq!(compiled.success_subtype, "completed");
         assert_eq!(compiled.error_subtypes, ["refused"]);
-        for names in [
-            serde_json::json!([]),
-            serde_json::json!([""]),
-            serde_json::json!(["success"]),
-            serde_json::json!(["error", "error"]),
+        assert_eq!(
+            compiled.terminal_outcomes,
+            [
+                ("completed".to_string(), false, 0),
+                ("refused".to_string(), true, 9)
+            ]
+        );
+        let ok = |name: &str| outcome(name, false, serde_json::json!(0));
+        let failed = |name: &str, code: serde_json::Value| outcome(name, true, code);
+        for rows in [
+            // no outcome that is not an error, or two of them
+            serde_json::json!([failed("refused", serde_json::json!(9))]),
+            serde_json::json!([ok("a"), ok("b"), failed("c", serde_json::json!(1))]),
+            // no error outcome
+            serde_json::json!([ok("completed")]),
+            // one name twice, or no name
+            serde_json::json!([ok("completed"), failed("completed", serde_json::json!(1))]),
+            serde_json::json!([ok(""), failed("refused", serde_json::json!(1))]),
+            // an exit code no process can leave
+            serde_json::json!([ok("completed"), failed("refused", serde_json::json!(256))]),
+            serde_json::json!([ok("completed"), failed("refused", serde_json::json!(-1))]),
+            serde_json::json!([ok("completed"), failed("refused", serde_json::json!("1"))]),
         ] {
             changed = source.clone();
-            changed["definitions"]["resultErrorSubtype"]["enum"] = names;
+            changed["definitions"]["terminalOutcome"]["oneOf"] = rows;
+            assert!(compile(&serde_json::to_vec(&changed).unwrap()).is_err());
+        }
+        // An outcome states exactly its subtype, error flag and exit code, and
+        // requires the two a terminal record carries.
+        let mut unstated = ok("completed");
+        unstated["properties"]
+            .as_object_mut()
+            .unwrap()
+            .remove("exit_code");
+        let mut extra = ok("completed");
+        extra["properties"]["reason"] = serde_json::json!({"const": "x"});
+        let mut unrequired = ok("completed");
+        unrequired["required"] = serde_json::json!(["subtype"]);
+        let mut open = ok("completed");
+        open["properties"]["exit_code"] = serde_json::json!({"type": "integer"});
+        for row in [unstated, extra, unrequired, open] {
+            changed = source.clone();
+            changed["definitions"]["terminalOutcome"]["oneOf"] =
+                serde_json::json!([row, failed("refused", serde_json::json!(1))]);
             assert!(compile(&serde_json::to_vec(&changed).unwrap()).is_err());
         }
     }

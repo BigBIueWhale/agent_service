@@ -1537,8 +1537,11 @@ impl Manager {
                     SessionStatus::Completed if body.terminal().is_process_error => {
                         "session is terminal with a process or lifecycle error; evidence handling is complete and the terminal record is ready for publication"
                     }
+                    // The process ended the way its terminal record says,
+                    // which is not a claim that the run succeeded: the record
+                    // names how it ended.
                     SessionStatus::Completed => {
-                        "session completed successfully; durable evidence is complete and the terminal record is ready for publication"
+                        "session completed as its terminal record says; durable evidence is complete and the terminal record is ready for publication"
                     }
                     SessionStatus::Running => "invalid running terminal state",
                 },

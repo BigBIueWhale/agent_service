@@ -36185,7 +36185,7 @@ diff --git a/packages/cli/src/nonInteractive/control/controllers/systemControlle
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-@@ -4,33 +4,35 @@
+@@ -4,33 +4,37 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -36194,6 +36194,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  import {
 +  AgentTerminateMode,
    GeminiEventType,
++  TERMINAL_OUTCOMES,
    type Config,
    type ServerGeminiStreamEvent,
    type ToolCallRequestInfo,
@@ -36207,6 +36208,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +  SubagentStopState,
 +  GenerationUsageSummary,
  } from '../types.js';
++import { TERMINAL_RESULT_BY_STATE } from '../types.js';
  import {
    BaseJsonOutputAdapter,
    type MessageState,
@@ -36222,7 +36224,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
    HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
  } from './headless-tool-result-text-projection.js';
  
-@@ -156,17 +158,35 @@
+@@ -156,17 +160,35 @@
    }
  
    exposeBuildResultMessage(options: ResultOptions) {
@@ -36260,7 +36262,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      getModel: vi.fn().mockReturnValue('test-model'),
    } as unknown as Config;
  }
-@@ -185,16 +205,13 @@
+@@ -185,16 +207,13 @@
        const state = adapter.exposeCreateMessageState();
  
        expect(state.messageId).toBeNull();
@@ -36278,7 +36280,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
    });
  
-@@ -220,63 +237,194 @@
+@@ -220,63 +239,194 @@
  
        expect(state1).not.toBe(state2);
      });
@@ -36490,7 +36492,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
  
      it('should throw error if message not started', () => {
-@@ -310,12 +458,40 @@
+@@ -310,12 +460,40 @@
          type: 'text',
          text: 'Hello world',
        });
@@ -36531,7 +36533,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          type: GeminiEventType.ToolCallRequest,
          value: {
            callId: 'tool-1',
-@@ -457,24 +633,30 @@
+@@ -457,24 +635,30 @@
    describe('startAssistantMessageInternal', () => {
      it('should reset message state', () => {
        const state = adapter.exposeCreateMessageState();
@@ -36564,7 +36566,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
    });
  
-@@ -864,22 +1046,28 @@
+@@ -864,22 +1048,28 @@
      it('should process Finished events with usage metadata', () => {
        adapter.processEvent({
          type: GeminiEventType.Finished,
@@ -36593,7 +36595,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should ignore events after finalization', () => {
        adapter.processEvent({
          type: GeminiEventType.Content,
-@@ -895,12 +1083,123 @@
+@@ -895,12 +1085,123 @@
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
@@ -36717,7 +36719,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      beforeEach(() => {
        adapter.startAssistantMessage();
      });
-@@ -1244,12 +1543,32 @@
+@@ -1244,12 +1545,32 @@
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -36750,7 +36752,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1280,13 +1599,14 @@
+@@ -1280,13 +1601,14 @@
        // Update lastAssistantMessage manually since test adapter doesn't do it automatically
        adapter['lastAssistantMessage'] = message;
      });
@@ -36766,7 +36768,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1621,14 @@
+@@ -1301,13 +1623,14 @@
          expect(result.num_turns).toBe(1);
        }
      });
@@ -36782,7 +36784,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1320,13 +1641,14 @@
+@@ -1320,13 +1643,14 @@
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -36798,7 +36800,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1335,19 +1657,27 @@
+@@ -1335,19 +1659,27 @@
        if (!result.is_error) {
          expect(result.result).toBe('Custom summary');
        }
@@ -36831,7 +36833,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1355,12 +1685,13 @@
+@@ -1355,12 +1687,13 @@
  
        expect(result.usage).toEqual(usage);
      });
@@ -36845,7 +36847,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -1375,13 +1706,14 @@
+@@ -1375,13 +1708,14 @@
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -36861,7 +36863,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +1724,14 @@
+@@ -1392,13 +1726,14 @@
        }
      });
  
@@ -36877,7 +36879,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1741,14 @@
+@@ -1408,13 +1743,14 @@
        }
      });
  
@@ -36893,7 +36895,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +1760,16 @@
+@@ -1426,15 +1762,16 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -36912,7 +36914,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1786,14 @@
+@@ -1451,13 +1788,14 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -36928,7 +36930,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1502,13 +1838,18 @@
+@@ -1502,13 +1840,18 @@
  
    describe('emitSubagentErrorResult', () => {
      it('should emit subagent error result', () => {
@@ -36948,7 +36950,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1525,13 +1866,18 @@
+@@ -1525,13 +1868,18 @@
      it('should finalize pending assistant message before emitting error', () => {
        const parentToolUseId = 'parent-tool-1';
        adapter.startSubagentAssistantMessage(parentToolUseId);
@@ -36968,7 +36970,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,26 +1965,245 @@
+@@ -1619,26 +1967,284 @@
      });
    });
  
@@ -37014,6 +37016,45 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +
 +      expect(errorResult.subtype).toBe(subtype);
 +      expect(errorResult.is_error).toBe(true);
++    });
++
++    it.each([
++      [AgentTerminateMode.GOAL, false, 0],
++      [AgentTerminateMode.ERROR, true, 1],
++      [AgentTerminateMode.TIMEOUT, true, 55],
++      [AgentTerminateMode.MAX_TURNS, true, 53],
++      [AgentTerminateMode.MAX_TOOL_CALLS, true, 55],
++      [AgentTerminateMode.LOOP_DETECTED, true, 1],
++      [AgentTerminateMode.INCOMPLETE_GENERATION, true, 1],
++      [AgentTerminateMode.SLIPPED_FINAL_MESSAGE, true, 1],
++      [AgentTerminateMode.CANCELLED, true, 130],
++    ] as const)(
++      'reports %s with the error flag and exit code the contract gives its name',
++      (mode, isError, exitCode) => {
++        const terminal = TERMINAL_RESULT_BY_STATE[mode];
++        // The flag and the exit code are the contract's terminal table's, read
++        // from its generated binding, never restated beside the name.
++        expect(terminal).toEqual({
++          subtype: terminal.subtype,
++          ...TERMINAL_OUTCOMES[terminal.subtype],
++        });
++        expect([terminal.isError, terminal.exitCode]).toEqual([
++          isError,
++          exitCode,
++        ]);
++      },
++    );
++
++    it('names every subtype the contract defines as the ending of some state', () => {
++      expect(
++        [
++          ...new Set(
++            Object.values(TERMINAL_RESULT_BY_STATE).map(
++              ({ subtype }) => subtype,
++            ),
++          ),
++        ].sort(),
++      ).toEqual(Object.keys(TERMINAL_OUTCOMES).sort());
 +    });
 +  });
 +
@@ -37217,7 +37258,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1764,12 +2329,46 @@
+@@ -1764,12 +2370,46 @@
  
          const result = toolResultContent(response);
  
@@ -37264,7 +37305,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2409,13 @@
+@@ -1810,13 +2450,13 @@
            error: undefined,
            errorType: undefined,
          };
@@ -37279,7 +37320,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        it('prefers a top-level tool error over content with a vision bridge disclosure', () => {
          const response = {
            callId: 'pdf-failure',
-@@ -1992,19 +2591,8 @@
+@@ -1992,19 +2632,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -41361,18 +41402,21 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
 diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInteractive/types.ts
 --- a/packages/cli/src/nonInteractive/types.ts
 +++ b/packages/cli/src/nonInteractive/types.ts
-@@ -1,7 +1,10 @@
+@@ -1,7 +1,13 @@
 +import type { GenerationUsageSummary } from '@qwen-code/qwen-code-core/generationUsage';
 +export type { GenerationUsageSummary } from '@qwen-code/qwen-code-core/generationUsage';
  /* eslint-disable @typescript-eslint/no-explicit-any */
-+import { AgentTerminateMode } from '@qwen-code/qwen-code-core';
++import {
++  AgentTerminateMode,
++  TERMINAL_OUTCOMES,
++} from '@qwen-code/qwen-code-core';
  import type {
    ActiveGoal,
    GoalSnapshotV2,
    SubagentConfig,
    McpToolProgressData,
    ShellProgressData,
-@@ -18,26 +21,15 @@
+@@ -18,26 +24,15 @@
  /**
   * Usage information types
   */
@@ -41402,7 +41446,7 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
    inputTokens: number;
    outputTokens: number;
    cacheReadInputTokens: number;
-@@ -105,13 +97,13 @@
+@@ -105,13 +100,13 @@
    id: string;
    type: 'message';
    role: 'assistant';
@@ -41417,7 +41461,7 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
   * CLI Message wrapper types
   */
  export interface CLIUserMessage {
-@@ -131,12 +123,13 @@
+@@ -131,12 +126,13 @@
    parent_tool_use_id: string | null;
  }
  
@@ -41431,11 +41475,30 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
    data?: unknown;
    cwd?: string;
    tools?: string[];
-@@ -160,44 +153,193 @@
+@@ -160,44 +156,188 @@
  
++/**
++ * The stream contract's terminal table, read from its generated binding:
++ * every result subtype, whether it is an error, and the exit code a process
++ * that ended with it leaves. It is stated once, in
++ * `protocol/stream-contract-v1.json`, and nowhere in this client.
++ */
++type TerminalOutcomes = typeof TERMINAL_OUTCOMES;
++
++/** Every result subtype the stream contract defines. */
++export type TerminalSubtype = keyof TerminalOutcomes;
++
++/** The subtypes the terminal table marks as errors, or as not. */
++type TerminalSubtypeWhere<IsError extends boolean> = {
++  [S in TerminalSubtype]: TerminalOutcomes[S]['isError'] extends IsError
++    ? S
++    : never;
++}[TerminalSubtype];
++
  export interface CLIResultMessageSuccess {
    type: 'result';
-   subtype: 'success';
+-  subtype: 'success';
++  subtype: TerminalSubtypeWhere<false>;
    uuid: string;
    session_id: string;
 +  /**
@@ -41485,17 +41548,10 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 +   * itself that ended the run, a bound the caller set and can raise, or a
 +   * shape of ending a reader has to tell from the others without parsing
 +   * English. Everything else the run did to itself is
-+   * `error_during_execution`, distinguished by `error.message`.
++   * `error_during_execution`, distinguished by `error.message`. The names
++   * are the stream contract's: each is a row of its terminal table.
 +   */
-+  subtype:
-+    | 'error_during_execution'
-+    | 'error_timeout'
-+    | 'error_max_turns'
-+    | 'error_max_tool_calls'
-+    | 'error_loop_detected'
-+    | 'error_incomplete_generation'
-+    | 'error_slipped_final_message'
-+    | 'error_cancelled';
++  subtype: TerminalSubtypeWhere<true>;
    uuid: string;
    session_id: string;
 +  /** See {@link CLIResultMessageSuccess.parent_tool_use_id}. */
@@ -41523,82 +41579,66 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 +/**
 + * The terminal record one ending is reported as: the name it carries on the
 + * wire, whether that name is an error, and the exit code a process that ended
-+ * this way leaves behind. The two arms keep `is_error` and the subtype from
-+ * ever disagreeing -- a success name can only be paired with `isError: false`
-+ * and an error name only with `isError: true`.
++ * this way leaves behind. There is one arm per row of the contract's terminal
++ * table, so a name can only be paired with the error flag and the exit code
++ * the contract gives it.
 + */
-+export type TerminalResult =
-+  | {
-+      readonly subtype: CLIResultMessageSuccess['subtype'];
-+      readonly isError: false;
-+      readonly exitCode: number;
-+    }
-+  | {
-+      readonly subtype: CLIResultMessageError['subtype'];
-+      readonly isError: true;
-+      readonly exitCode: number;
-+    };
++export type TerminalResult = {
++  [S in TerminalSubtype]: { readonly subtype: S } & TerminalOutcomes[S];
++}[TerminalSubtype];
++
++/** The record of an ending the contract names `subtype`. */
++function terminalResult<S extends TerminalSubtype>(
++  subtype: S,
++): { readonly subtype: S } & TerminalOutcomes[S] {
++  return { subtype, ...TERMINAL_OUTCOMES[subtype] };
++}
 +
 +/**
 + * How every terminal state is reported, for the session's own scope and for
 + * each subagent's alike. The mapping is total over {@link AgentTerminateMode}:
 + * a state added without a name here is a compile error rather than a run
-+ * reported under a neighbouring state's name, and the wire vocabulary above is
-+ * the set of names this table produces rather than a list maintained beside
-+ * it.
++ * reported under a neighbouring state's name, a name the contract does not
++ * define is a compile error too, and so is a name it defines that no state
++ * here produces, so the contract's vocabulary is exactly the names this
++ * client can write.
 + *
-+ * Exit codes are the process-level reading of the same states, and the three
-+ * bounds keep distinct ones so a script can branch on which bound stopped the
-+ * run: 53 for the turn budget, 55 for the wall-clock and tool-call budgets,
-+ * 130 for a cancellation.
++ * The name is this client's choice; whether it is an error and the exit code
++ * it leaves are the contract's, which is what lets a reader of the process
++ * tell an exit that agrees with the record from one that does not. The three
++ * bounds keep distinct exit codes so a script can branch on which bound
++ * stopped the run: 53 for the turn budget, 55 for the wall-clock and
++ * tool-call budgets, 130 for a cancellation.
 + */
 +export const TERMINAL_RESULT_BY_STATE = {
-+  [AgentTerminateMode.ERROR]: {
-+    subtype: 'error_during_execution',
-+    isError: true,
-+    exitCode: 1,
-+  },
-+  [AgentTerminateMode.TIMEOUT]: {
-+    subtype: 'error_timeout',
-+    isError: true,
-+    exitCode: 55,
-+  },
-+  [AgentTerminateMode.GOAL]: {
-+    subtype: 'success',
-+    isError: false,
-+    exitCode: 0,
-+  },
-+  [AgentTerminateMode.MAX_TURNS]: {
-+    subtype: 'error_max_turns',
-+    isError: true,
-+    exitCode: 53,
-+  },
-+  [AgentTerminateMode.MAX_TOOL_CALLS]: {
-+    subtype: 'error_max_tool_calls',
-+    isError: true,
-+    exitCode: 55,
-+  },
-+  [AgentTerminateMode.LOOP_DETECTED]: {
-+    subtype: 'error_loop_detected',
-+    isError: true,
-+    exitCode: 1,
-+  },
-+  [AgentTerminateMode.INCOMPLETE_GENERATION]: {
-+    subtype: 'error_incomplete_generation',
-+    isError: true,
-+    exitCode: 1,
-+  },
-+  [AgentTerminateMode.SLIPPED_FINAL_MESSAGE]: {
-+    subtype: 'error_slipped_final_message',
-+    isError: true,
-+    exitCode: 1,
-+  },
-+  [AgentTerminateMode.CANCELLED]: {
-+    subtype: 'error_cancelled',
-+    isError: true,
-+    exitCode: 130,
-+  },
++  [AgentTerminateMode.ERROR]: terminalResult('error_during_execution'),
++  [AgentTerminateMode.TIMEOUT]: terminalResult('error_timeout'),
++  [AgentTerminateMode.GOAL]: terminalResult('success'),
++  [AgentTerminateMode.MAX_TURNS]: terminalResult('error_max_turns'),
++  [AgentTerminateMode.MAX_TOOL_CALLS]: terminalResult('error_max_tool_calls'),
++  [AgentTerminateMode.LOOP_DETECTED]: terminalResult('error_loop_detected'),
++  [AgentTerminateMode.INCOMPLETE_GENERATION]: terminalResult(
++    'error_incomplete_generation',
++  ),
++  [AgentTerminateMode.SLIPPED_FINAL_MESSAGE]: terminalResult(
++    'error_slipped_final_message',
++  ),
++  [AgentTerminateMode.CANCELLED]: terminalResult('error_cancelled'),
 +} as const satisfies Record<AgentTerminateMode, TerminalResult>;
++
++type RequireNever<T extends never> = T;
++
++/**
++ * Every subtype the contract defines is the one some state is reported
++ * under: a name no state produces would be a record this client can never
++ * write, so the build refuses one here rather than leaving it defined.
++ */
++export type TerminalSubtypeWithoutAState = RequireNever<
++  Exclude<
++    TerminalSubtype,
++    (typeof TERMINAL_RESULT_BY_STATE)[AgentTerminateMode]['subtype']
++  >
++>;
 +
 +/**
 + * The states a scope can stop in without an answer of its own. Every one of
@@ -259231,7 +259271,7 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.test.ts b/packages/
 diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/src/utils/runtime-stream-contract.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-stream-contract.ts
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,125 @@
 +import type { GoalSnapshotV2 } from '../goals/goal-protocol.js';
 +import { requireGenerationUsage } from '../telemetry/generation-usage.js';
 +import {
@@ -259254,6 +259294,7 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +export {
 +  STREAM_EVENT_KINDS,
 +  OUTBOUND_CONTROL_KINDS,
++  TERMINAL_OUTCOMES,
 +} from '../generated/stream-contract.js';
 +
 +export function validateRuntimeControlRecord(value: unknown): string | null {

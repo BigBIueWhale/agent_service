@@ -48,6 +48,52 @@ if (
   throw new Error("Embedded MCP schema differs from its pinned protocol owner");
 }
 const hash = createHash("sha256").update(bytes).digest("hex");
+// The terminal table: every result subtype, whether it is an error, and the
+// exit code a process that ended with it leaves, each stated once as an
+// exact constant. The same alternatives validate a record's subtype and
+// is_error, so the vocabulary and the exit codes cannot come apart.
+function terminalOutcomes(definition) {
+  const fail = (index, cause) => {
+    throw new Error(`terminalOutcome alternative ${index}: ${cause}`);
+  };
+  if (
+    !definition ||
+    Object.keys(definition).join() !== "oneOf" ||
+    !Array.isArray(definition.oneOf)
+  )
+    throw new Error("terminalOutcome must be exactly one oneOf");
+  const seen = new Set();
+  const outcomes = definition.oneOf.map((row, index) => {
+    if (Object.keys(row).sort().join() !== "properties,required")
+      fail(index, "expected exactly properties and required");
+    if ([...row.required].sort().join() !== "is_error,subtype")
+      fail(index, "expected subtype and is_error to be required");
+    const properties = row.properties;
+    if (Object.keys(properties).sort().join() !== "exit_code,is_error,subtype")
+      fail(index, "expected exactly subtype, is_error and exit_code");
+    for (const [field, value] of Object.entries(properties))
+      if (Object.keys(value).join() !== "const")
+        fail(index, `${field} must be exactly one const`);
+    const subtype = properties.subtype.const;
+    const isError = properties.is_error.const;
+    const exitCode = properties.exit_code.const;
+    if (typeof subtype !== "string" || subtype === "")
+      fail(index, "subtype must be a nonempty name");
+    if (typeof isError !== "boolean") fail(index, "is_error must be a boolean");
+    if (!Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255)
+      fail(index, "exit_code must be an integer from 0 to 255");
+    if (seen.has(subtype)) fail(index, "terminal names must be distinct");
+    seen.add(subtype);
+    return { subtype, isError, exitCode };
+  });
+  const successes = outcomes.filter(({ isError }) => !isError);
+  if (successes.length !== 1)
+    throw new Error("expected exactly one terminal outcome that is not an error");
+  if (outcomes.length === successes.length)
+    throw new Error("expected at least one terminal outcome that is an error");
+  return outcomes;
+}
+const outcomes = terminalOutcomes(schema.definitions.terminalOutcome);
 const names = schema.oneOf.map((variant) => variant.properties.type.const);
 if (new Set(names).size !== names.length)
   throw new Error("duplicate event discriminator");
@@ -63,8 +109,9 @@ outputs.set(
     `export const OUTBOUND_CONTROL_KINDS = ${JSON.stringify(schema.definitions.outboundControlMessage.oneOf.map((v) => v.properties.type.const))} as const;\n` +
     `export const PARTIAL_EVENT_KINDS = ${JSON.stringify(schema.definitions.streamEvent.oneOf.map((v) => v.properties.type.const))} as const;\n` +
     `export const SYSTEM_EVENT_KINDS = ${JSON.stringify(schema.oneOf.find((v) => v.properties.type.const === "system").oneOf.map((v) => v.properties.subtype.const))} as const;\n` +
-    `export const RESULT_SUCCESS_SUBTYPE = ${JSON.stringify(schema.definitions.resultSuccessSubtype.const)} as const;\n` +
-    `export const RESULT_ERROR_SUBTYPES = ${JSON.stringify(schema.definitions.resultErrorSubtype.enum)} as const;\n` +
+    `export const TERMINAL_OUTCOMES = ${JSON.stringify(Object.fromEntries(outcomes.map(({ subtype, isError, exitCode }) => [subtype, { isError, exitCode }])))} as const;\n` +
+    `export const RESULT_SUCCESS_SUBTYPE = ${JSON.stringify(outcomes.find(({ isError }) => !isError).subtype)} as const;\n` +
+    `export const RESULT_ERROR_SUBTYPES = ${JSON.stringify(outcomes.filter(({ isError }) => isError).map(({ subtype }) => subtype))} as const;\n` +
     `export const GOAL_CHECKPOINT_EVIDENCE_MAX_BYTES = ${schema.definitions.goalCheckpointEvidenceBytes.maximum};\n`,
 );
 

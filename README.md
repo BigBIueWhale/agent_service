@@ -360,10 +360,12 @@ ordinary terminal outcome, not a fault: the client exits 53, reports
 that point stands. `is_error` is true because the run holds no final answer —
 the model never wrote one — and not because anything went wrong; a caller that
 wants to tell "your bound stopped it" from "the harness broke" reads
-`agent_result_subtype`. The budget is a degenerate-loop circuit breaker: a
-repository-level fix needs roughly 80-190 turns to orient, build, diagnose,
-implement, and verify, so 400 admits a complete second attempt after a wrong
-hypothesis. A caller who knows a particular task is shaped differently can say
+`agent_result_subtype`, and the session's `is_process_error` stays false
+because 53 is the exit its record's subtype names. The budget is a
+degenerate-loop circuit breaker: a repository-level fix needs roughly 80-190
+turns to orient, build, diagnose, implement, and verify, so 400 admits a
+complete second attempt after a wrong hypothesis. A caller who knows a
+particular task is shaped differently can say
 so per session, but something must stay finite or a degenerate loop simply asks
 for a bigger number: the ceiling is exactly five default budgets, and a request
 for zero, a negative count, a non-integer, or more than 2,000 turns is an error
@@ -688,7 +690,17 @@ spellings name the states that stopped a run instead, one name per state:
 progress, `error_incomplete_generation` when the provider stopped the last
 generation from outside, `error_slipped_final_message` when the model ended three
 consecutive turns with a message that was not a final answer after being told
-twice, and `error_cancelled` for an abort from outside. A state earns a name when
+twice, and `error_cancelled` for an abort from outside. The names, whether each
+is an error, and the exit code a process that ended with each leaves are one
+table in the stream contract, `terminalOutcome` in
+`protocol/stream-contract-v1.json`, which validates a record's pairing and from
+which both the client's and the service's bindings are generated: `success`
+exits 0, `error_max_turns` 53, `error_timeout` and `error_max_tool_calls` 55,
+`error_cancelled` 130, and every other error 1. A completed session's process
+error is exactly an exit that disagrees with the subtype its certified record
+carries (a cancelled session's exit is the cancellation's, and is not
+compared), so the service reports an ending the run recorded and exited with as
+that ending, never as a failure of the process. A state earns a name when
 it names an authority other than the run itself that ended the run, a bound the
 caller set and can raise, or a shape of ending a reader has to tell from the
 others without parsing English; everything else the run did to itself is

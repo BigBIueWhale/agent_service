@@ -1,7 +1,9 @@
 //! Descriptor and LF framing for captured agent output. The shared pure
 //! runtime_contract owner decides record identity, admission and observations.
 use crate::error::{io_msg, ServiceError, ServiceResult};
-pub use runtime_contract::runtime::{AgentResult, AgentScope, ERROR_SUBTYPES, SUCCESS_SUBTYPE};
+pub use runtime_contract::runtime::{
+    terminal_exit_code, AgentResult, AgentScope, ERROR_SUBTYPES, SUCCESS_SUBTYPE,
+};
 use runtime_contract::{
     json::{Document, Limits},
     runtime::{RuntimeBindings, RuntimeContract, RuntimeLimits},
@@ -713,8 +715,12 @@ mod tests {
             );
             let error = parse_text(&format!("{INIT}{MAIN_TURN}{terminal}"))
                 .expect_err("an undefined terminal state is not interpretable");
+            // The contract's terminal table refuses it: its alternatives pair
+            // every name with the one error flag it is reported under.
             assert!(
-                error.to_string().contains("at /subtype (schema rule "),
+                error
+                    .to_string()
+                    .contains("(schema rule /definitions/terminalOutcome/oneOf)"),
                 "unexpected refusal for {subtype:?}: {error}"
             );
         }

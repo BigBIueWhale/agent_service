@@ -745,7 +745,7 @@ pub async fn run_one(
             "trusted stream capture was not proved complete; refusing complete-result certification".into(),
         ))
     };
-    let (mut response, agent_result, num_turns, mut is_process_error) = match parsed {
+    let (mut response, agent_result, num_turns) = match parsed {
         Ok(result) => {
             let agent_result = AgentResult {
                 agent_duration_ms: result.duration_ms,
@@ -761,12 +761,7 @@ pub async fn run_one(
                     .count() as u64,
                 subagent_scopes: result.scopes,
             };
-            (
-                result.response,
-                Some(agent_result),
-                result.num_turns,
-                result.is_error,
-            )
+            (result.response, Some(agent_result), result.num_turns)
         }
         Err(error) => {
             diagnostics.push(format!("strict event parse failed: {error}"));
@@ -774,7 +769,6 @@ pub async fn run_one(
                 format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
                 None,
                 0,
-                true,
             )
         }
     };
@@ -783,13 +777,16 @@ pub async fn run_one(
     let final_observed = final_output_observations.unwrap_or(pre_teardown_observed);
     let last_event_at_unix = final_observed.last_event_at_unix;
     let final_num_turns = num_turns.max(final_observed.num_turns);
-    if status == SessionStatus::Completed
-        && (container_exit_code != Some(0) || agent_exit_code != Some(0))
-    {
-        is_process_error = true;
-        response = format!(
-            "agent exited abnormally (container={container_exit_code:?}, qwen={agent_exit_code:?}). {response}"
-        );
+    let (mut is_process_error, disagreement) = process_outcome(
+        status,
+        agent_result
+            .as_ref()
+            .map(|result| result.agent_result_subtype.as_str()),
+        container_exit_code,
+        agent_exit_code,
+    );
+    if let Some(disagreement) = disagreement {
+        response = format!("{disagreement}. {response}");
     }
     if !diagnostics.is_empty() {
         // Cleanup/capture failures are part of process correctness. They do
@@ -1951,6 +1948,61 @@ async fn finalize_setup_failure(
     body
 }
 
+/// Whether a finished agent process is a process error, and, when its exit is
+/// the reason, why.
+///
+/// A certified terminal record is an ending the run reported, whichever ending
+/// it is, so it is a process error exactly when the exit disagrees with it. No
+/// certified record leaves nothing for an exit to agree with, which is a
+/// process error in itself. A cancelled session's exit is the cancellation's,
+/// so only a completed session's exit is compared.
+fn process_outcome(
+    status: SessionStatus,
+    certified_subtype: Option<&str>,
+    container_exit_code: Option<i32>,
+    agent_exit_code: Option<i32>,
+) -> (bool, Option<String>) {
+    match certified_subtype {
+        None => (true, None),
+        Some(subtype) if status == SessionStatus::Completed => {
+            match exit_disagreement(subtype, container_exit_code, agent_exit_code) {
+                Some(disagreement) => (true, Some(disagreement)),
+                None => (false, None),
+            }
+        }
+        Some(_) => (false, None),
+    }
+}
+
+/// Why a completed process's exit disagrees with the terminal record it wrote,
+/// or `None` when it agrees.
+///
+/// A process error is exactly an exit that disagrees with the recorded
+/// subtype. The stream contract's terminal table gives every result subtype
+/// the one exit code a process that ended that way leaves, so a run that
+/// stopped at its turn budget and exited 53 ended as it said it did, and is an
+/// ordinary ending graded on its work; the same run exiting 0, or exiting at
+/// all without a wait observation, did not. Both observations must agree:
+/// the Docker wait and the trusted sidecar are the same exit, read twice.
+fn exit_disagreement(
+    subtype: &str,
+    container_exit_code: Option<i32>,
+    agent_exit_code: Option<i32>,
+) -> Option<String> {
+    let expected = result_parse::terminal_exit_code(subtype).map(i32::from);
+    if expected.is_some() && container_exit_code == expected && agent_exit_code == expected {
+        return None;
+    }
+    Some(match expected {
+        Some(code) => format!(
+            "agent exit disagrees with its terminal record (container={container_exit_code:?}, qwen={agent_exit_code:?}; {subtype} exits {code})"
+        ),
+        None => format!(
+            "agent terminal record names {subtype:?}, which the stream contract does not define (container={container_exit_code:?}, qwen={agent_exit_code:?})"
+        ),
+    })
+}
+
 fn read_exit_code(path: &Path) -> ServiceResult<Option<i32>> {
     use std::io::Read;
     use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -2132,6 +2184,86 @@ pub async fn sweep_orphans(cfg: &Config) -> ServiceResult<()> {
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    #[test]
+    fn a_finished_process_is_a_process_error_exactly_when_its_exit_disagrees_with_its_record() {
+        use super::process_outcome;
+        use crate::runtime::SessionStatus::{Cancelled, Completed};
+        // A recorded failure that exited as the table says is the record's
+        // failure, not the process's: the turn budget, and a run that failed
+        // on its own terms alike.
+        assert_eq!(
+            process_outcome(Completed, Some("error_max_turns"), Some(53), Some(53)),
+            (false, None)
+        );
+        assert_eq!(
+            process_outcome(Completed, Some("error_during_execution"), Some(1), Some(1)),
+            (false, None)
+        );
+        assert_eq!(
+            process_outcome(Completed, Some("success"), Some(0), Some(0)),
+            (false, None)
+        );
+        let (process_error, why) = process_outcome(Completed, Some("success"), Some(1), Some(1));
+        assert!(process_error);
+        assert_eq!(
+            why.as_deref(),
+            Some("agent exit disagrees with its terminal record (container=Some(1), qwen=Some(1); success exits 0)")
+        );
+        // Nothing certified leaves nothing to agree with.
+        assert_eq!(
+            process_outcome(Completed, None, Some(0), Some(0)),
+            (true, None)
+        );
+        assert_eq!(
+            process_outcome(Cancelled, None, Some(130), Some(130)),
+            (true, None)
+        );
+        // A cancelled session's exit is the cancellation's, not the run's.
+        assert_eq!(
+            process_outcome(Cancelled, Some("error_cancelled"), Some(143), Some(143)),
+            (false, None)
+        );
+        assert_eq!(
+            process_outcome(Cancelled, Some("success"), Some(0), Some(0)),
+            (false, None)
+        );
+    }
+
+    #[test]
+    fn a_process_error_is_exactly_an_exit_that_disagrees_with_the_recorded_subtype() {
+        use super::exit_disagreement;
+        // Every ending the run records, exited the way the terminal table
+        // says, is an ordinary ending: the turn budget's 53 among them.
+        for (subtype, code) in [
+            ("success", 0),
+            ("error_max_turns", 53),
+            ("error_timeout", 55),
+            ("error_max_tool_calls", 55),
+            ("error_during_execution", 1),
+            ("error_cancelled", 130),
+        ] {
+            assert_eq!(
+                exit_disagreement(subtype, Some(code), Some(code)),
+                None,
+                "{subtype}"
+            );
+        }
+        // Any other exit, either observation missing or the two differing, or
+        // a name the contract does not define, is a process error that says so.
+        assert_eq!(
+            exit_disagreement("error_max_turns", Some(0), Some(0)).as_deref(),
+            Some("agent exit disagrees with its terminal record (container=Some(0), qwen=Some(0); error_max_turns exits 53)")
+        );
+        assert!(exit_disagreement("success", Some(1), Some(1)).is_some());
+        assert!(exit_disagreement("success", None, None).is_some());
+        assert!(exit_disagreement("success", Some(0), None).is_some());
+        assert!(exit_disagreement("success", Some(0), Some(1)).is_some());
+        assert_eq!(
+            exit_disagreement("finished", Some(0), Some(0)).as_deref(),
+            Some("agent terminal record names \"finished\", which the stream contract does not define (container=Some(0), qwen=Some(0))")
+        );
+    }
 
     #[test]
     fn an_escalated_stop_is_named_in_the_diagnostics() {

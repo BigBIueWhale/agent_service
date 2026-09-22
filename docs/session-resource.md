@@ -76,7 +76,7 @@ The `terminal` object has these required fields:
 | `duration_wall_ms` | integer | Finalizer wall duration in milliseconds; restart recovery measures from durable acceptance to recovery |
 | `container_exit_code` | integer or null | Actual Docker-wait exit status in 0..255, or no successful wait observation |
 | `agent_exit_code` | integer or null | Trusted exit-sidecar readback in 0..255, or no valid sidecar; the same original observation as Docker wait, not independent corroboration |
-| `is_process_error` | boolean | Execution or mandatory evidence-handling failure; does not judge task correctness |
+| `is_process_error` | boolean | A completed session's exit disagrees with the exit the stream contract's terminal table gives the subtype its certified record carries, no terminal record was certified, or mandatory evidence handling failed; an ending the run recorded and exited with, whichever ending it is, is not one, a cancelled session's exit is the cancellation's and is not compared, and this does not judge task correctness |
 | `response` | string | Final service response, including any failure explanation; an empty string is a real empty answer |
 | `agent_result` | object or null | Strictly certified agent result, or no certified result |
 | `bundle` | object or null | Accepted bundle metadata, or no accepted bundle |

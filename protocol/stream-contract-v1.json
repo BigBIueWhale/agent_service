@@ -1612,19 +1612,161 @@
         }
       ]
     },
-    "resultSuccessSubtype": {
-      "const": "success"
-    },
-    "resultErrorSubtype": {
-      "enum": [
-        "error_during_execution",
-        "error_timeout",
-        "error_max_turns",
-        "error_max_tool_calls",
-        "error_loop_detected",
-        "error_incomplete_generation",
-        "error_slipped_final_message",
-        "error_cancelled"
+    "terminalOutcome": {
+      "oneOf": [
+        {
+          "properties": {
+            "subtype": {
+              "const": "success"
+            },
+            "is_error": {
+              "const": false
+            },
+            "exit_code": {
+              "const": 0
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_during_execution"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 1
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_timeout"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 55
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_max_turns"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 53
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_max_tool_calls"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 55
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_loop_detected"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 1
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_incomplete_generation"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 1
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_slipped_final_message"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 1
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "error_cancelled"
+            },
+            "is_error": {
+              "const": true
+            },
+            "exit_code": {
+              "const": 130
+            }
+          },
+          "required": [
+            "subtype",
+            "is_error"
+          ]
+        }
       ]
     },
     "terminalResult": {
@@ -1633,14 +1775,7 @@
           "const": "result"
         },
         "subtype": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/resultSuccessSubtype"
-            },
-            {
-              "$ref": "#/definitions/resultErrorSubtype"
-            }
-          ]
+          "type": "string"
         },
         "is_error": {
           "type": "boolean"
@@ -1700,6 +1835,9 @@
       ],
       "allOf": [
         {
+          "$ref": "#/definitions/terminalOutcome"
+        },
+        {
           "if": {
             "properties": {
               "is_error": {
@@ -1709,9 +1847,6 @@
           },
           "then": {
             "properties": {
-              "subtype": {
-                "$ref": "#/definitions/resultErrorSubtype"
-              },
               "error": {
                 "required": [
                   "message"
@@ -1724,22 +1859,6 @@
             "required": [
               "error"
             ]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "is_error": {
-                "const": false
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "subtype": {
-                "$ref": "#/definitions/resultSuccessSubtype"
-              }
-            }
           }
         }
       ]

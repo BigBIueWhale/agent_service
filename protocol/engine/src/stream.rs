@@ -8,6 +8,26 @@ use crate::{
 use std::collections::BTreeMap;
 include!(concat!(env!("OUT_DIR"), "/stream_contract.rs"));
 
+/// How one terminal state is reported, as the stream contract's terminal
+/// table states it: the result subtype a record carries, whether that subtype
+/// is an error, and the exit code a process that ended with it leaves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TerminalOutcome {
+    pub subtype: &'static str,
+    pub is_error: bool,
+    pub exit_code: u8,
+}
+
+/// The exit code a process whose terminal record carries `subtype` leaves, as
+/// the contract's terminal table states it; `None` for a subtype the contract
+/// does not define.
+pub fn terminal_exit_code(subtype: &str) -> Option<u8> {
+    TERMINAL_OUTCOMES
+        .iter()
+        .find(|outcome| outcome.subtype == subtype)
+        .map(|outcome| outcome.exit_code)
+}
+
 pub const SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
 pub(crate) fn field<'a>(value: Value<'a>, key: &str, line: usize) -> ContractResult<Value<'a>> {

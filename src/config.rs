@@ -77,9 +77,11 @@ pub const MAX_ARCHIVE_BYTES: u64 = MAX_STAGED_BYTES + 64 * 1024 * 1024;
 /// verify loop (~20-60), then regression-check and finalise (~10-20) -- about
 /// 80-190 for a clean pass. Doubling that admits one complete recovery pass
 /// after a wrong hypothesis, so an agent that reaches 400 is looping rather than
-/// converging. Qwen Code stops itself at this count and exits 53, which is an
-/// ordinary terminal outcome graded on the work done, never an infrastructure
-/// failure. `max_wall_time_seconds` stays disabled everywhere by design.
+/// converging. Qwen Code stops itself at this count, records `error_max_turns`
+/// and exits 53, the exit the stream contract's terminal table gives that
+/// subtype, so it is an ordinary terminal outcome graded on the work done,
+/// never a process error. `max_wall_time_seconds` stays disabled everywhere by
+/// design.
 ///
 /// This is the budget a submission that says nothing about turns receives. A
 /// caller that knows its task is shaped differently may name another budget in

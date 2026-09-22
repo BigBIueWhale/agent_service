@@ -593,7 +593,9 @@ print(json.dumps(found))
         save(self.root / "control/release-remove", b"provider EOF observed while relay remains running\n")
         body = self.wait_terminal(service, route)
         end = body["terminal"]
-        require(body["status"] == "cancelled" and end["is_process_error"] is True and
+        # A cancellation the run recorded, exited with the code the contract's
+        # terminal table gives error_cancelled, is an ending, not a process error.
+        require(body["status"] == "cancelled" and end["is_process_error"] is False and
                 end["container_exit_code"] == end["agent_exit_code"] == 130,
                 "held generation did not settle with the actual TERM outcome")
         require(self.stub.generations == 1 and not self.stub.failures, "cancelled generation was retried or fixture failed")
@@ -1183,7 +1185,10 @@ print(json.dumps(found))
     def provider_failure(self, service, route):
         body = self.wait_terminal(service, route)
         end = body["terminal"]
-        require(body["status"] == "completed" and end["is_process_error"] is True and
+        # The run recorded error_during_execution and exited 1, the code the
+        # contract's terminal table gives it: the process agrees with its
+        # record, so the failure is the record's, not a process error.
+        require(body["status"] == "completed" and end["is_process_error"] is False and
                 end["container_exit_code"] == end["agent_exit_code"] == 1,
                 "provider failure did not stop the actual invocation")
         require(self.stub.generations == 1 and not self.stub.failures,
@@ -1224,7 +1229,7 @@ print(json.dumps(found))
         )
         require(expected_cause in error_message and error_message.encode() in contents["output/qwen.stderr"],
                 "the actual provider refusal cause was lost or replaced by a later failure")
-        require(end["response"] == "agent exited abnormally (container=Some(1), qwen=Some(1)). " + error_message,
+        require(end["response"] == error_message,
                 "service publication changed the certified provider failure cause")
         if self.case == "provider_malformed_sse":
             require(b"Could not parse message into JSON: {invalid-json}" in contents["output/qwen.stderr"],

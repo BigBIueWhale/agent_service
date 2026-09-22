@@ -27,6 +27,16 @@ fn main() {
         compiled.error_subtypes.len(),
         compiled.error_subtypes
     ));
+    generated.push_str(&format!(
+        "pub const TERMINAL_OUTCOMES: [TerminalOutcome; {}] = [\n",
+        compiled.terminal_outcomes.len()
+    ));
+    for (subtype, is_error, exit_code) in &compiled.terminal_outcomes {
+        generated.push_str(&format!(
+            "TerminalOutcome {{ subtype: {subtype:?}, is_error: {is_error}, exit_code: {exit_code} }},\n"
+        ));
+    }
+    generated.push_str("];\n");
     for (name, variants) in &compiled.discriminators {
         generate_enum(&mut generated, name, variants);
     }

@@ -497,6 +497,40 @@ mod tests {
     }
 
     #[test]
+    fn the_terminal_table_gives_every_subtype_its_error_flag_and_one_exit_code() {
+        // The vocabulary a record is checked against and the exit codes a
+        // process reader compares with are the same generated table.
+        let names = |is_error: bool| {
+            crate::TERMINAL_OUTCOMES
+                .iter()
+                .filter(|outcome| outcome.is_error == is_error)
+                .map(|outcome| outcome.subtype)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(names(false), [crate::SUCCESS_SUBTYPE]);
+        assert_eq!(names(true), crate::ERROR_SUBTYPES);
+        for (subtype, exit_code) in [
+            ("success", 0),
+            ("error_during_execution", 1),
+            ("error_timeout", 55),
+            ("error_max_turns", 53),
+            ("error_max_tool_calls", 55),
+            ("error_loop_detected", 1),
+            ("error_incomplete_generation", 1),
+            ("error_slipped_final_message", 1),
+            ("error_cancelled", 130),
+        ] {
+            assert_eq!(
+                crate::terminal_exit_code(subtype),
+                Some(exit_code),
+                "{subtype}"
+            );
+        }
+        assert_eq!(crate::TERMINAL_OUTCOMES.len(), 9);
+        assert_eq!(crate::terminal_exit_code("unknown_terminal"), None);
+    }
+
+    #[test]
     fn every_compiled_schema_node_agrees_with_the_pinned_oracle_on_representable_values() {
         let schema: serde_json::Value =
             serde_json::from_str(include_str!("../../stream-contract-v1.json")).unwrap();

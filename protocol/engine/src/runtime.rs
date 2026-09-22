@@ -45,7 +45,7 @@ pub struct AgentResult {
 }
 
 // Public terminal vocabulary is generated from the same schema used by the producer.
-pub use crate::{ERROR_SUBTYPES, SUCCESS_SUBTYPE};
+pub use crate::{terminal_exit_code, ERROR_SUBTYPES, SUCCESS_SUBTYPE};
 
 /// One resolved subagent scope. Identification follows the Claude Code CLI
 /// convention: a scope is the id of the `tool_use` content block that spawned

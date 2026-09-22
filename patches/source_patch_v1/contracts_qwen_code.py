@@ -4519,16 +4519,14 @@ def _validate_incomplete_generation_after(state: State) -> None:
         label=label,
         location=cli,
     )
+    # The state's record carries the name the stream contract's terminal table
+    # defines for it; the client's build refuses a name the table does not.
     require_text(
         state,
         types,
-        "| 'error_incomplete_generation'",
-        label=label,
-    )
-    require_text(
-        state,
-        types,
-        "    subtype: 'error_incomplete_generation',",
+        "  [AgentTerminateMode.INCOMPLETE_GENERATION]: terminalResult(\n"
+        "    'error_incomplete_generation',\n"
+        "  ),",
         label=label,
     )
 
@@ -4812,11 +4810,14 @@ def _validate_final_message_slip_after(state: State) -> None:
         "                return p;",
         label=label,
     )
-    require_text(state, types, "| 'error_slipped_final_message'", label=label)
+    # The state's record carries the name the stream contract's terminal table
+    # defines for it; the client's build refuses a name the table does not.
     require_text(
         state,
         types,
-        "    subtype: 'error_slipped_final_message',",
+        "  [AgentTerminateMode.SLIPPED_FINAL_MESSAGE]: terminalResult(\n"
+        "    'error_slipped_final_message',\n"
+        "  ),",
         label=label,
     )
     require_text(
@@ -5026,17 +5027,8 @@ def _validate_terminal_state_before(state: State) -> None:
 
 
 _TERMINAL_ENUM = re.compile(r"\n  ([A-Z_]+) = '([A-Z_]+)',")
-_DECLARED_SUCCESS = re.compile(
-    r"export interface CLIResultMessageSuccess \{\n  type: 'result';\n"
-    r"  subtype: '([a-z_]+)';"
-)
-_DECLARED_ERRORS = re.compile(r"\n  subtype:\n((?:    \| '[a-z_]+'(?:;|\n))+)")
 _NAMED = re.compile(
-    r"\n  \[AgentTerminateMode\.([A-Z_]+)\]: \{\n"
-    r"    subtype: '([a-z_]+)',\n"
-    r"    isError: (true|false),\n"
-    r"    exitCode: (\d+),\n"
-    r"  \},"
+    r"\n  \[AgentTerminateMode\.([A-Z_]+)\]: terminalResult\(\s*'([a-z_]+)',?\s*\),"
 )
 # The two shapes that put a terminal state into a value: an ending carrying it
 # as `terminateMode`, and the table naming the state each run budget's overrun
@@ -5099,11 +5091,13 @@ def _validate_terminal_state_after(state: State) -> None:
     # ── The closed set, asserted in every direction ──────────────────────
     #
     # A declared name with no producer is byte-identical, type-checks, parses
-    # and builds; nothing else in this pipeline can see it. The four sets
-    # below are read out of the post-patch source and required to agree: the
-    # states an agentic run can end in, the states some statement in the tree
-    # constructs, the states the table names, and the names the protocol
-    # declares.
+    # and builds; nothing else in this pipeline can see it. The sets below
+    # are read out of the post-patch source and required to agree: the states
+    # an agentic run can end in, the states some statement in the tree
+    # constructs, and the states the table names. The names the protocol
+    # declares are the stream contract's terminal table, which the client
+    # reads from its generated binding: the TypeScript build refuses a name the
+    # table does not define, and one it defines that no state produces.
     #
     # The assertion is production, not reachability. Whether a given
     # deployment's argv can reach a producing statement is a path-sensitive
@@ -5124,23 +5118,39 @@ def _validate_terminal_state_after(state: State) -> None:
         )
     state_names = {name for name, _ in states}
 
-    types_source = _source(state, types, label=label)
-    success_match = _DECLARED_SUCCESS.search(types_source)
-    _require(
-        success_match is not None,
-        f"{label}: {types} declares no success subtype",
+    types_source = _require_all(
+        state,
+        types,
+        (
+            "import {\n  AgentTerminateMode,\n  TERMINAL_OUTCOMES,\n} from '@qwen-code/qwen-code-core';",
+            "type TerminalOutcomes = typeof TERMINAL_OUTCOMES;",
+            "export type TerminalSubtype = keyof TerminalOutcomes;",
+            "  subtype: TerminalSubtypeWhere<false>;",
+            "  subtype: TerminalSubtypeWhere<true>;",
+            "  [S in TerminalSubtype]: { readonly subtype: S } & TerminalOutcomes[S];",
+            "  return { subtype, ...TERMINAL_OUTCOMES[subtype] };",
+            "type RequireNever<T extends never> = T;",
+            "export type TerminalSubtypeWithoutAState = RequireNever<\n"
+            "  Exclude<\n"
+            "    TerminalSubtype,\n"
+            "    (typeof TERMINAL_RESULT_BY_STATE)[AgentTerminateMode]['subtype']\n"
+            "  >\n"
+            ">;",
+        ),
+        label=label,
     )
-    declared_success = {success_match.group(1)}
-    errors_match = _DECLARED_ERRORS.search(types_source)
-    _require(
-        errors_match is not None,
-        f"{label}: {types} declares no error subtype union",
-    )
-    declared_errors = set(re.findall(r"'([a-z_]+)'", errors_match.group(1)))
-    _require(
-        len(declared_errors) == errors_match.group(1).count("|"),
-        f"{label}: {types} declares a duplicate error subtype",
-    )
+    # Neither the vocabulary, nor whether a name is an error, nor the exit code
+    # it leaves is restated in the client: all three are the contract's.
+    for retired in (
+        "  type: 'result';\n  subtype: 'success';",
+        "  subtype:\n    | 'error_",
+        "    isError: true,\n",
+        "    isError: false,\n",
+        "    exitCode: ",
+        "readonly isError: false;",
+        "readonly isError: true;",
+    ):
+        forbid_text(state, types, retired, label=label)
 
     named = _NAMED.findall(
         types_source.split("export const TERMINAL_RESULT_BY_STATE = {", 1)[1].split(
@@ -5150,31 +5160,21 @@ def _validate_terminal_state_after(state: State) -> None:
     _require(named, f"{label}: {types} maps no state to a terminal record")
     named_states = {entry[0] for entry in named}
     _require(
+        len(named_states) == len(named),
+        f"{label}: {types} gives one state more than one terminal record",
+    )
+    _require(
         named_states == state_names,
         f"{label}: the terminal-record table is not total over the states a run "
         f"can end in; states without a record: {sorted(state_names - named_states)!r}, "
         f"records without a state: {sorted(named_states - state_names)!r}",
     )
-    named_success = {name for _, name, is_error, _ in named if is_error == "false"}
-    named_errors = {name for _, name, is_error, _ in named if is_error == "true"}
+    names = {name for _, name in named}
     _require(
-        named_success == declared_success,
-        f"{label}: the success name the table gives a state and the one {types} "
-        f"declares differ: named {sorted(named_success)!r}, "
-        f"declared {sorted(declared_success)!r}",
+        len(names) == len(named),
+        f"{label}: {types} reports two states under one name",
     )
-    _require(
-        named_errors == declared_errors,
-        f"{label}: the error names the table gives states and the ones {types} "
-        f"declares differ; declared with no row in the table: "
-        f"{sorted(declared_errors - named_errors)!r}, in the table but not "
-        f"declared: {sorted(named_errors - declared_errors)!r}",
-    )
-    for _, name, is_error, _ in named:
-        _require(
-            name.startswith("error_") == (is_error == "true"),
-            f"{label}: {types} pairs the name {name!r} with isError {is_error}",
-        )
+    success_names = {name for state_name, name in named if state_name == "GOAL"}
 
     # The producer half: a state earns its place in the enum -- and therefore
     # its wire name -- when some statement in the tree constructs it. The scan
@@ -5203,7 +5203,7 @@ def _validate_terminal_state_after(state: State) -> None:
     # The table is the only producer: no terminal name is written as a literal
     # where a record is built, and no cast reintroduces one.
     for path in (adapter, cli, helpers):
-        for name in sorted(declared_errors):
+        for name in sorted(names - success_names):
             forbid_text(state, path, f"'{name}'", label=label)
         forbid_text(state, path, "CLIResultMessageError['subtype']", label=label)
         forbid_text(state, path, "CLIResultMessageSuccess['subtype']", label=label)
@@ -5311,12 +5311,12 @@ def _validate_terminal_state_after(state: State) -> None:
     forbid_text(state, helpers, "previousStatus !== undefined", label=label)
 
     # ── Executed in the build ────────────────────────────────────────────
-    require_text(
-        state,
-        types_test,
+    for case in (
         "names a scope that stopped in %s as %s",
-        label=label,
-    )
+        "reports %s with the error flag and exit code the contract gives its name",
+        "names every subtype the contract defines as the ending of some state",
+    ):
+        require_text(state, types_test, case, label=label)
     require_text(
         state,
         cli_test,
@@ -7703,8 +7703,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="terminal-state-is-a-value",
         rationale=(
-            "A closed terminal-state value maps once to wire name, error classification, and exit code. "
-            "The declared, constructed, and mapped state sets agree. Budget admission precedes "
+            "A closed terminal-state value maps once to a wire name, whose error classification and exit "
+            "code are the stream contract's terminal table, read from its generated binding. The "
+            "constructed and mapped state sets agree, and every name the contract defines is one a "
+            "state produces. Budget admission precedes "
             "charging. One queued-turn lifetime tracks result delivery, so failed cleanup cannot mint a "
             "second terminal; cleanup and output callbacks are awaited."
         ),
