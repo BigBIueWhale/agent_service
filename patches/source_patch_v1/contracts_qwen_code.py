@@ -1660,6 +1660,87 @@ def _validate_subagent_result_scope_after(state: State) -> None:
         label=label,
     )
 
+    # A subagent that stopped before its goal is a failed call, whatever
+    # stopped it, and so is one that could not be run: one error type, and a
+    # message the text the parent reads already carries, so the scheduler's
+    # failure path sends the model that text unchanged. The labelled report
+    # opens with the summary the failed call carries; only GOAL is a success.
+    subagent_result = "packages/core/src/agents/subagent-result.ts"
+    _require_all(
+        state,
+        subagent_result,
+        (
+            "export function describeUnfinishedSubagent(\n"
+            "  terminateMode: Exclude<AgentTerminateMode, AgentTerminateMode.GOAL>,\n",
+            "  return `subagent ${reason}`;\n",
+            "    const summary = describeUnfinishedSubagent(\n"
+            "      terminateMode,\n"
+            "      turnsUsed,\n"
+            "      loopType,\n"
+            "      finalMessageSlip,\n"
+            "    );\n",
+            "      ? `[${summary}; its assignment is unfinished and the report below is partial]\\n\\n${partial}`\n"
+            "      : `[${summary} and produced no report; its assignment is unfinished]`;",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        _source(state, agent_tool, label=label),
+        (
+            "          if (terminateMode === AgentTerminateMode.GOAL) {\n"
+            "            const visibleFinalText =\n"
+            "              finalText || '(subagent produced no model-visible output)';\n"
+            "            return {\n"
+            "              llmContent: [{ text: visibleFinalText + wtSuffix }],\n"
+            "              returnDisplay: this.currentDisplay!,\n"
+            "            };\n"
+            "          }\n",
+            "          const unfinished = {\n"
+            "            type: ToolErrorType.EXECUTION_FAILED,\n"
+            "            message: describeUnfinishedSubagent(\n"
+            "              terminateMode,\n"
+            "              subagent.getTurnsUsed(),\n"
+            "              subagent.getLoopType(),\n"
+            "              subagent.getFinalMessageSlip(),\n"
+            "            ),\n"
+            "          };\n",
+            "                  text: `Agent was cancelled by the user. Partial result follows:\\n\\n${finalText}${wtSuffix}`,\n"
+            "                },\n"
+            "              ],\n"
+            "              returnDisplay: this.currentDisplay!,\n"
+            "              error: unfinished,\n"
+            "            };\n",
+            "            llmContent: [{ text: finalText + wtSuffix }],\n"
+            "            returnDisplay: this.currentDisplay!,\n"
+            "            error: unfinished,\n"
+            "          };\n",
+            "      const failedToRun = `Failed to run subagent: ${errorMessage}`;\n"
+            "      return {\n"
+            "        llmContent: `${failedToRun}${wtSuffix}${effectSuffix}`,\n"
+            "        returnDisplay: this.currentDisplay!,\n"
+            "        error: { type: ToolErrorType.EXECUTION_FAILED, message: failedToRun },\n"
+            "      };\n",
+        ),
+        label=label,
+        location=agent_tool,
+    )
+    # The retired shape: an unfinished subagent returned as a success, with
+    # fallbacks for a report the label means is never empty.
+    for retired in (
+        "if (terminateMode === AgentTerminateMode.ERROR) {",
+        "'Subagent execution failed.'",
+        "'(no partial result captured)'",
+    ):
+        forbid_text(state, agent_tool, retired, label=label)
+    for path, case in (
+        (agent_tool_test,
+         "a subagent that stopped as %s is a failed call, and the parent still reads its labelled report"),
+        (agent_tool_test, "a subagent that reached its goal is not a failed call"),
+        ("packages/core/src/agents/subagent-result.test.ts",
+         "opens the report of a subagent that stopped as %s with the summary its failed call carries"),
+    ):
+        require_text(state, path, case, label=label)
+
 
 def _validate_pages_affordance_before(state: State) -> None:
     label = "read_file range-mechanism precondition"
@@ -3004,7 +3085,7 @@ def _validate_subagent_progress_after(state: State) -> None:
     require_text(
         state,
         subagent_result,
-        "      reason = `stopped as ${String(terminateMode).toLowerCase()}${detail}${turns}`;",
+        "    reason = `stopped as ${String(terminateMode).toLowerCase()}${detail}${turns}`;",
         label=label,
     )
     require_text(
@@ -4824,9 +4905,9 @@ def _validate_final_message_slip_after(state: State) -> None:
         label=label,
     )
     _require(
-        _source(state, agent_tool, label=label).count("subagent.getFinalMessageSlip()") == 3,
+        _source(state, agent_tool, label=label).count("subagent.getFinalMessageSlip()") == 4,
         f"{label}: {agent_tool} does not carry the shape of the slip to the "
-        "parent and the terminal display",
+        "parent, its failed call and the terminal display",
     )
     require_text(state, agent_tool, "event.finalMessageSlip,", label=label)
     require_text(
@@ -7429,7 +7510,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="subagent-result-scope-and-turn-count",
         rationale=(
             "Each child result carries its spawning tool-call scope and actual execution-round count. "
-            "Root and child results cannot absorb each other’s state or usage."
+            "Root and child results cannot absorb each other’s state or usage. A child that stopped "
+            "before its goal, or could not be run, is a failed call whose message the report the "
+            "parent reads already carries."
         ),
         removal_condition=(
             "Upstream emits distinct correctly owned root and child results with preserved turn counts."

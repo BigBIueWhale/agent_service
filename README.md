@@ -697,7 +697,10 @@ names is a state the client contains a statement to produce, which the patch
 asserts before it writes a byte. A subagent's own scoped record carries the error
 names from the same list, so a subagent that ran out of turns and one whose tool
 threw are distinguishable without reading English; a scope that finished reports
-its work rather than a terminal state, so `success` is the session's own. The set
+its work rather than a terminal state, so `success` is the session's own. In the
+parent, the call that ran a subagent which stopped before its goal, or could not
+be run, is a failed tool call (`is_error: true`), and the text the parent reads
+is the subagent's labelled partial report, unchanged. The set
 is closed in both directions on the session's record: an error envelope carrying
 `success`, or a success envelope carrying an error spelling, is refused rather
 than mapped onto a neighbour, and the client's build refuses to produce a name
