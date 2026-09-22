@@ -11171,6 +11171,68 @@ diff --git a/packages/acp-bridge/src/transcript-replay.ts b/packages/acp-bridge/
      : undefined;
  }
  
+diff --git a/packages/channels/base/src/ChannelBase.test.ts b/packages/channels/base/src/ChannelBase.test.ts
+--- a/packages/channels/base/src/ChannelBase.test.ts
++++ b/packages/channels/base/src/ChannelBase.test.ts
+@@ -11862,22 +11862,22 @@
+       const promptText = (bridge.prompt as ReturnType<typeof vi.fn>).mock
+         .calls[0][1] as string;
+       expect(promptText).toBe('[Alice] /compress now');
+     });
+ 
+     it('does not prefix a recognized hyphenated agent command (widened token pattern)', async () => {
+-      setAvailableCommands('compress-fast');
++      setAvailableCommands('terminal-setup');
+       const ch = createChannel({ groupPolicy: 'open' });
+       await ch.handleInbound(
+-        groupEnv({ senderName: 'Alice', text: '/compress-fast now' }),
++        groupEnv({ senderName: 'Alice', text: '/terminal-setup now' }),
+       );
+       const promptText = (bridge.prompt as ReturnType<typeof vi.fn>).mock
+         .calls[0][1] as string;
+       // The `-` is part of the command token, so it parses as a command and (being
+       // recognized) is forwarded verbatim rather than tagged as plain text.
+-      expect(promptText).toBe('/compress-fast now');
++      expect(promptText).toBe('/terminal-setup now');
+     });
+ 
+     it('prefixes an unrecognized slash command (keeps attribution)', async () => {
+       // FIX (attribution injection): detection is now by SHAPE *and* RECOGNITION.
+       // /deploy looks like a command but no local handler or agent command exists,
+       // so it KEEPS its speaker tag rather than reaching the shared session
+diff --git a/packages/channels/base/src/ChannelBase.ts b/packages/channels/base/src/ChannelBase.ts
+--- a/packages/channels/base/src/ChannelBase.ts
++++ b/packages/channels/base/src/ChannelBase.ts
+@@ -315,13 +315,13 @@
+   clearEvicted?: boolean;
+ };
+ 
+ /**
+  * Character class (sans the enclosing `[]`) for a slash-command token: alphanumerics
+  * plus `_`, `:` and `-`, so hyphenated and namespaced agent commands (e.g.
+- * `/compress-fast`, `/git:commit`) parse as commands. Shared by parseCommand and
++ * `/terminal-setup`, `/git:commit`) parse as commands. Shared by parseCommand and
+  * isSlashCommand below so the two classifiers can't drift apart.
+  */
+ const COMMAND_TOKEN_CHARS = 'a-zA-Z0-9_:-';
+ /** parseCommand: capture the leading `/command` token (+ optional `@botname`) and the rest as args. */
+ const PARSE_COMMAND_RE = new RegExp(
+   `^\\/([${COMMAND_TOKEN_CHARS}]+)(?:@\\S+)?\\s*(.*)`,
+@@ -4602,13 +4602,13 @@
+     // copy-paste, e.g. " /help") parses, and so this agrees with isSlashCommand
+     // (which already trims). Otherwise isSlashCommand suppresses the [sender] tag
+     // while parseCommand returns null, leaking the command to the agent unattributed.
+     const trimmed = text.trim();
+     if (!trimmed.startsWith('/')) return null;
+     // Handle /command@botname format (Telegram groups). The token allows `-` and
+-    // `:` so hyphenated and namespaced agent commands (e.g. /compress-fast,
++    // `:` so hyphenated and namespaced agent commands (e.g. /terminal-setup,
+     // /git:commit) still parse as commands rather than being treated as text
+     // (charset shared with isSlashCommand via PARSE_COMMAND_RE).
+     const match = trimmed.match(PARSE_COMMAND_RE);
+     if (!match) return null;
+     return {
+       command: match[1].toLowerCase(),
 diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/src/acp-integration/acpAgent.test.ts
 --- a/packages/cli/src/acp-integration/acpAgent.test.ts
 +++ b/packages/cli/src/acp-integration/acpAgent.test.ts

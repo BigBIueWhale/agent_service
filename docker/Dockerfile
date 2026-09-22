@@ -127,10 +127,21 @@ RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && test -s /tmp/qwen-test-files.txt \
  && echo "executing $(wc -l < /tmp/qwen-test-files.txt) test files in full:" \
  && cat /tmp/qwen-test-files.txt \
- && cut -d/ -f1,2 /tmp/qwen-test-files.txt | sort -u > /tmp/qwen-test-packages.txt \
+ && : > /tmp/qwen-test-pairs.txt \
+ && while read -r f; do \
+      package="$(dirname "$f")"; \
+      while [ "$package" != "." ] && [ ! -f "/src/$package/package.json" ]; do \
+        package="$(dirname "$package")"; \
+      done; \
+      test -f "/src/$package/package.json" \
+        || { echo "no package owns the test file: $f"; exit 1; }; \
+      printf '%s\t%s\n' "$package" "$f" >> /tmp/qwen-test-pairs.txt; \
+    done < /tmp/qwen-test-files.txt \
+ && cut -f1 /tmp/qwen-test-pairs.txt | sort -u > /tmp/qwen-test-packages.txt \
  && while read -r package; do \
       (cd "/src/$package" \
-        && sed -n "s|^$package/||p" /tmp/qwen-test-files.txt \
+        && awk -F'\t' -v p="$package" '$1 == p { print substr($2, length(p) + 2) }' \
+             /tmp/qwen-test-pairs.txt \
           | xargs npx --no-install vitest run) || exit 1; \
     done < /tmp/qwen-test-packages.txt \
  && test "$(node dist/cli.js --version)" = '0.21.12' \
