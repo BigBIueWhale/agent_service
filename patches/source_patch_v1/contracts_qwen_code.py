@@ -5802,9 +5802,11 @@ def _validate_tool_result_bound_after(state: State) -> None:
     # The fit's "one result a turn" rests on one call a turn. The client asks
     # for it itself: its request builder writes parallel_tool_calls: false
     # into every request, once, after provider and extra-body decoration, so
-    # no setting carries it and none can replace it, and the model
-    # configuration refuses an extra_body that carries it or any other field
-    # the client writes, naming the field. The backend's grammar stops after
+    # no setting carries it and none can replace it. extra_body is a closed
+    # allowlist: the model configuration admits only the reasoning switches
+    # this deployment sends -- reasoning_effort, and chat_template_kwargs with
+    # the three keys the served template reads -- and refuses every other field
+    # or template argument by name, the client's own fields among them. The backend's grammar stops after
     # the first call, and the client checks it where a turn is assembled: a
     # turn that carries more is refused whole, before any of it is recorded,
     # committed or run, as a defect of the serving side, naming the backend
@@ -5823,49 +5825,55 @@ def _validate_tool_result_bound_after(state: State) -> None:
         location=pipeline,
     )
     require_text(state, pipeline, "parallel_tool_calls", count=1, label=label)
-    require_text(
+    constants = "packages/core/src/core/openaiContentGenerator/constants.ts"
+    content_generator = "packages/core/src/core/contentGenerator.ts"
+    _require_all(
         state,
-        "packages/core/src/core/openaiContentGenerator/constants.ts",
-        "export const CLIENT_OWNED_REQUEST_FIELDS = [\n"
-        "  'model',\n"
-        "  'messages',\n"
-        "  'stream',\n"
-        "  'stream_options',\n"
-        "  'tools',\n"
-        "  'tool_choice',\n"
-        "  'parallel_tool_calls',\n"
-        "  'kv_scope',\n"
-        "  'max_tokens',\n"
-        "  ...PROVIDER_OUTPUT_BUDGET_KEYS,\n"
-        "  'temperature',\n"
-        "  'top_p',\n"
-        "  'top_k',\n"
-        "  'repetition_penalty',\n"
-        "  'presence_penalty',\n"
-        "  'frequency_penalty',\n"
-        "  'reasoning',\n"
-        "] as const;",
+        constants,
+        (
+            "export const EXTRA_BODY_FIELDS = [\n"
+            "  'reasoning_effort',\n"
+            "  'chat_template_kwargs',\n"
+            "] as const;",
+            "export const CHAT_TEMPLATE_KWARGS_FIELDS = [\n"
+            "  'enable_thinking',\n"
+            "  'reasoning_effort',\n"
+            "  'add_vision_id',\n"
+            "] as const;",
+        ),
         label=label,
     )
     _require_all(
         state,
-        "packages/core/src/core/contentGenerator.ts",
+        content_generator,
         (
-            "import { CLIENT_OWNED_REQUEST_FIELDS } from './openaiContentGenerator/constants.js';",
-            "  const owned = new Set<string>([\n"
-            "    ...CLIENT_OWNED_REQUEST_FIELDS,\n"
-            "    ...Object.keys(config.samplingParams ?? {}),\n"
-            "  ]);\n"
-            "  const claimed = Object.keys(config.extra_body ?? {}).filter((field) =>\n"
-            "    owned.has(field),\n"
-            "  );\n"
-            "  if (claimed.length > 0) {\n"
+            "import {\n"
+            "  CHAT_TEMPLATE_KWARGS_FIELDS,\n"
+            "  EXTRA_BODY_FIELDS,\n"
+            "} from './openaiContentGenerator/constants.js';",
+            "  const refused = Object.keys(config.extra_body ?? {})\n"
+            "    .filter(\n"
+            "      (field) => !(EXTRA_BODY_FIELDS as readonly string[]).includes(field),\n"
+            "    )\n"
+            "    .map((field) => `extra_body.${field}`);",
+            "      refused.push('extra_body.chat_template_kwargs (not an object)');",
+            "              !(CHAT_TEMPLATE_KWARGS_FIELDS as readonly string[]).includes(key),",
+            "          .map((key) => `extra_body.chat_template_kwargs.${key}`),",
+            "  if (refused.length > 0) {\n"
             "    errors.push(\n"
             "      new Error(\n"
-            "        `extra_body carries ${claimed.join(', ')}, which the client writes into the request itself, "
-            "and extra_body would silently replace the client's value. "
-            "Remove ${claimed.length === 1 ? 'it' : 'them'} from extra_body.`,\n",
+            "        `extra_body carries ${refused.join(', ')}.",
         ),
+        label=label,
+    )
+    # The denylist it replaces, which admitted any field the client did not
+    # write, does not return beside it.
+    for path in (constants, content_generator):
+        forbid_text(state, path, "CLIENT_OWNED_REQUEST_FIELDS", label=label)
+    forbid_text(
+        state,
+        "packages/core/src/core/contentGenerator.test.ts",
+        "admits extra_body fields the client does not write",
         label=label,
     )
     for path, case in (
@@ -5874,9 +5882,11 @@ def _validate_tool_result_bound_after(state: State) -> None:
         ("packages/core/src/core/contentGenerator.test.ts",
          "refuses extra_body that carries a field the client writes: %s"),
         ("packages/core/src/core/contentGenerator.test.ts",
-         "refuses extra_body that repeats a sampling value the settings supply"),
+         "refuses extra_body that carries a field this deployment does not send: %s"),
         ("packages/core/src/core/contentGenerator.test.ts",
-         "admits extra_body fields the client does not write, a phase budget among them"),
+         "refuses a template argument the served template does not read: %s"),
+        ("packages/core/src/core/contentGenerator.test.ts",
+         "admits exactly the reasoning switches this deployment sends"),
     ):
         require_text(state, path, case, label=label)
     # One call a turn was the deployment's setting; it is the client's own.

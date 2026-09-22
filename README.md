@@ -152,16 +152,21 @@ rendered prompt + reasoning + tools + final response <= 262144
 ```
 
 The backend's launch defaults no phase budget, and Qwen Code sends none; a
-caller may still set either budget per request.
+caller of the backend may still set either budget per request, and Qwen Code's
+own `extra_body` admits neither.
 
 Thinking, its effort and the tuple above are defaults at both layers, not
 suggestions in prose. vLLM defaults omitted request fields to thinking enabled,
 xhigh, and the exact tuple above, and the pinned Qwen Code settings send the
 same values explicitly, with `add_vision_id=false`.
 Every request also asks for `parallel_tool_calls: false`, which is not a setting:
-the client's request builder writes it after every setting and provider, and the
-model configuration refuses an `extra_body` that carries it, or any other field
-the client writes, naming the field. The backend maps high and max to the
+the client's request builder writes it after every setting and provider. The
+model configuration's `extra_body` is a closed allowlist of the reasoning switches
+this deployment sends — `reasoning_effort`, and `chat_template_kwargs` with
+`enable_thinking`, `reasoning_effort` and `add_vision_id` — and any other field or
+template argument is refused by name: a copy of a field the client writes would
+silently overwrite the client's value or be overwritten by it, and a key the engine
+does not read would be dropped without a word. The backend maps high and max to the
 canonical xhigh rendering and rejects medium, low, or disabled thinking in this
 profile. A client cannot accidentally obtain the old Qwen3.6 repetition
 intervention or a weaker fast path.

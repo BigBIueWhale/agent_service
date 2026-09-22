@@ -8572,7 +8572,19 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
 +| `model.chatCompression.maxRecentImagesToRetain`    | number  | Number of most-recent images reattached at the end of a request once historical image payloads are replaced with text references. `0` reattaches none. Env override: `QWEN_COMPACT_MAX_RECENT_IMAGES`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `3`         |
 -| `model.skipNextSpeakerCheck`                       | boolean | Skip the next speaker check.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `true`      |
  | `model.skipLoopDetection`                          | boolean | Disables streaming loop detection checks. Defaults to `true` (loop detection is skipped) to avoid false positives interrupting legitimate workflows. Set to `false` to re-enable streaming loop detection — useful as a guardrail in headless / non-interactive runs where stuck repetition can otherwise waste budget. In daemon/ACP sessions, which run none of the other streaming detectors, re-enabling also activates a global-duplicate tool-call halt; the always-on per-turn tool-call cap and an invalid-tool-params stagnation guard run there regardless of this setting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `true`      |
-@@ -224,6 +217,6 @@
+@@ -210,7 +203,10 @@
+         "X-Client-Request-ID": "req-123"
+       },
+       "extra_body": {
+-        "enable_thinking": true
++        "reasoning_effort": "xhigh",
++        "chat_template_kwargs": {
++          "enable_thinking": true
++        }
+       },
+       "samplingParams": {
+         "temperature": 0.2,
+@@ -224,6 +220,6 @@
  
  **timeout (request timeout):**
  
@@ -8581,7 +8593,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  
 -**stream guards (OpenAI-compatible providers only):**
 +**stream bounds (OpenAI-compatible providers only):**
-@@ -230,29 +223,26 @@
+@@ -230,29 +226,26 @@
  
 -Two guards bound a streaming response, each accepting `0` to disable. Neither is implemented by the Anthropic/Gemini generators, which leave the drip-fed shape below unbounded.
 +A streaming response is held to three bounds, none of which is configurable or can be disabled. None is implemented by the Anthropic/Gemini generators, which leave the drip-fed shape below unbounded.
@@ -8619,7 +8631,16 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  top-level `model.generationConfig`. Provider model entries are sealed, so
  top-level generation settings do not fill missing provider fields.
  
-@@ -305,41 +295,34 @@
+@@ -264,7 +257,7 @@
+ 
+ Allows you to add custom HTTP headers to all API requests. This is useful for request tracing, monitoring, API gateway routing, or when different models require different headers. For provider models, define `customHeaders` in `modelProviders[].generationConfig.customHeaders`. For runtime models without a matching provider entry, define it in `model.generationConfig.customHeaders`. No merging occurs between the two levels.
+ 
+-The `extra_body` field allows you to add custom parameters to the request body sent to the API. This is useful for provider-specific options that are not covered by the standard configuration fields. **Note: This field is only supported for OpenAI-compatible providers (`openai`, `qwen-oauth`). It is ignored for Anthropic and Gemini providers.** For provider models, define `extra_body` in `modelProviders[].generationConfig.extra_body`. For runtime models without a matching provider entry, define it in `model.generationConfig.extra_body`.
++The `extra_body` field carries the reasoning switches sent in the request body, and only those: `reasoning_effort`, and `chat_template_kwargs` with `enable_thinking`, `reasoning_effort` and `add_vision_id`. Every other request field is written by the client itself, where a copy in `extra_body` would silently overwrite the client's value or be overwritten by it, and the engine drops a key it does not read without a word, so the model configuration refuses any other field or template argument by name. **Note: This field is only supported for OpenAI-compatible providers (`openai`, `qwen-oauth`). It is ignored for Anthropic and Gemini providers.** For provider models, define `extra_body` in `modelProviders[].generationConfig.extra_body`. For runtime models without a matching provider entry, define it in `model.generationConfig.extra_body`.
+ 
+ **model.openAILoggingDir examples:**
+ 
+@@ -305,41 +298,34 @@
  #### voiceModel
  
  | Setting      | Type   | Description                                                                                                                                             | Default |
@@ -8675,7 +8696,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  If you are experiencing performance issues with file searching (e.g., with `@` completions), especially in projects with a very large number of files, here are a few things you can try in order of recommendation:
  
  1. **Use an ignore file:** Create a `.qwenignore` or configured custom ignore file in your project root to exclude directories that contain a large number of files that you don't need to reference (e.g., build artifacts, logs, `node_modules`). Reducing the total number of files crawled is the most effective way to improve performance.
-@@ -365,8 +348,6 @@
+@@ -365,8 +351,6 @@
  | `tools.callCommand`                   | string            | Defines a custom shell command for calling a specific tool that was discovered using `tools.discoveryCommand`. The shell command must meet the following criteria: It must take function `name` (exactly as in [function declaration](https://ai.google.dev/gemini-api/docs/function-calling#function-declarations)) as first command line argument. It must read function arguments as JSON on `stdin`, analogous to [`functionCall.args`](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#functioncall). It must return function output as JSON on `stdout`, analogous to [`functionResponse.response.content`](https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference#functionresponse). | `undefined` |                                                                                                                                                                                                                                                                                                                             |
  | `tools.useRipgrep`                    | boolean           | Use ripgrep for file content search instead of the fallback implementation. Provides faster search performance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | `true`      |                                                                                                                                                                                                                                                                                                                             |
  | `tools.useBuiltinRipgrep`             | boolean           | Use the bundled ripgrep binary. When set to `false`, the system-level `rg` command will be used instead. This setting is only effective when `tools.useRipgrep` is `true`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `true`      |                                                                                                                                                                                                                                                                                                                             |
@@ -8684,7 +8705,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  | `tools.computerUse.enabled`           | boolean           | Enable the built-in Computer Use tools (cua-driver native desktop automation). When `true` (default), the `computer_use__*` tools are registered as deferred built-ins; the first invocation downloads the pinned, signed cua-driver binary into `~/.qwen/computer-use/` and walks through macOS Accessibility / Screen Recording permissions.                                                                                                                                                                                                                                                                                                                                                                                                       | `true`      | Requires restart: Yes                                                                                                                                                                                                                                                                                                       |
  | `tools.computerUse.maxImageDimension` | number            | Longest-edge pixel cap applied to cua-driver screenshots (via `set_config`'s `max_image_dimension`). `-1` (default) keeps cua-driver's built-in default (1568); `0` disables resizing (full resolution); a positive value caps the longest edge. Lower caps cut vision-token cost at the expense of fine detail.                                                                                                                                                                                                                                                                                                                                                                                                                                     | `-1`        | Requires restart: Yes. Env override: `QWEN_COMPUTER_USE_MAX_IMAGE_DIMENSION` (a non-negative integer; takes precedence over this setting)                                                                                                                                                                                   |
  | `tools.computerUse.idleTimeoutMs`     | number            | Milliseconds to keep the cua-driver process alive after the last `computer_use__*` call. The default is `300000` (5 minutes). Set to `0` to keep it running until Qwen Code exits.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `300000`    | Requires restart: Yes                                                                                                                                                                                                                                                                                                       |
-@@ -601,13 +582,12 @@
+@@ -601,13 +585,12 @@
  > **Experimental features.** These toggles gate in-development capabilities and may change or be removed in future releases.
  
  | Setting                                | Type    | Description                                                                                                                                                                                                                                                                                                                                                                                                  | Default |
@@ -8698,7 +8719,7 @@ diff --git a/docs/users/configuration/settings.md b/docs/users/configuration/set
  | `experimental.emitToolUseSummaries`    | boolean | Generate a short LLM-based label after each tool-call batch completes. See [Tool-Use Summaries](../features/tool-use-summaries). Requires a fast model to be configured (`fastModel`); silently skipped otherwise. Can be overridden per-session with `QWEN_CODE_EMIT_TOOL_USE_SUMMARIES=0` or `=1`.                                                                                                         | `true`  |
  
  #### mcpServers
-@@ -736,42 +716,42 @@
+@@ -736,42 +719,42 @@
  > [!warning]
  >
  > **Loader-affecting variables are always rejected:** Variables that make a spawned Node.js process or OS loader execute an attacker-chosen file — `NODE_OPTIONS`, `npm_config_node_options` (and npm's config-file redirects `npm_config_userconfig`, `npm_config_globalconfig`, `npm_config_script_shell`, `npm_config_prefix`), `NODE_PATH`, `OPENSSL_CONF` (dlopens an attacker OpenSSL engine at startup), `NODE_REPL_EXTERNAL_MODULE`, `npm_config_node_gyp`, `npm_config_init_module`, `LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`, `BASH_ENV`, `ZDOTDIR`, and exported bash function definitions (`BASH_FUNC_*`) — are never loaded from `.env` files (any scope, including `.qwen/.env` and user-level files) or from the top-level `settings.json` `env` section. A workspace-controlled value there could hijack module resolution for every subprocess Qwen Code spawns, so Qwen Code prints a warning when it rejects such a key (once per process, per key and source — in a multi-workspace daemon each workspace's rejection is reported separately). To use one of these variables, export it in the environment you launch Qwen Code from; sessions hosted by a `qwen serve` daemon deliberately do not inherit them, while direct editor (ACP) sessions and the plain CLI keep the exported value. Library _search_ paths (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH`) and the interactive-shell-only `ENV` are intentionally not on this list — rejecting them breaks mainstream toolchains (`ENV=production`, conda/CUDA library dirs) — but a project `.env` still cannot apply them on reload. This rejection applies to the top-level `env` section only: per-server `mcpServers[].env` and per-hook `hooks[].env` are intentionally scoped to that server or hook and still apply (both surfaces are gated by folder trust for workspace-provided configs). Separately, a project `.env` can never set `QWEN_CLI_ENTRY` (the daemon's session-process entrypoint), `QWEN_CDP_MCP_COMMAND` (the command the daemon spawns as the browser-automation MCP adapter), `QWEN_SERVE_CDP_TUNNEL_OVER_WS` (switches that tunnel surface on), `DEV` (the dev-harness launch marker), the TLS trust-anchor variables (`NODE_EXTRA_CA_CERTS`, `SSL_CERT_FILE`, `SSL_CERT_DIR`, `CURL_CA_BUNDLE`, `REQUESTS_CA_BUNDLE`, `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH`, `npm_config_cafile`, `npm_config_ca`, `npm_config_strict_ssl`, `PIP_CERT` — an attacker CA there, or `npm_config_strict_ssl=false`, would enable MITM of the token-bearing traffic a session's `git`/`npm`/`pip`/`curl` calls make), the git command-execution variables (`GIT_SSH_COMMAND`, `GIT_SSH`, `GIT_EXEC_PATH`, `GIT_TEMPLATE_DIR`, `GIT_ASKPASS`, `GIT_PROXY_COMMAND`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, `GIT_EXTERNAL_DIFF`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_PARAMETERS` and the numbered `GIT_CONFIG_KEY_<n>`/`GIT_CONFIG_VALUE_<n>` pairs — git runs these on any session `git` invocation — and `XDG_CONFIG_HOME`, which redirects the `$XDG_CONFIG_HOME/git/config` git merges with `~/.gitconfig`), the curl/wget rc-file redirects (`CURL_HOME`, `WGETRC` — their rc files can install an attacker proxy or CA), `PIP_CONFIG_FILE` (redirects all of pip's configuration — `index-url`, `trusted-host`, proxy, or cert settings in an attacker file send session pip traffic or credentials to attacker infrastructure), `SSH_ASKPASS` (git/ssh execute it as the fallback passphrase-prompt program on an auth challenge), `LESSOPEN` and `LESSCLOSE` (`less` executes them as input preprocessors on every file a session views), the node-gyp interpreter-selection variables (`NODE_GYP_FORCE_PYTHON`, `npm_config_python`, `PYTHON` — run as the build Python during native-addon installs — and `npm_config_git`, run as npm's git binary), the editor and startup hooks (`VISUAL`, `EDITOR` — git's editor fallback chain, also spawned by the CLI's own external-editor flows — and `PYTHONSTARTUP`, which CPython executes at interactive startup), or `BROWSER` (the CLI execs it via the secure browser launcher). Those stay settable from the shell environment or a user-level `.env`; unlike the loader list above they are rejected from project files only, so a value you export yourself is preserved. They are also frozen at boot from a user-level `.env`: a settings reload does not apply edits to them there — or their removal — until the process restarts. Upgrade note: before this denylist existed, some of these keys could load from `.env` files or `settings.json` `env` on some paths; they are now rejected everywhere with a warning, and a `qwen serve` daemon no longer passes inherited values of them to session subprocesses.
@@ -131170,7 +131191,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
        const err = error as Error;
        expect(err.message).toMatch(
          /updated in the background and needs to be restarted/,
-@@ -700,33 +548,108 @@
+@@ -700,33 +548,157 @@
        expect(err.cause).toBe(moduleError);
      }
    });
@@ -131260,6 +131281,7 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
 +    ['kv_scope', { kv_scope: 'someone-else' }],
 +    ['tools', { tools: [] }],
 +    ['temperature', { temperature: 0.2 }],
++    ['min_p', { min_p: 0.1 }],
 +  ])(
 +    'refuses extra_body that carries a field the client writes: %s',
 +    (field, extra_body) => {
@@ -131270,44 +131292,92 @@ diff --git a/packages/core/src/core/contentGenerator.test.ts b/packages/core/src
 +          ...supported,
 +          extra_body,
 +        }),
-+      ).toThrow(
-+        `extra_body carries ${field}, which the client writes into the request itself`,
-+      );
++      ).toThrow(`extra_body carries extra_body.${field}.`);
 +    },
 +  );
-+  it('refuses extra_body that repeats a sampling value the settings supply', () => {
++  it.each([
++    ['thinking_token_budget', { thinking_token_budget: 8_192 }],
++    ['final_response_token_budget', { final_response_token_budget: 8_192 }],
++    ['enable_thinking', { enable_thinking: true }],
++    ['service_tier', { service_tier: 'priority' }],
++  ])(
++    'refuses extra_body that carries a field this deployment does not send: %s',
++    (field, extra_body) => {
++      // A phase budget, or a switch the engine reads only inside the
++      // template arguments, is not one of the reasoning switches extra_body
++      // carries; the configuration names it rather than letting the engine
++      // drop it or the client pass it on.
++      expect(() =>
++        createContentGeneratorConfig(config, AuthType.USE_OPENAI, {
++          ...supported,
++          extra_body: { reasoning_effort: 'xhigh', ...extra_body },
++        }),
++      ).toThrow(`extra_body carries extra_body.${field}.`);
++    },
++  );
++  it.each([
++    ['preserve_thinking', { preserve_thinking: true }],
++    ['enable_thinkng', { enable_thinkng: true }],
++  ])(
++    'refuses a template argument the served template does not read: %s',
++    (key, chat_template_kwargs) => {
++      expect(() =>
++        createContentGeneratorConfig(config, AuthType.USE_OPENAI, {
++          ...supported,
++          extra_body: {
++            chat_template_kwargs: {
++              enable_thinking: true,
++              ...chat_template_kwargs,
++            },
++          },
++        }),
++      ).toThrow(`extra_body carries extra_body.chat_template_kwargs.${key}.`);
++    },
++  );
++  it('refuses template arguments that are not an object', () => {
 +    expect(() =>
 +      createContentGeneratorConfig(config, AuthType.USE_OPENAI, {
 +        ...supported,
-+        samplingParams: { min_p: 0 },
-+        extra_body: { min_p: 0.1, reasoning_effort: 'xhigh' },
++        extra_body: { chat_template_kwargs: ['enable_thinking'] },
 +      }),
-+    ).toThrow('extra_body carries min_p, which the client writes');
++    ).toThrow(
++      'extra_body carries extra_body.chat_template_kwargs (not an object).',
++    );
 +  });
-+  it('admits extra_body fields the client does not write, a phase budget among them', () => {
-+    // The backend's phase budgets remain a per-request capability; a caller
-+    // that wants one says so in extra_body, and the client sets none itself.
-+    expect(
++  it('names every refused field at once', () => {
++    expect(() =>
 +      createContentGeneratorConfig(config, AuthType.USE_OPENAI, {
 +        ...supported,
 +        extra_body: {
-+          reasoning_effort: 'xhigh',
-+          chat_template_kwargs: { enable_thinking: true },
 +          thinking_token_budget: 8_192,
++          chat_template_kwargs: { preserve_thinking: true },
 +        },
 +      }),
-+    ).toMatchObject({
-+      extra_body: {
++    ).toThrow(
++      'extra_body carries extra_body.thinking_token_budget, extra_body.chat_template_kwargs.preserve_thinking.',
++    );
++  });
++  it('admits exactly the reasoning switches this deployment sends', () => {
++    const extra_body = {
++      reasoning_effort: 'xhigh',
++      chat_template_kwargs: {
++        enable_thinking: true,
 +        reasoning_effort: 'xhigh',
-+        thinking_token_budget: 8_192,
++        add_vision_id: false,
 +      },
-+    });
++    };
++    expect(
++      createContentGeneratorConfig(config, AuthType.USE_OPENAI, {
++        ...supported,
++        extra_body,
++      }),
++    ).toMatchObject({ extra_body });
 +  });
  });
 diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core/contentGenerator.ts
 --- a/packages/core/src/core/contentGenerator.ts
 +++ b/packages/core/src/core/contentGenerator.ts
-@@ -1,32 +1,35 @@
+@@ -1,32 +1,38 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -131346,9 +131416,12 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    StrictMissingModelIdError,
  } from '../models/modelConfigErrors.js';
  import { PROVIDER_SOURCED_FIELDS } from '../models/constants.js';
-+import { CLIENT_OWNED_REQUEST_FIELDS } from './openaiContentGenerator/constants.js';
++import {
++  CHAT_TEMPLATE_KWARGS_FIELDS,
++  EXTRA_BODY_FIELDS,
++} from './openaiContentGenerator/constants.js';
  import { preloadRuntimeFetchModule } from '../utils/runtimeFetchOptions.js';
-@@ -43,28 +46,60 @@
+@@ -43,28 +49,60 @@
  
    generateContentStream(
      request: GenerateContentParameters,
@@ -131411,7 +131484,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
     */
    promptCacheSharing?: boolean;
  };
-@@ -90,20 +125,8 @@
+@@ -90,20 +128,8 @@
    enableOpenAILogging?: boolean;
    openAILoggingDir?: string;
    timeout?: number; // Timeout configuration in milliseconds
@@ -131432,7 +131505,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    retryMaxDelayMs?: number; // Maximum delay for stream rate-limit retries
    retryErrorCodes?: number[]; // Additional error codes that trigger rate-limit retry
    enableCacheControl?: boolean; // Enable provider prompt-cache controls
-@@ -170,12 +193,20 @@
+@@ -170,12 +196,20 @@
    customHeaders?: Record<string, string>;
    // Extra body parameters to be merged into the request body
    extra_body?: Record<string, unknown>;
@@ -131453,7 +131526,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    // When true, media parts in tool responses (including the built-in read_file
    // and MCP tools) are split into a follow-up `role: "user"` message instead of
    // being embedded inside the `role: "tool"` message. The OpenAI Chat
-@@ -297,15 +328,74 @@
+@@ -297,15 +331,91 @@
  export function validateModelConfig(
    config: ContentGeneratorConfig,
    isStrictModelProvider: boolean = false,
@@ -131503,21 +131576,38 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
 +      ),
 +    );
 +  }
-+  // extra_body is merged after every field the client writes, so one of
-+  // those fields in extra_body would silently replace the client's value --
-+  // among them parallel_tool_calls, on which one result per turn rests. The
-+  // sampling values the settings supply are the client's own too.
-+  const owned = new Set<string>([
-+    ...CLIENT_OWNED_REQUEST_FIELDS,
-+    ...Object.keys(config.samplingParams ?? {}),
-+  ]);
-+  const claimed = Object.keys(config.extra_body ?? {}).filter((field) =>
-+    owned.has(field),
-+  );
-+  if (claimed.length > 0) {
++  // extra_body is a closed allowlist: the reasoning switches this deployment
++  // sends, and nothing else. Any other field is either one the client writes
++  // itself, where one of the two values would silently overwrite the other,
++  // or one the engine drops without a word; each is refused by name.
++  const refused = Object.keys(config.extra_body ?? {})
++    .filter(
++      (field) => !(EXTRA_BODY_FIELDS as readonly string[]).includes(field),
++    )
++    .map((field) => `extra_body.${field}`);
++  const templateArguments = config.extra_body?.['chat_template_kwargs'];
++  if (templateArguments !== undefined) {
++    if (
++      templateArguments === null ||
++      typeof templateArguments !== 'object' ||
++      Array.isArray(templateArguments)
++    ) {
++      refused.push('extra_body.chat_template_kwargs (not an object)');
++    } else {
++      refused.push(
++        ...Object.keys(templateArguments)
++          .filter(
++            (key) =>
++              !(CHAT_TEMPLATE_KWARGS_FIELDS as readonly string[]).includes(key),
++          )
++          .map((key) => `extra_body.chat_template_kwargs.${key}`),
++      );
++    }
++  }
++  if (refused.length > 0) {
 +    errors.push(
 +      new Error(
-+        `extra_body carries ${claimed.join(', ')}, which the client writes into the request itself, and extra_body would silently replace the client's value. Remove ${claimed.length === 1 ? 'it' : 'them'} from extra_body.`,
++        `extra_body carries ${refused.join(', ')}. It may carry only ${EXTRA_BODY_FIELDS.join(' and ')}, and chat_template_kwargs only ${CHAT_TEMPLATE_KWARGS_FIELDS.join(', ')}: every other request field is the client's to write, and the engine drops any other key without a word. Remove ${refused.length === 1 ? 'it' : 'them'} from extra_body.`,
 +      ),
 +    );
 +  }
@@ -131531,7 +131621,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
    if (!config.apiKey) {
      if (isStrictModelProvider) {
        errors.push(
-@@ -336,26 +426,12 @@
+@@ -336,26 +446,12 @@
      } else {
        const envKey = getDefaultModelEnvVar(config.authType);
        errors.push(new MissingModelError({ authType: config.authType, envKey }));
@@ -131558,7 +131648,7 @@ diff --git a/packages/core/src/core/contentGenerator.ts b/packages/core/src/core
  export function createContentGeneratorConfig(
    config: Config,
    authType: AuthType | undefined,
-@@ -448,16 +524,36 @@
+@@ -448,16 +544,36 @@
      return (await this.getGeneratorForUse()).generateContentStream(
        request,
        userPromptId,
@@ -161267,13 +161357,7 @@ diff --git a/packages/core/src/core/nonInteractiveToolExecutor.test.ts b/package
 diff --git a/packages/core/src/core/openaiContentGenerator/constants.ts b/packages/core/src/core/openaiContentGenerator/constants.ts
 --- a/packages/core/src/core/openaiContentGenerator/constants.ts
 +++ b/packages/core/src/core/openaiContentGenerator/constants.ts
-@@ -1,3 +1,5 @@
-+import { PROVIDER_OUTPUT_BUDGET_KEYS } from '../tokenLimits.js';
-+
- export const DEFAULT_TIMEOUT = 120000;
- /**
-  * Sentinel request timeout (ms) representing a *disabled* timeout.
-@@ -4,9 +6,8 @@
+@@ -4,9 +4,8 @@
   *
   * The OpenAI and Anthropic SDKs treat `timeout: 0` as an immediate abort rather
 - * than "no timeout", so a configured `0` (disable — matching the
@@ -161286,7 +161370,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/constants.ts b/packag
   */
  export const DISABLED_REQUEST_TIMEOUT_MS = 2_147_483_647;
  
-@@ -28,43 +29,58 @@
+@@ -28,43 +27,58 @@
 -// Inactivity (no-chunk) timeout for streaming responses. The SDK `timeout`
 -// only bounds connect + first response, so a stream that returns 200 then
 -// goes silent is otherwise unbounded. The 4-minute default gives large-prompt
@@ -161351,31 +161435,31 @@ diff --git a/packages/core/src/core/openaiContentGenerator/constants.ts b/packag
  export const DEFAULT_MAX_RETRIES = 3;
  
 +/**
-+ * The request fields the client writes itself: the conversation, streaming,
-+ * the declared tools and how they may be called, the output limit under
-+ * every name a provider reads it by, ownership, and the sampling and reasoning
-+ * values its own settings supply. `extra_body` is merged after all of them,
-+ * so an `extra_body` carrying one would silently replace the client's value;
-+ * the model configuration refuses it instead, naming the field.
++ * The only fields `extra_body` may carry: the reasoning switches this
++ * deployment sends, the top-level effort and the served template's own
++ * arguments. Every other request field is the client's to write. The
++ * provider merges `extra_body` over the request the client built, so one of
++ * those fields there would silently replace the client's value, and the two
++ * written after the merge -- `parallel_tool_calls`, on which one result per
++ * turn rests, and `kv_scope` -- would silently discard it; a field the engine
++ * does not read is dropped without a word. The model configuration refuses
++ * any other field by name.
 + */
-+export const CLIENT_OWNED_REQUEST_FIELDS = [
-+  'model',
-+  'messages',
-+  'stream',
-+  'stream_options',
-+  'tools',
-+  'tool_choice',
-+  'parallel_tool_calls',
-+  'kv_scope',
-+  'max_tokens',
-+  ...PROVIDER_OUTPUT_BUDGET_KEYS,
-+  'temperature',
-+  'top_p',
-+  'top_k',
-+  'repetition_penalty',
-+  'presence_penalty',
-+  'frequency_penalty',
-+  'reasoning',
++export const EXTRA_BODY_FIELDS = [
++  'reasoning_effort',
++  'chat_template_kwargs',
++] as const;
++
++/**
++ * The only keys `extra_body.chat_template_kwargs` may carry: the three the
++ * served template reads. The engine drops any other key without a word, on
++ * generation and on /tokenize alike, so a misspelt one would switch nothing
++ * and say nothing; it is refused by name instead.
++ */
++export const CHAT_TEMPLATE_KWARGS_FIELDS = [
++  'enable_thinking',
++  'reasoning_effort',
++  'add_vision_id',
 +] as const;
 +
  export const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
