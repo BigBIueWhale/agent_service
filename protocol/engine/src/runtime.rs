@@ -1263,6 +1263,94 @@ mod tests {
             .contains("journal sync uncertain"));
     }
     #[test]
+    fn a_call_the_output_limit_stopped_is_recorded_whole_and_issues_no_tool() {
+        let block = r#"{"type":"incomplete_tool_use","name":"write_file","arguments":"{\"file_path\": \"a.md\", \"content\": \"cut"}"#;
+        let mut owner = initialized();
+        for (id, event) in [
+            (
+                "start",
+                r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#.to_string(),
+            ),
+            (
+                "block",
+                format!(r#"{{"type":"content_block_start","index":0,"content_block":{block}}}"#),
+            ),
+            ("stop", r#"{"type":"content_block_stop","index":0}"#.to_string()),
+        ] {
+            admit(&mut owner, &partial(id, &event)).unwrap();
+        }
+        admit(&mut owner, &assistant("cut", "null", &format!("[{block}]"), "7")).unwrap();
+        // The model's output, and never a call: nothing is issued, so no
+        // result can answer it and no scope can claim it, while the turn that
+        // wrote it is billed.
+        assert!(owner.tool_uses.is_empty());
+        assert_eq!(owner.scope_states[0].billed_turns, 1);
+        assert_eq!(owner.scope_states[0].output_tokens, 7);
+
+        // It starts whole, so no delta can extend it.
+        let mut owner = initialized();
+        for (id, event) in [
+            (
+                "start",
+                r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#.to_string(),
+            ),
+            (
+                "block",
+                format!(r#"{{"type":"content_block_start","index":0,"content_block":{block}}}"#),
+            ),
+        ] {
+            admit(&mut owner, &partial(id, &event)).unwrap();
+        }
+        let delta = partial(
+            "delta",
+            r#"{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"more"}}"#,
+        );
+        assert!(admit(&mut owner, &delta)
+            .unwrap_err()
+            .to_string()
+            .contains("no delta representation"));
+
+        // Its declared shape: a name or null, and the served text.
+        for shape in [
+            r#"{"type":"incomplete_tool_use","name":null,"arguments":""}"#,
+            r#"{"type":"incomplete_tool_use","name":"write_file","arguments":"{}"}"#,
+        ] {
+            let mut owner = initialized();
+            admit(
+                &mut owner,
+                &partial(
+                    "start",
+                    r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#,
+                ),
+            )
+            .unwrap();
+            let start = format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
+            admit(&mut owner, &partial("block", &start)).unwrap();
+        }
+        for shape in [
+            r#"{"type":"incomplete_tool_use","name":"","arguments":""}"#,
+            r#"{"type":"incomplete_tool_use","name":"write_file"}"#,
+            r#"{"type":"incomplete_tool_use","arguments":""}"#,
+            r#"{"type":"incomplete_tool_use","name":"write_file","arguments":{}}"#,
+            r#"{"type":"incomplete_tool_use","name":"write_file","arguments":"","input":{}}"#,
+        ] {
+            let mut owner = initialized();
+            admit(
+                &mut owner,
+                &partial(
+                    "start",
+                    r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#,
+                ),
+            )
+            .unwrap();
+            let start = format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
+            assert!(
+                admit(&mut owner, &partial("block", &start)).is_err(),
+                "admitted {shape}"
+            );
+        }
+    }
+    #[test]
     fn failing_last_tool_does_not_insert_earlier_tools_or_clear_partial_state() {
         let mut owner = initialized();
         for (id, event) in [

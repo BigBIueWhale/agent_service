@@ -486,6 +486,19 @@ def _validate_stream_commit_before(state: State) -> None:
     )
     forbid_text(state, chat, "const strictToolCalling", label=label)
     forbid_text(state, converter, "requestContext.strictToolCalling", label=label)
+    # Upstream has no carrier for what a generation its limit stopped served
+    # of a call: under a strict terminal the call is not made, and the only
+    # copy of its arguments, the stream parser's buffer, is dropped with it.
+    _require(
+        "packages/core/src/core/incomplete-tool-call.ts" not in state,
+        f"{label}: the stopped-call carrier unexpectedly exists upstream",
+    )
+    forbid_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/streamingToolCallParser.ts",
+        "getBufferedToolCalls",
+        label=label,
+    )
 
 
 def _validate_stream_commit_after(state: State) -> None:
@@ -550,6 +563,131 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         label=label,
     )
+
+    # A call a length terminal stopped is never made, and what the provider
+    # served of it is the model's output: it is carried, as served, to every
+    # record of the generation, on both transports, and never as a call.
+    carrier = "packages/core/src/core/incomplete-tool-call.ts"
+    carrier_source = _require_all(
+        state,
+        carrier,
+        (
+            "export interface IncompleteToolCall {",
+            "readonly name: string | null;",
+            "readonly arguments: string;",
+            "export function setIncompleteToolCalls(",
+            "export function getIncompleteToolCalls(",
+            "export function takeIncompleteToolCalls(",
+            "incompleteToolCallsByResponse.delete(response);",
+        ),
+        label=label,
+    )
+    for executable in ("functionCall", "FunctionCall", "JSON.parse"):
+        _require(
+            executable not in carrier_source,
+            f"{label}: {carrier} names {executable!r}; a stopped call is carried "
+            "as the text it was served as and is never turned into a call.",
+        )
+    parser = "packages/core/src/core/openaiContentGenerator/streamingToolCallParser.ts"
+    parser_source = _require_all(
+        state,
+        parser,
+        (
+            "getBufferedToolCalls(): IncompleteToolCall[] {",
+            "name: this.toolCallMeta.get(index)?.name ?? null,",
+            "arguments: this.buffers.get(index) ?? '',",
+        ),
+        label=label,
+    )
+    buffered = parser_source[parser_source.index("getBufferedToolCalls(): IncompleteToolCall[] {"):]
+    buffered = buffered[: buffered.index("\n  }\n")]
+    for rewrite in ("JSON.parse", "safeJsonParse", "trim()", "+ '\"'"):
+        _require(
+            rewrite not in buffered,
+            f"{label}: {parser} getBufferedToolCalls uses {rewrite!r}; the "
+            "stopped call's arguments are the buffer exactly as it arrived.",
+        )
+    converter_source = _require_all(
+        state,
+        converter,
+        (
+            "if (effectiveFinishReason === 'length' && completedToolCalls.length === 0) {",
+            "const incomplete = toolCallParser.getBufferedToolCalls();",
+            "choice.finish_reason === 'length' &&\n      choice.message.tool_calls?.length",
+        ),
+        label=label,
+    )
+    _require(
+        converter_source.count("setIncompleteToolCalls(response, incomplete);") == 2,
+        f"{label}: {converter} does not carry a stopped call on both the "
+        "streamed terminal and the batch response",
+    )
+    chat_source = _source(state, chat, label=label)
+    _require_ordered(
+        chat_source,
+        (
+            "const incompleteToolCalls: IncompleteToolCall[] = [];",
+            "incompleteToolCalls.push(...takeIncompleteToolCalls(chunk));",
+            "yield chunk;",
+            "await this.chatRecordingService.recordAssistantTurn({",
+            "incompleteToolCalls,",
+            "this.history.push({",
+            "setIncompleteToolCalls(terminal, incompleteToolCalls);",
+            "yield terminal;",
+            "this.chatRecordingService.recordGenerationFailure(",
+            "incompleteToolCalls,",
+        ),
+        label=label,
+        location=chat,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/chatRecordingService.ts",
+        (
+            "incompleteToolCalls: readonly IncompleteToolCall[];\n"
+            "    goalContext?: GoalTurnPermit;\n  }): Promise<void> {",
+            "incompleteToolCalls?: IncompleteToolCall[];",
+            "record.incompleteToolCalls = structuredClone([",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/agents/agent-transcript.ts",
+        "incompleteToolCalls: structuredClone([\n              ...record.incompleteToolCalls,",
+        label=label,
+    )
+    # The strict-mode length case once asserted the prefix was suppressed; it
+    # is carried now, and a test saying otherwise would describe a loss.
+    forbid_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.test.ts",
+        "suppresses diagnostic tool prefixes",
+        label=label,
+    )
+    for path, name in (
+        (
+            "packages/core/src/core/openaiContentGenerator/converter.test.ts",
+            "carries the call a length terminal delivers whole, byte for byte, in strict mode",
+        ),
+        (
+            "packages/core/src/core/openaiContentGenerator/converter.test.ts",
+            "carries a length-stopped call as served, never as a function call, in strict mode",
+        ),
+        (
+            "packages/core/src/core/openaiContentGenerator/streamingToolCallParser.test.ts",
+            "returns every served call in index order with its arguments exactly as they arrived",
+        ),
+        (
+            "packages/core/src/core/geminiChat.test.ts",
+            "records a call its limit stopped with the turn and publishes it only on the committed terminal",
+        ),
+        (
+            "packages/core/src/services/chatRecordingService.test.ts",
+            "[stopped-call] keeps a call the output limit stopped on its assistant record",
+        ),
+    ):
+        require_text(state, path, name, label=label)
 
 
 def _validate_tool_policy_before(state: State) -> None:
@@ -1186,7 +1324,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         ),
         "packages/core/src/core/openaiContentGenerator/converter.test.ts": (
             "preserves text-image-text chronology inside the originating tool result",
-            "suppresses diagnostic tool prefixes on a length terminal in strict mode",
+            "carries a length-stopped call as served, never as a function call, in strict mode",
             "requires a tool_calls terminal in strict mode",
             "exposes a completed identified call in strict mode",
         ),
@@ -1256,6 +1394,12 @@ def _validate_stream_evidence_before(state: State) -> None:
     forbid_text(
         state, adapter, "must carry what the model actually received", label=label
     )
+    # Nothing upstream records what a stopped call carried: the turn yields
+    # no event for it and the stream has no block to put it in.
+    forbid_text(state, adapter, "incomplete_tool_use", label=label)
+    forbid_text(
+        state, "packages/core/src/core/turn.ts", "IncompleteToolCall", label=label
+    )
 
 
 def _validate_stream_evidence_after(state: State) -> None:
@@ -1288,6 +1432,124 @@ def _validate_stream_evidence_after(state: State) -> None:
         "[stream-evidence] falls back to the display when no parts exist",
         label=label,
     )
+
+    # A call its output limit stopped is part of what the turn generated, so
+    # the stream records it with the turn, in the main session and in every
+    # subagent round, as its own block type: never a tool_use, which a result
+    # would have to answer and a reader would count as a call made.
+    turn = "packages/core/src/core/turn.ts"
+    turn_source = _require_all(
+        state,
+        turn,
+        (
+            "IncompleteToolCall = 'incomplete_tool_call',",
+            "export type ServerGeminiIncompleteToolCallEvent = {",
+            "| ServerGeminiIncompleteToolCallEvent",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        turn_source,
+        (
+            "for (const call of getIncompleteToolCalls(resp)) {",
+            "yield { type: GeminiEventType.IncompleteToolCall, value: call };",
+            "this.finishReason = finishReason;",
+            "type: GeminiEventType.Finished,",
+        ),
+        label=label,
+        location=turn,
+    )
+    _require_all(
+        state,
+        adapter,
+        (
+            "case GeminiEventType.IncompleteToolCall:\n"
+            "        this.appendIncompleteToolUse(state, event.value, null);",
+            "for (const call of round.incompleteToolCalls) {\n"
+            "      this.appendIncompleteToolUse(state, call, parentToolUseId);",
+            "type: 'incomplete_tool_use',\n      name: call.name,\n      arguments: call.arguments,",
+            "protected onIncompleteToolUseBlockCreated(",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts",
+        "protected override onIncompleteToolUseBlockCreated(",
+        label=label,
+    )
+    for path in (
+        "packages/cli/src/nonInteractive/types.ts",
+        "packages/sdk-typescript/src/types/protocol.ts",
+        "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/protocol.ts",
+    ):
+        _require_all(
+            state,
+            path,
+            (
+                "export interface IncompleteToolUseBlock {\n"
+                "  type: 'incomplete_tool_use';\n"
+                "  name: string | null;\n"
+                "  arguments: string;",
+                "  | IncompleteToolUseBlock\n",
+            ),
+            label=label,
+        )
+    agent_core = "packages/core/src/agents/runtime/agent-core.ts"
+    _require_ordered(
+        _source(state, agent_core, label=label),
+        (
+            "roundIncompleteToolCalls = [];",
+            "roundIncompleteToolCalls = getIncompleteToolCalls(resp);",
+        ),
+        label=label,
+        location=agent_core,
+    )
+    require_text(
+        state,
+        agent_core,
+        "incompleteToolCalls: roundIncompleteToolCalls,",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "incompleteToolCalls: event.incompleteToolCalls,",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/tools.ts",
+        "incompleteToolCalls: readonly IncompleteToolCall[];",
+        label=label,
+    )
+    for path, name in (
+        (
+            adapter_test,
+            "[stopped-call] records a call the output limit stopped as its own block, as served, with the turn usage",
+        ),
+        (
+            adapter_test,
+            "[subagent-rounds] records a call the round output limit stopped after its text, as served",
+        ),
+        (
+            "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts",
+            "[stopped-call] starts an incomplete_tool_use block whole and stops it with no delta",
+        ),
+        (
+            "packages/cli/src/nonInteractiveCli.test.ts",
+            "records the call a limit-stopped last generation was writing, as served, and runs nothing",
+        ),
+        (
+            "packages/core/src/core/turn.test.ts",
+            "yields a call the limit stopped, as served, ahead of the terminal and never as a request",
+        ),
+        (
+            "packages/core/src/agents/runtime/agent-core.test.ts",
+            "publishes a call its limit stopped with the round, as served, and makes no call",
+        ),
+    ):
+        require_text(state, path, name, label=label)
 
 
 def _validate_compaction_event_before(state: State) -> None:
@@ -7931,7 +8193,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "One generation contract withholds structured calls and the terminal until EOF validation "
             "and canonical assistant recording succeed. Invalid pre-content requests have a bounded "
             "identical resample; delivered answers cannot be replayed. Literal text never supplies "
-            "executable calls."
+            "executable calls. A call a length terminal stopped is never made, and what the provider "
+            "served of it is carried, as the text it was served as, to every record of the generation."
         ),
         removal_condition=(
             "Upstream provides equivalent batch/stream call grammar, terminal and durable commit "
@@ -8114,8 +8377,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="generation-stream-evidence",
         rationale=(
             "Streaming and batch renderers preserve generation evidence and provider termination under "
-            "the correct root or spawning-call identity. Output drains before successful delivery is "
-            "acknowledged."
+            "the correct root or spawning-call identity, including a call the output limit stopped, "
+            "recorded as its own block and never as a call made. Output drains before successful "
+            "delivery is acknowledged."
         ),
         removal_condition=(
             "Upstream emits equivalent scoped generation evidence through callback-settled output "

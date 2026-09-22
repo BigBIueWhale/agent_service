@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `021981264596b417cfc11731e5ec41728b346a6c24e5cddde9b760748b9e35a6`
+- Review-diff SHA-256: `05ca1fe66bc3dc2c61f91e9df14877c10aadbbaa92af047810ba287c98fa5168`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `fb239857769b5f0a8c3f4350d236bb7bae02631837f5eda19ca4ef8f3cbfb648`
+- Transformer-manifest SHA-256: `fa8ca88ad3e8767fe7f67745dde12ce50412dfc8466f5b0f6977885d16c1569e`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -47,7 +47,12 @@ provider terminal. A fresh bounded retry is permitted only before answer content
 has been delivered. Text, whitespace, and literal protocol-like XML remain
 verbatim. Transport failures, invalid usage, malformed calls, and post-terminal
 content retain diagnostic text without publishing executable calls or a normal
-terminal. Empty normally completed output is a valid response.
+terminal. Empty normally completed output is a valid response. A call a length
+terminal stopped is never made, and what the provider served of it is the
+model's output: it is carried, as the text it was served as, to every record of
+the generation -- the stream's `incomplete_tool_use` block, the assistant
+transcript record beside the message history replays, and a subagent's round --
+and never becomes a function call anywhere.
 
 A turn the model ended itself with no tool call is its final answer only when
 its visible text is one. A message with no visible text, or one carrying the

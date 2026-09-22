@@ -651,6 +651,16 @@ extra properties, malformed JSON arguments, unmatched tool results, duplicate ID
 parallel calls, low/disabled thinking, and incomplete length-stopped calls are not
 made executable.
 
+A length-stopped call is still what the model wrote, and the record keeps it. The
+backend holds a call until the generation ends and then serves it, name and
+arguments, in the terminal chunk, `finish_reason: "length"` beside it; the client
+makes no call of it and records it, exactly as served, in that turn's assistant
+message as an `incomplete_tool_use` block carrying `name` (or `null`) and the
+`arguments` text. It is never a `tool_use`: no result answers it, no scope can
+claim it, and nothing that counts the calls a session made counts it. A subagent
+round records it the same way under its scope, and the client's chat recording
+keeps it on the turn's assistant record, outside the message a resume replays.
+
 Streaming and non-streaming are different parser paths and are tested as such. The
 backend suite cuts real token streams inside tool markers and arguments, compares
 stream/batch termination, and verifies that degenerate output never acquires a

@@ -753,6 +753,37 @@
           "type": "object",
           "properties": {
             "type": {
+              "const": "incomplete_tool_use"
+            },
+            "name": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            },
+            "arguments": {
+              "type": "string"
+            },
+            "annotations": {
+              "$ref": "#/definitions/annotations"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "arguments"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
               "const": "tool_result"
             },
             "tool_use_id": {
