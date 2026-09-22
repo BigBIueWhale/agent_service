@@ -126489,7 +126489,8 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        getArenaAgentClient: vi.fn().mockReturnValue(null),
        getManagedAutoMemoryEnabled: vi.fn().mockReturnValue(true),
        isManagedMemoryAvailable: vi.fn().mockReturnValue(true),
-@@ -704,61 +712,51 @@
+@@ -704,61 +712,52 @@
++        markAllReadsEvictedFromHistory: vi.fn().mockReturnValue(0),
        }),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
@@ -126563,7 +126564,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            lastCompletedUuid: 'record-1',
            turnParentUuids: [],
          },
-@@ -768,48 +766,47 @@
+@@ -768,48 +767,47 @@
        } as unknown as ReturnType<Config['getSessionRestoreRuntime']>);
  
        const resumedClient = new GeminiClient(mockConfig);
@@ -126625,7 +126626,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            sessionId: 'resumed-session-id',
            projectHash: 'project-hash',
            startTime: new Date(0).toISOString(),
-@@ -825,32 +822,33 @@
+@@ -825,32 +823,33 @@
                version: '1.0.0',
                message: { role: 'model', parts: [{ text: 'done' }] },
                usageMetadata: {
@@ -126665,7 +126666,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            sessionId: 'resumed-session-id',
            projectHash: 'project-hash',
            startTime: new Date(0).toISOString(),
-@@ -866,14 +864,15 @@
+@@ -866,14 +865,15 @@
                cwd: '/test/project',
                version: '1.0.0',
                systemPayload: {
@@ -126682,7 +126683,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              },
            ],
          },
-@@ -881,16 +880,16 @@
+@@ -881,16 +881,16 @@
          lastCompletedUuid: null,
        });
  
@@ -126703,7 +126704,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        vi.mocked(mockConfig.getResumedSessionData).mockReturnValue({
          conversation: {
            sessionId: 'resumed-session-id',
-@@ -1040,12 +1039,383 @@
+@@ -1040,12 +1040,383 @@
          'test-model',
          PermissionMode.Default,
        );
@@ -127087,7 +127088,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          fireSessionStartEvent: vi.fn().mockResolvedValue(
            createHookOutput('SessionStart', {
              hookSpecificOutput: {
-@@ -1134,6 +1504,73 @@
+@@ -1134,6 +1505,73 @@
        expect(enableSpy).toHaveBeenCalledTimes(2);
      });
  
@@ -127161,7 +127162,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      it('passes startup, resume, and clear sources to the profiler', async () => {
        await client.startChat();
        await client.startChat([{ role: 'user', parts: [{ text: 'hi' }] }]);
-@@ -1306,8 +1743,8 @@
+@@ -1306,8 +1744,8 @@
  
      it('finalizes failed startChat profiles for sync stage errors', async () => {
        vi.spyOn(
@@ -127172,7 +127173,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        ).mockImplementationOnce(() => {
          throw new Error('system instruction failed');
        });
-@@ -1495,39 +1932,57 @@
+@@ -1495,39 +1933,57 @@
          n === 'tool_search' ? ({} as never) : null,
        );
        reg.preloadDeferredToolsWithinBudget.mockClear();
@@ -127238,7 +127239,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          n === 'tool_search' ? ({} as never) : null,
        );
        vi.mocked(mockConfig.getToolSearchThreshold).mockReturnValue(0);
-@@ -1561,15 +2016,13 @@
+@@ -1561,15 +2017,13 @@
        // deferred tool. It is clamped to 100%.
        vi.mocked(mockConfig.getToolSearchThreshold).mockReturnValue(200);
        reg.preloadDeferredToolsWithinBudget.mockClear();
@@ -127255,7 +127256,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        // The eager-reveal branch already exposes everything; running the
        // budget check as well would be redundant.
        const reg = getRegistryMock();
-@@ -1726,11 +2179,12 @@
+@@ -1726,11 +2180,12 @@
      });
  
      it('re-applies SessionStart additionalContext after refreshing the system instruction', async () => {
@@ -127273,7 +127274,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const hookSystem = {
          fireSessionStartEvent: vi.fn().mockResolvedValue(
            createHookOutput('SessionStart', {
-@@ -1747,6 +2201,7 @@
+@@ -1747,6 +2202,7 @@
        );
  
        await client.startChat(undefined, SessionStartSource.Startup);
@@ -127281,7 +127282,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        await client.refreshSystemInstruction();
  
        expect(client.getChat()['generationConfig'].systemInstruction).toBe(
-@@ -1815,6 +2270,7 @@
+@@ -1815,6 +2271,7 @@
        const mockChat: Partial<GeminiChat> = {
          getHistory: vi.fn().mockReturnValue(currentHistory),
          setHistory: vi.fn(),
@@ -127289,7 +127290,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
        vi.mocked(getInitialChatHistory).mockResolvedValueOnce([[], []]);
-@@ -1822,6 +2278,9 @@
+@@ -1822,6 +2279,9 @@
        await client.refreshStartupContextReminder();
  
        expect(mockChat.setHistory).toHaveBeenCalledWith(currentHistory.slice(1));
@@ -127299,7 +127300,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('removes the full legacy 2-entry prelude, not just the first entry', async () => {
-@@ -1853,6 +2312,7 @@
+@@ -1853,6 +2313,7 @@
        const mockChat: Partial<GeminiChat> = {
          getHistory: vi.fn().mockReturnValue(currentHistory),
          setHistory: vi.fn(),
@@ -127307,7 +127308,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
        vi.mocked(getInitialChatHistory).mockResolvedValueOnce([
-@@ -1867,6 +2327,12 @@
+@@ -1867,6 +2328,12 @@
          newPrelude,
          ...currentHistory.slice(2),
        ]);
@@ -127320,7 +127321,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
    });
  
-@@ -1989,45 +2455,7 @@
+@@ -1989,45 +2456,7 @@
        expect(reg.getDeferredToolSummary).toHaveBeenCalledTimes(1);
      });
  
@@ -127367,7 +127368,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        await runTurn(SendMessageType.UserQuery);
  
        expect(mockConfig.startActiveTodoWorkChain).toHaveBeenCalledWith(
-@@ -2050,18 +2478,6 @@
+@@ -2050,18 +2479,6 @@
          'prompt-retry',
          'prompt-userQuery',
        );
@@ -127386,7 +127387,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('continues the carried Todo work chain for related notifications', async () => {
-@@ -2091,9 +2507,6 @@
+@@ -2091,9 +2508,6 @@
      });
  
      it('keeps automatic Todo ownership through its tool-result turns', async () => {
@@ -127396,7 +127397,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        mockTurnRunFn
          .mockReturnValueOnce(
            (async function* () {
-@@ -2128,9 +2541,6 @@
+@@ -2128,9 +2542,6 @@
          // drain
        }
  
@@ -127406,7 +127407,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        expect(mockConfig.endAutomaticActiveTodoWorkChain).toHaveBeenCalledWith(
          'prompt-automatic',
        );
-@@ -2625,12 +3035,107 @@
+@@ -2625,12 +3036,107 @@
        expect(systemInstructionBefore).toContain(
          'SessionStart additional context:\nHookCtx',
        );
@@ -127514,7 +127515,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          addHistory: vi.fn(),
        } as unknown as GeminiChat;
        client['chat'] = mockChat;
-@@ -2840,14 +3345,6 @@
+@@ -2840,14 +3346,6 @@
        expect(client['lastInjectedDate']).toBeUndefined();
      });
  
@@ -127529,7 +127530,131 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      it('clears recently completed tools', async () => {
        client.recordCompletedToolCall('read_file');
  
-@@ -2979,12 +3476,14 @@
+@@ -2857,16 +3355,16 @@
+     });
+   });
+ 
+-  describe('history mutation invalidates FileReadCache', () => {
+-    it('setHistory clears the cache', () => {
+-      const cacheClear = mockFileReadCacheClear();
++  describe('history mutation disarms resident reads', () => {
++    it('setHistory disarms the cached reads', () => {
++      const cacheDisarm = mockFileReadCacheDisarm();
+       client['chat'] = {
+         setHistory: vi.fn(),
+       } as unknown as GeminiChat;
+ 
+       client.setHistory([{ role: 'user', parts: [{ text: 'replaced' }] }]);
+ 
+-      expect(cacheClear).toHaveBeenCalled();
++      expect(cacheDisarm).toHaveBeenCalled();
+     });
+ 
+     /**
+@@ -2885,44 +3383,44 @@
+       } as unknown as GeminiChat;
+     }
+ 
+-    it('truncateHistory clears the cache when entries are actually removed', () => {
+-      const cacheClear = mockFileReadCacheClear();
++    it('truncateHistory disarms the cached reads when entries are actually removed', () => {
++      const cacheDisarm = mockFileReadCacheDisarm();
+       client['chat'] = mockChatWithLengths(3, 2);
+ 
+       client.truncateHistory(2);
+ 
+-      expect(cacheClear).toHaveBeenCalled();
++      expect(cacheDisarm).toHaveBeenCalled();
+     });
+ 
+-    it('truncateHistory does NOT clear the cache when nothing was removed (keepCount >= history length)', () => {
+-      const cacheClear = mockFileReadCacheClear();
++    it('truncateHistory disarms nothing when nothing was removed (keepCount >= history length)', () => {
++      const cacheDisarm = mockFileReadCacheDisarm();
+ 
+       // keepCount equals history length — nothing dropped.
+       client['chat'] = mockChatWithLengths(2, 2);
+       client.truncateHistory(2);
+-      expect(cacheClear).not.toHaveBeenCalled();
++      expect(cacheDisarm).not.toHaveBeenCalled();
+ 
+       // keepCount exceeds history length — also a no-op.
+       client['chat'] = mockChatWithLengths(2, 2);
+       client.truncateHistory(99);
+-      expect(cacheClear).not.toHaveBeenCalled();
++      expect(cacheDisarm).not.toHaveBeenCalled();
+     });
+ 
+-    it('truncateHistory clears the cache when a non-finite keepCount empties history (NaN regression)', () => {
++    it('truncateHistory disarms the cached reads when a non-finite keepCount empties history (NaN regression)', () => {
+       // slice(0, NaN) returns [], but `NaN < prevLen` evaluates to
+       // false. Comparing the actual post-truncate length closes that
+-      // hole — without this guard the cache would survive a history
+-      // wipe and the file_unchanged placeholder bug returns.
+-      const cacheClear = mockFileReadCacheClear();
++      // hole — without this guard the reads would stay armed through a
++      // history wipe and the file_unchanged placeholder bug returns.
++      const cacheDisarm = mockFileReadCacheDisarm();
+       client['chat'] = mockChatWithLengths(3, 0);
+ 
+       client.truncateHistory(NaN);
+ 
+-      expect(cacheClear).toHaveBeenCalled();
++      expect(cacheDisarm).toHaveBeenCalled();
+     });
+ 
+     it('truncateHistory uses O(1) getHistoryLength, not getHistory (avoids structuredClone)', () => {
+-      mockFileReadCacheClear();
++      mockFileReadCacheDisarm();
+       const getHistoryLength = vi.fn().mockReturnValue(5);
+       const getHistory = vi.fn();
+       client['chat'] = {
+@@ -2938,9 +3436,9 @@
+     });
+ 
+     it('stripOrphanedUserEntriesFromHistory forces full IDE context only when entries were removed', async () => {
+-      const cacheClear = mockFileReadCacheClear();
++      const cacheDisarm = mockFileReadCacheDisarm();
+       const strip = vi.fn();
+-      // Case 1: history actually shrank → forceFullIdeContext + cache clear.
++      // Case 1: history actually shrank → forceFullIdeContext + disarm.
+       client['chat'] = {
+         getHistoryLength: vi.fn().mockReturnValueOnce(3).mockReturnValueOnce(1),
+         stripOrphanedUserEntriesFromHistory: strip,
+@@ -2950,11 +3448,11 @@
+       client.stripOrphanedUserEntriesFromHistory();
+ 
+       expect(strip).toHaveBeenCalledOnce();
+-      expect(cacheClear).toHaveBeenCalled();
++      expect(cacheDisarm).toHaveBeenCalled();
+       expect(client['forceFullIdeContext']).toBe(true);
+ 
+       // Case 2: no entries removed → don't touch caches / IDE context.
+-      const cacheClear2 = mockFileReadCacheClear();
++      const cacheDisarm2 = mockFileReadCacheDisarm();
+       const strip2 = vi.fn();
+       client['chat'] = {
+         getHistoryLength: vi.fn().mockReturnValue(2),
+@@ -2965,14 +3463,14 @@
+       client.stripOrphanedUserEntriesFromHistory();
+ 
+       expect(strip2).toHaveBeenCalledOnce();
+-      expect(cacheClear2).not.toHaveBeenCalled();
++      expect(cacheDisarm2).not.toHaveBeenCalled();
+       expect(client['forceFullIdeContext']).toBe(false);
+     });
+ 
+-    it('retry strips orphaned trailing user entries and clears the cache', async () => {
+-      const cacheClear = mockFileReadCacheClear();
++    it('retry strips orphaned trailing user entries and disarms the cached reads', async () => {
++      const cacheDisarm = mockFileReadCacheDisarm();
+       const stripOrphanedUserEntriesFromHistory = vi.fn();
+-      // The wrapper now gates cache-clear / forceFullIdeContext on a
++      // The wrapper now gates the disarm / forceFullIdeContext on a
+       // before/after length comparison — return one value pre-strip
+       // (mocked first) and a smaller value post-strip (subsequent
+       // calls) so the simulated mutation actually triggers the
+@@ -2979,12 +3477,14 @@
        // post-strip cleanup branch.
        const getHistoryLength = vi
          .fn()
@@ -127544,11 +127669,12 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          stripOrphanedUserEntriesFromHistory,
          repairOrphanedToolUseTurns: vi.fn().mockReturnValue({ injected: [] }),
        } as unknown as GeminiChat;
-@@ -3005,45 +3504,47 @@
+@@ -3005,45 +3505,47 @@
        }
  
        expect(stripOrphanedUserEntriesFromHistory).toHaveBeenCalled();
-       expect(cacheClear).toHaveBeenCalled();
+-      expect(cacheClear).toHaveBeenCalled();
++      expect(cacheDisarm).toHaveBeenCalled();
      });
  
 -    it('restores stripped retry entries when session token limit skips send', async () => {
@@ -127608,16 +127734,37 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
    /**
     * Test helper: replace mockConfig.getFileReadCache to return a stub
-@@ -3054,8 +3555,6 @@
+@@ -3050,4 +3552,4 @@
+    * whose clear() is a fresh spy. Returned spy lets tests assert on
+-   * whether a code path invalidated the cache.
++   * whether a code path dropped the cache outright.
+    */
+   function mockFileReadCacheClear(): ReturnType<typeof vi.fn> {
+@@ -3054,8 +3556,21 @@
      const clearMock = vi.fn();
      vi.mocked(mockConfig.getFileReadCache).mockReturnValue({
        clear: clearMock,
++      markAllReadsEvictedFromHistory: vi.fn().mockReturnValue(0),
 -      // Returns true = "entry found and disarmed" (the common case).
 -      markReadEvictedFromHistory: vi.fn().mockReturnValue(true),
      } as unknown as ReturnType<Config['getFileReadCache']>);
      return clearMock;
++  }
++
++  /**
++   * Test helper: the same stub with a fresh spy on the targeted disarm,
++   * for the paths that rewrite history and must keep what the model read
++   * and wrote while giving up the claim that it is still quotable.
++   */
++  function mockFileReadCacheDisarm(): ReturnType<typeof vi.fn> {
++    const disarmMock = vi.fn().mockReturnValue(0);
++    vi.mocked(mockConfig.getFileReadCache).mockReturnValue({
++      clear: vi.fn(),
++      markAllReadsEvictedFromHistory: disarmMock,
++    } as unknown as ReturnType<Config['getFileReadCache']>);
++    return disarmMock;
    }
-@@ -3063,1171 +3562,52 @@
+@@ -3063,1171 +3578,52 @@
 -  /**
 -   * Like {@link mockFileReadCacheClear} but also exposes the
 -   * `markReadEvictedFromHistory` spy — the surgical per-file fast-path
@@ -128821,7 +128968,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const signal = new AbortController().signal;
  
        await client.tryCompressChat('p1', true, signal);
-@@ -4240,14 +3620,16 @@
+@@ -4240,14 +3636,16 @@
  
      it('forwards customInstructions through the options bag when supplied', async () => {
        const tryCompress = vi.fn().mockResolvedValue({
@@ -128838,7 +128985,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        await client.tryCompressChat('p1', true, undefined, 'focus on auth bug');
  
-@@ -4255,42 +3637,43 @@
+@@ -4255,42 +3653,43 @@
          customInstructions: 'focus on auth bug',
        });
      });
@@ -128886,7 +129033,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        await client.tryCompressChat('p4');
  
-@@ -4303,14 +3686,13 @@
+@@ -4303,14 +3702,13 @@
                text: '<system-reminder>\nMocked env context\n</system-reminder>',
              },
            ],
@@ -128902,7 +129049,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      it('preserves Compact SessionStart additionalContext on the new chat', async () => {
        const compressedHistory: Content[] = [
          { role: 'user', parts: [{ text: 'summary' }] },
-@@ -4335,12 +3717,13 @@
+@@ -4335,12 +3733,13 @@
        vi.spyOn(originalChat, 'tryCompress').mockImplementation(async () => {
          originalChat.setHistory(compressedHistory);
          return {
@@ -128916,7 +129063,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        await client.tryCompressChat('p4');
  
        expect(hookSystem.fireSessionStartEvent).toHaveBeenCalledWith(
-@@ -4381,12 +3764,13 @@
+@@ -4381,12 +3780,13 @@
        vi.spyOn(originalChat, 'tryCompress').mockImplementation(async () => {
          originalChat.setHistory(compressedHistory);
          return {
@@ -128930,7 +129077,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        await client.tryCompressChat('p4');
  
        expect(client.getChat()['generationConfig'].systemInstruction).toContain(
-@@ -4407,12 +3791,15 @@
+@@ -4407,12 +3807,15 @@
        vi.mocked(mockConfig.getDisableAllHooks).mockReturnValue(false);
        vi.mocked(mockConfig.hasHooksForEvent).mockReturnValue(true);
        vi.mocked(mockConfig.getHookSystem).mockReturnValue(
@@ -128946,7 +129093,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          applySessionStartContext: vi.fn(),
        } as unknown as GeminiChat;
  
-@@ -4421,12 +3808,13 @@
+@@ -4421,12 +3824,13 @@
            yield {
              type: GeminiEventType.ChatCompressed,
              value: {
@@ -128960,7 +129107,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        const stream = client.sendMessageStream(
-@@ -4459,12 +3847,15 @@
+@@ -4459,12 +3863,15 @@
        vi.mocked(mockConfig.getDisableAllHooks).mockReturnValue(false);
        vi.mocked(mockConfig.hasHooksForEvent).mockReturnValue(true);
        vi.mocked(mockConfig.getHookSystem).mockReturnValue(
@@ -128976,7 +129123,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          applySessionStartContext: vi.fn(),
        } as unknown as GeminiChat;
  
-@@ -4473,12 +3864,13 @@
+@@ -4473,12 +3880,13 @@
            yield {
              type: GeminiEventType.ChatCompressed,
              value: {
@@ -128990,7 +129137,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              type: GeminiEventType.Finished,
              value: undefined,
            };
-@@ -4518,12 +3910,15 @@
+@@ -4518,12 +3926,15 @@
        vi.mocked(mockConfig.getDisableAllHooks).mockReturnValue(true);
        vi.mocked(mockConfig.hasHooksForEvent).mockReturnValue(true);
        vi.mocked(mockConfig.getHookSystem).mockReturnValue({
@@ -129006,7 +129153,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          applySessionStartContext: vi.fn(),
        } as unknown as GeminiChat;
  
-@@ -4532,12 +3927,13 @@
+@@ -4532,12 +3943,13 @@
            yield {
              type: GeminiEventType.ChatCompressed,
              value: {
@@ -129020,7 +129167,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        const stream = client.sendMessageStream(
-@@ -4559,12 +3955,15 @@
+@@ -4559,12 +3971,15 @@
        vi.mocked(mockConfig.getDisableAllHooks).mockReturnValue(false);
        vi.mocked(mockConfig.hasHooksForEvent).mockReturnValue(false);
        vi.mocked(mockConfig.getHookSystem).mockReturnValue({
@@ -129036,7 +129183,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          applySessionStartContext: vi.fn(),
        } as unknown as GeminiChat;
  
-@@ -4573,12 +3972,13 @@
+@@ -4573,12 +3988,13 @@
            yield {
              type: GeminiEventType.ChatCompressed,
              value: {
@@ -129050,7 +129197,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        const stream = client.sendMessageStream(
-@@ -4610,12 +4010,15 @@
+@@ -4610,12 +4026,15 @@
        vi.mocked(mockConfig.hasHooksForEvent).mockReturnValue(true);
        vi.mocked(mockConfig.getHookSystem).mockReturnValue({
          fireSessionStartEvent,
@@ -129066,7 +129213,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          applySessionStartContext: vi.fn(),
        } as unknown as GeminiChat;
  
-@@ -4624,12 +4027,13 @@
+@@ -4624,12 +4043,13 @@
            yield {
              type: GeminiEventType.ChatCompressed,
              value: {
@@ -129080,7 +129227,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              type: GeminiEventType.Finished,
              value: undefined,
            };
-@@ -4656,16 +4060,18 @@
+@@ -4656,16 +4076,18 @@
        );
        expect(client.getChat().applySessionStartContext).not.toHaveBeenCalled();
      });
@@ -129099,7 +129246,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['forceFullIdeContext'] = false;
  
        await client.tryCompressChat('p3');
-@@ -4679,26 +4085,31 @@
+@@ -4679,26 +4101,31 @@
        // path is owned by the for-await loop in client.sendMessageStream, not
        // by tryCompressChat — so this test feeds the event in directly.
        vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -129131,7 +129278,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        } as unknown as GeminiChat;
        client['forceFullIdeContext'] = false;
  
-@@ -4715,11 +4126,10 @@
+@@ -4715,11 +4142,10 @@
        expect(client['forceFullIdeContext']).toBe(true);
      });
  
@@ -129147,7 +129294,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const compactedHistory: Content[] = [
          { role: 'user', parts: [{ text: 'summary' }] },
          { role: 'model', parts: [{ text: 'ok' }] },
-@@ -4726,26 +4136,32 @@
+@@ -4726,26 +4152,32 @@
        ];
        const setHistory = vi.fn();
        vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -129180,7 +129327,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
 +      vi.mocked(getInitialChatHistory).mockClear();
        const stream = client.sendMessageStream(
-@@ -4761,23 +4177,82 @@
+@@ -4761,23 +4193,82 @@
 -      expect(setHistory).toHaveBeenCalledWith([
 -        {
 -          role: 'user',
@@ -129276,7 +129423,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client.getChat().setHistory([
          {
            role: 'user',
-@@ -4803,14 +4278,14 @@
+@@ -4803,14 +4294,14 @@
          new AbortController().signal,
          'prompt-cache-media',
        )) {
@@ -129293,7 +129440,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      it.each([
        SendMessageType.UserQuery,
        SendMessageType.Cron,
-@@ -4879,21 +4354,24 @@
+@@ -4879,21 +4370,24 @@
        vi.mocked(mockConfig.getIdeMode).mockReturnValue(true);
  
        vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -129318,7 +129465,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat;
  
        const initialRequest: Part[] = [{ text: 'Hi' }];
-@@ -4924,13 +4402,16 @@
+@@ -4924,13 +4418,16 @@
    - /path/to/recent/file2.ts`;
        expect(mockChat.addHistory).not.toHaveBeenCalled();
        expect(mockTurnRunFn).toHaveBeenCalledWith(
@@ -129336,7 +129483,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('should not add context if ideMode is enabled but no open files', async () => {
-@@ -4946,12 +4427,14 @@
+@@ -4946,12 +4443,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -129351,7 +129498,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const initialRequest = [{ text: 'Hi' }];
-@@ -4993,20 +4476,23 @@
+@@ -4993,20 +4492,23 @@
        vi.spyOn(client['config'], 'getIdeMode').mockReturnValue(true);
  
        vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -129375,7 +129522,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const initialRequest = [{ text: 'Hi' }];
-@@ -5063,12 +4549,14 @@
+@@ -5063,12 +4565,14 @@
          (async function* () {
            yield { type: 'content', value: 'Hello' };
          })(),
@@ -129390,7 +129537,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        const stream = client.sendMessageStream(
          [{ text: 'Hi' }],
-@@ -5116,12 +4604,14 @@
+@@ -5116,12 +4620,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -129405,7 +129552,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
        client.recordCompletedToolCall('mcp__ata__article-list-query');
  
-@@ -5144,13 +4634,13 @@
+@@ -5144,13 +4650,13 @@
          }),
        );
        expect(mockTurnRunFn).toHaveBeenCalledWith(
@@ -129420,7 +129567,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('should track surfaced managed memory paths across user queries', async () => {
-@@ -5180,12 +4670,14 @@
+@@ -5180,12 +4686,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -129435,7 +129582,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const first = client.sendMessageStream(
-@@ -5226,12 +4718,14 @@
+@@ -5226,12 +4734,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -129450,7 +129597,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -5265,12 +4759,14 @@
+@@ -5265,12 +4775,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -129465,7 +129612,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -5311,12 +4807,14 @@
+@@ -5311,12 +4823,14 @@
          (async function* () {
            yield { type: 'content', value: 'Hello' };
          })(),
@@ -129480,7 +129627,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        const stream = client.sendMessageStream(
          [{ text: 'Quick question' }],
-@@ -5350,12 +4848,14 @@
+@@ -5350,12 +4864,14 @@
          (async function* () {
            yield { type: 'content', value: 'Hello' };
          })(),
@@ -129495,7 +129642,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        const stream = client.sendMessageStream(
          [{ text: 'Quick question' }],
-@@ -5428,12 +4928,14 @@
+@@ -5428,12 +4944,14 @@
            },
          };
        })();
@@ -129510,7 +129657,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Turn 1: UserQuery — recall still pending, no injection
-@@ -5763,20 +5265,26 @@
+@@ -5763,20 +5281,26 @@
        ).not.toHaveBeenCalled();
        expect(
          mockInteractionTelemetry.endInteractionSpan,
@@ -129543,7 +129690,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            };
          })(),
        );
-@@ -5788,27 +5296,22 @@
+@@ -5788,27 +5312,22 @@
            'provider-retry-prompt',
            { type: SendMessageType.UserQuery, submittedPrompt: 'request' },
          ),
@@ -129574,7 +129721,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        } as unknown as GoalRuntime;
        mockConfig.getGoalRuntimeReady = vi.fn().mockResolvedValue(goalRuntime);
        mockTurnRunFn.mockReturnValue(
-@@ -5917,12 +5420,14 @@
+@@ -5917,12 +5436,14 @@
          (async function* () {
            yield { type: 'content', value: 'Hello' };
          })(),
@@ -129589,7 +129736,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        const stream = client.sendMessageStream(
          [{ text: 'no tool calls here' }],
-@@ -5955,12 +5460,14 @@
+@@ -5955,12 +5476,14 @@
            abortHandlerInvoked = true;
          });
          return new Promise(() => {});
@@ -129604,7 +129751,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
        mockTurnRunFn.mockReturnValue(
          (async function* () {
-@@ -6000,12 +5507,14 @@
+@@ -6000,12 +5523,14 @@
        mockMemoryManager.recall.mockImplementation((_root, _query, opts) => {
          abortSignals.push(opts.abortSignal as AbortSignal);
          return new Promise(() => {});
@@ -129619,7 +129766,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
        mockTurnRunFn.mockReturnValue(
          (async function* () {
-@@ -6085,12 +5594,14 @@
+@@ -6085,12 +5610,14 @@
            abortHandlerInvoked = true;
          });
          return new Promise(() => {});
@@ -129634,7 +129781,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
        mockTurnRunFn.mockReturnValue(
-@@ -6126,12 +5637,14 @@
+@@ -6126,12 +5653,14 @@
      });
  
      it('should log discard telemetry when pending auto-memory is reset', async () => {
@@ -129649,7 +129796,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        } as unknown as GeminiChat;
        mockTurnRunFn.mockReturnValue(
          (async function* () {
-@@ -6175,12 +5688,14 @@
+@@ -6175,12 +5704,14 @@
      });
  
      it('should log discard telemetry when pending auto-memory is shut down', async () => {
@@ -129664,7 +129811,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        } as unknown as GeminiChat;
        mockTurnRunFn.mockReturnValue(
          (async function* () {
-@@ -6227,12 +5742,14 @@
+@@ -6227,12 +5758,14 @@
        mockMemoryManager.recall.mockImplementation((_root, _query, opts) => {
          expect(opts.abortSignal?.aborted).toBe(true);
          return new Promise(() => {});
@@ -129679,7 +129826,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        mockTurnRunFn.mockReturnValue(
          (async function* () {
            yield { type: 'content', value: 'Hello' };
-@@ -6265,12 +5782,14 @@
+@@ -6265,12 +5798,14 @@
      });
  
      it('should discard prefetch when Retry resets hasToolCalls', async () => {
@@ -129694,7 +129841,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        // ToolCallRequest sets hasToolCalls, then Retry resets it → end-of-turn
        // sees no tool calls and discards the prefetch.
-@@ -6316,12 +5835,14 @@
+@@ -6316,12 +5851,14 @@
      });
  
      it('should preserve prefetch when ToolCallRequest follows Retry', async () => {
@@ -129709,7 +129856,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        // ToolCallRequest → Retry (resets) → ToolCallRequest (re-sets) →
        // end-of-turn sees hasToolCalls=true and preserves the prefetch.
-@@ -6368,129 +5889,12 @@
+@@ -6368,129 +5905,12 @@
          .mock.calls.filter(
            ([, event]) => event.discard_reason === 'no_safe_delivery_point',
          );
@@ -129839,7 +129986,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const mockArenaAgentClient = {
          checkControlSignal: vi
            .fn()
-@@ -6505,12 +5909,14 @@
+@@ -6505,12 +5925,14 @@
          mockArenaAgentClient as unknown as ReturnType<
            Config['getArenaAgentClient']
          >,
@@ -129854,7 +130001,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        // Turn 1: prefetch fires, tool call preserves it past end-of-turn.
        mockTurnRunFn.mockReturnValue(
-@@ -6616,12 +6022,14 @@
+@@ -6616,12 +6038,14 @@
            abortHandlerInvoked = true;
          });
          return new Promise(() => {});
@@ -129869,7 +130016,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6654,7 +6062,7 @@
+@@ -6654,7 +6078,7 @@
        expect(client['pendingMemoryPrefetch']).toBeUndefined();
      });
  
@@ -129878,7 +130025,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        let abortHandlerInvoked = false;
        mockMemoryManager.recall.mockImplementation((_root, _query, opts) => {
          opts.abortSignal?.addEventListener('abort', () => {
-@@ -6661,12 +6069,14 @@
+@@ -6661,12 +6085,14 @@
            abortHandlerInvoked = true;
          });
          return new Promise(() => {});
@@ -129893,7 +130040,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6678,7 +6088,7 @@
+@@ -6678,7 +6104,7 @@
          .mockReturnValue(true);
        const heuristicSpy = vi.spyOn(loopDetector, 'addAndCheckHeuristicLoops');
        vi.spyOn(loopDetector, 'getLastLoopType').mockReturnValue(
@@ -129902,7 +130049,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        // `run` is invoked as `turn.run(...)`, so `this` is the live Turn —
-@@ -6696,7 +6106,7 @@
+@@ -6696,7 +6122,7 @@
        });
  
        const stream = client.sendMessageStream(
@@ -129911,7 +130058,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          new AbortController().signal,
          'prompt-id-cap',
          { type: SendMessageType.UserQuery },
-@@ -6717,9 +6127,11 @@
+@@ -6717,9 +6143,11 @@
        const loopEvent = events.find(
          (e) => e.type === GeminiEventType.LoopDetected,
        );
@@ -129926,7 +130073,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        // double-prints the message.
        expect(returnedTurn?.pendingToolCalls).toHaveLength(0);
        // The mid-stream memory prefetch is cancelled.
-@@ -6726,12 +6138,14 @@
+@@ -6726,12 +6154,14 @@
        expect(abortHandlerInvoked).toBe(true);
        expect(client['pendingMemoryPrefetch']).toBeUndefined();
      });
@@ -129941,7 +130088,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6745,7 +6159,7 @@
+@@ -6745,7 +6175,7 @@
        const loopDetector = client['loopDetector'];
        vi.spyOn(loopDetector, 'checkAlwaysOnSafeties').mockReturnValue(true);
        vi.spyOn(loopDetector, 'getLastLoopType').mockReturnValue(
@@ -129950,7 +130097,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        mockTurnRunFn.mockReturnValue(
-@@ -6769,12 +6183,14 @@
+@@ -6769,12 +6199,14 @@
 -        LoopType.TURN_TOOL_CALL_CAP,
 +        LoopType.GLOBAL_TOOL_CALL_DUPLICATE,
        );
@@ -129966,7 +130113,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6812,12 +6228,14 @@
+@@ -6812,12 +6244,14 @@
          LoopType.CHANTING_IDENTICAL_SENTENCES,
        );
      });
@@ -129981,7 +130128,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6853,12 +6271,14 @@
+@@ -6853,12 +6287,14 @@
          undefined,
        );
      });
@@ -129996,7 +130143,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6872,7 +6292,7 @@
+@@ -6872,7 +6308,7 @@
        const loopDetector = client['loopDetector'];
        vi.spyOn(loopDetector, 'checkAlwaysOnSafeties').mockReturnValue(true);
        vi.spyOn(loopDetector, 'getLastLoopType').mockReturnValue(
@@ -130005,7 +130152,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        mockTurnRunFn.mockReturnValue(
-@@ -6893,12 +6313,14 @@
+@@ -6893,12 +6329,14 @@
  
        expect(fireStopFailureEvent).not.toHaveBeenCalled();
      });
@@ -130020,7 +130167,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6912,7 +6334,7 @@
+@@ -6912,7 +6350,7 @@
        const loopDetector = client['loopDetector'];
        vi.spyOn(loopDetector, 'checkAlwaysOnSafeties').mockReturnValue(true);
        vi.spyOn(loopDetector, 'getLastLoopType').mockReturnValue(
@@ -130029,7 +130176,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        mockTurnRunFn.mockReturnValue(
-@@ -6933,12 +6355,14 @@
+@@ -6933,12 +6371,14 @@
  
        expect(fireStopFailureEvent).not.toHaveBeenCalled();
      });
@@ -130044,7 +130191,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        };
        client['chat'] = mockChat as GeminiChat;
  
-@@ -6954,7 +6378,7 @@
+@@ -6954,7 +6394,7 @@
        const loopDetector = client['loopDetector'];
        vi.spyOn(loopDetector, 'checkAlwaysOnSafeties').mockReturnValue(true);
        vi.spyOn(loopDetector, 'getLastLoopType').mockReturnValue(
@@ -130053,7 +130200,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
  
        mockTurnRunFn.mockReturnValue(
-@@ -6975,11 +6399,11 @@
+@@ -6975,11 +6415,11 @@
  
        expect(fireStopFailureEvent).toHaveBeenCalledWith(
          'loop_detected',
@@ -130067,7 +130214,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        // skipLoopDetection defaults true, so this also confirms the consecutive
        // guard halts via the always-on path on a mixed batch (distinct calls
        // followed by an identical run). The halt drops the whole pending queue,
-@@ -7016,12 +6440,14 @@
+@@ -7016,12 +6456,14 @@
            this.pendingToolCalls.push(call);
            yield { type: GeminiEventType.ToolCallRequest, value: call };
          }
@@ -130082,7 +130229,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -7050,72 +6476,1 @@
+@@ -7050,72 +6492,1 @@
  
 -    it('should PRESERVE the pending prefetch when next-speaker continueTurn returns', async () => {
 -      // Self-inflicted-regression guard for the round-4 finding:
@@ -130155,7 +130302,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 -      expect(client['pendingMemoryPrefetch']).not.toBeUndefined();
 -    });
 -
-@@ -7125,12 +6480,14 @@
+@@ -7125,12 +6496,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130170,7 +130317,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -7147,13 +6504,13 @@
+@@ -7147,13 +6520,13 @@
  
        // The main request should have been called without any memory content
        expect(mockTurnRunFn).toHaveBeenCalledWith(
@@ -130185,7 +130332,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        vi.mocked(mockConfig.isManagedMemoryAvailable).mockReturnValue(true);
      });
-@@ -7166,12 +6523,14 @@
+@@ -7166,12 +6539,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130200,7 +130347,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -7185,13 +6544,13 @@
+@@ -7185,13 +6560,13 @@
  
        // The main request should have been called without any memory content
        expect(mockTurnRunFn).toHaveBeenCalledWith(
@@ -130215,7 +130362,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('should run managed auto-memory extraction after a completed user query', async () => {
-@@ -7208,12 +6567,17 @@
+@@ -7208,12 +6583,17 @@
        const mockStream = (async function* () {
          yield { type: GeminiEventType.Content, value: 'Done' };
        })();
@@ -130233,7 +130380,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            { role: 'model', parts: [{ text: 'Done' }] },
          ]),
        };
-@@ -7253,12 +6617,14 @@
+@@ -7253,12 +6633,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130248,7 +130395,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -7275,13 +6641,13 @@
+@@ -7275,13 +6657,13 @@
        expect(mockTurnRunFn).toHaveBeenCalledWith(
          'test-model',
          [
@@ -130263,7 +130410,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('uses the subagent plan reminder when a subagent inherits PLAN mode', async () => {
-@@ -7292,26 +6658,32 @@
+@@ -7292,26 +6674,32 @@
        );
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Plan ready' };
@@ -130306,7 +130453,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
      it('uses the subagent plan reminder when SDK mode is active', async () => {
        vi.mocked(mockConfig.getApprovalMode).mockReturnValue(ApprovalMode.PLAN);
-@@ -7321,12 +6693,14 @@
+@@ -7321,12 +6709,14 @@
        );
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Plan ready' };
@@ -130321,7 +130468,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        const stream = client.sendMessageStream(
          [{ text: 'Plan this change' }],
-@@ -7348,12 +6722,14 @@
+@@ -7348,12 +6738,14 @@
        );
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Plan ready' };
@@ -130336,7 +130483,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        const stream = client.sendMessageStream(
          [{ text: 'Plan this change' }],
-@@ -7374,12 +6750,14 @@
+@@ -7374,12 +6766,14 @@
        const mockStream1 = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130351,7 +130498,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // First query on June 5 — should inject date
-@@ -7395,13 +6773,13 @@
+@@ -7395,13 +6789,13 @@
        expect(mockTurnRunFn).toHaveBeenLastCalledWith(
          'test-model',
          [
@@ -130366,7 +130513,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        // Second query same day — should NOT inject date again
        const mockStream2 = (async function* () {
-@@ -7421,13 +6799,13 @@
+@@ -7421,13 +6815,13 @@
        for await (const _ of stream2) {
          // consume stream
        }
@@ -130381,7 +130528,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['lastInjectedDate'] = undefined;
  
        vi.setSystemTime(new Date('2026-06-04T12:00:00Z'));
-@@ -7435,12 +6813,14 @@
+@@ -7435,12 +6829,14 @@
        const mockStream1 = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130396,7 +130543,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // First query on June 4 — should inject date
-@@ -7456,13 +6836,13 @@
+@@ -7456,13 +6852,13 @@
        expect(mockTurnRunFn).toHaveBeenLastCalledWith(
          'test-model',
          [
@@ -130411,7 +130558,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
  
        // Advance to June 5 — date should change
        vi.setSystemTime(new Date('2026-06-05T12:00:00Z'));
-@@ -7499,12 +6879,14 @@
+@@ -7499,12 +6895,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Cron response' };
        })();
@@ -130426,7 +130573,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Send a Cron message — date should NOT be injected
-@@ -7545,13 +6927,13 @@
+@@ -7545,13 +6943,13 @@
        expect(mockTurnRunFn).toHaveBeenLastCalledWith(
          'test-model',
          [
@@ -130441,7 +130588,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      describe('autoSkill: scheduleSkillReview via runManagedAutoMemoryBackgroundTasks', () => {
-@@ -7562,12 +6944,17 @@
+@@ -7562,12 +6960,17 @@
          vi.spyOn(client['config'], 'getAutoSkillEnabled').mockReturnValue(true);
          mockStreamFn = async function* () {
            yield { type: GeminiEventType.Content, value: 'Done' };
@@ -130459,7 +130606,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              { role: 'model', parts: [{ text: 'Done' }] },
            ]),
          };
-@@ -7772,20 +7159,23 @@
+@@ -7772,20 +7175,23 @@
        vi.spyOn(client['config'], 'getIdeMode').mockReturnValue(true);
  
        vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -130483,7 +130630,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const initialRequest = [{ text: 'Hi' }];
-@@ -7818,12 +7208,14 @@
+@@ -7818,12 +7224,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130498,7 +130645,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Act
-@@ -7847,8 +7239,18 @@
+@@ -7847,8 +7255,18 @@
        expect(finalResult).toBeInstanceOf(Turn);
      });
  
@@ -130521,7 +130668,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +      vi.mocked(mockConfig.getMessageBus).mockReturnValue(
 +        mockMessageBus as unknown as ReturnType<Config['getMessageBus']>,
        );
-@@ -7855,27 +7257,29 @@
+@@ -7855,27 +7273,29 @@
 -      const mockCheckNextSpeaker = vi.mocked(checkNextSpeaker);
 -      mockCheckNextSpeaker.mockResolvedValue({
 -        next_speaker: 'model',
@@ -130577,7 +130724,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +          (async function* () {
 +            yield { type: GeminiEventType.Content, value: 'not done' };
 +          })() as unknown as AsyncGenerator<ServerGeminiStreamEvent>,
-@@ -7882,61 +7286,16 @@
+@@ -7882,61 +7302,16 @@
        );
  
 -      // Count how many stream events we get
@@ -130649,7 +130796,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('should yield MaxSessionTurns and stop when session turn limit is reached', async () => {
-@@ -7949,12 +7308,14 @@
+@@ -7949,12 +7324,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130664,7 +130811,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Act & Assert
-@@ -8000,12 +7361,14 @@
+@@ -8000,12 +7377,14 @@
        const mockStream = (async function* () {
          yield { type: 'content', value: 'Hello' };
        })();
@@ -130679,7 +130826,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const stream = client.sendMessageStream(
-@@ -8019,61 +7382,49 @@
+@@ -8019,61 +7398,49 @@
        }
  
        expect(events).toEqual([{ type: GeminiEventType.MaxSessionTurns }]);
@@ -130776,7 +130923,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +      vi.mocked(mockConfig.getDisableAllHooks).mockReturnValue(false);
 +      vi.mocked(mockConfig.getMessageBus).mockReturnValue(
 +        mockMessageBus as unknown as ReturnType<Config['getMessageBus']>,
-@@ -8081,30 +7432,29 @@
+@@ -8081,30 +7448,29 @@
 -      const mockCheckNextSpeaker = vi.mocked(checkNextSpeaker);
 -      mockCheckNextSpeaker.mockResolvedValue({
 -        next_speaker: 'model',
@@ -130835,7 +130982,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +          (async function* () {
 +            yield { type: GeminiEventType.Content, value: 'not done' };
 +          })() as unknown as AsyncGenerator<ServerGeminiStreamEvent>,
-@@ -8111,42 +7461,17 @@
+@@ -8111,42 +7477,17 @@
        );
  
 -      // Count how many stream events we get
@@ -130889,7 +131036,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      describe('Editor context delta', () => {
-@@ -8157,17 +7482,24 @@
+@@ -8157,17 +7498,24 @@
        beforeEach(() => {
          client['forceFullIdeContext'] = false; // Reset before each delta test
          vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -130914,7 +131061,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            getHistory: vi
              .fn()
              .mockReturnValue([
-@@ -8401,20 +7733,23 @@
+@@ -8401,20 +7749,23 @@
  
        beforeEach(() => {
          vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -130938,7 +131085,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          };
          client['chat'] = mockChat as GeminiChat;
  
-@@ -8982,13 +8317,30 @@
+@@ -8982,13 +8333,30 @@
        });
      });
  
@@ -130974,7 +131121,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const mockStream = (async function* () {
          yield {
            type: GeminiEventType.Error,
-@@ -8995,12 +8347,14 @@
+@@ -8995,12 +8363,14 @@
            value: { error: { message: 'test error' } },
          };
        })();
@@ -130989,7 +131136,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Act
-@@ -9014,7 +8368,12 @@
+@@ -9014,7 +8384,12 @@
        }
  
        // Assert
@@ -131003,7 +131150,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        expect(mockInteractionTelemetry.endInteractionSpan).toHaveBeenCalledWith(
          'error',
          {
-@@ -9025,13 +8384,30 @@
+@@ -9025,13 +8400,30 @@
        );
      });
  
@@ -131039,7 +131186,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const mockStream = (async function* () {
          yield { type: GeminiEventType.Content, value: 'some content' };
          yield {
-@@ -9039,12 +8415,14 @@
+@@ -9039,12 +8431,14 @@
            value: { error: { message: 'test error' } },
          };
        })();
@@ -131054,7 +131201,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Act
-@@ -9058,7 +8436,12 @@
+@@ -9058,7 +8452,12 @@
        }
  
        // Assert
@@ -131068,7 +131215,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      });
  
      it('does not run loop checks when skipLoopDetection is true', async () => {
-@@ -9079,12 +8462,14 @@
+@@ -9079,12 +8478,14 @@
          yield { type: 'content', value: 'Hello' };
          yield { type: 'content', value: 'World' };
        })();
@@ -131083,7 +131230,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        // Act
-@@ -9118,12 +8503,14 @@
+@@ -9118,12 +8519,14 @@
              };
            }
          })(),
@@ -131098,7 +131245,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const events = await fromAsync(
-@@ -9159,12 +8546,14 @@
+@@ -9159,12 +8562,14 @@
              };
            }
          })(),
@@ -131113,7 +131260,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        client['chat'] = mockChat as GeminiChat;
  
        const events = await fromAsync(
-@@ -9182,12 +8571,14 @@
+@@ -9182,12 +8587,14 @@
        expect(events).toHaveLength(5);
      });
  
@@ -131128,7 +131275,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            setHistory: vi.fn(),
            stripOrphanedUserEntriesFromHistory: vi.fn(),
            repairOrphanedToolUseTurns: vi.fn().mockReturnValue({ injected: [] }),
-@@ -9219,12 +8610,14 @@
+@@ -9219,12 +8626,14 @@
        it('restores stripped retry entries when the retry stream throws before its first event', async () => {
          const orphanedPrompt: Content = {
            role: 'user',
@@ -131143,7 +131290,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            // Send throws before the push, so the counter never advances → restore.
            getUserContentPushCount: vi.fn().mockReturnValue(0),
            setHistory: vi.fn(),
-@@ -9267,12 +8660,14 @@
+@@ -9267,12 +8676,14 @@
            parts: [{ text: 'retry me' }],
          };
          // Mirror GeminiChat's user-content push counter; the mocked turn bumps
@@ -131158,7 +131305,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            getUserContentPushCount: vi.fn(() => pushCount),
            setHistory: vi.fn(),
            stripOrphanedUserEntriesFromHistory: vi
-@@ -9325,12 +8720,14 @@
+@@ -9325,12 +8736,14 @@
            { role: 'user', parts: [{ text: 'old-1' }] },
            { role: 'model', parts: [{ text: 'old-2' }] },
            { role: 'user', parts: [{ text: 'old-3' }] },
@@ -131173,7 +131320,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            getUserContentPushCount: vi.fn(() => pushCount),
            setHistory: vi.fn(),
            stripOrphanedUserEntriesFromHistory: vi
-@@ -9372,12 +8769,14 @@
+@@ -9372,12 +8785,14 @@
          // counter guard must suppress the re-add.
          expect(mockChat.addHistory).not.toHaveBeenCalled();
        });
@@ -131188,7 +131335,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            setHistory: vi.fn(),
            stripOrphanedUserEntriesFromHistory: vi.fn(),
            repairOrphanedToolUseTurns: vi.fn().mockReturnValue({ injected: [] }),
-@@ -9410,20 +8809,24 @@
+@@ -9410,20 +8825,24 @@
  
        beforeEach(() => {
          vi.spyOn(client, 'tryCompressChat').mockResolvedValue({
@@ -131213,7 +131360,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          client['chat'] = mockChat as GeminiChat;
        });
  
-@@ -9479,12 +8882,20 @@
+@@ -9479,12 +8898,20 @@
            mockMessageBus as unknown as ReturnType<Config['getMessageBus']>,
          );
          vi.mocked(mockConfig.hasHooksForEvent).mockImplementation(
@@ -131234,7 +131381,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                role: 'model',
                parts: [{ text: 'done' }],
              },
-@@ -9533,12 +8944,20 @@
+@@ -9533,12 +8960,20 @@
            mockMessageBus as unknown as ReturnType<Config['getMessageBus']>,
          );
          vi.mocked(mockConfig.hasHooksForEvent).mockImplementation(
@@ -131255,7 +131402,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                role: 'model',
                parts: [{ text: 'done' }],
              },
-@@ -9614,12 +9033,20 @@
+@@ -9614,12 +9049,20 @@
            mockMessageBus as unknown as ReturnType<Config['getMessageBus']>,
          );
          vi.mocked(mockConfig.hasHooksForEvent).mockImplementation(
@@ -131276,7 +131423,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                role: 'model',
                parts: [{ text: 'done' }],
              },
-@@ -9688,12 +9115,94 @@
+@@ -9688,12 +9131,94 @@
          }
  
          // messageBus.request should NOT be called because hasHooksForEvent returned false
@@ -131371,7 +131518,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
            response: vi.fn(),
          };
          vi.mocked(mockConfig.getDisableAllHooks).mockReturnValue(false);
-@@ -10180,12 +9689,20 @@
+@@ -10180,12 +9705,20 @@
          vi.mocked(mockConfig.hasHooksForEvent).mockImplementation(
            (event: string) => event === 'Stop',
          );
@@ -131392,7 +131539,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                role: 'model',
                parts: [{ text: 'not done' }],
              },
-@@ -10218,7 +9735,7 @@
+@@ -10218,7 +9751,7 @@
          });
        });
  
@@ -131401,7 +131548,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          // First Stop check blocks (like a /goal "not met" verdict); the
          // second allows the loop to end.
          const mockMessageBus = {
-@@ -10241,13 +9758,14 @@
+@@ -10241,13 +9774,14 @@
 -        // Cap of 4: each turn's 3 tool calls fit, but 6 accumulated across
 -        // the continuation boundary would not. The value is explicit, so it is
 -        // a hard cap (no adaptive extension) and this stays a genuine guard on
@@ -131422,7 +131569,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              .mockReturnValue([
                { role: 'model', parts: [{ text: 'not done' }] },
              ]),
-@@ -10254,4 +9772,8 @@
+@@ -10254,4 +9788,8 @@
          } as unknown as GeminiChat;
 +        // Three identical calls a turn: a streak of three, below the
 +        // five-call consecutive-identical threshold. Six in a row, which is
@@ -131431,7 +131578,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          let turnIndex = 0;
          mockTurnRunFn.mockImplementation(() => {
            const turnNo = turnIndex++;
-@@ -10262,7 +9784,7 @@
+@@ -10262,7 +9800,7 @@
                  value: {
                    callId: `call-${turnNo}-${i}`,
                    name: 'test_tool',
@@ -131440,7 +131587,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                    isClientInitiated: false,
                    prompt_id: 'prompt-stop-hook-budget',
                  },
-@@ -10282,9 +9804,9 @@
+@@ -10282,9 +9820,9 @@
  
          // The hook continuation turn actually ran...
          expect(mockTurnRunFn).toHaveBeenCalledTimes(2);
@@ -131453,7 +131600,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          expect(events).not.toContainEqual(
            expect.objectContaining({ type: GeminiEventType.LoopDetected }),
          );
-@@ -10322,12 +9844,20 @@
+@@ -10322,12 +9860,20 @@
          vi.mocked(mockConfig.hasHooksForEvent).mockImplementation(
            (event: string) => event === 'Stop',
          );
@@ -131474,7 +131621,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                role: 'model',
                parts: [{ text: 'not done' }],
              },
-@@ -10437,13 +9967,13 @@
+@@ -10437,13 +9983,13 @@
              },
            ),
          );
@@ -131489,7 +131636,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
                  '&lt;hook-only context&gt;',
                  '</qwen:user-prompt-submit-context>',
                ].join('\n'),
-@@ -10551,13 +10081,13 @@
+@@ -10551,13 +10097,13 @@
          expect(requestText).toContain('my prompt');
          expect(requestText).toContain(taggedContext);
  
@@ -131504,7 +131651,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              hookContext: 'extra hook context',
            },
          );
-@@ -11125,55 +10655,6 @@
+@@ -11125,55 +10671,6 @@
            'Policy review is still required',
          );
          expect(getLastTurnRequestText()).not.toContain('Keep working');
@@ -131560,7 +131707,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        });
  
        it('does not drain steer input without another model-turn budget', async () => {
-@@ -11707,14 +11188,13 @@
+@@ -11707,14 +11204,13 @@
      });
    });
  
@@ -131576,7 +131723,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          {
            role: 'user',
            parts: [
-@@ -11748,18 +11228,18 @@
+@@ -11748,18 +11244,18 @@
        const abortSignal = new AbortController().signal;
  
        await client.generateContent(
@@ -131597,7 +131744,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              temperature: 0.5,
            }),
            contents,
-@@ -11767,13 +11247,13 @@
+@@ -11767,13 +11263,13 @@
          'test-session-id',
        );
      });
@@ -131612,7 +131759,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        await client.generateContent(
          [{ role: 'user', parts: [{ text: 'hi' }] }],
          {},
-@@ -11784,57 +11264,42 @@
+@@ -11784,57 +11280,42 @@
        expect(retryWithBackoff).toHaveBeenCalledWith(
          expect.any(Function),
          expect.objectContaining({ extraRetryErrorCodes: [4999] }),
@@ -131677,7 +131824,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
      });
  
-@@ -11844,24 +11309,18 @@
+@@ -11844,24 +11325,18 @@
  
        await promptIdContext.run('context-prompt-id', async () => {
          await (
@@ -131704,7 +131851,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        );
      });
  
-@@ -11882,13 +11341,13 @@
+@@ -11882,13 +11357,13 @@
        );
  
        await client.generateContent(
@@ -131719,7 +131866,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          .mocked(mockContentGenerator.generateContent)
          .mock.calls.at(-1)?.[0];
        const systemInstruction = request?.config?.systemInstruction as string;
-@@ -11919,13 +11378,13 @@
+@@ -11919,13 +11394,13 @@
        );
  
        await client.generateContent(
@@ -131734,7 +131881,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          .mocked(mockContentGenerator.generateContent)
          .mock.calls.at(-1)?.[0];
        const systemInstruction = request?.config?.systemInstruction as string;
-@@ -11950,18 +11409,13 @@
+@@ -11950,18 +11425,13 @@
          'Saved memory',
        );
        vi.mocked(getCustomSystemPrompt).mockReturnValueOnce(
@@ -131754,7 +131901,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        expect(getCustomSystemPrompt).toHaveBeenCalledWith('Override prompt');
        expect(mockContentGenerator.generateContent).toHaveBeenCalledWith(
          expect.objectContaining({
-@@ -11980,23 +11434,27 @@
+@@ -11980,23 +11450,27 @@
  
        vi.mocked(getCoreSystemPrompt).mockClear();
        vi.spyOn(client['config'], 'getAppendSystemPrompt').mockReturnValue(
@@ -131794,7 +131941,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +      }
        expect(mockContentGenerator.generateContent).toHaveBeenCalledWith(
          expect.objectContaining({
-@@ -12021,19 +11479,21 @@
+@@ -12021,19 +11495,21 @@
          vi.mocked(getCoreSystemPrompt).mockClear();
          vi.mocked(client['config'].isInteractive).mockReturnValue(interactive);
          vi.mocked(
@@ -131828,7 +131975,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +            turnBudget,
 +          );
 +        }
-@@ -12054,18 +11514,13 @@
+@@ -12054,18 +11530,13 @@
          'Saved memory',
        );
        vi.mocked(getCustomSystemPrompt).mockReturnValueOnce(
@@ -131848,7 +131995,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        // the append prompt).
        expect(getCustomSystemPrompt).toHaveBeenCalledWith('Override prompt');
        expect(mockContentGenerator.generateContent).toHaveBeenCalledWith(
-@@ -12084,24 +11539,14 @@
+@@ -12084,24 +11555,14 @@
        const abortSignal = new AbortController().signal;
  
        vi.mocked(getRecentGitStatus).mockReturnValue('Git snapshot cached');
@@ -131875,7 +132022,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          1,
          expect.objectContaining({
            config: expect.objectContaining({
-@@ -12126,18 +11571,13 @@
+@@ -12126,18 +11587,13 @@
        const abortSignal = new AbortController().signal;
        mockGenerateContentFn.mockRejectedValueOnce(
          new Error('raw upstream 500 with sensitive details'),
@@ -131895,7 +132042,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      it('propagates error when content generation is aborted', async () => {
        const contents = [{ role: 'user', parts: [{ text: 'hello' }] }];
        const abortController = new AbortController();
-@@ -12148,68 +11588,72 @@
+@@ -12148,68 +11604,72 @@
  
        await expect(
          client.generateContent(
@@ -131992,7 +132139,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        const contents = [{ role: 'user', parts: [{ text: 'hello' }] }];
        const abortSignal = new AbortController().signal;
  
-@@ -12222,15 +11666,18 @@
+@@ -12222,15 +11682,18 @@
  
        // Set up a resolved model for the fast model
        const mockResolvedModel = {
@@ -132012,7 +132159,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
          capabilities: {},
        };
  
-@@ -12253,13 +11700,13 @@
+@@ -12253,13 +11716,13 @@
  
        // Verify buildAgentContentGeneratorConfig was called with correct args
        expect(buildAgentContentGeneratorConfig).toHaveBeenCalledWith(
@@ -132027,7 +132174,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        // The dedicated fast content generator should be used
        expect(mockFastContentGenerator.generateContent).toHaveBeenCalledWith(
          expect.objectContaining({
-@@ -12297,105 +11744,104 @@
+@@ -12297,105 +11760,104 @@
            model: 'test-model',
          }),
          expect.any(String),
@@ -132157,7 +132304,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        vi.mocked(mockConfig.getModelsConfig).mockReturnValue({
          getResolvedModel: vi.fn().mockReturnValue(mockResolvedModel),
        } as unknown as ModelsConfig);
-@@ -12418,29 +11864,30 @@
+@@ -12418,29 +11880,30 @@
          abortController.signal,
          'fast-model',
        );
@@ -132195,7 +132342,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
              ? [
                  {
                    id: 'fast-model',
-@@ -12457,50 +11904,61 @@
+@@ -12457,50 +11920,61 @@
        );
  
        vi.mocked(mockConfig.getModelsConfig).mockReturnValue({
@@ -132272,7 +132419,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
        vi.mocked(mockConfig.getModelsConfig).mockReturnValue({
          getResolvedModel: vi.fn().mockReturnValue(mockResolvedModel),
        } as unknown as ModelsConfig);
-@@ -12540,12 +11998,14 @@
+@@ -12540,12 +12014,14 @@
      const mockSkillManager = {
        listSkills: vi.fn().mockResolvedValue([]),
        getActivatedSkillNames: vi.fn().mockReturnValue(new Set<string>()),
@@ -132287,7 +132434,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      };
  
      const priv = () =>
-@@ -13199,12 +12659,216 @@
+@@ -13199,12 +12675,216 @@
        );
        expect(priv().announcedAgentReminderNames).toEqual(
          new Set(['old-agent']),
@@ -132504,7 +132651,15 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
    mgr: Record<string, ReturnType<typeof vi.fn>>,
  ): Config {
    return {
-@@ -13245,5 +12909,6 @@
+@@ -13233,6 +12913,7 @@
+     }),
+     getFileReadCache: vi.fn().mockReturnValue({
+       clear: vi.fn(),
++      markAllReadsEvictedFromHistory: vi.fn().mockReturnValue(0),
+     }),
+     getExtensionLoader: vi.fn().mockReturnValue(undefined),
+     getWorkspaceContext: vi.fn().mockReturnValue(undefined),
+@@ -13245,5 +12926,6 @@
      getChatRecordingService: vi.fn().mockReturnValue(undefined),
      isInteractive: vi.fn().mockReturnValue(false),
      getStdinReader: vi.fn().mockReturnValue(undefined),
@@ -132827,7 +132982,64 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    }
  
    private getHistoryLength(): number {
-@@ -891,48 +887,60 @@
+@@ -663,11 +659,14 @@
+     // functionResponses from a failed-then-retried request. The
+     // FileReadCache would still record those reads, so the retry's
+     // re-issued Read could hit the file_unchanged placeholder while
+-    // the model has nothing to fall back on. Clear to be safe.
++    // the model has nothing to fall back on. What the strip takes away is
++    // that quotability, not the fact that the model read or wrote the file.
++    const disarmed = this.config
++      .getFileReadCache()
++      .markAllReadsEvictedFromHistory();
+     debugLogger.debug(
+-      `[FILE_READ_CACHE] clear after stripOrphanedUserEntriesFromHistory(prev=${before}, new=${after})`,
++      `[FILE_READ_CACHE] disarmed ${disarmed} resident read(s) after stripOrphanedUserEntriesFromHistory(prev=${before}, new=${after})`,
+     );
+-    this.config.getFileReadCache().clear();
+     // The stripped user turn may have carried the IDE context (open files,
+     // workspace state) that `lastSentIdeContext` advanced past. Without
+     // forcing a resend, the next request would either skip IDE context
+@@ -736,12 +735,17 @@
+   setHistory(history: Content[]) {
+     this.getChat().setHistory(history);
+     // Replacing history wholesale drops any prior read_file tool
+-    // results the FileReadCache still believes the model has seen.
+-    // Without clearing, a follow-up Read of an unchanged file would
+-    // return the file_unchanged placeholder for bytes that no longer
+-    // exist in the new history.
+-    debugLogger.debug('[FILE_READ_CACHE] clear after setHistory');
+-    this.config.getFileReadCache().clear();
++    // results the FileReadCache still believes are quotable: without
++    // disarming them, a follow-up Read of an unchanged file would return
++    // the file_unchanged placeholder for bytes that no longer exist in the
++    // new history. The reads and writes themselves still happened, and
++    // read-before-write still rests on them.
++    const disarmed = this.config
++      .getFileReadCache()
++      .markAllReadsEvictedFromHistory();
++    debugLogger.debug(
++      `[FILE_READ_CACHE] disarmed ${disarmed} resident read(s) after setHistory`,
++    );
+     this.forceFullIdeContext = true;
+   }
+ 
+@@ -758,10 +762,12 @@
+     // the clear, reintroducing the file_unchanged placeholder bug).
+     const newLen = this.getChat().getHistoryLength();
+     if (newLen < prevLen) {
++      const disarmed = this.config
++        .getFileReadCache()
++        .markAllReadsEvictedFromHistory();
+       debugLogger.debug(
+-        `[FILE_READ_CACHE] clear after truncateHistory(keep=${keepCount}, prev=${prevLen}, new=${newLen})`,
++        `[FILE_READ_CACHE] disarmed ${disarmed} resident read(s) after truncateHistory(keep=${keepCount}, prev=${prevLen}, new=${newLen})`,
+       );
+-      this.config.getFileReadCache().clear();
+     }
+     this.forceFullIdeContext = true;
+   }
+@@ -891,48 +897,60 @@
          'no_relevant_results',
        );
      }
@@ -132903,7 +133115,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const memAfter = process.memoryUsage();
      const newHistoryLength = this.chat?.getHistoryLength() ?? 0;
      if (debugLogger.isEnabled()) {
-@@ -995,4 +1003,31 @@
+@@ -995,4 +1013,31 @@
      return this.cachedGitStatus;
    }
  
@@ -132936,7 +133148,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +    systemInstruction: string;
 +    declaration: Parameters<GeminiChat['declarePreamble']>[0];
 +  } {
-@@ -999,12 +1034,20 @@
+@@ -999,12 +1044,20 @@
      const overrideSystemPrompt = this.config.getSystemPrompt();
 -    const base = overrideSystemPrompt
 -      ? getCustomSystemPrompt(overrideSystemPrompt)
@@ -132965,7 +133177,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const stableLayers = {
        base,
        contextFiles: this.config.getUserMemory(),
-@@ -1019,11 +1062,24 @@
+@@ -1019,11 +1072,24 @@
      // memory/model/mode changes; consumers match via `startsWith` and fail
      // open when it goes stale.
      this.config.setStaticSystemPrefix(assembleSystemPrompt(stableLayers));
@@ -132995,7 +133207,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    }
  
    async refreshStartupContextReminder(): Promise<void> {
-@@ -1047,44 +1103,11 @@
+@@ -1047,44 +1113,11 @@
      );
      this.seedSkillReminderDedupFromSnapshot(snapshotEntries);
      await this.seedAgentReminderDedupFromCurrent();
@@ -133045,7 +133257,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    }
  
    /**
-@@ -1101,7 +1124,9 @@
+@@ -1101,7 +1134,9 @@
        return;
      }
      await this.config.getToolRegistry().warmAll();
@@ -133056,7 +133268,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      if (this.lastSessionStartContext && this.lastSessionStartSource) {
        this.chat.applySessionStartContext(
          this.lastSessionStartContext,
-@@ -1141,14 +1166,13 @@
+@@ -1141,14 +1176,13 @@
      // misreading of the "(%)" label) would make the budget exceed the whole
      // window and preload every deferred tool unconditionally. Cap it at 100%
      // — the schema also bounds it, but clamp here so a hand-edited settings
@@ -133072,7 +133284,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      toolRegistry.preloadDeferredToolsWithinBudget(
        Math.floor((contextWindow * boundedPercent) / 100),
      );
-@@ -1547,13 +1571,13 @@
+@@ -1547,13 +1581,13 @@
        ? SessionStartSource.Resume
        : SessionStartSource.Startup,
    ): Promise<GeminiChat> {
@@ -133087,7 +133299,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      });
      let history: Content[] = [];
      let snapshotEntries: AvailableSkillEntry[] = [];
-@@ -1602,9 +1626,16 @@
+@@ -1602,9 +1636,16 @@
          return resolved;
        });
        deferredReminderCount = deferredTools?.length ?? 0;
@@ -133105,7 +133317,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        );
        profiler.timeSync('skill_reminder_seed', () => {
          this.seedSkillReminderDedupFromSnapshot(snapshotEntries);
-@@ -1613,22 +1644,27 @@
+@@ -1613,22 +1654,27 @@
          this.seedAgentReminderDedupFromCurrent(),
        );
 -      const systemInstruction = profiler.timeSync('system_instruction', () =>
@@ -133136,7 +133348,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +      chat.declareStartupContext(declareStartupContext(history));
        this.chat = chat;
  
-@@ -2081,70 +2117,6 @@
+@@ -2081,70 +2127,6 @@
      }
    }
  
@@ -133207,7 +133419,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    async *sendMessageStream(
      request: PartListUnion,
      callerSignal: AbortSignal,
-@@ -2316,13 +2288,13 @@
+@@ -2316,13 +2298,13 @@
            } catch (error) {
              debugLogger.warn('Failed to pause interrupted Goal turn', error);
            }
@@ -133222,7 +133434,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
          if (sameGoalPermit(runtime.permitForTurn(goalTurnKey), goalPermit)) {
            await runtime.finishTurn(goalPermit);
-@@ -2342,27 +2314,20 @@
+@@ -2342,27 +2324,20 @@
      // strip. The Retry's re-submitted content is the first thing the send
      // pushes, so if the counter advances at all that content landed.
      let pushCountAfterStrip = 0;
@@ -133254,7 +133466,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const attachedSteerPushCount = currentPushCount();
  
      const restoreStrippedRetryEntries = () => {
-@@ -2396,22 +2361,38 @@
+@@ -2396,22 +2371,38 @@
        }
        strippedRetryEntries = [];
      };
@@ -133293,7 +133505,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          ? partToString(request)
          : undefined;
      if (startsInteraction) {
-@@ -2494,13 +2475,13 @@
+@@ -2494,13 +2485,13 @@
              }
              bindGoalStateEvents(runtime);
              const admitted = runtime.permitForTurn(goalTurnKey);
@@ -133308,7 +133520,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction('cancelled');
              for (const goalEvent of takePendingGoalEvents()) {
                yield goalEvent;
-@@ -2512,13 +2493,13 @@
+@@ -2512,13 +2503,13 @@
              type: GeminiEventType.UserPromptSubmitBlocked,
              value: {
                reason: hookOutput.getEffectiveReason(),
@@ -133323,7 +133535,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          // Add additional context from hooks to the request. The context is
          // appended as its own part, wrapped in a reserved tag so it stays
          // distinguishable from user-authored text in model history, resume,
-@@ -2630,13 +2611,13 @@
+@@ -2630,13 +2621,13 @@
        // them as a compact `●` line (the displayText) and the envelope
        // is the model-bound payload, so a resumed session restores the
        // same info item. Without this they were the one top-level
@@ -133338,7 +133550,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            goalPermit,
          );
      }
-@@ -2700,13 +2681,13 @@
+@@ -2700,13 +2691,13 @@
      // right before the turn's streaming loop below.
      let messageDisplay: MessageDisplayDispatcher | null = null;
      try {
@@ -133353,7 +133565,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        ) {
          if (
            this.config.isManagedMemoryAvailable() &&
-@@ -2802,61 +2783,57 @@
+@@ -2802,61 +2793,57 @@
          }
  
          // record user/cron message for session management
@@ -133439,7 +133651,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          this.sessionTurnCount++;
  
          if (messageType === SendMessageType.UserQuery) {
-@@ -2867,35 +2844,21 @@
+@@ -2867,35 +2854,21 @@
                  .getFileHistoryService()
                  .getSnapshots()
                  .at(-1);
@@ -133476,7 +133688,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        const boundedTurns =
          messageType === SendMessageType.Goal
            ? MAX_TURNS
-@@ -2914,17 +2877,17 @@
+@@ -2914,17 +2887,17 @@
            !signal ||
            signal.aborted ||
            !options?.getSteerInput
@@ -133498,7 +133710,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          const steerInput = await options.getSteerInput(signal);
          if (!steerInput || steerInput.parts.length === 0) {
            return undefined;
-@@ -2937,37 +2900,12 @@
+@@ -2937,37 +2910,12 @@
        };
  
        // Auto-compaction happens inside GeminiChat.sendMessageStream and surfaces
@@ -133536,7 +133748,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        // in the conversation history. The IDE context is not discarded; it will
        // be included in the next regular message sent to the model.
        const historyLength = this.getHistoryLength();
-@@ -3122,39 +3060,6 @@
+@@ -3122,39 +3070,6 @@
          requestToSend = [...systemReminders, ...requestToSend];
        }
  
@@ -133576,7 +133788,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        if (messageType === SendMessageType.ToolResult) {
          const toolResultMemory =
            await this.tryConsumeMemoryPrefetch('tool_result');
-@@ -3168,23 +3073,4 @@
+@@ -3168,23 +3083,4 @@
            // intact under native Gemini; the OpenAI converter then emits the
            // text as a separate user message after the tool messages.
            requestToSend = [...requestToSend, toolResultMemory.prompt];
@@ -133600,7 +133812,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -          sizeOnly: true,
 -          pendingContent: createUserContent(requestToSend),
 -        });
-@@ -3253,26 +3139,20 @@
+@@ -3253,26 +3149,20 @@
              // Settle the attached steer input as soon as the first stream
              // event arrives — the user-content push has landed by now.
              // Settling here (before model-response events are committed to
@@ -133630,12 +133842,12 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            } else if (event.type === GeminiEventType.Finished) {
              agentOutput.observeFinishReason(event.value?.reason);
            }
-@@ -3309,4 +3189,3 @@
+@@ -3309,4 +3199,3 @@
              if (arenaAgentClient) {
                await arenaAgentClient.reportError('Loop detected');
              }
 -            this.lastApiCompletionTimestamp = Date.now();
-@@ -3313,12 +3192,25 @@
+@@ -3313,12 +3202,25 @@
              endCurrentInteraction('error', 'loop detected', 'loop_detected');
              this.cancelPendingMemoryPrefetch('no_safe_delivery_point');
              this.fireLoopDetectedStopFailure(loopType);
@@ -133661,7 +133873,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            // (content/thought repetition, read-file and action stagnation,
            // global-duplicate and alternating tool-call patterns) sit behind this
            // flag. The precise consecutive-identical guard, shell inspection
-@@ -3341,7 +3233,6 @@
+@@ -3341,7 +3243,6 @@
              if (arenaAgentClient) {
                await arenaAgentClient.reportError('Loop detected');
              }
@@ -133669,7 +133881,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction('error', 'loop detected', 'loop_detected');
              // finally cleanup catches this, but cancel explicitly to match
              // the cleanup pattern at other early-return sites.
-@@ -3360,18 +3251,8 @@
+@@ -3360,18 +3261,8 @@
            // the previous merged IDE context.
            if (event.type === GeminiEventType.ChatCompressed) {
              this.forceFullIdeContext = true;
@@ -133690,7 +133902,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              void this.fireSessionStartHook(SessionStartSource.Compact)
                .then((compactAdditionalContext) => {
                  if (!compactAdditionalContext || !this.chat) {
-@@ -3412,7 +3293,6 @@
+@@ -3412,7 +3303,6 @@
                    : 'Unknown error';
                await arenaAgentClient.reportError(errorMsg);
              }
@@ -133698,7 +133910,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              // Sanitize: do not pass raw API error messages to span status.
              const errMsg =
                event.value instanceof Error ? '[API error]' : 'unknown error';
-@@ -3450,7 +3330,6 @@
+@@ -3450,7 +3340,6 @@
        }
  
        // Track API completion time for thinking block idle cleanup
@@ -133706,7 +133918,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
        if (!turn.pendingToolCalls.length) {
          const steerTurnBudget = boundedTurns - 1;
-@@ -3469,13 +3348,13 @@
+@@ -3469,13 +3358,13 @@
                  submittedPrompt: undefined,
                  steerInput,
                },
@@ -133721,7 +133933,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            normalCompletion = true;
-@@ -3494,15 +3373,14 @@
+@@ -3494,15 +3383,14 @@
          this.config.hasHooksForEvent('Stop')
        ) {
          const responseText =
@@ -133739,7 +133951,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            HookExecutionRequest,
            HookExecutionResponse
          >(
-@@ -3633,13 +3511,13 @@
+@@ -3633,13 +3521,13 @@
                      reasons: currentReasons,
                    },
                  },
@@ -133754,7 +133966,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
                endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
              }
              normalCompletion = true;
-@@ -3725,14 +3603,10 @@
+@@ -3725,14 +3613,10 @@
  
            // A blocking Stop hook (e.g. /goal) feeds a fresh user-role prompt
            // back to the model, starting a new logical turn — reset per-turn
@@ -133773,7 +133985,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            this.loopDetector.reset(prompt_id);
  
            const activeGoal = getActiveGoal(this.config.getSessionId());
-@@ -3804,13 +3678,13 @@
+@@ -3804,13 +3688,13 @@
                            : currentReasons,
                      },
                },
@@ -133788,7 +134000,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            // Preserve the pending prefetch: the inner Hook turn we just
-@@ -3834,13 +3708,13 @@
+@@ -3834,13 +3718,13 @@
        if (
          goalPermit &&
          goalRuntime &&
@@ -133803,7 +134015,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          }
          await goalRuntime.finishTurn(goalPermit);
          goalPermitReleased = true;
-@@ -3850,92 +3724,14 @@
+@@ -3850,92 +3734,14 @@
          endCurrentInteraction('ok');
          normalCompletion = true;
          return turn;
@@ -133903,7 +134115,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -          return continueTurn;
 -        }
 -
-@@ -3984,13 +3780,13 @@
+@@ -3984,13 +3790,13 @@
          this.config.endAutomaticActiveTodoWorkChain(prompt_id);
        }
        if (!goalPermitReleased && (callerSignal.aborted || !normalCompletion)) {
@@ -133918,7 +134130,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        // exception thrown out of the streaming loop still ends the message,
        // and buffering hook consumers need the is_final signal). finish() is
        // idempotent, so on the normal paths this resolves immediately.
-@@ -4117,137 +3913,80 @@
+@@ -4117,137 +3923,79 @@
        throw new Error(
          `Failed to generate content with model ${currentAttemptModel}: ${getErrorMessage(error)}`,
        );
@@ -134037,7 +134249,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +      return info;
 +    });
    }
- 
+-
 -  /**
 -   * Surgically disarm FileReadCache entries for files evicted by
 -   * microcompaction. Falls back to a blanket clear() only when a blanked read
@@ -201224,7 +201436,8 @@ diff --git a/packages/core/src/services/memoryPressureMonitor.test.ts b/packages
            isInitialized: () => true,
 @@ -170,17 +163,12 @@
        ({
-         clear: vi.fn(),
+-        clear: vi.fn(),
++        markAllReadsEvictedFromHistory: vi.fn().mockReturnValue(0),
          evictNotAccessedSince: vi.fn().mockReturnValue(0),
          ...overrides.fileReadCache,
        }) as unknown as FileReadCache,
@@ -201249,7 +201462,7 @@ diff --git a/packages/core/src/services/memoryPressureMonitor.test.ts b/packages
    // Each cleanup step has an await Promise.resolve() boundary.
 -  // With up to 4 steps (evict_cold_cache, compact_history, clear_file_cache, trigger_gc),
 -  // we need enough microtask drains to let them all complete.
-+  // With up to 3 steps (evict_cold_cache, clear_file_cache, trigger_gc), we
++  // With up to 3 steps (evict_cold_cache, disarm_cached_reads, trigger_gc), we
 +  // need enough microtask drains to let them all complete.
    for (let i = 0; i < 6; i++) await Promise.resolve();
    await new Promise<void>((resolve) => setImmediate(resolve));
@@ -201257,7 +201470,188 @@ diff --git a/packages/core/src/services/memoryPressureMonitor.test.ts b/packages
  }
  
  describe('MemoryPressureMonitor', () => {
-@@ -1236,391 +1224,12 @@
+@@ -654,12 +642,12 @@
+       expect(evictSpy).toHaveBeenCalledWith(30);
+     });
+ 
+-    it('calls clear on critical pressure', async () => {
+-      const clearSpy = vi.fn();
++    it('disarms the cached reads on critical pressure', async () => {
++      const disarmSpy = vi.fn().mockReturnValue(0);
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: vi.fn(),
+           },
+         }),
+@@ -669,16 +657,16 @@
+       setMemUsage(14 * 1024 * 1024 * 1024); // 14/16 = 0.875 >= 0.80: critical
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+-      expect(clearSpy).toHaveBeenCalled();
++      expect(disarmSpy).toHaveBeenCalled();
+     });
+ 
+     it('runs escalated critical cleanup after lower cleanup finishes', async () => {
+-      const clearSpy = vi.fn();
++      const disarmSpy = vi.fn().mockReturnValue(0);
+       const evictSpy = vi.fn().mockReturnValue(0);
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: evictSpy,
+           },
+         }),
+@@ -691,19 +679,19 @@
+ 
+       setMemUsage(14 * 1024 * 1024 * 1024); // escalates to critical
+       monitor.performCheck();
+-      expect(clearSpy).not.toHaveBeenCalled();
++      expect(disarmSpy).not.toHaveBeenCalled();
+ 
+       await drainCleanupMeasurement();
+-      expect(clearSpy).toHaveBeenCalledTimes(1);
++      expect(disarmSpy).toHaveBeenCalledTimes(1);
+     });
+ 
+     it('keeps the strongest queued cleanup while cleanup is in progress', async () => {
+-      const clearSpy = vi.fn();
++      const disarmSpy = vi.fn().mockReturnValue(0);
+       const evictSpy = vi.fn().mockReturnValue(0);
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: evictSpy,
+           },
+         }),
+@@ -719,19 +707,19 @@
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+ 
+-      expect(clearSpy).toHaveBeenCalledTimes(1);
+-      // critical steps now include evict_cold_cache (30 min) before clear_file_cache
++      expect(disarmSpy).toHaveBeenCalledTimes(1);
++      // critical steps now include evict_cold_cache (30 min) before disarm_cached_reads
+       expect(evictSpy).toHaveBeenCalledWith(60);
+       expect(evictSpy).toHaveBeenCalledWith(30);
+     });
+ 
+     it('cancels queued cleanup when the session is reset', async () => {
+-      const clearSpy = vi.fn();
++      const disarmSpy = vi.fn().mockReturnValue(0);
+       const evictSpy = vi.fn().mockReturnValue(0);
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: evictSpy,
+           },
+         }),
+@@ -749,11 +737,11 @@
+       await drainCleanupMeasurement();
+ 
+       expect(evictSpy).toHaveBeenCalledWith(60);
+-      expect(clearSpy).not.toHaveBeenCalled();
++      expect(disarmSpy).not.toHaveBeenCalled();
+ 
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+-      expect(clearSpy).toHaveBeenCalledTimes(1);
++      expect(disarmSpy).toHaveBeenCalledTimes(1);
+     });
+ 
+     it('blocks same-level cleanup within the cooldown window', async () => {
+@@ -877,11 +865,11 @@
+     it('backs off repeated ineffective aggressive cleanup', async () => {
+       let now = 1_000;
+       vi.spyOn(Date, 'now').mockImplementation(() => now);
+-      const clearSpy = vi.fn();
++      const disarmSpy = vi.fn().mockReturnValue(0);
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: vi.fn(),
+           },
+         }),
+@@ -896,16 +884,16 @@
+         now += 1_000;
+       }
+ 
+-      expect(clearSpy).toHaveBeenCalledTimes(3);
++      expect(disarmSpy).toHaveBeenCalledTimes(3);
+ 
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+-      expect(clearSpy).toHaveBeenCalledTimes(3);
++      expect(disarmSpy).toHaveBeenCalledTimes(3);
+ 
+       now += 1_000;
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+-      expect(clearSpy).toHaveBeenCalledTimes(4);
++      expect(disarmSpy).toHaveBeenCalledTimes(4);
+     });
+ 
+     it('measures a cleanup before running a queued escalation', async () => {
+@@ -922,13 +910,14 @@
+         rss = 8 * 1024 * 1024 * 1024;
+         return 0;
+       });
+-      const clearSpy = vi.fn(() => {
++      const disarmSpy = vi.fn(() => {
+         rss = 4 * 1024 * 1024 * 1024;
++        return 0;
+       });
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: evictSpy,
+           },
+         }),
+@@ -942,7 +931,7 @@
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+ 
+-      expect(clearSpy).toHaveBeenCalledTimes(1);
++      expect(disarmSpy).toHaveBeenCalledTimes(1);
+       expect(mockDebugLogger.info).toHaveBeenCalledWith(
+         expect.stringContaining(
+           'Cleanup "light" completed; RSS delta 1073741824 bytes',
+@@ -1024,11 +1013,11 @@
+ 
+     it('warns when explicit GC is requested but unavailable', async () => {
+       vi.stubGlobal('gc', undefined);
+-      const clearSpy = vi.fn();
++      const disarmSpy = vi.fn().mockReturnValue(0);
+       const monitor = new MemoryPressureMonitor(
+         createMockConfig({
+           fileReadCache: {
+-            clear: clearSpy,
++            markAllReadsEvictedFromHistory: disarmSpy,
+             evictNotAccessedSince: vi.fn(),
+           },
+         }),
+@@ -1043,7 +1032,7 @@
+       monitor.performCheck();
+       await drainCleanupMeasurement();
+ 
+-      expect(clearSpy).toHaveBeenCalled();
++      expect(disarmSpy).toHaveBeenCalled();
+       expect(mockDebugLogger.warn).toHaveBeenCalledWith(
+         'trigger_gc requested but global.gc is not available; ' +
+           'start Node.js with --expose-gc',
+@@ -1236,391 +1225,12 @@
        }
  
        expect(monitor.getConsecutiveFailures()).toBe(3);
@@ -201671,7 +202065,8 @@ diff --git a/packages/core/src/services/memoryPressureMonitor.ts b/packages/core
  }
  
  export type CleanupStep =
-   | 'clear_file_cache'
+-  | 'clear_file_cache'
++  | 'disarm_cached_reads'
    | 'evict_cold_cache'
    | 'evict_stale_cache'
 -  | 'trigger_gc'
@@ -201691,7 +202086,8 @@ diff --git a/packages/core/src/services/memoryPressureMonitor.ts b/packages/core
            steps: [
              'evict_cold_cache',
 -            'compact_history',
-             'clear_file_cache',
+-            'clear_file_cache',
++            'disarm_cached_reads',
              ...(this.config.enableExplicitGC ? ['trigger_gc' as const] : []),
            ],
          };
@@ -201699,14 +202095,39 @@ diff --git a/packages/core/src/services/memoryPressureMonitor.ts b/packages/core
          return {
            action: 'moderate',
 -          steps: ['evict_cold_cache', 'compact_history', 'clear_file_cache'],
-+          steps: ['evict_cold_cache', 'clear_file_cache'],
++          steps: ['evict_cold_cache', 'disarm_cached_reads'],
          };
        case 'soft':
          return {
            action: 'light',
            steps: ['evict_stale_cache'],
          };
-@@ -702,63 +698,12 @@
+@@ -672,9 +668,21 @@
+ 
+   private executeStep(step: CleanupStep): void {
+     switch (step) {
+-      case 'clear_file_cache': {
+-        this.coreConfig.getFileReadCache().clear();
+-        debugLogger.debug('FileReadCache cleared');
++      case 'disarm_cached_reads': {
++        // Under pressure this cache gives up its convenience and keeps its
++        // safety. The convenience is `file_unchanged`: the Read fast path's
++        // claim that an earlier read is still quotable from history. The
++        // safety is what the model read and wrote this session, which is
++        // what read-before-write rests on -- and clear() discarded that too,
++        // so the next overwrite of a file the model had written itself was
++        // refused for want of a read. An entry holds no file content, only
++        // an identity, a (mtime, size) fingerprint and a few flags, so
++        // dropping entries is not what frees memory here; the evictions
++        // above are the step that drops them, by age.
++        const disarmed = this.coreConfig
++          .getFileReadCache()
++          .markAllReadsEvictedFromHistory();
++        debugLogger.debug(`FileReadCache reads disarmed: ${disarmed} entries`);
+         break;
+       }
+       case 'evict_cold_cache': {
+@@ -702,63 +710,12 @@
              'trigger_gc requested but global.gc is not available; ' +
                'start Node.js with --expose-gc',
            );

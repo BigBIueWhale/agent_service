@@ -7534,6 +7534,22 @@ def _validate_compaction_read_evidence_before(state: State) -> None:
         "      debugLogger.debug('[FILE_READ_CACHE] clear after tryCompressChat');",
         label=label,
     )
+    # The same wipe stands in for a memory cleanup, and on every path that
+    # rewrites the client's history.
+    _require_all(
+        state,
+        "packages/core/src/services/memoryPressureMonitor.ts",
+        (
+            "  | 'clear_file_cache'",
+            "      case 'clear_file_cache': {\n"
+            "        this.coreConfig.getFileReadCache().clear();",
+        ),
+        label=label,
+    )
+    _require(
+        _source(state, client, label=label).count("getFileReadCache().clear()") == 5,
+        f"{label}: the client does not wipe the read cache on five paths",
+    )
 
 
 def _validate_compaction_read_evidence_after(state: State) -> None:
@@ -7602,13 +7618,59 @@ def _validate_compaction_read_evidence_after(state: State) -> None:
         state, client, "[FILE_READ_CACHE] clear after tryCompressChat", label=label
     )
 
-    # Executed in the build.
-    require_text(
+    # Memory pressure and the client's own history rewrites reached for the
+    # same wipe. An entry holds an identity, a (mtime, size) fingerprint and a
+    # few flags -- no file content -- so a tight heap has nothing to gain from
+    # forgetting what the model wrote, and the monitor's evictions are what
+    # drop entries. The three client paths that rewrite history invalidate
+    # quotability alone, exactly as compaction does. resetChat still clears:
+    # the session it starts has seen nothing.
+    monitor = "packages/core/src/services/memoryPressureMonitor.ts"
+    _require_all(
         state,
-        cache_test,
-        "disarms history residency without discarding the write that authored the file",
+        monitor,
+        (
+            "  | 'disarm_cached_reads'",
+            "      case 'disarm_cached_reads': {",
+            "          .markAllReadsEvictedFromHistory();",
+        ),
         label=label,
     )
+    for retired in ("clear_file_cache", "getFileReadCache().clear()"):
+        forbid_text(state, monitor, retired, label=label)
+    client_source = _source(state, client, label=label)
+    _require(
+        client_source.count(".markAllReadsEvictedFromHistory()") == 3,
+        f"{label}: a history rewrite in the client does not disarm the reads "
+        f"it invalidates",
+    )
+    _require(
+        client_source.count("getFileReadCache().clear()") == 1,
+        f"{label}: the client wipes the read cache somewhere other than the "
+        f"session reset, discarding what the model wrote along with what it "
+        f"can still quote",
+    )
+
+    # Executed in the build.
+    for path, case in (
+        (
+            cache_test,
+            "disarms history residency without discarding the write that authored the file",
+        ),
+        (
+            "packages/core/src/services/memoryPressureMonitor.test.ts",
+            "disarms the cached reads on critical pressure",
+        ),
+        (
+            "packages/core/src/core/client.test.ts",
+            "setHistory disarms the cached reads",
+        ),
+        (
+            "packages/core/src/core/client.test.ts",
+            "truncateHistory disarms the cached reads when entries are actually removed",
+        ),
+    ):
+        require_text(state, path, case, label=label)
 
 
 def _validate_stream_bounds_before(state: State) -> None:
