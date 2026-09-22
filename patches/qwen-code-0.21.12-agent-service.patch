@@ -190835,7 +190835,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1604 @@
+@@ -1,4405 +1,1709 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -190901,6 +190901,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +import * as attachments from './postCompactAttachments.js';
 +import {
 +  ChatCompressionService,
++  compactionRequestDirective,
 +  DRAW_REFUSAL_NOTICE_MAX_BYTES,
 +  drawRefusalNotice,
 +  MAX_COMPACTION_CANDIDATE_ATTEMPTS,
@@ -190920,9 +190921,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +/**
 + * What the deployment's compaction directive renders to, measured through the
 + * served template and tokenizer: the request with it, less the request
-+ * without it.
++ * without it, with the ceiling it states at its widest, the window.
 + */
-+const DIRECTIVE_TOKENS = 548;
++const DIRECTIVE_TOKENS = 632;
 +/**
 + * What the ceiling holds back for the one message a redraw appends: the
 + * widest refusal notice's bytes, the most tokens its text can be, and the
@@ -190968,6 +190969,31 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +/** What an accepted call becomes once it enters history. */
 +function snapshot(body = 'complete state'): string {
 +  return renderStateSnapshot(snapshotSections(body));
++}
++
++/**
++ * The contents a draw is issued with are the ones that were counted, with the
++ * ceiling the directive states moved from the widest there could be, the
++ * window, to the one the draw is issued with.
++ */
++function asIssued(counted: Content[], ceiling: number): Content[] {
++  const directive = counted.at(-1)!;
++  const text = directive.parts?.[0]?.text ?? '';
++  expect(text).toContain(`at most ${WINDOW} tokens`);
++  return [
++    ...counted.slice(0, -1),
++    {
++      ...directive,
++      parts: [
++        {
++          text: text.replace(
++            `at most ${WINDOW} tokens`,
++            `at most ${ceiling} tokens`,
++          ),
++        },
++      ],
++    },
++  ];
 +}
 +
 +function summaryResult(
@@ -191339,14 +191365,30 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      .calls[0]![0] as GenerateTextOptions;
 +    const generated = harness.generateText.mock
 +      .calls[0]![0] as GenerateTextOptions;
-+    // One request shape renders both the count and the generation; the output
-+    // budget is the single field the count has no use for.
++    // One request shape renders both the count and the generation. They
++    // differ in two places only: the output budget, which the count has no
++    // use for, and the ceiling the directive states -- the count states the
++    // widest there could be, the window, and the generation the ceiling it is
++    // issued with, its own max_tokens.
 +    const { maxOutputTokens, ...generatedConfig } = generated.config as Record<
 +      string,
 +      unknown
 +    >;
-+    expect({ ...generated, config: generatedConfig }).toEqual(counted);
 +    expect(maxOutputTokens).toBe(WINDOW - 190_000 - REDRAW_NOTICE_TOKENS);
++    const directiveOf = (options: GenerateTextOptions) =>
++      options.contents.at(-1)?.parts?.[0]?.text ?? '';
++    expect(directiveOf(counted)).toContain(`at most ${WINDOW} tokens`);
++    expect(directiveOf(generated)).toBe(
++      directiveOf(counted).replace(
++        `at most ${WINDOW} tokens`,
++        `at most ${maxOutputTokens} tokens`,
++      ),
++    );
++    expect({
++      ...generated,
++      config: generatedConfig,
++      contents: generated.contents.slice(0, -1),
++    }).toEqual({ ...counted, contents: counted.contents.slice(0, -1) });
 +    expect(generated).toMatchObject({
 +      model: MODEL,
 +      stream: true,
@@ -191408,6 +191450,22 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(directive).toContain('native hidden-thinking channel');
 +    expect(directive).toContain(STATE_SNAPSHOT_FUNCTION_NAME);
 +    expect(directive).toContain('Preserve the exact unresolved');
++    // The draw is told its own ceiling and what reaching it costs, not the
++    // turn's: the session's system prompt it carries states a turn's limit
++    // and that reaching it ends the session, and neither is true here.
++    expect(
++      directive.endsWith(compactionRequestDirective(maxOutputTokens as number)),
++    ).toBe(true);
++    expect(directive).toContain(
++      `This request is not a turn, and the turn limit does not apply to it: your answer may generate at most ${maxOutputTokens} tokens, reasoning included.`,
++    );
++    expect(directive).toContain(
++      `An answer that reaches that limit is refused rather than ending the session, and the request is made again, told why, up to ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} answers in all.`,
++    );
++    expect(directive).toContain(
++      `If all ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} are refused, this conversation is not compacted and cannot continue.`,
++    );
++    expect(directive).not.toContain(String(PARTITION.turnGeneration));
 +
 +    expect(harness.countCandidate.mock.calls[0]![3]).toEqual({
 +      tools: requestTools,
@@ -192667,7 +192725,10 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      expect(request.generationContext).toBe(child);
 +    expect(stream.mock.calls[0][0].generationContext).toBe(child);
 +    expect(stream.mock.calls[0][0].contents).toEqual(
-+      count.mock.calls[0][0].contents,
++      asIssued(
++        count.mock.calls[0][0].contents as Content[],
++        stream.mock.calls[0][0].config?.maxOutputTokens as number,
++      ),
 +    );
 +    expect(provider.generateContent).not.toHaveBeenCalled();
 +    expect(harness.countSideQuery).not.toHaveBeenCalled();
@@ -196079,9 +196140,14 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    const directive = generated.contents.at(-1)?.parts?.[0]?.text;
 +    expect(directive).toContain(user);
 +    expect(directive).toContain(hook);
-+    expect(harness.countSideQuery.mock.calls[0][0]).toMatchObject({
-+      contents: generated.contents,
-     });
+-    });
++    expect(
++      asIssued(
++        (harness.countSideQuery.mock.calls[0][0] as GenerateTextOptions)
++          .contents,
++        (generated.config as { maxOutputTokens: number }).maxOutputTokens,
++      ),
++    ).toEqual(generated.contents);
 -
 -    const passed = spy.mock.calls[0]![1] as { systemInstruction: string };
 -    expect(passed.systemInstruction).toContain('Additional Instructions:');
@@ -196688,11 +196754,51 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    );
 +    expect(attachments.composePostCompactHistory).not.toHaveBeenCalled();
    });
++
++  it("tells every draw its own ceiling and what reaching it costs, never a turn's", async () => {
++    // The request carries the session's system prompt, which gives a turn's
++    // limit and says reaching it ends the session. A draw is told the ceiling
++    // its own max_tokens is set to, and that reaching it refuses the answer
++    // and asks again -- which is what then happens.
++    const harness = makeHarness();
++    harness.generateText
++      .mockResolvedValueOnce(
++        summaryResult({
++          functionCalls: [],
++          finishReason: FinishReason.MAX_TOKENS,
++        }),
++      )
++      .mockResolvedValueOnce(summaryResult());
++    const result = await compress(harness);
++
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    const draws = harness.generateText.mock.calls.map(
++      ([options]) => options as GenerateTextOptions,
++    );
++    expect(draws).toHaveLength(2);
++    const ceiling = WINDOW - 190_000 - REDRAW_NOTICE_TOKENS;
++    for (const draw of draws) {
++      expect(
++        (draw.config as { maxOutputTokens?: number }).maxOutputTokens,
++      ).toBe(ceiling);
++      const directive = draw.contents
++        .map((content) => content.parts?.[0]?.text ?? '')
++        .find((text) => text.includes('This request is not a turn'));
++      expect(directive?.endsWith(compactionRequestDirective(ceiling))).toBe(
++        true,
++      );
++      expect(directive).not.toContain(`${PARTITION.turnGeneration}`);
++    }
++    // The redraw is told the same ceiling it was refused at.
++    expect(draws[1]!.contents.at(-1)?.parts?.[0]?.text).toBe(
++      drawRefusalNotice({ kind: 'truncated', limit: ceiling }),
++    );
++  });
  });
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -1,256 +1,246 @@
+@@ -1,256 +1,266 @@
 +import {
 +  acceptStateSnapshot,
 +  renderStateSnapshot,
@@ -197080,8 +197186,28 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
 -  return { warn, auto, hard, effectiveWindow };
 -}
-+const COMPRESSION_REQUEST_DIRECTIVE =
-+  `Reason in the native hidden-thinking channel, then call ${STATE_SNAPSHOT_FUNCTION_NAME} once with every section filled in.`;
++/**
++ * The directive that closes a compaction request, stating what the answer to
++ * it is issued with and what reaching that costs.
++ *
++ * The request carries the session's own system prompt, which states a turn's
++ * limit and that reaching it ends the session. This request is not a turn:
++ * its answer is issued with the room the request leaves, which the partition
++ * proves is never less than a turn's, and an answer that reaches it is
++ * refused and the request made again, told why, until the draws run out. A
++ * draw told only the turn's rule would be told a wrong number and a wrong
++ * consequence at the moment it decides how much to write, so the directive
++ * states its own. The number is never typed here: it is the ceiling the
++ * request's `max_tokens` is set to, passed in where that ceiling is derived.
++ */
++export function compactionRequestDirective(maxOutputTokens: number): string {
++  return (
++    `Reason in the native hidden-thinking channel, then call ${STATE_SNAPSHOT_FUNCTION_NAME} once with every section filled in. ` +
++    `This request is not a turn, and the turn limit does not apply to it: your answer may generate at most ${maxOutputTokens} tokens, reasoning included. ` +
++    `An answer that reaches that limit is refused rather than ending the session, and the request is made again, told why, up to ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} answers in all. ` +
++    `If all ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} are refused, this conversation is not compacted and cannot continue.`
++  );
++}
  
  export type CompactTrigger = 'manual' | 'auto';
  
@@ -197135,7 +197261,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
     * User-supplied focus directives passed to the compression side-query.
     * Appended to the system prompt as an `Additional Instructions:` block.
     * Sourced from `/compress <text>`. PreCompact hooks may further append
-@@ -318,13 +308,13 @@
+@@ -318,13 +328,13 @@
    }
    if (parts.length === 0) return base;
    return `${base}\n\nAdditional Instructions:\n${parts.join('\n\n')}`;
@@ -197150,7 +197276,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    if (
      provider.authType === AuthType.USE_GEMINI ||
      provider.authType === AuthType.USE_VERTEX_AI
-@@ -333,161 +323,94 @@
+@@ -333,161 +343,94 @@
    }
    if (provider.enableCacheControl === false) return false;
    if (provider.authType === AuthType.USE_ANTHROPIC) return true;
@@ -197360,7 +197486,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +432,688 @@
+@@ -509,619 +452,710 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -197804,8 +197930,6 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      typeof compressionOutputTokenCount === 'number' &&
 -      compressionOutputTokenCount >= COMPACT_MAX_OUTPUT_TOKENS
 -    ) {
-+    const sharedRequestText =
-+      `${systemInstruction}\n\n` + COMPRESSION_REQUEST_DIRECTIVE;
 +    const generationConfig = {
 +      ...chat.getGenerationConfig(),
 +      ...opts.requestGenerationConfig,
@@ -197813,14 +197937,23 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    const mainSystemInstruction = generationConfig.systemInstruction;
 +    delete generationConfig.systemInstruction;
 +    delete generationConfig.abortSignal;
-+    const directiveContent: Content = {
-+      role: 'user',
-+      parts: [{ text: sharedRequestText }],
-+    };
++    // The request's contents: the prompt it summarizes and the directive,
++    // which states the ceiling its answer is issued with.
++    const requestContents = (maxOutputTokens: number): Content[] => [
++      ...issuedPrompt,
++      {
++        role: 'user',
++        parts: [
++          {
++            text: `${systemInstruction}\n\n${compactionRequestDirective(maxOutputTokens)}`,
++          },
++        ],
++      },
++    ];
 +    // One request shape, used for both the exact count and the generation,
-+    // so the two can never disagree about rendering.
-+    const sideQueryOptions = {
-+      contents: [...issuedPrompt, directiveContent],
++    // so the two can never disagree about rendering; they differ only in the
++    // ceiling the directive states, as the preflight below explains.
++    const requestOptions = {
 +      model: config.getModel(),
 +      systemInstruction: mainSystemInstruction,
 +      config: {
@@ -197850,6 +197983,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    let exactOriginalTokenCount: number;
 +    let summaryRequestTokenCount: number;
 +    let compactionOutputBudget: number;
++    let sideQueryOptions: typeof requestOptions & { contents: Content[] };
 +    try {
 +      const originalCount = await chat.countRequestTokensForCandidateHistory(
 +        historyBeforeCompaction,
@@ -197858,9 +197992,17 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        opts.requestGenerationConfig,
 +      );
 +      exactOriginalTokenCount = originalCount.totalTokens;
-+      const summaryCount = await config
-+        .getBaseLlmClient()
-+        .countRequestTokens(sideQueryOptions);
++      // The directive states the ceiling, and the ceiling is what the request
++      // leaves, so the request is counted with the directive stating the
++      // widest ceiling it could: the window itself, which no ceiling reaches,
++      // in at least as many digits as any ceiling. The served tokenizer splits
++      // every digit into a token of its own that no space or letter joins --
++      // the fact the turn budget's bound rests on -- so the request the draws
++      // are issued with, stating the real ceiling, is at most this count.
++      const summaryCount = await config.getBaseLlmClient().countRequestTokens({
++        ...requestOptions,
++        contents: requestContents(contextLimit),
++      });
 +      if (summaryCount.maxModelLen !== contextLimit) {
 +        throw new Error(
 +          `summary /tokenize max_model_len=${summaryCount.maxModelLen}, expected ${contextLimit}`,
@@ -197877,7 +198019,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      const promptOnlyCount = await config
 +        .getBaseLlmClient()
 +        .countRequestTokens({
-+          ...sideQueryOptions,
++          ...requestOptions,
 +          contents: issuedPrompt,
 +        });
 +      if (promptOnlyCount.maxModelLen !== contextLimit) {
@@ -197915,6 +198057,12 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          `The compaction request renders to ${summaryRequestTokenCount} tokens, leaving ${compactionOutputBudget} for the snapshot once a redraw's notice is held back, below the ${partition.turnGeneration} tokens the partition guarantees it.`,
 +        );
 +      }
++      // Every draw is issued with this ceiling and told it: the number in the
++      // directive and the request's max_tokens are one value.
++      sideQueryOptions = {
++        ...requestOptions,
++        contents: requestContents(compactionOutputBudget),
++      };
 +    } catch (error) {
 +      // Preflight is a deterministic function of the frozen request: the same
 +      // history, directive and window refuse the same way every time. Nothing

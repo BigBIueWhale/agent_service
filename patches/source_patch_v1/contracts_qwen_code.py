@@ -4484,10 +4484,63 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         service,
         (
-            "      contents: [...issuedPrompt, directiveContent],",
+            "const requestContents = (maxOutputTokens: number): Content[] => [\n"
+            "      ...issuedPrompt,\n",
             "      promptCacheSharing: true,",
             "            turn,\n          }),",
         ),
+        label=label,
+    )
+    # A draw is told its own ceiling and what reaching it costs. The request
+    # carries the session's system prompt, which states a turn's limit and
+    # that reaching it ends the session; neither holds for a draw, whose room
+    # is what the request leaves and whose limit refuses the answer and asks
+    # again. The number is the ceiling max_tokens is set to, passed where it
+    # is derived: the request is counted stating the widest ceiling, the
+    # window, and issued stating the one it is issued with.
+    _require_all(
+        state,
+        service,
+        (
+            "export function compactionRequestDirective(maxOutputTokens: number): string {",
+            "This request is not a turn, and the turn limit does not apply to it: "
+            "your answer may generate at most ${maxOutputTokens} tokens, reasoning included. ",
+            "An answer that reaches that limit is refused rather than ending the session, "
+            "and the request is made again, told why, up to ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} answers in all. ",
+            "If all ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} are refused, this conversation is not "
+            "compacted and cannot continue.",
+            "text: `${systemInstruction}\\n\\n${compactionRequestDirective(maxOutputTokens)}`,",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        service_source,
+        (
+            "contents: requestContents(contextLimit),",
+            "compactionOutputBudget =\n        contextLimit - summaryRequestTokenCount - redrawNoticeTokens;",
+            "sideQueryOptions = {\n        ...requestOptions,\n"
+            "        contents: requestContents(compactionOutputBudget),\n      };",
+            "maxOutputTokens: compactionOutputBudget,",
+        ),
+        label=label,
+        location=service,
+    )
+    directive_body = service_source.split(
+        "export function compactionRequestDirective(maxOutputTokens: number): string {"
+    )[1].split("\n}\n")[0]
+    for restated in ("turnGeneration", "turnOutputLimit", "partition", "69509", "69,509"):
+        _require(
+            restated not in directive_body,
+            f"{label}: {service} compactionRequestDirective names {restated!r}; a draw "
+            "is told the ceiling it is issued with, passed in, never a turn's.",
+        )
+    # The directive once stated nothing of the draw's limit, leaving it the
+    # turn's rule from the system prompt.
+    forbid_text(state, service, "COMPRESSION_REQUEST_DIRECTIVE", label=label)
+    require_text(
+        state,
+        service_test,
+        "tells every draw its own ceiling and what reaching it costs, never a turn's",
         label=label,
     )
     # A truncated snapshot is refused before its content is examined, so one
@@ -8536,7 +8589,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "room and the compaction trigger are derived from the fit; a turn's output limit is "
             "that room and nothing else, and a configured ceiling is refused. Compaction summarises "
             "the prompt the last turn was issued against and carries that turn verbatim behind the "
-            "snapshot, so the snapshot always has at least a turn's room. Exact before/after sizing "
+            "snapshot, so the snapshot always has at least a turn's room, and each draw is told "
+            "that room as its own limit and that reaching it refuses the answer and asks again, "
+            "not the turn's limit and its ending. Exact before/after sizing "
             "governs compaction. Original authored inputs are retained independently of model "
             "summaries; summaries must satisfy the six-section structural contract. No phase budget "
             "forces reasoning to stop."

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `5867801734a9cb64d5c6fe8c72d3d4946423e2f59cc200e02f6fb9f3030b57cb`
+- Review-diff SHA-256: `aa7aded034c4ced2f9c91930e27c4f3a4f0a098adf2337dfc5a88bc6c6dacda0`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4ef923f40cc7284403398b3e656048c6e7be7a3f360e01c705c7d48ed083bae7`
+- Transformer-manifest SHA-256: `ddcf62324efae2a83386f55c6232e815732cd389769dadc5207e0087a7800625`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -174,7 +174,15 @@ Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
 request never holds what the turn generated. It requests the room left by that
 exact input and by the widest notice a redraw may add, which is never below
-`C`, and refuses insufficient space. The accepted snapshot is itself one inline
+`C`, and refuses insufficient space. It tells the draw that room: the request
+carries the session's system prompt, which states a turn's limit and that
+reaching it ends the session, and neither holds for a draw, so its directive
+says the request is not a turn, states the number the request's `max_tokens` is
+set to, and says that an answer reaching it is refused and asked for again, told
+why, up to the draw limit, after which the conversation is not compacted and
+cannot continue. The request is counted with that number at its widest, the
+window, and the served tokenizer spends one token per digit, so the room it
+states is the room it is issued with. The accepted snapshot is itself one inline
 block: the bound is stated in the declaration the model is given, and
 acceptance — not decoding — refuses a longer draw, which is redrawn whole
 rather than cut. A redraw carries one message more than the request it

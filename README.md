@@ -294,7 +294,17 @@ waiting for; nothing synthetic stands between them. The snapshot is issued at
 the room the window actually has — the window less the summary request that
 was just counted, and less the most a redraw's notice can add — and a request
 that would leave less than `C` is refused instead of quietly shrinking the
-snapshot. The accepted snapshot is itself one inline block: the bound is stated
+snapshot. The draw is told that room as its own limit. The request carries the
+session's system prompt, which states a turn's limit and that reaching it ends
+the session, and neither holds for a draw, whose room is what the request
+leaves, never less than `C + 1`, and whose limit, reached, refuses that answer
+rather than ending the session; so the directive says the request is not a turn,
+states the number the request's `max_tokens` is set to, and says that an answer
+reaching it is refused and asked for again, told why, up to the draw limit, after
+which the conversation is not compacted and cannot continue. The request is
+counted with that number at its widest, the window, and the served tokenizer
+spends one token per digit, so the room it states is the room it is issued
+with. The accepted snapshot is itself one inline block: the bound is stated
 in the declaration the model is given, and a draw that renders past it is
 refused and redrawn whole rather than cut. A redraw is told why the draw before
 it was refused, so it does not start over blind: the request gains one user
@@ -305,7 +315,8 @@ which would not fit beside another in the room the request is proved to have.
 The notice is built only from values the service measured and closed names,
 never from text the model wrote, so it has a widest rendering: 228 bytes, and
 with the 61 bytes of framing 289 tokens at most, held inside `D` with the
-directive's 548 before the first draw, which leaves every draw one ceiling.
+directive's 632, counted with the ceiling it states at its widest, before the
+first draw, which leaves every draw one ceiling.
 Counted through the served path, a redraw's notice costs 44 to 56 tokens.
 
 The compaction request replaces the turn's tool declarations with that single
