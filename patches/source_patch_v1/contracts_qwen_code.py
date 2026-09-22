@@ -5983,6 +5983,40 @@ def _validate_served_accounting_after(state: State) -> None:
     for path in (core + "config/config.ts", core + "services/chatRecordingService.ts"):
         for symbol in ("sessionWriterLeaseEnabled", "writerLeaseRequired"):
             forbid_text(state, path, symbol, label=label)
+    # The lease is mandatory here, so the election it runs is this patch's to
+    # get right. Upstream's election can leave a sealed session with no
+    # writer: a contender links its record into the primary path in the gap
+    # after another has renamed the sealed primary away, the other's link
+    # fails with EEXIST, the contender sees the other's claim and removes its
+    # record, and the inspection that follows finds the path missing -- which
+    # upstream treats as unavailable, so both lose. An EEXIST link whose path
+    # is missing by the time it is inspected is that removed record, and the
+    # link is tried again under the same claim, within the same budget; a
+    # missing path after any other failure still fails.
+    lease = core + "services/session-writer-lease.ts"
+    link = _source(state, lease, label=label).split(
+        "async function linkClaimedPrimary(", 1
+    )[1].split("\nasync function removeClaimedPrimary(", 1)[0]
+    _require_ordered(
+        link,
+        (
+            "await assertExactTransitionClaim(claimPath, claimRaw);",
+            "await fs.link(sourcePath, lockPath);",
+            "state === 'missing' &&\n        (error as NodeJS.ErrnoException).code === 'EEXIST'",
+            "await waitForClaimedPrimaryCandidate(++candidateWaitAttempts);\n        continue;",
+            "if (state === 'other') throw new SessionWriterLostError();",
+            "throw new SessionWriterUnavailableError({",
+        ),
+        label=label,
+        location=lease,
+    )
+    for case in (
+        "takes over a sealed session when a racing candidate leaves the path between the failed link and the inspection",
+        "seals a session when a racing candidate leaves the path between the failed link and the inspection",
+        "fails closed when the primary link fails for any other reason, even with the path free",
+        "expected exactly one certified replacement; the contenders answered",
+    ):
+        require_text(state, core + "services/session-writer-lease.test.ts", case, label=label)
 
 
 def _validate_manual_compaction_before(state: State) -> None:

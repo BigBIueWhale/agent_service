@@ -197487,7 +197487,25 @@ diff --git a/packages/core/src/services/session-usage-retention.test.ts b/packag
 diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/core/src/services/session-writer-lease.test.ts
 --- a/packages/core/src/services/session-writer-lease.test.ts
 +++ b/packages/core/src/services/session-writer-lease.test.ts
-@@ -88,12 +88,19 @@
+@@ -77,6 +77,17 @@
+ const restoreLinkFault = vi.hoisted(() => ({
+   linkTo: undefined as string | undefined,
+   remainingFailures: 0,
++}));
++
++/**
++ * Runs `onConflict` after a link into `linkTo` fails because the path is
++ * taken, and before the failure reaches the caller: the gap in which another
++ * process's record can leave the path again.
++ */
++const linkConflictFault = vi.hoisted(() => ({
++  linkTo: undefined as string | undefined,
++  onConflict: undefined as (() => Promise<void> | void) | undefined,
++  conflicts: 0,
+ }));
+ 
+ const unlinkFault = vi.hoisted(() => ({
+@@ -88,12 +99,19 @@
  const writeFault = vi.hoisted(() => ({
    contains: undefined as string | undefined,
    onEntered: undefined as (() => void) | undefined,
@@ -197507,7 +197525,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  }));
  
  const readFileFault = vi.hoisted(() => ({
-@@ -135,12 +142,21 @@
+@@ -135,12 +153,21 @@
        }
        return result;
      },
@@ -197529,7 +197547,30 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            writeFault.contains &&
            Buffer.isBuffer(data) &&
            data.toString('utf8').includes(writeFault.contains)
-@@ -411,12 +427,16 @@
+@@ -178,7 +205,18 @@
+           code: 'EIO',
+         });
+       }
+-      await actual.link(existingPath, newPath);
++      try {
++        await actual.link(existingPath, newPath);
++      } catch (error) {
++        if (
++          newPath === linkConflictFault.linkTo &&
++          (error as NodeJS.ErrnoException).code === 'EEXIST'
++        ) {
++          linkConflictFault.conflicts++;
++          await linkConflictFault.onConflict?.();
++        }
++        throw error;
++      }
+       if (newPath === claimInstallFault.path) {
+         await claimInstallFault.afterInstall?.();
+       }
+@@ -411,12 +449,19 @@
++  linkConflictFault.linkTo = undefined;
++  linkConflictFault.onConflict = undefined;
++  linkConflictFault.conflicts = 0;
    unlinkFault.path = undefined;
    unlinkFault.afterUnlink = undefined;
    unlinkFault.throwAfterUnlink = false;
@@ -197546,7 +197587,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    readFileFault.triggerCall = 0;
    readFileFault.calls = 0;
    readFileFault.afterRead = undefined;
-@@ -488,15 +508,14 @@
+@@ -488,15 +533,14 @@
            sessionId: fixture.options.sessionId,
            sessionData: stalePreview,
            cwd: fixture.projectRoot,
@@ -197563,7 +197604,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -510,13 +529,13 @@
+@@ -510,13 +554,13 @@
      });
      expect(config.getResumedSessionData()?.lastCompletedUuid).toBe(
        physicalFinal.uuid,
@@ -197578,7 +197619,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        .trim()
        .split('\n')
        .map((line) => JSON.parse(line) as ChatRecord);
-@@ -548,15 +567,14 @@
+@@ -548,15 +592,14 @@
            new Config({
              sessionId: fixture.options.sessionId,
              cwd: fixture.projectRoot,
@@ -197595,7 +197636,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            }),
        );
      const initialize = (config: Config) =>
-@@ -570,13 +588,13 @@
+@@ -570,13 +613,13 @@
        });
  
      const first = createConfig();
@@ -197610,7 +197651,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          await fs.readFile(
            getSessionWriterLockPath(
              fixture.runtimeBaseDir,
-@@ -665,15 +683,14 @@
+@@ -665,15 +708,14 @@
            sessionId: fixture.options.sessionId,
            sessionData: preview,
            cwd: fixture.projectRoot,
@@ -197627,7 +197668,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -684,13 +701,13 @@
+@@ -684,13 +726,13 @@
        skipSkillManager: true,
        skipFileCheckpointing: true,
        lenientToolWarmup: true,
@@ -197642,7 +197683,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        .trim()
        .split('\n')
        .map((line) => JSON.parse(line) as ChatRecord);
-@@ -717,15 +734,14 @@
+@@ -717,15 +759,14 @@
          new Config({
            sessionId: fixture.options.sessionId,
            cwd: fixture.projectRoot,
@@ -197659,7 +197700,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -948,33 +964,39 @@
+@@ -948,33 +989,39 @@
      );
      await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(
        '{"replacement":true}',
@@ -197719,7 +197760,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const lockPath = getSessionWriterLockPath(
        fixture.runtimeBaseDir,
        fixture.options.sessionId,
-@@ -2116,12 +2138,137 @@
+@@ -2116,12 +2163,137 @@
      );
      await expect(
        Promise.all([lease.release(), lease.release()]),
@@ -197857,7 +197898,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        const fixture = await createFixture();
        const lease = await SessionWriterLease.acquire(fixture.options);
  
-@@ -2230,13 +2377,13 @@
+@@ -2230,13 +2402,13 @@
        state: 'active',
        hostname: 'retired-foreign-host',
      });
@@ -197872,7 +197913,137 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.options.sessionId,
      );
      const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
-@@ -3243,13 +3390,13 @@
+@@ -2762,11 +2934,128 @@
+         requestChild(child, { type: 'acquire', options }),
+       ),
+     );
+-    expect(results.filter((result) => result.ok)).toHaveLength(1);
++    // A failure here is an election that went wrong, so it says how each
++    // contender answered.
++    expect(
++      results.filter((result) => result.ok),
++      `expected exactly one certified replacement; the contenders answered ${JSON.stringify(
++        results.map(({ ok, errorKind, message }) => ({
++          ok,
++          errorKind,
++          message,
++        })),
++      )}`,
++    ).toHaveLength(1);
+     const winner = contenders[results.findIndex((result) => result.ok)]!;
+     expect(await requestChild(winner, { type: 'release' })).toMatchObject({
+       ok: true,
+     });
++  });
++
++  it('takes over a sealed session when a racing candidate leaves the path between the failed link and the inspection', async () => {
++    const fixture = await createFixture('takeover-vanishing-candidate-session');
++    const first = await SessionWriterLease.acquire(fixture.options);
++    await first.sealForHandoff();
++    const lockPath = getSessionWriterLockPath(
++      fixture.runtimeBaseDir,
++      fixture.options.sessionId,
++    );
++    // Another process links its own record into the primary path in the gap
++    // after this takeover renamed the sealed primary away, so this
++    // takeover's link finds the path taken. That process then sees this
++    // claim and removes its record before this one inspects the path. Both
++    // faults are armed from inside the transition, so nothing before it --
++    // the acquisition's own first link finds the sealed primary there too --
++    // can take their place.
++    transitionFault.renameFrom = lockPath;
++    transitionFault.afterRename = async () => {
++      // Once: the lease this takeover installs renames the path away again
++      // when it is released.
++      transitionFault.renameFrom = undefined;
++      const claim = JSON.parse(
++        await fs.readFile(`${lockPath}.claim`, 'utf8'),
++      ) as Record<string, unknown>;
++      await fs.writeFile(
++        lockPath,
++        JSON.stringify({ ...claim, owner_id: 'racing-candidate' }),
++        'utf8',
++      );
++      linkConflictFault.linkTo = lockPath;
++      linkConflictFault.onConflict = () => fs.unlink(lockPath);
++    };
++
++    const second = await SessionWriterLease.acquire({
++      ...fixture.options,
++      reclaimPolicy: 'never',
++      takeoverPolicy: 'certified',
++    });
++
++    expect(linkConflictFault.conflicts).toBe(1);
++    expect(JSON.parse(await fs.readFile(lockPath, 'utf8'))).toMatchObject({
++      state: 'active',
++      owner_id: second.ownerId,
++    });
++    await expect(fs.lstat(`${lockPath}.claim`)).rejects.toMatchObject({
++      code: 'ENOENT',
++    });
++    await second.release();
++  });
++
++  it('seals a session when a racing candidate leaves the path between the failed link and the inspection', async () => {
++    const fixture = await createFixture('sealing-vanishing-candidate-session');
++    const first = await SessionWriterLease.acquire(fixture.options);
++    const lockPath = getSessionWriterLockPath(
++      fixture.runtimeBaseDir,
++      fixture.options.sessionId,
++    );
++    const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
++      string,
++      unknown
++    >;
++    transitionFault.renameFrom = lockPath;
++    transitionFault.renameTo = `${lockPath}.handoff.${encodeURIComponent(
++      first.ownerId,
++    )}`;
++    transitionFault.afterRename = async () => {
++      await fs.writeFile(
++        lockPath,
++        JSON.stringify({ ...active, owner_id: 'racing-candidate' }),
++        'utf8',
++      );
++      linkConflictFault.linkTo = lockPath;
++      linkConflictFault.onConflict = () => fs.unlink(lockPath);
++    };
++
++    await expect(first.sealForHandoff()).resolves.toBeUndefined();
++
++    expect(linkConflictFault.conflicts).toBe(1);
++    expect(JSON.parse(await fs.readFile(lockPath, 'utf8'))).toMatchObject({
++      state: 'sealed',
++      owner_id: first.ownerId,
++    });
++    await expect(fs.lstat(`${lockPath}.claim`)).rejects.toMatchObject({
++      code: 'ENOENT',
++    });
++  });
++
++  it('fails closed when the primary link fails for any other reason, even with the path free', async () => {
++    const fixture = await createFixture('sealing-failed-link-session');
++    const first = await SessionWriterLease.acquire(fixture.options);
++    const lockPath = getSessionWriterLockPath(
++      fixture.runtimeBaseDir,
++      fixture.options.sessionId,
++    );
++    const activeRaw = await fs.readFile(lockPath, 'utf8');
++    // The link into the primary path fails with an I/O error once, and the
++    // path is free: that is not a racing record having come and gone, so it
++    // is not retried; the transition restores the primary and fails.
++    restoreLinkFault.linkTo = lockPath;
++    restoreLinkFault.remainingFailures = 1;
++
++    await expect(first.sealForHandoff()).rejects.toBeInstanceOf(
++      SessionWriterUnavailableError,
++    );
++    await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(activeRaw);
+   });
+ 
+   it('releases a losing takeover claim before its transition starts', async () => {
+@@ -3243,13 +3532,13 @@
        getCliVersion: () => 'test',
        getFastModel: () => undefined,
        isInteractive: () => false,
@@ -197924,7 +198095,27 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        typeof record['qwen_version'] === 'string')
    );
  }
-@@ -1991,26 +1987,39 @@
+@@ -1309,6 +1305,19 @@
+         await waitForClaimedPrimaryCandidate(++candidateWaitAttempts);
+         continue;
+       }
++      if (
++        state === 'missing' &&
++        (error as NodeJS.ErrnoException).code === 'EEXIST'
++      ) {
++        // The same acquirer, seen one step later: its candidate held the path
++        // when this link was made and was removed before the inspection. The
++        // path is free again. The top of the loop checks that the claim is
++        // still this transition's before the next link, which is exclusive and
++        // cannot overwrite anything, and the retry counts against the same
++        // budget, so a path that keeps changing hands still ends.
++        await waitForClaimedPrimaryCandidate(++candidateWaitAttempts);
++        continue;
++      }
+       if (state === 'other') throw new SessionWriterLostError();
+       throw new SessionWriterUnavailableError({
+         cause: error instanceof Error ? error : undefined,
+@@ -1991,26 +2000,39 @@
        throw new SessionTranscriptChangedError();
      }
      await this.reconcileTranscriptMetadata(transcriptState);
