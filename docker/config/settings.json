@@ -40,9 +40,7 @@
     "skipNextSpeakerCheck": true,
     "skipLoopDetection": true,
     "chatCompression": {
-      "enableScreenshotTrigger": false,
-      "maxRecentImagesToRetain": 0,
-      "maxRecentFilesToRetain": 20
+      "maxRecentImagesToRetain": 0
     }
   },
   "modelFallbacks": "",

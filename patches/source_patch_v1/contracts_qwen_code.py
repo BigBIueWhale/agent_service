@@ -3542,7 +3542,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "const startupContext = chat.getStartupContext();",
             "...(startupContext ? [startupContext] : []),",
-            "...(await composePostCompactHistory(",
+            "...composePostCompactHistory(historyBeforeCompaction, summary, {",
             "const candidateCount = await chat.countRequestTokensForCandidateHistory(",
         ),
         label=label,
@@ -3841,7 +3841,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "      contents: [...issuedPrompt, directiveContent],",
             "      promptCacheSharing: true,",
-            "              turn,\n            },\n          )),",
+            "            turn,\n          }),",
         ),
         label=label,
     )
@@ -3931,10 +3931,12 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         attachments,
         (
+            "export function composePostCompactHistory(",
+            "): Content[] {",
+            "const { planModeActive, runningSubagents, turn = [] } = options;",
             "const authoredParts = retainedInstructionParts(history)",
             "...authoredParts",
             "  turn?: Content[];",
-            "    turn = [],",
             "return [{ role: 'user', parts }, ...turn.map((content) => ({ ...content }))];",
         ),
         label=label,
@@ -3946,11 +3948,77 @@ def _validate_compaction_budget_after(state: State) -> None:
         "postAckParts",
     ):
         forbid_text(state, attachments, absent, label=label)
+    # Nothing is restored behind the snapshot: no file is read back off disk
+    # by a guessed size, and no earlier image is re-embedded. A file the
+    # session read is one read_file away afterwards exactly as before, and
+    # the composer reads nothing, so it is synchronous and cannot fail on the
+    # workspace.
+    for absent in (
+        "export async function composePostCompactHistory(",
+        "node:fs",
+        "CHARS_PER_TOKEN",
+        "POST_COMPACT_",
+        "extractRecentFilePaths",
+        "extractRecentImages",
+        "countToolResponseImages",
+        "readFileSizeAdaptive",
+        "buildFileRestorationBlocks",
+        "buildImageRestorationBlock",
+        "workspaceRoot",
+        "maxFiles",
+        "maxImages",
+    ):
+        forbid_text(state, attachments, absent, label=label)
+    for absent in (
+        "countToolResponseImages",
+        "enableScreenshotTrigger",
+        "screenshotTriggerThreshold",
+        "image_overflow",
+        "maxRecentFiles",
+        "resolveCompactionTuning",
+    ):
+        forbid_text(state, service, absent, label=label)
+    slimming = "packages/core/src/services/compactionInputSlimming.ts"
+    for absent in (
+        "maxRecentFiles",
+        "DEFAULT_MAX_RECENT_FILES",
+        "ScreenshotTrigger",
+        "screenshotTrigger",
+        "QWEN_COMPACT_MAX_RECENT_FILES",
+        "QWEN_COMPACT_SCREENSHOT",
+    ):
+        forbid_text(state, slimming, absent, label=label)
+    for path in (
+        "packages/core/src/config/config.ts",
+        "packages/core/src/core/turn.ts",
+        "packages/cli/src/ui/hooks/useGeminiStream.ts",
+        "packages/cli/src/acp-integration/session/Session.ts",
+    ):
+        for absent in (
+            "maxRecentFilesToRetain",
+            "enableScreenshotTrigger",
+            "screenshotTriggerThreshold",
+            "image_overflow",
+        ):
+            forbid_text(state, path, absent, label=label)
+    forbid_text(state, prompts, "may also be restored", label=label)
     for case in (
         "carries the turn verbatim behind the snapshot, reasoning included",
         "ends with the turn so a pending functionResponse has its match",
+        "restores nothing from the workspace or the earlier history",
     ):
         require_text(state, attachments_test, case, label=label)
+    for path, case in (
+        (
+            "packages/core/src/core/authored-instructions.test.ts",
+            "carries an authored image as retained input and restores no other image",
+        ),
+        (
+            "packages/core/src/services/compactionInputSlimming.test.ts",
+            "resolves only the image-payload knobs, now that compaction restores nothing",
+        ),
+    ):
+        require_text(state, path, case, label=label)
     # The compaction request declares the snapshot function and forces the
     # call, so the artifact is constrained where it is generated rather than
     # judged after the model has hand-written it.
@@ -6406,11 +6474,24 @@ def _validate_bounded_output_after(state: State) -> None:
     require_text(
         state, "packages/core/src/tools/glob.ts", "MAX_GLOB_COLLECTED_ENTRIES = 1000", label=label
     )
+    # The todo reminder that cut its own copy of the list is gone with the
+    # reminder itself: todo_write states the list it wrote and nothing more.
+    for retired in ("formatOutputBound(", "setActiveTodoReminder", "MAX_ACTIVE_TODO_CONTEXT_CHARS"):
+        forbid_text(state, "packages/core/src/tools/todoWrite.ts", retired, label=label)
+    # Nor does a copy of the list come back into later turns: the periodic
+    # reminder is deleted everywhere it was wired, and the work-chain owners
+    # the scheduler scopes todos by are what remains.
+    for path in (
+        "packages/core/src/config/config.ts",
+        "packages/core/src/core/client.ts",
+        "packages/cli/src/acp-integration/session/Session.ts",
+    ):
+        for retired in ("ActiveTodoReminder", "activeTodoReminder", "ACTIVE_TODO_REMINDER_REFRESH_TURNS"):
+            forbid_text(state, path, retired, label=label)
     require_text(
         state,
-        "packages/core/src/tools/todoWrite.ts",
-        "formatOutputBound(",
-        count=1,
+        "packages/core/src/config/config.ts",
+        "  getActiveTodoWorkChainOwner(",
         label=label,
     )
     forbid_text(
@@ -6468,7 +6549,6 @@ def _validate_bounded_output_after(state: State) -> None:
         ("packages/core/src/tools/write-file.test.ts", "quotes user-modified content whole and last, leaving its bound to where the model copy is made"),
         ("packages/core/src/tools/glob.test.ts", "returns every match below the scan ceiling, leaving the inline bound to the one bound on a tool result"),
         ("packages/core/src/tools/ls.test.ts", "lists every entry, leaving the inline bound to the one bound on a tool result"),
-        ("packages/core/src/tools/todoWrite.test.ts", "bounds the active Todo reminder through the one notice"),
         ("packages/core/src/services/monitorRegistry.test.ts", "bounds a long event line through the one notice"),
     ):
         require_text(state, path, case, label=label)

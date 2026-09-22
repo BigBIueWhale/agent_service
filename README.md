@@ -173,21 +173,22 @@ sealed settings here send no retention field at all.
 
 Dropping reasoning from earlier turns is a good idea when it is correctly
 implemented: it trades compute for slower context growth and stability. For
-Qwen3.8-27B it is not correctly implemented, even though the model card documents
-`preserve_thinking: false` as supported. The model's own template keeps thinking
-only for assistant turns after the most recent `role: "user"` message not wrapped
-in `<tool_response>`. A one-prompt agent task therefore sheds nothing, and a
-client that injects reminders as user messages moves the cut into the middle of
-the current task: Qwen Code re-injects its active-todo reminder as its own user
-message every third tool turn (`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`). What
-survives depends on when the client injects a message, not on any rule. Measured
-on the engine before its template refused `false`, one prompt and four tool turns
-rendered identically with the field omitted or `false`, and diverged only once a
-reminder was injected. An invented rule, such as keeping the last K assistant
-turns, is no fix either: it renders a history the model was never trained on.
-Qwen3.8-27B was trained with preserved thinking, as nearly all current models
-are, and there is no correct off switch for it, which is why the served template
-offers none.
+Qwen3.8-27B it is not correctly implemented, even though the model card
+documents `preserve_thinking: false` as supported. The model's own template
+keeps thinking only for assistant turns after the most recent `role: "user"`
+message not wrapped in `<tool_response>`. A one-prompt agent task therefore
+sheds nothing, and a client that injects reminders as user messages moves the
+cut into the middle of the current task: upstream Qwen Code re-injects its
+active-todo reminder as its own user message every third tool turn
+(`ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3`), a reminder this deployment's client
+no longer sends. What survives depends on when the client injects a message, not
+on any rule. Measured on the engine before its template refused `false`, one
+prompt and four tool turns rendered identically with the field omitted or
+`false`, and diverged only once a reminder was injected. An invented rule, such
+as keeping the last K assistant turns, is no fix either: it renders a history
+the model was never trained on. Qwen3.8-27B was trained with preserved thinking,
+as nearly all current models are, and there is no correct off switch for it,
+which is why the served template offers none.
 
 The served context window is spent exactly, from three declared quantities and
 two derived from them:
@@ -221,7 +222,7 @@ the context costs its fixed text plus each run's own tokens exactly; counted
 through the served path, it does. The startup context is kept whole at the
 head of every history a compaction builds, never summarized and rebuilt, so
 nothing can fail to put it back. In the compaction shape, without a snapshot,
-the preamble is 3,358 before the 559 its directive adds. `F` is proved against
+the preamble is 3,358 before the 548 its directive adds. `F` is proved against
 the served template too: a user message, an assistant turn and a tool result,
 each counted with the request and without it, less its content counted
 alone. The served template frames them in 5, 10 and 24 tokens, the last with
@@ -587,10 +588,12 @@ and reject non-PNG inline media and every file/remote image reference.
 
 Before compaction, old image-bearing tool results remain at their chronological
 positions. vLLM can reuse both the unchanged rendered prefix and the SHA-256-keyed
-multimodal processor entry. On compaction, `maxRecentImagesToRetain=0`: old raw
-pixels are removed with the compacted history rather than moved into a false recent
-turn. The visible summary can preserve findings; the replaced turns' hidden
-thinking is not carried into it, because the turns themselves are gone.
+multimodal processor entry. On compaction, old raw pixels are removed with the
+compacted history rather than moved into a false recent turn: a compaction
+restores no file and no image, so nothing the replaced turns carried comes back
+behind the snapshot. The visible summary can preserve findings; the replaced
+turns' hidden thinking is not carried into it, because the turns themselves are
+gone.
 
 The limit is fifteen images in one rendered request, not fifteen over the lifetime
 of a session. Their visual expansion counts inside the same native 262,144
