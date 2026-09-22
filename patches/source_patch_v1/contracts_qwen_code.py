@@ -6927,7 +6927,10 @@ def _validate_bounded_output_after(state: State) -> None:
             "  total: number | { readonly unknown: string };",
             "  continuation?: string | { readonly unretained: string };",
             "  coverageUnknown?: boolean;",
+            "  remainder?: string;",
             "export function formatOutputBound(bound: OutputBound): string {",
+            "  const rest = bound.remainder === undefined ? '' : ` ${bound.remainder}`;",
+            "    `${asked}${coverage}${rest}${next}`",
             ": ` The rest was not retained: ${bound.continuation.unretained}`;",
             ": `, cut at a limit of ${bound.limit} ${bound.limitUnit}`;",
             "export function boundedContent(content: string, bound: OutputBound): string {",
@@ -7025,9 +7028,42 @@ def _validate_bounded_output_after(state: State) -> None:
             "`Lines ${first}-${first + returned - 1} of ${total} in total: the file ends here.`",
             "llmContent = `${pageEnd(this.params.offset + 1, pageLineCount(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;",
             "tokenizerText(`${pageEnd(most, most, most)}${PAGE_STATEMENT_BREAK}`).bytes,",
+            # The other ending says as much as this one: a page the file
+            # continues past states that it does and how many lines are still
+            # unread, beside the call that returns them. A page that carried
+            # only the call left a reader to infer from an instruction's
+            # presence that anything remained, and a first page read as a whole
+            # file is what that inference costs. The numbers are the page's own
+            # and the call is untouched: what the page says changed, not what
+            # it computes.
+            "function pageMore(last: number, remaining: number, counted: boolean): string {",
+            "    ? `The file continues past line ${last}: ${remaining} lines remain.`",
+            "    : `The file continues past line ${last}: the rest is still being counted.`;",
+            "          remainder: pageMore(lastLine, trueTotal - lastLine, counted),",
+            "      const lastLine = this.params.offset + pageLineCount(page);",
+            # The page budget counts the new words, in both their forms, so a
+            # page and all that leads it are still one inline block.
+            "          remainder: pageMore(most, most, true),",
+            "          remainder: pageMore(most, most, false),",
         ),
         label=label,
     )
+    # Executed in the build: the pair, and the notice that carries it.
+    for name in (
+        "says a page the file continues past continues, and how many lines remain",
+        "says a page continues from the line it ends on, whatever it started from",
+        "says the last page of a file read in pages is its end, counting its lines, not its final newline",
+    ):
+        require_text(
+            state, "packages/core/src/tools/read-file.test.ts", name, label=label
+        )
+    for name in (
+        "states what the source holds past a first part, before the call that continues",
+        "says nothing about a remainder for a result that is not a first part",
+    ):
+        require_text(
+            state, "packages/core/src/tools/tools.test.ts", name, label=label
+        )
     # A sentence that says "lines" means lines. `originalLineCount` counts the
     # segments a split on "\n" yields, which is one more than the lines
     # whenever the file ends with a newline; every arithmetic use of it counts
@@ -7993,7 +8029,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "A tool result says whether it is complete. One notice states what was asked for, what "
             "came back, the limit that cut it and its unit, the real total or why the tool cannot "
             "know it, and the call that continues or why the rest was not kept; tools do not phrase "
-            "their own. A tool that cuts a result to a cap without declaring it refuses the build, "
+            "their own. Both endings of a paged read say what they are: the page a file ends with "
+            "says so, and a page the file continues past says that, with the lines that remain, "
+            "beside the call that returns them. A tool that cuts a result to a cap without declaring it refuses the build, "
             "no listing is cut to a count its caller did not ask for, and a cap a service applied is "
             "reported with the items rather than discarded, because a layer cannot declare what it "
             "was never told."
