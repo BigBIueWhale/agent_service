@@ -68,6 +68,39 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             ):
                 MODULE.verify(paths)
 
+    def test_rejects_retired_generation_fields_even_if_settings_are_resealed(self) -> None:
+        # extra_body carries only the reasoning switches. parallel_tool_calls
+        # is the client's own constant, which the client refuses to take from
+        # extra_body, and the two phase budgets could never bind before the
+        # limits that do, so none of them is a setting.
+        for field, value in (
+            ("parallel_tool_calls", False),
+            ("thinking_token_budget", 262144),
+            ("final_response_token_budget", 131072),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+                provider = settings["modelProviders"]["openai"][0]
+                provider["generationConfig"]["extra_body"][field] = value
+                settings_path = root / "settings.json"
+                settings_path.write_text(
+                    json.dumps(settings, indent=2) + "\n", encoding="utf-8"
+                )
+                contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+                contract["components"]["settings_sha256"] = MODULE.sha256(
+                    settings_path.read_bytes()
+                )
+                contract_path = root / "contract.json"
+                contract_path.write_text(
+                    json.dumps(contract, indent=2) + "\n", encoding="utf-8"
+                )
+                paths = [contract_path, settings_path, *self.paths[2:]]
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, "generation extra body drift"
+                ):
+                    MODULE.verify(paths)
+
     def test_rejects_turn_budget_drift_even_if_settings_are_resealed(self) -> None:
         # The default turn budget is cross-checked in several places. Resealing
         # the settings file and the contract together still leaves the

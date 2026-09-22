@@ -78,9 +78,6 @@
     "min_p": 0.0,
     "presence_penalty": 0.0,
     "repetition_penalty": 1.0,
-    "thinking_token_budget": 262144,
-    "final_response_token_budget": 131072,
-    "parallel_tool_calls": false,
     "request_retries": 0,
     "token_counting": "vllm-exact-rendered-request",
     "fallback_token_counting": false
@@ -166,7 +163,7 @@
     ]
   },
   "components": {
-    "settings_sha256": "5f24f2b613261694a156513a4481b008d767753d0e3e30261b654a7854b591de",
+    "settings_sha256": "eacb54f53de1d9189b2aafb3d7db774d78c0c7013593b831dc4e31c246919677",
     "instructions_sha256": "3194de23e874dd998407cf8b301eb6875c670bf1da87c45d381200dcf0c0e46d",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "8aa4379bbf19749f26eaecff549524e7c85300d4235a06baeba4579762cc207b",

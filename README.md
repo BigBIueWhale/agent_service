@@ -136,7 +136,6 @@ top_k                = 20
 min_p                = 0.0
 presence_penalty     = 0.0
 repetition_penalty   = 1.0
-parallel_tool_calls  = false
 ```
 
 `repetition_penalty=1.0` is neutral. The historical Qwen3.6 repetition detector is
@@ -145,21 +144,30 @@ and adding one would be an untrained semantic intervention. “Deterministic pro
 are not treated as a real guarantee; fixed seeds and greedy GPU execution do not
 make a long agent trajectory bitwise deterministic.
 
-The reasoning ceiling is 262,144 tokens and the final-response ceiling is 131,072.
-Those are separate phase ceilings, not reservations and not additive capacity. The
-patched server and client still enforce:
+No phase budget bounds a turn. A turn is bounded by its output limit, `C`, and
+by the window, which the patched server and client enforce:
 
 ```text
 rendered prompt + reasoning + tools + final response <= 262144
 ```
 
-These are defaults at both layers, not suggestions in prose. vLLM defaults omitted
-request fields to thinking enabled, xhigh, and the exact tuple above. The pinned Qwen Code settings send the same values explicitly,
-including `thinking_token_budget=262144`,
-`final_response_token_budget=131072`, and `add_vision_id=false`. The backend maps
-high and max to the canonical xhigh rendering and rejects medium, low, or disabled
-thinking in this profile. A client cannot accidentally obtain the old Qwen3.6
-repetition intervention or a weaker fast path.
+The backend's launch still defaults a 262,144-token reasoning budget and a
+131,072-token final-response budget, and neither can bind first: the reasoning
+budget is the whole window, a turn's output limit is `C`, and a compaction's
+final response is accepted only up to `M` bytes. Qwen Code sends neither; a
+caller may still set either per request.
+
+Thinking, its effort and the tuple above are defaults at both layers, not
+suggestions in prose. vLLM defaults omitted request fields to thinking enabled,
+xhigh, and the exact tuple above, and the pinned Qwen Code settings send the
+same values explicitly, with `add_vision_id=false`.
+Every request also asks for `parallel_tool_calls: false`, which is not a setting:
+the client's request builder writes it after every setting and provider, and the
+model configuration refuses an `extra_body` that carries it, or any other field
+the client writes, naming the field. The backend maps high and max to the
+canonical xhigh rendering and rejects medium, low, or disabled thinking in this
+profile. A client cannot accidentally obtain the old Qwen3.6 repetition
+intervention or a weaker fast path.
 
 Every assistant turn already in the conversation is rendered with its reasoning,
 and a request that asks otherwise is refused. That is a property of the model
@@ -313,14 +321,14 @@ the compaction trigger or it is not issued at all, and it is issued with `C`.
 The tool result it appends is bounded before it gets there: every result is held
 to one inline block where its model copy is made — the tool's output with every
 hook and reminder that joined it, measured once in the bytes of its NFC form —
-and the deployment's `parallel_tool_calls: false` holds the backend's call
-grammar to one call a turn, so a turn appends one result; a turn that carries
-more is refused where the client assembles it, as the deployment defect it is,
-and never cut down to one call. A result past the bound keeps its start and its
-end, with a notice in the cut giving its true total and the `read_file` call
-that returns the cut lines from the session's copy of the whole, or the reason
-no copy could be kept; a send that finds a result past the bound refuses it as
-the defect it is rather than sending it.
+and the `parallel_tool_calls: false` the client asks every request for holds the
+backend's call grammar to one call a turn, so a turn appends one result; a turn
+that carries more is refused where the client assembles it, as the deployment
+defect it is, and never cut down to one call. A result past the bound keeps its
+start and its end, with a notice in the cut giving its true total and the
+`read_file` call that returns the cut lines from the session's copy of the
+whole, or the reason no copy could be kept; a send that finds a result past the
+bound refuses it as the defect it is rather than sending it.
 There is no character division, `target // 8`, image-token guess, padding
 margin, local tokenizer, or tokenizer fallback anywhere in the compaction
 trigger, the outbound sizing, or the tool-result bound. If the tokenizer is

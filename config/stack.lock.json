@@ -12,8 +12,8 @@
     "agent_apt_lock_sha256": "b653bee65b0d55f999b96a73102bdd3de03d72a4136a62810b9c89f091997770",
     "toolchain_verifier_sha256": "092f465dc47c3d102d7abe9d92d8317eea7e732d3133a7449607eb1dd46fe3ec",
     "toolchain_verifier_test_sha256": "932d6c5956a0e18a9f31a473ef68d1359d7bbd88a5b4fecdd5741568c3183011",
-    "runtime_contract_verifier_sha256": "4f101415b57a63aec66efa079e4e7b5c5a3280995d589b8f19ed7a4ca8edac10",
-    "runtime_contract_verifier_test_sha256": "1224506b32f33ceec79ec74b4d5e7dcf3f9c4f43b7b8b79ee02fd8f53d3c125f",
+    "runtime_contract_verifier_sha256": "167ef18770f7baee3faa43ef7d1f2523d0f472d012f9d47feeb126eec463cbd6",
+    "runtime_contract_verifier_test_sha256": "c973b19dbee6747ca99da214b5dcc3855b0a46f9016a6a4ffc8377934db51c4b",
     "wrapper_contract_test_sha256": "4d152995741166a803388cb4741c15753d8b94f0d58ae6b71b19cc64b01ff18a",
     "jks_normalizer_sha256": "309570025cc08c1ea865d67607e357d92cbb32ce2afe9af5e17c2cd7af8c3d6a",
     "jks_normalizer_test_sha256": "9e9060b44eee4132a78a9a523d8525a0b53c8665f61b16f4b5cc5e3d2e03fcb1",
@@ -91,12 +91,12 @@
     "pids_limit": 4096,
     "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
     "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
-    "settings_sha256": "5f24f2b613261694a156513a4481b008d767753d0e3e30261b654a7854b591de",
+    "settings_sha256": "eacb54f53de1d9189b2aafb3d7db774d78c0c7013593b831dc4e31c246919677",
     "instructions_sha256": "3194de23e874dd998407cf8b301eb6875c670bf1da87c45d381200dcf0c0e46d",
     "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
     "deployment_contract_sha256": "8aa4379bbf19749f26eaecff549524e7c85300d4235a06baeba4579762cc207b",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "02d593902b0f26b36484e4f06086acb67a75989c5a029e86dc6009eb9e8b6e40",
+    "runtime_contract_sha256": "bc1f20c272fe79c420e3c1aa5f657c9aa7851f0ba96617f03037484e77eb321d",
     "wrapper_sha256": "0fdb2ac4b0f2fa4aafe1ea81322895ad4292ac88919c010f7eeea6f387ebc9d8",
     "agent_exec_source_sha256": "e6ddbbdc5f78b4e5fdcf3e6f96483e670c02ca50c94a4b5131f2a18d0c9ceb0b",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
@@ -120,8 +120,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "0e075d7a203ef7cf339273bbb37591c6040fc65a7effdb24a2fbd821c874983a",
-      "source_patch_manifest_sha256": "5c8d4d969f0bc187eab2e6c7a2b71be729dc0aa59e09c069a31f46eb831a3db4"
+      "patch_sha256": "7f4c3e7d76ba63bc3bc51159a4da0a56e195a596c15a92e3d8d922861841c6ad",
+      "source_patch_manifest_sha256": "70db0b0a366fd6da56bd402403c3ef97441064327de369d75387216c2f6eb829"
     }
   },
   "backend": {

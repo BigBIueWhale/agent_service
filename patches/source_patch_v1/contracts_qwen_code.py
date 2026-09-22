@@ -5656,13 +5656,91 @@ def _validate_tool_result_bound_after(state: State) -> None:
         label=label,
         location=chat,
     )
-    # The fit's "one result a turn" rests on one call a turn. The deployment
-    # decides that -- every request asks for parallel_tool_calls: false and
-    # the backend's grammar stops after the first call -- and the client
-    # checks it where a turn is assembled: a turn that carries more is refused
-    # whole, before any of it is recorded, committed or run, as a defect of
-    # the serving side, naming the backend and its grammar. It is never cut
-    # down to one call.
+    # The fit's "one result a turn" rests on one call a turn. The client asks
+    # for it itself: its request builder writes parallel_tool_calls: false
+    # into every request, once, after provider and extra-body decoration, so
+    # no setting carries it and none can replace it, and the model
+    # configuration refuses an extra_body that carries it or any other field
+    # the client writes, naming the field. The backend's grammar stops after
+    # the first call, and the client checks it where a turn is assembled: a
+    # turn that carries more is refused whole, before any of it is recorded,
+    # committed or run, as a defect of the serving side, naming the backend
+    # and its grammar. It is never cut down to one call.
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    _require_ordered(
+        _source(state, pipeline, label=label),
+        (
+            "let providerRequest = this.config.provider.buildRequest(",
+            "    typed['parallel_tool_calls'] = false;\n"
+            "    // Invocation ownership is authoritative after provider and extra-body decoration.\n"
+            "    typed['kv_scope'] = request.generationContext.kvScope;\n"
+            "    return providerRequest;",
+        ),
+        label=label,
+        location=pipeline,
+    )
+    require_text(state, pipeline, "parallel_tool_calls", count=1, label=label)
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/constants.ts",
+        "export const CLIENT_OWNED_REQUEST_FIELDS = [\n"
+        "  'model',\n"
+        "  'messages',\n"
+        "  'stream',\n"
+        "  'stream_options',\n"
+        "  'tools',\n"
+        "  'tool_choice',\n"
+        "  'parallel_tool_calls',\n"
+        "  'kv_scope',\n"
+        "  'max_tokens',\n"
+        "  ...PROVIDER_OUTPUT_BUDGET_KEYS,\n"
+        "  'temperature',\n"
+        "  'top_p',\n"
+        "  'top_k',\n"
+        "  'repetition_penalty',\n"
+        "  'presence_penalty',\n"
+        "  'frequency_penalty',\n"
+        "  'reasoning',\n"
+        "] as const;",
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/contentGenerator.ts",
+        (
+            "import { CLIENT_OWNED_REQUEST_FIELDS } from './openaiContentGenerator/constants.js';",
+            "  const owned = new Set<string>([\n"
+            "    ...CLIENT_OWNED_REQUEST_FIELDS,\n"
+            "    ...Object.keys(config.samplingParams ?? {}),\n"
+            "  ]);\n"
+            "  const claimed = Object.keys(config.extra_body ?? {}).filter((field) =>\n"
+            "    owned.has(field),\n"
+            "  );\n"
+            "  if (claimed.length > 0) {\n"
+            "    errors.push(\n"
+            "      new Error(\n"
+            "        `extra_body carries ${claimed.join(', ')}, which the client writes into the request itself, "
+            "and extra_body would silently replace the client's value. "
+            "Remove ${claimed.length === 1 ? 'it' : 'them'} from extra_body.`,\n",
+        ),
+        label=label,
+    )
+    for path, case in (
+        ("packages/core/src/core/openaiContentGenerator/pipeline.test.ts",
+         "asks every request for one call per turn, whatever decorates it"),
+        ("packages/core/src/core/contentGenerator.test.ts",
+         "refuses extra_body that carries a field the client writes: %s"),
+        ("packages/core/src/core/contentGenerator.test.ts",
+         "refuses extra_body that repeats a sampling value the settings supply"),
+        ("packages/core/src/core/contentGenerator.test.ts",
+         "admits extra_body fields the client does not write, a phase budget among them"),
+    ):
+        require_text(state, path, case, label=label)
+    # One call a turn was the deployment's setting; it is the client's own.
+    forbid_text(state, "packages/core/src/core/tool-call-count.ts",
+                "the deployment's guarantee, not this client's choice", label=label)
+    forbid_text(state, "packages/core/src/core/geminiChat.ts",
+                "which the deployment decides and this client checks", label=label)
     count_path = "packages/core/src/core/tool-call-count.ts"
     _require_all(
         state,

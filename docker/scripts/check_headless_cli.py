@@ -190,6 +190,9 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     require(isinstance(body["kv_scope"], str) and bool(body["kv_scope"]), "request lacks an owner")
                     require(any(t.get("function", {}).get("name") == "read_file" for t in body["tools"]),
                             "provider tool schema lacks read_file")
+                    # One result a turn rests on one call a turn, which the client's request builder
+                    # asks for itself: no setting carries it, so the bundle is what must send it.
+                    require(body.get("parallel_tool_calls") is False, "CLI did not ask for one call per turn")
                     generation_count += 1
                     if generation_count == 1:
                         require(nonce not in json.dumps(body), "fixture content leaked into the initial prompt")

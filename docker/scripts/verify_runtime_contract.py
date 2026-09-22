@@ -193,10 +193,7 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
         "generation extra body",
         config["extra_body"],
         {
-            "parallel_tool_calls": generation["parallel_tool_calls"],
             "reasoning_effort": generation["reasoning_effort"],
-            "thinking_token_budget": generation["thinking_token_budget"],
-            "final_response_token_budget": generation["final_response_token_budget"],
             "chat_template_kwargs": {
                 "enable_thinking": generation["thinking_enabled"],
                 "reasoning_effort": generation["reasoning_effort"],
