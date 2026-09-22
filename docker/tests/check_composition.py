@@ -127,7 +127,11 @@ class StubHandler(BaseHTTPRequestHandler):
             require(body["model"] == self.server.model, "model identity changed")
             if self.path == "/tokenize":
                 if "prompt" in body:
-                    require(body["prompt"] == "agent-service-tokenizer-preflight", "unknown raw prompt")
+                    # Two raw prompts reach the provider: the launcher's tokenizer preflight, and the
+                    # startup proof's framing probe, a text alone with no template and special tokens off.
+                    require(body["prompt"] == "agent-service-tokenizer-preflight"
+                            or (body["prompt"] == "framing" and body.get("add_special_tokens") is False),
+                            "unknown raw prompt")
                     response = {"count": 1, "tokens": [42], "max_model_len": 262144}
                 else:
                     require(isinstance(body["messages"], list) and body["messages"], "sizing lacks messages")
