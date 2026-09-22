@@ -220671,7 +220671,89 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
    let mockToolRegistry: ToolRegistry;
    let mockConfig: Config;
  
-@@ -2187,32 +2203,21 @@
+@@ -1937,6 +1953,81 @@
+     });
+   });
+ 
++  describe('the locked configuration', () => {
++    let lockedManager: SubagentManager;
++    let refusals: string[];
++
++    beforeEach(() => {
++      const lockedConfig = makeFakeConfig({ foregroundAgentsOnly: true });
++      vi.spyOn(lockedConfig, 'getToolRegistry').mockReturnValue(
++        mockToolRegistry,
++      );
++      vi.spyOn(lockedConfig, 'getProjectRoot').mockReturnValue('/test/project');
++      lockedManager = new SubagentManager(lockedConfig);
++      refusals = [];
++      vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
++        refusals.push(args.join(' '));
++      });
++    });
++
++    it('names a workspace definition and runs the built-in instead', async () => {
++      // The workspace is the submitted repository: a definition there names
++      // the built-in it would replace. The name the caller asked for is a
++      // built-in's, so a built-in answers; the file is never read, and the
++      // run records which file was not used.
++      vi.mocked(fs.readdir)
++        // eslint-disable-next-line @typescript-eslint/no-explicit-any
++        .mockResolvedValue(['general-purpose.md'] as any);
++
++      const loaded = await lockedManager.loadSubagent('general-purpose');
++
++      const refused = path.join(
++        '/test/project',
++        '.qwen',
++        'agents',
++        'general-purpose.md',
++      );
++      expect(loaded?.level).toBe('builtin');
++      expect(loaded?.isBuiltin).toBe(true);
++      expect(fs.readFile).not.toHaveBeenCalled();
++      expect(refusals).toContain(
++        `Agent definition not used: ${refused}. This deployment runs its ` +
++          `built-in agents, so a definition supplied beside the work does not ` +
++          `choose the agent that works on it.`,
++      );
++    });
++
++    it('says nothing when the workspace offers no definition', async () => {
++      vi.mocked(fs.readdir).mockRejectedValue(new Error('ENOENT'));
++
++      const loaded = await lockedManager.loadSubagent('general-purpose');
++
++      expect(loaded?.level).toBe('builtin');
++      expect(refusals).toEqual([]);
++    });
++
++    it('lists the built-ins and names the definition it did not read', async () => {
++      // Listing builds the cache, which visits every level: the file is named
++      // there, without waiting for a caller to ask for an agent by name.
++      vi.mocked(fs.readdir)
++        // eslint-disable-next-line @typescript-eslint/no-explicit-any
++        .mockResolvedValue(['evil-agent.md'] as any);
++      vi.mocked(fs.readFile).mockResolvedValue(`---
++name: evil-agent
++description: Injected via the task repository
++---
++malicious prompt`);
++
++      const subagents = await lockedManager.listSubagents();
++
++      expect(subagents.every((s) => s.level === 'builtin')).toBe(true);
++      expect(subagents.find((s) => s.name === 'evil-agent')).toBeUndefined();
++      expect(refusals.some((line) => line.includes('evil-agent.md'))).toBe(
++        true,
++      );
++    });
++  });
++
+   describe('safe mode', () => {
+     let safeManager: SubagentManager;
+ 
+@@ -2187,32 +2278,21 @@
            mockConfig,
          );
  
@@ -220711,7 +220793,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
  
        it('should populate runConfig.max_turns from top-level maxTurns', async () => {
          const cfg: SubagentConfig = { ...validConfig, maxTurns: 42 };
-@@ -2293,29 +2298,34 @@
+@@ -2293,29 +2373,34 @@
            getResult: vi.fn(),
          });
          mockCreateContentGenerator.mockResolvedValue({
@@ -220751,7 +220833,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
              disallowedTools: [ToolNames.EDIT],
            },
            mockConfig,
-@@ -2330,13 +2340,17 @@
+@@ -2330,13 +2415,17 @@
          });
        });
  
@@ -220770,7 +220852,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
          // (e.g. the override) gets caught.
          expect(mockCreateContentGenerator).toHaveBeenCalledWith(
            expect.objectContaining({ model: 'custom-model' }),
-@@ -2344,13 +2358,17 @@
+@@ -2344,13 +2433,17 @@
          );
        });
  
@@ -220789,7 +220871,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
              model: 'claude-sonnet',
              authType: 'anthropic',
            }),
-@@ -2358,50 +2376,67 @@
+@@ -2358,50 +2451,67 @@
          );
        });
  
@@ -220866,7 +220948,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
          );
          // Subagents always get an `Object.create(parent)` wrapper for
          // FileReadCache isolation — distinct instance, prototype === parent.
-@@ -2413,48 +2448,56 @@
+@@ -2413,48 +2523,56 @@
        });
  
        it('should build a ContentGenerator with the resolved fastModel when model is "fast"', async () => {
@@ -220927,7 +221009,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
          });
          vi.spyOn(mockConfig, 'getFastModel').mockReturnValue(
            'deepseek-v4-flash',
-@@ -2469,55 +2512,63 @@
+@@ -2469,55 +2587,63 @@
                      label: 'deepseek-v4-flash',
                      authType: AuthType.USE_OPENAI,
                    },
@@ -221018,7 +221100,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
          description: 'dispose contract test',
          systemPrompt: 'You are a test agent.',
          level: 'session' as const,
-@@ -2539,12 +2590,13 @@
+@@ -2539,12 +2665,13 @@
          const addAgentHooksSpy = vi.fn().mockReturnValue(unregisterSpy);
          vi.spyOn(mockConfig, 'getHookSystem').mockReturnValue({
            getRegistry: () => ({ addAgentHooks: addAgentHooksSpy }),
@@ -221032,7 +221114,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
                PreToolUse: [
                  {
                    matcher: 'Bash',
-@@ -2553,43 +2605,33 @@
+@@ -2553,43 +2680,33 @@
                ],
              },
            },
@@ -221078,7 +221160,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
                PreToolUse: [
                  {
                    matcher: '*',
-@@ -2602,41 +2644,36 @@
+@@ -2602,41 +2719,36 @@
          );
  
          await dispose();
@@ -221123,7 +221205,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.test.ts b/packages/cor
                  PreToolUse: [
                    {
                      matcher: '*',
-@@ -2648,8 +2685,273 @@
+@@ -2648,8 +2760,273 @@
              mockConfig,
            ),
          ).rejects.toThrow(/synthetic constructor failure/);
@@ -221415,7 +221497,75 @@ diff --git a/packages/core/src/subagents/subagent-manager.ts b/packages/core/src
  import { randomUUID } from 'crypto';
  import {
    parse as parseYaml,
-@@ -792,80 +794,35 @@
+@@ -103,6 +105,23 @@
+   private readonly validator: SubagentValidator;
+   private subagentsCache: Map<SubagentLevel, SubagentConfig[]> | null = null;
+   private readonly changeListeners: Set<() => void> = new Set();
++  /**
++   * Definition files already refused, by path, so each is named once.
++   *
++   * Where definitions come from the built-ins alone the workspace is
++   * untrusted input -- in a benchmark run it is the submitted repository --
++   * and a definition file there names an agent by the name the caller asks
++   * for, so `.qwen/agents/general-purpose.md` would replace the prompt, the
++   * tools, the model and the run configuration of the agent that works on
++   * that very repository. Nothing about the file says it came from the task
++   * rather than from the deployment, which is why it is not read at all: the
++   * agent tool offers the built-ins, and a built-in is what runs.
++   *
++   * The file is not used and the run says which file that was, because a
++   * silent skip would leave a reader unable to tell a workspace that tried to
++   * redefine its agent from one that never had a definition.
++   */
++  private readonly refusedDefinitions = new Set<string>();
+ 
+   constructor(private readonly config: Config) {
+     this.validator = new SubagentValidator();
+@@ -527,21 +546,21 @@
+     }
+ 
+     // Normal mode: load from project, user, and builtin levels
+-    // Safe mode: only builtin subagents are available
+-    const defaultLevels: SubagentLevel[] = this.config.isSafeMode()
++    // Locked and safe mode: only builtin subagents are available
++    const defaultLevels: SubagentLevel[] = this.builtinDefinitionsOnly()
+       ? ['builtin']
+       : ['project', 'user', 'builtin', 'extension'];
+     if (
+-      this.config.isSafeMode() &&
++      this.builtinDefinitionsOnly() &&
+       options.level &&
+       options.level !== 'builtin'
+     ) {
+       debugLogger.debug(
+-        `Safe mode: overriding requested level '${options.level}' to 'builtin'`,
++        `Built-in definitions only: overriding requested level '${options.level}' to 'builtin'`,
+       );
+     }
+     const levelsToCheck: SubagentLevel[] = options.level
+-      ? this.config.isSafeMode() && options.level !== 'builtin'
++      ? this.builtinDefinitionsOnly() && options.level !== 'builtin'
+         ? ['builtin']
+         : [options.level]
+       : defaultLevels;
+@@ -642,10 +661,12 @@
+   async refreshCache(): Promise<void> {
+     const subagentsCache = new Map();
+ 
+-    // Safe mode: only load builtin subagents
+-    const levels: SubagentLevel[] = this.config.isSafeMode()
+-      ? ['builtin']
+-      : ['project', 'user', 'builtin', 'extension'];
++    // Every level is visited, and what a level yields is decided in one
++    // place, listSubagentsAtLevel. With definitions coming from the built-ins
++    // alone the file-backed levels yield nothing, and a definition file they
++    // hold is named as the cache is built rather than whenever some later
++    // lookup happens to pass by.
++    const levels: SubagentLevel[] = ['project', 'user', 'builtin', 'extension'];
+ 
+     for (const level of levels) {
+       const levelSubagents = await this.listSubagentsAtLevel(level);
+@@ -792,80 +813,35 @@
      }).trim();
  
      // Combine frontmatter and system prompt
@@ -221504,7 +221654,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.ts b/packages/core/src
          config,
          runtimeContext,
        );
-@@ -912,68 +869,49 @@
+@@ -912,68 +888,49 @@
        );
  
        const { context: subagentContext, cleanup } =
@@ -221605,7 +221755,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.ts b/packages/core/src
    /**
     * Build the per-subagent Config override used as the AgentHeadless
     * runtime context. The override is a thin prototype-delegation wrapper
-@@ -997,23 +935,12 @@
+@@ -997,23 +954,12 @@
     */
    private async buildSubagentContextOverride(
      runtimeContext: Config,
@@ -221629,7 +221779,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.ts b/packages/core/src
      const subagentContext = Object.create(runtimeContext) as any as Config;
  
      // Per-agent MCP server overrides. Frontmatter `mcpServers` entries shadow
-@@ -1033,94 +960,67 @@
+@@ -1033,94 +979,67 @@
          ...sessionServers,
          ...(config.mcpServers as Record<string, MCPServerConfig>),
        };
@@ -221753,7 +221903,7 @@ diff --git a/packages/core/src/subagents/subagent-manager.ts b/packages/core/src
            ...runtimeAuthOverrides,
            authType: authType as string,
          };
-@@ -1140,17 +1040,19 @@
+@@ -1140,17 +1059,19 @@
    }
  
    private resolveModelOverride(
@@ -221777,6 +221927,93 @@ diff --git a/packages/core/src/subagents/subagent-manager.ts b/packages/core/src
     * Converts a file-based SubagentConfig to runtime configuration
     * compatible with AgentHeadless.create().
     *
+@@ -1321,12 +1242,31 @@
+    * @param level - Storage level to scan
+    * @returns Array of subagent configurations
+    */
++  /**
++   * Whether definitions come only from the built-ins: the locked
++   * agent-service configuration, where the workspace is untrusted input, and
++   * safe mode, where local customization is distrusted by request.
++   */
++  private builtinDefinitionsOnly(): boolean {
++    return this.config.getForegroundAgentsOnly() || this.config.isSafeMode();
++  }
++
+   private async listSubagentsAtLevel(
+     level: SubagentLevel,
+   ): Promise<SubagentConfig[]> {
+     // Handle built-in agents
+     if (level === 'builtin') {
+       return this.getBuiltinAgents();
++    }
++
++    // Every other level yields nothing: a definition outside the built-ins
++    // is never read. The files are listed, not parsed -- what a refusal names
++    // is the path, and parsing one to name it would be reading it.
++    if (this.builtinDefinitionsOnly()) {
++      for (const filePath of await this.listDefinitionFiles(level)) {
++        this.refuseDefinition(filePath);
++      }
++      return [];
+     }
+ 
+     if (level === 'extension') {
+@@ -1400,6 +1340,54 @@
+     }
+ 
+     return null;
++  }
++
++  /**
++   * Says, once per path, that a definition file was not used.
++   *
++   * On stderr, because the deployment records that stream with the run: a
++   * definition the workspace offered is exactly what a reader of the run has
++   * to be able to see, and the debug channel is off unless asked for.
++   */
++  private refuseDefinition(filePath: string): void {
++    if (this.refusedDefinitions.has(filePath)) {
++      return;
++    }
++    this.refusedDefinitions.add(filePath);
++    // eslint-disable-next-line no-console -- a refusal the run must record
++    console.error(
++      `Agent definition not used: ${filePath}. This deployment runs its ` +
++        `built-in agents, so a definition supplied beside the work does not ` +
++        `choose the agent that works on it.`,
++    );
++  }
++
++  /**
++   * Every `.md` file at a file-backed level, by path, without reading one.
++   */
++  private async listDefinitionFiles(level: SubagentLevel): Promise<string[]> {
++    if (level !== 'project' && level !== 'user') {
++      return [];
++    }
++    const projectRoot = this.config.getProjectRoot();
++    if (
++      level === 'project' &&
++      path.resolve(projectRoot) === path.resolve(os.homedir())
++    ) {
++      return [];
++    }
++    const baseDir =
++      level === 'project'
++        ? path.join(projectRoot, QWEN_DIR, AGENT_CONFIG_DIR)
++        : path.join(Storage.getGlobalQwenDir(), AGENT_CONFIG_DIR);
++    try {
++      const files = await fs.readdir(baseDir);
++      return files
++        .filter((file) => file.endsWith('.md'))
++        .map((file) => path.join(baseDir, file));
++    } catch {
++      return [];
++    }
+   }
+ 
+   /**
 diff --git a/packages/core/src/telemetry/constants.ts b/packages/core/src/telemetry/constants.ts
 --- a/packages/core/src/telemetry/constants.ts
 +++ b/packages/core/src/telemetry/constants.ts

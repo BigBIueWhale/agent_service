@@ -237,6 +237,68 @@ def _validate_locked_boundary_after(state: State) -> None:
         core_source.count("getForegroundAgentsOnly()") >= 13,
         f"{label}: the mode no longer dominates every initialization/getter gate",
     )
+    # A subagent definition is a prompt, a tool list, a model and a run
+    # configuration under a name the caller asks for by that name. The
+    # workspace is the submitted repository, so a definition in it is the work
+    # choosing the agent that works on it. Here definitions come from the
+    # built-ins alone, and a file offered beside the work is refused by path
+    # rather than skipped in silence -- which is what makes the agent tool's
+    # own sentence, that custom agent definitions are unavailable, true. The
+    # name the caller asked for is a built-in's, so a built-in still answers
+    # it: a file in the workspace decides neither which agent runs nor
+    # whether one may. The
+    # working-time limit a definition could have set is why `error_timeout`
+    # stays in the terminal table: only a subagent scope can carry it, and no
+    # session ends there.
+    manager = "packages/core/src/subagents/subagent-manager.ts"
+    _require_all(
+        state,
+        manager,
+        (
+            "  private builtinDefinitionsOnly(): boolean {",
+            "    return this.config.getForegroundAgentsOnly() || this.config.isSafeMode();",
+            "  private async listDefinitionFiles(level: SubagentLevel): Promise<string[]> {",
+            "    if (this.builtinDefinitionsOnly()) {\n"
+            "      for (const filePath of await this.listDefinitionFiles(level)) {\n"
+            "        this.refuseDefinition(filePath);\n"
+            "      }\n"
+            "      return [];\n"
+            "    }",
+            "  private refuseDefinition(filePath: string): void {",
+            "      `Agent definition not used: ${filePath}. This deployment runs its `",
+            "    const levels: SubagentLevel[] = "
+            "['project', 'user', 'builtin', 'extension'];",
+        ),
+        label=label,
+    )
+    manager_source = _source(state, manager, label=label)
+    _require(
+        manager_source.count("this.builtinDefinitionsOnly()") >= 4,
+        f"{label}: a level list or a lookup still decides for itself whether "
+        f"definitions may come from the workspace",
+    )
+    _require(
+        "this.config.isSafeMode()\n      ? ['builtin']" not in manager_source,
+        f"{label}: a level list is gated on safe mode alone again, so the "
+        f"locked configuration would read a workspace definition",
+    )
+    for case in (
+        "names a workspace definition and runs the built-in instead",
+        "says nothing when the workspace offers no definition",
+        "lists the built-ins and names the definition it did not read",
+    ):
+        require_text(
+            state,
+            "packages/core/src/subagents/subagent-manager.test.ts",
+            case,
+            label=label,
+        )
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "custom agent definitions, and model overrides are unavailable.",
+        label=label,
+    )
     _require_all(
         state,
         helpers,
@@ -7704,7 +7766,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         rationale=(
             "A sealed deployment loads its explicit settings, prompt, tools, and local task guidance "
             "without admitting workspace executable policy or interpreting the submitted task as a CLI "
-            "command."
+            "command. Subagent definitions come from the built-ins alone, and one offered by the "
+            "workspace is refused by path rather than skipped, so the work cannot choose the agent "
+            "that works on it."
         ),
         removal_condition=(
             "Upstream provides the same sealed configuration boundary and adversarial initialization "

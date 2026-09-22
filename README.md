@@ -530,7 +530,10 @@ A terminal conversation and a headless conversation share the same obligations:
 
 The sealed deployment separately fixes its advertised capabilities: the ten tools
 below, sequential foreground `general-purpose` and `Explore` children, immutable
-settings and instructions, and per-child scratch and effect journals. It excludes
+settings and instructions, and per-child scratch and effect journals. Those two
+children are defined by the deployment: a `.qwen/agents/<name>.md` beside the work
+is named in the run and never read, so the workspace cannot replace the prompt,
+the tools, the model or the working time of the agent that works on it. It excludes
 forks, background work, teams, worktrees, alternate child models, and nesting.
 Workspace environment/configuration discovery, ambient MCP, hooks, managed memory,
 custom workflows, and injected policy remain disabled through authentication;
@@ -701,15 +704,17 @@ which both the client's and the service's bindings are generated: `success`
 exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
 The table also names `error_timeout`, which no session ends in: only a subagent
 scope does, when the working time a subagent definition allows it runs out, and a
-scope's record carries no exit code. A completed session's process
-error is exactly an exit that disagrees with the subtype its certified record
-carries (a cancelled session's exit is the cancellation's, and is not
-compared), so the service reports an ending the run recorded and exited with as
-that ending, never as a failure of the process. A state earns a name when
+scope's record carries no exit code. The definitions are the built-in ones, so
+that working time is the deployment's to set and no definition here sets one; a
+definition offered by the workspace is named and not used. A completed
+session's process error is exactly an exit that disagrees with the subtype its
+certified record carries (a cancelled session's exit is the cancellation's, and
+is not compared), so the service reports an ending the run recorded and exited
+with as that ending, never as a failure of the process. A state earns a name when
 it names an authority other than the run itself that ended the run, a bound the
 caller set and can raise, or a shape of ending a reader has to tell from the
 others without parsing English; everything else the run did to itself is
-`error_during_execution`, told apart by the error message. Every one of the nine
+`error_during_execution`, told apart by the error message. Every one of the eight
 names is a state the client contains a statement to produce, which the patch
 asserts before it writes a byte. A subagent's own scoped record carries the error
 names from the same list, so a subagent that ran out of turns and one whose tool
