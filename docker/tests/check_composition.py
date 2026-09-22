@@ -277,8 +277,18 @@ class Harness:
             }[self.case]
             self.arm_terminal_fault(initial_site)
         self.artifact_manifest = prepare_artifacts(self.source, args.artifacts, self.root / "input")
+        # The service records every session's release; in the gate that is these
+        # candidates and the commit the candidate service image was built from.
+        labels = json.loads(self.command(["docker", "image", "inspect", "--format", "{{json .Config.Labels}}",
+                                          self.images["service"]]).stdout)
+        require(isinstance(labels, dict), "candidate service image carries no labels")
+        commit = labels.get("agent_service.source.commit", "")
+        require(isinstance(commit, str) and len(commit) == 40 and all(c in "0123456789abcdef" for c in commit),
+                "candidate service image names no implementation commit")
         fixture = {"root": str(self.root), "case": case, "session_ids": [self.session],
-                   **{name + "_image": self.images[name] for name in ("agent", "relay", "capture")}}
+                   "implementation_commit": commit,
+                   **{name + "_image": self.images[name]
+                      for name in ("agent", "relay", "capture", "broker", "service")}}
         save_json(self.root / "input/fixture.json", fixture)
         archive = self.root / "input/workspace.zip"
         with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_STORED) as output:

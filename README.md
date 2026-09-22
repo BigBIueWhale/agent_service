@@ -1019,7 +1019,13 @@ broker, and service image IDs; candidate build directories were absent afterward
 commit, the build-input manifest hash, the stack-lock hash, and all five
 resulting image IDs, and the commit that writes it freezes that complete
 set. It is the only place those identities are stated, so there is no second
-copy to disagree with it.
+copy to disagree with it. The service reads it at startup and refuses one that
+does not name, by hash, the stack lock compiled into the service or that pins
+other agent, relay, capture or broker images than that stack lock; it records
+the implementation commit and the five image IDs, with the backend image ID and
+profile from the stack lock, in every session's acceptance and terminal
+records, so a run is matched to the release that served it by its own record
+rather than by when it ran.
 
 Pinning is not a claim that the upstream dependency graph has no security debt. The
 Qwen `npm ci` build currently reports 68 audit advisories (3 low, 35 moderate, 27
@@ -1200,9 +1206,10 @@ chosen backend, not a correctness property of this service.
 Acceptance requires the streamed bytes to equal the declared count and SHA-256
 exactly, so a reset or truncation can never masquerade as success; replaying
 the identical receipt is a pure lookup, and every session read echoes the
-accepted archive commitment. There is no waiting endpoint: the operation never
-belongs to a connection, and callers poll the monotonic `progress_revision` /
-`progress_events` on the ordinary session read. The prompt cap is `M`, one
+accepted archive commitment and the release that accepted the session. There
+is no waiting endpoint: the operation never belongs to a connection, and
+callers poll the monotonic `progress_revision` / `progress_events` on the
+ordinary session read. The prompt cap is `M`, one
 inline block, 32,768 bytes at the served window: a submitted prompt is retained
 verbatim in every post-compaction history for the life of the session, so it is
 held to the same magnitude as every other block placed inline, and material

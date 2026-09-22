@@ -9,6 +9,11 @@ pub struct Fixture {
     pub agent_image: String,
     pub relay_image: String,
     pub capture_image: String,
+    pub broker_image: String,
+    pub service_image: String,
+    /// The commit the candidate service image was built from, as its
+    /// `agent_service.source.commit` label names it.
+    pub implementation_commit: String,
     pub session_ids: Vec<String>,
 }
 

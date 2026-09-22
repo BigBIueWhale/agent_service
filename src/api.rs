@@ -3092,6 +3092,7 @@ mod tests {
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            release: crate::config::test_release_identity(),
             prompt_preview: "fixture".to_string(),
             progress_revision: 1,
             progress_at_unix_ms: 1,
@@ -3296,6 +3297,7 @@ mod tests {
             agent_image: lock.agent.image_tag.clone(),
             vllm_model_name: lock.backend.served_model.clone(),
             vllm_endpoint: lock.backend.endpoint.clone(),
+            release: crate::config::test_release_identity(),
             lock,
         }
     }

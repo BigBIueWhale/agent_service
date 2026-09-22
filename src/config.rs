@@ -9,7 +9,8 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::error::{ServiceError, ServiceResult};
 
@@ -117,6 +118,8 @@ const _: () = assert!(
 #[derive(Clone, Debug)]
 pub struct Config {
     pub lock: StackLock,
+    /// The release this process is, as every session it accepts records it.
+    pub release: ReleaseIdentity,
     pub listen_addr: SocketAddr,
     pub state_dir: PathBuf,
     pub results_dir: PathBuf,
@@ -125,6 +128,60 @@ pub struct Config {
     pub agent_image: String,
     pub vllm_model_name: String,
     pub vllm_endpoint: String,
+}
+
+/// The release a session ran under, recorded in its acceptance and terminal
+/// records so that two runs can be compared by what served them rather than
+/// matched to a release by when they ran.
+///
+/// Every value is read from a lock this service validates, never typed here:
+/// the implementation commit and every component image from the release lock,
+/// which must name the stack lock compiled into this binary, and the backend
+/// image and profile from that stack lock.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseIdentity {
+    pub implementation_commit: String,
+    pub images: ReleaseImages,
+    pub backend: BackendIdentity,
+}
+
+/// Every service component image of the release, as the release lock pins it.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ReleaseImages {
+    pub agent: String,
+    pub relay: String,
+    pub capture: String,
+    pub broker: String,
+    pub service: String,
+}
+
+/// The backend image the service is locked to, and its profile label.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct BackendIdentity {
+    pub image_id: String,
+    pub profile: String,
+}
+
+/// `config/release.lock.json`, exactly as `scripts/common.sh` validates it.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReleaseLock {
+    schema_version: u32,
+    profile: String,
+    implementation_commit: String,
+    build_inputs_manifest_sha256: String,
+    stack_lock_sha256: String,
+    archive: Option<ReleaseArchive>,
+    images: ReleaseImages,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReleaseArchive {
+    sha256: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -483,6 +540,14 @@ impl Config {
         })?;
         validate_lock(&lock)?;
 
+        let release_lock_path = "/home/user/Desktop/agent_service/config/release.lock.json";
+        let release_lock = std::fs::read_to_string(release_lock_path).map_err(|error| {
+            ServiceError::Internal(format!(
+                "cannot read the mounted release lock at {release_lock_path}: {error}"
+            ))
+        })?;
+        let release = release_identity(&lock, STACK_LOCK_JSON, &release_lock)?;
+
         let listen_addr: SocketAddr = lock.service.listen.parse().map_err(|e| {
             ServiceError::Internal(format!(
                 "stack lock service.listen {:?} is not a socket address: {e}",
@@ -496,6 +561,7 @@ impl Config {
         }
 
         Ok(Self {
+            release,
             listen_addr,
             state_dir: PathBuf::from(&lock.service.state_dir),
             results_dir: PathBuf::from(&lock.service.results_dir),
@@ -522,6 +588,121 @@ fn reject_legacy_overrides() -> ServiceResult<()> {
         )));
     }
     Ok(())
+}
+
+/// The identity unit tests record: this binary's compiled stack lock, with a
+/// fixed commit and service image, since no release lock describes a test
+/// build.
+#[cfg(test)]
+pub(crate) fn test_release_identity() -> ReleaseIdentity {
+    let lock: StackLock =
+        serde_json::from_str(STACK_LOCK_JSON).expect("compiled stack lock must parse");
+    ReleaseIdentity {
+        implementation_commit: "0".repeat(40),
+        images: ReleaseImages {
+            agent: lock.agent.image_id,
+            relay: lock.relay.image_id,
+            capture: lock.capture.image_id,
+            broker: lock.broker.image_id,
+            service: format!("sha256:{}", "0".repeat(64)),
+        },
+        backend: BackendIdentity {
+            image_id: lock.backend.image_id,
+            profile: lock.backend.profile_label,
+        },
+    }
+}
+
+/// The release identity a session records, read from the mounted release lock
+/// and validated against the stack lock this binary was built with.
+///
+/// The release lock names the stack lock by its hash and pins the agent,
+/// relay, capture and broker images the stack lock also pins, so a release
+/// lock that does not describe this binary's stack lock is refused rather than
+/// recorded: a session would otherwise name a release that did not serve it.
+/// The service image and the implementation commit exist only in the release
+/// lock, which `start.sh` checks against the image it starts before this
+/// process runs.
+fn release_identity(
+    lock: &StackLock,
+    stack_lock_json: &str,
+    release_lock_json: &str,
+) -> ServiceResult<ReleaseIdentity> {
+    let fail = |message: String| {
+        Err(ServiceError::Internal(format!(
+            "release lock: {message}; the release lock must describe the stack lock this service was built with, so cut the release again with ./release.sh"
+        )))
+    };
+    let release: ReleaseLock = match serde_json::from_str(release_lock_json) {
+        Ok(release) => release,
+        Err(error) => return fail(format!("does not match its exact schema: {error}")),
+    };
+    let image_id = |value: &str| {
+        value.len() == 71
+            && value.starts_with("sha256:")
+            && is_sha256(&value["sha256:".len()..])
+    };
+    if release.schema_version != 1 || release.profile != lock.profile {
+        return fail(format!(
+            "schema {} profile {:?} is not schema 1 of profile {:?}",
+            release.schema_version, release.profile, lock.profile
+        ));
+    }
+    if release.implementation_commit.len() != 40
+        || !release
+            .implementation_commit
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        || !is_sha256(&release.build_inputs_manifest_sha256)
+        || !is_sha256(&release.stack_lock_sha256)
+        || !release
+            .archive
+            .as_ref()
+            .is_none_or(|archive| is_sha256(&archive.sha256))
+        || ![
+            &release.images.agent,
+            &release.images.relay,
+            &release.images.capture,
+            &release.images.broker,
+            &release.images.service,
+        ]
+        .into_iter()
+        .all(|image| image_id(image))
+    {
+        return fail(
+            "a commit, digest or image ID is not in its exact lowercase hexadecimal form".into(),
+        );
+    }
+    let compiled = Sha256::digest(stack_lock_json.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    if release.stack_lock_sha256 != compiled {
+        return fail(format!(
+            "names stack lock {} but this service was built with {compiled}",
+            release.stack_lock_sha256
+        ));
+    }
+    for (component, released, locked) in [
+        ("agent", &release.images.agent, &lock.agent.image_id),
+        ("relay", &release.images.relay, &lock.relay.image_id),
+        ("capture", &release.images.capture, &lock.capture.image_id),
+        ("broker", &release.images.broker, &lock.broker.image_id),
+    ] {
+        if released != locked {
+            return fail(format!(
+                "pins the {component} image {released} but the stack lock pins {locked}"
+            ));
+        }
+    }
+    Ok(ReleaseIdentity {
+        implementation_commit: release.implementation_commit,
+        images: release.images,
+        backend: BackendIdentity {
+            image_id: lock.backend.image_id.clone(),
+            profile: lock.backend.profile_label.clone(),
+        },
+    })
 }
 
 fn is_sha256(value: &str) -> bool {
@@ -1496,5 +1677,90 @@ mod tests {
                 .contains("compiled broker policy disagrees with the stack lock for duplicated field(s): relay.image_id"),
             "unexpected validation error: {error}"
         );
+    }
+
+    /// A release lock that describes the compiled stack lock, as a converged
+    /// release leaves it. The checked-in release lock describes the last
+    /// release, not every commit, so the pair is built here.
+    fn describing_release_lock() -> serde_json::Value {
+        use sha2::{Digest, Sha256};
+        let lock = checked_in_lock();
+        serde_json::json!({
+            "schema_version": 1,
+            "profile": lock.profile,
+            "implementation_commit": "0123456789abcdef0123456789abcdef01234567",
+            "build_inputs_manifest_sha256": "a".repeat(64),
+            "stack_lock_sha256": Sha256::digest(STACK_LOCK_JSON.as_bytes())
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>(),
+            "archive": {"sha256": "b".repeat(64)},
+            "images": {
+                "agent": lock.agent.image_id,
+                "relay": lock.relay.image_id,
+                "capture": lock.capture.image_id,
+                "broker": lock.broker.image_id,
+                "service": format!("sha256:{}", "c".repeat(64)),
+            },
+        })
+    }
+
+    fn identity_of(release: &serde_json::Value) -> Result<super::ReleaseIdentity, String> {
+        super::release_identity(&checked_in_lock(), STACK_LOCK_JSON, &release.to_string())
+            .map_err(|error| error.to_string())
+    }
+
+    #[test]
+    fn records_the_release_its_locks_name() {
+        let lock = checked_in_lock();
+        let release = describing_release_lock();
+        let identity = identity_of(&release).expect("a release lock describing this stack lock is accepted");
+        assert_eq!(
+            identity,
+            super::ReleaseIdentity {
+                implementation_commit: "0123456789abcdef0123456789abcdef01234567".into(),
+                images: super::ReleaseImages {
+                    agent: lock.agent.image_id.clone(),
+                    relay: lock.relay.image_id.clone(),
+                    capture: lock.capture.image_id.clone(),
+                    broker: lock.broker.image_id.clone(),
+                    service: format!("sha256:{}", "c".repeat(64)),
+                },
+                backend: super::BackendIdentity {
+                    image_id: lock.backend.image_id.clone(),
+                    profile: lock.backend.profile_label.clone(),
+                },
+            }
+        );
+        // A release cut before its archive is bundled is the same schema.
+        let mut unbundled = release;
+        unbundled["archive"] = serde_json::Value::Null;
+        identity_of(&unbundled).expect("an unbundled release lock is still a release lock");
+    }
+
+    #[test]
+    fn refuses_a_release_lock_that_does_not_describe_this_service() {
+        let cases: [(&str, fn(&mut serde_json::Value)); 10] = [
+            ("names another stack lock", |r| r["stack_lock_sha256"] = serde_json::json!("d".repeat(64))),
+            ("pins another agent", |r| r["images"]["agent"] = serde_json::json!(format!("sha256:{}", "e".repeat(64)))),
+            ("pins another relay", |r| r["images"]["relay"] = serde_json::json!(format!("sha256:{}", "e".repeat(64)))),
+            ("pins another capture", |r| r["images"]["capture"] = serde_json::json!(format!("sha256:{}", "e".repeat(64)))),
+            ("pins another broker", |r| r["images"]["broker"] = serde_json::json!(format!("sha256:{}", "e".repeat(64)))),
+            ("carries a short commit", |r| r["implementation_commit"] = serde_json::json!("0123456")),
+            ("carries a malformed service image", |r| r["images"]["service"] = serde_json::json!("service:latest")),
+            ("carries an unknown field", |r| r["notes"] = serde_json::json!("x")),
+            ("lacks a field", |r| { r.as_object_mut().unwrap().remove("images"); }),
+            ("is another schema", |r| r["schema_version"] = serde_json::json!(2)),
+        ];
+        for (name, mutate) in cases {
+            let mut release = describing_release_lock();
+            mutate(&mut release);
+            let error = identity_of(&release).expect_err(name);
+            assert!(
+                error.starts_with("internal: release lock: ")
+                    && error.ends_with("so cut the release again with ./release.sh"),
+                "{name}: the refusal must name the lock and the next action: {error}"
+            );
+        }
     }
 }

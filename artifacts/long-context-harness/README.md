@@ -80,9 +80,11 @@ across it are not comparable with anything recorded here.
 Each run is a session submitted to the production service with the corpus as its
 workspace and the matching prompt file. The service accepts submissions on loopback only,
 so a run is launched on the machine where the service is deployed. Its session record
-carries the turn budget it ran under, and the release identity is recorded beside it —
-the same identity a suite run records, for the same reason: a result whose conditions
-are not recorded cannot be compared with another.
+carries the turn budget and the release it ran under: the implementation commit, the five
+service image IDs, and the backend image ID and profile, which the service reads at
+startup from the release and stack locks it validates. A suite run records its release
+for the same reason: a result whose conditions are not recorded cannot be compared with
+another.
 
 ## How a run is judged
 

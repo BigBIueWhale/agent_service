@@ -36,6 +36,24 @@ async fn final_image_service() {
     });
     let mut lock: crate::config::StackLock =
         serde_json::from_str(crate::config::STACK_LOCK_JSON).unwrap();
+    // The release a converged release lock would name for these candidates:
+    // the gate runs before any such lock exists, so the harness supplies the
+    // candidate images and the commit the candidate service image was built
+    // from.
+    let release = crate::config::ReleaseIdentity {
+        implementation_commit: fixture.implementation_commit.clone(),
+        images: crate::config::ReleaseImages {
+            agent: fixture.agent_image.clone(),
+            relay: fixture.relay_image.clone(),
+            capture: fixture.capture_image.clone(),
+            broker: fixture.broker_image.clone(),
+            service: fixture.service_image.clone(),
+        },
+        backend: crate::config::BackendIdentity {
+            image_id: lock.backend.image_id.clone(),
+            profile: lock.backend.profile_label.clone(),
+        },
+    };
     lock.service.runtime_root = fixture.root.to_str().unwrap().into();
     lock.service.state_dir = fixture.root.join("state").to_str().unwrap().into();
     lock.service.results_dir = fixture.root.join("results").to_str().unwrap().into();
@@ -58,6 +76,7 @@ async fn final_image_service() {
         agent_image: lock.agent.image_tag.clone(),
         vllm_model_name: lock.backend.served_model.clone(),
         vllm_endpoint: lock.backend.endpoint.clone(),
+        release,
         lock,
     });
     crate::init_tracing().unwrap();

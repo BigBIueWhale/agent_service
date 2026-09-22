@@ -106,6 +106,12 @@ pub struct SessionBody {
     /// finished session can tell what bound it actually ran under instead of
     /// inferring it from the deployment's current default.
     pub max_session_turns: u32,
+    /// The release that accepted this session: its implementation commit,
+    /// every component image and the backend it is locked to. Carried
+    /// through every state from the acceptance record, so two sessions are
+    /// compared by what served them rather than matched to a release by
+    /// when they ran.
+    pub release: crate::config::ReleaseIdentity,
     /// Byte count and SHA-256 of the exact workspace archive the caller
     /// streamed over the connection for this session. Carried through every
     /// state so any later reader can re-verify which workspace bytes this
@@ -352,6 +358,7 @@ pub struct RunningSnapshot {
     pub model: String,
     pub context_window: u64,
     pub max_session_turns: u32,
+    pub release: crate::config::ReleaseIdentity,
     pub archive_bytes: u64,
     pub archive_sha256: String,
 }
@@ -362,9 +369,10 @@ pub struct RunningSnapshot {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
-    /// Version 2 records the streamed-archive commitment and is the only
-    /// version this service writes. Terminal reads cross-check the record
-    /// against the published terminal body.
+    /// Version 3 records the streamed-archive commitment and the release
+    /// that accepted the session, and is the only version this service
+    /// writes. Terminal reads cross-check the record against the published
+    /// terminal body.
     pub schema_version: u32,
     pub session_id: String,
     pub accepted_at_unix: u64,
@@ -372,18 +380,25 @@ pub struct AcceptanceRecord {
     pub archive_sha256: String,
     pub prompt: String,
     pub max_session_turns: u32,
+    pub release: crate::config::ReleaseIdentity,
 }
 
 impl AcceptanceRecord {
-    fn from_request(session_id: &str, accepted_at_unix: u64, req: &ValidatedRequest) -> Self {
+    fn from_request(
+        session_id: &str,
+        accepted_at_unix: u64,
+        req: &ValidatedRequest,
+        release: &crate::config::ReleaseIdentity,
+    ) -> Self {
         Self {
-            schema_version: 2,
+            schema_version: 3,
             session_id: session_id.to_string(),
             accepted_at_unix,
             archive_bytes: req.archive.bytes,
             archive_sha256: req.archive.sha256.clone(),
             prompt: req.prompt.clone(),
             max_session_turns: req.max_session_turns,
+            release: release.clone(),
         }
     }
 
@@ -394,7 +409,7 @@ impl AcceptanceRecord {
         archive_sha256: &str,
         max_session_turns: u32,
     ) -> bool {
-        self.schema_version == 2
+        self.schema_version == 3
             && self.archive_bytes == archive_bytes
             && self.archive_sha256 == archive_sha256
             && self.prompt == prompt
@@ -1361,6 +1376,8 @@ impl Manager {
         let session_cancel = self.shutdown_token.child_token();
         let prompt_preview = preview(&req.prompt);
         let started_at_unix = unix_now();
+        let acceptance =
+            AcceptanceRecord::from_request(&session_id, started_at_unix, &req, &self.cfg.release);
         let snapshot = RunningSnapshot {
             session_id: session_id.clone(),
             started_at_unix,
@@ -1368,10 +1385,10 @@ impl Manager {
             model: self.cfg.vllm_model_name.clone(),
             context_window: self.cfg.lock.backend.max_model_len,
             max_session_turns: req.max_session_turns,
+            release: acceptance.release.clone(),
             archive_bytes: req.archive.bytes,
             archive_sha256: req.archive.sha256.clone(),
         };
-        let acceptance = AcceptanceRecord::from_request(&session_id, started_at_unix, &req);
         let paths = SessionPaths::new(&self.cfg.state_dir, &session_id);
 
         // Take the last asynchronous lock before publishing acceptance. From
@@ -2017,6 +2034,7 @@ fn running_body(
         model: s.model.clone(),
         context_window: s.context_window,
         max_session_turns: s.max_session_turns,
+        release: s.release.clone(),
         archive_bytes: s.archive_bytes,
         archive_sha256: s.archive_sha256.clone(),
         prompt_preview: s.prompt_preview.clone(),
@@ -2474,11 +2492,11 @@ fn read_acceptance_file(
     let record: AcceptanceRecord = serde_json::from_slice(&bytes).map_err(|error| {
         ServiceError::Internal(format!("{role} {} is malformed: {error}", path.display()))
     })?;
-    // Durable acceptance records were introduced together with the 256-bit
-    // caller-known-handle wire protocol, and that protocol has only ever
-    // written schema version 2. No version-1 record can legitimately exist
-    // on disk, so anything else here is drift, not compatibility.
-    if record.schema_version != 2 || record.session_id != session_id {
+    // Version 3 is the only version this service writes: version 2 lacked the
+    // release identity, and the service reads only the formats it writes, so
+    // an older record here is one startup names for the operator to move
+    // aside rather than one it translates.
+    if record.schema_version != 3 || record.session_id != session_id {
         return Err(ServiceError::Internal(format!(
             "{role} {} has identity/schema drift",
             path.display()
@@ -4151,6 +4169,7 @@ fn validate_terminal_resource(
     let acceptance = read_acceptance(&cfg.results_dir, session_id)?;
     if acceptance.accepted_at_unix != body.started_at_unix
         || acceptance.max_session_turns != body.max_session_turns
+        || acceptance.release != body.release
         || preview(&acceptance.prompt) != body.prompt_preview
     {
         return Err(ServiceError::Internal(format!(
@@ -4351,7 +4370,7 @@ mod tests {
             let paths = SessionPaths::new(&state, session_id);
             let archive = b"original archive";
             let acceptance = AcceptanceRecord {
-                schema_version: 2,
+                schema_version: 3,
                 session_id: session_id.into(),
                 accepted_at_unix: 1,
                 archive_bytes: archive.len() as u64,
@@ -4361,6 +4380,7 @@ mod tests {
                     .collect(),
                 prompt: "retained request".into(),
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                release: crate::config::test_release_identity(),
             };
             paths.create_dirs().unwrap();
             paths.write_prompt(&acceptance.prompt).unwrap();
@@ -4458,6 +4478,7 @@ mod tests {
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            release: crate::config::test_release_identity(),
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
             prompt_preview: "fixture".to_string(),
@@ -4527,6 +4548,9 @@ mod tests {
             serde_json::json!("s-2222222222222222222222222222222222222222222222222222222222222222");
         let mut running = original.clone();
         running["status"] = serde_json::json!("running");
+        // What every release before this one wrote: no release identity.
+        let mut unidentified = original.clone();
+        unidentified.as_object_mut().unwrap().remove("release");
         let mut contradictory = original;
         contradictory["observed_output_tokens"] = serde_json::json!(0);
         contradictory["observed_reasoning_tokens"] = serde_json::json!(1);
@@ -4558,6 +4582,11 @@ mod tests {
                 "identity/status mismatch",
             ),
             (
+                "no release identity",
+                serde_json::to_vec(&unidentified).unwrap(),
+                "missing field `release`",
+            ),
+            (
                 "semantic contradiction",
                 serde_json::to_vec(&contradictory).unwrap(),
                 "reasoning tokens exceed",
@@ -4581,19 +4610,24 @@ mod tests {
         let session_id = "s-5757575757575757575757575757575757575757575757575757575757575757";
         std::fs::create_dir_all(results.join(session_id)).expect("create acceptance directory");
         let current = AcceptanceRecord {
-            schema_version: 2,
+            schema_version: 3,
             session_id: session_id.to_string(),
             accepted_at_unix: 1,
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
             prompt: "strict acceptance fixture".to_string(),
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            release: crate::config::test_release_identity(),
         };
         let encoded = serde_json::to_value(&current).unwrap();
         let mut unknown = encoded.clone();
         unknown["preserve_thinking"] = serde_json::json!(false);
         let mut missing = encoded.clone();
         missing.as_object_mut().unwrap().remove("max_session_turns");
+        // A version-2 record, as every release before this one wrote.
+        let mut unidentified = encoded.clone();
+        unidentified.as_object_mut().unwrap().remove("release");
+        unidentified["schema_version"] = serde_json::json!(2);
         let path = results.join(session_id).join("accepted.json");
         for (case, record, expected) in [
             ("current", encoded, None),
@@ -4606,6 +4640,11 @@ mod tests {
                 "missing field",
                 missing,
                 Some("missing field `max_session_turns`"),
+            ),
+            (
+                "no release identity",
+                unidentified,
+                Some("missing field `release`"),
             ),
         ] {
             match std::fs::remove_file(&path) {
@@ -4666,13 +4705,14 @@ mod tests {
         terminal.progress_phase = latest.phase;
         terminal.progress_message = latest.message.clone();
         let acceptance = AcceptanceRecord {
-            schema_version: 2,
+            schema_version: 3,
             session_id: current_id.to_string(),
             accepted_at_unix: terminal.started_at_unix,
             archive_bytes: terminal.archive_bytes,
             archive_sha256: terminal.archive_sha256.clone(),
             prompt: terminal.prompt_preview.clone(),
             max_session_turns: terminal.max_session_turns,
+            release: crate::config::test_release_identity(),
         };
         private_write(
             &current_dir.join("accepted.json"),
@@ -4698,16 +4738,25 @@ mod tests {
         std::fs::create_dir(&legacy_dir).expect("create legacy result directory");
         std::fs::set_permissions(&legacy_dir, std::fs::Permissions::from_mode(0o755))
             .expect("chmod legacy result directory");
+        // It recorded no release identity either, as every release before
+        // this one wrote.
         let mut legacy_terminal = serde_json::to_value(body(legacy_id)).unwrap();
         let object = legacy_terminal.as_object_mut().unwrap();
         let ending = object.remove("terminal").unwrap();
         object.extend(ending.as_object().unwrap().clone());
+        object.remove("release").expect("the fixture body records a release");
         let mut legacy_acceptance = serde_json::to_value(AcceptanceRecord {
             session_id: legacy_id.to_string(),
             ..acceptance.clone()
         })
         .unwrap();
         legacy_acceptance["preserve_thinking"] = serde_json::json!(false);
+        legacy_acceptance["schema_version"] = serde_json::json!(2);
+        legacy_acceptance
+            .as_object_mut()
+            .unwrap()
+            .remove("release")
+            .expect("the fixture acceptance records a release");
         private_write(
             &legacy_dir.join("finished.json"),
             &serde_json::to_vec_pretty(&legacy_terminal).unwrap(),
@@ -4893,6 +4942,7 @@ mod tests {
             model: "fixture".into(),
             context_window: 262_144,
             max_session_turns: 100,
+            release: crate::config::test_release_identity(),
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
         };
@@ -5114,6 +5164,7 @@ mod tests {
             agent_image: lock.agent.image_tag.clone(),
             vllm_model_name: lock.backend.served_model.clone(),
             vllm_endpoint: lock.backend.endpoint.clone(),
+            release: crate::config::test_release_identity(),
             lock,
         }
     }
@@ -5150,17 +5201,19 @@ mod tests {
                 model: cfg.vllm_model_name.clone(),
                 context_window: 262_144,
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                release: crate::config::test_release_identity(),
                 archive_bytes: 22,
                 archive_sha256: "0".repeat(64),
             },
             acceptance: AcceptanceRecord {
-                schema_version: 2,
+                schema_version: 3,
                 session_id: session_id.clone(),
                 accepted_at_unix: 1,
                 archive_bytes: 22,
                 archive_sha256: "0".repeat(64),
                 prompt: "running-read deadlock regression fixture".to_string(),
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                release: crate::config::test_release_identity(),
             },
             progress,
             cancel: tokio_util::sync::CancellationToken::new(),
@@ -5190,7 +5243,7 @@ mod tests {
     /// pinned acceptance records to schema version 1 while the wire protocol
     /// has only ever written version 2.
     #[tokio::test]
-    async fn current_handle_terminal_read_accepts_persistent_v2_acceptance() {
+    async fn current_handle_terminal_read_accepts_persistent_v3_acceptance() {
         let tree = TestTree::new("current-terminal-read");
         let state = tree.0.join("state");
         let results = tree.0.join("results");
@@ -5219,13 +5272,14 @@ mod tests {
         terminal.progress_phase = latest.phase;
         terminal.progress_message = latest.message.clone();
         let acceptance = AcceptanceRecord {
-            schema_version: 2,
+            schema_version: 3,
             session_id: session_id.to_string(),
             accepted_at_unix: terminal.started_at_unix,
             archive_bytes: 22,
             archive_sha256: "3".repeat(64),
             prompt: terminal.prompt_preview.clone(),
             max_session_turns: terminal.max_session_turns,
+            release: crate::config::test_release_identity(),
         };
         private_write(
             &result_dir.join("accepted.json"),
@@ -5251,15 +5305,43 @@ mod tests {
         let cfg = test_config(state, results.clone());
         let recovered = read_terminal(&cfg, session_id)
             .await
-            .expect("terminal read must accept the persistent schema-2 acceptance record");
+            .expect("terminal read must accept the persistent schema-3 acceptance record");
         assert_eq!(recovered.session_id, session_id);
         assert_eq!(recovered.status, SessionStatus::Completed);
+        assert_eq!(recovered.release, acceptance.release);
 
-        // No version-1 acceptance record can legitimately exist on disk, so
-        // the strict reader must reject one instead of trusting it.
+        // A terminal that names another release than the one that accepted
+        // the session contradicts its acceptance, and is refused.
+        let mut other = terminal.clone();
+        other.release.implementation_commit = "f".repeat(40);
+        std::fs::remove_file(result_dir.join("finished.json")).expect("remove terminal fixture");
+        private_write(
+            &result_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&other).expect("serialize other-release terminal"),
+        );
+        make_service_owned(&result_dir.join("finished.json"));
+        let error = read_terminal(&cfg, session_id)
+            .await
+            .expect_err("a terminal naming another release must be refused");
+        assert!(
+            error
+                .to_string()
+                .contains("terminal fields contradict the durable acceptance record"),
+            "unexpected rejection: {error}"
+        );
+        std::fs::remove_file(result_dir.join("finished.json")).expect("remove other-release fixture");
+        private_write(
+            &result_dir.join("finished.json"),
+            &serde_json::to_vec_pretty(&terminal).expect("serialize terminal fixture"),
+        );
+        make_service_owned(&result_dir.join("finished.json"));
+
+        // Version 2 lacked the release identity and version 1 never reached
+        // disk; the strict reader refuses an older version instead of
+        // trusting it.
         let mut downgraded = acceptance;
-        downgraded.schema_version = 1;
-        std::fs::remove_file(result_dir.join("accepted.json")).expect("remove schema-2 fixture");
+        downgraded.schema_version = 2;
+        std::fs::remove_file(result_dir.join("accepted.json")).expect("remove schema-3 fixture");
         private_write(
             &result_dir.join("accepted.json"),
             &serde_json::to_vec_pretty(&downgraded).expect("serialize downgraded fixture"),
@@ -5267,7 +5349,7 @@ mod tests {
         make_service_owned(&result_dir.join("accepted.json"));
         let error = read_terminal(&cfg, session_id)
             .await
-            .expect_err("schema-version-1 acceptance record must be rejected");
+            .expect_err("schema-version-2 acceptance record must be rejected");
         assert!(
             error.to_string().contains("identity/schema drift"),
             "unexpected rejection: {error}"
@@ -5579,13 +5661,14 @@ mod tests {
             let session_id = "s-6767676767676767676767676767676767676767676767676767676767676767";
             let paths = SessionPaths::new(&state, session_id);
             let acceptance = AcceptanceRecord {
-                schema_version: 2,
+                schema_version: 3,
                 session_id: session_id.to_string(),
                 accepted_at_unix: 1,
                 archive_bytes: 24,
                 archive_sha256: "2".repeat(64),
                 prompt: "restart terminal fixture".to_string(),
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                release: crate::config::test_release_identity(),
             };
             let spool_dir = tree.0.join("spool-fixture");
             std::fs::create_dir(&spool_dir).expect("create spool fixture dir");
