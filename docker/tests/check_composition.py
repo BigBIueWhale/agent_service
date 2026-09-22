@@ -675,7 +675,7 @@ print(json.dumps(found))
             return self.removal_fault(service, route)
         body = self.wait_terminal(service, route)
         end = body["terminal"]
-        require(body["status"] == "completed" and end["container_exit_code"] == end["agent_exit_code"] == 0,
+        require(body["status"] == "ended" and end["container_exit_code"] == end["agent_exit_code"] == 0,
                 f"execution failed: {end}")
         require(end["is_process_error"] is False and end["teardown_diagnostics"] == [], "process/teardown failed")
         require(end["response"] == "COMPOSITION_OK " + self.nonce and end["agent_result"] is not None,
@@ -800,7 +800,7 @@ print(json.dumps(found))
             save(self.root / "control/release-observation", b"true quiescence observed only by the fault harness\n")
         body = self.wait_terminal(service, route)
         end = body["terminal"]
-        require(body["status"] == "completed" and end["container_exit_code"] == end["agent_exit_code"] == 0 and
+        require(body["status"] == "ended" and end["container_exit_code"] == end["agent_exit_code"] == 0 and
                 end["is_process_error"] is True and end["agent_result"]["agent_result_subtype"] == "success" and
                 end["raw_session_tree_retained"] is True, "teardown failure lost independent result or retained-state obligation")
         require(end["response"] == "COMPOSITION_OK " + self.nonce,
@@ -939,7 +939,7 @@ print(json.dumps(found))
     def terminal_recovery(self, service, route):
         body = self.wait_terminal(service, route)
         end = body["terminal"]
-        require(body["status"] == "completed" and end["container_exit_code"] == end["agent_exit_code"] == 0 and
+        require(body["status"] == "ended" and end["container_exit_code"] == end["agent_exit_code"] == 0 and
                 end["is_process_error"] is True and end["agent_result"]["agent_result_subtype"] == "success" and
                 any("terminal persistence failed; body retained only in service memory" in detail
                     for detail in end["teardown_diagnostics"]), "live owner did not retain the actual publication failure")
@@ -1140,7 +1140,7 @@ print(json.dumps(found))
         body = self.wait_terminal(service, route)
         end = body["terminal"]
         cancelled = self.case == "capture_proof_held_cancel"
-        require(body["status"] == ("cancelled" if cancelled else "completed") and
+        require(body["status"] == ("cancelled" if cancelled else "ended") and
                 end["container_exit_code"] == end["agent_exit_code"] == (None if lost_wait else 0),
                 "observation fault invented or lost the actual lifecycle facts")
         require(end["is_process_error"] is (not cancelled), "observation fault has wrong process outcome")
@@ -1205,7 +1205,7 @@ print(json.dumps(found))
         # The run recorded error_during_execution and exited 1, the code the
         # contract's terminal table gives it: the process agrees with its
         # record, so the failure is the record's, not a process error.
-        require(body["status"] == "completed" and end["is_process_error"] is False and
+        require(body["status"] == "ended" and end["is_process_error"] is False and
                 end["container_exit_code"] == end["agent_exit_code"] == 1,
                 "provider failure did not stop the actual invocation")
         require(self.stub.generations == 1 and not self.stub.failures,

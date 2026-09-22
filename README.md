@@ -731,7 +731,7 @@ The table also names `error_timeout`, which no session ends in: only a subagent
 scope does, when the working time a subagent definition allows it runs out, and a
 scope's record carries no exit code. The definitions are the built-in ones, so
 that working time is the deployment's to set and no definition here sets one; a
-definition offered by the workspace is named and not used. A completed
+definition offered by the workspace is named and not used. An ended
 session's process error is exactly an exit that disagrees with the subtype its
 certified record carries (a cancelled session's exit is the cancellation's, and
 is not compared), so the service reports an ending the run recorded and exited
@@ -1259,8 +1259,8 @@ were written, nobody moves them, and the new release starts on an empty subtree
 rather than on records it would have to refuse. Inside the current subtree the
 rule is unchanged — a record this release cannot read stops startup before it
 adopts the directory. Startup removes only labelled orphan containers, abandoned
-staging trees, and incomplete result directories. It never prunes completed
-sessions by age or count.
+staging trees, and incomplete result directories. It never prunes ended or
+cancelled sessions by age or count.
 
 ## HTTP API
 

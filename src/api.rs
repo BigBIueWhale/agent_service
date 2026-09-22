@@ -3,7 +3,8 @@
 //! Resource: a `session`, with explicit lifecycle and idempotent verbs.
 //! All session-related endpoints share one wire body
 //! (`runtime::SessionBody`), discriminated by a `status` field with values
-//! `running` | `completed` | `cancelled`. Required-field discipline:
+//! `running` | `ended` | `cancelled`: where the lifecycle stands, never how
+//! the run turned out, which the terminal object names. Required-field discipline:
 //! live observations accompany running sessions; terminal evidence exists only
 //! inside the terminal object once an ending is established.
 //!
@@ -3090,7 +3091,7 @@ mod tests {
     fn terminal(session_id: &str, raw_retained: bool) -> SessionBody {
         SessionBody {
             session_id: session_id.to_string(),
-            status: SessionStatus::Completed,
+            status: SessionStatus::Ended,
             started_at_unix: 1,
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,

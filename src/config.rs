@@ -128,7 +128,7 @@ const _: () = assert!(
 /// anything to start the new one. Inside the current subtree the rule is
 /// unchanged: a record this release cannot read stops it before it adopts the
 /// directory.
-pub const RESULT_RECORD_SCHEMA: u32 = 4;
+pub const RESULT_RECORD_SCHEMA: u32 = 5;
 
 #[derive(Clone, Debug)]
 pub struct Config {

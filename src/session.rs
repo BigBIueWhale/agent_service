@@ -227,7 +227,7 @@ pub async fn run_one(
                 cfg,
                 paths,
                 error,
-                SessionStatus::Completed,
+                SessionStatus::Ended,
                 progress,
                 ProgressCounters::default(),
             )
@@ -287,7 +287,7 @@ pub async fn run_one(
                 if cancel.is_cancelled() {
                     SessionStatus::Cancelled
                 } else {
-                    SessionStatus::Completed
+                    SessionStatus::Ended
                 },
                 progress,
                 ProgressCounters::default(),
@@ -305,7 +305,7 @@ pub async fn run_one(
                 if cancel.is_cancelled() {
                     SessionStatus::Cancelled
                 } else {
-                    SessionStatus::Completed
+                    SessionStatus::Ended
                 },
                 progress,
                 ProgressCounters::default(),
@@ -325,7 +325,7 @@ pub async fn run_one(
             ServiceError::Staging(format!(
                 "remove consumed workspace archive after extraction: {error}"
             )),
-            SessionStatus::Completed,
+            SessionStatus::Ended,
             progress,
             ProgressCounters {
                 staged_bytes: staged.copied_bytes,
@@ -357,7 +357,7 @@ pub async fn run_one(
             cfg,
             paths,
             error,
-            SessionStatus::Completed,
+            SessionStatus::Ended,
             progress,
             staged_counters,
         )
@@ -377,7 +377,7 @@ pub async fn run_one(
                 cfg,
                 paths,
                 error,
-                SessionStatus::Completed,
+                SessionStatus::Ended,
                 progress,
                 staged_counters,
             )
@@ -411,7 +411,7 @@ pub async fn run_one(
             cfg,
             paths,
             error,
-            SessionStatus::Completed,
+            SessionStatus::Ended,
             progress,
             staged_counters,
         )
@@ -444,7 +444,7 @@ pub async fn run_one(
                 cfg,
                 paths,
                 error,
-                SessionStatus::Completed,
+                SessionStatus::Ended,
                 Vec::new(),
                 progress,
                 staged_counters,
@@ -500,7 +500,7 @@ pub async fn run_one(
             cfg,
             paths,
             error,
-            SessionStatus::Completed,
+            SessionStatus::Ended,
             Vec::new(),
             progress,
             staged_counters,
@@ -546,7 +546,7 @@ pub async fn run_one(
             cfg,
             paths,
             setup_error,
-            SessionStatus::Completed,
+            SessionStatus::Ended,
             diagnostics,
             progress,
             staged_counters,
@@ -582,7 +582,7 @@ pub async fn run_one(
                 if cancel.is_cancelled() {
                     SessionStatus::Cancelled
                 } else {
-                    SessionStatus::Completed
+                    SessionStatus::Ended
                 },
                 Vec::new(),
                 progress,
@@ -605,7 +605,7 @@ pub async fn run_one(
             cfg,
             paths,
             error,
-            SessionStatus::Completed,
+            SessionStatus::Ended,
             Vec::new(),
             progress,
             staged_counters,
@@ -975,7 +975,7 @@ async fn wait_for_completion_or_cancel(
     tokio::pin!(wait);
     tokio::select! {
         result = &mut wait => match result {
-            Ok(code) => (SessionStatus::Completed, Some(code), diagnostics, true),
+            Ok(code) => (SessionStatus::Ended, Some(code), diagnostics, true),
             Err(error) => {
                 diagnostics.push(format!("docker wait failed: {error}"));
                 let producer_stopped = match docker_ops::stop_session(cfg, session_id).await {
@@ -990,7 +990,7 @@ async fn wait_for_completion_or_cancel(
                         false
                     }
                 };
-                (SessionStatus::Completed, None, diagnostics, producer_stopped)
+                (SessionStatus::Ended, None, diagnostics, producer_stopped)
             }
         },
         () = cancel.cancelled() => {
@@ -1043,7 +1043,7 @@ pub async fn recover_after_execution_panic(
     let status = if cancelled {
         SessionStatus::Cancelled
     } else {
-        SessionStatus::Completed
+        SessionStatus::Ended
     };
     let response = format!(
         "agent session execution terminated unexpectedly; no success was inferred: {join_error}"
@@ -1262,7 +1262,7 @@ pub async fn recover_after_service_restart(
     let status = if cancellation_was_durable {
         SessionStatus::Cancelled
     } else {
-        SessionStatus::Completed
+        SessionStatus::Ended
     };
     let response = if cancellation_was_durable {
         "the durable cancellation request survived a service restart; no successful agent result was inferred"
@@ -1955,7 +1955,7 @@ async fn finalize_setup_failure(
 /// it is, so it is a process error exactly when the exit disagrees with it. No
 /// certified record leaves nothing for an exit to agree with, which is a
 /// process error in itself. A cancelled session's exit is the cancellation's,
-/// so only a completed session's exit is compared.
+/// so only an ended session's exit is compared.
 fn process_outcome(
     status: SessionStatus,
     certified_subtype: Option<&str>,
@@ -1964,7 +1964,7 @@ fn process_outcome(
 ) -> (bool, Option<String>) {
     match certified_subtype {
         None => (true, None),
-        Some(subtype) if status == SessionStatus::Completed => {
+        Some(subtype) if status == SessionStatus::Ended => {
             match exit_disagreement(subtype, container_exit_code, agent_exit_code) {
                 Some(disagreement) => (true, Some(disagreement)),
                 None => (false, None),
@@ -1974,7 +1974,7 @@ fn process_outcome(
     }
 }
 
-/// Why a completed process's exit disagrees with the terminal record it wrote,
+/// Why an ended process's exit disagrees with the terminal record it wrote,
 /// or `None` when it agrees.
 ///
 /// A process error is exactly an exit that disagrees with the recorded
@@ -2188,23 +2188,23 @@ mod tests {
     #[test]
     fn a_finished_process_is_a_process_error_exactly_when_its_exit_disagrees_with_its_record() {
         use super::process_outcome;
-        use crate::runtime::SessionStatus::{Cancelled, Completed};
+        use crate::runtime::SessionStatus::{Cancelled, Ended};
         // A recorded failure that exited as the table says is the record's
         // failure, not the process's: the turn budget, and a run that failed
         // on its own terms alike.
         assert_eq!(
-            process_outcome(Completed, Some("error_max_turns"), Some(53), Some(53)),
+            process_outcome(Ended, Some("error_max_turns"), Some(53), Some(53)),
             (false, None)
         );
         assert_eq!(
-            process_outcome(Completed, Some("error_during_execution"), Some(1), Some(1)),
+            process_outcome(Ended, Some("error_during_execution"), Some(1), Some(1)),
             (false, None)
         );
         assert_eq!(
-            process_outcome(Completed, Some("success"), Some(0), Some(0)),
+            process_outcome(Ended, Some("success"), Some(0), Some(0)),
             (false, None)
         );
-        let (process_error, why) = process_outcome(Completed, Some("success"), Some(1), Some(1));
+        let (process_error, why) = process_outcome(Ended, Some("success"), Some(1), Some(1));
         assert!(process_error);
         assert_eq!(
             why.as_deref(),
@@ -2212,7 +2212,7 @@ mod tests {
         );
         // Nothing certified leaves nothing to agree with.
         assert_eq!(
-            process_outcome(Completed, None, Some(0), Some(0)),
+            process_outcome(Ended, None, Some(0), Some(0)),
             (true, None)
         );
         assert_eq!(

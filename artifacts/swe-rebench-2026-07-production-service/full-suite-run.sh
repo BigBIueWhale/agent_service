@@ -385,7 +385,7 @@ run_once() {
   local terminal="${run_dir}/terminal.json"
   poll_until_terminal "${session_id}" "${terminal}"
   jq -e --arg id "${session_id}" \
-    '.session_id == $id and .status == "completed" and
+    '.session_id == $id and .status == "ended" and
      .model == "qwen3.8-27b-nvfp4-k8v4" and .context_window == 262144 and
      .finished_at_unix > 0 and
      (.bundle_sha256 | test("^[0-9a-f]{64}$")) and .bundle_compressed_bytes > 0 and

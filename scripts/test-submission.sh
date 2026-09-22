@@ -140,7 +140,7 @@ submission_post_receipt "${RUNNING_ID}" "${RUNNING_REQUEST}" >/dev/null
 
 TERMINAL_REQUEST="$(submission_create_receipt "${TERMINAL_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
 readonly TERMINAL_REQUEST
-TEST_RESPONSE_STATUS='completed'
+TEST_RESPONSE_STATUS='ended'
 TEST_HTTP_STATUS=200
 TEST_EXPECTED_ID="${TERMINAL_ID}"
 submission_post_receipt "${TERMINAL_ID}" "${TERMINAL_REQUEST}" >/dev/null
@@ -201,7 +201,7 @@ done
 
 INVALID_REQUEST="$(submission_create_receipt "${INVALID_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
 readonly INVALID_REQUEST
-TEST_RESPONSE_STATUS='completed'
+TEST_RESPONSE_STATUS='ended'
 TEST_HTTP_STATUS=202
 TEST_EXPECTED_ID="${INVALID_ID}"
 if submission_post_receipt "${INVALID_ID}" "${INVALID_REQUEST}" >/dev/null 2>&1; then

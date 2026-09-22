@@ -248,7 +248,7 @@ submission_response_is_valid() {
   if [[ "${http_status}" == 202 ]]; then
     required_status='running'
   else
-    required_status='running|completed|cancelled'
+    required_status='running|ended|cancelled'
   fi
   local receipt_dir="${SUBMISSION_RECEIPT_ROOT}/${session_id}"
   local declared_bytes declared_sha

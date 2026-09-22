@@ -22,7 +22,7 @@ if type != "object" or (has("terminal") | not)
 elif .status == "running" then
   if .terminal == null and (observation_fields | all(uint)) and valid_observations then .
   else error("running resource must carry live observations and no terminal evidence") end
-elif .status == "completed" or .status == "cancelled" then
+elif .status == "ended" or .status == "cancelled" then
   if (.terminal | type) == "object" and valid_observations and certified_observations
      and (.terminal | has("agent_result") and has("bundle"))
      and (.terminal.is_process_error | type) == "boolean"

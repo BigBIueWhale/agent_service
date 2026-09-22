@@ -25,7 +25,7 @@ class SessionReaderTests(unittest.TestCase):
         running = {"status": "running", "terminal": None, **dict.fromkeys(OBSERVED, 0)}
         self.validate(running, True)
         terminal = {
-            "status": "completed", **dict.fromkeys(OBSERVED),
+            "status": "ended", **dict.fromkeys(OBSERVED),
             "terminal": {"agent_result": None, "bundle": None,
                          "is_process_error": True, "response": "",
                          "raw_session_tree_retained": False, "teardown_diagnostics": []},
@@ -52,7 +52,7 @@ class SessionReaderTests(unittest.TestCase):
         self.validate(terminal, False)
 
     def test_partial_observations_cannot_claim_a_complete_result(self):
-        body = {"status": "completed", **dict.fromkeys(OBSERVED, 0),
+        body = {"status": "ended", **dict.fromkeys(OBSERVED, 0),
                 "terminal": {"agent_result": {
                     "main_output_tokens": 0, "main_reasoning_tokens": 0,
                     "subagent_scopes": [], "subagent_scope_count": 0},
@@ -77,6 +77,21 @@ class SessionReaderTests(unittest.TestCase):
         result = subprocess.run(["jq", "-er", ".terminal.bundle.artifacts_file_count"],
                                 input=json.dumps(body), text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout.strip(), "0")
+
+    def test_status_names_the_lifecycle_and_never_a_success(self):
+        # An ended session carries its outcome in its terminal, an error as
+        # readily as a success; the status says only that it ended. The
+        # spelling that read as a success is not a status this reader knows.
+        ended = {"status": "ended", **dict.fromkeys(OBSERVED),
+                 "terminal": {"agent_result": None, "bundle": None,
+                              "is_process_error": False,
+                              "response": "Generation on turn 1 ended as MAX_TOKENS",
+                              "raw_session_tree_retained": False,
+                              "teardown_diagnostics": []}}
+        self.validate(ended, True)
+        retired = copy.deepcopy(ended)
+        retired["status"] = "completed"
+        self.validate(retired, False)
 
 
 if __name__ == "__main__":

@@ -78,12 +78,21 @@ const MAX_DELETE_INTENT_BYTES: u64 = 4096;
 const DELETE_INTENT_PREFIX: &str = ".delete-session-";
 const DELETE_INTENT_SUFFIX: &str = ".json";
 
-/// Wire status. Discriminator for the unioned `SessionBody` shape.
+/// Wire status: where the session's lifecycle stands, and the discriminator
+/// for the unioned `SessionBody` shape. It never says how the run turned out.
+/// `terminal.agent_result.agent_result_subtype` names that, and
+/// `terminal.is_process_error` whether the process and its evidence handling
+/// held; an ended session can carry any subtype, an error included.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
+    /// No ending exists yet.
     Running,
-    Completed,
+    /// The session's execution ended with no cancellation requested --
+    /// whatever its run did, success and every error alike. Its ending is in
+    /// `terminal`.
+    Ended,
+    /// The session ended after a durable cancellation request.
     Cancelled,
 }
 
@@ -370,12 +379,14 @@ pub struct RunningSnapshot {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
-    /// Version 4 records the streamed-archive commitment and the release
+    /// Version 5 records the streamed-archive commitment and the release
     /// that accepted the session, the backend's launch profile named as the
     /// launch profile, and is the only version this service writes; it is
     /// `RESULT_RECORD_SCHEMA`, which also names the subtree these records live
-    /// in. Terminal reads cross-check the record against the published
-    /// terminal body.
+    /// in. Its acceptance record is version 4's; what moved is the terminal
+    /// record beside it, whose status names a session that ended on its own
+    /// `ended` where version 4 wrote `completed`. Terminal reads cross-check
+    /// the record against the published terminal body.
     pub schema_version: u32,
     pub session_id: String,
     pub accepted_at_unix: u64,
@@ -1503,7 +1514,7 @@ impl Manager {
             {
                 let mut decision = entry_for_task.terminal_decision.lock().await;
                 if cancel_for_supervisor.is_cancelled()
-                    && body.status == SessionStatus::Completed
+                    && body.status == SessionStatus::Ended
                 {
                     body.status = SessionStatus::Cancelled;
                 }
@@ -1537,14 +1548,14 @@ impl Manager {
                     SessionStatus::Cancelled => {
                         "session cancellation is terminal; mandatory capture, teardown, and evidence handling are complete and the terminal record is ready for publication"
                     }
-                    SessionStatus::Completed if body.terminal().is_process_error => {
+                    SessionStatus::Ended if body.terminal().is_process_error => {
                         "session is terminal with a process or lifecycle error; evidence handling is complete and the terminal record is ready for publication"
                     }
                     // The process ended the way its terminal record says,
                     // which is not a claim that the run succeeded: the record
                     // names how it ended.
-                    SessionStatus::Completed => {
-                        "session completed as its terminal record says; durable evidence is complete and the terminal record is ready for publication"
+                    SessionStatus::Ended => {
+                        "session ended as its terminal record says; durable evidence is complete and the terminal record is ready for publication"
                     }
                     SessionStatus::Running => "invalid running terminal state",
                 },
@@ -4307,6 +4318,25 @@ mod tests {
     }
 
     #[test]
+    fn status_names_where_the_lifecycle_stands_and_never_a_success() {
+        // An ended session's status says only that it ended: the terminal
+        // names how, an error as readily as a success. The spelling that read
+        // as a success is not a status, so a record carrying it is refused.
+        for (status, wire) in [
+            (SessionStatus::Running, "running"),
+            (SessionStatus::Ended, "ended"),
+            (SessionStatus::Cancelled, "cancelled"),
+        ] {
+            assert_eq!(serde_json::to_value(status).unwrap(), serde_json::json!(wire));
+            assert_eq!(
+                serde_json::from_value::<SessionStatus>(serde_json::json!(wire)).unwrap(),
+                status
+            );
+        }
+        assert!(serde_json::from_value::<SessionStatus>(serde_json::json!("completed")).is_err());
+    }
+
+    #[test]
     fn grant_owner_write_recursively_makes_readonly_dirs_removable() {
         let tree = TestTree::new("grant-write");
         // A Go-module-cache-shaped subtree: nested directories mode 0555 with a
@@ -4381,7 +4411,7 @@ mod tests {
             let paths = SessionPaths::new(&state, session_id);
             let archive = b"original archive";
             let acceptance = AcceptanceRecord {
-                schema_version: 4,
+                schema_version: crate::config::RESULT_RECORD_SCHEMA,
                 session_id: session_id.into(),
                 accepted_at_unix: 1,
                 archive_bytes: archive.len() as u64,
@@ -4484,7 +4514,7 @@ mod tests {
     fn body(session_id: &str) -> SessionBody {
         SessionBody {
             session_id: session_id.to_string(),
-            status: SessionStatus::Completed,
+            status: SessionStatus::Ended,
             started_at_unix: 1,
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
@@ -4551,9 +4581,13 @@ mod tests {
         object.extend(ending.as_object().unwrap().clone());
         let duplicate = serde_json::to_string(&original).unwrap().replacen(
             '{',
-            "{\"status\":\"completed\",",
+            "{\"status\":\"ended\",",
             1,
         );
+        // What the previous schema wrote for a session that ended on its own,
+        // whatever its run did: a status that read as a success.
+        let mut completed = original.clone();
+        completed["status"] = serde_json::json!("completed");
         let mut wrong_identity = original.clone();
         wrong_identity["session_id"] =
             serde_json::json!("s-2222222222222222222222222222222222222222222222222222222222222222");
@@ -4613,6 +4647,11 @@ mod tests {
                 "semantic contradiction",
                 serde_json::to_vec(&contradictory).unwrap(),
                 "reasoning tokens exceed",
+            ),
+            (
+                "a status that read as a success",
+                serde_json::to_vec(&completed).unwrap(),
+                "unknown variant `completed`",
             ),
         ] {
             let error = super::parse_terminal_record(&bytes, id, path).expect_err(case);
@@ -4687,7 +4726,7 @@ mod tests {
         let session_id = "s-5757575757575757575757575757575757575757575757575757575757575757";
         std::fs::create_dir_all(results.join(session_id)).expect("create acceptance directory");
         let current = AcceptanceRecord {
-            schema_version: 4,
+            schema_version: crate::config::RESULT_RECORD_SCHEMA,
             session_id: session_id.to_string(),
             accepted_at_unix: 1,
             archive_bytes: 1,
@@ -4714,9 +4753,11 @@ mod tests {
         let launch_profile = backend.remove("launch_profile").unwrap();
         backend.insert("profile".into(), launch_profile);
         // The current shape under the previous version number is a record no
-        // release wrote, and is refused on its number alone.
+        // release wrote beside a terminal this release can read -- version 4
+        // wrote an ended session's status as `completed` -- and is refused on
+        // its number alone.
         let mut renumbered = encoded.clone();
-        renumbered["schema_version"] = serde_json::json!(3);
+        renumbered["schema_version"] = serde_json::json!(4);
         let path = results.join(session_id).join("accepted.json");
         for (case, record, expected) in [
             ("current", encoded, None),
@@ -4877,7 +4918,7 @@ mod tests {
         terminal.progress_phase = latest.phase;
         terminal.progress_message = latest.message.clone();
         let acceptance = AcceptanceRecord {
-            schema_version: 4,
+            schema_version: crate::config::RESULT_RECORD_SCHEMA,
             session_id: current_id.to_string(),
             accepted_at_unix: terminal.started_at_unix,
             archive_bytes: terminal.archive_bytes,
@@ -5434,7 +5475,7 @@ mod tests {
                 archive_sha256: "0".repeat(64),
             },
             acceptance: AcceptanceRecord {
-                schema_version: 4,
+                schema_version: crate::config::RESULT_RECORD_SCHEMA,
                 session_id: session_id.clone(),
                 accepted_at_unix: 1,
                 archive_bytes: 22,
@@ -5501,7 +5542,7 @@ mod tests {
         terminal.progress_phase = latest.phase;
         terminal.progress_message = latest.message.clone();
         let acceptance = AcceptanceRecord {
-            schema_version: 4,
+            schema_version: crate::config::RESULT_RECORD_SCHEMA,
             session_id: session_id.to_string(),
             accepted_at_unix: terminal.started_at_unix,
             archive_bytes: 22,
@@ -5534,9 +5575,9 @@ mod tests {
         let cfg = test_config(state, results.clone());
         let recovered = read_terminal(&cfg, session_id)
             .await
-            .expect("terminal read must accept the persistent schema-4 acceptance record");
+            .expect("terminal read must accept the persistent current-schema acceptance record");
         assert_eq!(recovered.session_id, session_id);
-        assert_eq!(recovered.status, SessionStatus::Completed);
+        assert_eq!(recovered.status, SessionStatus::Ended);
         assert_eq!(recovered.release, acceptance.release);
 
         // A terminal that names another release than the one that accepted
@@ -5907,7 +5948,7 @@ mod tests {
             let session_id = "s-6767676767676767676767676767676767676767676767676767676767676767";
             let paths = SessionPaths::new(&state, session_id);
             let acceptance = AcceptanceRecord {
-                schema_version: 4,
+                schema_version: crate::config::RESULT_RECORD_SCHEMA,
                 session_id: session_id.to_string(),
                 accepted_at_unix: 1,
                 archive_bytes: 24,

@@ -1,7 +1,15 @@
 # Session resource
 
 Successful session state responses use the same `SessionBody` JSON object. `status` is
-`running`, `completed`, or `cancelled`. A reader uses the explicitly present
+where the session's lifecycle stands, and nothing else: `running` while no ending
+exists, `ended` once its execution ended with no cancellation requested, and
+`cancelled` once it ended after a durable cancellation request. It never says how
+the run turned out. An ended session may have succeeded or ended in any error:
+`terminal.agent_result.agent_result_subtype` names how the run ended, `success` or
+an `error_*` state, and `terminal.is_process_error` whether the process and its
+evidence handling held. Releases before schema 5 wrote an ended session as
+`completed`, which read as a success whatever the run did; that spelling is
+refused. A reader uses the explicitly present
 `terminal` value to inspect ending evidence; it never interprets zero, false, an
 empty string, or an empty array as “pending.” Nullable fields must be present and
 spelled `null` when absent. Unknown fields and inconsistent evidence are refused
@@ -61,7 +69,7 @@ incomplete tail. This rule applies to captured wire output. Canonical session
 journals used to restore or mutate history retain their own strict durability
 and framing requirements.
 
-`release` is recorded in the acceptance record (schema version 4) when the
+`release` is recorded in the acceptance record (schema version 5) when the
 session is accepted and carried unchanged into every state of the resource,
 the terminal record included; a terminal read refuses a terminal that names
 another release than its acceptance. Its values are read at startup from the
@@ -75,9 +83,13 @@ it deliberately lags the backend image, whose own profile label no lock the
 service validates records, so the record names the image by its ID and the
 profile it carries as the launch profile. A service whose release lock does
 not describe it refuses to start. A session recovered after a restart keeps
-the release that accepted it. Version 3 records called the launch profile
-`profile`; like every older format they are refused at startup, which names
-each such result directory for the operator to move aside.
+the release that accepted it. Version 5's acceptance record is version 4's;
+what moved is the terminal record beside it, whose `status` names an ended
+session `ended` where version 4 wrote `completed`. Version 3 records called the
+launch profile `profile`. A release reads only its own version, in its own
+subtree, so records an earlier release wrote stay where they are, readable by
+that release; a record of another version found inside that subtree is refused
+at startup, which names its result directory.
 
 The `terminal` object has these required fields:
 
@@ -87,7 +99,7 @@ The `terminal` object has these required fields:
 | `duration_wall_ms` | integer | Finalizer wall duration in milliseconds; restart recovery measures from durable acceptance to recovery |
 | `container_exit_code` | integer or null | Actual Docker-wait exit status in 0..255, or no successful wait observation |
 | `agent_exit_code` | integer or null | Trusted exit-sidecar readback in 0..255, or no valid sidecar; the same original observation as Docker wait, not independent corroboration |
-| `is_process_error` | boolean | A completed session's exit disagrees with the exit the stream contract's terminal table gives the subtype its certified record carries, no terminal record was certified, or mandatory evidence handling failed; an ending the run recorded and exited with, whichever ending it is, is not one, a cancelled session's exit is the cancellation's and is not compared, and this does not judge task correctness |
+| `is_process_error` | boolean | An ended session's exit disagrees with the exit the stream contract's terminal table gives the subtype its certified record carries, no terminal record was certified, or mandatory evidence handling failed; an ending the run recorded and exited with, whichever ending it is, is not one, a cancelled session's exit is the cancellation's and is not compared, and this does not judge task correctness |
 | `response` | string | Final service response, including any failure explanation; an empty string is a real empty answer |
 | `agent_result` | object or null | Strictly certified agent result, or no certified result |
 | `bundle` | object or null | Accepted bundle metadata, or no accepted bundle |
