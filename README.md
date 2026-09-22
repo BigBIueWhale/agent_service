@@ -420,7 +420,7 @@ The source pins describe this checkout. The independently pinned
 pins does not build, release, or update those images.
 
 The [source transformer](patches/source_patch_v1) applies the reviewed changes to
-that exact upstream tree. It checks source identities, structural landmarks, 34
+that exact upstream tree. It checks source identities, structural landmarks, 35
 semantic concerns, and final identities, including explicit absent identities for
 removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
 mutation refuse application. Failed publication restores original bytes, modes,

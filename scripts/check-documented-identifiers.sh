@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Every code identifier the transformation README names is one the
-# transformation ships.
+# transformation ships, and every count of its semantic concerns a document
+# states is the count the transformer validates.
 #
 # The README describes the result of applying the review diff to pinned
 # upstream source, so an identifier it quotes must appear in that result. An
@@ -10,13 +11,18 @@
 # Scope is deliberately narrow and mechanical: backtick-quoted tokens that are
 # unambiguously code symbols (SCREAMING_SNAKE_CASE or lowerCamelCase). Prose,
 # paths, wire fields and file names are not identifiers and are not checked.
+#
+# The concern count is the transformer's own number, read from its contracts
+# module rather than restated, so a document that states another describes a
+# transformer nobody has.
 set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly PROJECT_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 readonly README="${PROJECT_DIR}/patches/README.md"
 readonly REVIEW_DIFF="${PROJECT_DIR}/patches/qwen-code-0.21.12-agent-service.patch"
+readonly PROJECT_README="${PROJECT_DIR}/README.md"
 
-for required in "${README}" "${REVIEW_DIFF}"; do
+for required in "${README}" "${REVIEW_DIFF}" "${PROJECT_README}"; do
   [[ -f "${required}" && ! -L "${required}" ]] || {
     printf 'ERROR: missing required input: %s\n' "${required}" >&2
     exit 1
@@ -59,4 +65,33 @@ if (( ${#undocumented[@]} > 0 )); then
   exit 1
 fi
 
-printf 'DOC_IDENTIFIER_CONTRACT_OK identifiers=%s\n' "${#identifiers[@]}"
+concerns="$(
+  cd -- "${PROJECT_DIR}" &&
+    PYTHONDONTWRITEBYTECODE=1 python3 -c \
+      'from patches.source_patch_v1.contracts_qwen_code import CONCERNS; print(len(CONCERNS))'
+)"
+
+# A stated count may wrap across lines, so whitespace is folded before it is
+# read, and a document that states none no longer matches the extractor.
+for document in "${README}" "${PROJECT_README}"; do
+  mapfile -t stated < <(
+    tr -s '[:space:]' ' ' <"${document}" |
+      grep -oE '\b[0-9]+ semantic concerns\b' |
+      cut -d' ' -f1 |
+      sort -u
+  )
+  (( ${#stated[@]} > 0 )) || {
+    printf 'ERROR: %s states no semantic-concern count; the extractor no longer matches it.\n' \
+      "${document#"${PROJECT_DIR}/"}" >&2
+    exit 1
+  }
+  for count in "${stated[@]}"; do
+    [[ "${count}" == "${concerns}" ]] || {
+      printf 'ERROR: %s states %s semantic concerns; the transformer validates %s.\n' \
+        "${document#"${PROJECT_DIR}/"}" "${count}" "${concerns}" >&2
+      exit 1
+    }
+  done
+done
+
+printf 'DOC_IDENTIFIER_CONTRACT_OK identifiers=%s concerns=%s\n' "${#identifiers[@]}" "${concerns}"

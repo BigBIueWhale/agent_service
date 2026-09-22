@@ -19,7 +19,7 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 34 semantic concerns before changing the private source tree.
+identities, and 35 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
