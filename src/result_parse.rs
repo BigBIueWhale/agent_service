@@ -1128,6 +1128,7 @@ mod tests {
         serde_json::json!({
             "status": "COMPRESSION_FAILED_EMPTY_SUMMARY", "requestAttempts": 1,
             "summary": "", "reasoning": "Reasoning that produced nothing.",
+            "incompleteToolCalls": [],
             "finishReason": "STOP",
             "usage": {"promptTokenCount": 233926, "candidatesTokenCount": 40,
                 "thoughtsTokenCount": 40, "cachedContentTokenCount": 100,
@@ -1139,6 +1140,9 @@ mod tests {
         serde_json::json!({
             "maxOutputTokens": 49152, "requestAttempts": 2,
             "summary": "  partial snapshot", "reasoning": "Observed reasoning.  ",
+            // The snapshot call the ceiling stopped, as it was served.
+            "incompleteToolCalls": [{"name": "state_snapshot",
+                "arguments": "{\"intent\": \"Summarise the corpus \\u2014 cut"}],
             "finishReason": "MAX_TOKENS",
             "usage": {"promptTokenCount": 233926, "candidatesTokenCount": 49152,
                 "thoughtsTokenCount": 49152, "cachedContentTokenCount": 100,
@@ -1186,6 +1190,11 @@ mod tests {
         unattempted["requestAttempts"] = serde_json::json!(0);
         // A refused candidate was drawn under the same frozen ceiling as the
         // one that settled the transition, so it cannot have outspent it.
+        let mut without_stopped_calls = refused.clone();
+        without_stopped_calls
+            .as_object_mut()
+            .unwrap()
+            .remove("incompleteToolCalls");
         let mut past_budget = refused.clone();
         past_budget["usage"] = serde_json::json!({"promptTokenCount": 233926,
             "candidatesTokenCount": 49153, "thoughtsTokenCount": 40,
@@ -1202,6 +1211,10 @@ mod tests {
             (
                 serde_json::json!([past_budget]),
                 "does not nest within its prompt, output, total and budget",
+            ),
+            (
+                serde_json::json!([without_stopped_calls]),
+                "lacks the incompleteToolCalls array",
             ),
             (serde_json::json!([7]), "is not an object"),
             (serde_json::json!({}), "is not an array"),
@@ -1253,6 +1266,31 @@ mod tests {
                 "has no positive budget",
             ),
             ("usage", serde_json::json!(7), "neither an object nor null"),
+            (
+                "incompleteToolCalls",
+                serde_json::Value::Null,
+                "lacks the incompleteToolCalls array",
+            ),
+            (
+                "incompleteToolCalls",
+                serde_json::json!([{"name": "", "arguments": ""}]),
+                "is not a name or null and its served arguments text",
+            ),
+            (
+                "incompleteToolCalls",
+                serde_json::json!([{"name": "state_snapshot"}]),
+                "is not a name or null and its served arguments text",
+            ),
+            (
+                "incompleteToolCalls",
+                serde_json::json!([{"name": null, "arguments": {"intent": "x"}}]),
+                "is not a name or null and its served arguments text",
+            ),
+            (
+                "incompleteToolCalls",
+                serde_json::json!([{"name": null, "arguments": "", "input": {}}]),
+                "is not a name or null and its served arguments text",
+            ),
         ];
         for (field, value, expected) in cases {
             let mut bad = output.clone();

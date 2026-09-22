@@ -275,6 +275,45 @@ fn validate_compaction_event(
                 return Err(refuse(&format!("whose {whose} lacks the {key} string")));
             }
         }
+        // What a draw its ceiling stopped had written of a call, as served:
+        // always present, a name or null and the arguments text, and nothing
+        // else, so a stopped snapshot call is kept rather than lost.
+        let stopped = holder
+            .get("incompleteToolCalls")
+            .and_then(Value::elements)
+            .ok_or_else(|| {
+                refuse(&format!("whose {whose} lacks the incompleteToolCalls array"))
+            })?;
+        for call in stopped {
+            let shape_holds = call.members().is_some_and(|members| {
+                let mut named = false;
+                let mut served = false;
+                for (key, value) in members {
+                    match key {
+                        "name" if !named => {
+                            named = value.is_null()
+                                || value.as_str().is_some_and(|name| !name.is_empty());
+                            if !named {
+                                return false;
+                            }
+                        }
+                        "arguments" if !served => {
+                            served = value.is_string();
+                            if !served {
+                                return false;
+                            }
+                        }
+                        _ => return false,
+                    }
+                }
+                named && served
+            });
+            if !shape_holds {
+                return Err(refuse(&format!(
+                    "whose {whose} carries a stopped call that is not a name or null and its served arguments text"
+                )));
+            }
+        }
         string_or_null(holder, "finishReason")?;
         let usage = match holder.get("usage") {
             Some(value) if value.is_null() => return Ok(()),

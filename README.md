@@ -671,6 +671,8 @@ message as an `incomplete_tool_use` block carrying `name` (or `null`) and the
 claim it, and nothing that counts the calls a session made counts it. A subagent
 round records it the same way under its scope, and the client's chat recording
 keeps it on the turn's assistant record, outside the message a resume replays.
+A compaction draw its ceiling stops inside its snapshot call keeps what it had
+written of that call in the compaction record's accounting for the draw.
 
 Streaming and non-streaming are different parser paths and are tested as such. The
 backend suite cuts real token streams inside tool markers and arguments, compares
@@ -709,8 +711,11 @@ generations reach the stream too: each completed round is written under the
 scope's tool-call id as its reasoning, its text and its served usage, so a
 subagent's turns are billed to the subagent rather than absent, and a compaction
 record (`system`/`compaction`) carries the reasoning the attempt emitted beside
-its counts, validated in full. All of it is evidence for the reader; nothing in
-it is ever handed back to a model.
+its counts, and, for every draw, the calls its ceiling stopped as served
+(`incompleteToolCalls`) -- a snapshot call cut before it was complete made no
+snapshot, and what the draw had written of it is kept here -- validated in
+full. All of it is evidence for the reader; nothing in it is ever handed back
+to a model.
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's

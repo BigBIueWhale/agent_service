@@ -38918,7 +38918,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should ignore events after finalization', () => {
        adapter.processEvent({
          type: GeminiEventType.Content,
-@@ -895,12 +1165,123 @@
+@@ -895,12 +1165,137 @@
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
@@ -38982,6 +38982,12 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +            requestAttempts: 1,
 +            reasoning: 'Let me first list every file the user touched...',
 +            summary: '',
++            incompleteToolCalls: [
++              {
++                name: 'state_snapshot',
++                arguments: '{"intent": "Keep every file the user touched',
++              },
++            ],
 +            finishReason: 'MAX_TOKENS',
 +          },
 +        },
@@ -39002,6 +39008,14 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +            requestAttempts: 1,
 +            reasoning: 'Let me first list every file the user touched...',
 +            summary: '',
++            // What the draw had written of its snapshot call when the
++            // ceiling stopped it, as served.
++            incompleteToolCalls: [
++              {
++                name: 'state_snapshot',
++                arguments: '{"intent": "Keep every file the user touched',
++              },
++            ],
 +            finishReason: 'MAX_TOKENS',
 +          },
 +        });
@@ -39042,7 +39056,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      beforeEach(() => {
        adapter.startAssistantMessage();
      });
-@@ -1244,12 +1625,32 @@
+@@ -1244,12 +1639,32 @@
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -39075,7 +39089,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1280,13 +1681,14 @@
+@@ -1280,13 +1695,14 @@
        // Update lastAssistantMessage manually since test adapter doesn't do it automatically
        adapter['lastAssistantMessage'] = message;
      });
@@ -39091,7 +39105,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1703,14 @@
+@@ -1301,13 +1717,14 @@
          expect(result.num_turns).toBe(1);
        }
      });
@@ -39107,7 +39121,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1320,13 +1723,14 @@
+@@ -1320,13 +1737,14 @@
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -39123,7 +39137,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1335,19 +1739,27 @@
+@@ -1335,19 +1753,27 @@
        if (!result.is_error) {
          expect(result.result).toBe('Custom summary');
        }
@@ -39156,7 +39170,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1355,12 +1767,13 @@
+@@ -1355,12 +1781,13 @@
  
        expect(result.usage).toEqual(usage);
      });
@@ -39170,7 +39184,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -1375,13 +1788,14 @@
+@@ -1375,13 +1802,14 @@
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -39186,7 +39200,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +1806,14 @@
+@@ -1392,13 +1820,14 @@
        }
      });
  
@@ -39202,7 +39216,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1823,14 @@
+@@ -1408,13 +1837,14 @@
        }
      });
  
@@ -39218,7 +39232,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +1842,16 @@
+@@ -1426,15 +1856,16 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -39237,7 +39251,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1868,14 @@
+@@ -1451,13 +1882,14 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -39253,7 +39267,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1502,13 +1920,18 @@
+@@ -1502,13 +1934,18 @@
  
    describe('emitSubagentErrorResult', () => {
      it('should emit subagent error result', () => {
@@ -39273,7 +39287,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1525,13 +1948,18 @@
+@@ -1525,13 +1962,18 @@
      it('should finalize pending assistant message before emitting error', () => {
        const parentToolUseId = 'parent-tool-1';
        adapter.startSubagentAssistantMessage(parentToolUseId);
@@ -39293,7 +39307,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,26 +2047,283 @@
+@@ -1619,26 +2061,283 @@
      });
    });
  
@@ -39580,7 +39594,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1764,12 +2449,46 @@
+@@ -1764,12 +2463,46 @@
  
          const result = toolResultContent(response);
  
@@ -39627,7 +39641,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2529,13 @@
+@@ -1810,13 +2543,13 @@
            error: undefined,
            errorType: undefined,
          };
@@ -39642,7 +39656,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        it('prefers a top-level tool error over content with a vision bridge disclosure', () => {
          const response = {
            callId: 'pdf-failure',
-@@ -1992,19 +2711,8 @@
+@@ -1992,19 +2725,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -74427,7 +74441,7 @@ diff --git a/packages/cli/src/ui/components/messages/ToolMessage.test.tsx b/pack
        );
        const output = lastFrame() ?? '';
        expect(output).toContain('✔');
-@@ -1826,12 +1841,291 @@
+@@ -1826,12 +1841,292 @@
      expect(output).toContain('MockMarkdown:# My Plan');
      expect(output).toContain('- Step 1');
      expect(output).toContain('- Step 2');
@@ -74635,6 +74649,7 @@ diff --git a/packages/cli/src/ui/components/messages/ToolMessage.test.tsx b/pack
 +            requestAttempts: 1,
 +            summary: '',
 +            reasoning: 'Compaction reasoning',
++            incompleteToolCalls: [],
 +            finishReason: 'STOP',
 +            usage: {
 +              promptTokenCount: 200,
@@ -95181,7 +95196,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
      ...actual,
      getCachedGitBranch: getCachedGitBranchMock,
    };
-@@ -220,662 +249,1026 @@
+@@ -220,662 +249,1027 @@
          subagentName: 'explore',
          executionAllowedTools: [],
        });
@@ -96513,6 +96528,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +            usage,
 +            summary: 'derived summary',
 +            reasoning: '',
++            incompleteToolCalls: [],
 +            finishReason: 'STOP',
 +            requestAttempts: 1,
 +          },
@@ -104300,7 +104316,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    getRuntimeContentGenerator,
    runWithAgentContext,
    runWithRuntimeContentGenerator,
-@@ -46,40 +62,911 @@
+@@ -46,40 +62,912 @@
  } from '../../core/contentGenerator.js';
  import {
    getInvocationContext,
@@ -105179,6 +105195,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        output: {
 +          summary: 'partial summary',
 +          reasoning: 'partial thought',
++          incompleteToolCalls: [],
 +          usage: null,
 +          finishReason: null,
 +          requestAttempts: 1,
@@ -105223,7 +105240,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  describe('AgentCore.runInAgentFrames', () => {
    // The deferred-approval `respond` callback that AgentCore hands to the
    // UI must restore both ALS frames the agent normally runs under, so any
-@@ -92,14 +979,15 @@
+@@ -92,14 +980,15 @@
  
    function makeCore(name: string, runtimeView?: RuntimeContentGeneratorView) {
      const promptConfig: PromptConfig = { systemPrompt: '' };
@@ -105240,7 +105257,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        undefined,
        undefined,
        undefined,
-@@ -207,13 +1095,20 @@
+@@ -207,13 +1096,20 @@
        core as unknown as {
          _runReasoningLoopInner: () => Promise<ReasoningLoopResult>;
        },
@@ -105262,7 +105279,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        core.runReasoningLoop({} as never, [], [], new AbortController()),
      );
  
-@@ -270,21 +1165,25 @@
+@@ -270,21 +1166,25 @@
      let inheritedAgentId: string | null = null;
      let observedAgentId: string | null = null;
      const onConfirm = async () => {
@@ -105297,7 +105314,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  
      await respondClosure!();
  
-@@ -304,28 +1203,38 @@
+@@ -304,28 +1204,38 @@
      const onConfirm = async () => {
        observedDepth = getCurrentAgentDepth();
      };
@@ -105352,7 +105369,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(getCurrentAgentId()).toBeNull();
      await new Promise((resolve) => setImmediate(resolve));
  
-@@ -416,37 +1325,37 @@
+@@ -416,37 +1326,37 @@
    // includes MCP / lsp / cron_* tools would silently lose them once
    // ToolSearch was introduced.
    function buildAgentForTools(
@@ -105393,7 +105410,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        { model: 'test-model' },
        { max_turns: 1 },
        toolConfig,
-@@ -701,104 +1610,81 @@
+@@ -701,104 +1611,81 @@
  
    it.each([ToolNames.ENTER_PLAN_MODE, ToolNames.EXIT_PLAN_MODE])(
      'returns a dedicated message when filtered %s is called directly',
@@ -105554,7 +105571,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    // The AgentTool is depth-gated: available to a sub-agent only while
    // maxSubagentDepth still permits another level. prepareTools() reads the
    // sub-agent's own 0-based depth from getCurrentAgentDepth(); a child sits
-@@ -811,30 +1697,45 @@
+@@ -811,30 +1698,45 @@
      } as FunctionDeclaration,
    ];
  
@@ -105604,7 +105621,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    it('nesting: frameless prepareTools fails closed — AgentTool excluded', async () => {
      // prepareTools() only ever serves agents, never the top-level session.
      // A missing agent frame means the launch path forgot runWithAgentContext
-@@ -849,13 +1750,17 @@
+@@ -849,13 +1751,17 @@
  
    it('nesting: fork execution contexts never receive the AgentTool', async () => {
      // The fork contract is context-sharing, not isolation — forks must not
@@ -105623,7 +105640,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(names).toContain('read_file');
    });
  
-@@ -865,35 +1770,43 @@
+@@ -865,35 +1771,43 @@
        agentId: 'scribe@demo',
        agentName: 'scribe',
        teamName: 'demo',
@@ -105672,7 +105689,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(deniedNames).toContain('read_file');
    });
  });
-@@ -969,6 +1882,205 @@
+@@ -969,6 +1883,206 @@
      expect(extractParentToolNames(undefined)).toEqual([]);
      expect(extractParentToolNames({} as GenerateContentConfig)).toEqual([]);
      expect(extractParentToolNames(configWithTools([]))).toEqual([]);
@@ -105810,6 +105827,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      output: {
 +        summary: 'partial summary',
 +        reasoning: 'partial thought',
++        incompleteToolCalls: [],
 +        usage: served,
 +        finishReason: null,
 +        requestAttempts: 1,
@@ -124779,7 +124797,7 @@ diff --git a/packages/core/src/core/anthropicContentGenerator/anthropicContentGe
 diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/core/src/core/authored-instructions.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/authored-instructions.test.ts
-@@ -0,0 +1,564 @@
+@@ -0,0 +1,565 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -125223,6 +125241,7 @@ diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/cor
 +      const result: GenerateTextResult = {
 +        text: '',
 +        thoughtText: '',
++        incompleteToolCalls: [],
 +        finishReason: FinishReason.STOP,
 +        functionCalls: [
 +          {
@@ -125495,7 +125514,7 @@ diff --git a/packages/core/src/core/authored-instructions.ts b/packages/core/src
 diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/core/baseLlmClient.test.ts
 --- a/packages/core/src/core/baseLlmClient.test.ts
 +++ b/packages/core/src/core/baseLlmClient.test.ts
-@@ -1,25 +1,42 @@
+@@ -1,25 +1,43 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -125531,6 +125550,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 +  GenerationTextFailure,
 +  type GenerateJsonOptions,
 +} from './baseLlmClient.js';
++import { setIncompleteToolCalls } from './incomplete-tool-call.js';
 +import type {
 +  ContentGenerator,
 +  ContentGeneratorConfig,
@@ -125541,7 +125561,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
  import { retryWithBackoff } from '../utils/retry.js';
  import { getErrorMessage } from '../utils/errors.js';
  import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
-@@ -34,15 +51,23 @@
+@@ -34,15 +52,23 @@
  });
  
  vi.mock('../utils/generateContentResponseUtilities.js', () => ({
@@ -125567,7 +125587,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
  vi.mock('./contentGenerator.js', async (importOriginal) => {
    const actual = await importOriginal<typeof import('./contentGenerator.js')>();
    return {
-@@ -56,116 +81,147 @@
+@@ -56,116 +82,147 @@
  const mockBuildAgentContentGeneratorConfig = vi.fn();
  vi.mock('../models/content-generator-config.js', () => ({
    buildAgentContentGeneratorConfig: (...args: unknown[]): unknown =>
@@ -125731,7 +125751,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        schema: { type: 'object', properties: { color: { type: 'string' } } },
        model: 'test-model',
        abortSignal: abortController.signal,
-@@ -174,20 +230,24 @@
+@@ -174,20 +231,24 @@
    });
  
    afterEach(() => {
@@ -125758,7 +125778,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
  
        expect(result).toEqual({ color: 'blue' });
  
-@@ -226,13 +286,17 @@
+@@ -226,13 +287,17 @@
      });
  
      it('should respect configuration overrides', async () => {
@@ -125777,7 +125797,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          ...defaultOptions,
          config: { temperature: 0.8, topK: 10 },
        };
-@@ -254,13 +318,17 @@
+@@ -254,13 +319,17 @@
      it('should include system instructions when provided', async () => {
        const mockResponse = createMockResponseWithFunctionCall({
          color: 'green',
@@ -125796,7 +125816,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        const options: GenerateJsonOptions = {
          ...defaultOptions,
          systemInstruction,
-@@ -281,13 +349,17 @@
+@@ -281,13 +350,17 @@
      it('should use the provided promptId', async () => {
        const mockResponse = createMockResponseWithFunctionCall({
          color: 'yellow',
@@ -125815,7 +125835,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        const options: GenerateJsonOptions = {
          ...defaultOptions,
          promptId: customPromptId,
-@@ -304,13 +376,17 @@
+@@ -304,13 +377,17 @@
      it('should pass maxAttempts to retryWithBackoff when provided', async () => {
        const mockResponse = createMockResponseWithFunctionCall({
          color: 'cyan',
@@ -125834,7 +125854,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        const options: GenerateJsonOptions = {
          ...defaultOptions,
          maxAttempts: customMaxAttempts,
-@@ -330,13 +406,17 @@
+@@ -330,13 +407,17 @@
      it('should call retryWithBackoff with default maxAttempts when not provided', async () => {
        const mockResponse = createMockResponseWithFunctionCall({
          color: 'indigo',
@@ -125853,7 +125873,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        await client.generateJson(defaultOptions);
  
        expect(retryWithBackoff).toHaveBeenCalledWith(
-@@ -346,87 +426,96 @@
+@@ -346,87 +427,96 @@
          }),
        );
      });
@@ -125973,7 +125993,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
    describe('generateJson - Error Handling', () => {
      it('should throw and report generic API errors', async () => {
        const apiError = new Error('Service Unavailable (503)');
-@@ -464,31 +553,33 @@
+@@ -464,31 +554,33 @@
        await expect(client.generateJson(options)).rejects.toThrow(abortError);
  
        // Crucially, it should not report a cancellation as an application error
@@ -126021,7 +126041,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        {
          role: 'user',
          parts: [
-@@ -498,13 +589,13 @@
+@@ -498,13 +590,13 @@
        },
      ];
      mockGenerateContent
@@ -126036,7 +126056,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        contents,
        model: 'test-model',
        abortSignal: abortController.signal,
-@@ -610,14 +701,16 @@
+@@ -610,14 +702,16 @@
          'API Failure',
        );
      });
@@ -126054,7 +126074,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        };
        mockGenerateContentStream.mockImplementation(async () =>
          mockTextStream(['  Hello', ', ', 'world  '], usage),
-@@ -643,16 +736,38 @@
+@@ -643,16 +737,72 @@
              abortSignal: abortController.signal,
            }),
          }),
@@ -126090,13 +126110,47 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 +      });
 +
 +      expect(result.finishReason).toBe('STOP');
++    });
++
++    it('carries the calls a response’s limit stopped, as served, on both transports and never as function calls', async () => {
++      const stopped = {
++        name: 'state_snapshot',
++        arguments: '{"intent": "Summarise the corpus, cut',
++      };
++      const cut = () => {
++        const chunk = createMockTextResponse('');
++        chunk.candidates![0]!.finishReason = FinishReason.MAX_TOKENS;
++        setIncompleteToolCalls(chunk, [stopped]);
++        return chunk;
++      };
++      vi.mocked(getFunctionCalls).mockReturnValue(undefined);
++      mockGenerateContentStream.mockImplementation(async () =>
++        (async function* () {
++          yield cut();
++        })(),
++      );
++      mockGenerateContent.mockResolvedValue(cut());
++
++      for (const stream of [true, false]) {
++        const result = await client.generateText({
++          contents: [{ role: 'user', parts: [{ text: 'summarize' }] }],
++          model: 'test-model',
++          abortSignal: abortController.signal,
++          promptId: 'compaction',
++          stream,
++        });
++
++        expect(result.finishReason).toBe('MAX_TOKENS');
++        expect(result.incompleteToolCalls).toEqual([stopped]);
++        expect(result.functionCalls).toEqual([]);
++      }
      });
  
      it('forwards tool declarations and reports function calls without executing them', async () => {
        const tools = [
          {
            functionDeclarations: [
-@@ -661,13 +776,13 @@
+@@ -661,13 +811,13 @@
          },
        ];
        mockGenerateContentStream.mockImplementation(async () =>
@@ -126111,7 +126165,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          contents: [{ role: 'user', parts: [{ text: 'summarize' }] }],
          model: 'test-model',
          abortSignal: abortController.signal,
-@@ -678,17 +793,17 @@
+@@ -678,17 +828,17 @@
        expect(mockGenerateContentStream).toHaveBeenCalledWith(
          expect.objectContaining({
            config: expect.objectContaining({ tools }),
@@ -126131,7 +126185,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        mockGenerateContentStream.mockImplementation(async () =>
          mockTextStream(['summary']),
        );
-@@ -707,13 +822,13 @@
+@@ -707,13 +857,13 @@
        );
      });
  
@@ -126146,7 +126200,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          mockGenerateContentStream.mockImplementation(async () =>
            mockTextStream(['summary']),
          );
-@@ -729,15 +844,18 @@
+@@ -729,15 +879,18 @@
          expect(mockGenerateContentStream.mock.calls[0]?.[0]).not.toHaveProperty(
            'promptCacheSharing',
          );
@@ -126167,7 +126221,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
                content: {
                  role: 'model',
                  parts: [{ text: 'reasoning', thought: true }],
-@@ -748,66 +866,134 @@
+@@ -748,66 +901,134 @@
          } as unknown as GenerateContentResponse;
        }
        mockGenerateContentStream.mockImplementation(async () =>
@@ -126314,7 +126368,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
  
        // A failure after some deltas have arrived rejects the whole call — the
        // accumulated 'partial' text is never surfaced as a success — and, since
-@@ -818,66 +1004,90 @@
+@@ -818,66 +1039,90 @@
            contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
            model: 'test-model',
            abortSignal: abortController.signal,
@@ -126419,7 +126473,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        };
        async function* usageOnTextChunk(): AsyncGenerator<GenerateContentResponse> {
          yield createMockTextResponse('Hello, ');
-@@ -899,12 +1109,104 @@
+@@ -899,12 +1144,104 @@
  
        expect(result.text).toBe('Hello, world');
        expect(result.usage).toEqual(usage);
@@ -126524,7 +126578,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
      const fastGenerateContentStream = vi.fn();
      const fastContentGenerator = {
        generateContent: fastGenerateContent,
-@@ -928,17 +1230,22 @@
+@@ -928,17 +1265,22 @@
        mockCreateContentGenerator.mockResolvedValue(fastContentGenerator);
        mockBuildAgentContentGeneratorConfig.mockReturnValue({
          model: fastModel,
@@ -126550,7 +126604,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          getAllConfiguredModels: vi.fn((authTypes?: AuthType[]) =>
            authTypes?.includes(AuthType.QWEN_OAUTH)
              ? []
-@@ -950,41 +1257,45 @@
+@@ -950,41 +1292,45 @@
                ],
          ),
          getModelsConfig: vi.fn().mockReturnValue({ getResolvedModel }),
@@ -126603,7 +126657,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
      });
  
      it('builds a per-model generator when model differs and is registered under another authType', async () => {
-@@ -1003,17 +1314,17 @@
+@@ -1003,17 +1349,17 @@
  
        const targetConfig = {
          model: fastModel,
@@ -126623,7 +126677,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          crossProviderConfig,
          fastModel,
          expect.objectContaining({
-@@ -1034,17 +1345,16 @@
+@@ -1034,17 +1380,16 @@
                baseUrl: '',
              }
            : undefined,
@@ -126643,7 +126697,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
      it('keeps explicit vision capability on the resolved generator config', async () => {
        getResolvedModel.mockImplementation((authType: string, model: string) =>
          authType === AuthType.USE_ANTHROPIC && model === fastModel
-@@ -1060,15 +1370,14 @@
+@@ -1060,15 +1405,14 @@
          model: fastModel,
          authType: AuthType.USE_ANTHROPIC,
          modalities: {},
@@ -126660,7 +126714,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          expect.objectContaining({ modalities: { image: true } }),
          crossProviderConfig,
        );
-@@ -1091,18 +1400,18 @@
+@@ -1091,18 +1435,18 @@
              };
            }
            return undefined;
@@ -126681,7 +126735,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          selectedBaseUrl,
        );
        expect(mockBuildAgentContentGeneratorConfig).toHaveBeenCalledWith(
-@@ -1114,12 +1423,24 @@
+@@ -1114,12 +1458,24 @@
          }),
        );
      });
@@ -126706,7 +126760,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
              authType === AuthType.USE_ANTHROPIC &&
              model === 'qwen3.7-plus' &&
              baseUrl === selectedBaseUrl
-@@ -1132,27 +1453,29 @@
+@@ -1132,27 +1488,29 @@
              };
            }
            return undefined;
@@ -126739,7 +126793,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        });
        getResolvedModel.mockImplementation(
          (authType: string, model: string, baseUrl?: string) => {
-@@ -1169,98 +1492,87 @@
+@@ -1169,98 +1527,87 @@
              };
            }
            return undefined;
@@ -126856,7 +126910,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          abortSignal: abortController.signal,
          promptId: 'p',
          stream: true,
-@@ -1275,120 +1587,59 @@
+@@ -1275,120 +1622,59 @@
            config: expect.objectContaining({
              abortSignal: abortController.signal,
            }),
@@ -126990,7 +127044,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
        const retryErrorCodes = [4999];
        getResolvedModel.mockReturnValue({
          authType: AuthType.USE_ANTHROPIC,
-@@ -1398,16 +1649,16 @@
+@@ -1398,16 +1684,16 @@
          },
        });
        fastGenerateContent.mockResolvedValue(
@@ -127009,7 +127063,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          schema: { type: 'object' },
          model: fastModel,
          abortSignal: new AbortController().signal,
-@@ -1437,16 +1688,16 @@
+@@ -1437,16 +1723,16 @@
          return undefined;
        });
        fastGenerateContent.mockResolvedValue(
@@ -127028,7 +127082,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          schema: { type: 'object' },
          model: 'openai:shared-model',
          abortSignal: new AbortController().signal,
-@@ -1481,16 +1732,16 @@
+@@ -1481,16 +1767,16 @@
          return undefined;
        });
        fastGenerateContent.mockResolvedValue(
@@ -127047,7 +127101,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          schema: { type: 'object' },
          model: 'fast',
          abortSignal: new AbortController().signal,
-@@ -1514,19 +1765,15 @@
+@@ -1514,19 +1800,15 @@
  
      it('generateText routes through the per-model generator and forwards retry authType', async () => {
        getResolvedModel.mockReturnValue({
@@ -127069,7 +127123,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          model: fastModel,
          abortSignal: new AbortController().signal,
          promptId: 'test',
-@@ -1538,7 +1785,382 @@
+@@ -1538,7 +1820,383 @@
        expect(retryWithBackoff).toHaveBeenCalledWith(
          expect.any(Function),
          expect.objectContaining({ authType: AuthType.USE_ANTHROPIC }),
@@ -127261,6 +127315,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 +          usage: knownUsage,
 +          requestAttempts: 1,
 +          functionCalls: [],
++          incompleteToolCalls: [],
 +        });
 +        expect(create).toHaveBeenCalledOnce();
 +        expect(create.mock.calls[0]![0]).toMatchObject({
@@ -127455,7 +127510,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/baseLlmClient.ts
 --- a/packages/core/src/core/baseLlmClient.ts
 +++ b/packages/core/src/core/baseLlmClient.ts
-@@ -1,53 +1,58 @@
+@@ -1,53 +1,62 @@
 +import { FinishReason } from '@google/genai';
 +import { SchemaValidator } from '../utils/schemaValidator.js';
 +import {
@@ -127504,6 +127559,10 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
  import { ApiRetryEvent } from '../telemetry/types.js';
  import { logApiRetry } from '../telemetry/loggers.js';
  import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
++import {
++  getIncompleteToolCalls,
++  type IncompleteToolCall,
++} from './incomplete-tool-call.js';
 -import { getResponseText } from '../utils/partUtils.js';
 -import { createDebugLogger } from '../utils/debugLogger.js';
 +import { getResponseText, getResponseThoughtText } from '../utils/partUtils.js';
@@ -127520,7 +127579,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
    const modelPart = model.slice(0, idx);
    if (!modelPart) return { model: modelPart };
    return {
-@@ -62,13 +67,13 @@
+@@ -62,13 +71,13 @@
   * model, both fields are resolved against that model's provider so that
   * per-model `extra_body` / `samplingParams` / reasoning settings — and
   * provider-specific retry/quota behaviour — do not leak from the main
@@ -127535,7 +127594,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
    model: string;
  }
  
-@@ -112,59 +117,45 @@
+@@ -112,59 +121,51 @@
    /**
     * Let the OpenAI adapter mark the unchanged history prefix for cache reuse.
     * This is only for requests ending in a non-reusable trailing directive;
@@ -127574,6 +127633,12 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +   * of these, and one that declared none refuses a response that has any.
 +   */
 +  functionCalls: FunctionCall[];
++  /**
++   * Every call the response's output limit stopped, as the provider served
++   * it, in arrival order. None is a function call and none is ever made; a
++   * caller that records what the model produced records these beside it.
++   */
++  incompleteToolCalls: IncompleteToolCall[];
 +  /** Provider terminal reason from the final response/chunk. */
 +  finishReason?: string;
  }
@@ -127618,7 +127683,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
  /**
   * Options for the generateJson utility function.
   */
-@@ -214,19 +205,16 @@
+@@ -214,19 +215,16 @@
     */
    private readonly perModelGeneratorCache = new Map<
      string,
@@ -127641,7 +127706,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      options: GenerateJsonOptions,
    ): Promise<Record<string, unknown>> {
      const {
-@@ -294,13 +282,12 @@
+@@ -294,13 +292,12 @@
          );
  
        const result = await retryWithBackoff(apiCall, {
@@ -127655,7 +127720,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
              `[qwen-code] Waiting for API capacity... attempt ${info.attempt}, retry in ${Math.ceil(info.remainingMs / 1000)}s\n`,
            );
          },
-@@ -317,41 +304,48 @@
+@@ -317,41 +314,48 @@
                subagentName: subagentNameContext.getStore(),
              }),
            );
@@ -127725,7 +127790,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          contents,
          'generateJson-api',
        );
-@@ -360,12 +354,50 @@
+@@ -360,12 +364,50 @@
          { cause: error },
        );
      }
@@ -127776,7 +127841,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
     * `ContentGenerator` directly, so the caller's `systemInstruction` is sent
     * through verbatim — no `getCustomSystemPrompt` wrapping (which would append
     * user memory) and no main-session-prompt fallback when omitted. Side queries
-@@ -393,69 +425,103 @@
+@@ -393,69 +435,110 @@
      const {
        contentGenerator,
        contentGeneratorConfig,
@@ -127796,6 +127861,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +      thoughtText: '',
 +      usage: undefined,
 +      functionCalls: [],
++      incompleteToolCalls: [],
 +      requestAttempts,
 +    };
      try {
@@ -127821,6 +127887,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +              thoughtText: '',
 +              usage: undefined,
 +              functionCalls: [],
++              incompleteToolCalls: [],
 +              requestAttempts,
 +            };
              const responseStream = await contentGenerator.generateContentStream(
@@ -127846,6 +127913,9 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +                partial.text += getResponseText(chunk) ?? '';
 +                partial.thoughtText += getResponseThoughtText(chunk) ?? '';
 +                partial.functionCalls.push(...(getFunctionCalls(chunk) ?? []));
++                partial.incompleteToolCalls.push(
++                  ...getIncompleteToolCalls(chunk),
++                );
 +                if (chunk.usageMetadata) partial.usage = chunk.usageMetadata;
 +                const terminal = chunk.candidates?.[0]?.finishReason;
 +                if (terminal) partial.finishReason = terminal;
@@ -127867,6 +127937,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +              thoughtText: '',
 +              usage: undefined,
 +              functionCalls: [],
++              incompleteToolCalls: [],
 +              requestAttempts,
 +            };
              const result = await contentGenerator.generateContent(
@@ -127881,6 +127952,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
                usage: result.usageMetadata,
 -              hadToolCall: (getFunctionCalls(result)?.length ?? 0) > 0,
 +              functionCalls: getFunctionCalls(result) ?? [],
++              incompleteToolCalls: [...getIncompleteToolCalls(result)],
 +              finishReason: result.candidates?.[0]?.finishReason,
              };
 +            return partial;
@@ -127900,7 +127972,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
              `[qwen-code] Waiting for API capacity... attempt ${info.attempt}, retry in ${Math.ceil(info.remainingMs / 1000)}s\n`,
            );
          },
-@@ -472,34 +538,53 @@
+@@ -472,34 +555,54 @@
                subagentName: subagentNameContext.getStore(),
              }),
            );
@@ -127923,6 +127995,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          usage: result.usage,
 -        hadToolCall: result.hadToolCall,
 +        functionCalls: result.functionCalls,
++        incompleteToolCalls: result.incompleteToolCalls,
 +        finishReason: result.finishReason,
        };
      } catch (error) {
@@ -127962,7 +128035,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
    async generateEmbedding(texts: string[]): Promise<number[][]> {
      if (!texts || texts.length === 0) {
        return [];
-@@ -507,13 +592,13 @@
+@@ -507,13 +610,13 @@
      const embedModelParams: EmbedContentParameters = {
        model: this.config.getEmbeddingModel(),
        contents: texts,
@@ -127977,7 +128050,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      ) {
        throw new Error('No embeddings found in API response.');
      }
-@@ -537,31 +622,26 @@
+@@ -537,31 +640,26 @@
  
    /**
     * Resolve the ContentGenerator and retry authType for a request targeting
@@ -128014,7 +128087,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      const matchesMainBaseUrl =
        requested.baseUrl === undefined || requested.baseUrl === mainBaseUrl;
  
-@@ -580,13 +660,12 @@
+@@ -580,13 +678,12 @@
      }
  
      const { contentGenerator, contentGeneratorConfig } =
@@ -128028,7 +128101,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        requested.model,
        selector,
        requested.baseUrl,
-@@ -594,13 +673,15 @@
+@@ -594,13 +691,15 @@
      const retryAuthType =
        resolvedModel?.authType ?? mainAuthType ?? AuthType.USE_OPENAI;
      const retryErrorCodes =
@@ -128045,7 +128118,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        model: resolvedModel?.id ?? requestModel,
      };
    }
-@@ -659,13 +740,12 @@
+@@ -659,13 +758,12 @@
      return undefined;
    }
  
@@ -128059,7 +128132,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        ? modelBaseUrl === undefined
          ? `${selector.authType ?? ''}:${selector.modelId}`
          : `${selector.authType ?? ''}:${selector.modelId}\0${modelBaseUrl}`
-@@ -675,55 +755,24 @@
+@@ -675,55 +773,24 @@
      const normalizeGeneratorError = (err: unknown) =>
        err instanceof Error
          ? err
@@ -128119,7 +128192,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        try {
          const targetModel = resolvedModel.id ?? selector?.modelId ?? model;
          const targetConfig = buildAgentContentGeneratorConfig(
-@@ -754,13 +803,13 @@
+@@ -754,13 +821,13 @@
          this.perModelGeneratorCache.delete(cacheKey);
          throw normalizeGeneratorError(err);
        }
@@ -180801,7 +180874,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    const providerCallId = request.providerCallId ?? request.callId;
    const message = duplicateProviderToolCallMessage(providerCallId);
    return {
-@@ -345,58 +599,216 @@
+@@ -345,58 +599,226 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -180885,6 +180958,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  /** Observed text and reasoning, including an interrupted prefix, verbatim. */
 +  summary: string;
 +  reasoning: string;
++  /**
++   * Calls the candidate's output limit stopped, exactly as served -- a
++   * snapshot call cut before it was complete among them; empty when none.
++   */
++  incompleteToolCalls: readonly IncompleteToolCall[];
 +  finishReason: string | null;
 +  /** Provider calls attempted while producing this candidate. */
 +  requestAttempts: number;
@@ -180898,6 +180976,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  /** Observed text and reasoning, including an interrupted prefix, verbatim. */
 +  summary: string;
 +  reasoning: string;
++  /**
++   * Calls the candidate's output limit stopped, exactly as served -- a
++   * snapshot call cut before it was complete among them; empty when none.
++   */
++  incompleteToolCalls: readonly IncompleteToolCall[];
 +  finishReason: string | null;
 +  /** Number of provider calls attempted; absence of a response is not zero work. */
 +  requestAttempts: number;
@@ -181037,7 +181120,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    type: GeminiEventType.Finished;
    value: GeminiFinishedEventValue;
  };
-@@ -403,4 +815,9 @@
+@@ -403,4 +825,9 @@
  
 +export type ServerGeminiIncompleteToolCallEvent = {
 +  type: GeminiEventType.IncompleteToolCall;
@@ -181047,7 +181130,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  export type ServerGeminiLoopDetectedEvent = {
    type: GeminiEventType.LoopDetected;
    // The loop type is optional so historical call sites that don't produce one
-@@ -450,29 +867,29 @@
+@@ -450,29 +877,29 @@
  };
  
  // The original union type, now composed of the individual types
@@ -181079,7 +181162,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    response: GenerateContentResponse,
  ): ServerGeminiContentPart[] {
    const parts = response.candidates?.[0]?.content?.parts ?? [];
-@@ -525,14 +942,12 @@
+@@ -525,14 +952,12 @@
    async *run(
      model: string,
      req: PartListUnion,
@@ -181094,7 +181177,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            message: req,
            config: {
              abortSignal: signal,
-@@ -540,46 +955,47 @@
+@@ -540,46 +965,47 @@
          },
          this.prompt_id,
          this.goalContext,
@@ -181158,7 +181241,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  
          // Surface auto-compaction that fired inside chat.sendMessageStream
          // as the top-level ChatCompressed event so existing UI handlers stay
-@@ -656,6 +1072,12 @@
+@@ -656,6 +1082,12 @@
              this.pendingCitations.clear();
            }
  
@@ -190835,7 +190918,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1709 @@
+@@ -1,4405 +1,1754 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -191005,6 +191088,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    thoughtText: '',
 +    finishReason: FinishReason.STOP,
 +    functionCalls: [snapshotCall()],
++    incompleteToolCalls: [],
 +    usage: {
 +      promptTokenCount: 220_000,
 +      candidatesTokenCount: 2_000,
@@ -194339,6 +194423,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        usage: refused.usage,
 +        summary: `no snapshot: expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received 0`,
 +        reasoning: '',
++        incompleteToolCalls: [],
 +        finishReason: FinishReason.STOP,
 +        requestAttempts: 1,
 +      },
@@ -194366,6 +194451,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        usage: refused.usage,
 +        summary: snapshot(long),
 +        reasoning: '',
++        incompleteToolCalls: [],
 +        finishReason: FinishReason.STOP,
 +        requestAttempts: 1,
        },
@@ -194759,6 +194845,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +                thoughtText: '',
 +                usage: undefined,
 +                functionCalls: [],
++                incompleteToolCalls: [],
 +                requestAttempts: 1,
 +              },
 +              new Error('connection reset'),
@@ -195541,6 +195628,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      requestAttempts: 1,
 +      reasoning: 'Let me first list every file the user touched...',
 +      summary: `no snapshot: expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received 0`,
++      incompleteToolCalls: [],
 +      finishReason: FinishReason.MAX_TOKENS,
 +    };
 +    expect(result.info.output).toEqual({
@@ -196603,6 +196691,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +          thoughtText: 'reasoning',
 +          usage: undefined,
 +          functionCalls: [],
++          incompleteToolCalls: [],
          },
 -      ],
 -    });
@@ -196753,6 +196842,45 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
 +    );
 +    expect(attachments.composePostCompactHistory).not.toHaveBeenCalled();
++  });
++
++  it('keeps what a draw its ceiling stopped had written of its snapshot call, as served', async () => {
++    // A draw cut inside its state_snapshot call made no snapshot, and what it
++    // had written of one is the model's output: it is kept with the draw's
++    // record rather than lost with the call.
++    const stopped = {
++      name: STATE_SNAPSHOT_FUNCTION_NAME,
++      arguments: '{"intent": "Summarise all eleven books", "environment": "cut',
++    };
++    const harness = makeHarness();
++    harness.generateText
++      .mockResolvedValueOnce(
++        summaryResult({
++          functionCalls: [],
++          incompleteToolCalls: [stopped],
++          finishReason: FinishReason.MAX_TOKENS,
++        }),
++      )
++      .mockResolvedValue(
++        summaryResult({
++          functionCalls: [],
++          incompleteToolCalls: [stopped],
++          finishReason: FinishReason.MAX_TOKENS,
++        }),
++      );
++    const result = await compress(harness);
++
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++    );
++    expect(result.info.rejectedAttempts).toHaveLength(
++      MAX_COMPACTION_CANDIDATE_ATTEMPTS - 1,
++    );
++    for (const attempt of result.info.rejectedAttempts) {
++      expect(attempt.incompleteToolCalls).toEqual([stopped]);
++    }
++    expect(result.info.output?.incompleteToolCalls).toEqual([stopped]);
    });
 +
 +  it("tells every draw its own ceiling and what reaching it costs, never a turn's", async () => {
@@ -197486,7 +197614,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +452,710 @@
+@@ -509,619 +452,715 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -198161,6 +198289,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      usage: attempt.usage,
 +      summary: attempt.summary,
 +      reasoning: attempt.reasoning,
++      incompleteToolCalls: attempt.incompleteToolCalls,
 +      finishReason: attempt.finishReason,
 +      requestAttempts: attempt.requestAttempts,
 +    });
@@ -198215,6 +198344,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +            usage,
 +            summary: partial.text,
 +            reasoning: partial.thoughtText,
++            incompleteToolCalls: partial.incompleteToolCalls,
 +            finishReason: partial.finishReason ?? null,
 +            requestAttempts: partial.requestAttempts,
 +          };
@@ -198245,6 +198375,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        usage: summaryUsage,
 +        summary,
 +        reasoning: summaryResult.thoughtText,
++        // A draw its ceiling stopped mid-call made no snapshot, and what it
++        // had written of one is its own output: kept as served.
++        incompleteToolCalls: summaryResult.incompleteToolCalls,
 +        finishReason: summaryResult.finishReason ?? null,
 +        requestAttempts: summaryResult.requestAttempts,
 +      };
@@ -278035,7 +278168,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
  
  describe('runSideQuery', () => {
    let mockBaseLlmClient: BaseLlmClient;
-@@ -28,12 +29,68 @@
+@@ -28,12 +29,69 @@
        getModel: vi.fn().mockReturnValue('main-model'),
        getFastModel: vi.fn().mockReturnValue(undefined),
        getOutputLanguageFilePath: vi.fn().mockReturnValue(undefined),
@@ -278063,6 +278196,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
 +            requestAttempts: 1,
 +            usage: undefined,
 +            functionCalls: [],
++            incompleteToolCalls: [],
 +          });
 +          const before = structuredClone(config);
 +          const options = {
@@ -278104,7 +278238,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          decision: 'user',
        });
  
-@@ -40,6 +97,6 @@
+@@ -40,6 +98,6 @@
        const result = await runSideQuery<{ decision: string }>(mockConfig, {
 -        purpose: 'next-speaker',
 -        contents: [{ role: 'user', parts: [{ text: 'Who speaks next?' }] }],
@@ -278113,7 +278247,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          schema: {
            type: 'object',
            properties: { decision: { type: 'string' } },
-@@ -51,15 +108,13 @@
+@@ -51,15 +109,13 @@
        expect(result).toEqual({ decision: 'user' });
        expect(mockBaseLlmClient.generateJson).toHaveBeenCalledWith(
          expect.objectContaining({
@@ -278131,7 +278265,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
  
      it('prefers fastModel when available', async () => {
        vi.mocked(mockConfig.getFastModel).mockReturnValue('fast-model');
-@@ -99,13 +154,13 @@
+@@ -99,13 +155,13 @@
  
        expect(mockBaseLlmClient.generateJson).toHaveBeenCalledWith(
          expect.objectContaining({ model: 'override-model' }),
@@ -278146,7 +278280,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          purpose: 'p',
          contents: [{ role: 'user', parts: [{ text: 'q' }] }],
          schema: {
-@@ -134,17 +189,17 @@
+@@ -134,17 +190,17 @@
          schema: {
            type: 'object',
            properties: { ok: { type: 'boolean' } },
@@ -278166,7 +278300,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
      it('adds the configured output language to JSON side queries', async () => {
        const dir = await mkdtemp(path.join(tmpdir(), 'qwen-side-query-'));
        try {
-@@ -211,30 +266,32 @@
+@@ -211,30 +267,32 @@
        } finally {
          await rm(dir, { recursive: true, force: true });
        }
@@ -278212,7 +278346,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
        vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue({
          status: '',
        });
-@@ -304,16 +361,21 @@
+@@ -304,16 +362,22 @@
    });
  
    describe('text mode (no schema)', () => {
@@ -278222,6 +278356,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
 +        thoughtText: '',
 +        requestAttempts: 1,
 +        functionCalls: [],
++        incompleteToolCalls: [],
          usage: withUsage
            ? {
                promptTokenCount: 10,
@@ -278234,7 +278369,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
        });
      }
  
-@@ -326,24 +388,25 @@
+@@ -326,24 +390,26 @@
          systemInstruction: 'You are a recap generator.',
          abortSignal: abortController.signal,
        });
@@ -278244,6 +278379,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
 +        thoughtText: '',
 +        requestAttempts: 1,
 +        functionCalls: [],
++        incompleteToolCalls: [],
          usage: expect.objectContaining({ totalTokenCount: 15 }),
        });
        expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(
@@ -278263,7 +278399,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
  
      it('forwards stream:true to generateText when opted in', async () => {
        mockTextResult('streamed');
-@@ -357,13 +420,13 @@
+@@ -357,13 +423,13 @@
  
        expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(
          expect.objectContaining({ stream: true }),
@@ -278278,7 +278414,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          purpose: 'p',
          contents: [{ role: 'user', parts: [{ text: 'q' }] }],
          abortSignal: abortController.signal,
-@@ -416,13 +479,13 @@
+@@ -416,13 +482,13 @@
            validate,
          }),
        ).rejects.toThrow('too short');

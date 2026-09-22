@@ -4838,6 +4838,55 @@ def _validate_compaction_accounting_after(state: State) -> None:
         "[compaction-event] carries the failed attempt output accounting to the stream",
         label=label,
     )
+    # A draw its ceiling stopped inside its snapshot call made no snapshot,
+    # and what it had written of that call is the model's output: generateText
+    # carries the calls a limit stopped, as served, on both transports, and
+    # every draw's accounting keeps them, the refused ones and the one that
+    # settled the transition alike.
+    _require(
+        _source(state, "packages/core/src/core/turn.ts", label=label).count(
+            "  incompleteToolCalls: readonly IncompleteToolCall[];\n  finishReason: string | null;"
+        )
+        == 2,
+        f"{label}: a compaction candidate's accounting does not carry the calls its ceiling stopped",
+    )
+    client = "packages/core/src/core/baseLlmClient.ts"
+    client_source = _require_all(
+        state,
+        client,
+        (
+            "  incompleteToolCalls: IncompleteToolCall[];\n  /** Provider terminal reason",
+            "partial.incompleteToolCalls.push(\n                  ...getIncompleteToolCalls(chunk),\n                );",
+            "incompleteToolCalls: [...getIncompleteToolCalls(result)],",
+            "incompleteToolCalls: result.incompleteToolCalls,",
+        ),
+        label=label,
+    )
+    _require(
+        client_source.count("incompleteToolCalls: [],") == 3,
+        f"{label}: {client} does not start every attempt's record of stopped calls empty",
+    )
+    _require_all(
+        state,
+        service,
+        (
+            "incompleteToolCalls: attempt.incompleteToolCalls,",
+            "incompleteToolCalls: partial.incompleteToolCalls,",
+            "incompleteToolCalls: summaryResult.incompleteToolCalls,",
+        ),
+        label=label,
+    )
+    for path, name in (
+        (
+            "packages/core/src/services/chatCompressionService.test.ts",
+            "keeps what a draw its ceiling stopped had written of its snapshot call, as served",
+        ),
+        (
+            "packages/core/src/core/baseLlmClient.test.ts",
+            "carries the calls a response’s limit stopped, as served, on both transports and never as function calls",
+        ),
+    ):
+        require_text(state, path, name, label=label)
 
 
 def _validate_incomplete_generation_before(state: State) -> None:
@@ -8567,7 +8616,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="compaction-output-accounting",
         rationale=(
-            "A compaction attempt retains its observed text, reasoning, terminal, request attempts, and "
+            "A compaction attempt retains its observed text, reasoning, terminal, request attempts, "
+            "what a call its ceiling stopped had written, as served, and "
             "full served usage or explicit absence. Failure after a partial stream cannot erase the "
             "last valid observation. Reasoning remains inline; this contract does not assert reference "
             "persistence."
