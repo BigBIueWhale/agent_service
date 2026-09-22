@@ -65,12 +65,6 @@
     "approvalMode": "yolo",
     "sandbox": false
   },
-  "context": {
-    "clearContextOnIdle": {
-      "toolResultsThresholdMinutes": -1,
-      "toolResultsTotalCharsThreshold": -1
-    }
-  },
   "env": {
     "QWEN38_LOCAL_API_KEY": "local-loopback-only"
   },

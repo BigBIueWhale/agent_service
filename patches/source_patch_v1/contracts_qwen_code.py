@@ -4692,6 +4692,35 @@ _NEXT_SPEAKER_TEST = "packages/core/src/utils/nextSpeakerChecker.test.ts"
 # sealed settings are the only settings, and neither names any of the three --
 # so each was a bound with no way in. They are gone, with the terminal state
 # and the wire name the tool-call budget ended a run in.
+# Upstream rewrites history a second way, beside compaction: microcompaction
+# blanks old tool results and inline media on an idle gap or a cumulative-size
+# threshold, forced by /compress-fast, and a memory-pressure tier ran it too.
+# This deployment can reach none of it -- the sealed settings disable both
+# thresholds, the locked mode interprets no slash command, and a page of
+# history the model was shown is not something to blank behind it. The engine,
+# the setting, the command and the per-file cache disarm it needed are gone;
+# compaction, which replaces the whole history and says so, is what remains.
+_MICROCOMPACTION_MODULE = "packages/core/src/services/microcompaction/microcompact.ts"
+_MICROCOMPACTION_TEST = "packages/core/src/services/microcompaction/microcompact.test.ts"
+_FAST_COMPACTION_COMMAND = "packages/cli/src/ui/commands/compressFastCommand.ts"
+_FAST_COMPACTION_COMMAND_TEST = "packages/cli/src/ui/commands/compressFastCommand.test.ts"
+_CLEAR_CONTEXT_DEFAULTS = "packages/core/src/config/clearContextDefaults.ts"
+_RETIRED_MICROCOMPACTION_NAMES = (
+    "microcompact",
+    "Microcompact",
+    "MICROCOMPACT",
+    "clearContextOnIdle",
+    "ClearContextOnIdle",
+    "compact_history",
+    "compressFast",
+    "compress-fast",
+    "markReadEvictedFromHistory",
+    "invalidateByPath",
+    "DEFAULT_TOOL_RESULTS_TOTAL_CHARS_THRESHOLD",
+    "clearContextDefaults",
+    "lastApiCompletionTimestamp",
+)
+
 _RUN_BUDGET_MODULE = "packages/cli/src/utils/runBudget.ts"
 _RUN_BUDGET_TEST = "packages/cli/src/utils/runBudget.test.ts"
 _RETIRED_BUDGET_NAMES = tuple(
@@ -6577,6 +6606,17 @@ def _validate_manual_compaction_before(state: State) -> None:
         "MAX_COMPRESS_INSTRUCTIONS_CHARS",
         "originalTokenCount: null",
     ), label=label)
+    # The second way upstream rewrites history: an engine that blanks old tool
+    # results, the setting that arms it, the command that forces it, and the
+    # client pass that runs it before a send.
+    _require_all(state, _MICROCOMPACTION_MODULE, (
+        "export function microcompactHistory(",
+        "export function evaluateTimeBasedTrigger(",
+    ), label=label)
+    require_text(state, _FAST_COMPACTION_COMMAND, "export const compressFastCommand: SlashCommand = {", label=label)
+    require_text(state, "packages/core/src/core/client.ts", "  private async microcompactHistoryBeforeSend(", label=label)
+    require_text(state, "packages/core/src/core/geminiChat.ts", "  compressFast(): {", label=label)
+    require_text(state, "packages/core/src/config/config.ts", "export interface ClearContextOnIdleSettings {", label=label)
     require_text(state, "packages/cli/src/ui/hooks/slashCommandProcessor.ts",
                  "Promise.race", label=label)
     require_text(state, "packages/cli/src/ui/components/messages/CompressionMessage.tsx",
@@ -6587,11 +6627,37 @@ def _validate_manual_compaction_after(state: State) -> None:
     label = "manual compaction ownership and outcome"
     cli = "packages/cli/src/"
     core = "packages/core/src/"
-    for command in ("compressCommand.ts", "compressFastCommand.ts"):
-        path = cli + "ui/commands/" + command
-        require_text(state, path, "runCompressionCommand(", label=label)
-        for absent in ("executionMode", "setPendingItem", "MAX_COMPRESS_INSTRUCTIONS_CHARS"):
-            forbid_text(state, path, absent, label=label)
+    path = cli + "ui/commands/compressCommand.ts"
+    require_text(state, path, "runCompressionCommand(", label=label)
+    for absent in ("executionMode", "setPendingItem", "MAX_COMPRESS_INSTRUCTIONS_CHARS"):
+        forbid_text(state, path, absent, label=label)
+
+    # ── The second way of rewriting history is gone ──────────────────────
+    #
+    # Microcompaction blanked old tool results and inline media in place: on
+    # an idle gap, on a cumulative size, or forced by /compress-fast. The
+    # sealed settings disabled both thresholds and the locked mode interprets
+    # no slash command, so nothing here could reach it -- and a page the model
+    # was shown, blanked behind it while the placeholder that replaced it says
+    # nothing, is not a bound this deployment wants back. The engine, its
+    # test, the command, its test, the threshold defaults and the setting are
+    # absent, and no file the transformation writes names them again. What
+    # rewrites history is compaction, which replaces it whole and records what
+    # it did.
+    for absent in (
+        _MICROCOMPACTION_MODULE,
+        _MICROCOMPACTION_TEST,
+        _FAST_COMPACTION_COMMAND,
+        _FAST_COMPACTION_COMMAND_TEST,
+        _CLEAR_CONTEXT_DEFAULTS,
+    ):
+        _require(absent not in state, f"{label}: {absent} still ships")
+    for path, source in sorted(state.items()):
+        for retired in _RETIRED_MICROCOMPACTION_NAMES:
+            _require(
+                retired not in source,
+                f"{label}: {path} still names the retired {retired!r}",
+            )
     outcome_path = cli + "utils/compression-result.ts"
     outcome = _require_all(state, outcome_path, (
         "Number.isSafeInteger(count)", "const unhandled: never = status;",
@@ -6631,11 +6697,6 @@ def _validate_manual_compaction_after(state: State) -> None:
         "private async runCompaction(", "this.compactionFinalizationError = error",
         "{ cause: this.compactionFinalizationError }",
     ), label=label)
-    chat = _source(state, core + "core/geminiChat.ts", label=label)
-    fast = chat.split("async compressFast()", 1)[1].split("setSystemInstruction(", 1)[0]
-    _require_ordered(fast, ("recordChatCompression(", "chatRecordingService.flush()",
-        "this.setHistory(newHistory)", "throw new CompactionFinalizationError(info, error)"),
-        label=label, location="fast durable checkpoint")
     recorder = _source(state, core + "services/chatRecordingService.ts", label=label)
     admission = recorder.split("recordSlashCommand(payload:", 1)[1].split("async recordAdoptedMessage", 1)[0]
     _require("SessionWriterUnavailableError" in admission and "this.enterWriteFailure(error, this.getSessionId())" in admission,
@@ -7388,11 +7449,15 @@ def _validate_compaction_read_evidence_after(state: State) -> None:
         cache,
         (
             "  markAllReadsEvictedFromHistory(): number {",
-            "  markReadEvictedFromHistory(stats: Stats): boolean {",
             "  clear(): void {",
         ),
         label=label,
     )
+    # The per-file disarm and its path fallback went with microcompaction: the
+    # only caller walked an eviction list that no longer exists, and a
+    # compaction that replaces the whole history has no list to walk.
+    for retired in ("markReadEvictedFromHistory", "invalidateByPath"):
+        forbid_text(state, cache, retired, label=label)
     # The all-entry disarm touches residency and nothing else. Naming the
     # authorship fields here is what keeps a later edit from folding clear()
     # back into it.

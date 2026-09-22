@@ -37,6 +37,7 @@ RETIRED_SETTINGS = (
     ("model", "maxWallTimeSeconds"),
     ("model", "maxToolCalls"),
     ("model", "sessionTokenLimit"),
+    ("context", "clearContextOnIdle"),
 )
 
 
@@ -143,18 +144,10 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
     ):
         require_equal(f"settings {key}", settings[key], "")
     require_equal("settings sandbox", settings["tools"]["sandbox"], False)
-    # Compaction is the only thing that rewrites history here, and the size
-    # it is due at is a share of the served window rather than a setting.
-    require_equal(
-        "settings context",
-        settings["context"],
-        {
-            "clearContextOnIdle": {
-                "toolResultsThresholdMinutes": -1,
-                "toolResultsTotalCharsThreshold": -1,
-            }
-        },
-    )
+    # Compaction is the only thing that rewrites history here, and the size it
+    # is due at is a share of the served window rather than a setting, so the
+    # settings carry no context section at all.
+    require_equal("settings context", "context" in settings, False)
     require_false_map(
         "settings memory",
         settings["memory"],

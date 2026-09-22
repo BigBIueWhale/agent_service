@@ -112,6 +112,11 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             (("model", "maxToolCalls"), -1),
             (("model", "maxToolCalls"), 1000),
             (("model", "sessionTokenLimit"), -1),
+            (("context", "clearContextOnIdle"), {}),
+            (
+                ("context", "clearContextOnIdle"),
+                {"toolResultsThresholdMinutes": -1},
+            ),
         ):
             with self.subTest(path=path, value=value), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
@@ -131,6 +136,24 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                     MODULE.ContractError, f"settings carry {'.'.join(path)}, which the client no longer has"
                 ):
                     MODULE.verify(paths)
+
+    def test_rejects_a_settings_context_section_even_if_resealed(self) -> None:
+        # Compaction is the only thing that rewrites history here, and its size
+        # is a share of the served window, so the settings carry no context
+        # section at all -- not one holding something else, either.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+            settings["context"] = {"fileFiltering": {"respectGitIgnore": True}}
+            settings_path = root / "settings.json"
+            settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["components"]["settings_sha256"] = MODULE.sha256(settings_path.read_bytes())
+            contract_path = root / "contract.json"
+            contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+            paths = [contract_path, settings_path, *self.paths[2:]]
+            with self.assertRaisesRegex(MODULE.ContractError, "settings context drift"):
+                MODULE.verify(paths)
 
     def test_rejects_a_wrapper_that_sets_stream_bounds_even_if_resealed(self) -> None:
         # The client derives every stream bound itself; a wrapper that pins one
