@@ -809,17 +809,20 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
     # repository can make a deployment refuse to start. The caps are bytes,
     # measured after NFC because the served tokenizer normalizes first, and
     # every value is lines behind `git: ` ending in a newline between fixed
-    # lines that end in one, so no token spans a value's edge.
+    # lines that end in one, so no token spans a value's edge. The branch
+    # shares upstream's one line with its label, `git: Current branch: main`,
+    # so that whole line is the value and is charged at its cap: the startup
+    # proof's convenience is no reason to change what the model reads.
     git = "packages/core/src/utils/gitUtils.ts"
     git_source = _require_all(
         state,
         git,
         (
-            "const MAX_BRANCH_BYTES = 128;",
+            "const MAX_BRANCH_LINE_BYTES = 144;",
             "const MAX_STATUS_BYTES = 1024;",
             "const MAX_LOG_BYTES = 768;",
             "export const GIT_SNAPSHOT_REPOSITORY_BYTES =",
-            "MAX_BRANCH_BYTES + MAX_STATUS_BYTES + MAX_LOG_BYTES;",
+            "MAX_BRANCH_LINE_BYTES + MAX_STATUS_BYTES + MAX_LOG_BYTES;",
             "function repositoryLines(",
             "const lines = tokenizerText(",
             ".map((line) => `git: ${line}\\n`)",
@@ -829,19 +832,21 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             # A value over its cap is a defect in the cut, and must not pass
             # for a repository that had no snapshot.
             "  return renderGitSnapshot(values);\n}",
-            "value(values?.branch ?? '', MAX_BRANCH_BYTES, 'branch --show-current')",
+            "    '```text\\n' +\n    value(\n      `Current branch: ${values?.branch ?? ''}`,\n      MAX_BRANCH_LINE_BYTES,\n      'branch --show-current',\n    ) +\n    'git: Status:\\n' +",
             "value(values?.status ?? '', MAX_STATUS_BYTES, 'status')",
             "value(values?.log ?? '', MAX_LOG_BYTES, 'log --oneline -n 5')",
             "export const GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA = renderGitSnapshot();",
         ),
         label=label,
     )
-    for uncounted in ("MAX_BRANCH_CHARS", "MAX_STATUS_CHARS", "MAX_LOG_CHARS", "cappedRepositoryText", "utf8Prefix"):
+    for uncounted in ("MAX_BRANCH_CHARS", "MAX_STATUS_CHARS", "MAX_LOG_CHARS", "cappedRepositoryText", "utf8Prefix", "MAX_BRANCH_BYTES"):
         _require(
             uncounted not in git_source,
             f"{label}: {git} still caps a snapshot value by '{uncounted}'; a "
             f"character cap is no token cap, so every value is capped in bytes.",
         )
+    # The label on a line of its own was ours alone, and is gone.
+    forbid_text(state, git, "'git: Current branch:\\n'", label=label)
     for uncapped in (
         "`Current branch: ${branch}`",
         "`Recent commits:\\n${log}`",
@@ -876,7 +881,8 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         state,
         "packages/core/src/utils/gitUtils.test.ts",
         (
-            "truncates a branch name over 128 bytes",
+            "truncates a branch line over 144 bytes, on the line it shares with its label",
+            "renders upstream's snapshot, the branch on its label's line, and leaves that whole line out of the fixed text",
             "truncates recent commits over 768 bytes",
             "cuts a value on a character boundary, within its byte cap",
             "measures a value in the bytes the served tokenizer sees, after NFC",

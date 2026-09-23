@@ -221,7 +221,7 @@ rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
 its request adds — the snapshot's declaration and the directive — to the same
 share. The proof counts this deployment's turn preamble with the Git
-snapshot's repository values and the turn budget's number left out — 7,757 tokens, rendered by the served template and counted by the
+snapshot's repository values and the turn budget's number left out — 7,751 tokens, rendered by the served template and counted by the
 served tokenizer — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
 around its blocks — the snapshot's resume trailer, the acknowledgement turn and
@@ -229,12 +229,12 @@ a retained input's header — with the blocks left out, 73 more, and the todo
 reminder, of which at most one stands in the request a compaction leaves, with
 one character for its list, 51 more. It adds the most bytes the data left out
 may hold, capped in the NFC form the tokenizer reads, as the most tokens they
-can cost: 1,920 for the snapshot's branch, status and commits, 1,280 for the
+can cost: 1,936 for the snapshot's branch line, status and commits, 1,280 for the
 startup context's environment lines and folder listing, 16 for the turn
 budget, the widest a safe integer renders to, and 812 for the todo reminder's
-list and truncation mark. That is a bound of 11,955, the same for every
+list and truncation mark. That is a bound of 11,965, the same for every
 repository, every workspace, every budget and every todo list, so none of them
-can make a deployment refuse to start, with 333 left for the prompt and the
+can make a deployment refuse to start, with 323 left for the prompt and the
 declarations to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
