@@ -845,7 +845,9 @@ reasoning. A slip is represented to the model and never executed: the message
 stays in history exactly as produced, a user-role notice below it says what
 happened, that nothing was executed and nothing changed, and how many notices
 remain, and the next turn is issued and charged to the turn budget like any
-other. Each notice is written to the stream as a `user` record, so the captured
+other. The notice is set off in upstream's `<system-reminder>` envelope, as the
+runtime's words rather than the user's, on upstream's own continuation prompt,
+"Please continue.". Each notice is written to the stream as a `user` record, so the captured
 session shows how many were sent. The third consecutive slip ends the run as
 `error_slipped_final_message` (exit 1) with a message naming the shape of the
 slip and that the model was told twice; a turn that calls a tool or ends with a

@@ -5746,6 +5746,25 @@ def _validate_final_message_slip_after(state: State) -> None:
         module_source.count("'<") == len(_FINAL_MESSAGE_SLIP_MARKUP),
         f"{label}: {module} tests markers other than the six",
     )
+    # The notice is the runtime's, so it is set off in upstream's reminder
+    # envelope; and it is the message the next turn answers, so it rides on
+    # upstream's own continuation prompt: a message of reminders alone is,
+    # by upstream's reading, structure rather than a turn.
+    _require_all(
+        state,
+        module,
+        (
+            "const FINAL_MESSAGE_SLIP_CONTINUATION = 'Please continue.';",
+            "  return `<system-reminder>\\n${notice}\\n</system-reminder>\\n\\n${FINAL_MESSAGE_SLIP_CONTINUATION}`;",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        module_test,
+        "rides in upstream's reminder envelope on upstream's continuation prompt, so it reads as a turn and not as structure",
+        label=label,
+    )
     for needle in (
         "Your previous message ended the turn without a tool call, and it ",
         "'contained tool-call markup outside a structured call. Nothing was '",

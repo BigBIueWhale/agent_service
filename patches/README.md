@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `feac27563f5b8859e326519fbf1b716e97c47f40d68e24fdb9e5007864485213`
+- Review-diff SHA-256: `21575d4813d5d84578be7139ce93832370a063f5eee16468c0bc13d4939abce4`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `41cc7b05d5d2fee7048d1c72e90ff5fc2d17c44870620ee6a98a98cb6c17fc33`
+- Transformer-manifest SHA-256: `2f6e2469292837dd619f589f857304440914416a3fbe170f0507fd52ab7f47de`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -60,7 +60,11 @@ served template's tool-call markup (`<tool_call>`, `</tool_call>`, `<function=`,
 `</function>`, `<parameter=`, `</parameter>`) outside a structured call, is a
 slip: it stays in history exactly as produced, is answered with a user-role
 notice that says nothing was executed, and is followed by the next turn, charged
-like any other. The third consecutive slip is the `SLIPPED_FINAL_MESSAGE` state,
+like any other. The notice is in upstream's shape for runtime context on a
+turn: a `<system-reminder>` envelope, marking it as the runtime's words rather
+than the user's, on upstream's own continuation prompt, "Please continue.",
+because a message of reminders alone is, by upstream's reading, structure
+rather than a turn. The third consecutive slip is the `SLIPPED_FINAL_MESSAGE` state,
 `error_slipped_final_message` on the wire with exit code 1, in the headless
 session and every subagent alike, decided after the incomplete-generation check
 and never in its place. One core module (`describeFinalMessageSlip`,
