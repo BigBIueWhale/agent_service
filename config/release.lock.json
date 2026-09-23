@@ -6,7 +6,7 @@
   "stack_lock_sha256": "55fb967bbb226cadb35d49f60292c1679176dc774f3f66eec49ac83c5fe88a8f",
   "archive": null,
   "images": {
-    "agent": "sha256:c371a572ace7055aad2562cdde8073b668139a62c4f8aaeb5aed67712c1f4d0f",
+    "agent": "sha256:5bf69ef7dfe3a22428f339fda546f6767ff371c47afab03a7cee909a5cecf789",
     "capture": "sha256:1658271fc7a12695376eef81371401816037dd6ce2f2754f85426681c2935c4e",
     "relay": "sha256:568e6bc1ae204600c030b98b472f20ebc35706bdfb7e5218547378579912c8f2",
     "broker": "sha256:983e5e01bcaa218aebd6a16f80a7ff779d7b3fd68afa502876fa58df97bd1b5f",

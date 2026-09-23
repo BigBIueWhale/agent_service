@@ -53,7 +53,7 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:983e5e01bcaa218aebd6a16f80a7ff779d7b3fd68afa502876fa58df97bd1b5f",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "6b89f9578263b91e7d9cd09d6b79e209b584872fa027029bc989eb7c4a4f5784",
+    "policy_sha256": "1471837cfaad4843f21ea11dcae3002b0ca3702c230584f45e32e873dc35272c",
     "source_sha256": "80b137e1e52b75e7da629361f44f49b7f4d9051021531053c0d27eba608e05f9",
     "memory": "128m",
     "memory_swap": "128m",
@@ -85,7 +85,7 @@
   },
   "agent": {
     "image_tag": "qwen38-agent:0.21.12-b965d5f8-v9",
-    "image_id": "sha256:c371a572ace7055aad2562cdde8073b668139a62c4f8aaeb5aed67712c1f4d0f",
+    "image_id": "sha256:5bf69ef7dfe3a22428f339fda546f6767ff371c47afab03a7cee909a5cecf789",
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
