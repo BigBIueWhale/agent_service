@@ -6645,9 +6645,10 @@ def _validate_tool_result_bound_after(state: State) -> None:
     # What the model reads of a call is one text: the output or the failure,
     # with every hook, rule and skill reminder that joined it. That text is
     # held to one inline block in the bytes of its NFC form, whole, once,
-    # after everything has joined it. A text past it keeps its head, which is
-    # cut before anything is retained, so retention decides nothing about it;
-    # the whole is retained and one notice leads the head.
+    # after everything has joined it. A text past it keeps its start and its
+    # end, cut on line boundaries before anything is retained, so retention
+    # decides nothing about them; the whole is retained and one notice stands
+    # in the cut.
     seam_path = "packages/core/src/core/toolResultBound.ts"
     seam = _require_all(
         state,
@@ -6657,7 +6658,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const maxBytes = config.getInlineBlockBytes();",
             "function withNestedTextJoined(",
             "export function assertToolResponsesBounded(",
-            "  cutTailToTokenizerBytes,\n  cutToTokenizerBytes,\n  tokenizerText,\n} from './tokenLimits.js';",
+            "  keepLeadingLines,\n  keepTrailingLines,\n  SLICED_LINE_MARK,\n  tokenizerText,\n  type KeptLines,\n} from './tokenLimits.js';",
             "import { middleCutContent, type OutputBound } from '../tools/tools.js';",
             "SESSION_ARTIFACT_CAPACITY_BYTES,",
         ),
@@ -6671,14 +6672,23 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const widest = Math.max(",
             "if (widest > maxBytes) {",
             # Upstream's split: one fifth of the room to the start, and the
-            # rest to the end, so what a result says last is what it keeps.
+            # rest to the end, so what a result says last is what it keeps;
+            # and upstream's cut: each end on line boundaries, a line only
+            # part of which fits sliced and marked.
             "const room = maxBytes - widest;",
-            "const head = cutToTokenizerBytes(whole.text, Math.floor(room / 5));",
-            "const tail = cutTailToTokenizerBytes(whole.text, room - head.bytes);",
+            "const head = keepLeadingLines(whole.text, Math.floor(room / 5));",
+            "const tail = keepTrailingLines(whole.text, room - head.bytes);",
             "const retention = await persistSessionArtifact(config, bytes, 'txt');",
-            "const firstCut = lineBreaks(head.text);",
-            "tailFrom > 0 && whole.text[tailFrom - 1] === '\\n' ? tailLine - 1 : tailLine;",
+            # The read back starts at the first line the start does not hold
+            # whole, ends at the last line the end does not, and never asks
+            # past the text's last line.
+            "const lastTextLine = whole.text.endsWith('\\n') ? lastLine - 1 : lastLine;",
+            "const firstCut = head.whole;",
+            "const lastCut = Math.min(lastLine - tail.whole, lastTextLine);",
+            "if (lastCut < firstCut) {",
             "middleCutContent(\n      head.text,",
+            # What it says it returned is the part of the result it shows.
+            "shownBytes(head) + shownBytes(tail),",
             "? readBack(firstCut, lastCut - firstCut + 1)",
             "if (emitted.bytes > maxBytes) {",
             "async function boundedPart(",
@@ -6690,8 +6700,19 @@ def _validate_tool_result_bound_after(state: State) -> None:
         label=label,
         location=seam_path,
     )
-    # Nothing in the seam converts bytes into tokens or keeps a second store.
-    for absent in ("inlineBlockTokenBound", "500 * 1024 * 1024", "normalize('NF", "boundedContent("):
+    # Nothing in the seam converts bytes into tokens, keeps a second store, or
+    # cuts on a character boundary: a character cut hands on a fragment of a
+    # line as if it were the line, and can open the end on a blank line that
+    # is only the edge of the cut.
+    for absent in (
+        "inlineBlockTokenBound",
+        "500 * 1024 * 1024",
+        "normalize('NF",
+        "boundedContent(",
+        "cutToTokenizerBytes",
+        "cutTailToTokenizerBytes",
+        "tailFrom",
+    ):
         forbid_text(state, seam_path, absent, label=label)
     # The one notice's two placements live beside it: leading what a tool
     # returned the first part of, and standing in the cut of a result whose
@@ -6706,16 +6727,47 @@ def _validate_tool_result_bound_after(state: State) -> None:
         ),
         label=label,
     )
-    _require_all(
+    # Each end is cut on line boundaries, as upstream's truncation cut it:
+    # whole lines while the next one fits, then the next one sliced and marked
+    # with upstream's ellipsis if any of it fits beside the mark, and never a
+    # blank line where the end meets the cut. The end is measured again whole,
+    # and one past its bound is an error rather than a result.
+    cutter = _require_all(
         state,
         "packages/core/src/core/tokenLimits.ts",
         (
-            "export function cutTailToTokenizerBytes(",
-            "if (tail.text !== cut) {",
-            "if (tail.bytes > maxBytes) {",
+            "export const SLICED_LINE_MARK = '...';",
+            "export interface KeptLines {",
+            "function partOfLine(",
+            "while (end > 0 && continuation(end)) end--;",
+            "while (continuation(start)) start++;",
+            "export function keepLeadingLines(text: string, maxBytes: number): KeptLines {",
+            "export function keepTrailingLines(text: string, maxBytes: number): KeptLines {",
         ),
         label=label,
     )
+    _require_ordered(
+        cutter,
+        (
+            "function keepLines(",
+            "if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {",
+            "const lines = tokenizerText(text).text.split('\\n');",
+            "if (used + separator + lineBytes <= maxBytes) {",
+            "const part = partOfLine(line, maxBytes - used - separator - markBytes, from);",
+            "if (part.length > 0) {",
+            "? `${part}${SLICED_LINE_MARK}`",
+            ": `${SLICED_LINE_MARK}${part}`,",
+            "if (!sliced) {",
+            "while (kept.length > 0 && isBlankLine(kept[kept.length - 1])) kept.pop();",
+            "if (measured.text !== joined || measured.bytes > maxBytes) {",
+            "whole: kept.length - (sliced ? 1 : 0),",
+        ),
+        label=label,
+        location="packages/core/src/core/tokenLimits.ts",
+    )
+    for retired in ("cutTailToTokenizerBytes", "if (tail.text !== cut) {"):
+        forbid_text(state, "packages/core/src/core/tokenLimits.ts", retired, label=label)
+        forbid_text(state, "packages/core/src/core/tokenLimits.test.ts", retired, label=label)
 
     # The scheduler finishes every call's copy after the batch hook has joined
     # it and before anything logs, records or delivers it. A copy that cannot
@@ -6985,10 +7037,15 @@ def _validate_tool_result_bound_after(state: State) -> None:
     # Executed in the build.
     for path, case in (
         ("packages/core/src/core/toolResultBound.test.ts", "keeps the start and the end of a result past the bound, split as upstream split them, with the notice in the cut"),
-        ("packages/core/src/core/toolResultBound.test.ts", "reads back from the line the start was cut in through the line the end begins in"),
+        ("packages/core/src/core/toolResultBound.test.ts", "reads back every line the start or the end does not hold whole"),
+        ("packages/core/src/core/toolResultBound.test.ts", "cuts on line boundaries, marking a line it slices as upstream marks one, and meets the cut on no blank line"),
+        ("packages/core/src/core/toolResultBound.test.ts", "reads back to the last line and not past it when the end holds only blank lines"),
         ("packages/core/src/core/toolResultBound.test.ts", "never splits a multi-byte code point at either boundary"),
-        ("packages/core/src/core/tokenLimits.test.ts", "keeps the end of the normalized text, cut on a code-point boundary within the bound"),
-        ("packages/core/src/core/tokenLimits.test.ts", "keeps the tail of what U+1D1C0 normalizes to, and that tail is normalized too"),
+        ("packages/core/src/core/tokenLimits.test.ts", "keep whole lines while the next one fits with its line break"),
+        ("packages/core/src/core/tokenLimits.test.ts", "slice the first line that does not fit and mark it as upstream marks a sliced line"),
+        ("packages/core/src/core/tokenLimits.test.ts", "mark no slice that would hold none of the line"),
+        ("packages/core/src/core/tokenLimits.test.ts", "never meet the cut on a blank line, which is left to the cut"),
+        ("packages/core/src/core/tokenLimits.test.ts", "measure and hand on the NFC form, and slice on a code-point boundary"),
         ("packages/core/src/tools/tools.test.ts", "stands in the cut between the start and the end of a result cut in the middle"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the joined text, not the tool output alone"),
         ("packages/core/src/core/toolResultBound.test.ts", "says the rest was not retained when the store is full, with what to do instead, and does not throw"),

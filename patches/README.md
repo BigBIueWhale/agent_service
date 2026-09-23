@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `1875989d458a6fe8f4f8ed100bb9855f89df128634d8c29885f3ae8d201400fc`
+- Review-diff SHA-256: `b92f7f21fbddf532590667eab19e410a521e0afad6c29969c5ab2010b23ce3c3`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `a92ce3237a3ed27dd4951985e9d0897d6d8798512380772fe4a7a116c191d132`
+- Transformer-manifest SHA-256: `8d22186ea2abb9484322abfbd74ae5a73db41aececab210ea8477eb5ae58f4bd`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -151,7 +151,9 @@ call itself — the ACP session, speculation, a subagent's refusal of a tool it
 does not have — finishes its copy the same way. The joined text is measured
 once, whole; a longer one keeps its start and its end, split as upstream's own
 truncation split them -- one fifth of the room to the start, the rest to the
-end -- the complete text is retained as a session artifact, and one notice
+end -- and cut as it cut them: on line boundaries, a line only part of which
+fits sliced and marked with upstream's `...`, and neither end meeting the cut
+on a blank line. The complete text is retained as a session artifact, and one notice
 stands in the cut with the true total and the exact call that reads the cut
 lines back, or why they were not kept. Upstream's tool layouts are kept as
 upstream lays them out: what a result says last, such as an exit code, an error
@@ -171,9 +173,9 @@ to NFC and then spends at least a byte per token — and nothing else converts
 between the two units. The bytes a text is written in are not that bound: NFC
 can make a text three times longer, and U+1D1C0, four bytes, normalizes to
 twelve. So one function, `tokenizerText`, measures every such bound in NFC, and
-a bounded text is cut on a character boundary in that form, measured again
-whole, and handed on in the form measured; its notice is inside the bound, not
-on top of it. A send, and the adoption of a speculated turn, refuse a result
+a bounded text is cut in that form -- a sliced line on a character boundary --
+measured again whole, and handed on in the form measured; its notice is inside
+the bound, not on top of it. A send, and the adoption of a speculated turn, refuse a result
 past the bound as a defect of the path that made it rather than repairing it.
 The service refuses a prompt not in NFC, and the suite materializer excludes
 one on the same terms with the same Unicode version.

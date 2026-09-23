@@ -178101,7 +178101,7 @@ diff --git a/packages/core/src/core/session-recovery.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core/tokenLimits.test.ts
 --- a/packages/core/src/core/tokenLimits.test.ts
 +++ b/packages/core/src/core/tokenLimits.test.ts
-@@ -1,19 +1,22 @@
+@@ -1,19 +1,23 @@
  import { describe, it, expect } from 'vitest';
  import {
    normalize,
@@ -178113,8 +178113,9 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  partitionContextWindow,
 +  turnOutputLimit,
 +  tokenizerText,
-+  cutTailToTokenizerBytes,
 +  cutToTokenizerBytes,
++  keepLeadingLines,
++  keepTrailingLines,
    defaultOutputCeiling,
    reconcileMaxTokens,
    DEFAULT_TOKEN_LIMIT,
@@ -178128,7 +178129,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('normalize', () => {
    it('should lowercase and trim the model string', () => {
      expect(normalize('  GEMINI-1.5-PRO  ')).toBe('gemini-1.5-pro');
-@@ -509,68 +512,317 @@
+@@ -509,68 +513,387 @@
        expect(tokenLimit('QWEN3-MAX', 'output')).toBe(32768);
        expect(tokenLimit('qwen3-max-20250601', 'output')).toBe(32768);
      });
@@ -178441,54 +178442,124 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  });
 +});
 +
-+describe('cutTailToTokenizerBytes', () => {
-+  it('returns a text that fits whole, in its NFC form', () => {
-+    expect(cutTailToTokenizerBytes('short', 32)).toEqual({
-+      text: 'short',
-+      bytes: 5,
++describe('keepLeadingLines and keepTrailingLines', () => {
++  const text = 'alpha\nbravo\ncharlie\ndelta';
++
++  it('keep whole lines while the next one fits with its line break', () => {
++    expect(keepLeadingLines(text, 14)).toEqual({
++      text: 'alpha\nbravo',
++      bytes: 11,
++      whole: 2,
++      sliced: false,
 +    });
-+    expect(cutTailToTokenizerBytes('e\u0301', 2)).toEqual({
-+      text: '\u00E9',
-+      bytes: 2,
++    expect(keepTrailingLines(text, 16)).toEqual({
++      text: 'charlie\ndelta',
++      bytes: 13,
++      whole: 2,
++      sliced: false,
 +    });
 +  });
 +
-+  it('keeps the end of the normalized text, cut on a code-point boundary within the bound', () => {
-+    // Three bytes each, so a cut at 32 from the end lands inside the second.
-+    const euros = '€'.repeat(12);
-+    expect(cutTailToTokenizerBytes(euros, 32)).toEqual({
-+      text: '€'.repeat(10),
-+      bytes: 30,
++  it('slice the first line that does not fit and mark it as upstream marks a sliced line', () => {
++    // Two bytes past the whole lines leave room for the line break, the mark
++    // and one character of the next line.
++    expect(keepLeadingLines(text, 16)).toEqual({
++      text: 'alpha\nbravo\nc...',
++      bytes: 16,
++      whole: 2,
++      sliced: true,
 +    });
-+    // Four bytes each, which is the longest walk forward a cut can need.
-+    const faces = '😀'.repeat(9);
-+    expect(cutTailToTokenizerBytes(faces, 34)).toEqual({
-+      text: '😀'.repeat(8),
-+      bytes: 32,
++    expect(keepTrailingLines(text, 18)).toEqual({
++      text: '...o\ncharlie\ndelta',
++      bytes: 18,
++      whole: 2,
++      sliced: true,
 +    });
-+    expect(cutTailToTokenizerBytes('head and tail', 4)).toEqual({
-+      text: 'tail',
-+      bytes: 4,
++    // A single line wider than the bound is all slice.
++    expect(keepLeadingLines('x'.repeat(40), 10)).toEqual({
++      text: 'xxxxxxx...',
++      bytes: 10,
++      whole: 0,
++      sliced: true,
++    });
++    expect(keepTrailingLines('0123456789', 7)).toEqual({
++      text: '...6789',
++      bytes: 7,
++      whole: 0,
++      sliced: true,
 +    });
 +  });
 +
-+  it('keeps the tail of what U+1D1C0 normalizes to, and that tail is normalized too', () => {
-+    // Five of them are sixty bytes in NFC, fifteen code points of four bytes;
-+    // the last twenty begin with two marks whose starter was cut away, which
-+    // nothing composes, so the tail is already in its normal form.
-+    const cut = cutTailToTokenizerBytes('\u{1D1C0}'.repeat(5), 20);
-+    expect(cut.bytes).toBe(20);
-+    expect(cut.text).toBe('\u{1D165}\u{1D16F}\u{1D1BA}\u{1D165}\u{1D16F}');
-+    expect(tokenizerText(cut.text)).toEqual(cut);
-+  });
-+
-+  it('returns nothing for a bound that admits nothing, and refuses a negative one', () => {
-+    expect(cutTailToTokenizerBytes('anything', 0)).toEqual({
++  it('mark no slice that would hold none of the line', () => {
++    // After the whole lines, the line break and the mark leave nothing.
++    expect(keepLeadingLines(text, 15)).toEqual({
++      text: 'alpha\nbravo',
++      bytes: 11,
++      whole: 2,
++      sliced: false,
++    });
++    expect(keepLeadingLines('anything', 3)).toEqual({
 +      text: '',
 +      bytes: 0,
++      whole: 0,
++      sliced: false,
 +    });
-+    expect(() => cutTailToTokenizerBytes('anything', -1)).toThrow(
-+      'does not fit the bound it was cut to',
++  });
++
++  it('never meet the cut on a blank line, which is left to the cut', () => {
++    // The start would close on two blank lines, the end open on two.
++    expect(keepLeadingLines('one\n\n\ntwo\nthree', 8)).toEqual({
++      text: 'one',
++      bytes: 3,
++      whole: 1,
++      sliced: false,
++    });
++    expect(keepTrailingLines('one\ntwo\n\n \nthree\n', 10)).toEqual({
++      text: 'three\n',
++      bytes: 6,
++      whole: 2,
++      sliced: false,
++    });
++    // A blank line inside an end is part of what it shows, and a sliced line
++    // is where it meets the cut.
++    expect(keepTrailingLines('xxxxxxxx\n\nend', 9)).toEqual({
++      text: '...x\n\nend',
++      bytes: 9,
++      whole: 2,
++      sliced: true,
++    });
++  });
++
++  it('measure and hand on the NFC form, and slice on a code-point boundary', () => {
++    expect(keepLeadingLines('café', 32)).toEqual({
++      text: 'café',
++      bytes: 5,
++      whole: 1,
++      sliced: false,
++    });
++    // Three bytes each: 29 bytes beside the mark hold nine of them.
++    const euros = '€'.repeat(12);
++    expect(keepLeadingLines(euros, 32).text).toBe(`${'€'.repeat(9)}...`);
++    expect(keepTrailingLines(euros, 32).text).toBe(`...${'€'.repeat(9)}`);
++    // U+1D1C0 is four bytes as written and twelve in NFC, three code points
++    // of four; twenty bytes beside the mark hold five of the fifteen.
++    const cut = keepLeadingLines('\u{1D1C0}'.repeat(5), 23);
++    expect(cut.bytes).toBe(23);
++    expect(cut.text).toBe(
++      '\u{1D1BA}\u{1D165}\u{1D16F}\u{1D1BA}\u{1D165}...',
++    );
++    expect(tokenizerText(cut.text).text).toBe(cut.text);
++    const end = keepTrailingLines('\u{1D1C0}'.repeat(5), 23);
++    expect(end.text).toBe('...\u{1D165}\u{1D16F}\u{1D1BA}\u{1D165}\u{1D16F}');
++    expect(tokenizerText(end.text).text).toBe(end.text);
++  });
++
++  it('refuse a bound that is not a whole number of bytes', () => {
++    expect(() => keepLeadingLines('anything', -1)).toThrow(
++      'A cut is made to a whole number of bytes, not -1.',
++    );
++    expect(() => keepTrailingLines('anything', 1.5)).toThrow(
++      'A cut is made to a whole number of bytes, not 1.5.',
 +    );
 +  });
 +});
@@ -178502,7 +178573,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('defaultOutputCeiling', () => {
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
-@@ -625,6 +877,39 @@
+@@ -625,6 +948,39 @@
    it('returns undefined when either side is absent (caller applies its own fallback)', () => {
      expect(reconcileMaxTokens(8_000, undefined)).toBeUndefined();
      expect(reconcileMaxTokens(undefined, 8_000)).toBeUndefined();
@@ -178545,7 +178616,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,371 @@
+@@ -8,88 +8,477 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -178919,43 +178990,149 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +}
 +
 +/**
-+ * The longest suffix of `text` whose tokenizer form fits `maxBytes`, in that
-+ * form: the tail `cutToTokenizerBytes` is the head of.
-+ *
-+ * The cut is made in the normalized text on a code-point boundary, walking
-+ * forward off continuation bytes, for the reason the head's cut walks back.
-+ * A suffix of normalized text is normalized text: composition and canonical
-+ * order act within a run that begins at a starter, and the cut can only leave
-+ * marks with no starter before them, which nothing composes. The suffix is
-+ * normalized and measured again anyway, and one that differs from the cut, or
-+ * does not fit, is an error rather than a result, because the caller counts
-+ * lines in the text it cut.
++ * What marks a line an end of a cut text holds only part of: the ellipsis
++ * upstream's truncator puts where it slices a line, after the part kept at
++ * the start and before the part kept at the end.
 + */
-+export function cutTailToTokenizerBytes(
++export const SLICED_LINE_MARK = '...';
++
++/**
++ * One end of a text cut on line boundaries, in the tokenizer's form.
++ *
++ * An end holds whole lines, in order, joined by the line breaks between them;
++ * past the last line that fits whole it may hold part of the next line in,
++ * marked where it was sliced, as upstream's truncator marks one. A cut never
++ * hands on part of a line as if it were the line.
++ */
++export interface KeptLines {
++  /** The kept lines, joined by line breaks, in NFC. */
++  readonly text: string;
++  /** Its UTF-8 bytes, the mark included: the most tokens it can become. */
++  readonly bytes: number;
++  /** How many of the text's lines this end holds whole. */
++  readonly whole: number;
++  /** Whether it also holds part of the next line in, marked as sliced. */
++  readonly sliced: boolean;
++}
++
++/** A line with nothing on it to read. */
++function isBlankLine(line: string): boolean {
++  return line.trim() === '';
++}
++
++/**
++ * The longest part of one normalized line that fits `maxBytes`, taken from
++ * its start or from its end, cut on a code-point boundary: cutting a UTF-8
++ * sequence in half would hand the model a replacement character
++ * indistinguishable from one the source contained, and a sequence is at most
++ * four bytes, so the walk off a continuation byte is at most three steps. A
++ * part of normalized text cut this way is normalized text: composition and
++ * canonical order act within a run that begins at a starter, and a cut can
++ * only drop the end of one run or leave marks with no starter before them,
++ * which nothing composes.
++ */
++function partOfLine(
++  line: string,
++  maxBytes: number,
++  from: 'start' | 'end',
++): string {
++  const encoded = Buffer.from(line, 'utf8');
++  const room = Math.max(0, Math.min(maxBytes, encoded.byteLength));
++  const continuation = (at: number) =>
++    at < encoded.byteLength && (encoded[at] & 0b1100_0000) === 0b1000_0000;
++  if (from === 'start') {
++    let end = room;
++    while (end > 0 && continuation(end)) end--;
++    return encoded.subarray(0, end).toString('utf8');
++  }
++  let start = encoded.byteLength - room;
++  while (continuation(start)) start++;
++  return encoded.subarray(start).toString('utf8');
++}
++
++/**
++ * One end of `text` within `maxBytes` of its tokenizer form, cut on line
++ * boundaries: `start` keeps its first lines and `end` its last.
++ *
++ * Lines are taken whole for as long as the next one fits with the line break
++ * that joins it. The first line that does not fit is sliced to the room that
++ * is left and marked as sliced, as upstream's truncator slices one, if at
++ * least one character of it fits beside the mark; a mark with nothing beside
++ * it would mark a cut and show none of the line. An end held only in whole
++ * lines does not open or close on a blank line where it meets the cut: the
++ * cut is set off by a blank line of its own, and one beside it would read as
++ * a gap in the result that is only the edge of the cut, so it is left to the
++ * cut instead.
++ *
++ * The text is normalized once and split on its line breaks, which
++ * normalization does not act across, so every line is measured in the form
++ * it is handed on in, and the end is those lines joined. What is handed on
++ * is measured again whole, and an end that does not fit is an error rather
++ * than a result: the bound is asserted on the text handed on, never inferred
++ * from how it was assembled.
++ */
++function keepLines(
 +  text: string,
 +  maxBytes: number,
-+): TokenizerText {
-+  const encoded = Buffer.from(tokenizerText(text).text, 'utf8');
-+  let start = Math.max(0, encoded.byteLength - Math.max(0, maxBytes));
-+  while (
-+    start < encoded.byteLength &&
-+    (encoded[start] & 0b1100_0000) === 0b1000_0000
-+  ) {
-+    start++;
-+  }
-+  const cut = encoded.subarray(start).toString('utf8');
-+  const tail = tokenizerText(cut);
-+  if (tail.text !== cut) {
++  from: 'start' | 'end',
++): KeptLines {
++  if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
 +    throw new Error(
-+      'A tail cut from normalized text changed when normalized again, so it is not the tail of the text it was cut from.',
++      `A cut is made to a whole number of bytes, not ${maxBytes}.`,
 +    );
 +  }
-+  if (tail.bytes > maxBytes) {
++  const lines = tokenizerText(text).text.split('\n');
++  if (from === 'end') lines.reverse();
++  const markBytes = Buffer.byteLength(SLICED_LINE_MARK, 'utf8');
++  const kept: string[] = [];
++  let used = 0;
++  let sliced = false;
++  for (const line of lines) {
++    const separator = kept.length > 0 ? 1 : 0;
++    const lineBytes = Buffer.byteLength(line, 'utf8');
++    if (used + separator + lineBytes <= maxBytes) {
++      kept.push(line);
++      used += separator + lineBytes;
++      continue;
++    }
++    const part = partOfLine(line, maxBytes - used - separator - markBytes, from);
++    if (part.length > 0) {
++      kept.push(
++        from === 'start'
++          ? `${part}${SLICED_LINE_MARK}`
++          : `${SLICED_LINE_MARK}${part}`,
++      );
++      sliced = true;
++    }
++    break;
++  }
++  if (!sliced) {
++    while (kept.length > 0 && isBlankLine(kept[kept.length - 1])) kept.pop();
++  }
++  if (from === 'end') kept.reverse();
++  const joined = kept.join('\n');
++  const measured = tokenizerText(joined);
++  if (measured.text !== joined || measured.bytes > maxBytes) {
 +    throw new Error(
-+      `A tail cut to ${maxBytes} bytes normalizes to ${tail.bytes}, so it does not fit the bound it was cut to.`,
++      `A cut to ${maxBytes} bytes on line boundaries normalizes to ${measured.bytes}, so it does not fit the bound it was cut to.`,
 +    );
 +  }
-+  return tail;
++  return {
++    text: measured.text,
++    bytes: measured.bytes,
++    whole: kept.length - (sliced ? 1 : 0),
++    sliced,
++  };
++}
++
++/** The first lines of `text` within `maxBytes`, as `keepLines` cuts them. */
++export function keepLeadingLines(text: string, maxBytes: number): KeptLines {
++  return keepLines(text, maxBytes, 'start');
++}
++
++/** The last lines of `text` within `maxBytes`, as `keepLines` cuts them. */
++export function keepTrailingLines(text: string, maxBytes: number): KeptLines {
++  return keepLines(text, maxBytes, 'end');
  }
  
  export function parsePositiveIntegerEnvValue(
@@ -178983,7 +179160,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -392,18 +675,20 @@
+@@ -392,18 +781,20 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -179157,7 +179334,7 @@ diff --git a/packages/core/src/core/tool-outcome.ts b/packages/core/src/core/too
 diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/core/toolResultBound.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/toolResultBound.test.ts
-@@ -0,0 +1,616 @@
+@@ -0,0 +1,708 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -179230,24 +179407,78 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +const CUT_OPENS = '\n\n---\nThe middle of this result is cut here: ';
 +const CUT_CLOSES = '\n---\n\n';
 +
++/** Upstream's mark on a line an end holds only part of. */
++const SLICED = '...';
++
 +/**
 + * A bounded result taken apart: the start it keeps, the one notice standing
-+ * in the cut, and the end it keeps. The notice is one line, so the first rule
-+ * after it closes the cut.
++ * in the cut, and the end it keeps, each end also without the mark on a line
++ * it sliced -- the part of the result it shows. The notice is one line, so
++ * the first rule after it closes the cut.
 + */
 +const cutOf = (
 +  bounded: string,
-+): { head: string; notice: string; tail: string } => {
++): {
++  head: string;
++  notice: string;
++  tail: string;
++  shownHead: string;
++  shownTail: string;
++} => {
 +  const opens = bounded.indexOf(CUT_OPENS);
 +  expect(opens).toBeGreaterThanOrEqual(0);
 +  const closes = bounded.indexOf(CUT_CLOSES, opens + 6);
 +  const notice = bounded.slice(opens + 6, closes);
 +  expect(notice).not.toContain('\n');
++  const head = bounded.slice(0, opens);
++  const tail = bounded.slice(closes + CUT_CLOSES.length);
 +  return {
-+    head: bounded.slice(0, opens),
++    head,
 +    notice,
-+    tail: bounded.slice(closes + CUT_CLOSES.length),
++    tail,
++    shownHead: head.endsWith(SLICED) ? head.slice(0, -SLICED.length) : head,
++    shownTail: tail.startsWith(SLICED) ? tail.slice(SLICED.length) : tail,
 +  };
++};
++
++/**
++ * An end cut on line boundaries, checked against the lines it was cut from:
++ * every line it holds is a line of the text, whole, except one at the cut,
++ * which holds part of its line and is marked. Returns how many lines it holds
++ * whole.
++ */
++const expectWholeLines = (
++  end: string,
++  lines: readonly string[],
++  from: 'start' | 'end',
++): number => {
++  const held = end.split('\n');
++  if (from === 'end') {
++    held.reverse();
++  }
++  const source = from === 'start' ? lines : [...lines].reverse();
++  let whole = 0;
++  held.forEach((line, index) => {
++    if (line === source[index]) {
++      whole++;
++      return;
++    }
++    // Only the line at the cut may differ, and only as a marked part.
++    expect(index).toBe(held.length - 1);
++    if (from === 'start') {
++      expect(line.endsWith(SLICED)).toBe(true);
++      expect(source[index].startsWith(line.slice(0, -SLICED.length))).toBe(
++        true,
++      );
++    } else {
++      expect(line.startsWith(SLICED)).toBe(true);
++      expect(source[index].endsWith(line.slice(SLICED.length))).toBe(true);
++    }
++    expect(line.length - SLICED.length).toBeLessThan(source[index].length);
++  });
++  // Neither end meets the cut on a blank line.
++  expect(held[held.length - 1].trim()).not.toBe('');
++  return whole;
 +};
 +
 +describe('boundToolResponseParts', () => {
@@ -179275,21 +179506,30 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    expect(tokenizerText(bounded).bytes).toBeGreaterThan(
 +      INLINE_BLOCK_BYTES - 400,
 +    );
-+    const { head, notice, tail } = cutOf(bounded);
-+    expect(text.startsWith(head)).toBe(true);
-+    expect(text.endsWith(tail)).toBe(true);
++    const { head, notice, tail, shownHead, shownTail } = cutOf(bounded);
++    const lines = text.split('\n');
++    expectWholeLines(head, lines, 'start');
++    expectWholeLines(tail, lines, 'end');
++    expect(text.startsWith(shownHead)).toBe(true);
++    expect(text.endsWith(shownTail)).toBe(true);
 +    // Upstream's split: the start is given one fifth of the room and the end
-+    // the rest, so the end is four times the start, to within the room's
-+    // remainder over five.
++    // the rest, and each fills its share to within the line break and mark of
++    // a line it could not slice -- under five bytes -- so the end is four
++    // times the start, to within five of those and the room's remainder over
++    // five.
 +    const headBytes = Buffer.byteLength(head);
 +    const tailBytes = Buffer.byteLength(tail);
-+    expect(tailBytes - 4 * headBytes).toBeGreaterThanOrEqual(0);
-+    expect(tailBytes - 4 * headBytes).toBeLessThan(5);
++    expect(tailBytes - 4 * headBytes).toBeGreaterThan(-5);
++    expect(tailBytes - 4 * headBytes).toBeLessThan(29);
 +    const artifact = sessionArtifactPath(config(), Buffer.from(text), 'txt');
++    // What it says it returned is the part of the result it shows, the marks
++    // on its sliced lines not counted.
++    const shownBytes =
++      Buffer.byteLength(shownHead) + Buffer.byteLength(shownTail);
 +    expect(
 +      notice.startsWith(
 +        `The middle of this result is cut here: above is its start, below is its end. ` +
-+          `Bounded result: ${headBytes + tailBytes} of ${Buffer.byteLength(text)} bytes in total, ` +
++          `Bounded result: ${shownBytes} of ${Buffer.byteLength(text)} bytes in total, ` +
 +          `cut at a limit of ${INLINE_BLOCK_BYTES} bytes. ` +
 +          `Continue with: read_file with file_path: ${JSON.stringify(artifact)}, offset: `,
 +      ),
@@ -179298,12 +179538,12 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    expect(await fs.readFile(artifact, 'utf8')).toBe(text);
 +  });
 +
-+  it('reads back from the line the start was cut in through the line the end begins in', async () => {
++  it('reads back every line the start or the end does not hold whole', async () => {
 +    const lines = Array.from(
 +      { length: 3000 },
 +      (_, i) => `row ${i} ${'y'.repeat(30)}`,
 +    );
-+    const text = lines.join('\n');
++    const text = `${lines.join('\n')}\n`;
 +    const [part] = await boundToolResponseParts(config(), [
 +      response('output', text),
 +    ]);
@@ -179311,28 +179551,53 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    const [, offset, limit] = (
 +      /offset: (\d+), limit: (\d+)$/.exec(notice) ?? []
 +    ).map(Number);
-+    // The start holds every line before `offset` whole, and at most part of
-+    // line `offset`.
-+    expect(head.split('\n').length - 1).toBe(offset);
-+    expect(lines.slice(0, offset).join('\n') + '\n').toBe(
-+      head.slice(0, head.lastIndexOf('\n') + 1),
++    // The start holds lines 0 to `offset - 1` whole, and the read begins at
++    // the first line it does not: the one it sliced, when it sliced one.
++    expect(expectWholeLines(head, lines, 'start')).toBe(offset);
++    // The end holds the empty segment after the final line break and the
++    // lines before it whole; the read ends at the last line it does not hold
++    // whole, and never asks past the file's last line.
++    const tailWhole = expectWholeLines(tail, [...lines, ''], 'end');
++    expect(tail.endsWith(`${lines[lines.length - 1]}\n`)).toBe(true);
++    expect(offset + limit).toBe(lines.length - (tailWhole - 1));
++    expect(offset + limit).toBeLessThanOrEqual(lines.length);
++  });
++
++  it('cuts on line boundaries, marking a line it slices as upstream marks one, and meets the cut on no blank line', async () => {
++    // Long lines, with blank lines between them: wherever the cut falls, a
++    // whole line, a marked part of one, or a blank line left to the cut is
++    // what each end meets it with.
++    const lines = Array.from({ length: 900 }, (_, i) =>
++      i % 3 === 2 ? '' : `entry ${i} ${'z'.repeat(97 + (i % 7))}`,
 +    );
-+    expect(
-+      lines[offset].startsWith(head.slice(head.lastIndexOf('\n') + 1)),
-+    ).toBe(true);
-+    // The end holds every line after the one it begins in whole, and at most
-+    // part of that one.
-+    const tailLine = lines.length - tail.split('\n').length;
-+    const firstPiece = tail.slice(0, tail.indexOf('\n'));
-+    expect(lines[tailLine].endsWith(firstPiece)).toBe(true);
-+    expect(lines.slice(tailLine + 1).join('\n')).toBe(
-+      tail.slice(tail.indexOf('\n') + 1),
-+    );
-+    // The read returns every line from `offset` through the one the end
-+    // begins in -- or the one before it, when the end begins at a line's
-+    // start -- so it leaves nothing the cut removed unread.
-+    const lastCut = firstPiece === lines[tailLine] ? tailLine - 1 : tailLine;
-+    expect(offset + limit - 1).toBe(lastCut);
++    const text = lines.join('\n');
++    const [part] = await boundToolResponseParts(config(), [
++      response('output', text),
++    ]);
++    const { head, tail, notice } = cutOf(textOf(part));
++    const headWhole = expectWholeLines(head, lines, 'start');
++    const tailWhole = expectWholeLines(tail, lines, 'end');
++    const [, offset, limit] = (
++      /offset: (\d+), limit: (\d+)$/.exec(notice) ?? []
++    ).map(Number);
++    expect(offset).toBe(headWhole);
++    expect(offset + limit).toBe(lines.length - tailWhole);
++  });
++
++  it('reads back to the last line and not past it when the end holds only blank lines', async () => {
++    // Blank lines fill the end's share, and an end does not meet the cut on
++    // a blank line, so it holds none of them: the read back covers them all,
++    // through the last line, and not the empty segment after the final line
++    // break, which is not a line.
++    const blank = 2 * INLINE_BLOCK_BYTES;
++    const text = `${'x'.repeat(10)}${'\n'.repeat(blank)}`;
++    const [part] = await boundToolResponseParts(config(), [
++      response('output', text),
++    ]);
++    const { head, tail, notice } = cutOf(textOf(part));
++    expect(head).toBe('x'.repeat(10));
++    expect(tail).toBe('');
++    expect(notice).toMatch(new RegExp(`, offset: 1, limit: ${blank - 1}$`));
 +  });
 +
 +  it('bounds the joined text, not the tool output alone', async () => {
@@ -179371,9 +179636,9 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    );
 +    // What is handed on is the form that was measured.
 +    expect(bounded).not.toContain('\u{1D1C0}');
-+    const { head, tail } = cutOf(bounded);
-+    expect(tokenizerText(text).text.startsWith(head)).toBe(true);
-+    expect(tokenizerText(text).text.endsWith(tail)).toBe(true);
++    const { shownHead, shownTail } = cutOf(bounded);
++    expect(tokenizerText(text).text.startsWith(shownHead)).toBe(true);
++    expect(tokenizerText(text).text.endsWith(shownTail)).toBe(true);
 +  });
 +
 +  it('never splits a multi-byte code point at either boundary', async () => {
@@ -179381,14 +179646,17 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    const [part] = await boundToolResponseParts(config(), [
 +      response('output', text),
 +    ]);
-+    const { head, tail } = cutOf(textOf(part));
++    const { head, tail, shownHead, shownTail } = cutOf(textOf(part));
 +    for (const end of [head, tail]) {
 +      expect(Buffer.from(end, 'utf8').toString('utf8')).toBe(end);
 +      expect(end).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/u);
 +      expect(end).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u);
 +    }
-+    expect(text.startsWith(head)).toBe(true);
-+    expect(text.endsWith(tail)).toBe(true);
++    // One line, so each end is a marked part of it.
++    expect(head.endsWith(SLICED)).toBe(true);
++    expect(tail.startsWith(SLICED)).toBe(true);
++    expect(text.startsWith(shownHead)).toBe(true);
++    expect(text.endsWith(shownTail)).toBe(true);
 +  });
 +
 +  it('bounds a failure by the same rule, keeping it a failure', async () => {
@@ -179401,10 +179669,10 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    expect(tokenizerText(bounded).bytes).toBeLessThanOrEqual(
 +      INLINE_BLOCK_BYTES,
 +    );
-+    const { head, tail } = cutOf(bounded);
-+    expect(failure.startsWith(head)).toBe(true);
++    const { shownHead, tail, shownTail } = cutOf(bounded);
++    expect(failure.startsWith(shownHead)).toBe(true);
 +    // The end of a failure is where it says what failed, and it is kept.
-+    expect(failure.endsWith(tail)).toBe(true);
++    expect(failure.endsWith(shownTail)).toBe(true);
 +    expect(tail.endsWith("': ENAMETOOLONG")).toBe(true);
 +    expect(part.functionResponse?.response).not.toHaveProperty('output');
 +    expect(part.functionResponse?.response?.['code']).toBe(36);
@@ -179430,9 +179698,9 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    );
 +    expect(bounded).toContain('Make a narrower call');
 +    expect(bounded).not.toContain('Continue with:');
-+    const { head, tail } = cutOf(bounded);
-+    expect(text.startsWith(head)).toBe(true);
-+    expect(text.endsWith(tail)).toBe(true);
++    const { shownHead, shownTail } = cutOf(bounded);
++    expect(text.startsWith(shownHead)).toBe(true);
++    expect(text.endsWith(shownTail)).toBe(true);
 +    expect(await fs.readdir(directory)).toEqual(['held.bin']);
 +  });
 +
@@ -179472,9 +179740,9 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +      INLINE_BLOCK_BYTES,
 +    );
 +    const serialized = JSON.stringify(response);
-+    const { head, tail } = cutOf(bounded);
-+    expect(serialized.startsWith(head)).toBe(true);
-+    expect(serialized.endsWith(tail)).toBe(true);
++    const { shownHead, shownTail } = cutOf(bounded);
++    expect(serialized.startsWith(shownHead)).toBe(true);
++    expect(serialized.endsWith(shownTail)).toBe(true);
 +    expect(
 +      await fs.readFile(
 +        sessionArtifactPath(config(), Buffer.from(serialized), 'txt'),
@@ -179704,8 +179972,9 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    expect(call.status).toBe('success');
 +    const copy = modelCopy(call);
 +    const { head, tail } = cutOf(copy);
-+    expect(text.startsWith(head)).toBe(true);
-+    expect(text.endsWith(tail)).toBe(true);
++    const lines = text.split('\n');
++    expectWholeLines(head, lines, 'start');
++    expectWholeLines(tail, lines, 'end');
 +    expect(tokenizerText(copy).bytes).toBeLessThanOrEqual(INLINE_BLOCK_BYTES);
 +    // What the call reports it sent is what it sends.
 +    expect(call.response.contentLength).toBe(copy.length);
@@ -179777,7 +180046,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/toolResultBound.ts
 --- /dev/null
 +++ b/packages/core/src/core/toolResultBound.ts
-@@ -0,0 +1,358 @@
+@@ -0,0 +1,378 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -179794,9 +180063,11 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +  sessionArtifactPath,
 +} from '../utils/session-artifacts.js';
 +import {
-+  cutTailToTokenizerBytes,
-+  cutToTokenizerBytes,
++  keepLeadingLines,
++  keepTrailingLines,
++  SLICED_LINE_MARK,
 +  tokenizerText,
++  type KeptLines,
 +} from './tokenLimits.js';
 +
 +/**
@@ -179821,9 +180092,13 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 + * it, one fifth to the start and the rest to the end, because what a result
 + * says last -- an exit status, an error, a test summary -- is most often what
 + * decides the next step, and a result laid out as upstream lays it out is a
-+ * result shaped as the model was trained to read. Both ends are cut first, to
-+ * what the notice leaves at its widest, so retaining the whole decides nothing
-+ * about them. A store at its capacity is an outcome, not a failure: the notice
++ * result shaped as the model was trained to read. Each end is cut as
++ * upstream's truncation cut it, too: on line boundaries, with a line only
++ * part of which fits sliced and marked where it was sliced, so neither end
++ * hands on a fragment as if it were a line, and neither meets the cut on a
++ * blank line. Both ends are cut first, to what the notice leaves at its
++ * widest, so retaining the whole decides nothing about them. A store at its
++ * capacity is an outcome, not a failure: the notice
 + * says the cut part was not retained, why, and what the caller can do instead.
 + * A store that is corrupt, locked by another writer or cannot be written is a
 + * defect, and that is thrown.
@@ -179935,6 +180210,13 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +  return count;
 +}
 +
++/** The bytes of the result an end shows: the end less the mark on a slice. */
++function shownBytes(end: KeptLines): number {
++  return (
++    end.bytes - (end.sliced ? Buffer.byteLength(SLICED_LINE_MARK, 'utf8') : 0)
++  );
++}
++
 +/**
 + * The model's copy of a text past `maxBytes`: its start and its end, with the
 + * notice in the cut between them.
@@ -179992,31 +180274,38 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +    );
 +  }
 +  // Upstream's split: the start is given one fifth of the room, and the end
-+  // takes all the start did not use.
++  // takes all the start did not use. Each end is at most the bytes it was
++  // given and the notice at most `widest`, so the three together are at most
++  // the bound, the blank lines and rules around the notice counted in
++  // `widest`: every piece is normalized text and meets the next at a line
++  // break, which normalization does not act across.
 +  const room = maxBytes - widest;
-+  const head = cutToTokenizerBytes(whole.text, Math.floor(room / 5));
-+  const tail = cutTailToTokenizerBytes(whole.text, room - head.bytes);
++  const head = keepLeadingLines(whole.text, Math.floor(room / 5));
++  const tail = keepTrailingLines(whole.text, room - head.bytes);
 +  const retention = await persistSessionArtifact(config, bytes, 'txt');
 +  if (retention.retained && retention.filepath !== filepath) {
 +    throw new Error(
 +      `The session artifact store retained ${retention.filepath}, not the ${filepath} this result's notice names.`,
 +    );
 +  }
-+  // The read that returns the cut starts at the line the start was cut in,
-+  // or the line after it when the start ends at a line break, and ends at the
-+  // line the end was cut in, or the line before it when the end begins at a
-+  // line's start. It re-reads the partial lines at either edge whole, so no
-+  // part of the result is left unread.
-+  const firstCut = lineBreaks(head.text);
-+  const tailFrom = whole.text.length - tail.text.length;
-+  const tailLine = lastLine - lineBreaks(tail.text);
-+  const lastCut =
-+    tailFrom > 0 && whole.text[tailFrom - 1] === '\n' ? tailLine - 1 : tailLine;
++  // The read that returns the cut starts at the first line the start does not
++  // hold whole and ends at the last line the end does not hold whole, so it
++  // re-reads a sliced line whole and leaves no part of the result unread. The
++  // empty segment after a final line break is not a line, so a read never
++  // asks past the last one.
++  const lastTextLine = whole.text.endsWith('\n') ? lastLine - 1 : lastLine;
++  const firstCut = head.whole;
++  const lastCut = Math.min(lastLine - tail.whole, lastTextLine);
++  if (lastCut < firstCut) {
++    throw new Error(
++      `A cut result keeps lines 1-${firstCut} and its last ${tail.whole} whole, which leaves no line between them to read back.`,
++    );
++  }
 +  const emitted = tokenizerText(
 +    middleCutContent(
 +      head.text,
 +      bound(
-+        head.bytes + tail.bytes,
++        shownBytes(head) + shownBytes(tail),
 +        retention.retained
 +          ? readBack(firstCut, lastCut - firstCut + 1)
 +          : unretained,
