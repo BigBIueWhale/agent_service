@@ -8030,7 +8030,8 @@ def _validate_bounded_output_after(state: State) -> None:
             "            : { lines: trueTotal, remaining: trueTotal - last },",
             "        nextOffset: result.nextRead.offset,\n        limit: this.params.limit,\n      })}${PAGE_STATEMENT_BREAK}${page}`;",
             "result.originalLineCount - (result.endsWithNewline === true ? 1 : 0);",
-            "  return page.split('\\n').length - (page === '' || page.endsWith('\\n') ? 1 : 0);",
+            "import { countTextLines } from '../utils/lineCount.js';",
+            "      const last = this.params.offset + countTextLines(page);",
             'A read that returns less than the whole file is led by "Showing lines X-Y of N total lines." and then either "The file continues past line Y: R lines remain. Continue with:" and the exact call that reads on, with the same \'limit\', or "The file ends here."',
         ),
         label=label,
@@ -8044,8 +8045,59 @@ def _validate_bounded_output_after(state: State) -> None:
         "in total: the file ends here",
         "No lines: the file has",
         "states the lines it returned, the file's total line count, and the exact next call to make",
+        "function pageLineCount(",
     ):
         forbid_text(state, read_file_tool, retired, label=label)
+
+    # A count that says lines means lines, in one place for every tool: a
+    # final line break ends the last line and does not start another, and an
+    # empty text has none. read_file counts a page by it and the edit counts
+    # the edited file by it, so the two state one number for one file.
+    line_count = "packages/core/src/utils/lineCount.ts"
+    _require_all(
+        state,
+        line_count,
+        (
+            "export function countTextLines(text: string): number {",
+            "  if (text === '') return 0;",
+            "  return text.split('\\n').length - (text.endsWith('\\n') ? 1 : 0);",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/utils/editHelper.ts",
+        (
+            "import { countTextLines } from './lineCount.js';",
+            "  const totalLines = countTextLines(newContent);",
+            "    if (totalLines === 0) return null;",
+        ),
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/utils/editHelper.ts",
+        "const totalLines = newLines.length;",
+        label=label,
+    )
+    # The edit states the excerpt it shows in upstream's words: an excerpt
+    # around an edit is not a result cut to a bound, and naming it one said
+    # something was cut when nothing was.
+    edit_tool = "packages/core/src/tools/edit.ts"
+    require_text(
+        state,
+        edit_tool,
+        "        const snippetText = `Showing lines ${snippetResult.startLine}-${snippetResult.endLine} of ${snippetResult.totalLines} from the edited file:\\n\\n---\\n\\n${snippetResult.content}`;",
+        label=label,
+    )
+    for retired in ("boundedContent", "lines around the edit", "Bounded result"):
+        forbid_text(state, edit_tool, retired, label=label)
+    for test_path, case in (
+        ("packages/core/src/utils/lineCount.test.ts", "counts a final line break as the end of the last line, not the start of another"),
+        ("packages/core/src/utils/lineCount.test.ts", "counts blank lines as lines, and an empty text as none"),
+        ("packages/core/src/tools/edit.test.ts", "states the lines of the edited file as read_file counts them, a final line break ending the last"),
+    ):
+        require_text(state, test_path, case, label=label)
     # Executed in the build: both endings, the offer of the caller's limit
     # through a whole file, and the page bytes the statement leaves.
     for name in (
@@ -8142,7 +8194,10 @@ def _validate_bounded_output_after(state: State) -> None:
         if path == tools_ts:
             continue
         for retired in _RETIRED_NOTICES:
-            if retired == "Showing lines " and path == read_file_tool:
+            # A range statement, not a notice of a cut: read_file leads a page
+            # with it and the edit leads its excerpt with it, both in
+            # upstream's words.
+            if retired == "Showing lines " and path in (read_file_tool, edit_tool):
                 continue
             _require(
                 retired not in text,

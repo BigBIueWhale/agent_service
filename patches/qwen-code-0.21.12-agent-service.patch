@@ -241364,37 +241364,46 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
  import { applyReplacement, EditTool } from './edit.js';
  import type { FileDiff, ToolInvocation, ToolResult } from './tools.js';
  import { ToolErrorType } from './tool-error.js';
-@@ -593,13 +594,13 @@
-       const writeSpy = vi.spyOn(fsService, 'writeTextFile');
- 
-       const invocation = tool.build(params);
-       const result = await invocation.execute(new AbortController().signal);
- 
-       expect(result.llmContent).toMatch(
--        /Showing lines \d+-\d+ of \d+ from the edited file:/,
-+        /Bounded result: \d+ of \d+ lines in total/,
-       );
-       expect(fs.readFileSync(filePath, 'utf8')).toBe(newContent);
-       expect(mockFileHistoryService.trackEdit).toHaveBeenCalledWith(filePath);
-       const display = result.returnDisplay as FileDiff;
-       expect(display.fileDiff).toMatch(initialContent);
-       expect(display.fileDiff).toMatch(newContent);
-@@ -629,13 +630,13 @@
-       const invocation = tool.build(params);
-       const result = await invocation.execute(new AbortController().signal);
- 
-       expect(mockFileHistoryService.trackEdit).toHaveBeenCalledWith(filePath);
-       expect(fs.readFileSync(filePath, 'utf8')).toBe(newContent);
-       expect(result.llmContent).toMatch(
--        /Showing lines \d+-\d+ of \d+ from the edited file:/,
-+        /Bounded result: \d+ of \d+ lines in total/,
-       );
+@@ -580,6 +581,38 @@
+       calculateSpy.mockRestore();
      });
  
-     // Pin the upstream-aligned ordering: trackEdit MUST run before the
-     // pre-write checkPriorRead. The upstream `claude-code/src/tools/
-     // FileEditTool` comment on the equivalent block says:
-@@ -727,21 +728,26 @@
++    it('states the lines of the edited file as read_file counts them, a final line break ending the last', async () => {
++      // Ten lines, the last ended by its line break: ten, where splitting on
++      // line breaks would say eleven.
++      const lines = Array.from({ length: 10 }, (_, i) => `line ${i + 1}`);
++      fs.writeFileSync(filePath, `${lines.join('\n')}\n`, 'utf8');
++      seedPriorRead(filePath);
++      const invocation = tool.build({
++        file_path: filePath,
++        old_string: 'line 2',
++        new_string: 'line two',
++      });
++      const result = await invocation.execute(new AbortController().signal);
++
++      expect(result.llmContent).toBe(
++        `The file: ${filePath} has been updated. Showing lines 1-6 of 10 from the edited file:\n\n---\n\nline 1\nline two\nline 3\nline 4\nline 5\nline 6`,
++      );
++
++      // An edit to the last line shows the file to its last line, and no
++      // line past it.
++      seedPriorRead(filePath);
++      const last = await tool
++        .build({
++          file_path: filePath,
++          old_string: 'line 10',
++          new_string: 'line ten',
++        })
++        .execute(new AbortController().signal);
++      expect(last.llmContent).toBe(
++        `The file: ${filePath} has been updated. Showing lines 6-10 of 10 from the edited file:\n\n---\n\nline 6\nline 7\nline 8\nline 9\nline ten`,
++      );
++    });
++
+     it('should edit an existing file and return diff with fileName', async () => {
+       const initialContent = 'This is some old text.';
+       const newContent = 'This is some new text.'; // old -> new
+@@ -727,21 +760,26 @@
          // with a positive contribution.
          expect(attribution!.aiContribution).toBeGreaterThan(0);
          // Length sanity: contribution is bounded by the new content.
@@ -241428,37 +241437,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          expect(
            CommitAttributionService.getInstance().getFileAttribution(filePath),
          ).toBeUndefined();
-@@ -764,13 +770,13 @@
-       const writeSpy = vi.spyOn(fsService, 'writeTextFile');
-       const invocation = tool.build(params);
-       const result = await invocation.execute(new AbortController().signal);
- 
-       expect(result.llmContent).toMatch(/Created new file/);
-       expect(result.llmContent).toMatch(
--        /Showing lines \d+-\d+ of \d+ from the edited file:/,
-+        /Bounded result: \d+ of \d+ lines in total/,
-       );
-       expect(fs.existsSync(newFilePath)).toBe(true);
-       expect(fs.readFileSync(newFilePath, 'utf8')).toBe(fileContent);
-       expect(writeSpy).toHaveBeenCalledWith(
-         expect.objectContaining({ toolWriteOrigin: 'edit' }),
-       );
-@@ -910,13 +916,13 @@
-       };
- 
-       const invocation = tool.build(params);
-       const result = await invocation.execute(new AbortController().signal);
- 
-       expect(result.llmContent).toMatch(
--        /Showing lines \d+-\d+ of \d+ from the edited file/,
-+        /Bounded result: \d+ of \d+ lines in total/,
-       );
-       expect(fs.readFileSync(filePath, 'utf8')).toBe(
-         'new text\nnew text\nnew text',
-       );
-       const display = result.returnDisplay as FileDiff;
- 
-@@ -955,13 +961,12 @@
+@@ -955,13 +993,12 @@
        const initialContent = 'This is some old text.';
        fs.writeFileSync(filePath, initialContent, 'utf8');
        const params: EditToolParams = {
@@ -241472,7 +241451,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          ApprovalMode.AUTO_EDIT,
        );
        const invocation = tool.build(params);
-@@ -969,13 +974,13 @@
+@@ -969,13 +1006,13 @@
  
        expect(result.llmContent).not.toMatch(
          /User modified the `new_string` content/,
@@ -241487,7 +241466,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          file_path: filePath,
          old_string: 'old',
          new_string: 'new',
-@@ -1474,12 +1479,16 @@
+@@ -1474,12 +1511,16 @@
          .execute(abortSignal);
  
        expect(result.error?.type).toBe(
@@ -241504,25 +241483,10 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
      });
  
      it('does not let an unread file be probed via NO_OCCURRENCE_FOUND', async () => {
-@@ -1727,13 +1736,13 @@
-         );
- 
-         const invocation = tool.build(params);
-         const result = await invocation.execute(new AbortController().signal);
- 
-         // Should succeed — not fail with file-not-found
--        expect(result.llmContent).toMatch(/Showing lines \d+-\d+ of \d+/);
-+        expect(result.llmContent).toMatch(/Bounded result: \d+ of \d+ lines in total/);
-         expect(fs.readFileSync(realPath, 'utf8')).toBe('Hello new world!');
-       });
- 
-       it('should fail gracefully when escaped path points to nonexistent file', async () => {
-         const escapedPath = path.join(rootDir, 'nonexistent\\ file.txt');
-         const params: EditToolParams = {
 diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
 --- a/packages/core/src/tools/edit.ts
 +++ b/packages/core/src/tools/edit.ts
-@@ -1,23 +1,32 @@
+@@ -1,23 +1,27 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -241544,19 +241508,14 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
  } from './tools.js';
  import type { PermissionDecision } from '../permissions/types.js';
 -import { BaseDeclarativeTool, Kind, ToolConfirmationOutcome } from './tools.js';
-+import {
-+  BaseDeclarativeTool,
-+  boundedContent,
-+  Kind,
-+  ToolConfirmationOutcome,
-+} from './tools.js';
++import { BaseDeclarativeTool, Kind, ToolConfirmationOutcome } from './tools.js';
  import { ToolErrorType } from './tool-error.js';
  import { makeRelative, shortenPath, unescapePath } from '../utils/paths.js';
  import { getErrorMessage, isNodeError } from '../utils/errors.js';
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
  import { isAnyAutoMemPath, isTeamAutoMemPath } from '../memory/paths.js';
-@@ -98,22 +107,12 @@
+@@ -98,22 +102,12 @@
    new_string: string;
  
    /**
@@ -241579,7 +241538,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    currentContent: string | null;
    newContent: string;
    occurrences: number;
-@@ -627,13 +626,13 @@
+@@ -627,13 +621,13 @@
              lineEnding: editData.lineEnding,
            },
          });
@@ -241594,7 +241553,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
            editData.newContent,
          );
        }
-@@ -656,13 +655,14 @@
+@@ -656,13 +650,14 @@
          // post-write, so the next ReadFile will report stale and
          // refresh the entry.
        }
@@ -241610,34 +241569,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
          originallyProposedContent,
          editData.newContent,
        );
-@@ -712,13 +712,25 @@
- 
-       const snippetResult = extractEditSnippet(
-         editData.currentContent,
-         editData.newContent,
-       );
-       if (snippetResult) {
--        const snippetText = `Showing lines ${snippetResult.startLine}-${snippetResult.endLine} of ${snippetResult.totalLines} from the edited file:\n\n---\n\n${snippetResult.content}`;
-+        // An excerpt around the edit, not the file. It takes the shared
-+        // notice so a reader is told what it is holding before reading it.
-+        const shown = snippetResult.endLine - snippetResult.startLine + 1;
-+        const snippetText = boundedContent(snippetResult.content, {
-+          returned: shown,
-+          unit: 'lines',
-+          limit: shown,
-+          limitUnit: 'lines around the edit',
-+          total: snippetResult.totalLines,
-+          continuation: `read_file with file_path: ${JSON.stringify(
-+            this.params.file_path,
-+          )}, offset: 0`,
-+        });
-         llmSuccessMessageParts.push(snippetText);
-       }
- 
-       return {
-         llmContent: llmSuccessMessageParts.join(' '),
-         returnDisplay: displayResult,
-@@ -792,12 +804,13 @@
+@@ -792,12 +787,13 @@
              type: 'boolean',
              description:
                'Replace all occurrences of old_string (default false).',
@@ -241651,7 +241583,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    }
  
    /**
-@@ -891,26 +904,39 @@
+@@ -891,26 +887,39 @@
                params.old_string,
                params.new_string,
                params.old_string === '' && currentContent === '',
@@ -247611,7 +247543,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
 --- a/packages/core/src/tools/read-file.ts
 +++ b/packages/core/src/tools/read-file.ts
-@@ -5,52 +5,150 @@
+@@ -5,52 +5,142 @@
   */
  
  import path from 'node:path';
@@ -247640,6 +247572,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -import { parsePDFPageRange, PDF_MAX_PAGES_PER_READ } from '../utils/pdf.js';
 +import { PDF_PAGE_RANGE_REMEDY_TEMPLATE } from '../utils/pdf.js';
 +import { tokenizerText } from '../core/tokenLimits.js';
++import { countTextLines } from '../utils/lineCount.js';
  import type { Config } from '../config/config.js';
  import { FileOperation } from '../telemetry/metrics.js';
  import { getProgrammingLanguage } from '../telemetry/telemetry-utils.js';
@@ -247718,15 +247651,6 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +const PAGE_STATEMENT_BREAK = '\n\n---\n\n';
 +
 +/**
-+ * The lines a page carries, counted from the page itself: every line it holds
-+ * whole ends in a newline, and a last line without one is still a line. The
-+ * empty segment after a file's final newline is not a line.
-+ */
-+function pageLineCount(page: string): number {
-+  return page.split('\n').length - (page === '' || page.endsWith('\n') ? 1 : 0);
-+}
-+
-+/**
 + * The room one inline block leaves for a page of `filePath`: the block less
 + * the widest statement that can lead a page of it -- that the file continues,
 + * counted or still being counted, with the call that reads on, or that it
@@ -247783,7 +247707,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  /**
   * Parameters for the ReadFile tool
   */
-@@ -58,26 +156,20 @@
+@@ -58,26 +148,20 @@
    /**
     * The absolute path to the file to read
     */
@@ -247812,7 +247736,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    ReadFileToolParams,
    ToolResult
  > {
-@@ -92,23 +184,17 @@
+@@ -92,23 +176,17 @@
      const relativePath = makeRelative(
        this.params.file_path,
        this.config.getTargetDir(),
@@ -247838,7 +247762,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    override toolLocations(): ToolLocation[] {
-@@ -148,19 +234,17 @@
+@@ -148,19 +226,17 @@
      // never serve the file_unchanged placeholder — those files own a
      // per-read freshness `<system-reminder>` that must be re-emitted
      // on every read.
@@ -247862,7 +247786,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      // here is microseconds. If stat fails we fall through to the normal
      // pipeline so its error handling stays the single source of truth.
      let stats: Stats | undefined;
-@@ -181,7 +265,7 @@
+@@ -181,7 +257,7 @@
          status.entry.lastReadWasFull &&
          status.entry.lastReadCacheable &&
          // Only quote-back if that read is still in history (issue
@@ -247871,7 +247795,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
          status.entry.readResidentInHistory &&
          (status.entry.lastWriteAt === undefined ||
            status.entry.lastReadAt > status.entry.lastWriteAt)
-@@ -189,34 +273,34 @@
+@@ -189,34 +265,34 @@
          debugLogger.debug('hit', { path: absPath });
          return this.unchangedResult(absPath);
        }
@@ -247916,7 +247840,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
          },
        };
      }
-@@ -241,14 +325,14 @@
+@@ -241,14 +317,14 @@
      //
      //  - `full` — whether the model has seen every byte of the
      //    current file. This now gates ONLY the file_unchanged
@@ -247933,7 +247857,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      //    everything". NotebookEdit also requires this flag so a
      //    truncated notebook render does not authorize structured writes
      //    against unseen cells.
-@@ -278,19 +362,43 @@
+@@ -278,19 +354,44 @@
      }
  
      let llmContent: PartListUnion;
@@ -247959,7 +247883,8 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -      llmContent = `Showing lines ${start}-${end} of ${totalLabel} total lines.\n\n---\n\n${result.llmContent}`;
 +      const page = String(result.llmContent);
 +      const first = this.params.offset + 1;
-+      const last = this.params.offset + pageLineCount(page);
++      // A page counts its own lines, as the file's total is counted.
++      const last = this.params.offset + countTextLines(page);
 +      llmContent = `${pageContinues(this.params.file_path, {
 +        first,
 +        last,
@@ -247980,14 +247905,14 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +      // and the file ends with it.
 +      const page = String(result.llmContent);
 +      const first = this.params.offset + 1;
-+      llmContent = `${pageEnds(first, this.params.offset + pageLineCount(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;
++      llmContent = `${pageEnds(first, this.params.offset + countTextLines(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;
      } else {
        llmContent = result.llmContent || '';
      }
  
      // For memory files, prepend a per-file staleness caveat so the model knows
      // the content is a point-in-time snapshot and may be stale.
-@@ -309,6 +417,20 @@
+@@ -309,6 +410,20 @@
        }
      }
  
@@ -248008,7 +247933,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      const lines =
        typeof result.llmContent === 'string'
          ? result.llmContent.split('\n').length
-@@ -328,158 +450,14 @@
+@@ -328,158 +443,14 @@
          programming_language,
        ),
      );
@@ -248168,7 +248093,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
     * Build the placeholder ToolResult returned when the cache indicates
     * the file has not changed since the model last fully read it. The
     * placeholder is intentionally explicit about its assumptions so the
-@@ -525,49 +503,38 @@
+@@ -525,49 +496,38 @@
  export class ReadFileTool extends BaseDeclarativeTool<
    ReadFileToolParams,
    ToolResult
@@ -248223,7 +248148,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    protected override validateToolParamValues(
-@@ -583,55 +550,27 @@
+@@ -583,55 +543,27 @@
      }
  
      if (!path.isAbsolute(filePath)) {
@@ -261632,6 +261557,44 @@ diff --git a/packages/core/src/utils/durable-path.ts b/packages/core/src/utils/d
 +    if (current === dirname(current)) break;
 +  }
 +}
+diff --git a/packages/core/src/utils/editHelper.ts b/packages/core/src/utils/editHelper.ts
+--- a/packages/core/src/utils/editHelper.ts
++++ b/packages/core/src/utils/editHelper.ts
+@@ -1,11 +1,13 @@
+ /**
+  * @license
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
++
++import { countTextLines } from './lineCount.js';
+ 
+ /**
+  * Helpers for reconciling LLM-proposed edits with on-disk text.
+  *
+  * The normalization pipeline intentionally stays deterministic: we first try
+  * literal substring matches, then gradually relax comparison rules (smart
+@@ -408,15 +410,19 @@
+  */
+ export function extractEditSnippet(
+   oldContent: string | null,
+   newContent: string,
+ ): EditSnippetResult | null {
+   const newLines = newContent.split('\n');
+-  const totalLines = newLines.length;
++  // The file's lines, counted as read_file counts them: the empty segment
++  // after a final line break is not a line, so no line number below reaches
++  // it and the total is the file's.
++  const totalLines = countTextLines(newContent);
+ 
+   if (oldContent === null) {
++    if (totalLines === 0) return null;
+     return {
+       startLine: 1,
+       endLine: totalLines,
+       totalLines,
+       content: newContent,
+     };
 diff --git a/packages/core/src/utils/environmentContext.test.ts b/packages/core/src/utils/environmentContext.test.ts
 --- a/packages/core/src/utils/environmentContext.test.ts
 +++ b/packages/core/src/utils/environmentContext.test.ts
@@ -270337,6 +270300,58 @@ diff --git a/packages/core/src/utils/jsonl-utils.ts b/packages/core/src/utils/js
  };
  
  type JsonlReadLinesOptions = {
+diff --git a/packages/core/src/utils/lineCount.test.ts b/packages/core/src/utils/lineCount.test.ts
+--- /dev/null
++++ b/packages/core/src/utils/lineCount.test.ts
+@@ -0,0 +1,23 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { describe, expect, it } from 'vitest';
++import { countTextLines } from './lineCount.js';
++
++describe('countTextLines', () => {
++  it('counts a final line break as the end of the last line, not the start of another', () => {
++    expect(countTextLines('one\ntwo\n')).toBe(2);
++    expect(countTextLines('one\ntwo')).toBe(2);
++    expect(countTextLines('x\n'.repeat(10))).toBe(10);
++  });
++
++  it('counts blank lines as lines, and an empty text as none', () => {
++    expect(countTextLines('\n')).toBe(1);
++    expect(countTextLines('\n\n')).toBe(2);
++    expect(countTextLines('one\n\n')).toBe(2);
++    expect(countTextLines('')).toBe(0);
++  });
++});
+diff --git a/packages/core/src/utils/lineCount.ts b/packages/core/src/utils/lineCount.ts
+--- /dev/null
++++ b/packages/core/src/utils/lineCount.ts
+@@ -0,0 +1,21 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++/**
++ * How many lines a text holds, as every tool that states a line count counts
++ * them.
++ *
++ * A line ends in a line break, and a last line without one is still a line.
++ * The empty segment after a text's final line break is not a line, so a text
++ * that ends in one has a line fewer than it has segments, and an empty text
++ * has none. Splitting on line breaks counts that segment, and a count taken
++ * that way says a ten-line file has eleven. Two tools that state how many
++ * lines one file has state one number because both count here.
++ */
++export function countTextLines(text: string): number {
++  if (text === '') return 0;
++  return text.split('\n').length - (text.endsWith('\n') ? 1 : 0);
++}
 diff --git a/packages/core/src/utils/nextSpeakerChecker.test.ts b/packages/core/src/utils/nextSpeakerChecker.test.ts
 --- a/packages/core/src/utils/nextSpeakerChecker.test.ts
 +++ /dev/null

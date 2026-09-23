@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `c973390b45b42621b7d78bbcd45843ee30f77b94df0855c34a57cb83a233e63a`
+- Review-diff SHA-256: `343c8a5d62625b6429451a39cb61f151d301224ac1febd24d572ad3708fc4e44`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `3ef6e17f3f0944b84fb47a0e42e53216306aecab79b1351c0fca8088b231f6b5`
+- Transformer-manifest SHA-256: `58634582e1119b4f4319802a3b796f1ef5b2e4db961457102659b7b5bdf7c08a`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -134,7 +134,10 @@ rather than the size of the page that fit, which would shrink every page
 after a long one -- or "The file ends here."; the tool description quotes
 the same words. A count that says lines means lines: the split-segment
 count every range calculation uses is one higher whenever a file ends with a
-newline, and only the sentence subtracts it. Upstream's periodic todo reminder
+newline, and only the sentence subtracts it. The edit leads the excerpt it
+returns with upstream's "Showing lines X-Y of N from the edited file:", and
+counts the edited file's lines with the one helper read_file counts a page
+with, so the two state one number for one file. Upstream's periodic todo reminder
 is carried in upstream's shape -- its words and `- [status] content` lines, re-sent
 beside every third tool result and on every automatic turn while items are
 unfinished -- with the bound it lacked: its list is cut at 800 bytes of the NFC
