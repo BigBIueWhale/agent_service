@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `25affdeb2c3b4684f8635db860b6f0bbd438b9521ff8eab5eb40fe1ea7156b1f`
+- Review-diff SHA-256: `feac27563f5b8859e326519fbf1b716e97c47f40d68e24fdb9e5007864485213`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `17609992a4c985a017170636d6cf50e849403a751fc805a1be65830daf5feea6`
+- Transformer-manifest SHA-256: `41cc7b05d5d2fee7048d1c72e90ff5fc2d17c44870620ee6a98a98cb6c17fc33`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -90,8 +90,8 @@ declaration and the directive -- to the same share. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof counts the frame every compacted history
-holds around its blocks -- the resume trailer, the acknowledgement turn and a
-retained input's header -- with it, the blocks left out, and one todo reminder
+holds around its blocks -- the resume trailer and the acknowledgement turn --
+with it, the blocks left out, and one todo reminder
 with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — the one
 declared magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back rather
@@ -212,7 +212,7 @@ rather than cut. A redraw carries one message more than the request it
 repeats: why the draw before it was refused and what to do instead, built from
 measured values and closed names rather than the draw's text, never the draw
 itself, and bounded at its widest inside the directive's share of `D`. A
-candidate must end normally, carry the required six-part
+candidate must end normally, carry the required
 snapshot, reduce the request, and leave an issuable turn. Failure retains the
 previous history and reports that retained count. There is no separate
 reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
@@ -220,9 +220,15 @@ what the model can quote, not what it has seen: it disarms every file-read
 entry's history residency and leaves the read and write evidence in place, so a
 file this session wrote itself is still one it is allowed to overwrite.
 
-The snapshot is declared, not described. The compaction request declares, after
-the turn's own tools, one function whose closed parameter schema is the six
-ordered sections, and forces a call to it by name, so presence, uniqueness and
+The snapshot is declared, not described. Its sections are upstream's: the nine
+elements of the `<state_snapshot>` block upstream's compression prompt asks for,
+in upstream's names and order, each described in upstream's words and ours
+where ours say more. The model declares all but `all_user_messages`, which is
+where upstream carries the user's messages forward and which the runtime fills
+with the original inputs it already retains verbatim, rather than asking the
+model to copy them. The compaction request declares, after the turn's own
+tools, one function whose closed parameter schema is those eight sections, in
+order, and forces a call to it by name, so presence, uniqueness and
 ordering are properties of the declaration rather than of markup the model
 types. The turn's tools stay declared because the history the request carries
 calls them, and a conversation whose calls name functions its request does not
@@ -244,12 +250,14 @@ issued and held to the static preamble's share.
 How the snapshot is obtained is ours; how the history it becomes is rendered is
 upstream's. The accepted sections are rendered as upstream's `<state_snapshot>`
 block, one element per section, laid out as upstream's compression prompt lays
-out the block it asks for, with nothing escaped. The history a compaction
+out the block it asks for, with nothing escaped, and its `all_user_messages`
+holds the retained original inputs verbatim, as the parts they are, so their
+provenance survives the next compaction. The block is bounded at acceptance with
+that element empty; the inputs are bounded where they were submitted. The history a compaction
 commits is composed in upstream's order: the startup context, the snapshot with
 its resume trailer as a user message, the model's acknowledgement in upstream's
-words, the attachments -- the retained original inputs and the state
-reminders, each block set off from the next -- as one user message, then the
-carried turn. Upstream keeps the last turn as a model message of its own after
+words, the attachments -- the state reminders, each block set off from the
+next -- as one user message, then the carried turn. Upstream keeps the last turn as a model message of its own after
 the attachments, and folds its call into the acknowledgement when nothing is
 attached; the carried turn is kept whole in both places, reasoning included.
 The trailer is upstream's own, word for word. The carried turn follows the

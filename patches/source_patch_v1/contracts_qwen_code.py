@@ -1009,7 +1009,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "refuseRestatedQuantities(prompt, context.quantities);",
             "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
             "'- A `read_file` page and the statement that leads it are one inline block together.",
-            "a declared six-section snapshot of at most one inline block,",
+            "a declared snapshot of at most one inline block plus the original inputs verbatim,",
             "while the child spends its own turn budget, as many turns as yours.",
         ),
         label=label,
@@ -3823,40 +3823,69 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "const instructions = collectInstructions(history);",
             "instructions.forEach((instruction, index) => {",
-            "parts.push({ text: retainedInstructionHeader(instruction.author, index) });",
+            "if (index > 0) parts.push({ text: RETAINED_INPUT_SEPARATOR });",
             "...attachInstructions(structuredClone(instruction.parts), [instruction])",
             "return parts;",
         ),
         label="complete authored retention",
         location=authored_path,
     )
-    # The parts of one message are joined with nothing between them, so a
-    # retained input's header carries the breaks that set it off from the
-    # input below it and, after the first, from the input above it.
+    # The retained inputs are carried where upstream carries the user's
+    # messages, the snapshot's all_user_messages, as their own parts: no
+    # header of ours introduces them. The parts of one message are joined
+    # with nothing between them, so each input after the first is set off
+    # from the one before it.
     require_text(
         state,
         authored_path,
-        "  return `${index > 0 ? '\\n\\n' : ''}${header}\\n\\n`;",
+        "export const RETAINED_INPUT_SEPARATOR = '\\n\\n';",
         label="complete authored retention",
     )
+    for path in (
+        authored_path,
+        "packages/core/src/services/postCompactAttachments.ts",
+        "packages/core/src/utils/environmentContext.ts",
+    ):
+        for retired in ("retainedInstructionHeader", "verbatim; chronological order"):
+            forbid_text(state, path, retired, label="complete authored retention")
     snapshot_path = "packages/core/src/services/state-snapshot.ts"
     snapshot = _source(state, snapshot_path, label="complete state snapshot")
-    section_match = re.search(
-        r"export const STATE_SNAPSHOT_SECTIONS = \[(.*?)\] as const;", snapshot, re.S
+    # The snapshot's elements are upstream's nine, in upstream's order: the
+    # block the resuming agent reads is the block it was trained to read. The
+    # model declares every one but all_user_messages, which the runtime fills
+    # with the original inputs it retains verbatim, where upstream carries the
+    # user's messages forward.
+    element_match = re.search(
+        r"export const STATE_SNAPSHOT_ELEMENTS = \[(.*?)\] as const;", snapshot, re.S
     )
-    _require(section_match is not None, "state snapshot section declaration missing")
+    _require(element_match is not None, "state snapshot element declaration missing")
     _require(
-        re.findall(r"'([^']+)'", section_match[1])
+        re.findall(r"'([^']+)'", element_match[1])
         == [
-            "intent",
-            "environment",
-            "completed",
-            "in_progress",
-            "learnings",
+            "primary_request_and_intent",
+            "key_technical_concepts",
+            "files_and_code_sections",
+            "errors_and_fixes",
+            "problem_solving",
+            "all_user_messages",
+            "pending_tasks",
+            "current_work",
             "next_step",
         ],
-        "state snapshot requires exactly the ordered six sections",
+        "state snapshot requires exactly upstream's nine elements, in upstream's order",
     )
+    _require_all(
+        state,
+        snapshot_path,
+        (
+            "export const RETAINED_INPUTS_ELEMENT = 'all_user_messages';",
+            "export const STATE_SNAPSHOT_SECTIONS: readonly StateSnapshotSection[] =\n  STATE_SNAPSHOT_ELEMENTS.filter(",
+            "      element !== RETAINED_INPUTS_ELEMENT,",
+        ),
+        label="complete state snapshot",
+    )
+    for retired in ("'intent'", "'environment'", "'completed'", "'in_progress'", "'learnings'", "six sections"):
+        forbid_text(state, snapshot_path, retired, label="complete state snapshot")
     # The sections are a declared closed schema, not a shape the model is
     # asked to type. Presence, uniqueness and ordering are properties of the
     # declaration; the client re-checks the answer against the question it
@@ -3872,9 +3901,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             # acceptance -- not decoding -- is where a longer draw is refused
             # and redrawn whole.
             "export function stateSnapshotTool(maxBytes: number): Tool {",
-            "`${maxBytes} bytes, including the tags and indentation that frame them; a longer snapshot is refused and redrawn.`,",
+            "its all_user_messages element is filled by the runtime with the original inputs, verbatim.",
+            "`${maxBytes} bytes, including the tags and indentation that frame it; a longer snapshot is refused and redrawn.`,",
             "export function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxBytes: number,\n): StateSnapshotAcceptance {",
-            "const rendered = tokenizerText(renderStateSnapshot(snapshot));",
+            # Measured with all_user_messages empty: the inputs it will hold
+            # are bounded on their own, and are not the draw's.
+            "const rendered = tokenizerText(stateSnapshotText(snapshot));",
             "if (rendered.bytes > maxBytes) {",
             # Rendered as upstream's block: one `<state_snapshot>` element, a
             # child per section, laid out as upstream's compression prompt
@@ -3882,7 +3914,10 @@ def _validate_compaction_budget_after(state: State) -> None:
             "      `    <${section}>`,",
             "        .map((line) => (line === '' ? '' : `        ${line}`)),",
             "      `    </${section}>`,",
-            "      '<state_snapshot>',\n      STATE_SNAPSHOT_SECTIONS.map(element).join('\\n\\n'),\n      '</state_snapshot>',",
+            "  const at = STATE_SNAPSHOT_ELEMENTS.indexOf(RETAINED_INPUTS_ELEMENT);",
+            "      `<state_snapshot>\\n${before.join('\\n\\n')}\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n`,",
+            "      `\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n${after.join('\\n\\n')}\\n</state_snapshot>`,",
+            "export function stateSnapshotText(snapshot: StateSnapshot): string {",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
             "(section) => !String(record[section]).trim(),",
             # A draw is refused for one of two things, and says which: it
@@ -4197,7 +4232,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "const startupContext = chat.getStartupContext();",
             "...(startupContext ? [startupContext] : []),",
-            "...composePostCompactHistory(historyBeforeCompaction, summary, {",
+            "...composePostCompactHistory(\n            historyBeforeCompaction,\n            acceptance.snapshot,",
             "const candidateCount = await chat.countRequestTokensForCandidateHistory(",
         ),
         label=label,
@@ -4625,7 +4660,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const requestContents = (maxOutputTokens: number): Content[] => [\n"
             "      ...issuedPrompt,\n",
             "      promptCacheSharing: true,",
-            "            turn,\n          }),",
+            "              turn,\n            },\n          ),",
         ),
         label=label,
     )
@@ -4760,13 +4795,14 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     # The post-compact history is composed as upstream's composer composes
-    # it: the snapshot with its resume trailer as a user message, the model's
-    # acknowledgement in upstream's words, the attachments -- the retained
-    # inputs and the state reminders, each block set off from the next -- as
-    # one user message, then the turn. Upstream keeps the last turn as a
-    # model message of its own after the attachments and folds its call into
-    # the acknowledgement when nothing is attached; ours keeps the whole
-    # turn, reasoning included, in both places.
+    # it: the snapshot with its resume trailer as a user message, the
+    # retained inputs as their own parts in its all_user_messages, the
+    # model's acknowledgement in upstream's words, the attachments -- the
+    # state reminders, each block set off from the next -- as one user
+    # message, then the turn. Upstream keeps the last turn as a model message
+    # of its own after the attachments and folds its call into the
+    # acknowledgement when nothing is attached; ours keeps the whole turn,
+    # reasoning included, in both places.
     _require_all(
         state,
         attachments,
@@ -4774,19 +4810,20 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export function composePostCompactHistory(",
             "): Content[] {",
             "const { planModeActive, runningSubagents, turn = [] } = options;",
-            "const authoredParts = retainedInstructionParts(history);",
+            "function snapshotMessage(snapshot: StateSnapshot, inputs: Part[]): Content {",
+            "      { text: opening },\n      ...inputs,\n      { text: `${closing}\\n\\n${RESUME_TRAILER}` },",
+            "const snapshot = snapshotMessage(declared, retainedInstructionParts(history));",
             "export const COMPACTION_ACKNOWLEDGEMENT =\n  'Got it. Thanks for the additional context!';",
             "const BLOCK_SEPARATOR = '\\n\\n';",
-            "      ? [{ text: BLOCK_SEPARATOR }]",
+            "    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],",
             "  turn?: Content[];",
             "    return [\n      snapshot,\n      { role: 'model', parts: [acknowledgement] },\n      { role: 'user', parts: attachments },\n      ...carried,\n    ];",
             "      { ...first, parts: [acknowledgement, ...(first.parts ?? [])] },",
             "  return [snapshot, { role: 'model', parts: [acknowledgement] }, ...carried];",
             # The frame the startup proof counts is built from the same text.
             "export function compactionFrame(): Content[] {",
-            "{ role: 'user', parts: [{ text: postProcessSummary('') }] },",
+            "    { role: 'user', parts: [{ text: `\\n\\n${RESUME_TRAILER}` }] },",
             "{ role: 'model', parts: [{ text: COMPACTION_ACKNOWLEDGEMENT }] },",
-            "parts: [{ text: retainedInstructionHeader('delegator', 0) }],",
         ),
         label=label,
     )
@@ -4824,13 +4861,16 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     # A compacted prefix is structural, the retained input included, so a
-    # rewind or fork does not count it as a prompt the user typed later.
+    # rewind or fork does not count it as a prompt the user typed later: the
+    # snapshot is recognised by its trailer, which follows the inputs in its
+    # message rather than leading it.
     require_text(
         state,
         "packages/core/src/utils/environmentContext.ts",
-        "      (part.text.startsWith(retainedInstructionHeader('user', 0)) ||",
+        "  const resumes = (firstEntry.parts ?? []).some(",
         label=label,
     )
+    forbid_text(state, attachments, "postProcessSummary", label=label)
     for name, path in (
         (
             "composes upstream's order: snapshot, acknowledgement, attachments, then the turn whole",
@@ -4845,15 +4885,27 @@ def _validate_compaction_budget_after(state: State) -> None:
             "packages/core/src/services/postCompactAttachments.test.ts",
         ),
         (
-            "is the composed history with its blocks left out, the widest header kept",
+            "is the fixed text around the blocks: the trailer after the snapshot, and the acknowledgement",
             "packages/core/src/services/postCompactAttachments.test.ts",
+        ),
+        (
+            "carries the retained inputs verbatim in all_user_messages, where upstream carries the user messages",
+            "packages/core/src/services/postCompactAttachments.test.ts",
+        ),
+        (
+            "declares upstream's nine elements in upstream's order, all but the one the runtime fills",
+            "packages/core/src/services/state-snapshot.test.ts",
+        ),
+        (
+            "says the runtime carries the original inputs in all_user_messages, so the draw does not copy them",
+            "packages/core/src/core/prompts.test.ts",
         ),
         (
             "renders the sections as upstream's state_snapshot block, laid out as its prompt lays it out",
             "packages/core/src/services/state-snapshot.test.ts",
         ),
         (
-            "commits upstream's composition: the snapshot block and its trailer, the acknowledgement, the retained input, then the turn",
+            "commits upstream's composition: the snapshot block holding the retained input and its trailer, then the acknowledgement leading the turn",
             "packages/core/src/services/chatCompressionService.test.ts",
         ),
     ):
@@ -9125,7 +9177,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "that room as its own limit and that reaching it refuses the answer and asks again, "
             "not the turn's limit and its ending. Exact before/after sizing "
             "governs compaction. Original authored inputs are retained independently of model "
-            "summaries; summaries must satisfy the six-section structural contract. No phase budget "
+            "summaries and carried in the snapshot's all_user_messages; summaries must declare the "
+            "snapshot's other sections, upstream's, in upstream's order. No phase budget "
             "forces reasoning to stop."
         ),
         removal_condition=(

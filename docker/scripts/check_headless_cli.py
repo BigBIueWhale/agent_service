@@ -42,7 +42,7 @@ SYSTEM_SETTINGS_FILES = (
 EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] * 2 + ["/v1/chat/completions"]
 EXPECTED_ROLES = [
     ["system"],
-    ["system", "user", "user", "assistant", "user", "user"],
+    ["system", "user", "user", "assistant", "user"],
     None,
     ["system", "user"],
     ["system", "user", "assistant"],

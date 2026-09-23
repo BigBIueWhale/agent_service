@@ -221,27 +221,27 @@ rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
 its request adds — the snapshot's declaration and the directive — to the same
 share. The proof counts this deployment's turn preamble with the Git
-snapshot's repository values and the turn budget's number left out — 7,751 tokens, rendered by the served template and counted by the
+snapshot's repository values and the turn budget's number left out — 7,755 tokens, rendered by the served template and counted by the
 served tokenizer — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
-around its blocks — the snapshot's resume trailer, the acknowledgement turn and
-a retained input's header — with the blocks left out, 73 more, and the todo
+around its blocks — the snapshot's resume trailer and the acknowledgement
+turn — with the blocks left out, 59 more, and the todo
 reminder, of which at most one stands in the request a compaction leaves, with
 one character for its list, 51 more. It adds the most bytes the data left out
 may hold, capped in the NFC form the tokenizer reads, as the most tokens they
 can cost: 1,936 for the snapshot's branch line, status and commits, 1,280 for the
 startup context's environment lines and folder listing, 16 for the turn
 budget, the widest a safe integer renders to, and 812 for the todo reminder's
-list and truncation mark. That is a bound of 11,965, the same for every
+list and truncation mark. That is a bound of 11,955, the same for every
 repository, every workspace, every budget and every todo list, so none of them
-can make a deployment refuse to start, with 323 left for the prompt and the
+can make a deployment refuse to start, with 333 left for the prompt and the
 declarations to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
 token a digit. The startup context is kept whole at the head of every history a
 compaction builds, never summarized and rebuilt, so nothing can fail to put it
-back. A compaction request adds 1,207 to the prompt it summarizes: the
-snapshot's declaration after the turn's tools, 558, and the directive, 649. `F` is proved against the served
+back. A compaction request adds 1,445 to the prompt it summarizes: the
+snapshot's declaration after the turn's tools, 786, and the directive, 659. `F` is proved against the served
 template too: a user message, an assistant turn and a tool result, each counted
 with the request and without it, less its content counted alone. The served
 template frames them in 5, 10 and 24 tokens, the last with the markup of the
@@ -318,17 +318,19 @@ instead, such as a snapshot of so many bytes against the 32,768-byte limit and
 to write the same state more briefly. It is never shown the refused draw,
 which would not fit beside another in the room the request is proved to have.
 The notice is built only from values the service measured and closed names,
-never from text the model wrote, so it has a widest rendering: 228 bytes, and
-with the 61 bytes of framing 289 tokens at most, held inside `D` with the
-directive's 632, counted with the ceiling it states at its widest, before the
-first draw, which leaves every draw one ceiling.
-Counted through the served path, a redraw's notice costs 44 to 56 tokens.
+never from text the model wrote, so it has a widest rendering: 313 bytes, the
+notice that names every section left empty, and with the 61 bytes of framing
+374 tokens at most, held inside `D` with what the request adds, 1,445, counted
+with the ceiling the directive states at its widest, before the first draw,
+which leaves every draw one ceiling. Counted through the served path with every
+number at its widest, a redraw's notice costs 33 to 73 tokens.
 
-The compaction request replaces the turn's tool declarations with that single
-function rather than extending them, so the model has exactly one thing it can
-emit. The prompt it carries is unchanged, but the declared tool block is not,
-so the request does not reuse the turn's prompt-cache prefix: it re-reads the
-prompt it shares. That is the price of having the snapshot constrained as it
+The compaction request declares that function after the turn's own tools,
+which stay declared because the history it carries calls them, and forces a
+call to it by name, so the model has exactly one thing it can emit. The prompt
+it carries is unchanged, but the declared tool block is not, so the request
+does not reuse the turn's prompt-cache prefix past it: it re-reads the prompt
+it shares. That is the price of having the snapshot constrained as it
 is generated, and it is paid once per compaction rather than once per turn.
 
 Every main-turn context-boundary decision uses the real vLLM tokenizer on the
@@ -496,9 +498,9 @@ A terminal conversation and a headless conversation share the same obligations:
   with `C`, the turn generation room, whatever the prompt was; no configured
   ceiling is admitted. Compaction summarises the prompt the last turn was
   issued against, receives the room left by that exact request, requires at
-  least `C`, accepts only a normally terminated six-section snapshot that fits
-  one inline block and leaves an issuable turn, and carries the turn behind the
-  snapshot verbatim.
+  least `C`, accepts only a normally terminated snapshot, in upstream's
+  sections, that fits one inline block and leaves an issuable turn, and carries
+  the turn behind the snapshot verbatim.
 - A tool result declares whether it is complete. The one notice in
   `packages/core/src/tools/tools.ts` states what was asked for, what came back,
   the bound and its unit, the true total or an explicit reason the tool cannot
@@ -508,8 +510,10 @@ A terminal conversation and a headless conversation share the same obligations:
   forgetting to mention it. A cap applied inside a service is returned with the
   items, because the layer asked to declare a limit has to be told one was hit.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
-  request advertises one function whose closed parameter schema is the six
-  sections, and forces it, so the structure is constrained where the tokens are
+  request advertises one function whose closed parameter schema is the sections
+  of upstream's `<state_snapshot>` block but `all_user_messages`, which the
+  runtime fills with the original inputs it retains verbatim, and forces it, so
+  the structure is constrained where the tokens are
   produced rather than judged after the model has typed it. Section text is
   carried as string arguments, so ordinary prose that once collided with the
   markup — an ampersand between two names, a filename template in angle
