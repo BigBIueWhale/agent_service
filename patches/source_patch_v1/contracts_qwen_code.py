@@ -2507,18 +2507,19 @@ def _validate_param_contract_after(state: State) -> None:
     require_text(state, read_file, "Optional: text files only.", count=1, label=label)
 
     # A truncated read carries the call that continues it, with the caller's
-    # own path and the exact resume line, rather than naming two parameters
-    # and leaving the arithmetic to the reader. The sentence around it is the
-    # shared one in tools.ts; what this tool owes is the values.
+    # own path, the exact resume line and the caller's own limit, rather than
+    # naming two parameters and leaving the arithmetic to the reader. The
+    # resume line is the only value the reading layer computes; the limit is
+    # the caller's, never the size of the page that happened to fit, which
+    # would shrink every page after a long one.
     require_text(
         state,
         read_file,
-        "continuation: `read_file with file_path: ${JSON.stringify(",
+        "`Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: ${page.nextOffset}${limit}`",
         label=label,
     )
-    require_text(
-        state, files, "nextRead?: { offset: number; limit: number };", label=label
-    )
+    require_text(state, files, "  nextRead?: { offset: number };", label=label)
+    forbid_text(state, files, "limit: Math.max(linesIncluded, 1)", label=label)
 
     # No tool description advertises a dispatch this build does not have.
     for path in (glob, shell):
@@ -2780,7 +2781,7 @@ def _validate_text_read_fidelity_after(state: State) -> None:
             "        const linesIncluded = pageLines.length;",
             "            index === pageLines.length - 1 && rangeReachedEof",
             "              : `${line}\\n`,",
-            "                  offset: actualEndLine,",
+            "            ? { nextRead: { offset: actualEndLine } }",
         ),
         label=label,
     )
@@ -7672,10 +7673,8 @@ def _validate_bounded_output_after(state: State) -> None:
             "  total: number | { readonly unknown: string };",
             "  continuation?: string | { readonly unretained: string };",
             "  coverageUnknown?: boolean;",
-            "  remainder?: string;",
             "export function formatOutputBound(bound: OutputBound): string {",
-            "  const rest = bound.remainder === undefined ? '' : ` ${bound.remainder}`;",
-            "    `${asked}${coverage}${rest}${next}`",
+            "    `${asked}${coverage}${next}`",
             ": ` The rest was not retained: ${bound.continuation.unretained}`;",
             ": `, cut at a limit of ${bound.limit} ${bound.limitUnit}`;",
             "export function boundedContent(content: string, bound: OutputBound): string {",
@@ -7686,6 +7685,7 @@ def _validate_bounded_output_after(state: State) -> None:
     # A notice that returned nothing is worded like any other, and none says
     # a tool's own limit cut a result: the limit it names is the one that did.
     for retired in (
+        "remainder",
         "refused?: boolean;",
         "bound.refused",
         "cut at this tool's limit",
@@ -7749,66 +7749,76 @@ def _validate_bounded_output_after(state: State) -> None:
         f"tool says it the same way and a reader learns the shape once.",
     )
 
-    # read_file pages by the room one inline block leaves what leads a page,
-    # and only two things can end a page: its bytes, or the caller's own
-    # `limit`. The notice names whichever did -- blaming the bytes when the
-    # caller's smaller `limit` stopped the page is exactly the plausible wrong
-    # number this notice exists to prevent. The page the file ends with carries
-    # no notice, because nothing cut it; it says instead which lines it holds
-    # and that the file ends with them, counted in lines rather than in the
-    # segments a final newline adds one to, so a reader that paged there knows
-    # it reached the end.
+    # read_file leads a page with upstream's own range statement -- "Showing
+    # lines X-Y of N total lines." -- and then says plainly whether the file
+    # continues past the page, with how many lines remain and the exact call
+    # that reads on, or ends with it. It states no bound: a page that met the
+    # caller's own limit was not cut, and saying it was is false. The call
+    # asks for the caller's own limit, never the size of the page that fit.
+    # The room a page has is one inline block less the widest statement that
+    # can lead it, every number at its most digits at once, so the page and
+    # its statement are one inline block by construction. The description
+    # quotes the statement in the same words.
+    read_file_tool = "packages/core/src/tools/read-file.ts"
     _require_all(
         state,
-        "packages/core/src/tools/read-file.ts",
+        read_file_tool,
         (
-            "function readPageBytes(",
+            "export function readPageBytes(",
+            "type PageTotal =",
+            "  | { readonly lines: number; readonly remaining: number }",
+            "  | { readonly atLeast: number };",
+            "  const of = 'lines' in total ? total.lines : `at least ${total.atLeast}`;",
+            "  return `Showing lines ${first}-${last} of ${of} total lines.`;",
+            "    `The file continues past line ${page.last}: ${rest} ` +",
+            "    ? 'the rest is still being counted.'",
+            "      ? '1 line remains.'",
+            "      : `${page.total.remaining} lines remain.`;",
+            "  const limit = page.limit === undefined ? '' : `, limit: ${page.limit}`;",
+            "? `Showing no lines: the file has ${total} total lines and ends before line ${first}.`",
+            ": `${showingLines(first, last, { lines: total, remaining: 0 })} The file ends here.`;",
+            "    ...[{ lines: most, remaining: most }, { atLeast: most }].map(",
+            "tokenizerText(`${pageEnds(most, most, most)}${PAGE_STATEMENT_BREAK}`)",
+            "tokenizerText(`${pageEnds(most, 0, most)}${PAGE_STATEMENT_BREAK}`).bytes,",
             "if (result.nextRead && result.linesShown && trueTotal !== undefined) {",
-            "result.truncatedByBytes === true || this.params.limit === undefined;",
-            "limit: cutByBytes ? pageBytes : this.params.limit!,",
-            "limitUnit: cutByBytes ? 'bytes of content' : 'lines',",
+            "            : { lines: trueTotal, remaining: trueTotal - last },",
+            "        nextOffset: result.nextRead.offset,\n        limit: this.params.limit,\n      })}${PAGE_STATEMENT_BREAK}${page}`;",
             "result.originalLineCount - (result.endsWithNewline === true ? 1 : 0);",
             "  return page.split('\\n').length - (page === '' || page.endsWith('\\n') ? 1 : 0);",
-            "      returned: pageLineCount(page),",
-            "`Lines ${first}-${first + returned - 1} of ${total} in total: the file ends here.`",
-            "llmContent = `${pageEnd(this.params.offset + 1, pageLineCount(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;",
-            "tokenizerText(`${pageEnd(most, most, most)}${PAGE_STATEMENT_BREAK}`).bytes,",
-            # The other ending says as much as this one: a page the file
-            # continues past states that it does and how many lines are still
-            # unread, beside the call that returns them. A page that carried
-            # only the call left a reader to infer from an instruction's
-            # presence that anything remained, and a first page read as a whole
-            # file is what that inference costs. The numbers are the page's own
-            # and the call is untouched: what the page says changed, not what
-            # it computes.
-            "function pageMore(last: number, remaining: number, counted: boolean): string {",
-            "    ? `The file continues past line ${last}: ${remaining} lines remain.`",
-            "    : `The file continues past line ${last}: the rest is still being counted.`;",
-            "          remainder: pageMore(lastLine, trueTotal - lastLine, counted),",
-            "      const lastLine = this.params.offset + pageLineCount(page);",
-            # The page budget counts the new words, in both their forms, so a
-            # page and all that leads it are still one inline block.
-            "          remainder: pageMore(most, most, true),",
-            "          remainder: pageMore(most, most, false),",
+            'A read that returns less than the whole file is led by "Showing lines X-Y of N total lines." and then either "The file continues past line Y: R lines remain. Continue with:" and the exact call that reads on, with the same \'limit\', or "The file ends here."',
         ),
         label=label,
     )
-    # Executed in the build: the pair, and the notice that carries it.
+    for retired in (
+        "boundedContent(",
+        "OutputBound",
+        "limitUnit",
+        "cut at a limit",
+        "Bounded result",
+        "in total: the file ends here",
+        "No lines: the file has",
+        "states the lines it returned, the file's total line count, and the exact next call to make",
+    ):
+        forbid_text(state, read_file_tool, retired, label=label)
+    # Executed in the build: both endings, the offer of the caller's limit
+    # through a whole file, and the page bytes the statement leaves.
     for name in (
         "says a page the file continues past continues, and how many lines remain",
         "says a page continues from the line it ends on, whatever it started from",
         "says the last page of a file read in pages is its end, counting its lines, not its final newline",
+        "offers the caller's own limit on every page, never the size of the page that fit",
+        "shows the range and the true line count, and calls nothing cut that met its limit",
+        "describes the page statement in the words the statement uses",
     ):
         require_text(
             state, "packages/core/src/tools/read-file.test.ts", name, label=label
         )
-    for name in (
-        "states what the source holds past a first part, before the call that continues",
-        "says nothing about a remainder for a result that is not a first part",
-    ):
-        require_text(
-            state, "packages/core/src/tools/tools.test.ts", name, label=label
-        )
+    require_text(
+        state,
+        "packages/core/src/tools/tools.test.ts",
+        "states the bound that cut an excerpt, then the call that continues",
+        label=label,
+    )
     # A sentence that says "lines" means lines. `originalLineCount` counts the
     # segments a split on "\n" yields, which is one more than the lines
     # whenever the file ends with a newline; every arithmetic use of it counts
@@ -7866,7 +7876,6 @@ def _validate_bounded_output_after(state: State) -> None:
         label=label,
     )
     for case in (
-        "reports the true line count and names what actually bound",
         "says the last page of a file read in pages is its end, counting its lines, not its final newline",
         "says a read that starts past the end of a file has no lines, and where the file ends",
         "counts the lines of a page by the page",
@@ -7887,6 +7896,8 @@ def _validate_bounded_output_after(state: State) -> None:
         if path == tools_ts:
             continue
         for retired in _RETIRED_NOTICES:
+            if retired == "Showing lines " and path == read_file_tool:
+                continue
             _require(
                 retired not in text,
                 f"{label}: {path} contains the retired truncation wording "

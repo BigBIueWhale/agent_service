@@ -142926,7 +142926,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 + * the preamble, the probe word alone, and the framing of each probed kind,
 + * the tool result's with the call markup it is measured behind.
 + */
-+const DECLARED_PREAMBLE_TOKENS = 7_722;
++const DECLARED_PREAMBLE_TOKENS = 7_757;
 +const FRAMING_PROBE_TOKENS = 2;
 +type ProbedKind = 'message' | 'turn' | 'result';
 +const SERVED_FRAMING_TOKENS: Record<ProbedKind, number> = {
@@ -178805,28 +178805,28 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,722 tokens, counted whole by the served
++ * turn budget's number left out, at 7,757 tokens, counted whole by the served
 + * tokenizer. By where each token starts, that is 2,613 of system message,
-+ * 4,864 of tool declarations and 245 of the template's own text. Counting
++ * 4,899 of tool declarations and 245 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
 + * the whole: a token can span two pieces, so pieces counted one at a time
 + * need not add up to the count that governs. The startup context opens every
 + * history, so it is counted too, with its workspace data left out: 46 more,
-+ * its template framing included, for 7,768.
++ * its template framing included, for 7,803.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's values, 128 + 1,024 + 768 = 1,920
 + * (`GIT_SNAPSHOT_REPOSITORY_BYTES`), the startup context's environment lines
 + * and folder listing, 256 + 1,024 = 1,280 (`STARTUP_CONTEXT_WORKSPACE_BYTES`),
 + * and the turn budget's number, at most 16 digits of one token each
-+ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 10,984 that no repository,
-+ * workspace or budget changes. The 1,304 tokens left are headroom for the
++ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 11,019 that no repository,
++ * workspace or budget changes. The 1,269 tokens left are headroom for the
 + * prompt and the declarations to grow into -- most of one more declaration
 + * the size of `run_shell_command`, the largest at 1,457. Exceeding it is a
 + * startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 10,984 at a 234,326-token window, so no smaller window holds this
++ * reaches 11,019 at a 235,072-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
@@ -244941,7 +244941,16 @@ diff --git a/packages/core/src/tools/priorReadEnforcement.ts b/packages/core/src
 diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools/read-file.test.ts
 --- a/packages/core/src/tools/read-file.test.ts
 +++ b/packages/core/src/tools/read-file.test.ts
-@@ -15,82 +15,58 @@
+@@ -6,7 +6,7 @@
+ 
+ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+ import type { ReadFileToolParams } from './read-file.js';
+-import { ReadFileTool } from './read-file.js';
++import { ReadFileTool, readPageBytes } from './read-file.js';
+ import { ToolErrorType } from './tool-error.js';
+ import path from 'node:path';
+ import os from 'node:os';
+@@ -15,82 +15,62 @@
  import sharp from 'sharp';
  import type { Config } from '../config/config.js';
  import { Storage } from '../config/storage.js';
@@ -245000,6 +245009,10 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -    renderPDFPagesToImages: pdfMocks.renderPDFPagesToImages,
    };
  });
++
++function escapeRegExp(text: string): string {
++  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++}
  
  describe('ReadFileTool', () => {
    let tempRootDir: string;
@@ -245031,7 +245044,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        path.join(os.tmpdir(), 'read-file-tool-root-'),
      );
      fileReadCache = new FileReadCache();
-@@ -103,13 +79,12 @@
+@@ -103,13 +83,12 @@
        storage: {
          getProjectTempDir: () => path.join(tempRootDir, '.temp'),
          getProjectDir: () => path.join(tempRootDir, '.project'),
@@ -245046,7 +245059,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        }),
        getFileReadCache: () => fileReadCache,
        getFileReadCacheDisabled: () => false,
-@@ -125,77 +100,85 @@
+@@ -125,77 +104,85 @@
    });
  
    describe('build', () => {
@@ -245132,7 +245145,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        );
      });
  
-@@ -227,12 +210,13 @@
+@@ -227,12 +214,13 @@
  
      it.each([0, -1])(
        'should throw error if limit is not positive (%s)',
@@ -245146,7 +245159,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            'Limit must be a positive integer',
          );
        },
-@@ -240,76 +224,136 @@
+@@ -240,76 +228,136 @@
  
      it.each([0.5, 1.5])(
        'should throw error if limit is fractional (%s)',
@@ -245293,7 +245306,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(permission).toBe('allow');
      });
  
-@@ -317,39 +361,43 @@
+@@ -317,39 +365,43 @@
        const params: ReadFileToolParams = {
          file_path: path.join(
            Storage.getUserExtensionsDir(),
@@ -245337,7 +245350,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(permission).toBe('ask');
      });
  
-@@ -359,24 +407,26 @@
+@@ -359,24 +411,26 @@
            tempRootDir,
            '.project',
            'subagents',
@@ -245364,7 +245377,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(
          (
            invocation as ToolInvocation<ReadFileToolParams, ToolResult>
-@@ -385,24 +435,25 @@
+@@ -385,24 +439,25 @@
      });
  
      it('should handle non-normalized file paths correctly', () => {
@@ -245391,7 +245404,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          (
            invocation as ToolInvocation<ReadFileToolParams, ToolResult>
          ).getDescription(),
-@@ -410,13 +461,13 @@
+@@ -410,13 +465,13 @@
      });
    });
  
@@ -245406,7 +245419,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -432,13 +483,13 @@
+@@ -432,13 +487,13 @@
      });
  
      it('should return success result for a text file', async () => {
@@ -245421,7 +245434,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        expect(await invocation.execute(abortSignal)).toEqual({
-@@ -454,13 +505,16 @@
+@@ -454,13 +509,16 @@
          const realPath = path.join(tempRootDir, realFileName);
          const fileContent = 'Content with spaces in filename.';
          await fsp.writeFile(realPath, fileContent, 'utf-8');
@@ -245439,7 +245452,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          >;
  
          expect(await invocation.execute(abortSignal)).toEqual({
-@@ -470,13 +524,13 @@
+@@ -470,13 +528,13 @@
        },
      );
  
@@ -245454,7 +245467,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -488,62 +542,219 @@
+@@ -488,62 +546,274 @@
            message: `Path is a directory, not a file: ${dirPath}`,
            type: ToolErrorType.TARGET_IS_DIRECTORY,
          },
@@ -245479,29 +245492,33 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(result.error).toBeUndefined();
 -      expect(result.returnDisplay).toBe(
 -        'Read lines 1-1 of at least 1 from largefile.txt (truncated)',
-+      // The page holds as many whole 1,000-byte lines as its bytes allow,
-+      // ends on a line boundary, names the byte limit that cut it, and says
-+      // where to resume.
++      // The page holds as many whole 1,000-byte lines as its bytes allow and
++      // ends on a line boundary. Its statement shows the range, a total still
++      // being counted as a lower bound, and the call that resumes after it --
++      // with no limit, because the caller named none.
 +      const llmContent = result.llmContent as string;
-+      const stated = /^Bounded result: (\d+) of an unknown total .*?, cut at a limit of (\d+) bytes of content\./.exec(
-+        llmContent,
-+      );
++      const stated =
++        /^Showing lines 1-(\d+) of at least \d+ total lines\. The file continues past line (\d+): the rest is still being counted\. Continue with: read_file with file_path: (".*?"), offset: (\d+)\n\n---\n\n/.exec(
++          llmContent,
++        );
 +      expect(stated).not.toBeNull();
-+      const [returned, pageBytes] = [Number(stated![1]), Number(stated![2])];
++      const returned = Number(stated![1]);
++      expect(Number(stated![2])).toBe(returned);
++      expect(stated![3]).toBe(JSON.stringify(filePath));
++      expect(Number(stated![4])).toBe(returned);
++      const pageBytes = readPageBytes(
++        INLINE_BLOCK_BYTES,
++        filePath,
++        undefined,
++        false,
++      );
 +      expect(returned * line.length).toBeLessThanOrEqual(pageBytes);
 +      expect((returned + 1) * line.length).toBeGreaterThan(pageBytes);
 +      expect(tokenizerText(llmContent).bytes).toBeLessThanOrEqual(
 +        INLINE_BLOCK_BYTES,
 +      );
 +      expect(llmContent.endsWith(line.repeat(returned))).toBe(true);
-+      expect(llmContent).toContain(
-+        `offset: ${returned}, limit: ${returned}`,
-       );
-+      // A file still being counted has no remainder to give, and says that
-+      // rather than a number it would have to revise.
-+      expect(llmContent).toContain(
-+        `The file continues past line ${returned}: the rest is still being counted.`,
-+      );
+-      );
 +    });
 +
 +    it('[read-contract] refuses a file whose single line is wider than one page', async () => {
@@ -245537,9 +245554,10 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      }).join('\n')}\n`;
 +      await fsp.writeFile(filePath, fileContent, 'utf-8');
 +
-+      const notice = /^Bounded result: .*?\n\n---\n\n/s;
++      const notice =
++        /^Showing lines \d+-\d+ of 600 total lines\. The file continues past line \d+: \d+ lines remain\. Continue with: .*?\n\n---\n\n/s;
 +      const end =
-+        /^Lines \d+-\d+ of 600 in total: the file ends here\.\n\n---\n\n/;
++        /^Showing lines \d+-\d+ of 600 total lines\. The file ends here\.\n\n---\n\n/;
 +      let params: ReadFileToolParams = { file_path: filePath, offset: 0 };
 +      let assembled = '';
 +      let pages = 0;
@@ -245563,16 +245581,64 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +          break;
 +        }
 +        assembled += text.slice(header[0].length);
-+        const next = /offset: (\d+), limit: (\d+)/.exec(header[0]!);
-+        if (next === null) break;
-+        params = {
-+          file_path: filePath,
-+          offset: Number(next[1]),
-+          limit: Number(next[2]),
-+        };
++        // The call is followed exactly: the first read named no limit, so no
++        // page offers one.
++        const next = /offset: (\d+)\n\n---\n\n$/.exec(header[0]!);
++        expect(next).not.toBeNull();
++        params = { file_path: filePath, offset: Number(next![1]) };
 +      }
 +
 +      expect(pages).toBeGreaterThan(1);
++      expect(assembled).toBe(fileContent);
++    });
++
++    it("[read-contract] offers the caller's own limit on every page, never the size of the page that fit", async () => {
++      // Lines of varying width, and a limit their bytes cannot always meet:
++      // some pages end at the limit and some where their bytes run out. Each
++      // offers the same limit back, and following the calls reproduces the
++      // file exactly.
++      const filePath = path.join(tempRootDir, 'limited-pages.txt');
++      const fileContent = `${Array.from(
++        { length: 2_000 },
++        (_, index) =>
++          `line ${index} ${'abcdefghij'.repeat(index % 3 === 0 ? 20 : 2)}`,
++      ).join('\n')}\n`;
++      await fsp.writeFile(filePath, fileContent, 'utf-8');
++      const limit = 300;
++
++      let params: ReadFileToolParams = {
++        file_path: filePath,
++        offset: 0,
++        limit,
++      };
++      let assembled = '';
++      const shown: number[] = [];
++      for (;;) {
++        const invocation = tool.build(params) as ToolInvocation<
++          ReadFileToolParams,
++          ToolResult
++        >;
++        const result = await invocation.execute(abortSignal);
++        expect(result.error).toBeUndefined();
++        expect(shown.length).toBeLessThan(40);
++        const text = result.llmContent as string;
++        const statement = text.slice(0, text.indexOf('\n\n---\n\n') + 7);
++        const range = /^Showing lines (\d+)-(\d+) of 2000 total lines\./.exec(
++          statement,
++        );
++        expect(range).not.toBeNull();
++        shown.push(Number(range![2]) - Number(range![1]) + 1);
++        assembled += text.slice(statement.length);
++        if (statement.includes('The file ends here.')) break;
++        const next = /offset: (\d+), limit: (\d+)\n\n---\n\n$/.exec(statement);
++        expect(next).not.toBeNull();
++        expect(Number(next![2])).toBe(limit);
++        params = { file_path: filePath, offset: Number(next![1]), limit };
++      }
++
++      // Both endings occurred, so the offer was tested where a page fell short.
++      expect(shown.some((lines) => lines === limit)).toBe(true);
++      expect(shown.some((lines) => lines < limit)).toBe(true);
 +      expect(assembled).toBe(fileContent);
 +    });
 +
@@ -245639,8 +245705,11 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +
 +      const result = await invocation.execute(abortSignal);
 +      const content = String(result.llmContent);
-+      const pageBytes = Number(
-+        /cut at a limit of (\d+) bytes of content/.exec(content)![1],
++      const pageBytes = readPageBytes(
++        INLINE_BLOCK_BYTES,
++        filePath,
++        undefined,
++        false,
 +      );
 +      const page = content.slice(content.indexOf('\n\n---\n\n') + 7);
 +      const pageLines = page.split('\n').filter((text) => text.length > 0);
@@ -245658,7 +245727,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +        INLINE_BLOCK_BYTES,
 +      );
 +      expect(content).toContain(
-+        `Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: ${pageLines.length}, limit: ${pageLines.length}`,
++        `Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: ${pageLines.length}\n\n---\n\n`,
 +      );
 +    });
 +
@@ -245682,15 +245751,15 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        'Read lines 1-2 of 3 from longlines.txt (truncated)',
 +        'Read lines 1-1 of 3 from longlines.txt',
 +      );
-+      expect(result.llmContent).toContain(
-+        `Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: 1, limit: 1`,
++      expect(result.llmContent).toBe(
++        `Showing lines 1-1 of 3 total lines. The file continues past line 1: 2 lines remain. Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: 1\n\n---\n\nShort line\n`,
        );
      });
  
      it('should handle image file and return appropriate content', async () => {
        const imagePath = path.join(tempRootDir, 'image.png');
        await sharp({
-@@ -553,42 +764,44 @@
+@@ -553,42 +823,44 @@
            channels: 3,
            background: '#306090',
          },
@@ -245740,7 +245809,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -599,340 +812,18 @@
+@@ -599,340 +871,18 @@
            displayName: 'document.pdf',
          },
        });
@@ -246082,7 +246151,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -943,13 +834,13 @@
+@@ -943,13 +893,13 @@
      });
  
      it('should handle SVG file as text', async () => {
@@ -246097,7 +246166,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -959,13 +850,15 @@
+@@ -959,13 +909,15 @@
  
 -    it('should handle large SVG file', async () => {
 +    it('reads a large SVG whole, for the one bound on a tool result to hold', async () => {
@@ -246116,7 +246185,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -972,18 +865,15 @@
+@@ -972,18 +924,15 @@
 -      expect(result.llmContent).toBe(
 -        'Cannot display content of SVG file larger than 1MB: large.svg',
 -      );
@@ -246139,7 +246208,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1003,13 +893,13 @@
+@@ -1003,13 +952,13 @@
              metadata: {},
            },
          ],
@@ -246154,7 +246223,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1032,12 +922,13 @@
+@@ -1032,12 +981,13 @@
          })),
          metadata: { language_info: { name: 'python' } },
        };
@@ -246168,7 +246237,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(typeof result.llmContent).toBe('string');
        expect(result.llmContent).toContain('remaining cells truncated');
        expect(result.llmContent).not.toContain('Showing lines');
-@@ -1047,54 +938,309 @@
+@@ -1047,54 +997,348 @@
        if (status.state === 'fresh') {
          expect(status.entry.lastReadWasFull).toBe(false);
          expect(status.entry.lastReadCacheable).toBe(false);
@@ -246344,7 +246413,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      expect(() => tool.build(params)).not.toThrow();
      });
  
-+    it('reports the true line count and names what actually bound', async () => {
++    it('shows the range and the true line count, and calls nothing cut that met its limit', async () => {
 +      const filePath = path.join(tempRootDir, 'trailing-newline.txt');
 +      // 20 lines, newline-terminated: splitting on "\n" yields 21 segments.
 +      // The paging arithmetic counts segments; the sentence says lines.
@@ -246361,10 +246430,12 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +
 +      const result = await invocation.execute(abortSignal);
 +
-+      expect(result.llmContent).toContain('3 of 20 lines in total');
-+      expect(result.llmContent).not.toContain('of 21 lines in total');
-+      // The page's bytes did not stop this page; the caller’s own limit did.
-+      expect(result.llmContent).toContain('cut at a limit of 3 lines.');
++      expect(result.llmContent).toContain(
++        'Showing lines 6-8 of 20 total lines.',
++      );
++      expect(result.llmContent).not.toContain('of 21 total lines');
++      // The caller's own limit was met: nothing was cut, and nothing says so.
++      expect(result.llmContent).not.toContain('cut');
 +    });
 +
 +    it('says a page the file continues past continues, and how many lines remain', async () => {
@@ -246385,14 +246456,52 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      // The pair of the last page's sentence: where the page ends, that the
 +      // file goes on past it, and how much of it is still unread -- said,
 +      // not left to be derived from a next call's presence.
-+      expect(result.llmContent).toContain(
-+        'The file continues past line 3: 17 lines remain.',
-+      );
-+      // The call that continues is what it was; only what the page says changed.
-+      expect(result.llmContent).toContain(
-+        `Continue with: read_file with file_path: ${JSON.stringify(
++      expect(result.llmContent).toBe(
++        `Showing lines 1-3 of 20 total lines. The file continues past line 3: 17 lines remain. Continue with: read_file with file_path: ${JSON.stringify(
 +          filePath,
-+        )}, offset: 3, limit: 3`,
++        )}, offset: 3, limit: 3\n\n---\n\nLine 1\nLine 2\nLine 3\n`,
++      );
++    });
++
++    it('describes the page statement in the words the statement uses', async () => {
++      // The description quotes the statement with placeholders; filled in,
++      // the quotations are what a page of the file actually starts with.
++      const quoted = [
++        ...tool.description.matchAll(
++          /"(Showing lines X-Y of N total lines\.)"|"(The file continues past line Y: R lines remain\. Continue with:)"|"(The file ends here\.)"/g,
++        ),
++      ].map((match) => match[1] ?? match[2] ?? match[3]);
++      expect(quoted).toHaveLength(3);
++      const [showing, continues, ends] = quoted;
++      const filePath = path.join(tempRootDir, 'described.txt');
++      await fsp.writeFile(
++        filePath,
++        `${Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n')}\n`,
++        'utf-8',
++      );
++      const read = async (params: ReadFileToolParams) =>
++        String(
++          (
++            await (
++              tool.build(params) as ToolInvocation<
++                ReadFileToolParams,
++                ToolResult
++              >
++            ).execute(abortSignal)
++          ).llmContent,
++        );
++      const fill = (text: string, values: Record<string, number>) =>
++        text.replace(/\b[XYNR]\b/g, (name) => String(values[name]));
++
++      expect(await read({ file_path: filePath, offset: 0, limit: 3 })).toMatch(
++        new RegExp(
++          `^${escapeRegExp(fill(`${showing} ${continues}`, { X: 1, Y: 3, N: 20, R: 17 }))} `,
++        ),
++      );
++      expect(await read({ file_path: filePath, offset: 17 })).toMatch(
++        new RegExp(
++          `^${escapeRegExp(fill(`${showing} ${ends}`, { X: 18, Y: 20, N: 20 }))}\n`,
++        ),
 +      );
 +    });
 +
@@ -246436,9 +246545,8 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      // Nothing cut this page, so it names no bound; it says where it stands
 +      // and that the file ends with it, then holds the rest of the file.
 +      expect(result.llmContent).toBe(
-+        'Lines 18-20 of 20 in total: the file ends here.\n\n---\n\nLine 18\nLine 19\nLine 20\n',
++        'Showing lines 18-20 of 20 total lines. The file ends here.\n\n---\n\nLine 18\nLine 19\nLine 20\n',
 +      );
-+      expect(String(result.llmContent)).not.toContain('cut at a limit');
 +      expect(result.returnDisplay).toBe(
 +        'Read lines 18-20 of 20 from last-page.txt',
 +      );
@@ -246459,7 +246567,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      const result = await invocation.execute(abortSignal);
 +
 +      expect(result.llmContent).toBe(
-+        'Lines 19-20 of 20 in total: the file ends here.\n\n---\n\nLine 19\nLine 20',
++        'Showing lines 19-20 of 20 total lines. The file ends here.\n\n---\n\nLine 19\nLine 20',
 +      );
 +    });
 +
@@ -246478,7 +246586,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      const result = await invocation.execute(abortSignal);
 +
 +      expect(result.llmContent).toBe(
-+        'No lines: the file has 20 lines in total and ends before line 26.\n\n---\n\n',
++        'Showing no lines: the file has 20 total lines and ends before line 26.\n\n---\n\n',
 +      );
 +    });
 +
@@ -246499,7 +246607,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      const result = await invocation.execute(abortSignal);
 +
 +      expect(result.llmContent).toContain(
-+        'Bounded result: 3 of 20 lines in total, cut at a limit of 3 lines.',
++        'Showing lines 17-19 of 20 total lines. The file continues past line 19: 1 line remains.',
 +      );
 +      expect(result.llmContent).toContain('offset: 19, limit: 3');
 +    });
@@ -246508,7 +246616,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
        const fileContent = lines.join('\n');
-@@ -1109,13 +1255,13 @@
+@@ -1109,13 +1353,13 @@
          ReadFileToolParams,
          ToolResult
        >;
@@ -246516,14 +246624,14 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        const result = await invocation.execute(abortSignal);
        expect(result.llmContent).toContain(
 -        'Showing lines 6-8 of 20 total lines',
-+        'Bounded result: 3 of 20 lines in total',
++        'Showing lines 6-8 of 20 total lines.',
        );
        expect(result.llmContent).toContain('Line 6');
        expect(result.llmContent).toContain('Line 7');
        expect(result.llmContent).toContain('Line 8');
        expect(result.returnDisplay).toBe(
          'Read lines 6-8 of 20 from paginated.txt',
-@@ -1126,13 +1272,13 @@
+@@ -1126,13 +1370,13 @@
        const tempDir = path.join(tempRootDir, '.temp');
        await fsp.mkdir(tempDir, { recursive: true });
        const tempFilePath = path.join(tempDir, 'temp-output.txt');
@@ -246538,7 +246646,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1146,13 +1292,16 @@
+@@ -1146,13 +1390,16 @@
        );
        const tempFilePath = path.join(osTempFile, 'pr-review-context.md');
        const tempFileContent = '## PR #123\nFix encoding issues';
@@ -246556,7 +246664,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          >;
  
          const result = await invocation.execute(abortSignal);
-@@ -1187,36 +1336,38 @@
+@@ -1187,36 +1434,38 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -246601,7 +246709,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          );
          // Placeholder must not echo the original content.
          expect(second.llmContent).not.toContain('hello world');
-@@ -1224,89 +1375,93 @@
+@@ -1224,89 +1473,93 @@
        });
  
 -      it('re-emits bytes (no placeholder) after the read was evicted from history by microcompaction (issue #4239)', async () => {
@@ -246712,7 +246820,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            offset: 1,
            limit: 2,
          });
-@@ -1321,5 +1476,5 @@
+@@ -1321,5 +1574,5 @@
          // must therefore re-emit the truncated window rather than
          // claiming "you've already seen this file".
          const filePath = path.join(tempRootDir, 'long.txt');
@@ -246720,7 +246828,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        // (500) so the read pipeline reports isTruncated = true.
 +        // Write more than one page holds, so the read pipeline reports
 +        // isTruncated = true.
-@@ -1326,20 +1481,19 @@
+@@ -1326,20 +1579,19 @@
          const bigContent = Array.from(
            { length: 700 },
 -          (_, i) => `line ${i + 1}`,
@@ -246746,7 +246854,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('does not arm the placeholder if the first Read was ranged', async () => {
-@@ -1348,26 +1502,26 @@
+@@ -1348,26 +1600,26 @@
          // pipeline, since the cache cannot prove the model has already
          // seen the entire file.
          const filePath = path.join(tempRootDir, 'big.txt');
@@ -246776,7 +246884,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('records an auto-memory read in the cache so a follow-up Edit can pass enforcement', async () => {
          // Auto-memory files skip the file_unchanged fast-path (they
-@@ -1386,13 +1540,13 @@
+@@ -1386,13 +1638,13 @@
            clearAutoMemoryRootCache();
            const memRoot = getAutoMemoryRoot(tempRootDir);
            await fsp.mkdir(memRoot, { recursive: true });
@@ -246791,7 +246899,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            // The cache must contain the auto-memory file's entry, AND
            // the entry must be in a shape that satisfies prior-read
            // enforcement on Edit / WriteFile (fresh + lastReadAt set +
-@@ -1428,13 +1582,13 @@
+@@ -1428,13 +1680,13 @@
          await fsp.writeFile(
            svgPath,
            '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
@@ -246806,13 +246914,13 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          // The cache must record this as a full, cacheable read so
          // that prior-read enforcement on Edit / WriteFile would
          // recognise it as the model having seen the bytes.
-@@ -1488,4 +1642,4 @@
+@@ -1488,4 +1740,4 @@
          // it stays true (the bytes were text), and only
          // `lastReadWasFull` is false (the model only saw the head).
          const filePath = path.join(tempRootDir, 'long.cpp');
 -        // Mock Config caps truncate-tool-output-lines at 500.
 +        // More than one page holds.
-@@ -1492,13 +1646,13 @@
+@@ -1492,13 +1744,13 @@
          const bigContent = Array.from(
            { length: 700 },
 -          (_, i) => `line ${i + 1}`,
@@ -246828,7 +246936,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
            // Truncated → model has not seen every byte.
-@@ -1527,13 +1681,13 @@
+@@ -1527,13 +1779,13 @@
          // content to a `.cpp` file. The test relies on the
          // extension override winning over any future content-side
          // heuristic — there is no isBinaryFile mocking in scope.
@@ -246843,7 +246951,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          const status = fileReadCache.check(fs.statSync(filePath));
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
-@@ -1551,17 +1705,17 @@
+@@ -1551,17 +1803,17 @@
              background: '#306090',
            },
          })
@@ -246863,7 +246971,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('completely bypasses the cache when getFileReadCacheDisabled() is true', async () => {
          // Build a fresh ReadFileTool with a Config whose cache is
-@@ -1579,27 +1733,32 @@
+@@ -1579,27 +1831,32 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -246900,7 +247008,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(second.llmContent).not.toMatch(/unchanged since/);
          expect(isolatedCache.size()).toBe(0);
        });
-@@ -1615,12 +1774,13 @@
+@@ -1615,12 +1872,13 @@
  
        it('should throw error if path is ignored by a .qwenignore pattern', async () => {
          const ignoredFilePath = path.join(tempRootDir, 'foo.bar');
@@ -246914,7 +247022,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('should throw error if path is ignored by .agentignore or .aiignore', async () => {
-@@ -1634,18 +1794,18 @@
+@@ -1634,18 +1892,18 @@
          );
          const agentIgnoredFilePath = path.join(tempRootDir, 'agent-secret.txt');
          const aiIgnoredFilePath = path.join(tempRootDir, 'ai-secret.txt');
@@ -246939,7 +247047,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          await fsp.writeFile(
            path.join(tempRootDir, '.cursorignore'),
            'cursor-secret.txt\n',
-@@ -1660,46 +1820,47 @@
+@@ -1660,46 +1918,47 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -246995,7 +247103,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read-file.ts
 --- a/packages/core/src/tools/read-file.ts
 +++ b/packages/core/src/tools/read-file.ts
-@@ -5,52 +5,168 @@
+@@ -5,52 +5,150 @@
   */
  
  import path from 'node:path';
@@ -247010,7 +247118,6 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 -} from './tools.js';
 +import type { ToolInvocation, ToolLocation, ToolResult } from './tools.js';
  import { BaseDeclarativeTool, BaseToolInvocation, Kind } from './tools.js';
-+import { boundedContent, type OutputBound } from './tools.js';
  import { ToolNames, ToolDisplayNames } from './tool-names.js';
  
  import type { PartListUnion } from '@google/genai';
@@ -247034,43 +247141,73 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  import { memoryFreshnessNote } from '../memory/memoryAge.js';
 +
 +/**
-+ * The notice that leads a cut page. Only two things can cut a page: its bytes,
-+ * or the caller's own `limit`. `limit` and `limitUnit` name whichever did.
++ * The file's total as a page states it: exact, with the lines that remain
++ * past the page, or, while the file is still being counted, the lines
++ * counted so far as a lower bound and no remainder.
 + */
-+function pageBound(
-+  filePath: string,
-+  requested: number | undefined,
-+  fields: {
-+    readonly returned: number;
-+    readonly limit: number;
-+    readonly limitUnit: 'bytes of content' | 'lines';
-+    readonly total: OutputBound['total'];
-+    readonly next: { readonly offset: number; readonly limit: number };
-+    readonly remainder: string;
-+  },
-+): OutputBound {
-+  return {
-+    ...(requested === undefined ? {} : { requested }),
-+    returned: fields.returned,
-+    unit: 'lines',
-+    limit: fields.limit,
-+    limitUnit: fields.limitUnit,
-+    total: fields.total,
-+    remainder: fields.remainder,
-+    // Naming the parameters would not be enough: the caller would still have
-+    // to derive the resume line from a 1-based display range, and getting it
-+    // wrong silently skips or repeats content. The values are known here, so
-+    // the continuation carries the actual next call.
-+    continuation: `read_file with file_path: ${JSON.stringify(
-+      filePath,
-+    )}, offset: ${fields.next.offset}, limit: ${fields.next.limit}`,
-+  };
++type PageTotal =
++  | { readonly lines: number; readonly remaining: number }
++  | { readonly atLeast: number };
++
++/**
++ * The lines a page shows and the file's total, in upstream's own words.
++ */
++function showingLines(first: number, last: number, total: PageTotal): string {
++  const of = 'lines' in total ? total.lines : `at least ${total.atLeast}`;
++  return `Showing lines ${first}-${last} of ${of} total lines.`;
 +}
 +
-+/** A count's total that is still a lower bound, worded once. */
-+function uncountedTotal(atLeast: number): { readonly unknown: string } {
-+  return { unknown: `the file is still being counted; at least ${atLeast}` };
++/**
++ * What leads a page the file continues past: the lines it shows, that the
++ * file continues and how much of it remains, and the exact call that returns
++ * the next lines.
++ *
++ * The call starts at the line after the page and asks for the caller's own
++ * `limit`, or for none when the caller named none: the page that happened to
++ * fit is not a request, and offering its size back would shrink every page
++ * after a long one. Naming the parameters would not be enough either: the
++ * caller would still have to derive the resume line from a 1-based range, and
++ * getting it wrong silently skips or repeats content, so the values are the
++ * call's own.
++ */
++function pageContinues(
++  filePath: string,
++  page: {
++    readonly first: number;
++    readonly last: number;
++    readonly total: PageTotal;
++    readonly nextOffset: number;
++    readonly limit: number | undefined;
++  },
++): string {
++  const rest = !('lines' in page.total)
++    ? 'the rest is still being counted.'
++    : page.total.remaining === 1
++      ? '1 line remains.'
++      : `${page.total.remaining} lines remain.`;
++  const limit = page.limit === undefined ? '' : `, limit: ${page.limit}`;
++  return (
++    `${showingLines(page.first, page.last, page.total)} ` +
++    `The file continues past line ${page.last}: ${rest} ` +
++    `Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: ${page.nextOffset}${limit}`
++  );
 +}
++
++/**
++ * What leads the last page of a file read in pages: the lines it shows, and
++ * that the file ends with them. A reader that paged this far has to know it
++ * reached the end, and a page that said nothing would read the same as one
++ * whose statement was lost. A read that starts past the end shows no lines
++ * and says where the file ends.
++ */
++function pageEnds(first: number, last: number, total: number): string {
++  return last < first
++    ? `Showing no lines: the file has ${total} total lines and ends before line ${first}.`
++    : `${showingLines(first, last, { lines: total, remaining: 0 })} The file ends here.`;
++}
++
++/** What separates a page's leading statement from the page. */
++const PAGE_STATEMENT_BREAK = '\n\n---\n\n';
 +
 +/**
 + * The lines a page carries, counted from the page itself: every line it holds
@@ -247081,89 +247218,42 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +  return page.split('\n').length - (page === '' || page.endsWith('\n') ? 1 : 0);
 +}
 +
-+/** What separates a page's leading statement from the page. */
-+const PAGE_STATEMENT_BREAK = '\n\n---\n\n';
-+
-+/**
-+ * What leads the last page of a file read in pages. It is not a notice:
-+ * nothing cut the page, so it states no bound and no next call. It says which
-+ * lines the page holds and that the file ends with them, because a reader that
-+ * paged this far has to know it reached the end, and a page that said nothing
-+ * would read the same as one whose notice was lost.
-+ */
-+function pageEnd(first: number, returned: number, total: number): string {
-+  return returned === 0
-+    ? `No lines: the file has ${total} lines in total and ends before line ${first}.`
-+    : `Lines ${first}-${first + returned - 1} of ${total} in total: the file ends here.`;
-+}
-+
-+/**
-+ * What the notice of a page the file continues past says about the rest: the
-+ * pair of {@link pageEnd}, in its voice. A page that carried only a next call
-+ * left a reader to infer from the presence of an instruction that anything
-+ * remained, and a first page taken for a whole file is what that inference
-+ * costs. A file still being counted has no number to give, and says that
-+ * rather than a figure it would have to revise.
-+ */
-+function pageMore(last: number, remaining: number, counted: boolean): string {
-+  return counted
-+    ? `The file continues past line ${last}: ${remaining} lines remain.`
-+    : `The file continues past line ${last}: the rest is still being counted.`;
-+}
-+
 +/**
 + * The room one inline block leaves for a page of `filePath`: the block less
-+ * the widest text that can lead a page of it -- the notice of a cut page, or
-+ * the statement that the file ends with it -- and, for a memory file, the
-+ * widest staleness note that leads it. Every number in them takes the most
-+ * digits a number here can have, so the page and all that leads it are one
-+ * inline block by construction rather than by measurement afterwards.
++ * the widest statement that can lead a page of it -- that the file continues,
++ * counted or still being counted, with the call that reads on, or that it
++ * ends -- and, for a memory file, the widest staleness note that leads it.
++ * Every number in them takes the most digits a number here can have, and the
++ * call carries the caller's own `limit`, so the page and all that leads it
++ * are one inline block by construction rather than by measurement afterwards.
 + */
-+function readPageBytes(
++export function readPageBytes(
 +  maxBytes: number,
 +  filePath: string,
-+  requested: number | undefined,
++  limit: number | undefined,
 +  isAutoMem: boolean,
 +): number {
 +  const most = Number.MAX_SAFE_INTEGER;
-+  // A page is led by the notice of the bound that cut it, which also says
-+  // what the file holds past the page, or, when the file ends with it, by the
-+  // statement that says so; the room is what the widest of them leaves. The
-+  // notice is measured with the widest total either form can carry.
-+  const widestNotice = Math.max(
-+    tokenizerText(
-+      boundedContent(
-+        '',
-+        pageBound(filePath, requested, {
-+          returned: most,
-+          limit: most,
-+          limitUnit: 'bytes of content',
-+          total: uncountedTotal(most),
-+          next: { offset: most, limit: most },
-+          remainder: pageMore(most, most, true),
-+        }),
-+      ),
-+    ).bytes,
-+    tokenizerText(
-+      boundedContent(
-+        '',
-+        pageBound(filePath, requested, {
-+          returned: most,
-+          limit: most,
-+          limitUnit: 'bytes of content',
-+          total: uncountedTotal(most),
-+          next: { offset: most, limit: most },
-+          remainder: pageMore(most, most, false),
-+        }),
-+      ),
-+    ).bytes,
-+    tokenizerText(`${pageEnd(most, most, most)}${PAGE_STATEMENT_BREAK}`).bytes,
-+    tokenizerText(`${pageEnd(most, 0, most)}${PAGE_STATEMENT_BREAK}`).bytes,
++  const widestStatement = Math.max(
++    ...[{ lines: most, remaining: most }, { atLeast: most }].map(
++      (total) =>
++        tokenizerText(
++          `${pageContinues(filePath, {
++            first: most,
++            last: most,
++            total,
++            nextOffset: most,
++            limit,
++          })}${PAGE_STATEMENT_BREAK}`,
++        ).bytes,
++    ),
++    tokenizerText(`${pageEnds(most, most, most)}${PAGE_STATEMENT_BREAK}`).bytes,
++    tokenizerText(`${pageEnds(most, 0, most)}${PAGE_STATEMENT_BREAK}`).bytes,
 +  );
 +  const widestNote = isAutoMem
 +    ? tokenizerText(memoryFreshnessNote(-Number.MAX_SAFE_INTEGER)).bytes
 +    : 0;
-+  return maxBytes - widestNotice - widestNote;
++  return maxBytes - widestStatement - widestNote;
 +}
  import { createDebugLogger } from '../utils/debugLogger.js';
  import { getFileReadDefaultPermission } from './file-read-permission.js';
@@ -247185,7 +247275,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
  /**
   * Parameters for the ReadFile tool
   */
-@@ -58,26 +174,20 @@
+@@ -58,26 +156,20 @@
    /**
     * The absolute path to the file to read
     */
@@ -247214,7 +247304,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    ReadFileToolParams,
    ToolResult
  > {
-@@ -92,23 +202,17 @@
+@@ -92,23 +184,17 @@
      const relativePath = makeRelative(
        this.params.file_path,
        this.config.getTargetDir(),
@@ -247240,7 +247330,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    override toolLocations(): ToolLocation[] {
-@@ -148,19 +252,17 @@
+@@ -148,19 +234,17 @@
      // never serve the file_unchanged placeholder — those files own a
      // per-read freshness `<system-reminder>` that must be re-emitted
      // on every read.
@@ -247264,7 +247354,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      // here is microseconds. If stat fails we fall through to the normal
      // pipeline so its error handling stays the single source of truth.
      let stats: Stats | undefined;
-@@ -181,7 +283,7 @@
+@@ -181,7 +265,7 @@
          status.entry.lastReadWasFull &&
          status.entry.lastReadCacheable &&
          // Only quote-back if that read is still in history (issue
@@ -247273,7 +247363,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
          status.entry.readResidentInHistory &&
          (status.entry.lastWriteAt === undefined ||
            status.entry.lastReadAt > status.entry.lastWriteAt)
-@@ -189,34 +291,34 @@
+@@ -189,34 +273,34 @@
          debugLogger.debug('hit', { path: absPath });
          return this.unchangedResult(absPath);
        }
@@ -247318,7 +247408,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
          },
        };
      }
-@@ -241,14 +343,14 @@
+@@ -241,14 +325,14 @@
      //
      //  - `full` — whether the model has seen every byte of the
      //    current file. This now gates ONLY the file_unchanged
@@ -247335,7 +247425,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      //    everything". NotebookEdit also requires this flag so a
      //    truncated notebook render does not authorize structured writes
      //    against unseen cells.
-@@ -278,19 +380,52 @@
+@@ -278,19 +362,43 @@
      }
  
      let llmContent: PartListUnion;
@@ -247352,35 +247442,26 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +        ? undefined
 +        : result.originalLineCount - (result.endsWithNewline === true ? 1 : 0);
 +    if (result.nextRead && result.linesShown && trueTotal !== undefined) {
-+      // A page is cut when the file continues past it.
++      // A page the file continues past. Its numbers are its own: the lines it
++      // holds, counted from it, and what the file holds past them.
 -      const [start, end] = result.linesShown!;
 -      const total = result.originalLineCount!;
 -      const totalLabel =
 -        result.originalLineCountExact === false ? `at least ${total}` : total;
 -      llmContent = `Showing lines ${start}-${end} of ${totalLabel} total lines.\n\n---\n\n${result.llmContent}`;
 +      const page = String(result.llmContent);
-+      // Only the page's bytes or the caller's own `limit` can have cut it.
-+      // Blaming the bytes when the caller's smaller `limit` is what stopped
-+      // it is a plausible wrong number, which is what this notice exists to
-+      // stop.
-+      const cutByBytes =
-+        result.truncatedByBytes === true || this.params.limit === undefined;
-+      // The last line this page holds, and what the file holds past it. Both
-+      // are the page's own numbers; the call that continues is unchanged by
-+      // saying them.
-+      const counted = result.originalLineCountExact !== false;
-+      const lastLine = this.params.offset + pageLineCount(page);
-+      llmContent = boundedContent(
-+        page,
-+        pageBound(this.params.file_path, this.params.limit, {
-+          returned: pageLineCount(page),
-+          limit: cutByBytes ? pageBytes : this.params.limit!,
-+          limitUnit: cutByBytes ? 'bytes of content' : 'lines',
-+          total: counted ? trueTotal : uncountedTotal(trueTotal),
-+          next: result.nextRead,
-+          remainder: pageMore(lastLine, trueTotal - lastLine, counted),
-+        }),
-+      );
++      const first = this.params.offset + 1;
++      const last = this.params.offset + pageLineCount(page);
++      llmContent = `${pageContinues(this.params.file_path, {
++        first,
++        last,
++        total:
++          result.originalLineCountExact === false
++            ? { atLeast: trueTotal }
++            : { lines: trueTotal, remaining: trueTotal - last },
++        nextOffset: result.nextRead.offset,
++        limit: this.params.limit,
++      })}${PAGE_STATEMENT_BREAK}${page}`;
 +    } else if (
 +      result.isTruncated &&
 +      result.linesShown &&
@@ -247388,17 +247469,17 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
 +      result.originalLineCountExact !== false
 +    ) {
 +      // The last page of a file read in pages: it starts past the beginning
-+      // and the file ends with it. Nothing cut it, so it names no bound; it
-+      // says which lines it holds and that they are the end.
++      // and the file ends with it.
 +      const page = String(result.llmContent);
-+      llmContent = `${pageEnd(this.params.offset + 1, pageLineCount(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;
++      const first = this.params.offset + 1;
++      llmContent = `${pageEnds(first, this.params.offset + pageLineCount(page), trueTotal)}${PAGE_STATEMENT_BREAK}${page}`;
      } else {
        llmContent = result.llmContent || '';
      }
  
      // For memory files, prepend a per-file staleness caveat so the model knows
      // the content is a point-in-time snapshot and may be stale.
-@@ -309,6 +444,20 @@
+@@ -309,6 +417,20 @@
        }
      }
  
@@ -247419,7 +247500,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
      const lines =
        typeof result.llmContent === 'string'
          ? result.llmContent.split('\n').length
-@@ -328,158 +477,14 @@
+@@ -328,158 +450,14 @@
          programming_language,
        ),
      );
@@ -247579,7 +247660,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
     * Build the placeholder ToolResult returned when the cache indicates
     * the file has not changed since the model last fully read it. The
     * placeholder is intentionally explicit about its assumptions so the
-@@ -525,49 +530,38 @@
+@@ -525,49 +503,38 @@
  export class ReadFileTool extends BaseDeclarativeTool<
    ReadFileToolParams,
    ToolResult
@@ -247599,7 +247680,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
        ReadFileTool.Name,
        ToolDisplayNames.READ_FILE,
 -      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. If the file is large, the content will be truncated. The tool's response will clearly indicate if truncation has occurred and will provide details on how to read more of the file using the 'offset' and 'limit' parameters. Handles text, images (PNG, JPG, GIF, WEBP, SVG, BMP), PDF files, and Jupyter notebooks (.ipynb). For text files, it can read specific line ranges. For PDF files, use the 'pages' parameter to extract specific page ranges as text (e.g. '1-5'). Max ${PDF_MAX_PAGES_PER_READ} pages per request. Large PDFs cannot be read all at once when the model does not support native PDF input; retry with narrower page ranges if the tool reports a PDF is too large. With a configured vision bridge, failed PDF text extraction or an irreducibly large single page may be transcribed automatically, at most four pages per call; this transcription is lossy and marked as untrusted. This tool can read Jupyter notebooks (.ipynb) and returns structured cell content with outputs.`,
-+      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. A text read returns whole lines within one page, the most one tool result carries with its notice, so 'limit' is an upper bound rather than a promise: a read of long lines returns fewer lines than requested, and a single line wider than a page is refused rather than returned in part. Every read that stops before the end of the file states the lines it returned, the file's total line count, and the exact next call to make. Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. This tool has exactly one range mechanism, 'offset'/'limit', and every read states where it starts: 'offset' is required, and 0 means the beginning of the file. A line range applies to text files only: a nonzero 'offset' or any 'limit' for a PDF, image, audio, video, notebook, SVG, or binary file is refused, not ignored — those files are read whole, with offset 0 and no limit. A PDF too large to return in one read fails with explicit guidance: ${PDF_PAGE_RANGE_REMEDY_TEMPLATE} Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
++      `Reads and returns the content of a specified file. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first. A text read returns whole lines within one page, and a page and the statement that leads it are one inline block together, so 'limit' is an upper bound rather than a promise: a read of long lines returns fewer lines than requested, and a single line wider than a page is refused rather than returned in part. A read that returns less than the whole file is led by "Showing lines X-Y of N total lines." and then either "The file continues past line Y: R lines remain. Continue with:" and the exact call that reads on, with the same 'limit', or "The file ends here." Image input has one fail-closed full-quality contract: a static PNG with 8-bit RGB or RGBA source pixels, at most 16,777,216 pixels, aspect ratio at most 30:1, and at most 100 MB on disk. The exact original PNG bytes are sent losslessly with no resize, crop, orientation, JPEG transcode, or decoder fallback. JPEG, WebP, GIF/APNG, BMP, grayscale, palette, 16-bit, RGB tRNS, over-limit, and corrupt image inputs are rejected. PDF input is text extraction only; PDF pages are never silently rendered into lossy image substitutes. This tool has exactly one range mechanism, 'offset'/'limit', and every read states where it starts: 'offset' is required, and 0 means the beginning of the file. A line range applies to text files only: a nonzero 'offset' or any 'limit' for a PDF, image, audio, video, notebook, SVG, or binary file is refused, not ignored — those files are read whole, with offset 0 and no limit. A PDF too large to return in one read fails with explicit guidance: ${PDF_PAGE_RANGE_REMEDY_TEMPLATE} Jupyter notebooks (.ipynb) return structured cell content with outputs.`,
        Kind.Read,
        {
          properties: {
@@ -247634,7 +247715,7 @@ diff --git a/packages/core/src/tools/read-file.ts b/packages/core/src/tools/read
    }
  
    protected override validateToolParamValues(
-@@ -583,55 +577,27 @@
+@@ -583,55 +550,27 @@
      }
  
      if (!path.isAbsolute(filePath)) {
@@ -249973,7 +250054,7 @@ diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/too
  class TestToolInvocation implements ToolInvocation<object, ToolResult> {
    constructor(
      readonly params: object,
-@@ -281,6 +284,135 @@
+@@ -281,6 +284,113 @@
          filePath: '/workspace/chart.png',
          mimeType: 'image/jpeg',
        }),
@@ -249982,29 +250063,7 @@ diff --git a/packages/core/src/tools/tools.test.ts b/packages/core/src/tools/too
  });
 +
 +describe('formatOutputBound', () => {
-+  it('states what the source holds past a first part, before the call that continues', () => {
-+    // A reader that must subtract to learn that anything remains reads a
-+    // first page as a whole file; the notice says it instead.
-+    expect(
-+      formatOutputBound({
-+        returned: 3,
-+        unit: 'lines',
-+        limit: 3,
-+        limitUnit: 'lines',
-+        total: 20,
-+        remainder: 'The file continues past line 3: 17 lines remain.',
-+        continuation: 'read_file with file_path: "/tmp/a", offset: 3, limit: 3',
-+      }),
-+    ).toBe(
-+      'Bounded result: 3 of 20 lines in total, cut at a limit of 3 lines.' +
-+        ' The file continues past line 3: 17 lines remain.' +
-+        ' Continue with: read_file with file_path: "/tmp/a", offset: 3, limit: 3',
-+    );
-+  });
-+
-+  it('says nothing about a remainder for a result that is not a first part', () => {
-+    // An excerpt from the middle continues to a whole file, not to a rest:
-+    // what "remains" would name is not what the continuation returns.
++  it('states the bound that cut an excerpt, then the call that continues', () => {
 +    expect(
 +      formatOutputBound({
 +        returned: 5,
@@ -250266,7 +250325,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
      );
  
      if (errors) {
-@@ -482,13 +534,153 @@
+@@ -482,13 +534,141 @@
    url?: string;
    mimeType?: string;
    sizeBytes?: number;
@@ -250331,17 +250390,6 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +   * must not read an empty or short result as proof of absence.
 +   */
 +  coverageUnknown?: boolean;
-+  /**
-+   * What the source still holds past this result, in the source's own words,
-+   * for a result that is its first part: a reader that has to subtract
-+   * `returned` from `total` to learn that anything remains is a reader that
-+   * takes a first page for the whole of it, and an instruction to continue is
-+   * not a statement that there is something to continue to. Only a result
-+   * that is a prefix says this: for an excerpt taken from the middle, or a
-+   * scan that skipped, what "remains" would name is not what the continuation
-+   * returns.
-+   */
-+  remainder?: string;
 +}
 +
 +/**
@@ -250367,7 +250415,6 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +  const coverage = bound.coverageUnknown
 +    ? ' Coverage is incomplete: do not read this as proof that nothing else matches.'
 +    : '';
-+  const rest = bound.remainder === undefined ? '' : ` ${bound.remainder}`;
 +  const next =
 +    bound.continuation === undefined
 +      ? ''
@@ -250380,7 +250427,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
 +      : `, cut at a limit of ${bound.limit} ${bound.limitUnit}`;
 +  return (
 +    `Bounded result: ${bound.returned} of ${total}${cut}.` +
-+    `${asked}${coverage}${rest}${next}`
++    `${asked}${coverage}${next}`
 +  );
 +}
 +
@@ -250420,7 +250467,7 @@ diff --git a/packages/core/src/tools/tools.ts b/packages/core/src/tools/tools.ts
     */
    llmContent: PartListUnion;
  
-@@ -630,29 +822,87 @@
+@@ -630,29 +810,87 @@
      return false;
    }
  
@@ -263241,7 +263288,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
 +      expect(result.llmContent).toBe('Short line\n');
 +      expect(result.returnDisplay).toBe('Read lines 1-1 of 3 from test.txt');
        expect(result.isTruncated).toBe(true);
-+      expect(result.nextRead).toEqual({ offset: 1, limit: 1 });
++      expect(result.nextRead).toEqual({ offset: 1 });
 +    });
 +
 +    it('[read-contract] refuses a line wider than one page instead of halving it', async () => {
@@ -263293,7 +263340,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
 -      );
 +      expect(result.returnDisplay).toBe('Read lines 1-10 of 11 from test.txt');
 +      expect(result.llmContent).toBe(`${lines.slice(0, 10).join('\n')}\n`);
-+      expect(result.nextRead).toEqual({ offset: 10, limit: 10 });
++      expect(result.nextRead).toEqual({ offset: 10 });
      });
  
      it('should truncate both line count and line length when both exceed limits', async () => {
@@ -263319,7 +263366,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
 -        'Read lines 1-5 of 20 from test.txt (truncated)',
 -      );
 +      expect(result.returnDisplay).toBe('Read lines 1-4 of 20 from test.txt');
-+      expect(result.nextRead).toEqual({ offset: 4, limit: 4 });
++      expect(result.nextRead).toEqual({ offset: 4 });
      });
  
      it('should read large text files through bounded truncation instead of the 10MB gate', async () => {
@@ -263404,7 +263451,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
 +        'Read lines 1-1 of at least 2 from test.txt',
        );
        expect(result.isTruncated).toBe(true);
-+      expect(result.nextRead).toEqual({ offset: 1, limit: 1 });
++      expect(result.nextRead).toEqual({ offset: 1 });
      });
  
      it('should use selected range as a lower bound when large file metadata is missing', async () => {
@@ -263903,7 +263950,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    } finally {
      // Only what we opened. A borrowed handle outlives this call.
      if (opened) {
-@@ -890,55 +864,42 @@
+@@ -890,55 +864,43 @@
    }
  
    return 'text';
@@ -263928,13 +263975,14 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    linesShown?: [number, number]; // For text files [startLine, endLine] (1-based for display)
    /**
 +   * For a truncated text read, the 0-based line to pass as `offset` to resume
-+   * exactly where this read stopped, and the window size to pass as `limit`
-+   * to keep reading at the same rate. Computed here because this is the only
-+   * layer that knows how many lines the result budget actually admitted, and
-+   * a resume line derived from anything else would skip or repeat content.
-+   * Absent when the read reached the end of the file.
++   * exactly where this read stopped. Computed here because this is the only
++   * layer that knows how many lines the page budget actually admitted, and a
++   * resume line derived from anything else would skip or repeat content. It
++   * carries no `limit`: how many lines to ask for next is the caller's, and
++   * the number that happened to fit this page is not a request. Absent when
++   * the read reached the end of the file.
 +   */
-+  nextRead?: { offset: number; limit: number };
++  nextRead?: { offset: number };
 +  /**
     * The Stats taken at the start of the read pipeline, before the
     * actual content read. Surfaced so the FileReadCache can record
@@ -263973,7 +264021,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
   * Whether a {@link ProcessedFileReadResult} may be cached for prior-read
   * enforcement: the payload must be plain text (not an image / PDF `Part`)
   * and carry a known line count. Shared by `read-file.ts` and
-@@ -954,29 +915,32 @@
+@@ -954,29 +916,32 @@
    );
  }
  
@@ -264015,7 +264063,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    textFileHandle?: FileHandle;
    textFileStats?: import('node:fs').Stats;
    textFileMaxScanBytes?: number;
-@@ -1028,35 +992,30 @@
+@@ -1028,35 +993,30 @@
  ): Promise<ProcessedFileReadResult>;
  export async function processSingleFileContent(
    filePath: string,
@@ -264051,7 +264099,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
    } = options;
    const rootDirectory = config.getTargetDir();
    const relativePathForDisplay = (
-@@ -1108,133 +1067,113 @@
+@@ -1108,133 +1068,113 @@
        };
      }
  
@@ -264255,7 +264303,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
              : `PDF requires page range: ${relativePathForDisplay}`;
          return {
            llmContent: guidance,
-@@ -1309,14 +1248,9 @@
+@@ -1309,14 +1249,9 @@
          };
        }
        case 'svg': {
@@ -264273,7 +264321,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const content = await readFileWithEncoding(filePath);
          // Populate `originalLineCount` and `isTruncated` so the
          // ReadFile cache treats this exactly like a successful text
-@@ -1335,13 +1269,14 @@
+@@ -1335,13 +1270,14 @@
            stats,
          };
        }
@@ -264290,7 +264338,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
                fileSize: stats.size,
 -              limit: limit ?? config.getTruncateToolOutputLines(),
 +              limit,
-@@ -1355,14 +1290,21 @@
+@@ -1355,14 +1291,21 @@
 -              limit: limit ?? config.getTruncateToolOutputLines(),
 +              limit,
                line: offset,
@@ -264314,7 +264362,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const originalLineCount =
            _meta?.originalLineCount ??
            (stats.size >= TEXT_RANGE_FAST_PATH_MAX_SIZE
-@@ -1370,171 +1312,188 @@
+@@ -1370,171 +1313,183 @@
              : await countFileLines(filePath));
          const originalLineCountExact =
            _meta?.originalLineCountExact === false
@@ -264500,12 +264548,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
 +          truncatedByBytes,
            linesShown: [startLine + 1, actualEndLine],
 +          ...(isTruncated && moreRemains && linesIncluded > 0
-+            ? {
-+                nextRead: {
-+                  offset: actualEndLine,
-+                  limit: Math.max(linesIncluded, 1),
-+                },
-+              }
++            ? { nextRead: { offset: actualEndLine } }
 +            : {}),
            stats,
          };
@@ -264638,7 +264681,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const contentBuffer = await fs.promises.readFile(filePath);
          const base64Data = contentBuffer.toString('base64');
          const base64SizeInMB = base64Data.length / (1024 * 1024);
-@@ -1556,304 +1515,92 @@
+@@ -1556,304 +1511,92 @@
              },
            },
            returnDisplay: `Read ${fileType} file: ${relativePathForDisplay}`,
@@ -264971,7 +265014,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          try {
            const { content, isTruncated } =
              await readNotebookWithMetadata(filePath);
-@@ -1894,25 +1641,12 @@
+@@ -1894,25 +1637,12 @@
        error: `Error reading file ${relativePathForDisplay}: ${errorMessage}`,
        errorType: ToolErrorType.READ_CONTENT_FAILURE,
      };

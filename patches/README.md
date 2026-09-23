@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `1e165292192fd69a30d5f184b8e66e8672a1182d487fa3249ab76e47a8559122`
+- Review-diff SHA-256: `6004a72e16ebe519f2feaf1065baa29485f47e68c2435cf423e4b0f35847aeb2`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `097d1d3eae6dd58617eea7d56fcbac389761662f26a9ba74c872df7cc745908a`
+- Transformer-manifest SHA-256: `adfa3facc11ad60e39e80814553034868ec7acde7ff417d8838e15ee5b760192`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -120,7 +120,15 @@ their own, and a tool under `src/tools` that cuts a result to a named cap
 without going through `boundedContent` refuses the build. A bound that
 returned nothing says so in those same words rather than claiming a cut, and
 every notice names the constraint that actually applied rather than the
-largest one in sight. A count that says lines means lines: the split-segment
+largest one in sight. A `read_file` page is the one exception, because
+nothing cut it: a page that met the caller's own limit was not cut, and one
+that ended where its bytes ran out is what the tool description promises. It
+is led by upstream's own range statement, "Showing lines X-Y of N total
+lines.", then either "The file continues past line Y: R lines remain." with
+the exact call that reads on -- the next line, and the caller's own limit
+rather than the size of the page that fit, which would shrink every page
+after a long one -- or "The file ends here."; the tool description quotes
+the same words. A count that says lines means lines: the split-segment
 count every range calculation uses is one higher whenever a file ends with a
 newline, and only the sentence subtracts it. A cap a service
 applied travels back with its items rather than being discarded, because a
