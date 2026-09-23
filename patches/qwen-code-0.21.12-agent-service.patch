@@ -198243,7 +198243,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +452,726 @@
+@@ -509,619 +452,730 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -199075,7 +199075,11 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      // The startup context opens the new history as it opened the old one:
 +      // kept whole, never summarized and rebuilt, so the candidate counted
 +      // below is the request the next turn sends, and nothing after this
-+      // point has to put the context back.
++      // point has to put the context back. Upstream's automatic compaction
++      // summarizes it away and rebuilds it when the compaction's event
++      // reaches the client, after the request the compaction was made for
++      // has gone out without it, and only logs a rebuild that fails; its
++      // manual compaction puts it at the head at once, as this does.
 +      const startupContext = chat.getStartupContext();
 -      // Use the new composer — assembles summary + ack + file restores +
 -      // image restore. No tail preservation, no continuation bridge.

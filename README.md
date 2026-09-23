@@ -240,7 +240,10 @@ spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
 token a digit. The startup context is kept whole at the head of every history a
 compaction builds, never summarized and rebuilt, so nothing can fail to put it
-back. A compaction request adds 1,445 to the prompt it summarizes: the
+back. Upstream's automatic compaction summarizes it away and rebuilds it once
+the compaction's event reaches the client, after the request that compaction
+was made for has gone out without it; its manual compaction puts it at the head
+at once, as this one does. A compaction request adds 1,445 to the prompt it summarizes: the
 snapshot's declaration after the turn's tools, 786, and the directive, 659. `F` is proved against the served
 template too: a user message, an assistant turn and a tool result, each counted
 with the request and without it, less its content counted alone. The served
