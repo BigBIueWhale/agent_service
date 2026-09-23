@@ -2795,6 +2795,37 @@ def _validate_text_read_fidelity_after(state: State) -> None:
         ),
         label=label,
     )
+    # Whether the file continues past a page is decided in lines, not
+    # segments: a page that ends on the file's last line has nothing past
+    # it, whether or not it carries the empty segment after that line's
+    # break, so it offers no continuation and cannot be said to continue
+    # with nothing left. The range it reports is in lines too.
+    _require_ordered(
+        _source(state, files, label=label),
+        (
+            "        const fileLines = originalLineCount - trailingSegment;",
+            "        const lastLineShown = originalLineCountExact\n          ? Math.min(actualEndLine, fileLines)\n          : actualEndLine;",
+            "        const moreRemains = !originalLineCountExact || lastLineShown < fileLines;",
+            "        const isTruncated = startLine > 0 || moreRemains;",
+            "          linesShown: [startLine + 1, lastLineShown],",
+            "          ...(moreRemains && linesIncluded > 0\n            ? { nextRead: { offset: actualEndLine } }",
+        ),
+        label=label,
+        location=files,
+    )
+    forbid_text(state, files, "actualEndLine < originalLineCount", label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/read-file.test.ts",
+        "says a page whose limit lands on the last line ends the file, and offers no continuation",
+        label=label,
+    )
+    require_text(
+        state,
+        files_test,
+        "decides in lines whether a page ends the file, and reports its range in lines",
+        label=label,
+    )
     forbid_text(state, files, "trimEnd()", label=label)
     forbid_text(state, files, "... [truncated]", label=label)
     # A line the result cannot carry whole is refused, with the two moves that

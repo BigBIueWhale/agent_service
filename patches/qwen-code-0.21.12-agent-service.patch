@@ -246678,7 +246678,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(typeof result.llmContent).toBe('string');
        expect(result.llmContent).toContain('remaining cells truncated');
        expect(result.llmContent).not.toContain('Showing lines');
-@@ -1047,54 +997,348 @@
+@@ -1047,54 +997,383 @@
        if (status.state === 'fresh') {
          expect(status.entry.lastReadWasFull).toBe(false);
          expect(status.entry.lastReadCacheable).toBe(false);
@@ -246993,6 +246993,41 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 +      );
 +    });
 +
++    it('says a page whose limit lands on the last line ends the file, and offers no continuation', async () => {
++      const filePath = path.join(tempRootDir, 'limit-at-end.txt');
++      // 20 lines, newline-terminated: splitting on "\n" yields a 21st, empty
++      // segment, which is not a line and is nothing to read on to.
++      await fsp.writeFile(
++        filePath,
++        `${Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n')}\n`,
++        'utf-8',
++      );
++      const last = await (
++        tool.build({
++          file_path: filePath,
++          offset: 17,
++          limit: 3,
++        }) as ToolInvocation<ReadFileToolParams, ToolResult>
++      ).execute(abortSignal);
++      expect(last.llmContent).toBe(
++        'Showing lines 18-20 of 20 total lines. The file ends here.\n\n---\n\nLine 18\nLine 19\nLine 20\n',
++      );
++
++      // A limit that lands on the last line from the start holds the whole
++      // file, and says nothing about a page.
++      const whole = await (
++        tool.build({
++          file_path: filePath,
++          offset: 0,
++          limit: 20,
++        }) as ToolInvocation<ReadFileToolParams, ToolResult>
++      ).execute(abortSignal);
++      expect(whole.llmContent).toBe(
++        `${Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`).join('\n')}\n`,
++      );
++      expect(whole.returnDisplay).toBe('');
++    });
++
 +    it('says the last page is the end of a file with no final newline, too', async () => {
 +      const filePath = path.join(tempRootDir, 'last-page-bare.txt');
 +      await fsp.writeFile(
@@ -247057,7 +247092,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        const filePath = path.join(tempRootDir, 'paginated.txt');
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
        const fileContent = lines.join('\n');
-@@ -1109,13 +1353,13 @@
+@@ -1109,13 +1388,13 @@
          ReadFileToolParams,
          ToolResult
        >;
@@ -247072,7 +247107,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        expect(result.llmContent).toContain('Line 8');
        expect(result.returnDisplay).toBe(
          'Read lines 6-8 of 20 from paginated.txt',
-@@ -1126,13 +1370,13 @@
+@@ -1126,13 +1405,13 @@
        const tempDir = path.join(tempRootDir, '.temp');
        await fsp.mkdir(tempDir, { recursive: true });
        const tempFilePath = path.join(tempDir, 'temp-output.txt');
@@ -247087,7 +247122,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        >;
  
        const result = await invocation.execute(abortSignal);
-@@ -1146,13 +1390,16 @@
+@@ -1146,13 +1425,16 @@
        );
        const tempFilePath = path.join(osTempFile, 'pr-review-context.md');
        const tempFileContent = '## PR #123\nFix encoding issues';
@@ -247105,7 +247140,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          >;
  
          const result = await invocation.execute(abortSignal);
-@@ -1187,36 +1434,38 @@
+@@ -1187,36 +1469,38 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -247150,7 +247185,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          );
          // Placeholder must not echo the original content.
          expect(second.llmContent).not.toContain('hello world');
-@@ -1224,89 +1473,93 @@
+@@ -1224,89 +1508,93 @@
        });
  
 -      it('re-emits bytes (no placeholder) after the read was evicted from history by microcompaction (issue #4239)', async () => {
@@ -247261,7 +247296,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            offset: 1,
            limit: 2,
          });
-@@ -1321,5 +1574,5 @@
+@@ -1321,5 +1609,5 @@
          // must therefore re-emit the truncated window rather than
          // claiming "you've already seen this file".
          const filePath = path.join(tempRootDir, 'long.txt');
@@ -247269,7 +247304,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
 -        // (500) so the read pipeline reports isTruncated = true.
 +        // Write more than one page holds, so the read pipeline reports
 +        // isTruncated = true.
-@@ -1326,20 +1579,19 @@
+@@ -1326,20 +1614,19 @@
          const bigContent = Array.from(
            { length: 700 },
 -          (_, i) => `line ${i + 1}`,
@@ -247295,7 +247330,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('does not arm the placeholder if the first Read was ranged', async () => {
-@@ -1348,26 +1600,26 @@
+@@ -1348,26 +1635,26 @@
          // pipeline, since the cache cannot prove the model has already
          // seen the entire file.
          const filePath = path.join(tempRootDir, 'big.txt');
@@ -247325,7 +247360,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('records an auto-memory read in the cache so a follow-up Edit can pass enforcement', async () => {
          // Auto-memory files skip the file_unchanged fast-path (they
-@@ -1386,13 +1638,13 @@
+@@ -1386,13 +1673,13 @@
            clearAutoMemoryRootCache();
            const memRoot = getAutoMemoryRoot(tempRootDir);
            await fsp.mkdir(memRoot, { recursive: true });
@@ -247340,7 +247375,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
            // The cache must contain the auto-memory file's entry, AND
            // the entry must be in a shape that satisfies prior-read
            // enforcement on Edit / WriteFile (fresh + lastReadAt set +
-@@ -1428,13 +1680,13 @@
+@@ -1428,13 +1715,13 @@
          await fsp.writeFile(
            svgPath,
            '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n',
@@ -247355,13 +247390,13 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          // The cache must record this as a full, cacheable read so
          // that prior-read enforcement on Edit / WriteFile would
          // recognise it as the model having seen the bytes.
-@@ -1488,4 +1740,4 @@
+@@ -1488,4 +1775,4 @@
          // it stays true (the bytes were text), and only
          // `lastReadWasFull` is false (the model only saw the head).
          const filePath = path.join(tempRootDir, 'long.cpp');
 -        // Mock Config caps truncate-tool-output-lines at 500.
 +        // More than one page holds.
-@@ -1492,13 +1744,13 @@
+@@ -1492,13 +1779,13 @@
          const bigContent = Array.from(
            { length: 700 },
 -          (_, i) => `line ${i + 1}`,
@@ -247377,7 +247412,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
            // Truncated → model has not seen every byte.
-@@ -1527,13 +1779,13 @@
+@@ -1527,13 +1814,13 @@
          // content to a `.cpp` file. The test relies on the
          // extension override winning over any future content-side
          // heuristic — there is no isBinaryFile mocking in scope.
@@ -247392,7 +247427,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          const status = fileReadCache.check(fs.statSync(filePath));
          expect(status.state).toBe('fresh');
          if (status.state === 'fresh') {
-@@ -1551,17 +1803,17 @@
+@@ -1551,17 +1838,17 @@
              background: '#306090',
            },
          })
@@ -247412,7 +247447,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
  
        it('completely bypasses the cache when getFileReadCacheDisabled() is true', async () => {
          // Build a fresh ReadFileTool with a Config whose cache is
-@@ -1579,27 +1831,32 @@
+@@ -1579,27 +1866,32 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -247449,7 +247484,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          expect(second.llmContent).not.toMatch(/unchanged since/);
          expect(isolatedCache.size()).toBe(0);
        });
-@@ -1615,12 +1872,13 @@
+@@ -1615,12 +1907,13 @@
  
        it('should throw error if path is ignored by a .qwenignore pattern', async () => {
          const ignoredFilePath = path.join(tempRootDir, 'foo.bar');
@@ -247463,7 +247498,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
        });
  
        it('should throw error if path is ignored by .agentignore or .aiignore', async () => {
-@@ -1634,18 +1892,18 @@
+@@ -1634,18 +1927,18 @@
          );
          const agentIgnoredFilePath = path.join(tempRootDir, 'agent-secret.txt');
          const aiIgnoredFilePath = path.join(tempRootDir, 'ai-secret.txt');
@@ -247488,7 +247523,7 @@ diff --git a/packages/core/src/tools/read-file.test.ts b/packages/core/src/tools
          await fsp.writeFile(
            path.join(tempRootDir, '.cursorignore'),
            'cursor-secret.txt\n',
-@@ -1660,46 +1918,47 @@
+@@ -1660,46 +1953,47 @@
              getProjectTempDir: () => path.join(tempRootDir, '.temp'),
              getProjectDir: () => path.join(tempRootDir, '.project'),
              getUserSkillsDirs: () => [
@@ -263854,7 +263889,56 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
  
      it('should identify truncation when reading the end of a file', async () => {
        const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
-@@ -3044,13 +2089,13 @@
+@@ -2956,6 +2001,48 @@
+       expect(result.linesShown).toEqual([11, 20]);
+     });
+ 
++    it('decides in lines whether a page ends the file, and reports its range in lines', async () => {
++      // Twenty lines, newline-terminated: twenty-one segments, the last one
++      // empty. A page that ends on line 20 has nothing past it, whether or
++      // not it carries that segment.
++      const lines = Array.from({ length: 20 }, (_, i) => `Line ${i + 1}`);
++      actualNodeFs.writeFileSync(testTextFilePath, `${lines.join('\n')}\n`);
++
++      for (const limit of [5, 10]) {
++        const result = await processSingleFileContent(
++          testTextFilePath,
++          mockConfig,
++          { offset: 15, limit },
++        );
++        expect(result.linesShown).toEqual([16, 20]);
++        expect(result.nextRead).toBeUndefined();
++        expect(result.isTruncated).toBe(true);
++        expect(result.returnDisplay).toBe(
++          'Read lines 16-20 of 20 from test.txt',
++        );
++      }
++
++      // From the start with a limit of the file's own length, the page is the
++      // whole file.
++      const whole = await processSingleFileContent(
++        testTextFilePath,
++        mockConfig,
++        { offset: 0, limit: 20 },
++      );
++      expect(whole.isTruncated).toBe(false);
++      expect(whole.nextRead).toBeUndefined();
++      expect(whole.linesShown).toEqual([1, 20]);
++
++      // One line short of the end, the file continues past the page.
++      const short = await processSingleFileContent(
++        testTextFilePath,
++        mockConfig,
++        { offset: 0, limit: 19 },
++      );
++      expect(short.nextRead).toEqual({ offset: 19 });
++      expect(short.linesShown).toEqual([1, 19]);
++    });
++
+     it('should handle limit exceeding file length', async () => {
+       const lines = ['Line 1', 'Line 2'];
+       actualNodeFs.writeFileSync(testTextFilePath, lines.join('\n'));
+@@ -3044,13 +2131,13 @@
        await expect(
          readFileWithLineAndLimit({
            path: testTextFilePath,
@@ -263869,7 +263953,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
        actualNodeFs.writeFileSync(testTextFilePath, 'hello\nworld');
        const controller = new AbortController();
        controller.abort();
-@@ -3121,13 +2166,13 @@
+@@ -3121,13 +2208,13 @@
          expect(statSpy).not.toHaveBeenCalled();
        } finally {
          statSpy.mockRestore();
@@ -263884,7 +263968,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
        const result = await processSingleFileContent(
          testTextFilePath,
          mockConfig,
-@@ -3135,33 +2180,47 @@
+@@ -3135,33 +2222,47 @@
  
        expect(result.llmContent).toBe(content);
        expect(result.returnDisplay).toBe('');
@@ -263942,7 +264026,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
        const lines = Array.from({ length: 11 }, (_, i) => `Line ${i + 1}`);
        actualNodeFs.writeFileSync(testTextFilePath, lines.join('\n'));
  
-@@ -3173,52 +2232,51 @@
+@@ -3173,52 +2274,51 @@
        );
  
        expect(result.isTruncated).toBe(true);
@@ -264003,7 +264087,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
        const lines = Array.from(
          { length: 65_000 },
          (_, index) => `Line ${index + 1} ${'x'.repeat(180)}`,
-@@ -3239,13 +2297,13 @@
+@@ -3239,13 +2339,13 @@
        );
        expect(result.originalLineCount).toBeLessThan(65_000);
        expect(result.originalLineCountExact).toBe(false);
@@ -264018,10 +264102,10 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
        );
        const noLineLimitConfig = {
          ...mockConfig,
-@@ -3252,2 +2310,1 @@
+@@ -3252,2 +2352,1 @@
 -        getTruncateToolOutputLines: () => Number.POSITIVE_INFINITY,
        } as unknown as Config;
-@@ -3254,52 +2311,46 @@
+@@ -3254,52 +2353,46 @@
  
        const result = await processSingleFileContent(
          testTextFilePath,
@@ -264088,7 +264172,7 @@ diff --git a/packages/core/src/utils/fileUtils.test.ts b/packages/core/src/utils
        actualNodeFs.writeFileSync(
          testTextFilePath,
          'x'.repeat(11 * 1024 * 1024),
-@@ -3323,80 +2374,24 @@
+@@ -3323,80 +2416,24 @@
        expect(result.originalLineCountExact).toBe(false);
        expect(result.returnDisplay).toBe(
          'Read lines 10-11 of at least 11 from test.txt',
@@ -264992,7 +265076,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const originalLineCount =
            _meta?.originalLineCount ??
            (stats.size >= TEXT_RANGE_FAST_PATH_MAX_SIZE
-@@ -1370,171 +1313,183 @@
+@@ -1370,171 +1313,185 @@
              : await countFileLines(filePath));
          const originalLineCountExact =
            _meta?.originalLineCountExact === false
@@ -265127,25 +265211,32 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
 -
          const actualEndLine = startLine + linesIncluded;
 -        const contentRangeTruncated =
-+        const isTruncated =
-           startLine > 0 ||
-           !originalLineCountExact ||
-           actualEndLine < originalLineCount;
+-          startLine > 0 ||
+-          !originalLineCountExact ||
+-          actualEndLine < originalLineCount;
 +        // A count that says lines means lines. The split-segment count every
 +        // range calculation here uses is one higher whenever the file ends
 +        // with a newline, and a page that reached that end carries its empty
-+        // last segment; the arithmetic keeps segments, and only what is said
-+        // in lines subtracts it.
++        // last segment; the arithmetic keeps segments, and what is said in
++        // lines, or decided about lines, subtracts it.
 +        const trailingSegment =
 +          originalLineCountExact && _meta?.endsWithNewline === true ? 1 : 0;
++        const fileLines = originalLineCount - trailingSegment;
 -        const isTruncated = contentRangeTruncated || contentLengthTruncated;
          const lineCountLabel = originalLineCountExact
 -          ? `${originalLineCount}`
-+          ? `${originalLineCount - trailingSegment}`
++          ? `${fileLines}`
            : `at least ${originalLineCount}`;
-+        const lastLineShown = rangeReachedEof
-+          ? Math.min(actualEndLine, originalLineCount - trailingSegment)
++        const lastLineShown = originalLineCountExact
++          ? Math.min(actualEndLine, fileLines)
 +          : actualEndLine;
++        // Whether a line of the file lies past this page. It is decided in
++        // lines, so a page that ends on the file's last line -- whether or
++        // not it carries the empty segment after that line's break -- has
++        // nothing past it: it offers no continuation, and a statement that
++        // the file continues, with nothing left, cannot be made.
++        const moreRemains = !originalLineCountExact || lastLineShown < fileLines;
++        const isTruncated = startLine > 0 || moreRemains;
  
          // By default, return nothing to streamline the common case of a successful read_file.
 -        let returnDisplay = '';
@@ -265166,8 +265257,6 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
 +
 +        // The page ended on a line boundary, so the next one starts at the
 +        // next line: a continuation always advances.
-+        const moreRemains =
-+          !originalLineCountExact || actualEndLine < originalLineCount;
          return {
            llmContent,
            returnDisplay,
@@ -265176,8 +265265,9 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
            originalLineCountExact,
 +          endsWithNewline: _meta?.endsWithNewline,
 +          truncatedByBytes,
-           linesShown: [startLine + 1, actualEndLine],
-+          ...(isTruncated && moreRemains && linesIncluded > 0
+-          linesShown: [startLine + 1, actualEndLine],
++          linesShown: [startLine + 1, lastLineShown],
++          ...(moreRemains && linesIncluded > 0
 +            ? { nextRead: { offset: actualEndLine } }
 +            : {}),
            stats,
@@ -265311,7 +265401,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          const contentBuffer = await fs.promises.readFile(filePath);
          const base64Data = contentBuffer.toString('base64');
          const base64SizeInMB = base64Data.length / (1024 * 1024);
-@@ -1556,304 +1511,92 @@
+@@ -1556,304 +1513,92 @@
              },
            },
            returnDisplay: `Read ${fileType} file: ${relativePathForDisplay}`,
@@ -265644,7 +265734,7 @@ diff --git a/packages/core/src/utils/fileUtils.ts b/packages/core/src/utils/file
          try {
            const { content, isTruncated } =
              await readNotebookWithMetadata(filePath);
-@@ -1894,25 +1637,12 @@
+@@ -1894,25 +1639,12 @@
        error: `Error reading file ${relativePathForDisplay}: ${errorMessage}`,
        errorType: ToolErrorType.READ_CONTENT_FAILURE,
      };
