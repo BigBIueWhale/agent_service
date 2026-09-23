@@ -4005,7 +4005,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const repositoryData = declared?.repositoryDataBytes ?? 0;",
             "const turnBudget = declared?.turnBudgetBytes ?? 0;",
             "const workspaceData = startup?.workspaceDataBytes ?? 0;",
-            "const preamble = withStartup + repositoryData + turnBudget + workspaceData;",
+            "    const todoList = reminder.listBytes;\n    const preamble =\n      withStartup + repositoryData + turnBudget + workspaceData + todoList;",
             "if (preamble > partition.staticPreamble) {",
             "`room for ${turnBudget} bytes of turn budget`",
             "const probe = await countText(FRAMING_PROBE_TEXT);",
@@ -4780,7 +4780,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         "packages/core/src/core/geminiChat.ts",
         (
-            "    const frame = compactionFrame();",
+            "    const frame: Content[] = [\n      ...compactionFrame(),\n      { role: 'user', parts: [{ text: reminder.text }] },\n    ];",
             "    const withStartup = await counted([\n      ...(startup ? [startup.counted] : []),\n      ...frame,\n    ]);",
             "        'the compaction frame',",
         ),
@@ -8077,24 +8077,81 @@ def _validate_bounded_output_after(state: State) -> None:
     require_text(
         state, "packages/core/src/tools/glob.ts", "MAX_GLOB_COLLECTED_ENTRIES = 1000", label=label
     )
-    # The todo reminder that cut its own copy of the list is gone with the
-    # reminder itself: todo_write states the list it wrote and nothing more.
-    for retired in ("formatOutputBound(", "setActiveTodoReminder", "MAX_ACTIVE_TODO_CONTEXT_CHARS"):
+    # Upstream's periodic todo reminder is carried in upstream's shape: its
+    # words, its `- [status] content` lines, re-sent beside every third tool
+    # result and on every automatic turn while items are unfinished, by the
+    # same store, cadence and injection sites. What it lacked is a bound the
+    # partition counts in: its list is cut at a byte bound of the NFC form
+    # the tokenizer reads, not at a character count, and the startup proof
+    # charges one reminder at its widest, because at most one stands in the
+    # request a compaction leaves.
+    reminder = "packages/core/src/tools/todo-reminder.ts"
+    _require_all(
+        state,
+        reminder,
+        (
+            "export const ACTIVE_TODO_LIST_BYTES = 800;",
+            "const TRUNCATION_MARK = '\\n[truncated]';",
+            "  return `<system-reminder>\\nThe current task still has unfinished todo items:\\n${list}\\nKeep the todo list current and continue the task. Do not treat a successful intermediate tool call as task completion.\\n</system-reminder>`;",
+            "unfinished.map((todo) => `- [${todo.status}] ${todo.content}`).join('\\n'),",
+            "const listed = cutToTokenizerBytes(serialized.text, ACTIVE_TODO_LIST_BYTES);",
+            "export function activeTodoReminderBound(): {",
+            "    text: reminderText('x'),",
+        ),
+        label=label,
+    )
+    forbid_text(state, reminder, ".slice(0,", label=label)
+    for retired in ("formatOutputBound(", "MAX_ACTIVE_TODO_CONTEXT_CHARS"):
         forbid_text(state, "packages/core/src/tools/todoWrite.ts", retired, label=label)
-    # Nor does a copy of the list come back into later turns: the periodic
-    # reminder is deleted everywhere it was wired, and the work-chain owners
-    # the scheduler scopes todos by are what remains.
-    for path in (
-        "packages/core/src/config/config.ts",
-        "packages/core/src/core/client.ts",
-        "packages/cli/src/acp-integration/session/Session.ts",
-    ):
-        for retired in ("ActiveTodoReminder", "activeTodoReminder", "ACTIVE_TODO_REMINDER_REFRESH_TURNS"):
-            forbid_text(state, path, retired, label=label)
     require_text(
         state,
+        "packages/core/src/tools/todoWrite.ts",
+        "        this.config.setActiveTodoReminder(\n          promptId,\n          activeTodoReminder(unfinishedTodos),\n        );",
+        label=label,
+    )
+    _require_all(
+        state,
         "packages/core/src/config/config.ts",
-        "  getActiveTodoWorkChainOwner(",
+        (
+            "const ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3;",
+            "  getActiveTodoWorkChainOwner(",
+            "  takeActiveTodoReminder(promptId: string, force = false): string | undefined {",
+            "    if (!force && elapsed < ACTIVE_TODO_REMINDER_REFRESH_TURNS) {",
+            "  setActiveTodoReminder(promptId: string, reminder: string | undefined): void {",
+        ),
+        label=label,
+    )
+    client_source = _source(state, "packages/core/src/core/client.ts", label=label)
+    _require(
+        client_source.count("this.config.takeActiveTodoReminder(") == 2
+        and "        const activeTodoReminder =\n          this.config.takeActiveTodoReminder(prompt_id);" in client_source,
+        f"{label}: the client does not re-send the todo reminder beside a tool result and on an automatic turn",
+    )
+    _require(
+        _source(state, "packages/cli/src/acp-integration/session/Session.ts", label=label).count(
+            "this.config.takeActiveTodoReminder("
+        )
+        == 4,
+        f"{label}: the ACP session does not re-send the todo reminder at its four sites",
+    )
+    for path, case in (
+        ("packages/core/src/tools/todo-reminder.test.ts", "cuts the list at its byte bound in the form the tokenizer reads, on a code-point boundary"),
+        ("packages/core/src/tools/todo-reminder.test.ts", "is upstream's reminder, word for word, for a list that fits"),
+        ("packages/core/src/tools/todo-reminder.test.ts", "measures the list in NFC and never cuts inside a code point"),
+        ("packages/core/src/tools/todo-reminder.test.ts", "is charged at its widest: its fixed text, and its list and mark at their byte bound"),
+        ("packages/core/src/config/config.test.ts", "re-issues the active Todo reminder only every third tool turn"),
+        ("packages/core/src/core/client.test.ts", "carries active todos after tool results and clears them for new work"),
+    ):
+        require_text(state, path, case, label=label)
+    # The proof charges it.
+    _require_all(
+        state,
+        "packages/core/src/core/geminiChat.ts",
+        (
+            "    const reminder = activeTodoReminderBound();",
+            "      { role: 'user', parts: [{ text: reminder.text }] },",
+            "        `room for ${todoList} bytes of todo list`,",
+        ),
         label=label,
     )
     forbid_text(

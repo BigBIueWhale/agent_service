@@ -34,15 +34,15 @@ SYSTEM_SETTINGS_FILES = (
     Path("/etc/qwen-code/system-defaults.json"),
 )
 # The two-turn cycle's requests, in order: the startup proof's six counts (the preamble,
-# the preamble with its startup context and the compaction frame -- the snapshot's
-# trailer, the acknowledgement and a retained input's header -- the framing text alone,
-# and the message, turn and tool-result probes), then for each turn the request with its
+# the preamble with its startup context, the compaction frame -- the snapshot's trailer,
+# the acknowledgement and a retained input's header -- and the todo reminder, the framing
+# text alone, and the message, turn and tool-result probes), then for each turn the request with its
 # pending message counted, the request about to be issued counted, and the generation. A
 # tool result is bounded where it is made, so no turn counts a baseline without it.
 EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] * 2 + ["/v1/chat/completions"]
 EXPECTED_ROLES = [
     ["system"],
-    ["system", "user", "user", "assistant", "user"],
+    ["system", "user", "user", "assistant", "user", "user"],
     None,
     ["system", "user"],
     ["system", "user", "assistant"],

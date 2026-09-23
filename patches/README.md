@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `9f22190366ed798de58f9b1c39e61e97fe7d8d50f73cc09b45fa13a858bd4f28`
+- Review-diff SHA-256: `1875989d458a6fe8f4f8ed100bb9855f89df128634d8c29885f3ae8d201400fc`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `d4277e32083ff9fb88d0d9b4f78d1f5eedba1764c6b11d835eef783d7928168c`
+- Transformer-manifest SHA-256: `a92ce3237a3ed27dd4951985e9d0897d6d8798512380772fe4a7a116c191d132`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -91,7 +91,8 @@ startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof counts the frame every compacted history
 holds around its blocks -- the resume trailer, the acknowledgement turn and a
-retained input's header -- with it, the blocks left out. `M`, one inline block, is W/8 bytes — 32,768 — the one
+retained input's header -- with it, the blocks left out, and one todo reminder
+with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — the one
 declared magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back rather
 than shortened. `F`, the per-message framing, is the 61 bytes the served
@@ -133,7 +134,13 @@ rather than the size of the page that fit, which would shrink every page
 after a long one -- or "The file ends here."; the tool description quotes
 the same words. A count that says lines means lines: the split-segment
 count every range calculation uses is one higher whenever a file ends with a
-newline, and only the sentence subtracts it. A cap a service
+newline, and only the sentence subtracts it. Upstream's periodic todo reminder
+is carried in upstream's shape -- its words and `- [status] content` lines, re-sent
+beside every third tool result and on every automatic turn while items are
+unfinished -- with the bound it lacked: its list is cut at 800 bytes of the NFC
+form the tokenizer reads rather than at 800 characters, and the startup proof
+charges one reminder at its widest, because at most one stands in the request a
+compaction leaves. A cap a service
 applied travels back with its items rather than being discarded, because a
 layer cannot declare a limit it was never told about.
 
