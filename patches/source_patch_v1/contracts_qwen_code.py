@@ -971,9 +971,11 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "export const QWEN38_TURN_BUDGET_LEFT_OUT = 'left out';",
             "export const QWEN38_TURN_BUDGET_BYTES = String(Number.MAX_SAFE_INTEGER).length;",
             "  if (turnBudget === QWEN38_TURN_BUDGET_LEFT_OUT) return '';\n  if (!Number.isSafeInteger(turnBudget) || turnBudget < 1) {",
-            "`- This session may run at most ${turnBudgetText(turnBudget)} turns. Reaching that number ends the session.`,",
+            "  const budget = turnBudgetText(turnBudget);",
+            "  const turns = `${budget} turns`;",
+            "`- This session may run at most ${turns}. Reaching that number ends the session.`,",
             "'locked agent-service states its turn budget in the deployment contract, and none was supplied',",
-            "${qwen38ContextSection(partition, turnBudget)}",
+            "const context = qwen38ContextSection(partition, turnBudget);",
         ),
         label=label,
     )
@@ -981,6 +983,80 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         prompt_source.count("turnBudgetText(") == 2,
         f"{label}: {prompt} states the turn budget somewhere other than its one line",
     )
+    # Every number of bytes, tokens or turns the deployment prompt states is
+    # one the `## Context` section renders, stated once: the section writes
+    # each quantity once and hands the same strings to the refusal, so a
+    # sealed file, the frame or a second sentence that restated a budget --
+    # the page size beside a header's other number, the bound described two
+    # ways -- refuses the prompt rather than reaching the model.
+    _require_all(
+        state,
+        prompt,
+        (
+            "const STATED_QUANTITY = /\\b(\\d[\\d,]*) (bytes|tokens|turns)\\b/g;",
+            "export function refuseRestatedQuantities(",
+            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n    ],",
+            "refuseRestatedQuantities(prompt, context.quantities);",
+            "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
+            "'- A `read_file` page and the statement that leads it are one inline block together.",
+            "a declared six-section snapshot of at most one inline block,",
+            "while the child spends its own turn budget, as many turns as yours.",
+        ),
+        label=label,
+    )
+    # Retired statements: the bound described as a whole-result replacement,
+    # which the scheduler seam never does; the page size restated in bytes;
+    # delegation stated a second time in `## Context`; a child's budget called
+    # the parent's own.
+    for retired in (
+        "Nothing is lost and nothing is silently shortened",
+        "the notice that replaces it",
+        "returns pages of at most",
+        "'- Subagents run one at a time, in the foreground.',",
+        "while the child spends its own turn budget. ",
+    ):
+        forbid_text(state, prompt, retired, label=label)
+    # The tool descriptions tell the same facts: a child's budget is its own,
+    # as many turns as the parent's, and the shell names `task_stop` only in a
+    # registry that holds it -- this deployment's never does.
+    agent_tool = "packages/core/src/tools/agent/agent.ts"
+    require_text(
+        state,
+        agent_tool,
+        "It runs under its own turn budget, as many turns as yours; exhausting that budget ends its run with the assignment marked unfinished.",
+        label=label,
+    )
+    forbid_text(state, agent_tool, "It runs under the same turn budget you do", label=label)
+    _require_all(
+        state,
+        "packages/core/src/tools/shell.ts",
+        (
+            "function getShellToolDescription(declaresTaskStop: boolean): string {",
+            "${declaresTaskStop ? `To stop a background command started by this tool, use \\`${ToolNames.TASK_STOP}\\` when a task id is available. ` : ''}",
+            "      getShellToolDescription(declaresTaskStop),",
+        ),
+        label=label,
+    )
+    config_source = _source(state, "packages/core/src/config/config.ts", label=label)
+    _require(
+        config_source.count("registry.getAllToolNames().includes(ToolNames.TASK_STOP),") == 2
+        and "new ShellTool(this)" not in config_source,
+        f"{label}: a shell tool is built without asking its registry whether it holds task_stop",
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/shell.test.ts",
+        "names task_stop only when the session declares it",
+        label=label,
+    )
+    for case in (
+        "states every budget once, as a number of bytes, tokens or turns, and nothing else as one",
+        "refuses a prompt that states a budget twice or one its ## Context section does not declare",
+        "states the bound on a tool result as the code applies it, and delegation once",
+    ):
+        require_text(
+            state, "packages/core/src/core/qwen38-deployment-prompt.test.ts", case, label=label
+        )
     _require_ordered(
         _source(state, core, label=label),
         (

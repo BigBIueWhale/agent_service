@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `d0c3f3c7e08bc804dab35682ecd3c80e931e00f832158789667e560df3d7fdc0`
+- Review-diff SHA-256: `1e165292192fd69a30d5f184b8e66e8672a1182d487fa3249ab76e47a8559122`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `9a4405ab1facd2cee07ad91e2736513605590b14d39be135e546c748331888d5`
+- Transformer-manifest SHA-256: `097d1d3eae6dd58617eea7d56fcbac389761662f26a9ba74c872df7cc745908a`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -307,7 +307,14 @@ per-invocation scratch ownership, and effect journaling govern this deployment.
 Generic host prompts describe the workspace and permissions actually provided;
 a report does not prove attribution of concurrent effects. The deployment frame
 names its timestamp as the CLI invocation time and does not promise indefinite
-cache residency.
+cache residency. Every number of bytes, tokens or turns the deployment prompt
+states is rendered once, in its `## Context` section, from the partition or the
+turn budget that enforces it, and is named rather than restated everywhere
+else -- "one inline block"; a prompt that states one twice, or states one the
+section does not declare, is refused, and the headless qualification holds the
+sealed instructions and every tool declaration to the same rule. A subagent
+spends its own turn budget, as many turns as its parent's, and the shell tool
+names `task_stop` only when its registry holds that tool.
 
 Locked initialization and later authentication use the sealed settings boundary:
 no workspace environment injection, permission-rule persistence, ambient MCP,

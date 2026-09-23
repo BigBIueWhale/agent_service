@@ -221,22 +221,22 @@ rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
 its directive adds to the same share. The proof counts this deployment's turn
 preamble with the Git snapshot's repository values and the turn budget's number
-left out — 7,813 tokens, rendered by the served template and counted by the
+left out — 7,722 tokens, rendered by the served template and counted by the
 served tokenizer — and the startup context that opens every history with its
 workspace data left out, 46 more. It adds the most bytes the data left out may
 hold, capped in the NFC form the tokenizer reads, as the most tokens they can
 cost: 1,920 for the snapshot's branch, status and commits, 1,280 for the startup
 context's environment lines and folder listing, and 16 for the turn budget, the
-widest a safe integer renders to. That is a bound of 11,075, the same for every
+widest a safe integer renders to. That is a bound of 10,984, the same for every
 repository, every workspace and every budget, so none of them can make a
-deployment refuse to start, with 1,213 left for the prompt and the declarations
+deployment refuse to start, with 1,304 left for the prompt and the declarations
 to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
 token a digit. The startup context is kept whole at the head of every history a
 compaction builds, never summarized and rebuilt, so nothing can fail to put it
-back. In the compaction shape, without a snapshot, the preamble is 3,426 before
-the 548 its directive adds. `F` is proved against the served
+back. In the compaction shape, without a snapshot, the preamble is 3,349 before
+the 632 its directive adds. `F` is proved against the served
 template too: a user message, an assistant turn and a tool result, each counted
 with the request and without it, less its content counted alone. The served
 template frames them in 5, 10 and 24 tokens, the last with the markup of the

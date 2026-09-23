@@ -36,8 +36,3 @@ fallback configuration.
   so far, which is an ordinary outcome and not an error.
 - There is no Qwen wall-clock cutoff. Use each shell call's explicit timeout
   carefully and keep long-running commands observable.
-- A tool result is held to one inline block. A longer one keeps its start and
-  its end, and a notice where its middle was cut states its true total and the
-  exact `read_file` call that returns the cut lines from a copy of the whole
-  kept for the session, or why no copy could be kept. Prefer one narrow read or
-  search over a broad one you will have to page back.

@@ -159,8 +159,8 @@
   },
   "components": {
     "settings_sha256": "54386b0b910f498f4c5a905d1d34c6364d857586381d002205fe85ab1dd90fbf",
-    "instructions_sha256": "3194de23e874dd998407cf8b301eb6875c670bf1da87c45d381200dcf0c0e46d",
-    "system_prompt_sha256": "44d333b727883811127d45d567f2f664456c9df7906ee24363720ebd3bf75487",
+    "instructions_sha256": "7151a19aa179d83577189e99d9f7420a45a3fe7074508022065487a80b4d2879",
+    "system_prompt_sha256": "49785ca44bfd6bdb1e1d9d4159601dfce99e88011e5deb16c8ff019fdf817e19",
     "deployment_contract_sha256": "3940a5e03bedf8fa0f5fdcf685f45ff451240cd235d84633fc69fd083e56a380",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "wrapper_sha256": "b16a82ac344ddc3e7b32c610eae505ce0118b8fea7244e027db7c96ecf536e4f",

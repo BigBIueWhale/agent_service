@@ -84,6 +84,10 @@ def require_false_map(label: str, value: Any, expected_keys: set[str]) -> None:
         require_equal(f"{label}.{key}", value[key], False)
 
 
+# A number of bytes, tokens or turns, as a preamble writes one.
+STATED_QUANTITY = re.compile(r"\b\d[\d,]* (?:bytes|tokens|turns)\b")
+
+
 def require_fragments(label: str, text: str, fragments: list[str]) -> None:
     normalized_text = " ".join(text.split())
     for fragment in fragments:
@@ -262,13 +266,28 @@ def verify_prompts(
             "deployment contract says 'bundled': what session teardown keeps and "
             "discards is stated once, in plain words"
         )
-    require_fragments(
-        "QWEN instructions",
-        instructions,
-        [
-            "A tool result is held to one inline block.",
-        ],
-    )
+    # Every budget the model is told -- a number of bytes, tokens or turns --
+    # and the bound on a tool result are stated once, in the `## Context`
+    # section the client renders from the partition and the turn budget. A
+    # sealed file that restated one would put a second statement of the same
+    # quantity in front of the model, as the instructions once described the
+    # tool-result bound one way while `## Context` described it another.
+    for label, text in (
+        ("QWEN instructions", instructions),
+        ("system prompt", system),
+        ("deployment contract", deployment),
+    ):
+        stated = STATED_QUANTITY.search(text)
+        if stated is not None:
+            raise ContractError(
+                f"{label} states {stated.group(0)!r}; every budget is stated once, in the "
+                "## Context section rendered from the partition, and named elsewhere"
+            )
+        if "inline block" in text:
+            raise ContractError(
+                f"{label} describes the inline block; the bound on a tool result is "
+                "stated once, in the ## Context section rendered from the partition"
+            )
 
 
 def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:

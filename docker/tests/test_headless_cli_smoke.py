@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "docker/scripts"))
-from check_headless_cli import SmokeFailure, check
+from check_headless_cli import SmokeFailure, check, require_quantities_stated_once
 
 
 class HeadlessSmokeTests(unittest.TestCase):
@@ -118,6 +118,37 @@ process.stdin.on('end', () => {
         self.assertEqual(len(children), 1)
         self.assertEqual(children[0].returncode, -signal.SIGKILL)
         self.assertTrue(all(pipe.closed for pipe in (children[0].stdin, children[0].stdout, children[0].stderr)))
+
+
+
+class StatedQuantityTests(unittest.TestCase):
+    CONTEXT = ("## Context\n\n- The context window is 262144 tokens.\n"
+               "- One inline block is at most 32768 bytes.\n\nCLI invocation started: now")
+
+    def system(self, before="", context=None):
+        return f"discipline{before}\n\n---\n\ncontract\n\n{context or self.CONTEXT}\n\n---\n\ninstructions"
+
+    def test_accepts_each_budget_stated_once_inside_the_context_section(self):
+        require_quantities_stated_once(self.system(), [{"function": {"description": "one inline block"}}])
+
+    def test_refuses_a_budget_restated_outside_the_context_section(self):
+        for before in (" Pages hold 32768 bytes.", " Pages hold 32,443 bytes.", " Runs 400 turns."):
+            with self.subTest(before=before), self.assertRaisesRegex(SmokeFailure, "outside its ## Context section"):
+                require_quantities_stated_once(self.system(before), [])
+
+    def test_refuses_a_budget_stated_twice_inside_the_context_section(self):
+        context = self.CONTEXT.replace("bytes.\n", "bytes.\n- Pages hold at most 32768 bytes.\n")
+        with self.assertRaisesRegex(SmokeFailure, "states a budget twice"):
+            require_quantities_stated_once(self.system(context=context), [])
+
+    def test_refuses_a_tool_declaration_that_states_a_budget(self):
+        with self.assertRaisesRegex(SmokeFailure, "a tool declaration states '32768 bytes'"):
+            require_quantities_stated_once(self.system(), [{"function": {"description": "pages of 32768 bytes"}}])
+
+    def test_refuses_a_system_message_without_one_context_section(self):
+        for system in ("no section", self.system() + "\n## Context\n"):
+            with self.subTest(system=system[:20]), self.assertRaisesRegex(SmokeFailure, "one ## Context section"):
+                require_quantities_stated_once(system, [])
 
 
 if __name__ == "__main__":

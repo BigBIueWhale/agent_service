@@ -14,6 +14,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import signal
@@ -86,6 +87,33 @@ def stub_address(settings: dict) -> tuple[str, int]:
     return base.hostname, base.port
 
 
+# A number of bytes, tokens or turns, as the preamble writes one.
+STATED_QUANTITY = re.compile(r"\b(\d[\d,]*) (bytes|tokens|turns)\b")
+CONTEXT_HEADING = "\n## Context\n"
+CONTEXT_END = "\n\nCLI invocation started: "
+
+
+def require_quantities_stated_once(system: str, tools: list) -> None:
+    """Every budget the preamble states in bytes, tokens or turns is stated once, in the
+    ## Context section the client renders from the partition. The sealed instructions and
+    the tool declarations name those budgets rather than restate them, so no two parts of
+    the preamble can give two values for one."""
+    require(system.count(CONTEXT_HEADING) == 1, "the system message does not carry one ## Context section")
+    start = system.index(CONTEXT_HEADING)
+    require(CONTEXT_END in system[start:], "the ## Context section is not followed by the invocation line")
+    end = system.index(CONTEXT_END, start)
+    stated = []
+    for match in STATED_QUANTITY.finditer(system):
+        quantity = f"{match.group(1).replace(',', '')} {match.group(2)}"
+        require(start <= match.start() < end,
+                f"the system message states {quantity} outside its ## Context section")
+        stated.append(quantity)
+    require(len(stated) == len(set(stated)), f"the ## Context section states a budget twice: {stated}")
+    declared = STATED_QUANTITY.search(json.dumps(tools, ensure_ascii=False))
+    require(declared is None, f"a tool declaration states {declared and declared.group(0)!r}; "
+            "it names the budget instead, which the ## Context section states once")
+
+
 def sealed_digests(home: Path) -> dict[str, str]:
     return {str(path.relative_to(home)): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(home.rglob("*")) if path.is_file()}
@@ -113,6 +141,7 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
         # The sealed instructions travel in every system message, whole, once.
         require(isinstance(system, str) and system.count(block) == 1,
                 f"request {index}'s system message does not carry the sealed QWEN.md once")
+        require_quantities_stated_once(system, body["tools"])
         require(body["chat_template_kwargs"] == config["extra_body"]["chat_template_kwargs"],
                 f"request {index}'s template arguments are not the sealed ones")
         tools = tools if tools is not None else body["tools"]

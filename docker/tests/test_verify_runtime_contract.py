@@ -383,6 +383,38 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                 with self.assertRaisesRegex(MODULE.ContractError, refusal):
                     MODULE.verify(paths)
 
+    def test_rejects_a_sealed_file_that_restates_a_budget_even_if_resealed(self) -> None:
+        # `## Context` states every budget, and the bound on a tool result,
+        # once. A sealed file that states one again is refused even when
+        # resealed, whether it agrees or not.
+        components = {
+            2: "instructions_sha256",
+            3: "system_prompt_sha256",
+            4: "deployment_contract_sha256",
+        }
+        for index, key in components.items():
+            for addition, refusal in (
+                ("A page holds at most 32,443 bytes.", "states '32,443 bytes'"),
+                ("The session runs 400 turns.", "states '400 turns'"),
+                ("A tool result is held to one inline block.", "describes the inline block"),
+            ):
+                with self.subTest(file=self.paths[index].name, addition=addition), \
+                        tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    sealed = root / self.paths[index].name
+                    sealed.write_text(
+                        self.paths[index].read_text(encoding="utf-8") + addition + "\n",
+                        encoding="utf-8",
+                    )
+                    contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+                    contract["components"][key] = MODULE.sha256(sealed.read_bytes())
+                    contract_path = root / "contract.json"
+                    contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+                    paths = [contract_path, *self.paths[1:]]
+                    paths[index] = sealed
+                    with self.assertRaisesRegex(MODULE.ContractError, refusal):
+                        MODULE.verify(paths)
+
     def test_rejects_extra_native_tool(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

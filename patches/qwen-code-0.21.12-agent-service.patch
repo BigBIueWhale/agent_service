@@ -123050,6 +123050,30 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        failures.push(error);
      }
      const pendingLease = activation
+@@ -8332,7 +7775,10 @@
+       });
+       await registerLazy(ToolNames.SHELL, async () => {
+         const { ShellTool } = await import('../tools/shell.js');
+-        return new ShellTool(this);
++        return new ShellTool(
++          this,
++          registry.getAllToolNames().includes(ToolNames.TASK_STOP),
++        );
+       });
+       await registerGoalWorkerTools();
+       await registerStructuredOutputIfRequested();
+@@ -8444,7 +7890,10 @@
+     });
+     await registerLazy(ToolNames.SHELL, async () => {
+       const { ShellTool } = await import('../tools/shell.js');
+-      return new ShellTool(this);
++      return new ShellTool(
++        this,
++        registry.getAllToolNames().includes(ToolNames.TASK_STOP),
++      );
+     });
+     await registerLazy(ToolNames.TODO_WRITE, async () => {
+       const { TodoWriteTool } = await import('../tools/todoWrite.js');
 diff --git a/packages/core/src/config/qwen38-agent-service-contract.test.ts b/packages/core/src/config/qwen38-agent-service-contract.test.ts
 --- /dev/null
 +++ b/packages/core/src/config/qwen38-agent-service-contract.test.ts
@@ -140996,15 +141020,21 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -17904,6 +17536,7 @@
+@@ -17904,6 +17536,10 @@
  
-     const tool = new TestShellTool({
-       getShellDefaultTimeoutMs: () => undefined,
-+      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
-     } as unknown as Config);
+-    const tool = new TestShellTool({
+-      getShellDefaultTimeoutMs: () => undefined,
+-    } as unknown as Config);
++    const tool = new TestShellTool(
++      {
++        getShellDefaultTimeoutMs: () => undefined,
++        getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
++      } as unknown as Config,
++      false,
++    );
      const mockToolRegistry = {
        getTool: () => tool,
-@@ -17920,12 +17553,13 @@
+@@ -17920,12 +17556,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -141018,7 +141048,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -17939,6 +17573,7 @@
+@@ -17939,6 +17576,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141026,7 +141056,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -18062,12 +17697,13 @@
+@@ -18062,12 +17700,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141040,7 +141070,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18090,6 +17726,7 @@
+@@ -18090,6 +17729,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141048,7 +141078,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onAllToolCallsComplete = vi.fn();
-@@ -18144,12 +17781,13 @@
+@@ -18144,12 +17784,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141062,7 +141092,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18172,6 +17810,7 @@
+@@ -18172,6 +17813,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141070,7 +141100,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -18217,12 +17856,13 @@
+@@ -18217,12 +17859,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141084,7 +141114,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18245,6 +17885,7 @@
+@@ -18245,6 +17888,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141092,7 +141122,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -18276,6 +17917,7 @@
+@@ -18276,6 +17920,7 @@
      const tool = new TestApprovalTool({
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        setApprovalMode: () => {},
@@ -141100,7 +141130,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config);
  
      const mockToolRegistry = {
-@@ -18291,12 +17933,13 @@
+@@ -18291,12 +17936,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141114,7 +141144,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18319,6 +17962,7 @@
+@@ -18319,6 +17965,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141122,7 +141152,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onAllToolCallsComplete = vi.fn();
-@@ -18348,6 +17992,66 @@
+@@ -18348,6 +17995,66 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -142896,7 +142926,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 + * the preamble, the probe word alone, and the framing of each probed kind,
 + * the tool result's with the call markup it is measured behind.
 + */
-+const DECLARED_PREAMBLE_TOKENS = 7_813;
++const DECLARED_PREAMBLE_TOKENS = 7_722;
 +const FRAMING_PROBE_TOKENS = 2;
 +type ProbedKind = 'message' | 'turn' | 'result';
 +const SERVED_FRAMING_TOKENS: Record<ProbedKind, number> = {
@@ -177265,7 +177295,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
-@@ -0,0 +1,325 @@
+@@ -0,0 +1,440 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -177286,6 +177316,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +  appendQwen38SubagentInvocation,
 +  getQwen38DeploymentContract,
 +  getQwen38EngineeringDiscipline,
++  refuseRestatedQuantities,
 +} from './qwen38-deployment-prompt.js';
 +import { partitionContextWindow } from './tokenLimits.js';
 +
@@ -177380,6 +177411,120 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    ]) {
 +      expect(rendered).toContain(String(value));
 +    }
++  });
++
++  it('states every budget once, as a number of bytes, tokens or turns, and nothing else as one', () => {
++    // One statement per quantity is what keeps a preamble from giving two
++    // values for one: everything else names it -- "one inline block".
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++    );
++    vi.spyOn(fs, 'lstatSync').mockReturnValue({
++      isFile: () => true,
++      isSymbolicLink: () => false,
++    } as fs.Stats);
++    vi.spyOn(fs, 'readFileSync').mockReturnValue(
++      'LOCKED_DEPLOYMENT_CONTRACT_V1\n',
++    );
++
++    const rendered = appendQwen38DeploymentContract(
++      'role prompt',
++      PARTITION,
++      TURN_BUDGET,
++    );
++    const stated = [
++      ...rendered.matchAll(/\b(\d[\d,]*) (bytes|tokens|turns)\b/g),
++    ].map(([quantity]) => quantity);
++    expect(stated).toEqual([
++      `${PARTITION.window} tokens`,
++      `${PARTITION.turnGeneration} tokens`,
++      `${TURN_BUDGET} turns`,
++      `${PARTITION.inlineBlockBytes} bytes`,
++      `${PARTITION.compactionTrigger} tokens`,
++    ]);
++  });
++
++  it('refuses a prompt that states a budget twice or one its ## Context section does not declare', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++    );
++    vi.spyOn(fs, 'lstatSync').mockReturnValue({
++      isFile: () => true,
++      isSymbolicLink: () => false,
++    } as fs.Stats);
++    vi.spyOn(fs, 'readFileSync').mockReturnValue(
++      'LOCKED_DEPLOYMENT_CONTRACT_V1\n',
++    );
++
++    // The same value stated a second time, even in agreement.
++    expect(() =>
++      appendQwen38DeploymentContract(
++        `Pages hold ${PARTITION.inlineBlockBytes} bytes.`,
++        PARTITION,
++        TURN_BUDGET,
++      ),
++    ).toThrow(
++      `The deployment prompt states ${PARTITION.inlineBlockBytes} bytes 2 times, and its ## Context section declares it once.`,
++    );
++    // A second value for the same quantity, written with digit grouping.
++    expect(() =>
++      appendQwen38DeploymentContract(
++        'Pages hold 32,443 bytes.',
++        PARTITION,
++        TURN_BUDGET,
++      ),
++    ).toThrow(
++      'The deployment prompt states 32443 bytes, which its ## Context section does not declare.',
++    );
++    // Every refusal names what to do instead.
++    expect(() => refuseRestatedQuantities('400 turns', [])).toThrow(
++      'State each budget once, in ## Context, where it is rendered from the partition, and refer to it by name everywhere else.',
++    );
++    expect(() => refuseRestatedQuantities('', ['400 turns'])).toThrow(
++      'The deployment prompt states 400 turns 0 times',
++    );
++  });
++
++  it('states the bound on a tool result as the code applies it, and delegation once', () => {
++    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
++    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      QWEN38_LOCKED_DEPLOYMENT_CONTRACT_PATH,
++    );
++    vi.spyOn(fs, 'lstatSync').mockReturnValue({
++      isFile: () => true,
++      isSymbolicLink: () => false,
++    } as fs.Stats);
++    vi.spyOn(fs, 'readFileSync').mockReturnValue(
++      'LOCKED_DEPLOYMENT_CONTRACT_V1\n',
++    );
++
++    const rendered = appendQwen38DeploymentContract(
++      appendQwen38MainSessionFrame('discipline'),
++      PARTITION,
++      TURN_BUDGET,
++    );
++    // The bound keeps a longer result's start and end around a notice in the
++    // cut, which is what the scheduler seam does; nothing claims it is
++    // replaced whole by a notice.
++    expect(rendered).toContain(
++      `- One inline block is at most ${PARTITION.inlineBlockBytes} bytes. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \`read_file\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,
++    );
++    expect(rendered).not.toContain('Nothing is lost');
++    expect(rendered).not.toContain('the notice that replaces it');
++    expect(
++      rendered.split('Subagents run one at a time, in the foreground.'),
++    ).toHaveLength(2);
++    expect(rendered).toContain(
++      'while the child spends its own turn budget, as many turns as yours.',
++    );
 +  });
 +
 +  it('states the turn budget the session was given, once, and that reaching it ends the session', () => {
@@ -177594,7 +177739,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,268 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -177695,7 +177840,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 + */
 +export function appendQwen38MainSessionFrame(base: string): string {
 +  if (!isQwen38LockedAgentServiceRuntime()) return base;
-+  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived session, and you own the final response.\n- Context length is the most important thing in AI, and it is immoral to waste it. Reading is what wastes it: material you open once to learn one fact stays in this thread for the rest of the session and drags you toward compaction.\n- That is what subagents are for. A subagent's reading never enters your context; only its report comes back, so the invocation consumes one parent turn while the child spends its own turn budget. Short reports can delay compaction of the parent conversation.\n- Delegate generously, then, to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. The backend can retain your KV cache in DDR5 while the child runs, but cache eviction can require prefix processing again. Delegation still consumes child tokens, computation, and time; bound the assignment and verify the report.\n- Subagents run one at a time, in the foreground. Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
++  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived session, and you own the final response.\n- Context length is the most important thing in AI, and it is immoral to waste it. Reading is what wastes it: material you open once to learn one fact stays in this thread for the rest of the session and drags you toward compaction.\n- That is what subagents are for. A subagent's reading never enters your context; only its report comes back, so the invocation consumes one parent turn while the child spends its own turn budget, as many turns as yours. Short reports can delay compaction of the parent conversation.\n- Delegate generously, then, to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. The backend can retain your KV cache in DDR5 while the child runs, but cache eviction can require prefix processing again. Delegation still consumes child tokens, computation, and time; bound the assignment and verify the report.\n- Subagents run one at a time, in the foreground. Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
 +}
 +
 +/** The `## Context` section with the turn budget's number left out. */
@@ -177744,20 +177889,83 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +function qwen38ContextSection(
 +  partition: ContextPartition,
 +  turnBudget: Qwen38TurnBudget,
-+): string {
-+  return [
++): { readonly text: string; readonly quantities: readonly string[] } {
++  // Each quantity as the section writes it, so the list of what it states is
++  // the text it states, not a second rendering of it.
++  const budget = turnBudgetText(turnBudget);
++  const contextWindow = `${partition.window} tokens`;
++  const turn = `${partition.turnGeneration} tokens`;
++  const turns = `${budget} turns`;
++  const block = `${partition.inlineBlockBytes} bytes`;
++  const trigger = `${partition.compactionTrigger} tokens`;
++  const text = [
 +    '## Context',
 +    '',
-+    `- The context window is ${partition.window} tokens. Every request is counted exactly by the server's tokenizer before it is sent; no number here is an estimate.`,
-+    `- One turn may generate at most ${partition.turnGeneration} tokens, and that total includes the reasoning you do before answering. Reaching it ends the session rather than truncating the turn, so it is a hard stop and not a budget to spend.`,
-+    `- This session may run at most ${turnBudgetText(turnBudget)} turns. Reaching that number ends the session.`,
++    `- The context window is ${contextWindow}. Every request is counted exactly by the server's tokenizer before it is sent; no number here is an estimate.`,
++    `- One turn may generate at most ${turn}, and that total includes the reasoning you do before answering. Reaching it ends the session rather than truncating the turn, so it is a hard stop and not a budget to spend.`,
++    `- This session may run at most ${turns}. Reaching that number ends the session.`,
 +    '- One tool call per turn. There is no parallel dispatch; issue independent work as successive turns.',
-+    `- One tool result carries at most ${partition.inlineBlockBytes} bytes inline. A larger result is retained whole in a session file, and the notice that replaces it names the exact call that reads it back. Nothing is lost and nothing is silently shortened.`,
-+    `- \`read_file\` returns pages of at most ${partition.inlineBlockBytes} bytes, for the same reason. Prefer one narrow read over a broad one you will have to page back.`,
-+    '- Subagents run one at a time, in the foreground.',
-+    `- At ${partition.compactionTrigger} tokens the next send compacts the conversation: the prompt the last turn was issued against becomes a declared six-section snapshot of at most ${partition.inlineBlockBytes} bytes, that turn is carried verbatim behind it, and the work continues.`,
++    `- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \`read_file\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,
++    '- A `read_file` page and the statement that leads it are one inline block together. Prefer one narrow read or search over a broad one you will have to page back.',
++    `- At ${trigger} the next send compacts the conversation: the prompt the last turn was issued against becomes a declared six-section snapshot of at most one inline block, that turn is carried verbatim behind it, and the work continues.`,
 +    '- Do not reconstruct or persist hidden reasoning outside model history.',
 +  ].join('\n');
++  // The turn budget left out in the form the startup proof counts states no
++  // number, and so no quantity.
++  return {
++    text,
++    quantities: [
++      contextWindow,
++      turn,
++      ...(budget ? [turns] : []),
++      block,
++      trigger,
++    ],
++  };
++}
++
++/**
++ * A number of bytes, tokens or turns, as the preamble writes one: digits,
++ * optionally grouped by commas, then the unit.
++ */
++const STATED_QUANTITY = /\b(\d[\d,]*) (bytes|tokens|turns)\b/g;
++
++/**
++ * Refuse a deployment prompt that states a budget twice or states one the
++ * `## Context` section does not declare.
++ *
++ * Every number of bytes, tokens or turns this deployment tells the model is
++ * rendered once, in `## Context`, from the partition or the turn budget that
++ * enforces it; everything else refers to it by name -- "one inline block",
++ * "the turn budget". A second statement is how a preamble comes to give two
++ * values for one quantity: a page described in one size while its header
++ * shows another, a bound described one way in one file and another way in
++ * the next. The rule needs no reading of what a sentence is about: a number
++ * of bytes, tokens or turns anywhere in the prompt must be one the section
++ * declares, and each the section declares must appear exactly once.
++ */
++export function refuseRestatedQuantities(
++  prompt: string,
++  declared: readonly string[],
++): void {
++  const stated = [...prompt.matchAll(STATED_QUANTITY)].map(
++    ([, value, unit]) => `${value.replaceAll(',', '')} ${unit}`,
++  );
++  for (const quantity of stated) {
++    if (!declared.includes(quantity)) {
++      throw new Error(
++        `The deployment prompt states ${quantity}, which its ## Context section does not declare. State each budget once, in ## Context, where it is rendered from the partition, and refer to it by name everywhere else.`,
++      );
++    }
++  }
++  for (const quantity of declared) {
++    const times = stated.filter((each) => each === quantity).length;
++    if (times !== 1) {
++      throw new Error(
++        `The deployment prompt states ${quantity} ${times} times, and its ## Context section declares it once. State each budget once, in ## Context, and refer to it by name everywhere else.`,
++      );
++    }
++  }
 +}
 +
 +export function appendQwen38DeploymentContract(
@@ -177777,7 +177985,10 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +      'locked agent-service states its turn budget in the deployment contract, and none was supplied',
 +    );
 +  }
-+  return `${base.trim()}\n\n---\n\n${contract}\n\n${qwen38ContextSection(partition, turnBudget)}\n\nCLI invocation started: ${QWEN38_INVOCATION_STARTED_AT_UTC}`;
++  const context = qwen38ContextSection(partition, turnBudget);
++  const prompt = `${base.trim()}\n\n---\n\n${contract}\n\n${context.text}\n\nCLI invocation started: ${QWEN38_INVOCATION_STARTED_AT_UTC}`;
++  refuseRestatedQuantities(prompt, context.quantities);
++  return prompt;
 +}
 +
 +export function appendQwen38SubagentInvocation(
@@ -178594,28 +178805,28 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,813 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,690 of system message,
-+ * 4,878 of tool declarations and 245 of the template's own text. Counting
++ * turn budget's number left out, at 7,722 tokens, counted whole by the served
++ * tokenizer. By where each token starts, that is 2,613 of system message,
++ * 4,864 of tool declarations and 245 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
 + * the whole: a token can span two pieces, so pieces counted one at a time
 + * need not add up to the count that governs. The startup context opens every
 + * history, so it is counted too, with its workspace data left out: 46 more,
-+ * its template framing included, for 7,859.
++ * its template framing included, for 7,768.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's values, 128 + 1,024 + 768 = 1,920
 + * (`GIT_SNAPSHOT_REPOSITORY_BYTES`), the startup context's environment lines
 + * and folder listing, 256 + 1,024 = 1,280 (`STARTUP_CONTEXT_WORKSPACE_BYTES`),
 + * and the turn budget's number, at most 16 digits of one token each
-+ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 11,075 that no repository,
-+ * workspace or budget changes. The 1,213 tokens left are headroom for the
++ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 10,984 that no repository,
++ * workspace or budget changes. The 1,304 tokens left are headroom for the
 + * prompt and the declarations to grow into -- most of one more declaration
-+ * the size of `run_shell_command`, the largest at 1,479. Exceeding it is a
++ * the size of `run_shell_command`, the largest at 1,457. Exceeding it is a
 + * startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,075 at a 236,267-token window, so no smaller window holds this
++ * reaches 10,984 at a 234,326-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
@@ -238017,7 +238228,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 +- **general-purpose**: bounded research or implementation with the inherited tool surface.
 +- **Explore**: evidence-oriented investigation with private scratch and journaled workspace effects.
 +
-+Give a detailed, self-contained prompt -- the subagent cannot see your conversation -- and verify anything load-bearing in its report. It runs under the same turn budget you do; exhausting that budget returns a partial report. Sequential and foreground only: background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable.`;
++Give a detailed, self-contained prompt -- the subagent cannot see your conversation -- and verify anything load-bearing in its report. It runs under its own turn budget, as many turns as yours; exhausting that budget ends its run with the assignment marked unfinished. Sequential and foreground only: background execution, forks, teams, worktrees, custom agent definitions, and model overrides are unavailable.`;
 +
 +    // Update description using object property assignment since it's readonly.
 +    (this as { description: string }).description =
@@ -248222,6 +248433,15 @@ diff --git a/packages/core/src/tools/shell.backgroundStatus.test.ts b/packages/c
        getGeminiClient: vi.fn(),
        getFileSystemService: vi.fn().mockReturnValue(undefined),
        getFileHistoryService: vi.fn().mockReturnValue(undefined),
+@@ -112,7 +110,7 @@
+       getBackgroundShellRegistry: vi.fn().mockReturnValue(registry),
+     } as unknown as Config;
+ 
+-    shellTool = new ShellTool(mockConfig);
++    shellTool = new ShellTool(mockConfig, true);
+   });
+ 
+   afterEach(async () => {
 diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/shell.test.ts
 --- a/packages/core/src/tools/shell.test.ts
 +++ b/packages/core/src/tools/shell.test.ts
@@ -248256,6 +248476,15 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        getFileHistoryService: vi.fn().mockReturnValue(mockFileHistoryService),
        getFileReadCache: vi.fn().mockReturnValue(mockFileReadCache),
        getFileReadCacheDisabled: vi.fn().mockReturnValue(false),
+@@ -204,7 +209,7 @@
+       Buffer.from('abcdef', 'hex'),
+     );
+ 
+-    shellTool = new ShellTool(mockConfig);
++    shellTool = new ShellTool(mockConfig, true);
+ 
+     // Capture the output callback to simulate streaming events from the service
+     mockShellExecutionService.mockImplementation((_cmd, _cwd, callback) => {
 @@ -437,47 +442,35 @@
          command: 'npm test',
          is_background: false,
@@ -248680,7 +248909,74 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // User explicitly sets timeout: 600_000 (10 min) because they
          // expect a long command. Threshold is half that, so a 100s
          // run should NOT trigger the advisory — the user already told
-@@ -7798,22 +7542,13 @@
+@@ -7476,7 +7220,7 @@
+       delete process.env['ComSpec'];
+       delete process.env['MSYSTEM'];
+       delete process.env['TERM'];
+-      const shellTool = new ShellTool(mockConfig);
++      const shellTool = new ShellTool(mockConfig, true);
+       expect(shellTool.description).toMatchSnapshot();
+       expect(shellTool.description).toContain(
+         "Use '&' only when you need to run commands sequentially",
+@@ -7491,11 +7235,29 @@
+ 
+     it('should return the non-windows description when not on windows', async () => {
+       vi.mocked(os.platform).mockReturnValue('linux');
+-      const shellTool = new ShellTool(mockConfig);
++      const shellTool = new ShellTool(mockConfig, true);
+       expect(shellTool.description).toMatchSnapshot();
+       expect(getCommandParameterDescription(shellTool)).toBe(
+         'Exact bash command to execute as `bash -c <command>`',
+       );
++    });
++
++    it('names task_stop only when the session declares it', async () => {
++      // A session without task_stop is told how to stop a process without
++      // it; the rest of the description is the same text.
++      vi.mocked(os.platform).mockReturnValue('linux');
++      const withStop = new ShellTool(mockConfig, true).description;
++      const withoutStop = new ShellTool(mockConfig, false).description;
++      expect(withStop).toContain(
++        'To stop a background command started by this tool, use `task_stop` when a task id is available. ',
++      );
++      expect(withoutStop).not.toContain('task_stop');
++      expect(
++        withStop.replace(
++          'To stop a background command started by this tool, use `task_stop` when a task id is available. ',
++          '',
++        ),
++      ).toBe(withoutStop);
+     });
+ 
+     it('should describe PowerShell when ComSpec points to powershell.exe', async () => {
+@@ -7505,7 +7267,7 @@
+       delete process.env['MSYSTEM'];
+       delete process.env['TERM'];
+ 
+-      const shellTool = new ShellTool(mockConfig);
++      const shellTool = new ShellTool(mockConfig, true);
+ 
+       expect(shellTool.description).toContain(
+         '`powershell.exe -NoProfile -Command <command>`',
+@@ -7533,7 +7295,7 @@
+       delete process.env['MSYSTEM'];
+       delete process.env['TERM'];
+ 
+-      const shellTool = new ShellTool(mockConfig);
++      const shellTool = new ShellTool(mockConfig, true);
+ 
+       expect(shellTool.description).toContain(
+         '`pwsh.exe -NoProfile -Command <command>`',
+@@ -7552,7 +7314,7 @@
+       process.env['MSYSTEM'] = 'MINGW64';
+       delete process.env['TERM'];
+ 
+-      const shellTool = new ShellTool(mockConfig);
++      const shellTool = new ShellTool(mockConfig, true);
+ 
+       expect(shellTool.description).toContain('`bash -c <command>`');
+       expect(shellTool.description).toContain('The active shell is Bash.');
+@@ -7798,22 +7560,13 @@
          expect(result.error?.type).toBe(ToolErrorType.EXECUTION_TIMEOUT);
        } finally {
          vi.stubGlobal('AbortSignal', originalAbortSignal);
@@ -248704,7 +249000,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          timeout: 5000,
        });
        const mockCombinedSignal = {
-@@ -7832,8 +7567,10 @@
+@@ -7832,8 +7585,10 @@
        try {
          const promise = invocation.execute(new AbortController().signal);
 +        // Past one inline block: the tool bounds nothing itself, and the
@@ -248717,7 +249013,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
            exitCode: null,
            signal: null,
            error: null,
-@@ -7840,21 +7577,19 @@
+@@ -7840,21 +7595,19 @@
            aborted: true,
            pid: 12345,
            executionMethod: 'child_process',
@@ -248945,7 +249241,31 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        return `- When issuing multiple commands:
    ${independentGuidance}
    - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before run_shell_command for git operations, or git add before git commit), run these operations sequentially instead.
-@@ -5039,16 +4987,12 @@
+@@ -4966,15 +4914,20 @@
+   }
+ }
+ 
+-function getShellToolDescription(): string {
++/**
++ * The shell tool's description. It names `task_stop` as the way to stop a
++ * background command only when this session has that tool: a description
++ * that sends the model to a tool it was never given is a false statement in
++ * the one text it reads before it can call anything.
++ */
++function getShellToolDescription(declaresTaskStop: boolean): string {
+   const shellConfiguration = getShellConfiguration();
+   const executionWrapper = getShellExecutionWrapper(shellConfiguration);
+   const isWindows = os.platform() === 'win32';
+   const processGroupNote = isWindows
+     ? ''
+     : '\n  - Command is executed as a subprocess that leads its own process group. Command process group can be terminated as `kill -- -PGID` or signaled as `kill -s SIGNAL -- -PGID`.';
+-  const processStopNote =
+-    '\n  - To stop a background command started by this tool, use `task_stop` when a task id is available. Do not use broad process-name kills such as `kill $(pgrep node)`, `pkill node`, or `killall node`; use a specific PID or process group id where supported.';
++  const processStopNote = `\n  - ${declaresTaskStop ? `To stop a background command started by this tool, use \`${ToolNames.TASK_STOP}\` when a task id is available. ` : ''}Do not use broad process-name kills such as \`kill $(pgrep node)\`, \`pkill node\`, or \`killall node\`; use a specific PID or process group id where supported.`;
+ 
+   return `Executes a given shell command (as \`${executionWrapper}\`) in a subprocess with optional timeout, ensuring proper handling and security measures.
+ 
+@@ -5039,16 +4992,19 @@
  
  export class ShellTool extends BaseDeclarativeTool<
    ShellToolParams,
@@ -248957,12 +249277,21 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 -    return getShellOutputThreshold(this.config);
 -  }
  
-   constructor(private readonly config: Config) {
+-  constructor(private readonly config: Config) {
++  /**
++   * @param declaresTaskStop whether the registry this tool is built in also
++   *   holds `task_stop`, which decides whether the description may name it.
++   */
++  constructor(
++    private readonly config: Config,
++    declaresTaskStop: boolean,
++  ) {
      super(
        ShellTool.Name,
        ToolDisplayNames.SHELL,
-       getShellToolDescription(),
-@@ -5078,12 +5022,13 @@
+-      getShellToolDescription(),
++      getShellToolDescription(declaresTaskStop),
+@@ -5078,12 +5034,13 @@
              type: 'string',
              description:
                '(OPTIONAL) The absolute path of the directory to run the command in. If not provided, the project root directory is used. Must be a directory within the workspace and must already exist.',
@@ -249017,6 +249346,27 @@ diff --git a/packages/core/src/tools/team-plan-approval.test.ts b/packages/core/
      expect(result.error?.message).toContain('Only the team leader');
    });
  
+diff --git a/packages/core/src/tools/toAutoClassifierInput.test.ts b/packages/core/src/tools/toAutoClassifierInput.test.ts
+--- a/packages/core/src/tools/toAutoClassifierInput.test.ts
++++ b/packages/core/src/tools/toAutoClassifierInput.test.ts
+@@ -109,13 +109,16 @@
+   });
+ });
+ 
+ // ShellTool ──────────────────────────────────────────────────────────────
+ 
+ describe('ShellTool.toAutoClassifierInput', () => {
+-  const tool = new ShellTool(minimalConfig({ getTargetDir: () => '/cwd' }));
++  const tool = new ShellTool(
++    minimalConfig({ getTargetDir: () => '/cwd' }),
++    true,
++  );
+ 
+   it('forwards the full command — no redaction (needed for safety judgement)', () => {
+     const result = tool.toAutoClassifierInput({
+       command: 'rm -rf /tmp/build',
+       is_background: false,
+     } as never) as Record<string, unknown>;
 diff --git a/packages/core/src/tools/todoWrite.test.ts b/packages/core/src/tools/todoWrite.test.ts
 --- a/packages/core/src/tools/todoWrite.test.ts
 +++ b/packages/core/src/tools/todoWrite.test.ts

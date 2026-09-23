@@ -33,6 +33,6 @@ identically to the main session and to every foreground subagent it launches.
   or silently replay it.
 - Use absolute paths. Shell working directories reset between calls.
 
-The exact filesystem, network, model, toolchain, context, image, subagent, retry,
-and failure facts follow in the immutable deployment-contract section. They are
-facts about this runtime, not optional advice.
+The exact filesystem, network, model, toolchain, context, image, subagent, and
+failure facts are stated in the immutable deployment-contract section below.
+They are facts about this runtime, not optional advice.
