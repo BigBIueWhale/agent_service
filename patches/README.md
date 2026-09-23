@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `278301102a54997b7733811c71b51515c1f1831686dea2d31918d7056776d2fa`
+- Review-diff SHA-256: `5a942f7c1ccb430d8ac7fc8dfd03227959a20fad1c188b85aee1073d7cd91424`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `644af922d1c3fe50e53c9f9be017da2d327d1333396ba3e7560a19360a8f8a28`
+- Transformer-manifest SHA-256: `2838f7cd843feac20a50d531c3a1f1696289fd66eaaba0b6c293efbfe3e12f40`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -199,7 +199,10 @@ read it and want the operational summary in full.
 
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
-request never holds what the turn generated. It requests the room left by that
+request never holds what the turn generated. Upstream's request holds the whole
+history; with the turn and its result in it, a request on a prompt just below
+the trigger could pass the window before the draw had a token, and the
+partition's comment gives the arithmetic. It requests the room left by that
 exact input and by the widest notice a redraw may add, which is never below
 `C`, and refuses insufficient space. It tells the draw that room: the request
 carries the session's system prompt, which states a turn's limit and that

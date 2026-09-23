@@ -295,7 +295,15 @@ was issued, so the request that summarises it — the prompt plus one directive,
 under a preamble also bounded by `D` — always leaves the snapshot at least
 `C + 1`, whatever the turn generated. The turn itself, reasoning included, is
 carried behind the snapshot verbatim, followed by the tool result it was
-waiting for; nothing synthetic stands between them. The snapshot is issued at
+waiting for; nothing synthetic stands between them. Upstream's compaction
+request carries the whole history, that turn and its result included. This
+partition cannot hold them: the turn can be `C + F` and its result `M + F`, so
+on a prompt of `T − 1`, with `D` of additions, the request alone could reach
+`W + M + 2F − 1` — 32,889 tokens past the window at 262,144, before the
+snapshot had one — and `W + F − 1` with the turn and no result. A trigger low
+enough to leave the snapshot `C` with them in the request would give every
+turn about half the room: `C` would be 35,376 rather than 69,509, and `T`
+146,215 rather than 180,347. The snapshot is issued at
 the room the window actually has — the window less the summary request that
 was just counted, and less the most a redraw's notice can add — and a request
 that would leave less than `C` is refused instead of quietly shrinking the
