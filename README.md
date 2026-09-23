@@ -219,9 +219,9 @@ later turn whose preamble has changed, as when a tool is re-declared after
 startup; a deployment whose own preamble does not fit is refused at startup
 rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
-its directive adds to the same share. The proof counts this deployment's turn
-preamble with the Git snapshot's repository values and the turn budget's number
-left out — 7,757 tokens, rendered by the served template and counted by the
+its request adds — the snapshot's declaration and the directive — to the same
+share. The proof counts this deployment's turn preamble with the Git
+snapshot's repository values and the turn budget's number left out — 7,757 tokens, rendered by the served template and counted by the
 served tokenizer — the startup context that opens every history with its
 workspace data left out, 46 more, and the frame every compacted history holds
 around its blocks — the snapshot's resume trailer, the acknowledgement turn and
@@ -237,8 +237,8 @@ spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
 token a digit. The startup context is kept whole at the head of every history a
 compaction builds, never summarized and rebuilt, so nothing can fail to put it
-back. In the compaction shape, without a snapshot, the preamble is 3,354 before
-the 632 its directive adds. `F` is proved against the served
+back. A compaction request adds 1,207 to the prompt it summarizes: the
+snapshot's declaration after the turn's tools, 558, and the directive, 649. `F` is proved against the served
 template too: a user message, an assistant turn and a tool result, each counted
 with the request and without it, less its content counted alone. The served
 template frames them in 5, 10 and 24 tokens, the last with the markup of the

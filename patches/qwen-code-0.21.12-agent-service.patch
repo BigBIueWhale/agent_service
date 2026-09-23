@@ -169136,7 +169136,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -3729,12 +3276,303 @@
+@@ -3729,12 +3276,366 @@
        );
  
        expect(response.candidates).toEqual([]);
@@ -169187,6 +169187,69 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          arguments: '{"command":"printf unsafe-prefix',
 +        },
 +      ]);
++    });
++
++    it('ends a call to a function the request forced by name with stop, in a batch response too', () => {
++      const served = (name: string, finish: string) =>
++        ({
++          object: 'chat.completion',
++          id: 'chatcmpl-named',
++          created: 123,
++          model: 'test-model',
++          choices: [
++            {
++              index: 0,
++              message: {
++                role: 'assistant',
++                content: null,
++                tool_calls: [
++                  {
++                    id: 'call_1',
++                    type: 'function',
++                    function: { name, arguments: '{"intent":"x"}' },
++                  },
++                ],
++              },
++              finish_reason: finish,
++              logprobs: null,
++            },
++          ],
++        }) as unknown as OpenAI.Chat.ChatCompletion;
++      const named = {
++        ...requestContext,
++        strictToolCalling: true,
++        namedToolChoice: 'state_snapshot',
++      };
++      expect(
++        converter.convertOpenAIResponseToGemini(
++          served('state_snapshot', 'stop'),
++          named,
++        ).functionCalls,
++      ).toEqual([
++        { id: 'call_1', name: 'state_snapshot', args: { intent: 'x' } },
++      ]);
++      expect(() =>
++        converter.convertOpenAIResponseToGemini(
++          served('state_snapshot', 'tool_calls'),
++          named,
++        ),
++      ).toThrow(
++        'without the stop terminal a call to the forced state_snapshot ends with',
++      );
++      expect(() =>
++        converter.convertOpenAIResponseToGemini(
++          served('read_file', 'stop'),
++          named,
++        ),
++      ).toThrow(
++        'Model response called another function than the state_snapshot its request forced.',
++      );
++      expect(() =>
++        converter.convertOpenAIResponseToGemini(
++          served('state_snapshot', 'stop'),
++          { ...requestContext, strictToolCalling: true },
++        ),
++      ).toThrow('without a tool_calls terminal');
 +    });
 +
 +    it('carries no stopped call when the generation made its call', () => {
@@ -169440,7 +169503,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            object: 'chat.completion',
            id: 'chatcmpl-usage',
            created: 123,
-@@ -3744,13 +3582,13 @@
+@@ -3744,13 +3645,13 @@
                index: 0,
                message: { role: 'assistant', content: 'hi' },
                finish_reason: 'stop',
@@ -169455,7 +169518,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
        const usage = response.usageMetadata;
        expect(usage?.totalTokenCount).toBe(5);
-@@ -3766,13 +3604,13 @@
+@@ -3766,13 +3667,13 @@
          {
            object: 'chat.completion.chunk',
            id: 'chunk-usage',
@@ -169470,7 +169533,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
        const usage = response.usageMetadata;
        expect(usage?.totalTokenCount).toBe(5);
-@@ -3818,13 +3656,13 @@
+@@ -3818,13 +3719,13 @@
        ).toBe(false);
        expect(
          getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,
@@ -169485,7 +169548,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            id: 'chatcmpl-reasoning-usage',
            created: 123,
            model: 'test-model',
-@@ -3842,68 +3680,116 @@
+@@ -3842,68 +3743,116 @@
            ],
            usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
          } as unknown as OpenAI.Chat.ChatCompletion,
@@ -169639,7 +169702,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        (reasoningTokens) => {
          const response = converter.convertOpenAIResponseToGemini(
            {
-@@ -3938,13 +3824,13 @@
+@@ -3938,13 +3887,13 @@
          expect(response.usageMetadata?.thoughtsTokenCount).toBe(
            reasoningTokens,
          );
@@ -169654,7 +169717,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            object: 'chat.completion.chunk',
            id,
            created: 123,
-@@ -3956,12 +3842,13 @@
+@@ -3956,12 +3905,13 @@
                finish_reason: null,
                logprobs: null,
              },
@@ -169668,7 +169731,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        );
        converter.convertOpenAIChunkToGemini(
          reasoningChunk('chunk-reasoning-2', '想'),
-@@ -3980,125 +3867,100 @@
+@@ -3980,125 +3930,100 @@
              total_tokens: 1201,
            },
          } as unknown as OpenAI.Chat.ChatCompletionChunk,
@@ -169859,7 +169922,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        (reasoningTokens) => {
          const context = withStreamParser();
          converter.convertOpenAIChunkToGemini(
-@@ -5178,13 +5040,12 @@
+@@ -5178,13 +5103,12 @@
            ?.join('') ?? '';
        expect(finalText).toBe('');
      });
@@ -169873,7 +169936,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              object: 'chat.completion.chunk',
              id: 'chunk-dual-1',
              created: 456,
-@@ -5317,13 +5178,13 @@
+@@ -5317,13 +5241,13 @@
                logprobs: null,
              },
            ],
@@ -169888,7 +169951,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        expect(response.candidates?.[0]?.content?.parts).toEqual([
          { text: '<think>visible xml example</think>' },
        ]);
-@@ -6800,17 +6661,21 @@
+@@ -6800,17 +6724,21 @@
    let converter: typeof OpenAIContentConverter;
  
    beforeEach(() => {
@@ -169911,7 +169974,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
    /**
     * Helper: feed streaming chunks then a final chunk with finish_reason,
-@@ -6822,15 +6687,16 @@
+@@ -6822,15 +6750,20 @@
        index: number;
        id?: string;
        name?: string;
@@ -169919,17 +169982,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      }>,
      finishReason: string,
 +    strictToolCalling = false,
++    namedToolChoice?: string,
    ) {
      // One stream-local context covers every chunk of this simulated stream.
 -    const ctx = createStreamingRequestContext();
-+    const ctx = createStreamingRequestContext('test-model', strictToolCalling);
++    const ctx = {
++      ...createStreamingRequestContext('test-model', strictToolCalling),
++      ...(namedToolChoice === undefined ? {} : { namedToolChoice }),
++    };
  
      // Feed argument chunks (no finish_reason yet)
      for (const tc of toolCallChunks) {
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7325,12 +7191,143 @@
+@@ -7325,12 +7258,190 @@
      expect(fnCall?.functionCall?.name).toBe('write_file');
      expect(fnCall?.functionCall?.args).toEqual({
        file_path: '/tmp/test.cpp',
@@ -170043,6 +170110,53 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +    ).toThrow('without a tool_calls terminal');
 +  });
 +
++  it('ends a call to a function the request forced by name with stop, as served, in strict mode', () => {
++    // The served engine reports a named choice's call with `stop`, as the
++    // OpenAI protocol has it. That is the terminal such a call is complete
++    // on; `tool_calls` is not, and neither is a call to another function.
++    const call = {
++      index: 0,
++      id: 'call_1',
++      name: 'state_snapshot',
++      arguments: '{"intent":"x"}',
++    };
++    const result = feedToolCallChunks(
++      converter,
++      [call],
++      'stop',
++      true,
++      'state_snapshot',
++    );
++    expect(result.functionCalls).toEqual([
++      { id: 'call_1', name: 'state_snapshot', args: { intent: 'x' } },
++    ]);
++    expect(result.candidates?.[0]?.finishReason).toBe(FinishReason.STOP);
++    expect(() =>
++      feedToolCallChunks(
++        converter,
++        [call],
++        'tool_calls',
++        true,
++        'state_snapshot',
++      ),
++    ).toThrow(
++      'without the stop terminal a call to the forced state_snapshot ends with',
++    );
++    expect(() =>
++      feedToolCallChunks(
++        converter,
++        [{ ...call, name: 'read_file' }],
++        'stop',
++        true,
++        'state_snapshot',
++      ),
++    ).toThrow('Model response contained a malformed tool call.');
++    // A request that forced nothing still requires `tool_calls`.
++    expect(() => feedToolCallChunks(converter, [call], 'stop', true)).toThrow(
++      'without a tool_calls terminal',
++    );
++  });
++
 +  it('exposes a completed identified call in strict mode', () => {
 +    const result = feedToolCallChunks(
 +      converter,
@@ -170073,7 +170187,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      const ctx = createStreamingRequestContext();
  
      // Chunk 1: start of JSON with tool metadata
-@@ -7420,14 +7417,14 @@
+@@ -7420,14 +7531,14 @@
      [FinishReason.PROHIBITED_CONTENT, 'content_filter'],
      [FinishReason.SPII, 'content_filter'],
      [FinishReason.IMAGE_SAFETY, 'content_filter'],
@@ -170090,7 +170204,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          candidates: [{ finishReason: geminiReason, content: { parts: [] } }],
        } as unknown as GenerateContentResponse,
        {
-@@ -7494,30 +7491,25 @@
+@@ -7494,30 +7605,25 @@
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -170314,7 +170428,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,108 +1139,12 @@
+@@ -1108,108 +1139,29 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -170418,12 +170532,29 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -}
 -
  /**
++ * The terminal a strict response ends a completed call with: `tool_calls`,
++ * or, for a request that forced one function by name, `stop`, which is what
++ * the OpenAI protocol -- and the served engine -- report for a named choice.
++ */
++function toolCallTerminal(
++  requestContext: RequestContext,
++): 'tool_calls' | 'stop' {
++  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';
++}
++
++function missingCallTerminalMessage(requestContext: RequestContext): string {
++  return requestContext.namedToolChoice === undefined
++    ? 'Model response carried tool calls without a tool_calls terminal.'
++    : `Model response carried tool calls without the stop terminal a call to the forced ${requestContext.namedToolChoice} ends with.`;
++}
++
++/**
   * Convert OpenAI response to Gemini format.
   */
  export function convertOpenAIResponseToGemini(
    openaiResponse: OpenAI.Chat.ChatCompletion,
    requestContext: RequestContext,
-@@ -1233,19 +1168,133 @@
+@@ -1233,19 +1185,151 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -170444,16 +170575,34 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +    // A tool call is executable only when the provider completed the
 +    // structured-tool branch normally. Diagnostic prefixes returned with a
 +    // length terminal must never become local actions.
++    const callTerminal = toolCallTerminal(requestContext);
 +    if (
 +      requestContext.strictToolCalling &&
 +      choice.message.tool_calls?.length &&
-+      choice.finish_reason !== 'tool_calls' &&
++      choice.finish_reason !== callTerminal &&
 +      choice.finish_reason !== 'length'
 +    ) {
 +      throw new ResponseObservationError(
 +        response,
 +        new InvalidStreamError(
-+          'Model response carried tool calls without a tool_calls terminal.',
++          missingCallTerminalMessage(requestContext),
++          'MALFORMED_TOOL_CALL',
++        ),
++      );
++    }
++    if (
++      requestContext.strictToolCalling &&
++      requestContext.namedToolChoice !== undefined &&
++      choice.finish_reason === callTerminal &&
++      choice.message.tool_calls?.some(
++        (toolCall) =>
++          toolCall.function?.name !== requestContext.namedToolChoice,
++      )
++    ) {
++      throw new ResponseObservationError(
++        response,
++        new InvalidStreamError(
++          `Model response called another function than the ${requestContext.namedToolChoice} its request forced.`,
 +          'MALFORMED_TOOL_CALL',
 +        ),
 +      );
@@ -170500,7 +170649,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +    if (
 +      choice.message.tool_calls &&
 +      (!requestContext.strictToolCalling ||
-+        choice.finish_reason === 'tool_calls')
++        choice.finish_reason === callTerminal)
 +    ) {
        for (const toolCall of choice.message.tool_calls) {
 +        if (requestContext.strictToolCalling && !toolCall.function) {
@@ -170561,7 +170710,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
              functionCall: {
                id: toolCall.id,
                name: toolCall.function.name,
-@@ -1259,15 +1308,13 @@
+@@ -1259,15 +1343,13 @@
      response.candidates = [
        {
          content: {
@@ -170578,7 +170727,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      ];
    } else {
      response.candidates = [];
-@@ -1279,61 +1326,24 @@
+@@ -1279,61 +1361,24 @@
      : new Date().getTime().toString();
  
    response.modelVersion = openaiResponse.model || undefined;
@@ -170652,7 +170801,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1417,21 +1427,12 @@
+@@ -1417,21 +1462,12 @@
          cumulativeMode: false,
        });
        const normalizedReasoningText = normalizeStreamingTextDelta(
@@ -170674,7 +170823,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        ) {
          parts.push(createOpenAIReasoningThoughtPart(normalizedReasoningText));
        } else if (
-@@ -1482,12 +1483,25 @@
+@@ -1482,12 +1518,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -170700,7 +170849,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,215 +1529,74 @@
+@@ -1515,215 +1564,85 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -170872,9 +171021,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +      choice.finish_reason && !toolCallsTruncated && !invalidToolCall
 +        ? toolCallParser.getCompletedToolCalls()
 +        : [];
++    const named = requestContext.namedToolChoice;
++    const callTerminal = toolCallTerminal(requestContext);
 +    const completedToolCalls = requestContext.strictToolCalling
-+      ? choice.finish_reason === 'tool_calls' &&
-+        parsedToolCalls.every((toolCall) => Boolean(toolCall.id))
++      ? choice.finish_reason === callTerminal &&
++        parsedToolCalls.every(
++          (toolCall) =>
++            Boolean(toolCall.id) &&
++            (named === undefined || toolCall.name === named),
++        )
 +        ? parsedToolCalls
 +        : []
 +      : choice.finish_reason
@@ -170883,7 +171038,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +    if (
 +      requestContext.strictToolCalling &&
 +      choice.finish_reason &&
-+      choice.finish_reason !== 'tool_calls' &&
++      choice.finish_reason !== callTerminal &&
 +      choice.finish_reason !== 'length' &&
 +      parsedToolCalls.length > 0
 +    ) {
@@ -170891,7 +171046,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +      throw new ResponseObservationError(
 +        response,
 +        new InvalidStreamError(
-+          'Model response carried tool calls without a tool_calls terminal.',
++          missingCallTerminalMessage(requestContext),
 +          'MALFORMED_TOOL_CALL',
 +        ),
 +      );
@@ -170927,6 +171082,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +        (!requestContext.strictToolCalling ||
 +          choice.finish_reason !== 'length')) ||
          (choice.finish_reason === 'tool_calls' &&
++          completedToolCalls.length === 0) ||
++        (requestContext.strictToolCalling &&
++          named !== undefined &&
++          choice.finish_reason === callTerminal &&
++          parsedToolCalls.length > 0 &&
            completedToolCalls.length === 0))
      ) {
        requestContext.pendingUntrustedResponseParts = undefined;
@@ -170963,7 +171123,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      if (choice.finish_reason) {
        for (const toolCall of completedToolCalls) {
          if (toolCall.name) {
-@@ -1746,6 +1619,17 @@
+@@ -1746,6 +1665,17 @@
        toolCallsTruncated && choice.finish_reason !== 'length'
          ? 'length'
          : choice.finish_reason;
@@ -170981,7 +171141,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      // Only include finishReason key if finish_reason is present
      const candidate: Candidate = {
-@@ -1772,62 +1656,18 @@
+@@ -1772,62 +1702,18 @@
      : new Date().getTime().toString();
  
    response.modelVersion = chunk.model || undefined;
@@ -171049,7 +171209,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1687,19 @@
+@@ -1847,17 +1733,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -171074,7 +171234,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,16 +1709,14 @@
+@@ -1867,16 +1755,14 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:
@@ -171572,7 +171732,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.concurrent.t
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
-@@ -1,16 +1,17 @@
+@@ -1,16 +1,18 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -171590,8 +171750,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    FunctionCallingConfigMode,
    GenerateContentResponse,
    Type,
++  type FunctionCallingConfig,
  } from '@google/genai';
-@@ -21,6 +22,8 @@
+@@ -17,4 +19,4 @@
+-import type { ErrorHandler, PipelineConfig } from './types.js';
++import type { ErrorHandler, PipelineConfig, RequestContext } from './types.js';
+ import {
+   ContentGenerationPipeline,
+   NonSSEResponseError,
+@@ -21,6 +23,8 @@
    StreamContentError,
    StreamInactivityTimeoutError,
    StreamLifetimeExceededError,
@@ -171600,7 +171767,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  } from './pipeline.js';
  import { OpenAIContentConverter } from './converter.js';
  import { openaiRequestCaptureContext } from './requestCaptureContext.js';
-@@ -33,14 +36,7 @@
+@@ -33,14 +37,7 @@
 -import {
 -  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
 -  DEFAULT_STREAM_MAX_LIFETIME_MS,
@@ -171616,7 +171783,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  } from '../../telemetry/gen-ai-usage.js';
  import { setToolCallPreparations } from '../tool-call-preparation.js';
  import { runWithAgentContext } from '../../agents/runtime/agent-context.js';
-@@ -57,15 +53,12 @@
+@@ -57,15 +54,12 @@
      convertOpenAIResponseToGemini: vi.fn(),
      convertOpenAIChunkToGemini: vi.fn(),
      convertGeminiToolsToOpenAI: vi.fn(),
@@ -171632,7 +171799,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    reportOpenAiChunk: mockReportOpenAiChunk,
  }));
  
-@@ -137,16 +130,201 @@
+@@ -137,16 +131,201 @@
    describe('constructor', () => {
      it('should initialize with correct configuration', () => {
        expect(mockProvider.buildClient).toHaveBeenCalled();
@@ -171834,7 +172001,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -216,12 +394,13 @@
+@@ -216,12 +395,13 @@
        );
      });
  
@@ -171848,7 +172015,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -265,12 +444,13 @@
+@@ -265,12 +445,13 @@
          expect.any(Object),
        );
      });
@@ -171862,7 +172029,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -307,12 +487,13 @@
+@@ -307,12 +488,13 @@
          }),
        );
      });
@@ -171876,7 +172043,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -350,12 +531,13 @@
+@@ -350,12 +532,13 @@
          }),
        );
      });
@@ -171890,7 +172057,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -394,12 +576,13 @@
+@@ -394,12 +577,13 @@
          }),
        );
      });
@@ -171904,7 +172071,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -435,12 +618,13 @@
+@@ -435,12 +619,13 @@
          }),
        );
      });
@@ -171918,7 +172085,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -476,65 +660,31 @@
+@@ -476,65 +661,31 @@
          expect.objectContaining({
            toolResultContentFormat: 'string',
          }),
@@ -171995,7 +172162,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            tools: [
              {
                functionDeclarations: [
-@@ -602,12 +752,13 @@
+@@ -602,12 +753,13 @@
        );
      });
  
@@ -172009,7 +172176,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'test-prompt-id';
  
-@@ -662,12 +813,13 @@
+@@ -662,12 +814,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -172023,7 +172190,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'forked_query';
  
-@@ -945,12 +1097,13 @@
+@@ -945,12 +1098,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          ...(testCase.extraBody ?? {}),
@@ -172037,7 +172204,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          contents: [{ parts: [{ text: 'Summarize' }], role: 'user' }],
          config: {
            thinkingConfig: { includeThoughts: testCase.includeThoughts },
-@@ -1025,12 +1178,13 @@
+@@ -1025,12 +1179,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:combined-shape'),
@@ -172051,13 +172218,87 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1066,12 +1220,100 @@
+@@ -1066,12 +1221,174 @@
  
        const apiCall = (mockClient.chat.completions.create as Mock).mock
          .calls[0][0];
        expect(apiCall.enable_thinking).toBe(true);
        expect(apiCall.reasoning_effort).toBe('high');
        expect(apiCall.tool_choice).toBe('required');
++    });
++
++    it('forces a call to one function by name, and refuses a config that names several', async () => {
++      const execute = async (functionCallingConfig: FunctionCallingConfig) => {
++        (mockClient.chat.completions.create as Mock).mockClear();
++        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
++          { role: 'user', content: 'Summarize' },
++        ]);
++        (mockConverter.convertGeminiToolsToOpenAI as Mock).mockResolvedValue([
++          { type: 'function', function: { name: 'read_file' } },
++          { type: 'function', function: { name: 'state_snapshot' } },
++        ]);
++        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
++          new GenerateContentResponse(),
++        );
++        (mockClient.chat.completions.create as Mock).mockResolvedValue({
++          id: 'r',
++          choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
++        } as OpenAI.Chat.ChatCompletion);
++        await pipeline.execute(
++          {
++            generationContext: new GenerationContext('named-choice-owner'),
++            model: 'test-model',
++            contents: [{ parts: [{ text: 'Summarize' }], role: 'user' }],
++            config: {
++              tools: [
++                {
++                  functionDeclarations: [
++                    { name: 'read_file' },
++                    { name: 'state_snapshot' },
++                  ],
++                },
++              ],
++              toolConfig: { functionCallingConfig },
++            },
++          },
++          'named-choice',
++        );
++        return (mockClient.chat.completions.create as Mock).mock.calls[0][0];
++      };
++
++      // The one function named is the one the call is forced to; every
++      // declared function stays declared.
++      const named = await execute({
++        mode: FunctionCallingConfigMode.ANY,
++        allowedFunctionNames: ['state_snapshot'],
++      });
++      expect(named.tool_choice).toEqual({
++        type: 'function',
++        function: { name: 'state_snapshot' },
++      });
++      expect(named.tools).toHaveLength(2);
++      // The response to it is read with the terminal a named call ends with.
++      const context = (
++        mockConverter.convertOpenAIResponseToGemini as Mock
++      ).mock.calls.at(-1)![1] as RequestContext;
++      expect(context.namedToolChoice).toBe('state_snapshot');
++      expect(
++        (await execute({ mode: FunctionCallingConfigMode.ANY })).tool_choice,
++      ).toBe('required');
++      await expect(
++        execute({
++          mode: FunctionCallingConfigMode.ANY,
++          allowedFunctionNames: ['read_file', 'state_snapshot'],
++        }),
++      ).rejects.toThrow(
++        'A forced call may name one function, and this request names 2: read_file, state_snapshot.',
++      );
++      await expect(
++        execute({
++          mode: FunctionCallingConfigMode.AUTO,
++          allowedFunctionNames: ['state_snapshot'],
++        }),
++      ).rejects.toThrow('Only a forced call may name its function');
 +    });
 +
 +    it('sends the agent identity so the backend can group offloaded KV by agent', async () => {
@@ -172152,7 +172393,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        // The provider canonicalizes the documented extra_body
        // `enable_thinking: false` escape hatch into the tiered family's
        // canonical disable shape (`reasoning_effort: 'none'`) even when no
-@@ -1101,12 +1343,13 @@
+@@ -1101,12 +1418,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:escape-hatch'),
@@ -172166,7 +172407,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1186,12 +1429,13 @@
+@@ -1186,12 +1504,13 @@
          .mockResolvedValue({
            id: 'r',
            choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
@@ -172180,7 +172421,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: false },
            tools: [
              {
-@@ -1296,12 +1540,13 @@
+@@ -1296,12 +1615,13 @@
              id: 'r',
              choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
            } as OpenAI.Chat.ChatCompletion);
@@ -172194,7 +172435,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            },
            'forked_query',
          );
-@@ -1355,12 +1600,13 @@
+@@ -1355,12 +1675,13 @@
        const retryError = new Error('retry failed');
        (mockClient.chat.completions.create as Mock)
          .mockRejectedValueOnce(requiredThinkingError)
@@ -172208,7 +172449,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        await expect(pipeline.execute(request, 'forked_query')).rejects.toBe(
-@@ -1391,12 +1637,13 @@
+@@ -1391,12 +1712,13 @@
        );
        (mockClient.chat.completions.create as Mock).mockRejectedValueOnce(
          requiredThinkingError,
@@ -172222,7 +172463,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            abortSignal: AbortSignal.abort(),
            thinkingConfig: { includeThoughts: false },
          },
-@@ -1439,12 +1686,13 @@
+@@ -1439,12 +1761,13 @@
          });
          (mockClient.chat.completions.create as Mock).mockRejectedValue(error);
  
@@ -172236,7 +172477,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
              },
              'forked_query',
            ),
-@@ -1458,12 +1706,13 @@
+@@ -1458,12 +1781,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          reasoning: { effort: 'high' },
@@ -172250,7 +172491,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1503,12 +1752,13 @@
+@@ -1503,12 +1827,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172264,7 +172505,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1534,12 +1784,13 @@
+@@ -1534,12 +1859,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true,
@@ -172278,7 +172519,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1583,12 +1834,13 @@
+@@ -1583,12 +1909,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172292,7 +172533,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1622,12 +1874,13 @@
+@@ -1622,12 +1949,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172306,7 +172547,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1659,12 +1912,13 @@
+@@ -1659,12 +1987,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172320,7 +172561,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1699,12 +1953,13 @@
+@@ -1699,12 +2028,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172334,7 +172575,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1744,12 +1999,13 @@
+@@ -1744,12 +2074,13 @@
  
        // Provider passes the request through unchanged — simulates the
        // common case where the user has not configured
@@ -172348,7 +172589,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1783,12 +2039,13 @@
+@@ -1783,12 +2114,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172362,7 +172603,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1825,12 +2082,13 @@
+@@ -1825,12 +2157,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172376,7 +172617,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1866,12 +2124,13 @@
+@@ -1866,12 +2199,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172390,7 +172631,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1906,12 +2165,13 @@
+@@ -1906,12 +2240,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172404,7 +172645,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1953,12 +2213,13 @@
+@@ -1953,12 +2288,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -172418,7 +172659,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1993,12 +2254,13 @@
+@@ -1993,12 +2329,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172432,7 +172673,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2038,12 +2300,13 @@
+@@ -2038,12 +2375,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          chat_template_kwargs: { apply_chat_template: true },
@@ -172446,7 +172687,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2082,12 +2345,13 @@
+@@ -2082,12 +2420,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172460,7 +172701,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2122,12 +2386,13 @@
+@@ -2122,12 +2461,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172474,7 +172715,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2161,12 +2426,13 @@
+@@ -2161,12 +2501,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172488,7 +172729,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2203,12 +2469,13 @@
+@@ -2203,12 +2544,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -172502,7 +172743,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2229,12 +2496,13 @@
+@@ -2229,12 +2571,13 @@
        expect(apiCall.enable_thinking).toBe(false);
      });
  
@@ -172516,7 +172757,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('API Error');
  
-@@ -2252,12 +2520,13 @@
+@@ -2252,12 +2595,13 @@
          request,
        );
      });
@@ -172530,7 +172771,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -2280,12 +2549,13 @@
+@@ -2280,12 +2624,13 @@
        expect(testError.message).not.toContain('token@');
      });
  
@@ -172544,7 +172785,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
-@@ -2307,12 +2577,13 @@
+@@ -2307,12 +2652,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -172558,7 +172799,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -2381,12 +2652,13 @@
+@@ -2381,12 +2727,13 @@
        (mockClient.chat.completions.create as Mock)
          .mockReturnValueOnce(failedCreate)
          .mockReturnValueOnce(successfulCreate);
@@ -172572,7 +172813,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'forked_query',
        );
-@@ -2404,12 +2676,13 @@
+@@ -2404,12 +2751,13 @@
        expect(mockErrorHandler.handle).not.toHaveBeenCalled();
      });
  
@@ -172586,7 +172827,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2439,13 +2712,13 @@
+@@ -2439,13 +2787,13 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIChunkToGemini as Mock)
@@ -172601,7 +172842,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        );
        const telemetryAttempt = {};
        mockReportOpenAiRequest.mockReturnValueOnce(telemetryAttempt);
-@@ -2472,13 +2745,13 @@
+@@ -2472,13 +2820,13 @@
        ).mock.calls[1];
        expect(firstChunkContext).toEqual(
          expect.objectContaining({
@@ -172616,7 +172857,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          firstChunkContext.toolCallParser,
        );
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
-@@ -2505,12 +2778,13 @@
+@@ -2505,12 +2853,13 @@
        );
      });
  
@@ -172630,7 +172871,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2576,539 +2850,516 @@
+@@ -2576,539 +2925,516 @@
  
        // Assert
        expect(results).toHaveLength(1); // Empty response should be filtered out
@@ -173661,7 +173902,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockChunk = {
          id: 'chunk-tool-opener',
          choices: [{ delta: { tool_calls: [] }, finish_reason: null }],
-@@ -3146,12 +3397,13 @@
+@@ -3146,12 +3472,13 @@
        expect(results).toEqual([preparationResponse]);
      });
  
@@ -173675,7 +173916,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('Stream Error');
  
-@@ -3194,12 +3446,13 @@
+@@ -3194,12 +3521,13 @@
          request,
        );
      });
@@ -173689,7 +173930,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('407 via http://user:pass@proxy.local');
  
-@@ -3219,12 +3472,13 @@
+@@ -3219,12 +3547,13 @@
        );
        expect(testError.message).not.toContain('user:pass');
      });
@@ -173703,7 +173944,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -3261,12 +3515,13 @@
+@@ -3261,12 +3590,13 @@
        );
        expect(testError.message).not.toContain('token@');
      });
@@ -173717,7 +173958,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3289,29 +3544,43 @@
+@@ -3289,29 +3619,43 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -173765,7 +174006,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockStream = {
          async *[Symbol.asyncIterator]() {
            yield {
-@@ -3329,28 +3598,36 @@
+@@ -3329,28 +3673,36 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -173806,7 +174047,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3396,12 +3673,13 @@
+@@ -3396,12 +3748,13 @@
        expect(thrownError!.requestId).toBe('req-123');
        expect(thrownError!.request_id).toBe('req-123');
      });
@@ -173820,7 +174061,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const jsonBody = '{"error":"gateway blocked streaming request"}';
        const mockStream = {
-@@ -3449,12 +3727,13 @@
+@@ -3449,12 +3802,13 @@
        expect(thrownError!.bodyPrefix).toContain('gateway blocked');
        expect(thrownError!.requestId).toBe('req-json');
      });
@@ -173834,7 +174075,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const htmlBody = '<html>' + 'x'.repeat(700) + '</html>';
        const mockStream = {
-@@ -3505,12 +3784,13 @@
+@@ -3505,12 +3859,13 @@
        expect(thrownError!.bodyPrefix).toHaveLength(512);
        expect(thrownError!.requestId).toBeNull();
      });
@@ -173848,7 +174089,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockStream = {
          async *[Symbol.asyncIterator]() {},
-@@ -3554,12 +3834,13 @@
+@@ -3554,12 +3909,13 @@
        expect(thrownError).toBeInstanceOf(NonSSEResponseError);
        expect(thrownError!.bodyPrefix).toBe('');
      });
@@ -173862,7 +174103,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3615,12 +3896,13 @@
+@@ -3615,12 +3971,13 @@
        }
        expect(results.length).toBeGreaterThan(0);
      });
@@ -173876,7 +174117,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3661,12 +3943,13 @@
+@@ -3661,12 +4018,13 @@
        expect(results.length).toBeGreaterThan(0);
      });
  
@@ -173890,7 +174131,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3698,12 +3981,13 @@
+@@ -3698,12 +4056,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -173904,7 +174145,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3735,12 +4019,13 @@
+@@ -3735,12 +4094,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -173918,7 +174159,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3775,12 +4060,13 @@
+@@ -3775,12 +4135,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -173932,7 +174173,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -3799,12 +4085,13 @@
+@@ -3799,12 +4160,13 @@
        expect(capturedSignal!.aborted).toBe(true);
      });
  
@@ -173946,7 +174187,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -3928,12 +4215,13 @@
+@@ -3928,12 +4290,13 @@
        }
      });
  
@@ -173960,7 +174201,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -4010,12 +4298,13 @@
+@@ -4010,12 +4373,13 @@
        });
      });
  
@@ -173974,7 +174215,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage (typical for modelscope)
-@@ -4119,12 +4408,13 @@
+@@ -4119,12 +4483,13 @@
        });
      });
  
@@ -173988,7 +174229,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage
-@@ -4211,12 +4501,13 @@
+@@ -4211,12 +4576,13 @@
        // Reproduces the real-world bug: some providers (e.g. bailian/glm-5)
        // send trailing empty chunks AFTER the finish+usage pair. Before the
        // fix, each trailing chunk re-triggered the merge logic and yielded
@@ -174002,7 +174243,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Chunk 1: content text
-@@ -4350,12 +4641,13 @@
+@@ -4350,12 +4716,13 @@
    });
  
    describe('buildRequest', () => {
@@ -174016,7 +174257,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            temperature: 0.8,
            topP: 0.7,
            maxOutputTokens: 500,
-@@ -4396,12 +4688,13 @@
+@@ -4396,12 +4763,13 @@
        );
      });
  
@@ -174030,7 +174271,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4435,12 +4728,13 @@
+@@ -4435,12 +4803,13 @@
        );
      });
  
@@ -174044,7 +174285,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4508,12 +4802,13 @@
+@@ -4508,12 +4877,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -174058,7 +174299,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4542,22 +4837,26 @@
+@@ -4542,22 +4912,26 @@
        );
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
@@ -174095,7 +174336,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123:Explore-a1b2c3d4',
          }),
-@@ -4582,22 +4881,26 @@
+@@ -4582,22 +4956,26 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
          choices: [{ message: { content: 'response' } }],
@@ -174132,7 +174373,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123',
-@@ -4630,12 +4933,13 @@
+@@ -4630,12 +5008,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -174146,21 +174387,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4667,12 +4971,13 @@
-         id: 'test',
-         choices: [{ message: { content: 'response' } }],
-       });
- 
-       await pipeline.execute(
-         {
-+          generationContext: new GenerationContext('provider-test-owner'),
-           model: 'gpt-5.6',
-           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
-           promptCacheSharing: true,
-         },
-         'prompt-id',
-       );
-@@ -4707,12 +5012,13 @@
+@@ -4667,12 +5046,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -174174,7 +174401,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4750,12 +5056,13 @@
+@@ -4707,12 +5087,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -174188,7 +174415,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4797,12 +5104,13 @@
+@@ -4750,12 +5131,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -174202,7 +174429,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4826,12 +5134,13 @@
+@@ -4797,12 +5179,13 @@
+         id: 'test',
+         choices: [{ message: { content: 'response' } }],
+       });
+ 
+       await pipeline.execute(
+         {
++          generationContext: new GenerationContext('provider-test-owner'),
+           model: 'gpt-5.6',
+           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
+           promptCacheSharing: true,
+         },
+         'prompt-id',
+       );
+@@ -4826,12 +5209,13 @@
          reasoning_effort: 'medium',
          verbosity: 'low',
        } as ContentGeneratorConfig['samplingParams'];
@@ -174216,7 +174457,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4867,12 +5176,13 @@
+@@ -4867,12 +5251,13 @@
          max_completion_tokens: 200000,
          reasoning_effort: 'high',
        } as ContentGeneratorConfig['samplingParams'];
@@ -174230,7 +174471,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4907,12 +5217,13 @@
+@@ -4907,12 +5292,13 @@
          max_tokens: 50000,
          max_completion_tokens: 100000,
        } as ContentGeneratorConfig['samplingParams'];
@@ -174244,7 +174485,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4944,12 +5255,13 @@
+@@ -4944,12 +5330,13 @@
        mockContentGeneratorConfig.samplingParams = {
          temperature: 0.7,
        } as ContentGeneratorConfig['samplingParams'];
@@ -174258,7 +174499,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4976,12 +5288,13 @@
+@@ -4976,12 +5363,13 @@
        // Arrange: no samplingParams — request.config.maxOutputTokens must still
        // fall through to max_tokens on the wire (original behavior unchanged).
        mockContentGeneratorConfig.samplingParams = undefined;
@@ -174272,7 +174513,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5008,12 +5321,13 @@
+@@ -5008,12 +5396,13 @@
    });
  
    describe('createRequestContext', () => {
@@ -174286,7 +174527,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockOpenAIResponse = new GenerateContentResponse();
  
-@@ -5032,12 +5346,13 @@
+@@ -5032,12 +5421,13 @@
        // Assert
      });
  
@@ -174300,7 +174541,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -5195,12 +5510,13 @@
+@@ -5195,12 +5585,13 @@
  
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          mockStream,
@@ -174314,7 +174555,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        // Collect responses
        const responses: GenerateContentResponse[] = [];
-@@ -5218,12 +5534,13 @@
+@@ -5218,12 +5609,13 @@
      });
    });
  
@@ -174328,7 +174569,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5271,12 +5588,13 @@
+@@ -5271,12 +5663,13 @@
          }),
        );
      });
@@ -174342,7 +174583,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5322,12 +5640,13 @@
+@@ -5322,12 +5715,13 @@
          }),
        );
      });
@@ -174356,7 +174597,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5370,7 +5689,7 @@
+@@ -5370,7 +5764,7 @@
      });
    });
  
@@ -174365,7 +174606,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
      // A stream whose `next()` is gated by the test: it stays pending until
      // `push()` / `end()` is called, letting us simulate a silent (stalled)
      // stream under fake timers.
-@@ -5457,12 +5776,15 @@
+@@ -5457,12 +5851,15 @@
          choices: [{ delta: { content: text } }],
        } as OpenAI.Chat.ChatCompletionChunk;
      }
@@ -174381,7 +174622,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
 +    // max_tokens 1200 bounds a started generation to 100s at the 12 tokens/s
 +    // floor; the request timeout bounds the wait for its first chunk.
-@@ -5469,17 +5791,27 @@
+@@ -5469,17 +5866,27 @@
      function buildPipeline(
 -      streamIdleTimeoutMs?: number,
 -      streamMaxLifetimeMs?: number,
@@ -174413,7 +174654,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
      }
  
      beforeEach(() => {
-@@ -5493,100 +5825,216 @@
+@@ -5493,100 +5900,216 @@
            return r;
          },
        );
@@ -174701,7 +174942,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const pendingSdkNext: {
          reject?: (err: unknown) => void;
        } = {};
-@@ -5613,18 +6061,13 @@
+@@ -5613,18 +6136,13 @@
        process.on('unhandledRejection', handler);
  
        try {
@@ -174723,7 +174964,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          });
  
          const sdkAbort = new Error('aborted by SDK');
-@@ -5640,91 +6083,13 @@
+@@ -5640,91 +6158,13 @@
        }
      });
  
@@ -174816,7 +175057,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(streamingRequest(), 'id');
        const call = (mockClient.chat.completions.create as Mock).mock.calls[0];
        const sdkSignal = call[1]?.signal;
-@@ -5742,7 +6107,7 @@
+@@ -5742,7 +6182,7 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
        );
@@ -174825,7 +175066,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(streamingRequest(), 'id');
        const results: GenerateContentResponse[] = [];
        gated.push(chunk('hello'));
-@@ -5761,6 +6126,6 @@
+@@ -5761,6 +6201,6 @@
          expect.anything(),
        );
  
@@ -174833,7 +175074,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS);
      });
  
-@@ -5767,367 +6132,32 @@
+@@ -5767,367 +6207,32 @@
 -    it('propagates a user AbortError (not ETIMEDOUT) when the parent signal is aborted', async () => {
 -      const ac = new AbortController();
 -      const gated = gatedStream(); // silent
@@ -175232,7 +175473,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +      // jump lands while `it.next()` is pending, so a wall-clock deadline
 +      // charged it as upstream wait and threw at the next iteration; the
 +      // monotonic clock sees only the 500ms the model actually took.
-@@ -6135,7 +6165,7 @@
+@@ -6135,7 +6240,7 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
        );
@@ -175241,7 +175482,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(streamingRequest(), 'id');
        let done = false;
        let error: unknown;
-@@ -6147,40 +6177,7 @@
+@@ -6147,40 +6252,7 @@
          () => (done = true),
          (e: unknown) => (error = e),
        );
@@ -175283,7 +175524,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        await vi.advanceTimersByTimeAsync(500); // next() pending, t=500
        // The wall clock leaps 20 minutes while monotonic time does not.
        const dateNow = vi
-@@ -6190,7 +6187,7 @@
+@@ -6190,7 +6262,7 @@
        await vi.advanceTimersByTimeAsync(0);
        gated.push(chunk('b'));
        await vi.advanceTimersByTimeAsync(500);
@@ -175292,7 +175533,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        await vi.advanceTimersByTimeAsync(0);
        await consume;
        dateNow.mockRestore();
-@@ -6201,259 +6198,2 @@
+@@ -6201,259 +6273,2 @@
 -    it('honours QWEN_STREAM_MAX_LIFETIME_MS when no explicit config is set', async () => {
 -      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, '4000');
 -      const gated = gatedStream(); // drip-fed, never ends
@@ -175554,7 +175795,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      // The lifetime cap charges only the time the loop is BLOCKED on
 +    it('does not bound a buffered, already-complete stream for a slow consumer — consumer time is not upstream wait', async () => {
 +      // The generation bound charges only the time the loop is BLOCKED on
-@@ -6461,16 +6201,14 @@
+@@ -6461,16 +6276,14 @@
        // after a yield. An upstream that already finished and buffered
        // everything owes nothing, however slowly the consumer drains — so all
        // ten pre-buffered chunks are delivered and the stream completes, even
@@ -175573,7 +175814,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(
          streamingRequest(new AbortController().signal),
          'id',
-@@ -6481,7 +6219,7 @@
+@@ -6481,7 +6294,7 @@
          for await (const r of gen) {
            received.push(r);
            // A slow consumer: the wall clock jumps 2s per chunk (20s total,
@@ -175653,7 +175894,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.tes
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-@@ -1,19 +1,25 @@
+@@ -1,19 +1,28 @@
 +import { ResponseObservationError } from '../served-usage.js';
  /**
   * @license
@@ -175672,7 +175913,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  type GenerateContentParameters,
 -  GenerateContentResponse,
 -} from '@google/genai';
-+import { GenerateContentResponse } from '@google/genai';
++import {
++  GenerateContentResponse,
++  type FunctionCallingConfig,
++} from '@google/genai';
  import type {
    ContentGeneratorConfig,
 +  ExactRequestTokenCount,
@@ -175683,7 +175927,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
  import {
    applyOfficialOpenAIPromptCaching,
-@@ -21,17 +27,22 @@
+@@ -21,17 +30,22 @@
  } from './prefix-caching.js';
  import { isDeepSeekHostname } from './provider/deepseek.js';
  import { openaiRequestCaptureContext } from './requestCaptureContext.js';
@@ -175710,7 +175954,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
 -  DEFAULT_STREAM_MAX_LIFETIME_MS,
 +  DECODE_FLOOR_TPS,
-@@ -39,14 +50,12 @@
+@@ -39,14 +53,12 @@
 -  QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
 -  QWEN_STREAM_MAX_LIFETIME_MS_ENV,
 +  STREAM_IDLE_TIMEOUT_MS,
@@ -175727,7 +175971,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    reportOpenAiChunk,
    reportOpenAiRequest,
    reportOpenAiResponse,
-@@ -81,7 +90,31 @@
+@@ -81,7 +93,31 @@
  }
  
  /**
@@ -175760,7 +176004,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   * `code: 'ETIMEDOUT'` makes `classifyRetryError` treat it as a retryable
   * transport error, identical to a real socket read timeout.
   */
-@@ -95,25 +128,23 @@
+@@ -95,25 +131,23 @@
    ) {
      super(
        `No stream activity for ${idleMs}ms after ${chunksReceived} chunks ` +
@@ -175797,7 +176041,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   */
  export class StreamLifetimeExceededError extends Error {
    readonly code = 'ETIMEDOUT' as const;
-@@ -124,11 +155,11 @@
+@@ -124,11 +158,11 @@
      readonly streamLifetimeMs: number,
    ) {
      super(
@@ -175814,7 +176058,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      );
      this.name = 'StreamLifetimeExceededError';
    }
-@@ -180,20 +211,17 @@
+@@ -180,20 +214,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -175839,7 +176083,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,75 +248,40 @@
+@@ -220,75 +251,40 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -175947,7 +176191,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  readonly requestTimeoutMs: number;
 +  /** The upstream wait the generation may take from its first chunk. */
 +  readonly generationMs: number;
-@@ -298,17 +291,19 @@
+@@ -298,17 +294,19 @@
 - * Wraps a streaming chunk source with two guards. The inactivity watchdog: if
 - * no chunk arrives for `idleMs`, `abortRequest()` is invoked (to abort the
 - * underlying request and free the socket) and the iterator throws — a user
@@ -175981,7 +176225,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  idleMs: number,
 -  maxLifetimeMs: number,
 +  bounds: StreamBounds,
-@@ -315,15 +310,9 @@
+@@ -315,15 +313,9 @@
    abortRequest: () => void,
    parentSignal: AbortSignal | undefined,
  ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
@@ -176000,7 +176244,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const it = source[Symbol.asyncIterator]();
    // Monotonic, never `Date.now()`: an NTP step must not kill a healthy
    // generation on the next iteration (a forward jump) nor silently disable
-@@ -331,64 +320,65 @@
+@@ -331,64 +323,65 @@
    // guard exists to bound. The setTimeout this races is a monotonic clock
    // too, so the two agree.
    const streamStartedAt = performance.now();
@@ -176101,7 +176345,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              } else {
                abortRequest();
                reject(
-@@ -417,8 +407,10 @@
+@@ -417,8 +410,10 @@
        }
        if (result.done) return;
        // Charge only the time this chunk took to arrive — the upstream
@@ -176114,7 +176358,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        chunksReceived += 1;
        yield result.value;
      }
-@@ -435,30 +427,103 @@
+@@ -435,30 +430,138 @@
  export type { PipelineConfig } from './types.js';
  
 +/** Every request this pipeline sends names the model it is for. */
@@ -176122,6 +176366,41 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  if (typeof model !== 'string' || !model.trim()) {
 +    throw new Error('Generation requests require a nonempty model.');
 +  }
++}
++
++/**
++ * The OpenAI `tool_choice` a Gemini-style function-calling config asks for.
++ *
++ * `ANY` forces a call: to any declared function when it names none, and to
++ * the one function it names when it names one, which OpenAI spells as a
++ * named choice. It cannot name several: that is `allowed_tools`, which this
++ * client does not send, and forcing any declared function instead would let
++ * the model call one the config excluded.
++ */
++function openAIToolChoice(
++  config: FunctionCallingConfig | undefined,
++):
++  | 'required'
++  | 'none'
++  | { readonly type: 'function'; readonly function: { readonly name: string } }
++  | undefined {
++  const names = config?.allowedFunctionNames ?? [];
++  if (config?.mode === 'ANY') {
++    if (names.length > 1) {
++      throw new Error(
++        `A forced call may name one function, and this request names ${names.length}: ${names.join(', ')}. Name one, or none to allow any declared function.`,
++      );
++    }
++    return names.length === 1
++      ? { type: 'function', function: { name: names[0] } }
++      : 'required';
++  }
++  if (names.length > 0) {
++    throw new Error(
++      `Only a forced call may name its function, and this request names ${names.join(', ')} under mode ${String(config?.mode)}.`,
++    );
++  }
++  return config?.mode === 'NONE' ? 'none' : undefined;
 +}
 +
  export class ContentGenerationPipeline {
@@ -176230,7 +176509,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        false,
-@@ -492,13 +557,13 @@
+@@ -492,13 +595,13 @@
          }
        },
      );
@@ -176245,7 +176524,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        true,
-@@ -505,8 +570,17 @@
+@@ -505,8 +608,17 @@
        async (openaiRequest, context, telemetryAttempt) => {
 -        // Always use a per-request controller so the inactivity watchdog can
 -        // abort the SDK request even when the caller did not provide a signal.
@@ -176265,7 +176544,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
          let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
          try {
            // Stage 1: Create OpenAI stream. Wrapped in try so a network /
-@@ -586,19 +660,9 @@
+@@ -586,19 +698,9 @@
 -        // Two guards wrap the stream (the SDK `timeout` only bounds connect +
 -        // first response). The inactivity watchdog aborts + surfaces a
 -        // retryable ETIMEDOUT after `idleMs` of no chunks; the lifetime cap
@@ -176294,7 +176573,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +          () => perRequestAc.abort(),
 +          parentSignal,
 +        );
-@@ -608,13 +672,12 @@
+@@ -608,13 +710,12 @@
          // once the stream is fully consumed or abandoned, releasing the SDK
          // request and any parent listener.
          const innerStream = this.processStreamWithLogging(
@@ -176308,7 +176587,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
            try {
              yield* innerStream;
            } finally {
-@@ -635,192 +698,95 @@
+@@ -635,192 +736,95 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -176571,7 +176850,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +795,18 @@
+@@ -829,16 +833,18 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -176597,7 +176876,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -845,9 +813,9 @@
+@@ -845,9 +851,9 @@
            isLifetime
 -            ? 'OpenAI stream lifetime cap exceeded'
 +            ? 'OpenAI stream generation bound exceeded'
@@ -176609,7 +176888,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              // the log reconcile the same way the error message does.
              wallClockMs: error.streamLifetimeMs,
              ...(isLifetime
-@@ -858,100 +826,19 @@
+@@ -858,100 +864,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -176711,7 +176990,26 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -1029,13 +916,13 @@
+@@ -991,13 +916,12 @@
+       // classifier's respond_in_schema) can force the model to emit a tool
+       // call instead of free-texting. Without this, thinking-heavy models
+       // may consume the tiny output budget on reasoning and skip the tool.
+-      const fcMode = request.config?.toolConfig?.functionCallingConfig?.mode;
+-      if (fcMode === 'ANY') {
++      const toolChoice = openAIToolChoice(
++        request.config?.toolConfig?.functionCallingConfig,
++      );
++      if (toolChoice !== undefined) {
+         (baseRequest as unknown as Record<string, unknown>)['tool_choice'] =
+-          'required';
+-      } else if (fcMode === 'NONE') {
+-        (baseRequest as unknown as Record<string, unknown>)['tool_choice'] =
+-          'none';
++          toolChoice;
+       }
+     }
+ 
+@@ -1029,13 +953,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -176726,7 +177024,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +934,14 @@
+@@ -1047,15 +971,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -176744,7 +177042,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1059,20 @@
+@@ -1173,12 +1096,20 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -176765,7 +177063,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,13 +1212,13 @@
+@@ -1318,13 +1249,13 @@
    }
  
    /**
@@ -176780,13 +177078,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        openaiRequest: OpenAI.Chat.ChatCompletionCreateParams,
        context: RequestContext,
        telemetryAttempt: GenAiAttemptHandle | undefined,
-@@ -1400,13 +1294,13 @@
+@@ -1400,13 +1331,16 @@
     * Create request context with common properties
     */
    private createRequestContext(
      request: GenerateContentParameters,
      isStreaming: boolean,
    ): RequestContext {
++    const toolChoice = openAIToolChoice(
++      request.config?.toolConfig?.functionCallingConfig,
++    );
 -    const effectiveModel = request.model || this.contentGeneratorConfig.model;
 +    requireRequestModel(request.model);
      const providerOverrides =
@@ -176795,7 +177096,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1308,18 @@
+@@ -1414,15 +1348,21 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -176807,6 +177108,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        modalities: this.contentGeneratorConfig.modalities ?? {},
        startTime: Date.now(),
 +      strictToolCalling: this.contentGeneratorConfig.strictToolCalling === true,
++      ...(typeof toolChoice === 'object'
++        ? { namedToolChoice: toolChoice.function.name }
++        : {}),
 +      exactTokenCounting:
 +        this.contentGeneratorConfig.exactTokenCounting === 'vllm',
        splitToolMedia:
@@ -177032,7 +177336,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/c
    InputModalities,
  } from '../contentGenerator.js';
  import type { OpenAICompatibleProvider } from './provider/index.js';
-@@ -31,21 +32,28 @@
+@@ -31,21 +32,35 @@
     * the correct suffix when an incremental-then-cumulative hybrid stream
     * transitions into cumulative mode after the cap (otherwise the suffix would
     * re-include bytes between the cap and the true emitted length, producing
@@ -177050,6 +177354,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/c
    startTime: number;
 +  strictToolCalling?: boolean;
 +  /**
++   * The function the request forced by name, when it named one. The served
++   * stream ends such a call with `stop` rather than `tool_calls`, as the
++   * OpenAI protocol has it for a named choice, so this is the terminal a
++   * strict response to it carries -- and only for a call to this function.
++   */
++  namedToolChoice?: string;
++  /**
 +   * True when the active model is configured with `exactTokenCounting: 'vllm'`.
 +   * Every usage the backend then serves carries
 +   * `completion_tokens_details.reasoning_tokens` and
@@ -177063,7 +177374,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/c
    // When true, media parts in tool-result messages are split into a follow-up
    // user message for strict OpenAI-compat servers. See ContentGeneratorConfig
    // for details.
-@@ -81,24 +89,12 @@
+@@ -81,24 +96,12 @@
     * emitted after the reasoning thought if no tagged thought appears.
     */
    pendingContentParts?: Part[];
@@ -177091,7 +177402,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/c
 diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/prompts.test.ts
 --- a/packages/core/src/core/prompts.test.ts
 +++ b/packages/core/src/core/prompts.test.ts
-@@ -1018,41 +1018,78 @@
+@@ -1018,41 +1018,85 @@
      expect(prompt).toContain('new-app');
      expect(prompt).toContain('## New Applications');
    });
@@ -177120,9 +177431,12 @@ diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/pro
 +    // the model used to be told to reproduce by hand -- a root element, six
 +    // ordered tags, escaping rules -- is now the engine's to enforce, and a
 +    // prompt that still described it would be describing a second format.
++    // The request declares the turn's tools as well, because the history
++    // calls them; the one it lets the model call is named.
 +    expect(prompt).toContain(
-+      'record the snapshot by calling the one function this request declares',
++      "record the snapshot by calling state_snapshot, the one function this request lets you call; the conversation's other tools are declared because its turns called them.",
 +    );
++    expect(prompt).not.toContain('the one function this request declares');
 +    expect(prompt).toContain('there is no markup to produce and nothing to escape');
 +    for (const markup of [
 +      '<state_snapshot>',
@@ -177148,13 +177462,17 @@ diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/pro
 +
 +  it('ends the snapshot at the prompt the latest turn was issued against', () => {
      const prompt = getCompressionPrompt();
++    // The request's last message is this prompt and its directive, so the
++    // conversation that is the issued prompt is the one above it; it does
++    // not end the request.
 -    expect(prompt).toContain('<analysis>');
 -    // Must signal that <analysis> is stripped (so the model knows it is a
 -    // drafting scratchpad, not part of the final summary).
 -    expect(prompt).toMatch(/<analysis>.*stripped|stripped.*<analysis>/is);
 +    expect(prompt).toContain(
-+      'ends with the prompt the latest turn was issued against',
++      'The conversation above this message is the prompt the latest turn was issued against.',
 +    );
++    expect(prompt).not.toContain('ends with the prompt');
 +    expect(prompt).toContain('follow your snapshot verbatim');
 +    expect(prompt).toContain('make next_step what that prompt called for');
 +  });
@@ -177316,7 +177634,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 -    <errors_and_fixes>
 -        <!-- List every error encountered and how it was fixed. Include the verbatim error message when it was quoted to the agent. Pay special attention to specific user feedback on the error, especially if the user told you to do something differently. -->
 -    </errors_and_fixes>
-+The conversation you are shown ends with the prompt the latest turn was issued against. That turn and its result are not shown to you: they follow your snapshot verbatim. End the snapshot at the state as of that prompt, and make next_step what that prompt called for.
++The conversation above this message is the prompt the latest turn was issued against. That turn and its result are not shown to you: they follow your snapshot verbatim. End the snapshot at the state as of that prompt, and make next_step what that prompt called for.
  
 -    <problem_solving>
 -        <!-- Document problems solved and any ongoing troubleshooting efforts. -->
@@ -177331,7 +177649,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 -    <pending_tasks>
 -        <!-- Outline any pending tasks that the user has explicitly asked the agent to work on but that are not yet complete. -->
 -    </pending_tasks>
-+Then record the snapshot by calling the one function this request declares. Each section is a parameter, described where it is declared. Write each section as ordinary prose: there is no markup to produce and nothing to escape, so quote error text, paths, filename patterns and fragments of XML or JSON exactly as they are.
++Then record the snapshot by calling state_snapshot, the one function this request lets you call; the conversation's other tools are declared because its turns called them. Each section is a parameter, described where it is declared. Write each section as ordinary prose: there is no markup to produce and nothing to escape, so quote error text, paths, filename patterns and fragments of XML or JSON exactly as they are.
  
 -    <current_work>
 -        <!-- Describe in detail precisely what the agent was working on immediately before this summary was requested, paying special attention to the most recent messages from both user and assistant. Include file names and code snippets where applicable. -->
@@ -191193,7 +191511,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1821 @@
+@@ -1,4405 +1,1830 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -191278,11 +191596,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +const WINDOW = 262_144;
 +const PARTITION = partitionContextWindow(WINDOW);
 +/**
-+ * What the deployment's compaction directive renders to, measured through the
-+ * served template and tokenizer: the request with it, less the request
-+ * without it, with the ceiling it states at its widest, the window.
++ * What the deployment's compaction request adds to the prompt it summarizes,
++ * measured through the served template and tokenizer: the snapshot's
++ * declaration after the turn's tools, 558, and the directive with the
++ * ceiling it states at its widest, the window, 649 -- the request, less the
++ * prompt as it was issued.
 + */
-+const DIRECTIVE_TOKENS = 632;
++const ADDED_TOKENS = 1_207;
 +/**
 + * What the ceiling holds back for the one message a redraw appends: the
 + * widest refusal notice's bytes, the most tokens its text can be, and the
@@ -191295,13 +191615,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +function stubSideQueryCounts(
 +  harness: { countSideQuery: ReturnType<typeof vi.fn> },
 +  requestTokens: number,
-+  directiveTokens = DIRECTIVE_TOKENS,
++  addedTokens = ADDED_TOKENS,
 +): void {
 +  harness.countSideQuery
 +    .mockReset()
 +    .mockResolvedValueOnce({ totalTokens: requestTokens, maxModelLen: WINDOW })
 +    .mockResolvedValueOnce({
-+      totalTokens: requestTokens - directiveTokens,
++      totalTokens: requestTokens - addedTokens,
 +      maxModelLen: WINDOW,
 +    });
 +}
@@ -191458,7 +191778,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    .mockResolvedValue({ totalTokens: 190_000, maxModelLen: WINDOW })
 +    .mockResolvedValueOnce({ totalTokens: 190_000, maxModelLen: WINDOW })
 +    .mockResolvedValueOnce({
-+      totalTokens: 190_000 - DIRECTIVE_TOKENS,
++      totalTokens: 190_000 - ADDED_TOKENS,
 +      maxModelLen: WINDOW,
 +    });
 +  const generateText = vi.fn().mockResolvedValue(summaryResult());
@@ -191755,15 +192075,16 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      maxAttempts: 1,
 +      promptCacheSharing: true,
 +      config: {
-+        // The turn's own tools are replaced, not extended: this request
-+        // exists only to obtain the snapshot, so the snapshot function is
-+        // the only thing it advertises and the call is forced. Declaring it
-+        // is what lets the engine hold the six sections to their declared
-+        // shape while it decodes.
-+        tools: [stateSnapshotTool(PARTITION.inlineBlockBytes)],
++        // The turn's own tools stay declared, because the history it carries
++        // calls them, with the snapshot's declaration after them, and the
++        // call is forced to that one function by name. Declaring it is what
++        // lets the engine hold the six sections to their declared shape
++        // while it decodes.
++        tools: [...requestTools, stateSnapshotTool(PARTITION.inlineBlockBytes)],
 +        toolConfig: {
 +          functionCallingConfig: {
 +            mode: FunctionCallingConfigMode.ANY,
++            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],
 +          },
 +        },
 +      },
@@ -191786,7 +192107,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -      config: mockConfig,
 -      consecutiveFailures: 0,
 -      originalTokenCount: uiTelemetryService.getLastPromptTokenCount(),
-+    expect(generated.config?.tools).not.toContainEqual(requestTools[0]);
++    // What the request adds is measured against the prompt as it was issued:
++    // the turn's own tools and no directive, so the declaration and the
++    // directive together are what the share of D is checked against.
++    const promptOnly = harness.countSideQuery.mock
++      .calls[1]![0] as GenerateTextOptions;
++    expect(promptOnly.config?.tools).toEqual(requestTools);
++    expect(promptOnly.contents).toEqual(counted.contents.slice(0, -1));
 +    // The request is the prompt the last turn was issued against — the same
 +    // contents, in the same order, up to and including the user content that
 +    // request ended with — plus exactly one trailing directive. The turn
@@ -192944,7 +193271,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      .fn<NonNullable<ContentGenerator['countRequestTokens']>>()
 +      .mockResolvedValueOnce({ totalTokens: 190_000, maxModelLen: WINDOW })
 +      .mockResolvedValueOnce({
-+        totalTokens: 190_000 - DIRECTIVE_TOKENS,
++        totalTokens: 190_000 - ADDED_TOKENS,
 +        maxModelLen: WINDOW,
 +      });
 +    const stream = vi
@@ -193110,10 +193437,10 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +  it("issues the generation at the room the window has, less a redraw's notice, never below a turn's", async () => {
 +    // One ceiling for every draw: the room this request leaves, less the most
 +    // a redraw's one extra message can take, so a redraw fits the window too.
-+    for (const [requestTokens, directiveTokens] of [
-+      [1_000 + DIRECTIVE_TOKENS, DIRECTIVE_TOKENS],
-+      [150_000, DIRECTIVE_TOKENS],
-+      [PARTITION.compactionTrigger - 1 + DIRECTIVE_TOKENS, DIRECTIVE_TOKENS],
++    for (const [requestTokens, addedTokens] of [
++      [1_000 + ADDED_TOKENS, ADDED_TOKENS],
++      [150_000, ADDED_TOKENS],
++      [PARTITION.compactionTrigger - 1 + ADDED_TOKENS, ADDED_TOKENS],
 +      [
 +        PARTITION.compactionTrigger -
 +          1 +
@@ -193123,7 +193450,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      ],
 +    ]) {
 +      const harness = makeHarness();
-+      stubSideQueryCounts(harness, requestTokens, directiveTokens);
++      stubSideQueryCounts(harness, requestTokens, addedTokens);
 +      await compress(harness);
 +      const generated = harness.generateText.mock
 +        .calls[0]![0] as GenerateTextOptions;
@@ -193208,7 +193535,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(budget).toBe(PARTITION.turnGeneration + 1);
 +  });
 +
-+  it('refuses when the directive outgrows the static preamble', async () => {
++  it('refuses when what the request adds outgrows the static preamble', async () => {
 +    const overgrown = makeHarness();
 +    stubSideQueryCounts(overgrown, 150_000, PARTITION.staticPreamble + 1);
 +    expect((await compress(overgrown)).info.compressionStatus).toBe(
@@ -193217,7 +193544,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(overgrown.generateText).not.toHaveBeenCalled();
 +  });
 +
-+  it("holds the widest redraw notice inside the directive's share of the static preamble", async () => {
++  it('holds the widest redraw notice inside the share of the static preamble what the request adds is held to', async () => {
 +    // A redraw's notice is counted before the first draw, at its widest and
 +    // framed, so no redraw can be issued with less than a turn's room.
 +    const fits = makeHarness();
@@ -193241,7 +193568,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(overgrown.generateText).not.toHaveBeenCalled();
 +    expect(overgrown.warn).toHaveBeenCalledWith(
 +      expect.stringContaining(
-+        `a redraw's refusal notice to at most ${REDRAW_NOTICE_TOKENS} more`,
++        `The snapshot's declaration and the compaction directive render to ${PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS + 1} tokens and a redraw's refusal notice to at most ${REDRAW_NOTICE_TOKENS} more`,
 +      ),
 +    );
 +  });
@@ -197956,7 +198283,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +452,715 @@
+@@ -509,619 +452,721 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -198423,23 +198750,27 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    // One request shape, used for both the exact count and the generation,
 +    // so the two can never disagree about rendering; they differ only in the
 +    // ceiling the directive states, as the preflight below explains.
++    // The request carries the turn's own tools with the snapshot's declaration
++    // after them, and forces a call to that one by name. The history it
++    // summarizes calls the turn's tools, and a conversation whose calls name
++    // functions its request does not declare is a shape no tool-use
++    // conversation has: upstream's compaction request on the session's own
++    // model declares the turn's tools for exactly that history. Declaring the
++    // snapshot is what lets the engine hold the six sections to their
++    // declared shape while it decodes, and forcing it by name is what keeps
++    // the answer to that one call rather than to any declared tool.
++    const turnTools = generationConfig.tools ?? [];
 +    const requestOptions = {
 +      model: config.getModel(),
 +      systemInstruction: mainSystemInstruction,
 +      config: {
 +        ...generationConfig,
-+        // The snapshot is the only thing this request exists to produce, so it
-+        // is the only tool declared and the call is forced. Declaring it is
-+        // what lets the engine hold the six sections to their declared shape
-+        // while it decodes, instead of asking the model to hand-write a
-+        // structure and refusing it afterwards when ordinary prose collides
-+        // with the markup.
-+        tools: [stateSnapshotTool(partition.inlineBlockBytes)],
++        tools: [...turnTools, stateSnapshotTool(partition.inlineBlockBytes)],
 +        toolConfig: {
 +          ...generationConfig.toolConfig,
 +          functionCallingConfig: {
-+            ...generationConfig.toolConfig?.functionCallingConfig,
 +            mode: FunctionCallingConfigMode.ANY,
++            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],
 +          },
 +        },
 +      },
@@ -198479,17 +198810,18 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        );
 +      }
 +      summaryRequestTokenCount = summaryCount.totalTokens;
-+      // The directive is the one message this request appends to the prompt
-+      // it summarizes, and the partition holds a share for exactly that. What
-+      // it costs is measured against the prompt it is appended to — the same
-+      // request, without it — so the share is checked against the rendering
-+      // rather than against an assumption about it. A directive that outgrew
-+      // its share would put the snapshot below its reserve, so it ends the
-+      // attempt here instead.
++      // The request adds two things to the prompt it summarizes, the
++      // snapshot's declaration and the directive, and the partition holds a
++      // share for exactly that. What they cost is measured against the
++      // prompt as it was issued -- the turn's own tools, no directive -- so
++      // the share is checked against the rendering rather than against an
++      // assumption about it. Additions that outgrew their share would put the
++      // snapshot below its reserve, so they end the attempt here instead.
 +      const promptOnlyCount = await config
 +        .getBaseLlmClient()
 +        .countRequestTokens({
 +          ...requestOptions,
++          config: { ...requestOptions.config, tools: turnTools },
 +          contents: issuedPrompt,
 +        });
 +      if (promptOnlyCount.maxModelLen !== contextLimit) {
@@ -198497,7 +198829,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          `summary /tokenize max_model_len=${promptOnlyCount.maxModelLen}, expected ${contextLimit}`,
 +        );
 +      }
-+      const directiveTokens =
++      const addedTokens =
 +        summaryRequestTokenCount - promptOnlyCount.totalTokens;
 +      // A redraw appends one message to this request: why the draw before it
 +      // was refused. That message is at most the widest notice's bytes, the
@@ -198506,9 +198838,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      // room is proved here, before the first draw is issued.
 +      const redrawNoticeTokens =
 +        partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;
-+      if (directiveTokens + redrawNoticeTokens > partition.staticPreamble) {
++      if (addedTokens + redrawNoticeTokens > partition.staticPreamble) {
 +        throw new Error(
-+          `The compaction directive renders to ${directiveTokens} tokens and a redraw's refusal notice to at most ${redrawNoticeTokens} more, past the ${partition.staticPreamble} the partition declares for the whole static preamble. Shorten the directive, or deploy on a larger window.`,
++          `The snapshot's declaration and the compaction directive render to ${addedTokens} tokens and a redraw's refusal notice to at most ${redrawNoticeTokens} more, past the ${partition.staticPreamble} the partition declares for the whole static preamble. Shorten the directive or the declaration, or deploy on a larger window.`,
 +        );
 +      }
 +      // The snapshot is issued at the room the window actually has, not at a
@@ -198516,8 +198848,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      // draw is issued under one ceiling and every request it is issued with
 +      // fits the window. The partition proves that ceiling is never below a
 +      // turn's: the prompt this request extends was issued below the trigger,
-+      // so the request and a redraw's notice are at most T - 1 + D, which
-+      // leaves at least C + 1. Every lighter request leaves more, and
++      // and what the request adds to it -- the declaration, the directive and
++      // a redraw's notice -- is held within D above, so the request is at
++      // most T - 1 + D, which leaves at least C + 1. Every lighter request leaves more, and
 +      // spending it is what keeps the snapshot from being truncated by the
 +      // reasoning it shares an output stream with.
 +      compactionOutputBudget =
@@ -217541,7 +217874,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/services/state-snapshot.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.ts
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,255 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -217577,8 +217910,9 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +export type StateSnapshot = Record<StateSnapshotSection, string>;
 +
 +/**
-+ * The one function a compaction request advertises. The request exists only to
-+ * obtain this artifact, so it declares nothing else and forces the call.
++ * The function a compaction request forces by name. The request exists only to
++ * obtain this artifact; it declares it after the turn's own tools, whose calls
++ * the history it summarizes holds, and allows a call to this one alone.
 + */
 +export const STATE_SNAPSHOT_FUNCTION_NAME = 'state_snapshot';
 +

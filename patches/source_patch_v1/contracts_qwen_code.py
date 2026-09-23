@@ -540,7 +540,11 @@ def _validate_stream_commit_after(state: State) -> None:
         state,
         converter,
         (
-            "choice.finish_reason !== 'tool_calls'",
+            # A strict call is complete only on the terminal its request calls
+            # for: `tool_calls`, or `stop` for a call the request forced by
+            # name, as the protocol and the served engine have it.
+            "  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';",
+            "choice.finish_reason !== callTerminal &&",
             "choice.finish_reason !== 'length'",
             "JSON.parse(toolCall.function.arguments)",
             "tool arguments are not an object",
@@ -549,7 +553,7 @@ def _validate_stream_commit_after(state: State) -> None:
             "toolCallParser.hasInvalidToolCallIndex()",
             "toolCallParser.hasConflictingToolCallIdentity()",
             "toolCallParser.hasInvalidToolCallArguments()",
-            "parsedToolCalls.every((toolCall) => Boolean(toolCall.id))",
+            "            Boolean(toolCall.id) &&\n            (named === undefined || toolCall.name === named),",
         ),
         label=label,
     )
@@ -4271,7 +4275,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     for case in (
-        "refuses when the directive outgrows the static preamble",
+        "refuses when what the request adds outgrows the static preamble",
         "gives the snapshot at least a turn's room at the largest prompt a turn can be issued against",
         "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
         "keeps the pending tool result out of the summary and in the turn's commit counts",
@@ -4314,9 +4318,11 @@ def _validate_compaction_budget_after(state: State) -> None:
         require_text(state, generator_test, case, label=label)
 
     # The snapshot's room is sized from the request that was counted rather
-    # than from a margin: the issued prompt plus the directive, less the
-    # widest notice a redraw appends. The directive and that notice, framed,
-    # are held to the static preamble's share before the first draw, so every
+    # than from a margin: the issued prompt plus what the request adds -- the
+    # snapshot's declaration and the directive -- less the widest notice a
+    # redraw appends. What it adds is measured against the prompt as it was
+    # issued, with the turn's own tools, and it and that notice, framed, are
+    # held to the static preamble's share before the first draw, so every
     # draw -- the first and each redraw -- is issued under one ceiling that is
     # never below a turn's room.
     service_source = _require_all(
@@ -4327,7 +4333,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const split = chat.renderIssuedTurnSplit(",
             "const issuedPrompt = split.prompt;",
             "const redrawNoticeTokens =\n        partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;",
-            "if (directiveTokens + redrawNoticeTokens > partition.staticPreamble) {",
+            "          config: { ...requestOptions.config, tools: turnTools },\n          contents: issuedPrompt,",
+            "const addedTokens =\n        summaryRequestTokenCount - promptOnlyCount.totalTokens;",
+            "if (addedTokens + redrawNoticeTokens > partition.staticPreamble) {",
             "compactionOutputBudget =\n        contextLimit - summaryRequestTokenCount - redrawNoticeTokens;",
             "if (compactionOutputBudget < partition.turnGeneration) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
@@ -4489,7 +4497,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         "tells the next draw why %s was refused, and what to do instead",
         "does not show the next draw the draw that was refused",
         "tells each redraw only why the draw just before it was refused",
-        "holds the widest redraw notice inside the directive's share of the static preamble",
+        "holds the widest redraw notice inside the share of the static preamble what the request adds is held to",
         "derives the widest notice from the notices themselves",
     ):
         require_text(state, service_test, case, label=label)
@@ -4664,10 +4672,10 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         prompts,
         (
-            "record the snapshot by calling the one function this request declares",
+            "record the snapshot by calling state_snapshot, the one function this request lets you call; the conversation's other tools are declared because its turns called them.",
             "there is no markup to produce and nothing to escape",
             "exactly once",
-            "ends with the prompt the latest turn was issued against",
+            "The conversation above this message is the prompt the latest turn was issued against.",
             "follow your snapshot verbatim",
             "make next_step what that prompt called for",
         ),
@@ -4889,15 +4897,21 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
     ):
         require_text(state, path, case, label=label)
-    # The compaction request declares the snapshot function and forces the
-    # call, so the artifact is constrained where it is generated rather than
-    # judged after the model has hand-written it.
+    # The compaction request declares the snapshot function after the turn's
+    # own tools and forces a call to it by name, so the artifact is
+    # constrained where it is generated rather than judged after the model
+    # has hand-written it, and every call in the history it carries is a
+    # call to a declared function, as in upstream's request on the session's
+    # own model. A named choice ends with `stop` on the served stream, and the
+    # strict converter holds a call to that request to that terminal and to
+    # that one function.
     _require_all(
         state,
         service,
         (
-            "tools: [stateSnapshotTool(partition.inlineBlockBytes)],",
-            "mode: FunctionCallingConfigMode.ANY,",
+            "const turnTools = generationConfig.tools ?? [];",
+            "tools: [...turnTools, stateSnapshotTool(partition.inlineBlockBytes)],",
+            "          functionCallingConfig: {\n            mode: FunctionCallingConfigMode.ANY,\n            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],\n          },",
             "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.inlineBlockBytes,\n      )",
             "if (!acceptance.snapshot) {",
             # A snapshot refused for its length was not empty. It is recorded
@@ -4910,6 +4924,46 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
+    for retired in (
+        "tools: [stateSnapshotTool(partition.inlineBlockBytes)],",
+        "directiveTokens",
+    ):
+        forbid_text(state, service, retired, label=label)
+    for retired in (
+        "ends with the prompt the latest turn was issued against",
+        "the one function this request declares",
+    ):
+        forbid_text(state, prompts, retired, label=label)
+    openai_dir = "packages/core/src/core/openaiContentGenerator/"
+    _require_all(
+        state,
+        openai_dir + "pipeline.ts",
+        (
+            "function openAIToolChoice(",
+            "      ? { type: 'function', function: { name: names[0] } }\n      : 'required';",
+            "A forced call may name one function, and this request names ${names.length}",
+            "Only a forced call may name its function",
+            "        ? { namedToolChoice: toolChoice.function.name }",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        openai_dir + "converter.ts",
+        (
+            "  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';",
+            "            (named === undefined || toolCall.name === named),",
+            "      choice.finish_reason !== callTerminal &&",
+            "`Model response called another function than the ${requestContext.namedToolChoice} its request forced.`",
+        ),
+        label=label,
+    )
+    for path, case in (
+        (openai_dir + "converter.test.ts", "ends a call to a function the request forced by name with stop, as served, in strict mode"),
+        (openai_dir + "converter.test.ts", "ends a call to a function the request forced by name with stop, in a batch response too"),
+        (openai_dir + "pipeline.test.ts", "forces a call to one function by name, and refuses a config that names several"),
+    ):
+        require_text(state, path, case, label=label)
     forbid_text(state, service, "isValidStateSnapshot", label=label)
     forbid_text(
         state,

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `7e043629dce54bd692645ff97db3800a259869b6fafb114749017c7267ac56e2`
+- Review-diff SHA-256: `9f22190366ed798de58f9b1c39e61e97fe7d8d50f73cc09b45fa13a858bd4f28`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `9446b30852763695ef04369e187c30e3de8b219c8f6b282bac56d6f55724f541`
+- Transformer-manifest SHA-256: `d4277e32083ff9fb88d0d9b4f78d1f5eedba1764c6b11d835eef783d7928168c`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -85,7 +85,8 @@ every history, its environment lines and folder listing bounded the same way,
 and the turn budget the `## Context` section states, its number bounded by the
 sixteen digits a safe integer renders to; a preamble that does not fit is a
 startup refusal naming shorten-or-deploy-larger;
-each compaction's preflight holds what its directive adds to the same share. The
+each compaction's preflight holds what its request adds -- the snapshot's
+declaration and the directive -- to the same share. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof counts the frame every compacted history
@@ -207,16 +208,26 @@ what the model can quote, not what it has seen: it disarms every file-read
 entry's history residency and leaves the read and write evidence in place, so a
 file this session wrote itself is still one it is allowed to overwrite.
 
-The snapshot is declared, not described. The compaction request replaces the
-turn's tools with one function whose closed parameter schema is the six ordered
-sections, and forces that call, so presence, uniqueness and ordering are
-properties of the declaration rather than of markup the model types. Section
+The snapshot is declared, not described. The compaction request declares, after
+the turn's own tools, one function whose closed parameter schema is the six
+ordered sections, and forces a call to it by name, so presence, uniqueness and
+ordering are properties of the declaration rather than of markup the model
+types. The turn's tools stay declared because the history the request carries
+calls them, and a conversation whose calls name functions its request does not
+declare is a shape no tool-use conversation has; upstream's compaction request
+on the session's own model declares the turn's tools for the same history. A
+named choice's call ends with `stop` on the served stream, as the protocol has
+it, so a strict response to a request that named its function is complete on
+that terminal and only for a call to that function. Section
 text travels as string arguments, so prose that collides with markup carries
 through unchanged and nothing has to be escaped. `acceptStateSnapshot` judges
 one drawn candidate against the same declaration, because a client cannot
-observe whether the engine applied a constraint it declared. Swapping the tool
-block does not reuse the turn's prompt-cache prefix; the conversation it carries
-is otherwise unchanged.
+observe whether the engine applied a constraint it declared. The added
+declaration ends the turn's tool block differently, so the request does not
+reuse the turn's prompt-cache prefix past it; the conversation it carries is
+otherwise unchanged. What the request adds to the prompt it summarizes -- the
+declaration and the directive -- is measured against that prompt as it was
+issued and held to the static preamble's share.
 
 How the snapshot is obtained is ours; how the history it becomes is rendered is
 upstream's. The accepted sections are rendered as upstream's `<state_snapshot>`
