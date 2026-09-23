@@ -361,6 +361,11 @@ bundle_release_archive() {
   # and before an earlier bundle of this same release is replaced.
   verify_service_archive_contents "${staging}" ||
     die "the freshly bundled archive disagrees with the pins this release wrote"
+  # The bundle has just proved the images present are the pinned ones, so this
+  # is where they take the release's identity tag: the next release rebuilds
+  # every component under the same mutable tags, and without it this release's
+  # images would then look exactly like a failed build's.
+  tag_release_identity "${RELEASE_LOCK_PATH}"
   mv -- "${staging}" "${archive}"
   write_release_archive_pin "${RELEASE_LOCK_PATH}" \
     "$(sha256_file "${archive}")"
@@ -431,6 +436,8 @@ main() {
           "$(json_value "${RELEASE_LOCK_PATH}" ".images.${component_name}")"
       done
       printf '  commit   %s\n' "$(json_value "${RELEASE_LOCK_PATH}" '.implementation_commit')"
+      printf '  identity %s (every image above also carries it as a tag)\n' \
+        "$(release_identity "${RELEASE_LOCK_PATH}")"
       archive_name="$(basename "$(service_archive_path "${RELEASE_LOCK_PATH}")")"
       printf '  archive  artifacts/%s sha256:%s\n' "${archive_name}" \
         "$(json_value "${RELEASE_LOCK_PATH}" '.archive.sha256')"

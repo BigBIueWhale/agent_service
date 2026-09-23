@@ -1218,7 +1218,8 @@ is the only way a release reaches another machine, and
 `./scripts/restore-service-images.sh` loads there the archive the checked-out
 release lock names, refusing it unless its hash is the pinned one. Bundling the
 same release again replaces only that release's archive, after proving the new
-one.
+one. Every image the release pinned also takes the release's identity as a tag;
+see [Storage and retention](#storage-and-retention).
 
 Start both the pinned backend (if absent) and the agent service:
 
@@ -1271,6 +1272,32 @@ rule is unchanged — a record this release cannot read stops startup before it
 adopts the directory. Startup removes only labelled orphan containers, abandoned
 staging trees, and incomplete result directories. It never prunes ended or
 cancelled sessions by age or count.
+
+### Storage and retention
+
+Every release rebuilds all five components under the same tags the stack lock
+names. Until now that stripped the previous release's images of every tag they
+had, so Docker reported shipped releases as dangling and "reclaimable", exactly
+like a failed or intermediate build. That is why `docker image prune`, in any
+form, and every `dangling=true` filter are banned in this project -- and why its
+genuine garbage was never collected either.
+
+**Identity tags.** Every image a release pins now also carries
+`<repository>:<release identity>`, where the release identity is
+`<implementation commit>-<service image>` (the image ID's hex after `sha256:`).
+It is the same string the release's archive is named by,
+`artifacts/agent-service-images-<release identity>.tar`, and one function in
+[`scripts/common.sh`](scripts/common.sh) derives both, so an image and the
+archive that restores it name the same release by construction. `./release.sh`
+applies the tags once its bundle has proved the images are the pinned ones, and
+`./scripts/restore-service-images.sh` applies them once it has proved what it
+loaded. An identity tag is never moved: one that already names another image is
+refused. The backend's runtime image carries the same kind of tag,
+`qwen38-vllm:runtime-v<N>-<image>`, from the backend's own build and restore path.
+
+**The prune rule.** Dangling images may be collected once every release's images
+carry their identity tag, and never before. Until then an untagged image of ours
+may still be a release.
 
 ## HTTP API
 

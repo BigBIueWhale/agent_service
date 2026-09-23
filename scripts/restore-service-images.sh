@@ -70,7 +70,13 @@ if ((${#failures[@]})); then
     "${failures[@]}"
 fi
 
+# Loaded images carry only the mutable tags they were saved under, which the
+# next release on this host would move. They take the release's identity tag
+# here, as they do where the release was cut, so they stay a named release.
+tag_release_identity
+
 printf '\nRESTORED — exact pinned images are available without a rebuild.\n'
 for component in base-toolchain base-runtime agent relay capture broker service; do
   printf '  %-14s %s\n' "${component}" "${expected[${component}]}"
 done
+printf '  %-14s %s\n' identity "$(release_identity)"

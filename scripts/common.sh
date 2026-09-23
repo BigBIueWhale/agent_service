@@ -61,9 +61,33 @@ validate_release_lock() {
   ' "${lock_path}" >/dev/null || die "Release lock violates its exact schema or one-mode identity contract"
 }
 
+# A release's identity is the pair its lock already holds that no other release
+# can share: the implementation commit, which fixes the stack lock and so every
+# image but the service's, and the service image, the one component a release
+# adopts without advancing that commit -- its hex after `sha256:`:
+#
+#   <implementation_commit>-<service image>
+#
+# It is derived here and only here, and it is everything that names a release:
+# the archive's file name and the identity tag every image of the release
+# carries. So an image and the archive that restores it name the same release
+# by construction, and no second copy of either value exists to drift. Takes the
+# lock explicitly, on the same terms as validate_release_lock, so the release
+# test harness proves it against copies.
+release_identity() {
+  local lock_path="${1:-${RELEASE_LOCK}}" commit service
+  commit="$(jq -er '.implementation_commit' "${lock_path}")" || \
+    die "The release lock names no implementation commit: ${lock_path}"
+  service="$(jq -er '.images.service' "${lock_path}")" || \
+    die "The release lock names no service image: ${lock_path}"
+  [[ "${commit}" =~ ^[0-9a-f]{40}$ && "${service}" =~ ^sha256:[0-9a-f]{64}$ ]] || \
+    die "The release lock's implementation commit or service image is malformed: ${lock_path}"
+  printf '%s-%s\n' "${commit}" "${service#sha256:}"
+}
+
 # Every release's archive has its own name, and the name is the release:
 #
-#   artifacts/agent-service-images-<implementation_commit>-<service image>.tar
+#   artifacts/agent-service-images-<release identity>.tar
 #
 # with the service image ID's hex after `sha256:`. An archive is the only way
 # a release reaches another machine, because images do not reproduce across
@@ -87,15 +111,56 @@ validate_release_lock() {
 # file its bundle will be. Takes the lock explicitly, on the same terms as
 # validate_release_lock, so the release test harness proves it against copies.
 service_archive_path() {
-  local lock_path="${1:-${RELEASE_LOCK}}" commit service
-  commit="$(jq -er '.implementation_commit' "${lock_path}")" || \
-    die "The release lock names no implementation commit: ${lock_path}"
-  service="$(jq -er '.images.service' "${lock_path}")" || \
-    die "The release lock names no service image: ${lock_path}"
-  [[ "${commit}" =~ ^[0-9a-f]{40}$ && "${service}" =~ ^sha256:[0-9a-f]{64}$ ]] || \
-    die "The release lock's implementation commit or service image is malformed: ${lock_path}"
-  printf '%s/artifacts/agent-service-images-%s-%s.tar\n' \
-    "${PROJECT_DIR}" "${commit}" "${service#sha256:}"
+  local lock_path="${1:-${RELEASE_LOCK}}" identity
+  identity="$(release_identity "${lock_path}")" || return 1
+  printf '%s/artifacts/agent-service-images-%s.tar\n' "${PROJECT_DIR}" "${identity}"
+}
+
+# Every image a release pins also carries the release's identity as a tag, in
+# the repository the stack lock tags that component under:
+#
+#   <repository>:<release identity>
+#
+# Each release rebuilds its components under the same mutable tags, so without
+# this the previous release's images lose every tag they had and become
+# indistinguishable from failed and intermediate builds. With it, a release
+# image is never untagged, and an untagged image of ours is genuinely garbage.
+# The identity is 105 characters, inside Docker's 128-character tag limit.
+release_identity_tag() {
+  local component="$1" lock_path="${2:-${RELEASE_LOCK}}" tag identity
+  case "${component}" in
+    agent | relay | capture | broker | service) ;;
+    *) die "unknown component: ${component}" ;;
+  esac
+  tag="$(lock_value ".${component}.image_tag")"
+  [[ "${tag}" == *:* && "${tag}" != *@* ]] || \
+    die "The stack lock's ${component} tag is not a repository:tag reference: ${tag}"
+  identity="$(release_identity "${lock_path}")" || return 1
+  printf '%s:%s\n' "${tag%:*}" "${identity}"
+}
+
+# Tag every image the lock pins with its release identity, then read each tag
+# back. An identity tag that already names another image is refused rather
+# than moved: it can only have got there by hand, and moving it would destroy
+# the one fact the tag exists to keep. Called only where the pinned IDs have
+# just been proved to be the images present -- after ./release.sh proves its
+# bundle, and after the restore script proves what it loaded.
+tag_release_identity() {
+  local lock_path="${1:-${RELEASE_LOCK}}" component image tag observed
+  for component in agent relay capture broker service; do
+    image="$(jq -er ".images.${component}" "${lock_path}")" || \
+      die "The release lock names no ${component} image: ${lock_path}"
+    tag="$(release_identity_tag "${component}" "${lock_path}")" || \
+      die "No identity tag can be derived from ${lock_path}"
+    observed="$(image_id "${tag}")"
+    if [[ -n "${observed}" && "${observed}" != "${image}" ]]; then
+      die "The identity tag ${tag} already names ${observed}, not the pinned ${image}." \
+        "An identity tag names exactly one image, so it was not moved." \
+        "Next: find how it got there (docker image inspect ${tag}), and untag it by hand once you know."
+    fi
+    docker tag "${image}" "${tag}" || die "Could not tag ${image} as ${tag}"
+    require_equal "identity tag ${tag}" "$(image_id "${tag}")" "${image}"
+  done
 }
 
 # Fail closed on an unpinned, missing or byte-drifted archive before anything

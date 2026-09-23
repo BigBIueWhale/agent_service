@@ -377,6 +377,42 @@ if (verify_service_archive_contents "${probe_tar}") >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
+# The release identity is derived once, and it is what names the release
+# everywhere it is named: the archive's file, and the identity tag each of the
+# five images carries. So an image leads to the archive that restores it by
+# construction. Proved on the same copies: the identity is the commit and the
+# service image; the archive name is built from it; every component's identity
+# tag is that identity in the repository the stack lock tags the component
+# under, and is a valid Docker tag; a malformed identity yields no tag, and
+# neither does a component the release does not pin.
+# ---------------------------------------------------------------------------
+probe_identity="$(release_identity "${name_probe}")" ||
+  fail 'a release lock with a valid identity has no release identity'
+[[ "${probe_identity}" == "${probe_commit}-${probe_service}" ]] ||
+  fail "the release identity is not the commit and the service image: ${probe_identity}"
+[[ "$(basename "$(service_archive_path "${name_probe}")")" == \
+  "agent-service-images-${probe_identity}.tar" ]] ||
+  fail 'the archive name and the release identity disagree'
+for component in agent relay capture broker service; do
+  identity_tag="$(release_identity_tag "${component}" "${name_probe}")" ||
+    fail "the ${component} image has no identity tag"
+  stack_tag="$(lock_value ".${component}.image_tag")"
+  [[ "${identity_tag}" == "${stack_tag%:*}:${probe_identity}" ]] ||
+    fail "the ${component} identity tag is not its repository and the release identity: ${identity_tag}"
+  [[ "${identity_tag##*:}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]] ||
+    fail "the ${component} identity tag is not a valid Docker tag: ${identity_tag}"
+done
+for malformed in '.implementation_commit = "c85eca7"' '.images.service = ("2" * 64)'; do
+  jq "${malformed}" "${name_probe}" >"${lock_copy}"
+  if (release_identity_tag agent "${lock_copy}") >/dev/null 2>&1; then
+    fail "a release lock with a malformed identity (${malformed}) produced an identity tag"
+  fi
+done
+if (release_identity_tag builder "${name_probe}") >/dev/null 2>&1; then
+  fail 'an identity tag was derived for a component no release pins'
+fi
+
+# ---------------------------------------------------------------------------
 # Deliberately absent: any assertion about a tar under artifacts/. This
 # harness is a build input and runs inside every build of the release loop,
 # where the release the lock names has legitimately no bundle yet (it is
@@ -391,4 +427,4 @@ fi
 # none of which run inside the build.
 # ---------------------------------------------------------------------------
 
-printf 'RELEASE_ARCHIVE_OK schema=exact identity=sha256-only name=per-release contents=proved advancing-release=accepted termination=artifacts-excluded\n'
+printf 'RELEASE_ARCHIVE_OK schema=exact identity=sha256-only name=per-release identity-tags=derived contents=proved advancing-release=accepted termination=artifacts-excluded\n'
