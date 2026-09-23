@@ -179334,7 +179334,7 @@ diff --git a/packages/core/src/core/tool-outcome.ts b/packages/core/src/core/too
 diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/core/toolResultBound.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/toolResultBound.test.ts
-@@ -0,0 +1,708 @@
+@@ -0,0 +1,707 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -179359,7 +179359,6 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +import {
 +  SESSION_ARTIFACT_CAPACITY_BYTES,
 +  sessionArtifactDirectory,
-+  sessionArtifactPath,
 +} from '../utils/session-artifacts.js';
 +import { partitionContextWindow, tokenizerText } from './tokenLimits.js';
 +import {
@@ -179400,6 +179399,10 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    response: { [field]: text, ...extra },
 +  },
 +});
++
++/** Where the store keeps the first artifact of the test's session. */
++const firstArtifact = async (): Promise<string> =>
++  path.join(await sessionArtifactDirectory(config()), '1.txt');
 +
 +const textOf = (part: Part, field: 'output' | 'error' = 'output'): string =>
 +  part.functionResponse?.response?.[field] as string;
@@ -179521,7 +179524,11 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    const tailBytes = Buffer.byteLength(tail);
 +    expect(tailBytes - 4 * headBytes).toBeGreaterThan(-5);
 +    expect(tailBytes - 4 * headBytes).toBeLessThan(29);
-+    const artifact = sessionArtifactPath(config(), Buffer.from(text), 'txt');
++    // The session's first directory of the store, and its first artifact: a
++    // short path the model copies, exact because each number was taken by
++    // exclusive creation.
++    const artifact = await firstArtifact();
++    expect(artifact).toBe(path.join(root, 'session-artifacts', '1', '1.txt'));
 +    // What it says it returned is the part of the result it shows, the marks
 +    // on its sliced lines not counted.
 +    const shownBytes =
@@ -179614,10 +179621,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    // The reminder the hook joined is the end, and the end is kept.
 +    expect(cutOf(textOf(part)).tail.endsWith('</system-reminder>')).toBe(true);
 +    expect(
-+      await fs.readFile(
-+        sessionArtifactPath(config(), Buffer.from(joined), 'txt'),
-+        'utf8',
-+      ),
++      await fs.readFile(await firstArtifact(), 'utf8'),
 +    ).toBe(joined);
 +  });
 +
@@ -179680,9 +179684,8 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +  });
 +
 +  it('says the rest was not retained when the store is full, with what to do instead, and does not throw', async () => {
-+    const directory = sessionArtifactDirectory(config());
-+    await fs.mkdir(directory, { recursive: true });
-+    const held = path.join(directory, 'held.bin');
++    const directory = await sessionArtifactDirectory(config());
++    const held = path.join(directory, '1.bin');
 +    await fs.writeFile(held, '');
 +    await fs.truncate(held, SESSION_ARTIFACT_CAPACITY_BYTES);
 +    const text = 'z'.repeat(INLINE_BLOCK_BYTES * 2);
@@ -179701,17 +179704,18 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    const { shownHead, shownTail } = cutOf(bounded);
 +    expect(text.startsWith(shownHead)).toBe(true);
 +    expect(text.endsWith(shownTail)).toBe(true);
-+    expect(await fs.readdir(directory)).toEqual(['held.bin']);
++    expect(await fs.readdir(directory)).toEqual(['1.bin']);
 +  });
 +
-+  it('throws when the store fails its integrity check, because that is a defect and not a capacity', async () => {
++  it('throws when the store holds something it did not keep, because that is a defect and not a capacity', async () => {
 +    const text = 'q'.repeat(INLINE_BLOCK_BYTES * 2);
-+    const artifact = sessionArtifactPath(config(), Buffer.from(text), 'txt');
-+    await fs.mkdir(path.dirname(artifact), { recursive: true });
-+    await fs.writeFile(artifact, 'not the same bytes');
++    await fs.writeFile(
++      path.join(await sessionArtifactDirectory(config()), 'stray'),
++      'not an artifact',
++    );
 +    await expect(
 +      boundToolResponseParts(config(), [response('output', text)]),
-+    ).rejects.toThrow('Session artifact integrity failure');
++    ).rejects.toThrow('Invalid session artifact: stray');
 +  });
 +
 +  it('measures a response read serialized in the form it is read, and cuts that form', async () => {
@@ -179744,10 +179748,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    expect(serialized.startsWith(shownHead)).toBe(true);
 +    expect(serialized.endsWith(shownTail)).toBe(true);
 +    expect(
-+      await fs.readFile(
-+        sessionArtifactPath(config(), Buffer.from(serialized), 'txt'),
-+        'utf8',
-+      ),
++      await fs.readFile(await firstArtifact(), 'utf8'),
 +    ).toBe(serialized);
 +  });
 +
@@ -179779,10 +179780,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    );
 +    expect(part.functionResponse?.parts).toEqual([media]);
 +    expect(
-+      await fs.readFile(
-+        sessionArtifactPath(config(), Buffer.from(joined), 'txt'),
-+        'utf8',
-+      ),
++      await fs.readFile(await firstArtifact(), 'utf8'),
 +    ).toBe(joined);
 +  });
 +
@@ -179954,7 +179952,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +  };
 +
 +  const retained = async (): Promise<string[]> => {
-+    const directory = sessionArtifactDirectory(config());
++    const directory = await sessionArtifactDirectory(config());
 +    return Promise.all(
 +      (await fs.readdir(directory)).map((name) =>
 +        fs.readFile(path.join(directory, name), 'utf8'),
@@ -180027,9 +180025,10 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +
 +  it('fails a call whose copy cannot be finished, naming the cause, rather than hanging the batch', async () => {
 +    const text = 'q'.repeat(INLINE_BLOCK_BYTES * 2);
-+    const artifact = sessionArtifactPath(config(), Buffer.from(text), 'txt');
-+    await fs.mkdir(path.dirname(artifact), { recursive: true });
-+    await fs.writeFile(artifact, 'not the same bytes');
++    await fs.writeFile(
++      path.join(await sessionArtifactDirectory(config()), 'stray'),
++      'not an artifact',
++    );
 +
 +    const call = await runOne({ llmContent: text, returnDisplay: 'long' });
 +
@@ -180038,7 +180037,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 +    // The tool ran and succeeded; delivering its result is what failed.
 +    expect(call.response.executionStatus).toBe('success');
 +    expect(call.response.error?.message).toBe(
-+      `The result of this call could not be delivered: Session artifact integrity failure: ${artifact}`,
++      'The result of this call could not be delivered: Invalid session artifact: stray',
 +    );
 +    expect(modelCopy(call)).toBe(call.response.error?.message);
 +  });
@@ -180046,7 +180045,7 @@ diff --git a/packages/core/src/core/toolResultBound.test.ts b/packages/core/src/
 diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/toolResultBound.ts
 --- /dev/null
 +++ b/packages/core/src/core/toolResultBound.ts
-@@ -0,0 +1,378 @@
+@@ -0,0 +1,384 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -180060,7 +180059,7 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +import {
 +  SESSION_ARTIFACT_CAPACITY_BYTES,
 +  persistSessionArtifact,
-+  sessionArtifactPath,
++  widestSessionArtifactPath,
 +} from '../utils/session-artifacts.js';
 +import {
 +  keepLeadingLines,
@@ -180228,10 +180227,13 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +  whole: { readonly text: string; readonly bytes: number },
 +): Promise<string> {
 +  const bytes = Buffer.from(text, 'utf8');
-+  // The artifact is named by its content, so where it will be is known before
-+  // it is written, and the notice can be sized with the path it will name.
-+  const filepath = sessionArtifactPath(config, bytes, 'txt');
-+  const readBack = (offset: number, limit: number): string =>
++  // The store names an artifact when it keeps it, after the ends are cut, so
++  // the notice is sized with the longest name it can take.
++  const readBack = (
++    filepath: string,
++    offset: number,
++    limit: number,
++  ): string =>
 +    `${ToolNames.READ_FILE} with file_path: ${JSON.stringify(filepath)}, offset: ${offset}, limit: ${limit}`;
 +  const unretained = {
 +    unretained:
@@ -180255,14 +180257,22 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +  // Line numbers are the same in the retained bytes as in the text measured:
 +  // normalization never adds or removes a line break.
 +  const lastLine = lineBreaks(whole.text);
-+  // The notice at its widest: `returned` can be no larger than the bound, and
-+  // the read that returns the cut starts at a line no later than the last and
-+  // spans no more lines than there are.
++  // The notice at its widest: `returned` can be no larger than the bound, the
++  // read that returns the cut names the longest path the store can give the
++  // artifact, starts at a line no later than the last and spans no more lines
++  // than there are.
 +  const widest = Math.max(
 +    tokenizerText(
 +      middleCutContent(
 +        '',
-+        bound(maxBytes, readBack(lastLine, lastLine + 1)),
++        bound(
++          maxBytes,
++          readBack(
++            widestSessionArtifactPath(config, 'txt'),
++            lastLine,
++            lastLine + 1,
++          ),
++        ),
 +        '',
 +      ),
 +    ).bytes,
@@ -180283,11 +180293,6 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +  const head = keepLeadingLines(whole.text, Math.floor(room / 5));
 +  const tail = keepTrailingLines(whole.text, room - head.bytes);
 +  const retention = await persistSessionArtifact(config, bytes, 'txt');
-+  if (retention.retained && retention.filepath !== filepath) {
-+    throw new Error(
-+      `The session artifact store retained ${retention.filepath}, not the ${filepath} this result's notice names.`,
-+    );
-+  }
 +  // The read that returns the cut starts at the first line the start does not
 +  // hold whole and ends at the last line the end does not hold whole, so it
 +  // re-reads a sliced line whole and leaves no part of the result unread. The
@@ -180307,7 +180312,7 @@ diff --git a/packages/core/src/core/toolResultBound.ts b/packages/core/src/core/
 +      bound(
 +        shownBytes(head) + shownBytes(tail),
 +        retention.retained
-+          ? readBack(firstCut, lastCut - firstCut + 1)
++          ? readBack(retention.filepath, firstCut, lastCut - firstCut + 1)
 +          : unretained,
 +      ),
 +      tail.text,
@@ -251349,7 +251354,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
        const pngBytes = Buffer.concat([
          Buffer.from([0x89]),
          Buffer.from('PNG\r\n'),
-@@ -916,22 +922,61 @@
+@@ -916,22 +922,59 @@
 -    it('should refuse to persist when the session disk budget is exhausted', async () => {
 +    it('says a binary body cannot be kept when the artifact store is full, with what to do instead', async () => {
        vi.spyOn(fetchUtils, 'fetchWithPolicy').mockResolvedValue(
@@ -251360,9 +251365,8 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
 -        getToolResultBytesWritten: () => 500 * 1024 * 1024,
        } as unknown as Config;
 +
-+      const directory = sessionArtifactDirectory(cappedConfig);
-+      fs.mkdirSync(directory, { recursive: true });
-+      const ledgerFile = path.join(directory, 'retained.bin');
++      const directory = await sessionArtifactDirectory(cappedConfig);
++      const ledgerFile = path.join(directory, '1.bin');
 +      fs.writeFileSync(ledgerFile, '');
 +      fs.truncateSync(ledgerFile, SESSION_ARTIFACT_CAPACITY_BYTES);
  
@@ -251379,7 +251383,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
 +      expect(result.llmContent).toContain(
 +        'Download the file into the workspace with the shell tool instead.',
 +      );
-+      expect(fs.readdirSync(directory)).toEqual(['retained.bin']);
++      expect(fs.readdirSync(directory)).toEqual(['1.bin']);
 +    });
 +
 +    it('returns a text body the artifact store is full for, saying its original bytes were not kept', async () => {
@@ -251390,9 +251394,8 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
 +          finalUrl: 'https://docs.python.org/3/library/json.md',
 +        }),
 +      );
-+      const directory = sessionArtifactDirectory(mockConfig);
-+      fs.mkdirSync(directory, { recursive: true });
-+      const ledgerFile = path.join(directory, 'retained.bin');
++      const directory = await sessionArtifactDirectory(mockConfig);
++      const ledgerFile = path.join(directory, '1.bin');
 +      fs.writeFileSync(ledgerFile, '');
 +      fs.truncateSync(ledgerFile, SESSION_ARTIFACT_CAPACITY_BYTES);
 +
@@ -251415,7 +251418,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
        vi.spyOn(fetchUtils, 'fetchWithPolicy').mockResolvedValue(
          okResponse({ contentType: 'application/pdf', body: pdfBytes }),
        );
-@@ -974,13 +1019,13 @@
+@@ -974,13 +1017,13 @@
  
        // Extracted PDF text — not mojibake — reaches the side-query.
        expect(receivedContent).toContain('$718.00');
@@ -251430,7 +251433,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
        )?.[1];
        expect(savedPath).toBeDefined();
        expect(fs.readFileSync(savedPath!)).toEqual(pdfBytes);
-@@ -990,15 +1035,12 @@
+@@ -990,15 +1033,12 @@
        // or budget charge — and the persisted-file wiring survives the hit.
        const repeat = await tool
          .build({ url: 'https://example.com/doc.pdf', prompt: 'again?' })
@@ -251446,7 +251449,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
  
      it('should skip the side-query when PDF extraction fails, with no mojibake', async () => {
        vi.spyOn(fetchUtils, 'fetchWithPolicy').mockResolvedValue(
-@@ -1013,13 +1055,13 @@
+@@ -1013,13 +1053,13 @@
        });
        const result = await invocation.execute(new AbortController().signal);
  
@@ -251461,7 +251464,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
      });
  
      it('should sniff mislabeled PDFs (application/octet-stream) via magic bytes', async () => {
-@@ -1083,40 +1125,39 @@
+@@ -1083,40 +1123,39 @@
  
        const result = await new WebFetchTool(mockConfig)
          .build({ url: 'https://example.com/raw', prompt: 'what is this?' })
@@ -251512,7 +251515,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
        // Unit-covered in binary-content.test.ts; this locks the wiring from
        // the response header to sniffFileKind.
        vi.spyOn(fetchUtils, 'fetchWithPolicy').mockResolvedValue(
-@@ -1129,25 +1170,31 @@
+@@ -1129,25 +1168,31 @@
        const result = await new WebFetchTool(mockConfig)
          .build({ url: 'https://example.com/download', prompt: 'what is it?' })
          .execute(new AbortController().signal);
@@ -251547,7 +251550,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
    describe('permission model', () => {
      it('always asks — WebFetch is egress, never auto-allowed by host', async () => {
        const tool = new WebFetchTool(mockConfig);
-@@ -1220,12 +1267,44 @@
+@@ -1220,12 +1265,44 @@
        expect(mockGenerateContent).not.toHaveBeenCalled();
        expect(result.llmContent).toContain('# JSON module');
        expect(result.llmContent).toContain('Detailed raw docs.');
@@ -251592,7 +251595,7 @@ diff --git a/packages/core/src/tools/web-fetch.test.ts b/packages/core/src/tools
            contentType: 'text/markdown',
            body: Buffer.from('# Raw docs'),
          }),
-@@ -1475,35 +1554,34 @@
+@@ -1475,35 +1552,34 @@
  
        const tool = new WebFetchTool(mockConfig);
        await tool
@@ -278596,18 +278599,19 @@ diff --git a/packages/core/src/utils/schemaValidator.ts b/packages/core/src/util
 diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/src/utils/session-artifacts.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/session-artifacts.test.ts
-@@ -0,0 +1,321 @@
+@@ -0,0 +1,375 @@
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
 +import * as os from 'node:os';
 +import lockfile from 'proper-lockfile';
 +import type { Config } from '../config/config.js';
++import { createHash } from 'node:crypto';
 +import {
 +  SESSION_ARTIFACT_CAPACITY_BYTES,
 +  persistSessionArtifact,
 +  sessionArtifactDirectory,
-+  sessionArtifactPath,
++  widestSessionArtifactPath,
 +  type SessionArtifactRetention,
 +} from './session-artifacts.js';
 +
@@ -278626,6 +278630,9 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +  }
 +  return retention;
 +}
++/** Whether an exclusive open is of an artifact rather than a session's claim. */
++const opensArtifact = (args: unknown[]): boolean =>
++  args[1] === 'wx' && !String(args[0]).includes(`${path.sep}claims${path.sep}`);
 +const config = (session = 'conversation') =>
 +  ({
 +    getSessionId: () => session,
@@ -278660,7 +278667,7 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +      const calls: string[] = [];
 +      vi.mocked(fs.open).mockImplementation(async (...args) => {
 +        const file = await open(...args);
-+        if (args[1] === 'wx') {
++        if (opensArtifact(args)) {
 +          vi.spyOn(file, 'sync').mockImplementation(async () => {
 +            calls.push('sync');
 +            throw failure;
@@ -278694,7 +278701,9 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +      expect(outcome.kind).toBe('failure');
 +      if (outcome.kind === 'failure') expect(outcome.error).toBe(failure);
 +      expect(calls).toEqual(['sync', 'close', 'release']);
-+      expect(await fs.readdir(sessionArtifactDirectory(config()))).toEqual([]);
++      expect(
++        await fs.readdir(await sessionArtifactDirectory(config())),
++      ).toEqual([]);
 +    },
 +  );
 +
@@ -278709,7 +278718,7 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +      );
 +    vi.mocked(fs.open).mockImplementation(async (...args) => {
 +      const file = await open(...args);
-+      if (args[1] === 'wx') {
++      if (opensArtifact(args)) {
 +        vi.spyOn(file, 'sync').mockImplementation(async () => {
 +          calls.push('sync');
 +          throw failures[0];
@@ -278754,9 +278763,9 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +        expect(leaves[index]).toBe(failures[index]);
 +    }
 +    expect(calls).toEqual(['sync', 'unlink', 'close', 'release']);
-+    expect(await fs.readdir(sessionArtifactDirectory(config()))).toHaveLength(
-+      1,
-+    );
++    expect(
++      await fs.readdir(await sessionArtifactDirectory(config())),
++    ).toHaveLength(1);
 +  });
 +
 +  it.each(['payload cleanup', 'lock release'] as const)(
@@ -278770,7 +278779,7 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +        );
 +      vi.mocked(fs.open).mockImplementation(async (...args) => {
 +        const file = await open(...args);
-+        if (args[1] === 'wx')
++        if (opensArtifact(args))
 +          vi.spyOn(file, 'sync').mockRejectedValue(syncFailure);
 +        return file;
 +      });
@@ -278796,20 +278805,23 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +    },
 +  );
 +
-+  it('retains every reasoning byte through owner recreation and reference reuse', async () => {
++  it('retains every reasoning byte, and the same bytes kept again under the next number', async () => {
 +    const reasoning = '思考😀\n'.repeat(40_000) + 'last reasoning byte';
 +    const bytes = Buffer.from(reasoning, 'utf8');
 +    const original = kept(
 +      await persistSessionArtifact(config('source-owner'), bytes, 'txt'),
 +    );
 +    await fs.utimes(original.filepath, new Date(0), new Date(0));
-+    const reused = kept(
++    // A second Config of the same session finds the directory it claimed.
++    const again = kept(
 +      await persistSessionArtifact(config('source-owner'), bytes, 'txt'),
 +    );
-+    expect(reused).toEqual(original);
++    expect(path.basename(original.filepath)).toBe('1.txt');
++    expect(path.basename(again.filepath)).toBe('2.txt');
++    expect(path.dirname(again.filepath)).toBe(path.dirname(original.filepath));
 +    expect(original.size).toBe(bytes.byteLength);
 +    expect(await fs.readFile(original.filepath)).toEqual(bytes);
-+    expect(await fs.readFile(original.filepath, 'utf8')).toBe(reasoning);
++    expect(await fs.readFile(again.filepath, 'utf8')).toBe(reasoning);
 +
 +    const otherOwner = kept(
 +      await persistSessionArtifact(
@@ -278821,13 +278833,13 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +    expect(path.dirname(otherOwner.filepath)).not.toBe(
 +      path.dirname(original.filepath),
 +    );
-+    expect(await fs.readFile(reused.filepath)).toEqual(bytes);
 +    expect(await fs.readdir(path.dirname(original.filepath))).toEqual([
-+      path.basename(original.filepath),
++      '1.txt',
++      '2.txt',
 +    ]);
 +  });
 +
-+  it('retains distinct simultaneous payloads and deduplicates equal bytes', async () => {
++  it('numbers simultaneous payloads in the order the store kept them, one file each', async () => {
 +    const contents = ['one', 'two', 'one', 'three'];
 +    const results = (
 +      await Promise.all(
@@ -278836,7 +278848,9 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +        ),
 +      )
 +    ).map(kept);
-+    expect(new Set(results.map((result) => result.filepath)).size).toBe(3);
++    expect(results.map((result) => path.basename(result.filepath)).sort()).toEqual(
++      ['1.txt', '2.txt', '3.txt', '4.txt'],
++    );
 +    expect(
 +      await Promise.all(
 +        results.map((result) => fs.readFile(result.filepath, 'utf8')),
@@ -278846,9 +278860,8 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +  });
 +
 +  it('answers a full store with a value naming its capacity, charging existing bytes regardless of age', async () => {
-+    const directory = sessionArtifactDirectory(config());
-+    await fs.mkdir(directory, { recursive: true });
-+    const retained = path.join(directory, 'retained.bin');
++    const directory = await sessionArtifactDirectory(config());
++    const retained = path.join(directory, '1.bin');
 +    await fs.writeFile(retained, '');
 +    await fs.truncate(retained, SESSION_ARTIFACT_CAPACITY_BYTES);
 +    await fs.utimes(retained, new Date(0), new Date(0));
@@ -278860,7 +278873,7 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +      requestedBytes: 1,
 +      capacityBytes: SESSION_ARTIFACT_CAPACITY_BYTES,
 +    });
-+    expect(await fs.readdir(directory)).toEqual(['retained.bin']);
++    expect(await fs.readdir(directory)).toEqual(['1.bin']);
 +    expect((await fs.stat(retained)).size).toBe(
 +      SESSION_ARTIFACT_CAPACITY_BYTES,
 +    );
@@ -278870,11 +278883,10 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +  });
 +
 +  it('serializes competing capacity admissions from separate Config instances', async () => {
-+    const directory = sessionArtifactDirectory(config());
-+    await fs.mkdir(directory, { recursive: true });
-+    await fs.writeFile(path.join(directory, 'retained.bin'), '');
++    const directory = await sessionArtifactDirectory(config());
++    await fs.writeFile(path.join(directory, '1.bin'), '');
 +    await fs.truncate(
-+      path.join(directory, 'retained.bin'),
++      path.join(directory, '1.bin'),
 +      SESSION_ARTIFACT_CAPACITY_BYTES - 1,
 +    );
 +    const results = await Promise.all(
@@ -278886,42 +278898,87 @@ diff --git a/packages/core/src/utils/session-artifacts.test.ts b/packages/core/s
 +    expect(results.filter((result) => !result.retained)).toHaveLength(1);
 +  });
 +
-+  it('names the path an artifact is kept at before it is written', async () => {
-+    const bytes = Buffer.from('named by its content');
-+    const planned = sessionArtifactPath(config(), bytes, 'txt');
-+    await expect(fs.stat(planned)).rejects.toThrow();
-+    const retention = kept(
-+      await persistSessionArtifact(config(), bytes, 'txt'),
++  it("names each artifact by its session's number and its own, taken in the order they were kept", async () => {
++    const store = path.join(root, 'session-artifacts');
++    const first = kept(
++      await persistSessionArtifact(config('a'), Buffer.from('1'), 'txt'),
 +    );
-+    expect(retention.filepath).toBe(planned);
-+    expect(() => sessionArtifactPath(config(), bytes, 'TXT')).toThrow(
++    const second = kept(
++      await persistSessionArtifact(config('b'), Buffer.from('2'), 'pdf'),
++    );
++    const third = kept(
++      await persistSessionArtifact(config('a'), Buffer.from('3'), 'html'),
++    );
++    expect([first, second, third].map((result) => result.filepath)).toEqual([
++      path.join(store, '1', '1.txt'),
++      path.join(store, '2', '1.pdf'),
++      path.join(store, '1', '2.html'),
++    ]);
++    // The longest path a notice can name, sized before anything is kept.
++    const most = String(Number.MAX_SAFE_INTEGER);
++    expect(widestSessionArtifactPath(config('a'), 'txt')).toBe(
++      path.join(store, most, `${most}.txt`),
++    );
++    expect(() => widestSessionArtifactPath(config(), 'TXT')).toThrow(
 +      'Invalid session artifact extension.',
 +    );
++    await expect(
++      persistSessionArtifact(config(), Buffer.from('x'), 'TXT'),
++    ).rejects.toThrow('Invalid session artifact extension.');
 +  });
 +
-+  it('rejects corruption and symlinks without replacing an existing payload', async () => {
++  it('records a claim under the session only the store reads, and gives back a directory it lost the claim for', async () => {
++    const store = path.join(root, 'session-artifacts');
++    const claimed = await Promise.all(
++      Array.from({ length: 6 }, () => sessionArtifactDirectory(config('one'))),
++    );
++    expect(new Set(claimed)).toEqual(new Set([path.join(store, '1')]));
++    // Every claimer that took a number and lost gave its directory back.
++    expect((await fs.readdir(store)).sort()).toEqual(['1', 'claims']);
++    const claim = path.join(
++      store,
++      'claims',
++      createHash('sha256').update('one').digest('hex'),
++    );
++    expect(await fs.readFile(claim, 'utf8')).toBe('1\n');
++    expect((await fs.stat(claim)).mode & 0o777).toBe(0o400);
++    // A claim that does not name a number is refused, not replaced.
++    await fs.mkdir(path.join(store, 'claims'), { recursive: true });
++    await fs.writeFile(
++      path.join(
++        store,
++        'claims',
++        createHash('sha256').update('two').digest('hex'),
++      ),
++      'two\n',
++    );
++    await expect(
++      persistSessionArtifact(config('two'), Buffer.from('x'), 'txt'),
++    ).rejects.toThrow('Invalid session artifact claim');
++  });
++
++  it('refuses what it did not keep, a stray name or a symlink, and writes nothing', async () => {
 +    const first = kept(
 +      await persistSessionArtifact(config(), Buffer.from('original'), 'txt'),
 +    );
-+    await fs.chmod(first.filepath, 0o600);
-+    await fs.writeFile(first.filepath, 'corrupt');
-+    await expect(
-+      persistSessionArtifact(config(), Buffer.from('original'), 'txt'),
-+    ).rejects.toThrow('integrity');
-+    expect(await fs.readFile(first.filepath, 'utf8')).toBe('corrupt');
-+    await fs.symlink(
-+      first.filepath,
-+      path.join(path.dirname(first.filepath), 'link'),
-+    );
++    const directory = path.dirname(first.filepath);
++    await fs.writeFile(path.join(directory, 'notes.md'), 'stray');
 +    await expect(
 +      persistSessionArtifact(config(), Buffer.from('next'), 'txt'),
-+    ).rejects.toThrow('Invalid session artifact');
++    ).rejects.toThrow('Invalid session artifact: notes.md');
++    await fs.rm(path.join(directory, 'notes.md'));
++    await fs.symlink(first.filepath, path.join(directory, '2.txt'));
++    await expect(
++      persistSessionArtifact(config(), Buffer.from('next'), 'txt'),
++    ).rejects.toThrow('Invalid session artifact: 2.txt');
++    expect((await fs.readdir(directory)).sort()).toEqual(['1.txt', '2.txt']);
++    expect(await fs.readFile(first.filepath, 'utf8')).toBe('original');
 +  });
 +});
 diff --git a/packages/core/src/utils/session-artifacts.ts b/packages/core/src/utils/session-artifacts.ts
 --- /dev/null
 +++ b/packages/core/src/utils/session-artifacts.ts
-@@ -0,0 +1,156 @@
+@@ -0,0 +1,265 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -278950,32 +279007,170 @@ diff --git a/packages/core/src/utils/session-artifacts.ts b/packages/core/src/ut
 + */
 +export const SESSION_ARTIFACT_CAPACITY_BYTES = 500 * 1024 * 1024;
 +
-+export function sessionArtifactDirectory(config: Config): string {
-+  const sessionId = config.getSessionId();
-+  if (!sessionId) throw new Error('Session artifacts require a session owner.');
-+  return path.join(
-+    config.storage.getProjectDir(),
-+    'session-artifacts',
-+    createHash('sha256').update(sessionId).digest('hex'),
++/**
++ * Where the store keeps what it retains, and what it calls it.
++ *
++ * A retained artifact is read back by the model with a `read_file` call a
++ * notice names, so its path is text the model reads and copies. It is kept
++ * short and exact. The project's store holds one directory per session,
++ * numbered in the order sessions first kept an artifact, and a session's
++ * directory holds its artifacts numbered in the order they were kept --
++ * `session-artifacts/1/3.txt`. Each number is taken by exclusive creation,
++ * so it names one directory or one file and never another. A digest of the
++ * session's id or of the bytes would be as exact and some sixty tokens long
++ * each, all of them for the model to copy without a slip.
++ *
++ * Which directory is a session's is recorded under the session's own
++ * identity, in a claim named by a digest of its id: a name only the store
++ * reads, so a session id of any spelling makes a safe one, and the model
++ * never sees it.
++ */
++const STORE_DIRECTORY = 'session-artifacts';
++const CLAIMS_DIRECTORY = 'claims';
++/** A session directory's name: its number. */
++const SESSION_NUMBER = /^[1-9][0-9]*$/;
++/** An artifact's name: its number in its session, and its extension. */
++const ARTIFACT_NAME = /^([1-9][0-9]*)\.[a-z0-9]+$/;
++/** A claim's content: the number of the directory it records. */
++const CLAIM = /^([1-9][0-9]*)\n$/;
++
++function requireExtension(extension: string): void {
++  if (!/^[a-z0-9]+$/.test(extension)) {
++    throw new Error('Invalid session artifact extension.');
++  }
++}
++
++function hasCode(error: unknown, code: string): boolean {
++  return (error as NodeJS.ErrnoException | undefined)?.code === code;
++}
++
++/** The directory a claim records, or nothing when the session has none. */
++async function readClaim(
++  root: string,
++  claim: string,
++): Promise<string | undefined> {
++  let content: string;
++  try {
++    content = await fs.readFile(claim, 'utf8');
++  } catch (error) {
++    if (hasCode(error, 'ENOENT')) return undefined;
++    throw error;
++  }
++  const number = CLAIM.exec(content)?.[1];
++  if (number === undefined) {
++    throw new Error(`Invalid session artifact claim: ${claim}`);
++  }
++  return path.join(root, number);
++}
++
++/**
++ * Create `filepath` holding `bytes`, read-only, synced, or not at all: a
++ * write that fails removes what it created, and every failure is kept.
++ */
++async function createImmutable(
++  filepath: string,
++  bytes: Uint8Array,
++): Promise<void> {
++  const file = await fs.open(filepath, 'wx', 0o400);
++  await withCleanup(
++    async () => {
++      try {
++        await file.writeFile(bytes);
++        await file.sync();
++      } catch (error) {
++        await runCleanupSteps([
++          () => {
++            throw error;
++          },
++          () => fs.unlink(filepath),
++        ]);
++      }
++    },
++    () => file.close(),
 +  );
 +}
 +
 +/**
-+ * Where `bytes` is retained, whether it has been yet or not. An artifact is
-+ * named by its content, so the path is known before anything is written and a
-+ * caller can state it before it asks for the write.
++ * This session's directory of the store, claimed the first time it is asked
++ * for.
++ *
++ * A claim takes the next number no session holds by creating its directory,
++ * which is exclusive, then records it under the session, which is exclusive
++ * too. A claim that loses to another for the same session gives its
++ * directory back and takes the one recorded; one that fails gives its
++ * directory back and fails with every cause.
 + */
-+export function sessionArtifactPath(
++export async function sessionArtifactDirectory(config: Config): Promise<string> {
++  const sessionId = config.getSessionId();
++  if (!sessionId) throw new Error('Session artifacts require a session owner.');
++  const root = path.join(config.storage.getProjectDir(), STORE_DIRECTORY);
++  const claims = path.join(root, CLAIMS_DIRECTORY);
++  const claim = path.join(
++    claims,
++    createHash('sha256').update(sessionId).digest('hex'),
++  );
++  const claimed = await readClaim(root, claim);
++  if (claimed !== undefined) return claimed;
++  await fs.mkdir(claims, { recursive: true, mode: 0o700 });
++  let number =
++    1 +
++    Math.max(
++      0,
++      ...(await fs.readdir(root))
++        .filter((entry) => SESSION_NUMBER.test(entry))
++        .map(Number),
++    );
++  for (; ; number++) {
++    try {
++      await fs.mkdir(path.join(root, String(number)), { mode: 0o700 });
++      break;
++    } catch (error) {
++      if (!hasCode(error, 'EEXIST')) throw error;
++    }
++  }
++  const directory = path.join(root, String(number));
++  try {
++    await createImmutable(claim, Buffer.from(`${number}\n`));
++  } catch (error) {
++    if (!hasCode(error, 'EEXIST')) {
++      await runCleanupSteps([
++        () => {
++          throw error;
++        },
++        () => fs.rmdir(directory),
++      ]);
++    }
++    // Another claim for this session was recorded first. The directory taken
++    // here holds nothing and is given back; the recorded one is this
++    // session's.
++    await fs.rmdir(directory);
++    const recorded = await readClaim(root, claim);
++    if (recorded === undefined) {
++      throw new Error(`Session artifact claim vanished: ${claim}`);
++    }
++    return recorded;
++  }
++  await syncDirectoryAncestors(claims);
++  return directory;
++}
++
++/**
++ * The longest path an artifact of this session with `extension` can have:
++ * every number at the most digits a safe integer has. A notice that names
++ * an artifact is sized with it before the artifact is kept, so the notice
++ * fits whatever numbers the store then takes.
++ */
++export function widestSessionArtifactPath(
 +  config: Config,
-+  bytes: Uint8Array,
 +  extension: string,
 +): string {
-+  if (!/^[a-z0-9]+$/.test(extension)) {
-+    throw new Error('Invalid session artifact extension.');
-+  }
++  requireExtension(extension);
++  const most = String(Number.MAX_SAFE_INTEGER);
 +  return path.join(
-+    sessionArtifactDirectory(config),
-+    `${createHash('sha256').update(bytes).digest('hex')}.${extension}`,
++    config.storage.getProjectDir(),
++    STORE_DIRECTORY,
++    most,
++    `${most}.${extension}`,
 +  );
 +}
 +
@@ -279010,9 +279205,8 @@ diff --git a/packages/core/src/utils/session-artifacts.ts b/packages/core/src/ut
 +  bytes: Uint8Array,
 +  extension: string,
 +): Promise<SessionArtifactRetention> {
-+  const filepath = sessionArtifactPath(config, bytes, extension);
-+  const directory = path.dirname(filepath);
-+  const filename = path.basename(filepath);
++  requireExtension(extension);
++  const directory = await sessionArtifactDirectory(config);
 +  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
 +  if (!(await fs.lstat(directory)).isDirectory()) {
 +    throw new Error('Session artifact directory must be a directory.');
@@ -279026,28 +279220,15 @@ diff --git a/packages/core/src/utils/session-artifacts.ts b/packages/core/src/ut
 +  });
 +  return withCleanup(async (): Promise<SessionArtifactRetention> => {
 +    let used = 0;
-+    let exists = false;
++    let last = 0;
 +    for (const entry of await fs.readdir(directory)) {
 +      const stat = await fs.lstat(path.join(directory, entry));
-+      if (!stat.isFile()) {
++      const number = ARTIFACT_NAME.exec(entry)?.[1];
++      if (!stat.isFile() || number === undefined) {
 +        throw new Error(`Invalid session artifact: ${entry}`);
 +      }
 +      used += stat.size;
-+      exists ||= entry === filename;
-+    }
-+    if (exists) {
-+      const file = await fs.open(filepath, 'r');
-+      await withCleanup(
-+        async () => {
-+          if (!Buffer.from(bytes).equals(await file.readFile())) {
-+            throw new Error(`Session artifact integrity failure: ${filepath}`);
-+          }
-+          await file.sync();
-+        },
-+        () => file.close(),
-+      );
-+      await syncDirectoryAncestors(directory);
-+      return { retained: true, filepath, size: bytes.byteLength };
++      last = Math.max(last, Number(number));
 +    }
 +    if (used + bytes.byteLength > SESSION_ARTIFACT_CAPACITY_BYTES) {
 +      return {
@@ -279057,23 +279238,8 @@ diff --git a/packages/core/src/utils/session-artifacts.ts b/packages/core/src/ut
 +        capacityBytes: SESSION_ARTIFACT_CAPACITY_BYTES,
 +      };
 +    }
-+    const file = await fs.open(filepath, 'wx', 0o400);
-+    await withCleanup(
-+      async () => {
-+        try {
-+          await file.writeFile(bytes);
-+          await file.sync();
-+        } catch (error) {
-+          await runCleanupSteps([
-+            () => {
-+              throw error;
-+            },
-+            () => fs.unlink(filepath),
-+          ]);
-+        }
-+      },
-+      () => file.close(),
-+    );
++    const filepath = path.join(directory, `${last + 1}.${extension}`);
++    await createImmutable(filepath, bytes);
 +    await syncDirectoryAncestors(directory);
 +    return { retained: true, filepath, size: bytes.byteLength };
 +  }, release);

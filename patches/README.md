@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `b92f7f21fbddf532590667eab19e410a521e0afad6c29969c5ab2010b23ce3c3`
+- Review-diff SHA-256: `c973390b45b42621b7d78bbcd45843ee30f77b94df0855c34a57cb83a233e63a`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `8d22186ea2abb9484322abfbd74ae5a73db41aececab210ea8477eb5ae58f4bd`
+- Transformer-manifest SHA-256: `3ef6e17f3f0944b84fb47a0e42e53216306aecab79b1351c0fca8088b231f6b5`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -309,10 +309,18 @@ the delegated task; its cleanup and accounting settle before completion. Child t
 
 ## Artifact retention
 
-Oversized text results and downloaded binary payloads share one immutable,
-content-addressed session artifact store. Exclusive creation prevents collisions;
-deduplication verifies existing bytes. Payloads and directory ancestry are synced.
-Its capacity, 500 MiB, is declared in one place and is a policy rather than a
+Oversized text results and downloaded binary payloads share one immutable
+session artifact store. What it keeps is named by numbers, because the model
+reads an artifact back with the call a notice names and so copies its path: a
+session's directory is numbered in the order sessions first kept an artifact,
+and its artifacts in the order they were kept -- `session-artifacts/1/3.txt`,
+where a digest of the session's id and of the bytes made some 130 tokens of
+hexadecimal. Each number is taken by exclusive creation, so it names one
+directory or file and never another. Which directory is a session's is a
+claim recorded under a digest of its id, which only the store reads; a claim
+that loses to another for the same session gives its directory back. An entry
+the store did not keep is refused, and nothing is replaced. Payloads, claims
+and directory ancestry are synced. Its capacity, 500 MiB, is declared in one place and is a policy rather than a
 derivation. It counts actual retained files under the store's writer lock,
 including interrupted-write remnants, and recreating Config does not reset it.
 Reaching it is an outcome the caller states, not an error: a bounded result
@@ -323,7 +331,7 @@ the download to make instead.
 Artifacts are retained by ownership and references. There is no age-based
 collection. Forks and exports may refer to an artifact after its original chat
 is deleted. A lock is not stolen based on elapsed time; an abandoned lock
-requires explicit administrative recovery. Persistence, integrity, lock and
+requires explicit administrative recovery. Persistence, claim, lock and
 cleanup failures retain their causes and refuse the operation.
 
 A fetched body is retained whole, and its note says where, or why it was not.

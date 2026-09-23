@@ -6583,19 +6583,42 @@ def _validate_tool_result_bound_after(state: State) -> None:
     store = _source(state, store_path, label="durable artifact publication")
     # Publication is durable and exclusive, and the capacity is charged
     # against what the store actually holds, under its writer lock. Reaching
-    # the capacity is an outcome with a next action, so it is returned; a
-    # corrupt entry, a lock another writer holds or a failed write is a
-    # defect, and those are thrown.
+    # the capacity is an outcome with a next action, so it is returned; an
+    # entry the store did not keep, a lock another writer holds or a failed
+    # write is a defect, and those are thrown.
+    #
+    # What the store keeps is named by numbers, because the model reads the
+    # path back with a call a notice names: a session's directory is numbered
+    # in the order sessions first kept an artifact, and its artifacts in the
+    # order they were kept, each number taken by exclusive creation. Which
+    # directory is a session's is a claim recorded under a digest of its id,
+    # a name only the store reads; a claim that loses to another for the same
+    # session gives its directory back.
     _require_ordered(
         store,
         (
+            "async function createImmutable(",
+            "const file = await fs.open(filepath, 'wx', 0o400);",
+            "await file.writeFile(bytes);",
+            "await file.sync();",
+            "() => fs.unlink(filepath),",
+            "export async function sessionArtifactDirectory(config: Config): Promise<string> {",
+            "createHash('sha256').update(sessionId).digest('hex'),",
+            "const claimed = await readClaim(root, claim);",
+            "if (claimed !== undefined) return claimed;",
+            "await fs.mkdir(path.join(root, String(number)), { mode: 0o700 });",
+            "if (!hasCode(error, 'EEXIST')) throw error;",
+            "await createImmutable(claim, Buffer.from(`${number}\\n`));",
+            "() => fs.rmdir(directory),",
+            "await fs.rmdir(directory);",
+            "const recorded = await readClaim(root, claim);",
+            "await syncDirectoryAncestors(claims);",
+            "export function widestSessionArtifactPath(",
             "const release = await lockfile.lock(directory,",
             "for (const entry of await fs.readdir(directory))",
+            "const number = ARTIFACT_NAME.exec(entry)?.[1];",
+            "if (!stat.isFile() || number === undefined) {",
             "used += stat.size;",
-            "if (exists) {",
-            "if (!Buffer.from(bytes).equals(await file.readFile()))",
-            "await file.sync();",
-            "await syncDirectoryAncestors(directory);",
             # Reaching the capacity returns what the store holds and what was
             # asked of it, and nothing between the test and the return can
             # throw instead.
@@ -6607,9 +6630,8 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "        capacityBytes: SESSION_ARTIFACT_CAPACITY_BYTES,\n"
             "      };\n"
             "    }",
-            "const file = await fs.open(filepath, 'wx', 0o400);",
-            "await file.writeFile(bytes);",
-            "await file.sync();",
+            "const filepath = path.join(directory, `${last + 1}.${extension}`);",
+            "await createImmutable(filepath, bytes);",
             "await syncDirectoryAncestors(directory);",
         ),
         label="durable artifact publication",
@@ -6623,17 +6645,28 @@ def _validate_tool_result_bound_after(state: State) -> None:
         (
             "export const SESSION_ARTIFACT_CAPACITY_BYTES = 500 * 1024 * 1024;",
             "It is a declared capacity, not a derivation",
-            "export function sessionArtifactPath(",
+            "const SESSION_NUMBER = /^[1-9][0-9]*$/;",
+            "const ARTIFACT_NAME = /^([1-9][0-9]*)\\.[a-z0-9]+$/;",
+            "const CLAIM = /^([1-9][0-9]*)\\n$/;",
+            "Invalid session artifact claim",
             "export type SessionArtifactRetention =",
             "): Promise<SessionArtifactRetention> {",
             "stale: Number.MAX_SAFE_INTEGER",
             "return withCleanup(",
-            "createHash('sha256')",
-            "Session artifact integrity failure",
         ),
         label=label,
     )
-    for retired in ("MAX_SESSION_ARTIFACT_BYTES", "Session artifact disk budget exhausted"):
+    # A digest names nothing the model reads: not a session's directory, not
+    # an artifact. Content addressing, and the integrity check it needed, are
+    # gone with it.
+    for retired in (
+        "MAX_SESSION_ARTIFACT_BYTES",
+        "Session artifact disk budget exhausted",
+        "export function sessionArtifactPath(",
+        "Session artifact integrity failure",
+        "createHash('sha256').update(bytes)",
+        "if (exists) {",
+    ):
         forbid_text(state, store_path, retired, label=label)
     for path in ("packages/core/src/utils/tool-output-cleanup.ts",):
         _require(
@@ -6661,6 +6694,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "  keepLeadingLines,\n  keepTrailingLines,\n  SLICED_LINE_MARK,\n  tokenizerText,\n  type KeptLines,\n} from './tokenLimits.js';",
             "import { middleCutContent, type OutputBound } from '../tools/tools.js';",
             "SESSION_ARTIFACT_CAPACITY_BYTES,",
+            "widestSessionArtifactPath,",
         ),
         label=label,
     )
@@ -6668,8 +6702,10 @@ def _validate_tool_result_bound_after(state: State) -> None:
         seam,
         (
             "async function boundedText(",
-            "const filepath = sessionArtifactPath(config, bytes, 'txt');",
             "const widest = Math.max(",
+            # The store names the artifact when it keeps it, so the notice is
+            # sized with the longest name it can take.
+            "widestSessionArtifactPath(config, 'txt'),",
             "if (widest > maxBytes) {",
             # Upstream's split: one fifth of the room to the start, and the
             # rest to the end, so what a result says last is what it keeps;
@@ -6689,7 +6725,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "middleCutContent(\n      head.text,",
             # What it says it returned is the part of the result it shows.
             "shownBytes(head) + shownBytes(tail),",
-            "? readBack(firstCut, lastCut - firstCut + 1)",
+            "? readBack(retention.filepath, firstCut, lastCut - firstCut + 1)",
             "if (emitted.bytes > maxBytes) {",
             "async function boundedPart(",
             "const functionResponse = withNestedTextJoined(part.functionResponse);",
@@ -6712,6 +6748,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
         "cutToTokenizerBytes",
         "cutTailToTokenizerBytes",
         "tailFrom",
+        "sessionArtifactPath(",
     ):
         forbid_text(state, seam_path, absent, label=label)
     # The one notice's two placements live beside it: leading what a tool
@@ -7049,7 +7086,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
         ("packages/core/src/tools/tools.test.ts", "stands in the cut between the start and the end of a result cut in the middle"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the joined text, not the tool output alone"),
         ("packages/core/src/core/toolResultBound.test.ts", "says the rest was not retained when the store is full, with what to do instead, and does not throw"),
-        ("packages/core/src/core/toolResultBound.test.ts", "throws when the store fails its integrity check, because that is a defect and not a capacity"),
+        ("packages/core/src/core/toolResultBound.test.ts", "throws when the store holds something it did not keep, because that is a defect and not a capacity"),
         ("packages/core/src/core/toolResultBound.test.ts", "joins text nested beside media to the response text, and bounds the joined text"),
         ("packages/core/src/core/toolResultBound.test.ts", "refuses a result that skipped the bound, naming the call, in the bytes the tokenizer reads"),
         ("packages/core/src/core/toolResultBound.test.ts", "keeps the start and the end of a long result and retains the whole"),
@@ -7062,7 +7099,10 @@ def _validate_tool_result_bound_after(state: State) -> None:
         ("packages/core/src/core/client.test.ts", "refuses an adopted tool result past one inline block before recording any of it"),
         ("packages/core/src/core/coreToolScheduler.test.ts", "joins the placeholder for an image too large to send to the result text"),
         ("packages/core/src/utils/session-artifacts.test.ts", "answers a full store with a value naming its capacity, charging existing bytes regardless of age"),
-        ("packages/core/src/utils/session-artifacts.test.ts", "names the path an artifact is kept at before it is written"),
+        ("packages/core/src/utils/session-artifacts.test.ts", "names each artifact by its session's number and its own, taken in the order they were kept"),
+        ("packages/core/src/utils/session-artifacts.test.ts", "records a claim under the session only the store reads, and gives back a directory it lost the claim for"),
+        ("packages/core/src/utils/session-artifacts.test.ts", "refuses what it did not keep, a stray name or a symlink, and writes nothing"),
+        ("packages/core/src/utils/session-artifacts.test.ts", "retains every reasoning byte, and the same bytes kept again under the next number"),
     ):
         require_text(state, path, case, label=label)
 
