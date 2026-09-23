@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `6004a72e16ebe519f2feaf1065baa29485f47e68c2435cf423e4b0f35847aeb2`
+- Review-diff SHA-256: `ab0ced039605c8423c90ef278fc1935a31c80118e4f1c48a18fdf07f20fb7942`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `adfa3facc11ad60e39e80814553034868ec7acde7ff417d8838e15ee5b760192`
+- Transformer-manifest SHA-256: `24b2a869e4ea9968271bb67d9261bb9fbfb8fdeacdfb51fac70a52c5d7e2d6e6`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -88,7 +88,9 @@ startup refusal naming shorten-or-deploy-larger;
 each compaction's preflight holds what its directive adds to the same share. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
-and cannot go missing. `M`, one inline block, is W/8 bytes — 32,768 — the one
+and cannot go missing, and the proof counts the frame every compacted history
+holds around its blocks -- the resume trailer, the acknowledgement turn and a
+retained input's header -- with it, the blocks left out. `M`, one inline block, is W/8 bytes — 32,768 — the one
 declared magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back rather
 than shortened. `F`, the per-message framing, is the 61 bytes the served
@@ -215,6 +217,18 @@ one drawn candidate against the same declaration, because a client cannot
 observe whether the engine applied a constraint it declared. Swapping the tool
 block does not reuse the turn's prompt-cache prefix; the conversation it carries
 is otherwise unchanged.
+
+How the snapshot is obtained is ours; how the history it becomes is rendered is
+upstream's. The accepted sections are rendered as upstream's `<state_snapshot>`
+block, one element per section, laid out as upstream's compression prompt lays
+out the block it asks for, with nothing escaped. The history a compaction
+commits is composed in upstream's order: the startup context, the snapshot with
+its resume trailer as a user message, the model's acknowledgement in upstream's
+words, the attachments -- the retained original inputs and the state
+reminders, each block set off from the next -- as one user message, then the
+carried turn. Upstream keeps the last turn as a model message of its own after
+the attachments, and folds its call into the acknowledgement when nothing is
+attached; the carried turn is kept whole in both places, reasoning included.
 
 Authored instructions and corrections have explicit provenance captured before
 hooks or input transformation. Their original parts survive repeated compaction,
