@@ -1574,6 +1574,10 @@ fn verify_agent_image_labels(cfg: &Config, value: &serde_json::Value) -> Service
             cfg.lock.agent.deployment_contract_sha256.as_str(),
         ),
         (
+            "agent_service.output-language.sha256",
+            cfg.lock.agent.output_language_sha256.as_str(),
+        ),
+        (
             "agent_service.toolchain-manifest.sha256",
             cfg.lock.agent.toolchain_manifest_sha256.as_str(),
         ),

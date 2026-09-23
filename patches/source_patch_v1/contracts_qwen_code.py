@@ -107,6 +107,15 @@ def _validate_locked_boundary_before(state: State) -> None:
     )
     forbid_text(state, cli, ".option('strict-tools'", label=label)
     forbid_text(state, cli, "lockedAgentServiceMode", label=label)
+    # Upstream reads a project rule before the home's, outside bare and safe mode.
+    require_text(
+        state,
+        cli,
+        "  let outputLanguageFilePath: string | undefined;\n"
+        "  if (!bareMode && !safeMode) {\n"
+        "    if (fs.existsSync(projectOutputLanguagePath)) {\n",
+        label=label,
+    )
     _require_all(
         state,
         auth,
@@ -164,6 +173,43 @@ def _validate_locked_boundary_after(state: State) -> None:
             "enableAutoSkill:",
             "autoSkillConfirm:",
         ),
+        label=label,
+    )
+    # The sealed home carries upstream's own output-language rule, the "auto"
+    # one upstream writes on a start with no language set, and the locked
+    # configuration reads that one alone: a project's rule is repository
+    # content. The file's absence refuses the start rather than silently
+    # dropping a rule upstream's system prompt carries.
+    cli_source = _source(state, cli, label=label)
+    _require_ordered(
+        cli_source,
+        (
+            "  let outputLanguageFilePath: string | undefined;\n"
+            "  if (lockedAgentServiceMode) {\n",
+            "    if (!fs.existsSync(globalOutputLanguagePath)) {\n"
+            "      throw new Error(\n"
+            "        `Locked agent-service configuration requires the sealed "
+            "output-language rule at ${globalOutputLanguagePath}`,\n"
+            "      );\n"
+            "    }\n"
+            "    outputLanguageFilePath = globalOutputLanguagePath;\n"
+            "  } else if (!bareMode && !safeMode) {\n"
+            "    if (fs.existsSync(projectOutputLanguagePath)) {\n",
+        ),
+        label=label,
+        location=cli,
+    )
+    forbid_text(
+        state,
+        cli,
+        "if (!bareMode && !safeMode && !lockedAgentServiceMode) {",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/config/config.test.ts",
+        "reads only the sealed home's output-language rule in foreground-only "
+        "agent-service mode, and refuses to start without it",
         label=label,
     )
     _require_all(

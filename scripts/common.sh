@@ -485,6 +485,9 @@ check_pinned_inputs() {
   require_equal "Qwen deployment contract SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/config/deployment-contract.md")" \
     "$(lock_value '.agent.deployment_contract_sha256')"
+  require_equal "Qwen output-language rule SHA256" \
+    "$(sha256_file "${PROJECT_DIR}/docker/config/output-language.md")" \
+    "$(lock_value '.agent.output_language_sha256')"
   require_equal "agent toolchain manifest SHA256" \
     "$(sha256_file "${PROJECT_DIR}/docker/config/toolchain-manifest.json")" \
     "$(lock_value '.agent.toolchain_manifest_sha256')"
@@ -675,6 +678,8 @@ require_agent_image_contract() {
     "$(image_label "${image}" agent_service.system-prompt.sha256)" "$(lock_value '.agent.system_prompt_sha256')"
   require_equal "agent image deployment contract label" \
     "$(image_label "${image}" agent_service.deployment-contract.sha256)" "$(lock_value '.agent.deployment_contract_sha256')"
+  require_equal "agent image output-language rule label" \
+    "$(image_label "${image}" agent_service.output-language.sha256)" "$(lock_value '.agent.output_language_sha256')"
   require_equal "agent image toolchain manifest label" \
     "$(image_label "${image}" agent_service.toolchain-manifest.sha256)" "$(lock_value '.agent.toolchain_manifest_sha256')"
   require_equal "agent image toolchain verifier label" \

@@ -217,12 +217,24 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
 
 
 def verify_prompts(
-    contract: dict[str, Any], instructions: str, system: str, deployment: str
+    contract: dict[str, Any],
+    instructions: str,
+    system: str,
+    deployment: str,
+    output_language: str,
 ) -> None:
     require_equal(
         "deployment contract marker",
         deployment.splitlines()[0],
         "# QWEN38_DEPLOYMENT_CONTRACT_V1",
+    )
+    # The sealed home holds upstream's own output-language rule, the one it
+    # writes for the default `auto` setting; the image build proves the bytes
+    # against upstream's generator.
+    require_equal(
+        "output-language rule heading",
+        output_language.splitlines()[0],
+        "# Output language preference: auto",
     )
     require_fragments(
         "system prompt",
@@ -276,6 +288,7 @@ def verify_prompts(
         ("QWEN instructions", instructions),
         ("system prompt", system),
         ("deployment contract", deployment),
+        ("output-language rule", output_language),
     ):
         stated = STATED_QUANTITY.search(text)
         if stated is not None:
@@ -372,6 +385,8 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
             f"readonly SYSTEM_PROMPT_SOURCE={sealed['system_prompt_path']}",
             f"readonly DEPLOYMENT_CONTRACT_SOURCE={sealed['deployment_contract_path']}",
             f"readonly QWEN_HOME={sealed['qwen_home']}",
+            # The client reads the rule from its home, so its path is the home's.
+            f"readonly OUTPUT_LANGUAGE_SOURCE={sealed['qwen_home']}/output-language.md",
             f"readonly MODEL_BASE={network['model_base_url'].removesuffix('/v1')}",
             f"readonly EXPECTED_INTERFACE={network['interfaces'][0]}",
             f"readonly EXPECTED_IPV4_ADDRESS={network['ipv4_addresses'][0]}",
@@ -516,6 +531,7 @@ def verify(paths: list[Path]) -> None:
         instructions_path,
         system_path,
         deployment_path,
+        output_language_path,
         toolchain_path,
         wrapper_path,
         agent_exec_source_path,
@@ -534,6 +550,7 @@ def verify(paths: list[Path]) -> None:
     instructions_raw = require_regular_file(instructions_path, "instructions")
     system_raw = require_regular_file(system_path, "system prompt")
     deployment_raw = require_regular_file(deployment_path, "deployment contract")
+    output_language_raw = require_regular_file(output_language_path, "output-language rule")
     toolchain_raw = require_regular_file(toolchain_path, "toolchain manifest")
     wrapper_raw = require_regular_file(wrapper_path, "agent wrapper")
     agent_exec_source_raw = require_regular_file(agent_exec_source_path, "agent_exec source")
@@ -543,6 +560,7 @@ def verify(paths: list[Path]) -> None:
         ("instructions_sha256", instructions_raw),
         ("system_prompt_sha256", system_raw),
         ("deployment_contract_sha256", deployment_raw),
+        ("output_language_sha256", output_language_raw),
         ("toolchain_manifest_sha256", toolchain_raw),
         ("wrapper_sha256", wrapper_raw),
         ("agent_exec_source_sha256", agent_exec_source_raw),
@@ -565,16 +583,17 @@ def verify(paths: list[Path]) -> None:
         instructions_raw.decode("utf-8"),
         system_raw.decode("utf-8"),
         deployment_raw.decode("utf-8"),
+        output_language_raw.decode("utf-8"),
     )
     verify_wrapper(contract, wrapper_raw.decode("utf-8"))
     verify_agent_exec(contract, agent_exec_source_raw.decode("utf-8"))
 
 
 def main() -> int:
-    if len(sys.argv) != 9:
+    if len(sys.argv) != 10:
         print(
             "usage: verify_runtime_contract.py CONTRACT SETTINGS INSTRUCTIONS "
-            "SYSTEM DEPLOYMENT TOOLCHAIN WRAPPER AGENT_EXEC_SOURCE",
+            "SYSTEM DEPLOYMENT OUTPUT_LANGUAGE TOOLCHAIN WRAPPER AGENT_EXEC_SOURCE",
             file=sys.stderr,
         )
         return 2

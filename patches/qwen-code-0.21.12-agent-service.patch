@@ -34039,7 +34039,14 @@ diff --git a/packages/cli/src/config/auth.ts b/packages/cli/src/config/auth.ts
 diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/config.test.ts
 --- a/packages/cli/src/config/config.test.ts
 +++ b/packages/cli/src/config/config.test.ts
-@@ -10,12 +10,13 @@
+@@ -5,5 +5,6 @@
+  */
+ 
+ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
++import * as fs from 'node:fs';
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+@@ -10,12 +11,13 @@
  import {
    ToolNames,
    DEFAULT_QWEN_MODEL,
@@ -34053,7 +34060,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
    loadCliConfig,
    parseArguments,
    SessionIdConflictError,
-@@ -1012,12 +1013,29 @@
+@@ -1012,12 +1014,29 @@
        'read_file,ShellTool(git status)',
      ];
      const argv = await parseArguments();
@@ -34083,7 +34090,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
        'script.js',
        '--allowed-mcp-server-names',
        'server1,server2',
-@@ -1033,78 +1051,12 @@
+@@ -1033,78 +1052,12 @@
    });
  
    it('should parse --bare', async () => {
@@ -34162,7 +34169,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
  describe('loadCliConfig', () => {
    const originalArgv = process.argv;
  
-@@ -1241,31 +1193,12 @@
+@@ -1241,31 +1194,12 @@
  
      expect(config.getOutputFormat()).toBe('stream-json');
      expect(config.getInputFormat()).toBe('stream-json');
@@ -34194,7 +34201,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
      const config = await loadCliConfig(
        { agents: { maxParallelAgents: 2 } },
        argv,
-@@ -1324,20 +1257,12 @@
+@@ -1324,20 +1258,12 @@
  
      expect(config.getAgentsSettings().modelGrades).toEqual({
        small: 'fast',
@@ -34215,7 +34222,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
      process.argv = ['node', 'script.js'];
      const argv = await parseArguments();
      const config = await loadCliConfig({}, argv);
-@@ -1452,58 +1377,12 @@
+@@ -1452,58 +1378,12 @@
  
      await loadCliConfig({ experimental: { artifact: false } }, argv);
  
@@ -34274,7 +34281,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
  
    it('should propagate the image model selection', async () => {
      process.argv = ['node', 'script.js'];
-@@ -1774,77 +1653,72 @@
+@@ -1774,77 +1654,72 @@
  
      const forkedSessionId = config.getSessionId();
      expect(mockSessionServiceInstance.forkSession).toHaveBeenCalledWith(
@@ -34396,7 +34403,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
      const sourceData = {
        conversation: { sessionId: sourceSessionId, messages: [] },
        uiHistory: [],
-@@ -3051,12 +2925,92 @@
+@@ -3051,12 +2926,132 @@
    it('should allow all MCP servers if the flag is not provided', async () => {
      process.argv = ['node', 'script.js'];
      const argv = await parseArguments();
@@ -34411,6 +34418,10 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +    vi.stubEnv(
 +      'QWEN_DEPLOYMENT_CONTRACT_MD',
 +      '/opt/agent/deployment-contract.md',
++    );
++    vi.stubEnv('QWEN_HOME', '/opt/agent');
++    vi.mocked(fs.existsSync).mockImplementation(
++      (p) => String(p) === '/opt/agent/output-language.md',
 +    );
 +    process.argv = ['node', 'script.js', '--foreground-agents-only'];
 +    const argv = await parseArguments();
@@ -34440,7 +34451,10 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +    const configParams = mockConfigConstructorParams.mock.calls.at(-1)?.[0];
 +    expect(configParams.includeDirectories).toEqual([]);
 +    expect(config.getContextRuleExcludes()).toEqual(['**']);
-+    expect(config.getOutputLanguageFilePath()).toBeUndefined();
++    // The sealed home's own output-language rule, upstream's "auto" one.
++    expect(config.getOutputLanguageFilePath()).toBe(
++      '/opt/agent/output-language.md',
++    );
 +    expect(config.getOnPersistPermissionRule()).toBeUndefined();
 +    expect(config.getManagedAutoMemoryEnabled()).toBe(false);
 +    expect(config.isManagedMemoryAvailable()).toBe(false);
@@ -34449,6 +34463,39 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +    expect(config.getTeamMemorySyncEnabled()).toBe(false);
 +    expect(config.getAutoSkillEnabled()).toBe(false);
 +    expect(config.getAutoSkillConfirmEnabled()).toBe(false);
++  });
++
++  it("reads only the sealed home's output-language rule in foreground-only agent-service mode, and refuses to start without it", async () => {
++    vi.stubEnv('QWEN38_AGENT_SERVICE_LOCKED', '1');
++    vi.stubEnv('QWEN_STREAM_CONTRACT_SHA256', STREAM_CONTRACT_SHA256);
++    vi.stubEnv('QWEN_SYSTEM_MD', '/opt/agent/system.md');
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      '/opt/agent/deployment-contract.md',
++    );
++    vi.stubEnv('QWEN_HOME', '/opt/agent');
++    process.argv = ['node', 'script.js', '--foreground-agents-only'];
++    const argv = await parseArguments();
++    // A project's rule is repository content, not configuration: present
++    // beside the sealed one, it is still not the one read.
++    const projectRule = path.join(process.cwd(), '.qwen', 'output-language.md');
++    vi.mocked(fs.existsSync).mockImplementation((p) =>
++      [projectRule, '/opt/agent/output-language.md'].includes(String(p)),
++    );
++    const config = await loadCliConfig(baseSettings, argv, undefined, []);
++    expect(config.getOutputLanguageFilePath()).toBe(
++      '/opt/agent/output-language.md',
++    );
++
++    // Without the sealed rule the deployment is not the one it claims to be.
++    vi.mocked(fs.existsSync).mockImplementation(
++      (p) => String(p) === projectRule,
++    );
++    await expect(
++      loadCliConfig(baseSettings, argv, undefined, []),
++    ).rejects.toThrow(
++      'Locked agent-service configuration requires the sealed output-language rule at /opt/agent/output-language.md',
++    );
 +  });
 +
 +  it('fails closed when the foreground-only deployment prompt paths are not sealed', async () => {
@@ -34489,7 +34536,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
        'node',
        'script.js',
        '--allowed-mcp-server-names',
-@@ -3926,14 +3880,14 @@
+@@ -3926,14 +3921,14 @@
        model: {
          chatCompression: {
            imageTokenEstimate: 1234,
@@ -34832,7 +34879,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    // every content generator and the preconnect path. Resolution there ORs this
    // with QWEN_TLS_INSECURE / NODE_TLS_REJECT_UNAUTHORIZED=0.
    if (argv.insecure) {
-@@ -1635,13 +1560,13 @@
+@@ -1635,13 +1560,26 @@
    const globalOutputLanguagePath = path.join(
      Storage.getGlobalQwenDir(),
      'output-language.md',
@@ -34840,14 +34887,27 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
  
    let outputLanguageFilePath: string | undefined;
 -  if (!bareMode && !safeMode) {
-+  if (!bareMode && !safeMode && !lockedAgentServiceMode) {
++  if (lockedAgentServiceMode) {
++    // The sealed home carries upstream's own output-language rule, the "auto"
++    // one upstream writes when a start with no language set finds none, so
++    // the system prompt carries it where upstream's does, after the other
++    // context files. It is the only one: a project's
++    // `.qwen/output-language.md` is repository content, not configuration,
++    // and nothing here writes the sealed one.
++    if (!fs.existsSync(globalOutputLanguagePath)) {
++      throw new Error(
++        `Locked agent-service configuration requires the sealed output-language rule at ${globalOutputLanguagePath}`,
++      );
++    }
++    outputLanguageFilePath = globalOutputLanguagePath;
++  } else if (!bareMode && !safeMode) {
      if (fs.existsSync(projectOutputLanguagePath)) {
        outputLanguageFilePath = projectOutputLanguagePath;
      } else if (fs.existsSync(globalOutputLanguagePath)) {
        outputLanguageFilePath = globalOutputLanguagePath;
      }
    }
-@@ -1649,16 +1574,22 @@
+@@ -1649,16 +1587,22 @@
    const fileService = new FileDiscoveryService(
      cwd,
      settings.context?.fileFiltering?.customIgnoreFiles,
@@ -34872,7 +34932,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    let lspClient: LspClient | undefined;
    const question = argv.promptInteractive || argv.prompt || '';
    const inputFormat: InputFormat =
-@@ -1979,16 +1910,14 @@
+@@ -1979,16 +1923,14 @@
      argv.screenReader !== undefined
        ? argv.screenReader
        : (settings.ui?.accessibility?.screenReader ?? false);
@@ -34889,7 +34949,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      if (argv.continue) {
        sessionData = await sessionService.loadLastSession();
        if (sessionData) {
-@@ -2003,27 +1932,13 @@
+@@ -2003,27 +1945,13 @@
  
      if (argv.resume) {
        // By the time we get here, argv.resume has been resolved to a valid
@@ -34918,7 +34978,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          const message = `No saved session found with ID ${argv.resume}. Run \`qwen --resume\` without an ID to choose from existing sessions.`;
          writeStderrLine(message);
          process.exit(1);
-@@ -2041,20 +1956,12 @@
+@@ -2041,20 +1969,12 @@
          );
          process.exit(1);
        }
@@ -34939,7 +34999,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
            writeStderrLine(`Failed to load forked session ${forkedSessionId}.`);
            process.exit(1);
          }
-@@ -2097,59 +2004,68 @@
+@@ -2097,59 +2017,68 @@
    // and compute which gated (project/workspace) servers are still pending
    // approval (#4615), so the discovery layer can skip them with no connection
    // side effect. Loading `.mcp.json` is a pure read.
@@ -35013,7 +35073,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          : argv.allowedTools || settings.tools?.allowed || undefined,
      excludeTools: mergedDeny,
      disabledSlashCommands:
-@@ -2190,25 +2106,30 @@
+@@ -2190,25 +2119,30 @@
        deny: mergedDeny.length > 0 ? mergedDeny : undefined,
        autoMode:
          bareMode || safeMode ? undefined : settings.permissions?.autoMode,
@@ -35057,7 +35117,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
        bareMode || safeMode ? undefined : settings.tools?.callCommand,
      mcpServerCommand:
        bareMode || safeMode ? undefined : settings.mcp?.serverCommand,
-@@ -2229,14 +2150,12 @@
+@@ -2229,14 +2163,12 @@
        : undefined,
      approvalMode,
      accessibility: {
@@ -35072,7 +35132,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      // before deferred init are an accepted startup-latency tradeoff. `qwen -i
      // "prompt"` still initializes eagerly because it auto-submits after render.
      deferTelemetryInitialization: isAcpMode || (interactive && !question),
-@@ -2245,7 +2164,6 @@
+@@ -2245,7 +2177,6 @@
        parseBooleanEnvFlag(process.env['QWEN_USAGE_STATISTICS_ENABLED']) ??
        settings.privacy?.usageStatisticsEnabled ??
        true,
@@ -35080,13 +35140,13 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      fileFiltering: settings.context?.fileFiltering,
      plansDirectory: settings.plansDirectory,
      proxy:
-@@ -2260,5 +2178,4 @@
+@@ -2260,5 +2191,4 @@
      bugCommand: settings.advanced?.bugCommand,
      model: resolvedModel,
      outputLanguageFilePath,
 -    sessionTokenLimit: settings.model?.sessionTokenLimit ?? -1,
      maxSessionTurns:
-@@ -2265,14 +2182,10 @@
+@@ -2265,14 +2195,10 @@
        argv.maxSessionTurns ?? settings.model?.maxSessionTurns ?? -1,
 -    maxWallTimeSeconds: resolveMaxWallTimeSeconds(argv, settings),
 -    maxToolCalls: resolveMaxToolCalls(argv, settings),
@@ -35101,7 +35161,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      artifactEnabled: settings.experimental?.artifact ?? true,
      artifactAutoOpen: settings.artifact?.autoOpen ?? true,
      artifactPublisher: settings.artifact?.publisher ?? 'local',
-@@ -2336,13 +2249,12 @@
+@@ -2336,13 +2262,12 @@
        bareMode || safeMode
          ? false
          : (settings.security?.allowPrivateNetworkHooks ?? false),
@@ -35115,7 +35175,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      useRipgrep: settings.tools?.useRipgrep,
      useBuiltinRipgrep: settings.tools?.useBuiltinRipgrep,
      shouldUseNodePtyShell: settings.tools?.shell?.enableInteractiveShell,
-@@ -2351,57 +2263,47 @@
+@@ -2351,57 +2276,47 @@
      preventSystemSleep: settings.general?.preventSystemSleep ?? true,
 -    skipNextSpeakerCheck: settings.model?.skipNextSpeakerCheck,
      skipWorkflowUsageWarning: settings.model?.skipWorkflowUsageWarning ?? false,
@@ -35179,7 +35239,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          ? undefined
          : (hooksConfig?.userHooks ?? settings.hooks),
      projectHooks: bareMode || safeMode ? undefined : hooksConfig?.projectHooks,
-@@ -2416,17 +2318,12 @@
+@@ -2416,17 +2331,12 @@
      // `--input-file` fall back to settings.dualOutput.* when the flag is
      // absent.
      jsonFd: argv.jsonFd,
@@ -178836,8 +178896,8 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,755 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,611 of system message,
++ * turn budget's number left out, at 7,970 tokens, counted whole by the served
++ * tokenizer. By where each token starts, that is 2,826 of system message,
 + * 4,899 of tool declarations and 245 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
 + * the whole: a token can span two pieces, so pieces counted one at a time
@@ -178847,7 +178907,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * holds around its blocks -- the snapshot's resume trailer and the
 + * acknowledgement turn, with the blocks left out: 59 more; and so is the
 + * todo reminder, of which at most one stands in the request a compaction
-+ * leaves, with one character for its list: 51 more, for 7,911.
++ * leaves, with one character for its list: 51 more, for 8,126.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's branch line, status and commits,
@@ -178857,14 +178917,14 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * digits of one token each (`QWEN38_TURN_BUDGET_BYTES`), and the todo
 + * reminder's list and truncation mark, 800 + 12 = 812
 + * (`activeTodoReminderBound`). That is a bound of
-+ * 11,955 that no repository, workspace, budget or todo list changes. The 333
++ * 12,170 that no repository, workspace, budget or todo list changes. The 118
 + * tokens left are headroom for the prompt and the declarations to grow into
-+ * -- less than a quarter of one more declaration the size of
++ * -- less than a tenth of one more declaration the size of
 + * `run_shell_command`, the largest at 1,457. Exceeding it is a startup
 + * refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,955 at a 255,040-token window, so no smaller window holds this
++ * reaches 12,170 at a 259,627-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */

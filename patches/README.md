@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `21575d4813d5d84578be7139ce93832370a063f5eee16468c0bc13d4939abce4`
+- Review-diff SHA-256: `278301102a54997b7733811c71b51515c1f1831686dea2d31918d7056776d2fa`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `2f6e2469292837dd619f589f857304440914416a3fbe170f0507fd52ab7f47de`
+- Transformer-manifest SHA-256: `644af922d1c3fe50e53c9f9be017da2d327d1333396ba3e7560a19360a8f8a28`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -390,7 +390,11 @@ names `task_stop` only when its registry holds that tool.
 Locked initialization and later authentication use the sealed settings boundary:
 no workspace environment injection, permission-rule persistence, ambient MCP,
 managed memory, custom workflows, or injected system-prompt override. Ordinary
-project instructions remain available. Leading slash task text is literal in
+project instructions remain available. The output-language rule is the sealed
+home's own, the `auto` rule upstream writes when a start with no language set
+finds none, so the system prompt carries it where upstream's does, after the
+other context files; a project's `.qwen/output-language.md` is not read, and a
+home without the rule refuses to start. Leading slash task text is literal in
 that configured surface. This deployment policy is distinct from the generation,
 accounting, and persistence obligations shared by every renderer.
 

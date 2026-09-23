@@ -26,6 +26,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             cls.project / "docker" / "config" / "QWEN.md",
             cls.project / "docker" / "config" / "system.md",
             cls.project / "docker" / "config" / "deployment-contract.md",
+            cls.project / "docker" / "config" / "output-language.md",
             cls.project / "docker" / "config" / "toolchain-manifest.json",
             cls.project / "docker" / "config" / "run_agent.sh",
             cls.project / "src" / "bin" / "agent_exec.rs",
@@ -203,7 +204,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         ):
             with self.subTest(line=line), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                source = self.paths[6].read_text(encoding="utf-8")
+                source = self.paths[7].read_text(encoding="utf-8")
                 resealed = source.replace(
                     "export NO_COLOR=1\n", f"{line}\nexport NO_COLOR=1\n"
                 )
@@ -218,7 +219,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                 contract_path.write_text(
                     json.dumps(contract, indent=2) + "\n", encoding="utf-8"
                 )
-                paths = [contract_path, *self.paths[1:6], wrapper_path, self.paths[7]]
+                paths = [contract_path, *self.paths[1:7], wrapper_path, self.paths[8]]
                 with self.assertRaisesRegex(
                     MODULE.ContractError, "agent wrapper must not set stream bounds"
                 ):
@@ -314,7 +315,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
         # budget, so the flag's per-session form is pinned.
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source = self.paths[7].read_text(encoding="utf-8")
+            source = self.paths[8].read_text(encoding="utf-8")
             resealed = source.replace(
                 '.arg(format!("--max-session-turns={max_session_turns}"))',
                 '.arg(format!("--max-session-turns={DEFAULT_MAX_SESSION_TURNS}"))',
@@ -330,7 +331,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             contract_path.write_text(
                 json.dumps(contract, indent=2) + "\n", encoding="utf-8"
             )
-            paths = [contract_path, *self.paths[1:7], source_path]
+            paths = [contract_path, *self.paths[1:8], source_path]
             with self.assertRaisesRegex(
                 MODULE.ContractError, "missing canonical fragment"
             ):
@@ -391,6 +392,7 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             2: "instructions_sha256",
             3: "system_prompt_sha256",
             4: "deployment_contract_sha256",
+            5: "output_language_sha256",
         }
         for index, key in components.items():
             for addition, refusal in (
@@ -414,6 +416,68 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                     paths[index] = sealed
                     with self.assertRaisesRegex(MODULE.ContractError, refusal):
                         MODULE.verify(paths)
+
+    def test_rejects_an_output_language_rule_other_than_upstreams_auto_even_if_resealed(
+        self,
+    ) -> None:
+        # The sealed rule is the one upstream writes for its default `auto`
+        # setting. A fixed-language rule resealed in its place is refused.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.paths[5].read_text(encoding="utf-8")
+            resealed = source.replace(
+                "# Output language preference: auto\n",
+                "# Output language preference: English\n",
+            )
+            self.assertNotEqual(source, resealed)
+            rule_path = root / "output-language.md"
+            rule_path.write_text(resealed, encoding="utf-8")
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["components"]["output_language_sha256"] = MODULE.sha256(
+                rule_path.read_bytes()
+            )
+            contract_path = root / "contract.json"
+            contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+            paths = [contract_path, *self.paths[1:5], rule_path, *self.paths[6:]]
+            with self.assertRaisesRegex(
+                MODULE.ContractError, "output-language rule heading drift"
+            ):
+                MODULE.verify(paths)
+
+    def test_rejects_output_language_hash_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root,
+                lambda value: value["components"].__setitem__(
+                    "output_language_sha256", "0" * 64
+                ),
+            )
+            with self.assertRaisesRegex(MODULE.ContractError, "output_language_sha256 drift"):
+                MODULE.verify(paths)
+
+    def test_rejects_a_wrapper_that_seals_the_output_language_rule_outside_the_home(
+        self,
+    ) -> None:
+        # The client reads the rule from QWEN_HOME; a wrapper that checks a
+        # file anywhere else would verify one file and launch with another.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = self.paths[7].read_text(encoding="utf-8")
+            resealed = source.replace(
+                "readonly OUTPUT_LANGUAGE_SOURCE=/opt/agent/output-language.md\n",
+                "readonly OUTPUT_LANGUAGE_SOURCE=/opt/agent/rules/output-language.md\n",
+            )
+            self.assertNotEqual(source, resealed)
+            wrapper_path = root / "run_agent.sh"
+            wrapper_path.write_text(resealed, encoding="utf-8")
+            contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+            contract["components"]["wrapper_sha256"] = MODULE.sha256(wrapper_path.read_bytes())
+            contract_path = root / "contract.json"
+            contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+            paths = [contract_path, *self.paths[1:7], wrapper_path, self.paths[8]]
+            with self.assertRaisesRegex(MODULE.ContractError, "missing canonical fragment"):
+                MODULE.verify(paths)
 
     def test_rejects_extra_native_tool(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

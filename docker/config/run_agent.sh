@@ -11,6 +11,7 @@ readonly SETTINGS_SOURCE=/opt/agent/settings.json
 readonly INSTRUCTIONS_SOURCE=/opt/agent/QWEN.md
 readonly SYSTEM_PROMPT_SOURCE=/opt/agent/system.md
 readonly DEPLOYMENT_CONTRACT_SOURCE=/opt/agent/deployment-contract.md
+readonly OUTPUT_LANGUAGE_SOURCE=/opt/agent/output-language.md
 readonly RUNTIME_CONTRACT_SOURCE=/opt/agent/runtime-contract.json
 readonly RUNTIME_CONTRACT_VERIFIER_SOURCE=/opt/agent/verify_runtime_contract.py
 readonly AGENT_EXEC_SOURCE=/usr/share/agent-service/agent_exec.rs
@@ -129,6 +130,7 @@ export GOPATH=/qwen-runtime/go
   fatal 108 "${START_GATE_FILE} must be a regular uid:gid 1000:1000 mode-0600 gate"
 [[ -r "${SETTINGS_SOURCE}" && -r "${INSTRUCTIONS_SOURCE}" && \
    -r "${SYSTEM_PROMPT_SOURCE}" && -r "${DEPLOYMENT_CONTRACT_SOURCE}" && \
+   -r "${OUTPUT_LANGUAGE_SOURCE}" && \
    -r "${RUNTIME_CONTRACT_SOURCE}" && -x "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" && \
    -r "${AGENT_EXEC_SOURCE}" && \
    -r "${TOOLCHAIN_MANIFEST_SOURCE}" && -x "${TOOLCHAIN_VERIFIER_SOURCE}" && \
@@ -136,6 +138,7 @@ export GOPATH=/qwen-runtime/go
   fatal 92 "pinned Qwen configuration is missing from /opt/agent"
 for sealed_prompt in "${SETTINGS_SOURCE}" "${INSTRUCTIONS_SOURCE}" \
   "${SYSTEM_PROMPT_SOURCE}" "${DEPLOYMENT_CONTRACT_SOURCE}" \
+  "${OUTPUT_LANGUAGE_SOURCE}" \
   "${RUNTIME_CONTRACT_SOURCE}" "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
   "${TOOLCHAIN_MANIFEST_SOURCE}" "${TOOLCHAIN_VERIFIER_SOURCE}"; do
   [[ -f "${sealed_prompt}" && ! -L "${sealed_prompt}" ]] || \
@@ -160,6 +163,7 @@ run_prelaunch python3 "${RUNTIME_CONTRACT_VERIFIER_SOURCE}" \
   "${INSTRUCTIONS_SOURCE}" \
   "${SYSTEM_PROMPT_SOURCE}" \
   "${DEPLOYMENT_CONTRACT_SOURCE}" \
+  "${OUTPUT_LANGUAGE_SOURCE}" \
   "${TOOLCHAIN_MANIFEST_SOURCE}" \
   /opt/agent/run_agent.sh "${AGENT_EXEC_SOURCE}" || \
   fatal 107 "canonical runtime contract validation failed"

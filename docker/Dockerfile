@@ -57,6 +57,11 @@ COPY docker/scripts/npm_lock_package_set.py \
   /opt/agent-artifacts/scripts/npm_lock_package_set.py
 COPY docker/tests/test_npm_lock_package_set.py \
   /opt/agent-artifacts/scripts/test_npm_lock_package_set.py
+# The sealed output-language rule is the file upstream writes when a start with
+# no language set finds none. The build has upstream's writer produce it in an
+# empty home and refuses the image unless the sealed bytes are those.
+COPY docker/config/output-language.md \
+  /opt/agent-artifacts/docker/config/output-language.md
 # The pinned upstream tarball comes from the base image, which fetched it once
 # at an exact digest; its digest is proved again here, so this build trusts the
 # base's bytes no further than it trusts anything else it is given.
@@ -96,6 +101,12 @@ RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
  && node /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs \
       /src --check \
  && npm run build -- --cli-only \
+ && install -d -m 0700 /tmp/upstream-output-language \
+ && QWEN_HOME=/tmp/upstream-output-language node --input-type=module --eval \
+      "import { initializeLlmOutputLanguage } from '/src/packages/cli/dist/src/utils/languageUtils.js'; initializeLlmOutputLanguage(undefined);" \
+ && cmp /tmp/upstream-output-language/output-language.md \
+      /opt/agent-artifacts/docker/config/output-language.md \
+ && rm -r /tmp/upstream-output-language \
  && npm run build --workspace=packages/webui \
  && grep -Fx "export const GIT_COMMIT_INFO = 'b965d5f8c24f';" \
       packages/cli/src/generated/git-commit.ts \
@@ -171,6 +182,7 @@ ARG SETTINGS_SHA256
 ARG INSTRUCTIONS_SHA256
 ARG SYSTEM_PROMPT_SHA256
 ARG DEPLOYMENT_CONTRACT_SHA256
+ARG OUTPUT_LANGUAGE_SHA256
 ARG TOOLCHAIN_MANIFEST_SHA256
 ARG TOOLCHAIN_VERIFIER_SHA256
 ARG TOOLCHAIN_VERIFIER_TEST_SHA256
@@ -193,6 +205,7 @@ LABEL agent_service.profile="qwen38-agent-service-v3" \
       agent_service.instructions.sha256="${INSTRUCTIONS_SHA256}" \
       agent_service.system-prompt.sha256="${SYSTEM_PROMPT_SHA256}" \
       agent_service.deployment-contract.sha256="${DEPLOYMENT_CONTRACT_SHA256}" \
+      agent_service.output-language.sha256="${OUTPUT_LANGUAGE_SHA256}" \
       agent_service.toolchain-manifest.sha256="${TOOLCHAIN_MANIFEST_SHA256}" \
       agent_service.toolchain-verifier.sha256="${TOOLCHAIN_VERIFIER_SHA256}" \
       agent_service.runtime-contract.sha256="${RUNTIME_CONTRACT_SHA256}" \
@@ -216,6 +229,7 @@ COPY docker/config/settings.json /opt/agent/settings.json
 COPY docker/config/QWEN.md /opt/agent/QWEN.md
 COPY docker/config/system.md /opt/agent/system.md
 COPY docker/config/deployment-contract.md /opt/agent/deployment-contract.md
+COPY docker/config/output-language.md /opt/agent/output-language.md
 COPY config/agent-runtime-contract-v1.json /opt/agent/runtime-contract.json
 COPY docker/scripts/verify_runtime_contract.py /opt/agent/verify_runtime_contract.py
 COPY src/bin/agent_exec.rs /usr/share/agent-service/agent_exec.rs
@@ -228,6 +242,7 @@ COPY docker/config/settings.json /tmp/runtime-contract-tests/docker/config/setti
 COPY docker/config/QWEN.md /tmp/runtime-contract-tests/docker/config/QWEN.md
 COPY docker/config/system.md /tmp/runtime-contract-tests/docker/config/system.md
 COPY docker/config/deployment-contract.md /tmp/runtime-contract-tests/docker/config/deployment-contract.md
+COPY docker/config/output-language.md /tmp/runtime-contract-tests/docker/config/output-language.md
 COPY docker/config/toolchain-manifest.json /tmp/runtime-contract-tests/docker/config/toolchain-manifest.json
 COPY docker/config/run_agent.sh /tmp/runtime-contract-tests/docker/config/run_agent.sh
 COPY src/bin/agent_exec.rs /tmp/runtime-contract-tests/src/bin/agent_exec.rs
@@ -244,6 +259,7 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
  && test "$(sha256sum /opt/agent/QWEN.md | cut -d' ' -f1)" = "${INSTRUCTIONS_SHA256}" \
  && test "$(sha256sum /opt/agent/system.md | cut -d' ' -f1)" = "${SYSTEM_PROMPT_SHA256}" \
  && test "$(sha256sum /opt/agent/deployment-contract.md | cut -d' ' -f1)" = "${DEPLOYMENT_CONTRACT_SHA256}" \
+ && test "$(sha256sum /opt/agent/output-language.md | cut -d' ' -f1)" = "${OUTPUT_LANGUAGE_SHA256}" \
  && test "$(sha256sum /opt/agent/runtime-contract.json | cut -d' ' -f1)" = "${RUNTIME_CONTRACT_SHA256}" \
  && test "$(sha256sum /opt/agent/verify_runtime_contract.py | cut -d' ' -f1)" = "${RUNTIME_CONTRACT_VERIFIER_SHA256}" \
  && test "$(sha256sum /tmp/runtime-contract-tests/docker/tests/test_verify_runtime_contract.py | cut -d' ' -f1)" = "${RUNTIME_CONTRACT_VERIFIER_TEST_SHA256}" \
@@ -263,7 +279,8 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
       /opt/agent/runtime-contract.json \
       /opt/agent/settings.json \
       /opt/agent/QWEN.md /opt/agent/system.md \
-      /opt/agent/deployment-contract.md /opt/agent/toolchain-manifest.json \
+      /opt/agent/deployment-contract.md /opt/agent/output-language.md \
+      /opt/agent/toolchain-manifest.json \
       /opt/agent/run_agent.sh /usr/share/agent-service/agent_exec.rs \
  && python3 /tmp/toolchain-tests/docker/tests/test_verify_toolchain.py -v \
  && python3 /opt/agent/verify_toolchain.py \

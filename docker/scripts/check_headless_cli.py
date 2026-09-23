@@ -120,8 +120,15 @@ def sealed_digests(home: Path) -> dict[str, str]:
             for path in sorted(home.rglob("*")) if path.is_file()}
 
 
+def context_block(label: str, text: str) -> str:
+    """A sealed file as the client carries it in the system message."""
+    return f"--- Context from: {label} ---\n{text.strip()}\n--- End of Context from: {label} ---"
+
+
 def require_production_requests(requests: list[dict], settings: dict, instructions: str,
-                                instructions_label: str, strict_tools: list[str], turn_budget: int) -> None:
+                                instructions_label: str, output_language: str,
+                                output_language_label: str, strict_tools: list[str],
+                                turn_budget: int) -> None:
     """The requests are the ones production sends, in shape and in their sealed inputs."""
     routes = [r["path"] for r in requests]
     require(routes == EXPECTED_ROUTES, f"the two-turn cycle issued another request sequence: {routes}")
@@ -129,8 +136,8 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
     config = settings["modelProviders"]["openai"][0]["generationConfig"]
     require(requests[2]["body"] == {"model": model, "prompt": "framing", "add_special_tokens": False},
             f"the framing probe drifted: {requests[2]['body']!r}")
-    block = (f"--- Context from: {instructions_label} ---\n{instructions.strip()}\n"
-             f"--- End of Context from: {instructions_label} ---")
+    block = context_block(instructions_label, instructions)
+    rule = context_block(output_language_label, output_language)
     tools = None
     for index, (request, roles) in enumerate(zip(requests, EXPECTED_ROLES)):
         body = request["body"]
@@ -142,6 +149,10 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
         # The sealed instructions travel in every system message, whole, once.
         require(isinstance(system, str) and system.count(block) == 1,
                 f"request {index}'s system message does not carry the sealed QWEN.md once")
+        # Upstream's output-language rule follows it, once, as the next context file.
+        require(system.count(rule) == 1 and f"{block}\n\n{rule}" in system,
+                f"request {index}'s system message does not carry the sealed output-language rule "
+                "once, after the sealed QWEN.md")
         require_quantities_stated_once(system, body["tools"])
         require(body["chat_template_kwargs"] == config["extra_body"]["chat_template_kwargs"],
                 f"request {index}'s template arguments are not the sealed ones")
@@ -254,6 +265,8 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
     sealed_home = settings_path.parent
     instructions_path = sealed_home / "QWEN.md"
     instructions = instructions_path.read_text()
+    output_language_path = sealed_home / "output-language.md"
+    output_language = output_language_path.read_text()
     for present in SYSTEM_SETTINGS_FILES:
         require(not present.exists(), f"{present} exists; the sealed settings would not be the only source")
     turn_budget = settings["model"]["maxSessionTurns"]
@@ -392,8 +405,9 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
             require(sealed_digests(sealed_home) == sealed_before, "the run changed a file in the sealed home")
             result = qualify(stdout, runtime, nonce, requests, certifier)
             require_production_requests(requests, settings, instructions,
-                                        os.path.relpath(instructions_path, workspace), strict_tools[0].split(","),
-                                        turn_budget)
+                                        os.path.relpath(instructions_path, workspace), output_language,
+                                        os.path.relpath(output_language_path, workspace),
+                                        strict_tools[0].split(","), turn_budget)
             return result
         finally:
             server.shutdown()
