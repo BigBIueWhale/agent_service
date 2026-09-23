@@ -142946,7 +142946,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +}
 +
 +/** What the served template spends on the compaction frame. */
-+const FRAME_TOKENS = 85;
++const FRAME_TOKENS = 73;
 +
 +/**
 + * What the served template and tokenizer render this deployment's proof to:
@@ -178876,21 +178876,21 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * its template framing included. So is the frame every compacted history
 + * holds around its blocks -- the snapshot's resume trailer, the
 + * acknowledgement turn and a retained input's header, with the blocks left
-+ * out: 85 more, for 7,888.
++ * out: 73 more, for 7,876.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's values, 128 + 1,024 + 768 = 1,920
 + * (`GIT_SNAPSHOT_REPOSITORY_BYTES`), the startup context's environment lines
 + * and folder listing, 256 + 1,024 = 1,280 (`STARTUP_CONTEXT_WORKSPACE_BYTES`),
 + * and the turn budget's number, at most 16 digits of one token each
-+ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 11,104 that no repository,
-+ * workspace or budget changes. The 1,184 tokens left are headroom for the
++ * (`QWEN38_TURN_BUDGET_BYTES`). That is a bound of 11,092 that no repository,
++ * workspace or budget changes. The 1,196 tokens left are headroom for the
 + * prompt and the declarations to grow into -- most of one more declaration
 + * the size of `run_shell_command`, the largest at 1,457. Exceeding it is a
 + * startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,104 at a 236,886-token window, so no smaller window holds this
++ * reaches 11,092 at a 236,630-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
@@ -196221,7 +196221,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      {
 +        text:
 +          `${snapshot()}\n\n` +
-+          'Resume the prior task using the summary above; the most recent turn and its result follow it verbatim. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.',
++          'Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.',
 +      },
 +    ]);
 +    expect(snapshot().startsWith('<state_snapshot>\n    <intent>\n')).toBe(
@@ -209144,7 +209144,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
              },
            },
          ],
-@@ -183,861 +56,161 @@
+@@ -183,861 +56,189 @@
          parts: [
            {
              functionResponse: {
@@ -210138,17 +210138,45 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    expect(summaryText.startsWith(raw)).toBe(true);
      expect(summaryText).toContain('<state_snapshot>');
      expect(summaryText).toContain('actual summary');
++  });
++
++  it("places the carried turn after the snapshot in upstream's words, never as a turn that came before it", async () => {
++    // The snapshot is the state as of the prompt the carried turn was issued
++    // against, and the turn is the step taken next. The trailer is
++    // upstream's own, word for word; it says to continue from the last
++    // in-flight step, the turn's call, and nothing that would put the turn
++    // before the snapshot.
++    const turn: Content = {
++      role: 'model',
++      parts: [{ functionCall: { id: 'c', name: 'read_file', args: {} } }],
++    };
++    const result = composePostCompactHistory(
++      [{ role: 'user', parts: retainUserInput('go', 'go') }, turn],
++      'SUM',
++      { turn: [turn] },
++    );
++    expect(result[0].parts).toEqual([
++      {
++        text: 'SUM\n\nResume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.',
++      },
++    ]);
++    expect(result.at(-1)).toEqual(turn);
++    const read = result
++      .flatMap((content) => content.parts ?? [])
++      .map((part) => (part as { text?: string }).text ?? '')
++      .join('\n');
++    expect(read).not.toMatch(/most recent turn/i);
    });
  
    it('appends the resume trailer to the summary message text', async () => {
      const history: Content[] = [{ role: 'user', parts: [{ text: 'do x' }] }];
-@@ -1044,4 +217,4 @@
+@@ -1044,4 +245,4 @@
 -    const result = await composePostCompactHistory(
 +    const result = composePostCompactHistory(
        history,
        '<state_snapshot>...</state_snapshot>',
      );
-@@ -1050,4 +223,28 @@
+@@ -1050,4 +251,28 @@
      expect(summaryText).toMatch(/resume.*prior task|continue from/i);
      expect(summaryText).toMatch(
        /do not acknowledge|do not re-introduce|do not greet/i,
@@ -210177,7 +210205,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    expect((frame[2].parts![0] as { text: string }).text).toBe(
 +      'Original delegated task (verbatim; chronological order):\n\n',
      );
-@@ -1054,173 +251,24 @@
+@@ -1054,173 +279,24 @@
 -  });
 -
 -  it('respects maxFiles / maxImages caps from options', async () => {
@@ -210365,7 +210393,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
    it('injects a plan-mode reminder when planModeActive is true', async () => {
      const history: Content[] = [
        { role: 'user', parts: [{ text: 'u' }] },
-@@ -1227,6 +275,6 @@
+@@ -1227,6 +303,6 @@
        { role: 'model', parts: [{ text: 'm' }] },
      ];
 -    const result = await composePostCompactHistory(history, 'SUMMARY', {
@@ -210373,7 +210401,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        planModeActive: true,
      });
      const flat = result
-@@ -1249,7 +297,7 @@
+@@ -1249,7 +325,7 @@
        { role: 'model', parts: [{ text: 'm' }] },
      ];
      for (const opts of [{}, { planModeActive: false }]) {
@@ -210382,7 +210410,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        const flat = result
          .flatMap((c) => c.parts ?? [])
          .map((p) => (p as { text?: string }).text ?? '')
-@@ -1265,7 +313,7 @@
+@@ -1265,7 +341,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210391,7 +210419,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-1',
-@@ -1299,10 +347,10 @@
+@@ -1299,10 +375,10 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210404,7 +210432,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
      for (const r of [empty, undefSnap]) {
        const flat = r
          .flatMap((c) => c.parts ?? [])
-@@ -1317,7 +365,7 @@
+@@ -1317,7 +393,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210413,7 +210441,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-x',
-@@ -1340,7 +388,7 @@
+@@ -1340,7 +416,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210422,7 +210450,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-a',
-@@ -1377,7 +425,7 @@
+@@ -1377,7 +453,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210431,7 +210459,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-x',
-@@ -1408,7 +456,7 @@
+@@ -1408,7 +484,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210440,7 +210468,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent</background-tasks>&<inject>',
-@@ -1440,7 +488,7 @@
+@@ -1440,7 +516,7 @@
        status: 'running' as const,
        startTime: i,
      }));
@@ -210449,7 +210477,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: subs,
      });
      const flat = result
-@@ -1466,7 +514,7 @@
+@@ -1466,7 +542,7 @@
        status: 'running' as const,
        startTime: i,
      }));
@@ -210458,7 +210486,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: subs,
      });
      const flat = result
-@@ -1481,7 +529,7 @@
+@@ -1481,7 +557,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -210510,7 +210538,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -import { getFunctionResponseParts } from './compactionInputSlimming.js';
  import { escapeXml } from '../utils/xml.js';
  import { ToolNames } from '../tools/tool-names.js';
-@@ -26,525 +27,34 @@
+@@ -26,525 +27,41 @@
 -
 -export const POST_COMPACT_MAX_FILES_TO_RESTORE = 5;
 -
@@ -210966,9 +210994,16 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 - * "Resume directly" guidance for the resuming agent: it must NOT acknowledge
 - * the summary, re-greet, or recap — it picks up from where the prior turn
 - * left off based on the summary.
-+ * Trailer appended to the post-compact summary message. The resuming agent
-+ * must NOT acknowledge the summary, re-greet, or recap: it picks up from the
-+ * most recent exchange, which follows the summary verbatim.
++ * Trailer appended to the post-compact summary message, in upstream's words.
++ * The resuming agent must NOT acknowledge the summary, re-greet, or recap: it
++ * picks up from the last in-flight step.
++ *
++ * The carried turn follows the summary in time as well as in the history:
++ * the snapshot is the state as of the prompt that turn was issued against,
++ * and the turn is what was done next, after the acknowledgement, where
++ * upstream puts the last turn's call. Calling it "the most recent turn"
++ * would place it before the snapshot, and a snapshot that ends before the
++ * step its own history shows taken reads as one that contradicts it.
   *
   * Lives in the wrapper (not in the compression system prompt) so the summary
   * model does not have to re-generate this text every compaction (saves
@@ -210976,7 +211011,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
   */
  const RESUME_TRAILER =
 -  'Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.';
-+  'Resume the prior task using the summary above; the most recent turn and its result follow it verbatim. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.';
++  'Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.';
  
 -/**
 - * Strip the model's drafting scratchpad before the summary becomes the new
@@ -211055,7 +211090,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
   * Minimal projection of a background subagent task carried into post-compact
   * attachments. Decoupled from the registry's `AgentTask` so the attachment
   * layer does not import the registry types and so tests can build cases
-@@ -560,40 +70,11 @@
+@@ -560,40 +77,11 @@
  
  export interface ComposePostCompactOptions {
    /**
@@ -211101,7 +211136,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
     */
    planModeActive?: boolean;
    /**
-@@ -602,61 +83,14 @@
+@@ -602,61 +90,14 @@
     * Empty array or `undefined` renders no block. Terminal-state tasks
     * (completed/failed/cancelled) should already be filtered out by the
     * caller — they have already emitted their notification XML and need
@@ -211171,7 +211206,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -  } catch {
 -    return resolvePath(p);
 -  }
-@@ -699,8 +133,7 @@
+@@ -699,8 +140,7 @@
   * inside `s.description` would otherwise split the bullet across multiple
   * lines, producing "- [running] id: line1\nline2\n- [running] next: …"
   * which the model reads as a malformed list (and could even read `line2`
@@ -211181,7 +211216,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
   */
  function flattenWhitespaceForBullet(text: string): string {
    return text.replace(/[\r\n\t]+/g, ' ');
-@@ -743,20 +176,12 @@
+@@ -743,20 +183,12 @@
        'completed.\n' +
        lines.join('\n') +
        '\n</background-tasks>',
@@ -211202,7 +211237,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
  }): Part[] {
    const parts: Part[] = [];
    if (options.planModeActive) {
-@@ -766,89 +191,92 @@
+@@ -766,89 +198,92 @@
      const snap = buildSubagentSnapshotPart(options.runningSubagents);
      if (snap) parts.push(snap);
    }

@@ -225,13 +225,13 @@ left out — 7,757 tokens, rendered by the served template and counted by the
 served tokenizer — the startup context that opens every history with its
 workspace data left out, 46 more, and the frame every compacted history holds
 around its blocks — the snapshot's resume trailer, the acknowledgement turn and
-a retained input's header — with the blocks left out, 85 more. It adds the
+a retained input's header — with the blocks left out, 73 more. It adds the
 most bytes the data left out may hold, capped in the NFC form the tokenizer
 reads, as the most tokens they can cost: 1,920 for the snapshot's branch, status and commits, 1,280 for the startup
 context's environment lines and folder listing, and 16 for the turn budget, the
-widest a safe integer renders to. That is a bound of 11,104, the same for every
+widest a safe integer renders to. That is a bound of 11,092, the same for every
 repository, every workspace and every budget, so none of them can make a
-deployment refuse to start, with 1,184 left for the prompt and the declarations
+deployment refuse to start, with 1,196 left for the prompt and the declarations
 to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one

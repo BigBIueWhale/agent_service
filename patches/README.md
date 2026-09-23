@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `ab0ced039605c8423c90ef278fc1935a31c80118e4f1c48a18fdf07f20fb7942`
+- Review-diff SHA-256: `7e043629dce54bd692645ff97db3800a259869b6fafb114749017c7267ac56e2`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `24b2a869e4ea9968271bb67d9261bb9fbfb8fdeacdfb51fac70a52c5d7e2d6e6`
+- Transformer-manifest SHA-256: `9446b30852763695ef04369e187c30e3de8b219c8f6b282bac56d6f55724f541`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -229,6 +229,12 @@ reminders, each block set off from the next -- as one user message, then the
 carried turn. Upstream keeps the last turn as a model message of its own after
 the attachments, and folds its call into the acknowledgement when nothing is
 attached; the carried turn is kept whole in both places, reasoning included.
+The trailer is upstream's own, word for word. The carried turn follows the
+snapshot in time as well as in the history -- the snapshot is the state as of
+the prompt that turn was issued against, and the turn is the step taken next --
+so nothing calls it the most recent turn, which would place it before the
+snapshot and make a snapshot that ends before the step its history shows taken
+read as one that contradicts it.
 
 Authored instructions and corrections have explicit provenance captured before
 hooks or input transformation. Their original parts survive repeated compaction,

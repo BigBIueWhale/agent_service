@@ -4745,6 +4745,26 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
+    # The carried turn follows the snapshot in time as well as in the
+    # history: the snapshot is the state as of the prompt the turn was issued
+    # against, and the turn is the step taken next, after the
+    # acknowledgement. The trailer is upstream's own, word for word, and
+    # nothing calls the turn "the most recent", which would place it before
+    # the snapshot and make a snapshot that ends before the step its history
+    # shows taken read as one that contradicts it.
+    require_text(
+        state,
+        attachments,
+        "  'Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.';",
+        label=label,
+    )
+    forbid_text(state, attachments, "the most recent turn and its result", label=label)
+    require_text(
+        state,
+        "packages/core/src/services/postCompactAttachments.test.ts",
+        "places the carried turn after the snapshot in upstream's words, never as a turn that came before it",
+        label=label,
+    )
     # The frame is fixed text every compacted history holds beside its
     # blocks, so the startup proof counts it with the static preamble: the fit
     # charges the blocks, and the frame around them is inside `D`.
