@@ -1297,7 +1297,54 @@ refused. The backend's runtime image carries the same kind of tag,
 
 **The prune rule.** Dangling images may be collected once every release's images
 carry their identity tag, and never before. Until then an untagged image of ours
-may still be a release.
+may still be a release. `./collect.sh` does not depend on tags at all -- it
+identifies every object from the lock histories -- and it is the only way
+anything of ours is removed.
+
+**The retention policy**, derived from what can be regenerated:
+
+- An image can be restored from an archive that carries it.
+- An archive can be rebuilt from its commit on the host that built it: every
+  release proves its build reproduces there, and images reproduce per host,
+  never across hosts.
+- So the images of the deployed release and of the release before it are kept,
+  and so are their archives. The archive of every release that evidence
+  references is kept too. Every older release keeps its archive and drops its
+  images; a release with no archive on the host keeps its images for as long as
+  evidence references it, because they are then its only exact copy there.
+
+A release is a lock state that pinned an archive, in either repository's lock.
+What is deployed is read from the running containers, never from a file; the
+release the checked-out lock names, and the one before it, are kept too, and a
+kept service release keeps the backend release it pins. Evidence is found, not
+assumed: the home directory is walked for session records, judgements and
+benchmark pass provenance, and every full commit, image or archive hash they
+name references that release. A session record that names no release (schema 2)
+still ran on one, so every release available before the newest such record
+counts as referenced. Only objects a lock pins, a lock derives the name of, or
+this project labels are ever considered; anything else is never touched. The
+report names each object, its size, its release identity and the rule that
+decides it, and anything it cannot explain -- no Docker, a lock that does not
+parse, a deployed release it cannot verify, an archive whose bytes are not the
+ones pinned for its name, a symlink where an archive should be -- stops it with
+a next step:
+
+```bash
+./collect.sh            # report only; nothing is removed
+./collect.sh --delete   # remove exactly what the report marks COLLECT
+```
+
+**The storage hook.** [`scripts/collect-hook.sh`](scripts/collect-hook.sh) runs
+this evaluation for Claude Code sessions, as a `PostToolUse` hook on `Bash`
+configured in the session's project settings, only at the moments it is owed: a
+release ends by pinning its archive in a lock, and a deploy replaces the sockets
+the stack serves on. Those pins and those sockets' identities are its
+fingerprint, compared after every command against the last one it evaluated,
+without touching Docker. It prints one line when something is collectable, or
+when its own check could not run and why; otherwise nothing. Its contract is the
+opposite of `./collect.sh`'s on purpose: it never blocks and always exits 0,
+because a storage reminder must never stop a session, and it never removes
+anything.
 
 ## HTTP API
 
