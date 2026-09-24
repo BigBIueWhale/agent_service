@@ -454,13 +454,15 @@ pub struct AgentDefaultsLock {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-/// Functional host requirements only: the isolation features the containers
-/// genuinely depend on, and the Docker control-socket wiring. Exact host
+/// Functional host requirements only: the AppArmor profile every container is
+/// verified to run under, and the Docker control-socket wiring. What the
+/// Docker daemon must report about container isolation is not recorded here:
+/// `scripts/host-isolation.sh` asserts it against the live daemon, as the one
+/// rule the vLLM backend repository carries byte-identically. Exact host
 /// software versions, binary hashes, and GPU identity are deliberately not
-/// recorded here — pinning them would tie the deployment to one specific
+/// recorded either — pinning them would tie the deployment to one specific
 /// computer without making it more correct anywhere.
 pub struct HostLock {
-    pub docker_security_options: Vec<String>,
     pub container_apparmor_profile: String,
     pub docker_socket: String,
     pub docker_socket_gid: u32,
@@ -1167,21 +1169,16 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
     if lock.backend.command.is_empty() {
         return fail("backend.command may not be empty".into());
     }
-    // Only the isolation features the containers depend on are asserted.
-    // Host software versions, binary hashes, and GPU identity are
-    // deliberately not validated: they tie the deployment to one specific
-    // computer without making it more correct anywhere. The Docker socket
-    // path and group id are wiring configuration, not identity assertions.
-    if lock.host.docker_security_options
-        != [
-            "name=apparmor",
-            "name=seccomp,profile=builtin",
-            "name=cgroupns",
-        ]
-        || lock.host.container_apparmor_profile != "docker-default"
-    {
+    // Only the AppArmor profile the containers are verified to run under is
+    // asserted here; the daemon's reported isolation is a property of the live
+    // host, asserted by scripts/host-isolation.sh. Host software versions,
+    // binary hashes, and GPU identity are deliberately not validated: they tie
+    // the deployment to one specific computer without making it more correct
+    // anywhere. The Docker socket path and group id are wiring configuration,
+    // not identity assertions.
+    if lock.host.container_apparmor_profile != "docker-default" {
         return fail(
-            "host container-isolation contract (apparmor/seccomp/cgroupns) is not satisfied".into(),
+            "host.container_apparmor_profile is not docker-default, the profile every container is verified to run under".into(),
         );
     }
     if !lock.host.docker_socket.starts_with('/') {

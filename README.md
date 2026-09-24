@@ -66,9 +66,9 @@ by this service. The build-input and release locks are advanced only by
 measurements below describe the releases that earned them.
 
 Every longer pin—including base-image digests, package snapshot and versions,
-source archive and patch hashes, Docker/BuildKit versions, image identity, live
-backend command, corrected model directory/hash/correction/manifest, official BF16
-revision, driver, GPU, and configuration hashes—is in
+source archive and patch hashes, the Docker CLI archive the broker image carries,
+image identity, live backend command, corrected model directory/hash/correction/manifest,
+official BF16 revision, and configuration hashes—is in
 [`config/stack.lock.json`](config/stack.lock.json). The lock is compiled into the
 service binary. At startup, the mounted copy must match the compiled copy
 byte-for-byte, the agent image ID and labels must match it, and the live backend
@@ -1162,11 +1162,18 @@ boundary and preserved Apache-2.0 text are in
 [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
 
 Putting a version string in a README is not considered a pin. The scripts require a
-clean repository and validate required host tools, isolation features, file hashes, image IDs,
-labels, Docker modes, listener addresses, backend command, endpoint identities, real
-tokenizer, model manifest, and health before reporting ready. Unexpected environment
-variables beginning with `AGENT_SERVICE_` or `OPENAI_` are rejected rather than
-silently changing behavior.
+clean repository and validate required host tools, the container isolation the Docker
+daemon reports, file hashes, image IDs, labels, Docker modes, listener addresses, backend
+command, endpoint identities, real tokenizer, model manifest, and health before reporting
+ready. The isolation is one rule,
+[`scripts/host-isolation.sh`](scripts/host-isolation.sh), which the backend repository
+carries byte-identically: it parses `docker info` SecurityOptions into names and
+attributes and requires AppArmor with the default profile, seccomp with the builtin
+profile, and a private cgroup namespace. Any other daemon-wide option, and anything it
+cannot interpret, is refused with the property, the requirement, the report, and the
+next action. It asserts properties rather than a string, so no Docker or containerd
+version is pinned. Unexpected environment variables beginning with `AGENT_SERVICE_`
+or `OPENAI_` are rejected rather than silently changing behavior.
 
 ## Operation
 

@@ -109,8 +109,82 @@ test_network_none_metadata_rejects_an_address() (
   assert_network_none_docker_sandbox contract-container
 )
 
+# The host check as every operator command runs it, with Docker's reported
+# security options replaced by the given report. Nothing else about the host
+# is faked.
+host_isolation_check_on() (
+  # Named apart from the check's own locals: bash scopes dynamically, so the
+  # fake must not read a variable the check itself declares.
+  local fake_security_options="$1"
+  docker() {
+    case "$*" in
+      "version --format {{.Server.Version}}")
+        printf '%s\n' 29.8.1
+        ;;
+      "info --format {{json .SecurityOptions}}")
+        printf '%s\n' "${fake_security_options}"
+        ;;
+      *)
+        printf 'unexpected fake Docker invocation: %q' "$1" >&2
+        printf ' %q' "${@:2}" >&2
+        printf '\n' >&2
+        return 97
+        ;;
+    esac
+  }
+  check_host_tools_and_versions
+)
+
 test_readiness_replays_existing_event_and_stops_follower
 test_network_none_metadata_is_exact
+
+# Every case of the host-isolation rule's own corpus -- the file the vLLM
+# backend repository carries byte-identically -- goes through the real host
+# check: each accepted report passes silently, and each refused one exits with
+# a refusal naming the failed property, what is required, what was reported,
+# and a next action.
+host_isolation_accepted=0
+host_isolation_refused=0
+while IFS=$'\x1f' read -r verdict report fragment; do
+  if isolation_output="$(host_isolation_check_on "${report}" 2>&1)"; then
+    isolation_status=0
+  else
+    isolation_status=$?
+  fi
+  case "${verdict}" in
+    accept)
+      [[ "${isolation_status}" == 0 && -z "${isolation_output}" ]] || {
+        printf 'host check refused an accepted report %s (exit %s):\n%s\n' \
+          "${report}" "${isolation_status}" "${isolation_output}" >&2
+        exit 1
+      }
+      host_isolation_accepted=$((host_isolation_accepted + 1))
+      ;;
+    refuse)
+      [[ "${isolation_status}" == 1 && \
+         "${isolation_output}" == *'ERROR: This host does not provide the container isolation the deployment requires.'* && \
+         "${isolation_output}" == *"Docker reports these security options: ${report:-<nothing>}"* && \
+         "${isolation_output}" == *"${fragment}"* && \
+         "${isolation_output}" == *'  Required: '* && \
+         "${isolation_output}" == *'  Reported: '* && \
+         "${isolation_output}" == *'  Next:     '* ]] || {
+        printf 'host check did not refuse %s with "%s" (exit %s):\n%s\n' \
+          "${report:-<nothing>}" "${fragment}" "${isolation_status}" "${isolation_output}" >&2
+        exit 1
+      }
+      host_isolation_refused=$((host_isolation_refused + 1))
+      ;;
+    *)
+      printf 'host-isolation case has no verdict: %q\n' "${verdict}" >&2
+      exit 1
+      ;;
+  esac
+done < <(host_isolation_cases)
+((host_isolation_accepted > 0 && host_isolation_refused > 0)) || {
+  printf 'the host-isolation corpus yielded %s accepted and %s refused cases\n' \
+    "${host_isolation_accepted}" "${host_isolation_refused}" >&2
+  exit 1
+}
 
 failure_output=''
 if failure_output="$(test_readiness_reports_stream_failure 2>&1)"; then
@@ -136,4 +210,5 @@ fi
   exit 1
 }
 
-printf 'COMMON_CONTRACT_OK readiness=replayed-immediately follower=terminated failure=evidenced network-none=docker-and-kernel-proven\n'
+printf 'COMMON_CONTRACT_OK readiness=replayed-immediately follower=terminated failure=evidenced network-none=docker-and-kernel-proven host-isolation=%s-accepted-%s-refused\n' \
+  "${host_isolation_accepted}" "${host_isolation_refused}"

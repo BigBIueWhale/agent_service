@@ -279,11 +279,6 @@
     ]
   },
   "host": {
-    "docker_security_options": [
-      "name=apparmor",
-      "name=seccomp,profile=builtin",
-      "name=cgroupns"
-    ],
     "container_apparmor_profile": "docker-default",
     "docker_socket": "/var/run/docker.sock",
     "docker_socket_gid": 984

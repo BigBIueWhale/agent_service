@@ -8,6 +8,8 @@ readonly RELEASE_LOCK="${PROJECT_DIR}/config/release.lock.json"
 readonly BUILD_INPUTS_MANIFEST="${PROJECT_DIR}/config/build-inputs.sha256"
 readonly BROKER_POLICY="${PROJECT_DIR}/config/broker-policy-v1.json"
 readonly RUNTIME_CONTRACT="${PROJECT_DIR}/config/agent-runtime-contract-v1.json"
+# shellcheck source=scripts/host-isolation.sh
+source "${PROJECT_DIR}/scripts/host-isolation.sh"
 
 die() {
   printf 'ERROR: %s\n' "$*" >&2
@@ -281,12 +283,13 @@ require_equal() {
 
 check_host_tools_and_versions() {
   # Functional requirements only. The tools this project actually invokes
-  # must exist, Docker must respond, and the container-isolation features
-  # the deployment depends on must be active. Exact host software versions,
-  # binary hashes, and GPU identity are deliberately not asserted: they tie
-  # the deployment to one specific computer without making anything more
-  # correct.
-  local tool
+  # must exist, Docker must respond, and the daemon must report the container
+  # isolation the deployment depends on, as scripts/host-isolation.sh states
+  # it -- the one rule the vLLM backend repository carries byte-identically.
+  # Exact host software versions, binary hashes, and GPU identity are
+  # deliberately not asserted: they tie the deployment to one specific
+  # computer without making anything more correct.
+  local tool report refusals
   for tool in docker git jq sha256sum curl ss zip unzip; do
     command -v "${tool}" >/dev/null 2>&1 || die "Required host tool is missing: ${tool}"
   done
@@ -294,9 +297,11 @@ check_host_tools_and_versions() {
   jq -e . "${RELEASE_LOCK}" >/dev/null || die "Release lock is not valid JSON"
   docker version --format '{{.Server.Version}}' >/dev/null ||
     die "Docker server is not responding"
-  require_equal "Docker security options" \
-    "$(docker info --format '{{json .SecurityOptions}}')" \
-    "$(jq -c '.host.docker_security_options' "${STACK_LOCK}")"
+  report="$(docker info --format '{{json .SecurityOptions}}')" ||
+    die "Docker did not report its security options. Next: run docker info to see the daemon's error, repair the daemon, and rerun."
+  if ! refusals="$(host_isolation_refusals "${report}")"; then
+    die "This host does not provide the container isolation the deployment requires."$'\n'"${refusals}"
+  fi
 }
 
 # The generic layers of this stack live in two base images that
