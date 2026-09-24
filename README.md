@@ -1169,10 +1169,12 @@ ready. The isolation is one rule,
 [`scripts/host-isolation.sh`](scripts/host-isolation.sh), which the backend repository
 carries byte-identically: it parses `docker info` SecurityOptions into names and
 attributes and requires AppArmor with the default profile, seccomp with the builtin
-profile, and a private cgroup namespace. Any other daemon-wide option, and anything it
-cannot interpret, is refused with the property, the requirement, the report, and the
-next action. It asserts properties rather than a string, so no Docker or containerd
-version is pinned. Unexpected environment variables beginning with `AGENT_SERVICE_`
+profile, and a private cgroup namespace. A daemon-wide mode that can only add a
+restriction the containers already impose (`no-new-privileges`) is accepted; one that
+changes the model the stack runs under (`userns`, `rootless`, `selinux`), and anything
+the rule cannot interpret, is refused with the property, the requirement, the report,
+and the next action. It asserts properties rather than a string, so no Docker or
+containerd version is pinned. Unexpected environment variables beginning with `AGENT_SERVICE_`
 or `OPENAI_` are rejected rather than silently changing behavior.
 
 ## Operation
