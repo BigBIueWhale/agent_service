@@ -1646,6 +1646,55 @@ def _validate_stream_evidence_after(state: State) -> None:
         label=label,
         location=turn,
     )
+    require_text(state, turn, "streamEvent.type !== 'chunk'", label=label)
+    _require_ordered(turn_source, (
+        "this.finishReason = finishReason;",
+        "type: GeminiEventType.Finished,",
+        "if (signal.aborted) {",
+        "yield { type: GeminiEventType.UserCancelled };",
+        "return;",
+    ), label=label, location="complete delivered chunk before cancellation")
+    cli = "packages/cli/src/nonInteractiveCli.ts"
+    headless = _source(state, cli, label=label)
+    for stream in ("responseStream", "itemStream"):
+        loop = headless.split(f"for await (const event of {stream}) {{", 1)[1]
+        loop = loop.split("if (abortController.signal.aborted) routeAbort();", 1)[0]
+        _require_ordered(loop, (
+            "adapter.processEvent(event);", "adapter.finalizeAssistantMessage();",
+        ), label=label, location=f"{stream} output before abort routing")
+        _require_ordered(loop, (
+            "adapter.processEvent(event);",
+            "(event.type === GeminiEventType.MaxSessionTurns ||",
+            "event.type === GeminiEventType.Error)",
+            "routeAbort();",
+        ), label=label, location=f"{stream} cancellation at terminal controls")
+    acp = "packages/cli/src/acp-integration/session/Session.ts"
+    acp_source = _source(state, acp, label=label)
+    _require_ordered(acp_source, (
+        "if (abortSignal.aborted && event.type !== StreamEventType.CHUNK)",
+        "await onEvent(event);",
+        "if (abortSignal.aborted) return stopped('cancelled');",
+    ), label=label, location="ACP delivered chunk before cancellation")
+    sends = acp_source.split("const sendResult = await this.#consumeMessageStream(")[1:]
+    _require(len(sends) == 4, f"{label}: ACP send owners changed; audit their cancellation output")
+    for send in sends:
+        _require_ordered(send, (
+            "await this.messageEmitter.emitUsageMetadata(",
+            "if (sendResult.kind === 'stopped')",
+        ), label=label, location="ACP observed usage before stopped return")
+    _require_ordered(sends[-1], (
+        "await this.#emitBackgroundNotificationResponse(",
+        "if (sendResult.kind === 'stopped')",
+    ), label=label, location="background response before stopped return")
+    require_text(state, "packages/cli/src/ui/hooks/useGeminiStream.ts",
+                 "case ServerGeminiEventType.AttemptStarted:\n              break;", label=label)
+    for path, case in (
+        ("packages/core/src/core/turn.test.ts", "projects a delivered chunk completely before cancellation in %s"),
+        ("packages/cli/src/nonInteractiveCli.test.ts", "preserves a cancelled chunk through Turn and the CLI"),
+        ("packages/cli/src/acp-integration/session/Session.test.ts", "preserves delivered output on ACP cancellation"),
+        ("packages/cli/src/ui/hooks/useGeminiStream.test.tsx", "continues an ordinary interactive reply after its attempt marker"),
+    ):
+        require_text(state, path, case, label=label)
     _require_all(
         state,
         adapter,
@@ -9718,7 +9767,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Streaming and batch renderers preserve generation evidence and provider termination under "
             "the correct root or spawning-call identity, including a call the output limit stopped, "
             "recorded as its own block and never as a call made. Output drains before successful "
-            "delivery is acknowledged."
+            "delivery is acknowledged. Cancellation preserves every field of a delivered chunk, "
+            "including terminal usage, before preventing another pull or tool execution. Interactive "
+            "consumers accept attempt metadata and continue through ordinary replies."
         ),
         removal_condition=(
             "Upstream emits equivalent scoped generation evidence through callback-settled output "
