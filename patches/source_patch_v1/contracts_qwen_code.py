@@ -563,18 +563,38 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         label=label,
     )
+    # A generation a length terminal stopped is refused, not committed: it is
+    # recorded as a draw that committed no turn, nothing of it enters the
+    # history a request is rendered from, and it names the message it was
+    # issued on so the turn can be drawn again. Anything else is committed.
     _require_ordered(
         source,
         (
+            "const refused = deferredFinishReason === FinishReason.MAX_TOKENS;",
+            "if (refused) {",
+            "if (consolidatedHistoryParts.some((part) => part.functionCall)) {",
+            "await this.chatRecordingService.recordGenerationFailure(",
+            "finishReason: FinishReason.MAX_TOKENS,",
+            "recorded = true;",
+            "this.refusal = { answered, draws: refusedBefore + 1 };",
+            "} else {",
             "await this.chatRecordingService.recordAssistantTurn({",
             "this.history.push({",
-            "committed = true;",
+            "recorded = true;",
             "syncFunctionCallsField(terminal, committedCalls)",
             "yield terminal;",
         ),
         label=label,
         location=chat,
     )
+    refused_branch = source[source.index("if (refused) {") :]
+    refused_branch = refused_branch[: refused_branch.index("} else {")]
+    _require(
+        "this.history" not in refused_branch.replace("this.history.at(-1)", ""),
+        f"{label}: {chat} commits part of a generation its limit stopped to the "
+        "history a request is rendered from",
+    )
+    forbid_text(state, chat, "committed = true;", label=label)
     for symbol in (
         "maxContinuationRetries",
         "transportContinuationPrefix",
@@ -679,6 +699,8 @@ def _validate_stream_commit_after(state: State) -> None:
             "const incompleteToolCalls: IncompleteToolCall[] = [];",
             "incompleteToolCalls.push(...takeIncompleteToolCalls(chunk));",
             "yield chunk;",
+            "await this.chatRecordingService.recordGenerationFailure(",
+            "incompleteToolCalls,",
             "await this.chatRecordingService.recordAssistantTurn({",
             "incompleteToolCalls,",
             "this.history.push({",
@@ -730,7 +752,11 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         (
             "packages/core/src/core/geminiChat.test.ts",
-            "records a call its limit stopped with the turn and publishes it only on the committed terminal",
+            "records a refused draw exactly as served, the call its limit stopped included, and publishes that call only on its terminal",
+        ),
+        (
+            "packages/core/src/core/geminiChat.test.ts",
+            "refuses a draw its limit stopped: publishes its terminal, keeps none of it and issues nothing more",
         ),
         (
             "packages/core/src/services/chatRecordingService.test.ts",
@@ -1057,21 +1083,35 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "'- A `read_file` page and the statement that leads it are one inline block together.",
             "a declared snapshot of at most one inline block plus the original inputs verbatim,",
             "while the child spends its own turn budget, as many turns as yours.",
+            # The model is told what happens at the turn's limit: the turn is
+            # refused rather than truncated, kept nowhere and run in no part,
+            # asked for again as the next turn, and how many refusals in a
+            # row end the session -- the number read from the bound itself.
+            "`- One turn may generate at most ${turn}, and that total includes the reasoning you do before answering. A turn that reaches it is refused rather than truncated: it is not kept, nothing it called is run, and it is asked for again, told why, as the next turn. ${MAX_GENERATION_DRAWS} refusals in a row end the session.`,",
         ),
         label=label,
     )
     # Retired statements: the bound described as a whole-result replacement,
     # which the scheduler seam never does; the page size restated in bytes;
     # delegation stated a second time in `## Context`; a child's budget called
-    # the parent's own.
+    # the parent's own; a turn's limit described as a stop rather than a
+    # refusal.
     for retired in (
         "Nothing is lost and nothing is silently shortened",
         "the notice that replaces it",
         "returns pages of at most",
         "'- Subagents run one at a time, in the foreground.',",
         "while the child spends its own turn budget. ",
+        "Reaching it ends the session rather than truncating the turn",
+        "it is a hard stop and not a budget to spend",
     ):
         forbid_text(state, prompt, retired, label=label)
+    require_text(
+        state,
+        "packages/core/src/core/qwen38-deployment-prompt.test.ts",
+        "states the turn limit, that a turn reaching it is refused and asked for again, and what ends the session",
+        label=label,
+    )
     # The tool descriptions tell the same facts: a child's budget is its own,
     # as many turns as the parent's, and the shell names `task_stop` only in a
     # registry that holds it -- this deployment's never does.
@@ -1438,7 +1478,10 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "refuses when the request cannot be counted at all",
             "resamples one invalid pre-content stream",
             "never resamples an invalid stream after visible output escaped",
-            "publishes MAX_TOKENS without another request",
+            "refuses a draw its limit stopped: publishes its terminal, keeps none of it and issues nothing more",
+            "draws a refused turn again on its request with the refusal notice added and nothing else",
+            "draws one turn at most ${MAX_GENERATION_DRAWS} times, each redraw carrying the notice of every refusal before it",
+            "issues a redraw above the trigger by no more than its notices, and refuses one past them",
             "literal response preservation",
             "maps maxRetries zero to one outer establishment attempt",
             "literal-with-structure",
@@ -3667,7 +3710,7 @@ def _validate_compaction_budget_before(state: State) -> None:
     )
 
 
-# The three quantities the partition declares. `D` and `M` are shares of the
+# The quantities the partition declares. `D`, `M` and `R` are shares of the
 # window; `F` is a byte count that belongs to the served chat template and
 # does not scale with the window. They are read out of the post-patch source
 # rather than restated here, so the arithmetic below is a check on the tree
@@ -3676,6 +3719,7 @@ _PARTITION_DECLARED_NAMES = (
     "WINDOW_SHARES",
     "STATIC_PREAMBLE_SHARES",
     "INLINE_BLOCK_SHARES",
+    "TURN_REASONING_SHARES",
     "MESSAGE_FRAMING_BYTES",
 )
 
@@ -3685,9 +3729,18 @@ _SERVED_PARTITION = {
     "staticPreamble": 12_288,
     "inlineBlockBytes": 32_768,
     "messageFraming": 61,
-    "turnGeneration": 69_509,
-    "compactionTrigger": 180_347,
+    "turnGeneration": 40_960,
+    "compactionTrigger": 208_896,
 }
+
+# Partition numbers of no deployment this repository describes. A literal in
+# the tree that matches one is a copy of a partition that is not the one the
+# source derives, and nothing would notice it disagree.
+_RETIRED_PARTITION_NUMBERS = re.compile(
+    r"(?<!\w)(?<!\d,)(?<!\d\.)"
+    r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215)"
+    r"(?!\w|,\d|\.\d)"
+)
 
 
 def _read_partition_declarations(source: str, *, label: str) -> dict[str, int]:
@@ -3702,61 +3755,42 @@ def _read_partition_declarations(source: str, *, label: str) -> dict[str, int]:
     return declared
 
 
-def _surviving(window: int, declared: dict[str, int], turn: int) -> int:
-    """What a compaction leaves standing if a turn were given `turn` tokens.
-
-    The static preamble, then the snapshot, the authored input and one result
-    -- each at most one framed inline block -- and the carried turn, framed
-    like any other message.
-    """
-    total = declared["WINDOW_SHARES"]
-    preamble = (window * declared["STATIC_PREAMBLE_SHARES"]) // total
-    block = (window * declared["INLINE_BLOCK_SHARES"]) // total + declared[
-        "MESSAGE_FRAMING_BYTES"
-    ]
-    return preamble + 3 * block + (turn + declared["MESSAGE_FRAMING_BYTES"])
-
-
-def _fits(window: int, declared: dict[str, int], turn: int) -> bool:
-    """Whether a turn of `turn` tokens leaves that standing below its trigger."""
-    total = declared["WINDOW_SHARES"]
-    preamble = (window * declared["STATIC_PREAMBLE_SHARES"]) // total
-    return _surviving(window, declared, turn) <= window - turn - preamble - 1
-
-
 def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
-    """`C` by search, so this checks the definition rather than the formula.
+    """The partition a window yields, written from the declarations.
 
-    `C` is the largest room a turn may be given while a compaction can still
-    leave its result standing below the trigger. The source solves that in
-    closed form; here it is found by bisection from the property itself, and
-    the two are then required to agree.
+    `C` is one inline block at the most tokens it can be and the reasoning
+    share beside it; `T` is what the window has left once `C` and `D` are
+    held back.
     """
     total = declared["WINDOW_SHARES"]
-    preamble = (window * declared["STATIC_PREAMBLE_SHARES"]) // total
-    low, high = 0, window
-    if not _fits(window, declared, 1):
-        turn = 0
-    else:
-        while low + 1 < high:
-            mid = (low + high) // 2
-            if _fits(window, declared, mid):
-                low = mid
-            else:
-                high = mid
-        turn = low
+    share = lambda shares: (window * shares) // total  # noqa: E731
+    preamble = share(declared["STATIC_PREAMBLE_SHARES"])
+    block = share(declared["INLINE_BLOCK_SHARES"])
+    turn = block + share(declared["TURN_REASONING_SHARES"])
     return {
         "staticPreamble": preamble,
-        "inlineBlockBytes": (window * declared["INLINE_BLOCK_SHARES"]) // total,
+        "inlineBlockBytes": block,
         "messageFraming": declared["MESSAGE_FRAMING_BYTES"],
         "turnGeneration": turn,
         "compactionTrigger": window - turn - preamble,
     }
 
 
+def _surviving(part: dict[str, int]) -> int:
+    """What a compaction leaves standing: the static preamble, then the
+    snapshot, the authored input and one result -- each at most one framed
+    inline block -- and the carried turn, framed like any other message."""
+    framing = part["messageFraming"]
+    return (
+        part["staticPreamble"]
+        + 3 * (part["inlineBlockBytes"] + framing)
+        + (part["turnGeneration"] + framing)
+    )
+
+
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget follows from three declared quantities, and the
-    two that are derived are the largest values the fit admits.
+    """Every context budget follows from four declared quantities, and what a
+    compaction can leave standing stands below the trigger.
 
     The safety argument: what stands in the window after a compaction is the
     static preamble plus a snapshot, the authored input, one tool result and
@@ -3764,15 +3798,14 @@ def _validate_context_partition(state: State, *, label: str) -> None:
     before they exist, and a text's tokens are at most the UTF-8 bytes of its
     NFC form -- the served tokenizer normalizes to NFC and then spends at
     least a byte per token -- so the whole of it is known before any of it is
-    generated.
-    `C` is the largest room a turn may be given while that still stands below
-    the trigger, and `T` is what the window has left. This checks the
-    definition rather than the formula: `C` is found here by bisection on the
-    fit and required to be what the source computes, `C + 1` is required not
-    to fit, and the two consequences -- that a turn issued at the largest
-    admitted prompt cannot reach the end of the window, and that the request
-    which later summarises that prompt is issued with at least `C + 1` -- are
-    asserted at every window the deployment can be given.
+    generated. `C` is sized for the largest thing a turn legitimately does,
+    one inline block at the most tokens it can be and the reasoning share
+    beside it, and `T` is what the window has left. At every window the
+    deployment can be given, the fit holds, a turn issued at the largest
+    admitted prompt cannot reach the end of the window, and the request that
+    later summarises that prompt is issued with at least `C + 1`; a window
+    where the fit fails is refused. No literal in the tree states a partition
+    number the source does not derive.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
@@ -3783,16 +3816,24 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         f"{label}: every declared quantity must be a positive integer",
     )
     _require(
-        declared["STATIC_PREAMBLE_SHARES"] + declared["INLINE_BLOCK_SHARES"]
+        declared["STATIC_PREAMBLE_SHARES"]
+        + declared["INLINE_BLOCK_SHARES"]
+        + declared["TURN_REASONING_SHARES"]
         < declared["WINDOW_SHARES"],
-        f"{label}: the declared shares leave no window for a turn or a trigger",
+        f"{label}: the declared shares leave no window for a trigger",
     )
-    # `T` is what the window has left once `C` and `D` are held back, so the
-    # three terms spend the window exactly and no fourth budget exists.
-    require_text(
+    # `C` is a block and the reasoning beside it, and `T` is what the window
+    # has left once `C` and `D` are held back, so the three terms spend the
+    # window exactly and no fourth budget exists.
+    _require_all(
         state,
         limits,
-        "  const compactionTrigger = contextWindowSize - turnGeneration - staticPreamble;",
+        (
+            "  const turnGeneration = inlineBlockBytes + share(TURN_REASONING_SHARES);",
+            "  const compactionTrigger = contextWindowSize - turnGeneration - staticPreamble;",
+            "  if (surviving > compactionTrigger - 1) {",
+            "this deployment needs a larger window.",
+        ),
         label=label,
     )
     # Every window this partition can be asked to describe: the served one,
@@ -3822,12 +3863,16 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"{label}: a {window}-token window is not spent exactly by {part!r}",
         )
         _require(
-            _fits(window, declared, part["turnGeneration"])
-            and not _fits(window, declared, part["turnGeneration"] + 1),
-            f"{label}: at a {window}-token window {part['turnGeneration']} is not "
-            f"the largest room a turn can be given while a compaction still "
-            f"leaves {_surviving(window, declared, part['turnGeneration'])} "
-            f"tokens standing below the trigger",
+            part["turnGeneration"] > part["inlineBlockBytes"],
+            f"{label}: at a {window}-token window a turn's "
+            f"{part['turnGeneration']} tokens cannot hold one inline block of "
+            f"{part['inlineBlockBytes']} bytes and reason beside it",
+        )
+        _require(
+            _surviving(part) <= part["compactionTrigger"] - 1,
+            f"{label}: at a {window}-token window a compaction can leave "
+            f"{_surviving(part)} tokens standing, not below the "
+            f"{part['compactionTrigger']}-token trigger",
         )
         _require(
             part["compactionTrigger"] - 1 + part["turnGeneration"] < window,
@@ -3842,13 +3887,14 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"the largest admitted prompt is not issued with a whole turn's "
             f"room plus the preamble",
         )
-    # A window too small to leave a turn any room is refused rather than
-    # partitioned into something unusable.
-    for tiny in (256, 257, 459):
+    # A window too small to hold what a compaction leaves standing is refused
+    # rather than partitioned into something unusable.
+    for tiny in (256, 257, 459, 1_085, 1_104):
+        part = _partition(tiny, declared)
         _require(
-            _partition(tiny, declared)["turnGeneration"] < 1,
-            f"{label}: a {tiny}-token window must leave a turn no room, so the "
-            f"partition refuses it instead of deriving one",
+            _surviving(part) > part["compactionTrigger"] - 1,
+            f"{label}: a {tiny}-token window must fail the fit, so the partition "
+            f"refuses it instead of deriving one",
         )
     served = _partition(_SERVED_WINDOW, declared)
     _require(
@@ -3856,6 +3902,15 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         f"{label}: the served {_SERVED_WINDOW}-token window yields {served!r}, "
         f"not the reviewed {_SERVED_PARTITION!r}",
     )
+    for path, text in sorted(state.items()):
+        found = _RETIRED_PARTITION_NUMBERS.search(text)
+        _require(
+            found is None,
+            f"{label}: {path} states {found.group(0)!r}, a partition number of "
+            "no deployment this repository describes"
+            if found
+            else "",
+        )
 
 
 def _validate_compaction_budget_after(state: State) -> None:
@@ -3995,11 +4050,11 @@ def _validate_compaction_budget_after(state: State) -> None:
     # The arithmetic itself, evaluated against the shares the tree declares.
     _validate_context_partition(state, label=label)
 
-    # One derivation, in one place, from three declared quantities. A turn's
-    # limit is the room the fit leaves and nothing else: not the prompt, not a
-    # model ceiling, not a clamp margin, not a floor. It is the same number a
-    # compaction's snapshot is issued with, because what a compaction has to
-    # carry is that quantity repeated.
+    # One derivation, in one place, from four declared quantities. A turn's
+    # limit is one inline block and the reasoning share beside it, and nothing
+    # else: not the prompt, not a model ceiling, not a clamp margin, not a
+    # floor. A compaction's snapshot, one block and the reasoning that writes
+    # it, is issued with at least that room.
     limits_source = _require_all(
         state,
         limits,
@@ -4009,8 +4064,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export function turnOutputLimit(",
             "    turnGeneration,\n    compactionTrigger,\n  };",
             "return partition.turnGeneration;",
-            # The one place bytes stand in for tokens: a framed block, `M`
-            # bytes of NFC plus the template's `F`, spent once in the fit.
+            # The one place bytes stand in for tokens: a block of `M` bytes of
+            # NFC is at most `M` tokens, spent in the block a turn writes and,
+            # framed with the template's `F`, in the blocks the fit carries.
             "  const block = inlineBlockBytes + messageFraming;",
             # A text's tokens are at most the UTF-8 bytes of its NFC form, not
             # of the text as written, and this is the one place either is
@@ -4143,6 +4199,97 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
         location=chat,
+    )
+    # A turn that reaches its limit is refused and drawn again on the request
+    # it was issued on, with the refusal notice added: the chat names the
+    # message the refused draw answered, a redraw is admitted only against
+    # that message, carries the notice and nothing else, is never compacted,
+    # and is drawn at most MAX_GENERATION_DRAWS times. Its request stands
+    # above the trigger by no more than its notices, which the startup proof
+    # holds within D, so its room is a turn's.
+    _require_ordered(
+        chat_source,
+        (
+            "private refusal:",
+            "const refusalNotices = refusedTurnNoticeTokens(partition);",
+            "if (refusalNotices > partition.staticPreamble) {",
+            "async redrawRefusedTurn(",
+            "'redraw',",
+            "draw: 'turn' | 'redraw',",
+            "const refusal = this.refusal;",
+            "this.refusal = undefined;",
+            "if (draw === 'redraw') {",
+            "if (!refusal || this.history.at(-1) !== refusal.answered) {",
+            "if (refusal.draws >= MAX_GENERATION_DRAWS) {",
+            "const notice = turnRefusalNotice(turnOutputLimit(partition));",
+            "          parts.length !== 1 ||\n"
+            "          Object.keys(parts[0]).length !== 1 ||\n"
+            "          parts[0].text !== notice\n",
+            "'A redraw carries the refusal notice of the turn it redraws and nothing else.',",
+            "refusedBefore = refusal.draws;",
+            "if (draw === 'redraw') {",
+            "this.history.push(notice);",
+            "requestContents = this.getRequestHistoryForRoute(",
+            "promptTokensForClamp = await countExactRequestTokens(requestContents);",
+            "            refusedBefore *\n            (partition.messageFraming + TURN_REFUSAL_NOTICE_MAX_BYTES);",
+            "            partition.compactionTrigger + noticesAdded",
+            "            promptTokensForClamp + turnOutputLimit(partition) >\n            partition.window",
+            "maxOutputTokens: turnOutputLimit(partition),",
+            "} else {",
+            "compressionInfo = await this.tryCompress(",
+        ),
+        label=label,
+        location=chat,
+    )
+    redraw_branch = chat_source.split("        if (draw === 'redraw') {\n", 1)[1].split(
+        "        } else {\n", 1
+    )[0]
+    for added in (
+        "tryCompress",
+        "takePendingManualPlanExitNotice",
+        "repairOrphanedToolUseTurns",
+    ):
+        _require(
+            added not in redraw_branch,
+            f"{label}: {chat} redraws a refused turn through {added!r}; a "
+            "redraw is the refused request with its notice and nothing else",
+        )
+    # Every reminder the client adds joins the send types it names, so a
+    # redraw, named by none, joins none; the hooks and the IDE context skip it
+    # by name, and it is drawn through the turn by name. Those are the only
+    # places the client names it.
+    client_source = _source(state, "packages/core/src/core/client.ts", label=label)
+    _require(
+        client_source.count("SendMessageType.Redraw") == 3,
+        f"{label}: packages/core/src/core/client.ts names SendMessageType.Redraw "
+        f"{client_source.count('SendMessageType.Redraw')} times; a redraw is named "
+        "where hooks and IDE context skip it and where it is drawn, and joins "
+        "no reminder",
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/client.ts",
+        (
+            "  Redraw = 'redraw',",
+            "        messageType !== SendMessageType.Redraw &&\n        hooksEnabled &&",
+            "        !hasPendingToolCall &&\n        messageType !== SendMessageType.Redraw",
+            "        messageType === SendMessageType.Redraw\n          ? turn.redraw(model, requestToSend, signal)\n          : turn.run(model, requestToSend, signal);",
+        ),
+        label=label,
+    )
+    for case in (
+        "refuses a redraw when no turn was refused",
+        "refuses a redraw once the conversation has changed since the refusal",
+        "refuses a redraw that carries %s",
+        "leaves a refused turn behind when a new message is sent",
+        "refuses a window whose preamble share cannot hold a refused turn's notices",
+    ):
+        require_text(state, chat_test, case, label=label)
+    require_text(
+        state,
+        "packages/core/src/core/client.test.ts",
+        "adds nothing to a redraw of a refused turn and draws it through the turn",
+        label=label,
     )
     # Both refusals name a move the operator has. A preamble already written
     # into history cannot be shortened after the fact, which is why every
@@ -4410,19 +4557,28 @@ def _validate_compaction_budget_after(state: State) -> None:
         require_text(state, chat_test, case, label=label)
     for case in (
         "declares D and M as shares of the window and F as a constant",
-        "gives a turn the largest room the fit allows, at every window",
+        "gives a turn one inline block at its most tokens and the reasoning share beside it",
         "spends the whole window and nothing more",
+        "leaves what a compaction can leave standing below the trigger, at every window",
         "cannot overrun the window from the largest admitted prompt",
         "issues the compaction of any admitted prompt with a whole turn of room",
-        "leaves the trigger independent of the static preamble",
-        "names the served partition",
-        "refuses a window too small to leave a turn any room",
+        "takes every token of the turn room and the preamble from the trigger",
+        "names the served partition and the least a segment after a compaction has",
+        "refuses a window too small to hold what a compaction leaves standing",
         "refuses a window that is not a count of tokens",
         "is the turn generation room and nothing else",
         "gives a turn the same room whatever its prompt",
-        "spends the byte-to-token theorem once, as M plus the framing",
+        "spends the byte-to-token theorem in the partition alone, a block of M bytes as at most M tokens",
     ):
         require_text(state, limits_test, case, label=label)
+    # A turn's room is sized, not maximised: nothing asserts it is the largest
+    # the fit allows, and the trigger is not independent of the preamble.
+    for retired in (
+        "gives a turn the largest room the fit allows",
+        "leaves the trigger independent of the static preamble",
+    ):
+        forbid_text(state, limits_test, retired, label=label)
+    forbid_text(state, limits, "The largest C satisfying", label=label)
     # The retired vocabulary cannot come back through a test either: a case
     # that still names a reserve is describing a partition this deployment no
     # longer has.
@@ -4440,7 +4596,8 @@ def _validate_compaction_budget_after(state: State) -> None:
     # snapshot's declaration and the directive -- less the widest notice a
     # redraw appends. What it adds is measured against the prompt as it was
     # issued, with the turn's own tools, and it and that notice, framed, are
-    # held to the static preamble's share before the first draw, so every
+    # held to the static preamble's share before the first draw beside the
+    # refusal notices the prompt itself can carry past the trigger, so every
     # draw -- the first and each redraw -- is issued under one ceiling that is
     # never below a turn's room.
     service_source = _require_all(
@@ -4453,7 +4610,8 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const redrawNoticeTokens =\n        partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;",
             "          config: { ...requestOptions.config, tools: turnTools },\n          contents: issuedPrompt,",
             "const addedTokens =\n        summaryRequestTokenCount - promptOnlyCount.totalTokens;",
-            "if (addedTokens + redrawNoticeTokens > partition.staticPreamble) {",
+            "const turnNoticeTokens = refusedTurnNoticeTokens(partition);",
+            "        addedTokens + redrawNoticeTokens + turnNoticeTokens >\n        partition.staticPreamble",
             "compactionOutputBudget =\n        contextLimit - summaryRequestTokenCount - redrawNoticeTokens;",
             "if (compactionOutputBudget < partition.turnGeneration) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
@@ -4478,8 +4636,9 @@ def _validate_compaction_budget_after(state: State) -> None:
         forbid_text(state, service, absent, label=label)
     # The snapshot is issued at the room the window actually has, less the
     # widest redraw notice, and that room is never less than a turn's: the
-    # prompt this request extends was issued below the trigger, so the request
-    # and a redraw's notice are at most T - 1 + D, leaving at least C + 1. The
+    # prompt this request extends was issued below the trigger, with at most
+    # its refusal notices more, so the request and a redraw's notice are at
+    # most T - 1 + D, leaving at least C + 1. The
     # floor is asserted in the service so a broken partition fails loudly,
     # rather than clamped so it silently shrinks the snapshot -- a clamp is
     # what hands a summary a few thousand tokens and truncates it.
@@ -4539,19 +4698,51 @@ def _validate_compaction_budget_after(state: State) -> None:
             absent not in service_source,
             f"{label}: {service} splits or converges the compaction budget via '{absent}'",
         )
-    # Redrawing is bounded, and the bound is counted in candidates rather than
-    # in elapsed time or consecutive faults, so the cost of a transition is
-    # knowable before it runs.
+    # Redrawing is bounded, and the bound is counted in draws rather than in
+    # elapsed time or consecutive faults, so the cost of a transition is
+    # knowable before it runs. It is the one bound every refused answer is
+    # drawn under, a compaction's snapshot and a turn alike, declared once.
+    # A refused turn is told in the voice a refused draw is told in, in
+    # upstream's reminder envelope, and told all of it: why, that the refused
+    # answer is not in the conversation and ran nothing, and what to do
+    # instead.
+    refusal_module = "packages/core/src/core/generation-refusal.ts"
+    _require_all(
+        state,
+        refusal_module,
+        (
+            "export const MAX_GENERATION_DRAWS = 4;",
+            "export const REFUSED_ANSWER =\n  'Your previous answer to this request was refused because';",
+            "export function limitReachedRefusal(limit: number, unfinished: string): string {",
+            "  return `${REFUSED_ANSWER} it reached its ${limit}-token limit before ${unfinished} was complete`;",
+            "export function turnRefusalNotice(limit: number): string {\n"
+            "  return (\n"
+            "    '<system-reminder>\\n' +\n"
+            "    `${limitReachedRefusal(limit, 'it')}, so it is not in this conversation and nothing it called was run. ` +\n"
+            "    'Reason more briefly, and do no more in one turn than fits within the limit: write a long file in parts, a turn each.' +\n"
+            "    '\\n</system-reminder>'\n"
+            "  );\n"
+            "}",
+        ),
+        label=label,
+    )
     _require_all(
         state,
         service,
         (
-            "export const MAX_COMPACTION_CANDIDATE_ATTEMPTS = 4;",
             "      outcome.kind === 'resampleable' &&",
-            "      rejectedAttempts.length + 1 < MAX_COMPACTION_CANDIDATE_ATTEMPTS",
+            "      rejectedAttempts.length + 1 < MAX_GENERATION_DRAWS",
+            "  const refused = REFUSED_ANSWER;",
+            "      return `${limitReachedRefusal(refusal.limit, `its ${STATE_SNAPSHOT_FUNCTION_NAME} call`)}. Reason more briefly, and make the call within the limit.`;",
         ),
         label=label,
     )
+    for path, text in sorted(state.items()):
+        _require(
+            "MAX_COMPACTION_CANDIDATE_ATTEMPTS" not in text,
+            f"{label}: {path} names a draw bound of compaction's own; every "
+            "refused answer is drawn under MAX_GENERATION_DRAWS",
+        )
     # The first draw is the counted request; each redraw is that request and
     # one notice about the draw just before it, never an accumulation and
     # never the refused draw itself, which would not fit the proved room.
@@ -4615,7 +4806,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         "tells the next draw why %s was refused, and what to do instead",
         "does not show the next draw the draw that was refused",
         "tells each redraw only why the draw just before it was refused",
-        "holds the widest redraw notice inside the share of the static preamble what the request adds is held to",
+        "holds the widest redraw notice and the notices of a refused turn inside the share of the static preamble what the request adds is held to",
         "derives the widest notice from the notices themselves",
     ):
         require_text(state, service_test, case, label=label)
@@ -4711,12 +4902,11 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     # A draw is told its own ceiling and what reaching it costs. The request
-    # carries the session's system prompt, which states a turn's limit and
-    # that reaching it ends the session; neither holds for a draw, whose room
-    # is what the request leaves and whose limit refuses the answer and asks
-    # again. The number is the ceiling max_tokens is set to, passed where it
-    # is derived: the request is counted stating the widest ceiling, the
-    # window, and issued stating the one it is issued with.
+    # carries the session's system prompt, which states a turn's limit, and a
+    # draw's room is what the request leaves, which is not that number. The
+    # number is the ceiling max_tokens is set to, passed where it is derived:
+    # the request is counted stating the widest ceiling, the window, and
+    # issued stating the one it is issued with.
     _require_all(
         state,
         service,
@@ -4724,9 +4914,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export function compactionRequestDirective(maxOutputTokens: number): string {",
             "This request is not a turn, and the turn limit does not apply to it: "
             "your answer may generate at most ${maxOutputTokens} tokens, reasoning included. ",
-            "An answer that reaches that limit is refused rather than ending the session, "
-            "and the request is made again, told why, up to ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} answers in all. ",
-            "If all ${MAX_COMPACTION_CANDIDATE_ATTEMPTS} are refused, this conversation is not "
+            "An answer that reaches that limit is refused, "
+            "and the request is made again, told why, up to ${MAX_GENERATION_DRAWS} answers in all. ",
+            "If all ${MAX_GENERATION_DRAWS} are refused, this conversation is not "
             "compacted and cannot continue.",
             "text: `${systemInstruction}\\n\\n${compactionRequestDirective(maxOutputTokens)}`,",
         ),
@@ -4747,7 +4937,14 @@ def _validate_compaction_budget_after(state: State) -> None:
     directive_body = service_source.split(
         "export function compactionRequestDirective(maxOutputTokens: number): string {"
     )[1].split("\n}\n")[0]
-    for restated in ("turnGeneration", "turnOutputLimit", "partition", "69509", "69,509"):
+    served_turn = _SERVED_PARTITION["turnGeneration"]
+    for restated in (
+        "turnGeneration",
+        "turnOutputLimit",
+        "partition",
+        str(served_turn),
+        f"{served_turn:,}",
+    ):
         _require(
             restated not in directive_body,
             f"{label}: {service} compactionRequestDirective names {restated!r}; a draw "
@@ -5328,8 +5525,19 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "): string | null {",
             # The limit the model is told about is read from the rule that
             # sets it, not restated as arithmetic beside it, so the sentence
-            # cannot drift from the partition.
-            "turnOutputLimit(partitionContextWindow(terminal.issued.window))",
+            # cannot drift from the partition: in the notice a refused turn is
+            # answered with, and in the ending of a run of refusals.
+            "export function refusedTurn(\n"
+            "  terminal: GenerationTerminal | undefined,\n"
+            "): GenerationTerminal | undefined {\n"
+            "  return terminal?.reason === FinishReason.MAX_TOKENS ? terminal : undefined;\n"
+            "}",
+            "export function refusedTurnNotice(terminal: GenerationTerminal): string {\n"
+            "  return turnRefusalNotice(\n"
+            "    turnOutputLimit(partitionContextWindow(terminal.issued.window)),\n"
+            "  );",
+            "export function describeRefusedTurns(",
+            "`${turnOutputLimit(partitionContextWindow(terminal.issued.window))}-token ` +",
             # Where the generation stood is read from what the turn produced:
             # a call its limit stopped, carried as served, outranks any text,
             # and whitespace is not a message.
@@ -5348,10 +5556,27 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "are recorded, exactly as served, in this turn's incomplete_tool_use",
             "'It stopped inside its message text, so that text is a cut-off prefix.'",
             "'It stopped before the model wrote any message text or tool call.'",
-            "'This run cannot be continued: a generation that did not end on its own is ' +",
-            "'final answer. What earlier turns wrote to the workspace is kept.'",
+            "const INCOMPLETE_RUN_LEAVES =\n"
+            "  'This run carries no final answer; what earlier turns wrote to the ' +\n"
+            "  'workspace is kept.';",
         ),
         label=label,
+    )
+    # A run of refusals ends with the numbers of its last, as the last of
+    # MAX_GENERATION_DRAWS turns in a row refused at their limit.
+    _require_ordered(
+        turn_source,
+        (
+            "export function describeRefusedTurns(",
+            "limit on ${MAX_GENERATION_DRAWS} turns in a row. A turn refused at its ",
+            "limit is asked for again, told why, and ${MAX_GENERATION_DRAWS} ",
+            "refusals in a row end the run. The last, turn ${turn}, was issued at a ",
+            "${terminal.issued.promptTokens}-token prompt and generated ",
+            "of them reasoning. ",
+            "${describeGenerationPosition(terminal.position)} ${INCOMPLETE_RUN_LEAVES}",
+        ),
+        label=label,
+        location=turn,
     )
     _require_ordered(
         turn_source,
@@ -5359,17 +5584,27 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "export function describeIncompleteGeneration(",
             "if (terminal?.reason === FinishReason.STOP) {",
             "return null;",
+            "const refused = refusedTurn(terminal);",
+            "return describeRefusedTurns(refused, turn);",
             "terminal === undefined",
             "ended with no terminal reason, so nothing ",
-            "terminal.reason === FinishReason.MAX_TOKENS",
-            "of them reasoning, rather than the ",
+            "not asked for again.",
+            "rather than the ",
+            "reason but its limit is not asked for again. ",
             "describeGenerationPosition(terminal.position)",
-            "describeGenerationPosition(terminal.position)",
-            "return `${ended} ${INCOMPLETE_RUN_ENDS}`;",
+            "return `${ended} ${INCOMPLETE_RUN_LEAVES}`;",
         ),
         label=label,
         location=turn,
     )
+    # A generation stopped at its limit is asked for again, so no sentence may
+    # say otherwise.
+    for retired in (
+        "This run cannot be continued",
+        "never resumed or retried",
+        "INCOMPLETE_RUN_ENDS",
+    ):
+        forbid_text(state, turn, retired, label=label)
     # The description once called every stopped generation a cut-off text
     # prefix, which a call the limit stopped is not, and named nothing the
     # run could do next.
@@ -5416,6 +5651,47 @@ def _validate_incomplete_generation_after(state: State) -> None:
     _require(
         cli_source.count("lastGenerationTerminal = undefined;") == 2,
         f"{label}: a turn head can inherit a stale terminal, or its numbers",
+    )
+    # Both loops ask the one predicate whether the turn they just read was
+    # refused at its limit, and answer it the same way: the notice, written to
+    # the stream and recorded, is the whole message of a redraw, and the
+    # MAX_GENERATION_DRAWS-th refusal in a row ends the run naming the limit.
+    _require(
+        cli_source.count("refusedTurn(lastGenerationTerminal);") == 2
+        and cli_source.count("await noticeForRefusedTurn(") == 2
+        and cli_source.count("if (!refused) {\n              consecutiveTurnRefusals = 0;") == 1
+        and cli_source.count("if (!itemRefused) {\n                    consecutiveTurnRefusals = 0;") == 1,
+        f"{label}: the main-turn and drain loops do not both answer a refused turn",
+    )
+    _require_ordered(
+        cli_source,
+        (
+            "let redrawRefusedTurn = false;",
+            "let consecutiveTurnRefusals = 0;",
+            "const noticeForRefusedTurn = async (",
+            "consecutiveTurnRefusals += 1;",
+            "if (consecutiveTurnRefusals >= MAX_GENERATION_DRAWS) {",
+            "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
+            "message: describeRefusedTurns(terminal, turnCount),",
+            "const parts: Part[] = [{ text: refusedTurnNotice(terminal) }];",
+            "adapter.emitUserMessage(parts);",
+            ".recordMidTurnUserMessage(parts);",
+            "if (redrawRefusedTurn) {",
+            "sendType = SendMessageType.Redraw;",
+            "redrawRefusedTurn = false;",
+            "const refused = refusedTurn(lastGenerationTerminal);",
+            "consecutiveFinalMessageSlips = 0;",
+            "if (refused) {",
+            "redrawRefusedTurn = true;",
+            "let itemRedraw = false;",
+            "? SendMessageType.Redraw",
+            "itemRedraw = false;",
+            "const itemRefused = refusedTurn(lastGenerationTerminal);",
+            "if (itemRefused) {",
+            "itemRedraw = true;",
+        ),
+        label=label,
+        location=cli,
     )
     # Both loops read where the generation stood from the turn's own events,
     # and a retry starts the turn's record again.
@@ -5488,6 +5764,32 @@ def _validate_incomplete_generation_after(state: State) -> None:
     )
     for retired in ("roundFinishReason", "issuedGeneration("):
         forbid_text(state, agent_core, retired, label=label)
+    # A subagent answers a round refused at its limit the same way: the
+    # notice, recorded in its transcript under its own kind, is the whole
+    # message of a redraw the chat draws again, and the
+    # MAX_GENERATION_DRAWS-th refusal in a row ends the run.
+    _require_ordered(
+        agent_core_source,
+        (
+            "let consecutiveTurnRefusals = 0;",
+            "let redrawRefusedRound = false;",
+            "const responseStream = redrawRefusedRound",
+            "? await chat.redrawRefusedTurn(roundModel, messageParams, promptId)",
+            "redrawRefusedRound = false;",
+            "const refusedRound = refusedTurn(roundTerminal);",
+            "consecutiveTurnRefusals = 0;",
+            "} else if (refusedRound) {",
+            "consecutiveTurnRefusals += 1;",
+            "if (consecutiveTurnRefusals >= MAX_GENERATION_DRAWS) {",
+            "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
+            "const notice = refusedTurnNotice(refusedRound);",
+            "kind: 'turn_refusal',",
+            "currentMessages = [{ role: 'user', parts: noticeParts }];",
+            "redrawRefusedRound = true;",
+        ),
+        label=label,
+        location=agent_core,
+    )
     require_text(
         state,
         agent_types,
@@ -5516,6 +5818,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
         label=label,
     )
     for name in (
+        "answers a turn that reached its limit with the notice for the room its window gives a turn",
+        "refuses no turn stopped by %s",
+        "refuses no turn that has no terminal",
         "names the prompt, the limit and the output, reasoning included, when a generation reached its limit",
         "names the call a limit stopped, what was served of it and where it is kept, and never calls it a text prefix",
         "counts every call a limit stopped and names one the provider left unnamed",
@@ -5560,6 +5865,25 @@ def _validate_incomplete_generation_after(state: State) -> None:
         "does not carry the terminal of an earlier turn into a turn that reported none",
         label=label,
     )
+    for name in (
+        "asks for the refused turn again, told why, as the next turn, and continues the run",
+        "ends the run on the refusal that makes ${MAX_GENERATION_DRAWS} in a row, as error_incomplete_generation naming the limit",
+        "counts only refusals in a row: a turn that is not refused starts the count again",
+        "charges every redraw to the turn budget before it is issued",
+        "asks for a refused drain turn again in the drain loop, as a redraw of the same item",
+    ):
+        require_text(state, cli_test, name, label=label)
+    for name in (
+        "stops the agent at once when its generation was stopped for a reason other than its limit",
+        "asks for a round refused at its limit again, told why, and stops the agent on the refusal that makes ${MAX_GENERATION_DRAWS} in a row",
+        "takes the report from a redraw that ends on its own",
+    ):
+        require_text(
+            state,
+            "packages/core/src/agents/runtime/agent-core.test.ts",
+            name,
+            label=label,
+        )
     # A fixture that leaves the terminal reason unstated would exercise the
     # incomplete branch by accident, so none may.
     forbid_text(state, cli_test, "reason: undefined", label=label)
@@ -5991,7 +6315,7 @@ def _validate_final_message_slip_after(state: State) -> None:
         (
             "  finalMessageSlip: FinalMessageSlipKind | null;",
             "  finalMessageSlipNotices: number;",
-            "kind?: 'message' | 'notification' | 'final_message_slip';",
+            "kind?: 'message' | 'notification' | 'final_message_slip' | 'turn_refusal';",
         ),
         label=label,
     )
@@ -6030,13 +6354,22 @@ def _validate_final_message_slip_after(state: State) -> None:
     require_text(
         state,
         recording,
-        "externalInputKind?: 'message' | 'notification' | 'final_message_slip';",
+        "  externalInputKind?:\n"
+        "    | 'message'\n"
+        "    | 'notification'\n"
+        "    | 'final_message_slip'\n"
+        "    | 'turn_refusal';",
         label=label,
     )
-    require_text(
+    # The loop's own notices -- after a slip, and after a turn refused at its
+    # limit -- are synthetic user records, never branch-bearing input.
+    _require_all(
         state,
         branches,
-        "record.externalInputKind === 'final_message_slip' ||",
+        (
+            "record.externalInputKind === 'final_message_slip' ||",
+            "record.externalInputKind === 'turn_refusal' ||",
+        ),
         label=label,
     )
     require_text(state, sdk_ts, "| 'error_slipped_final_message'", label=label)
@@ -7009,7 +7342,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "assertToolResponsesBounded(\n          userContent.parts ?? [],\n          partition.inlineBlockBytes,\n        );",
+            "assertToolResponsesBounded(\n            userContent.parts ?? [],\n            partition.inlineBlockBytes,\n          );",
             "const effectiveTokens = await countExactRequestTokens(",
             "compressionInfo = await this.tryCompress(",
         ),
@@ -8957,8 +9290,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "One generation contract withholds structured calls and the terminal until EOF validation "
             "and canonical assistant recording succeed. Invalid pre-content requests have a bounded "
             "identical resample; delivered answers cannot be replayed. Literal text never supplies "
-            "executable calls. A call a length terminal stopped is never made, and what the provider "
-            "served of it is carried, as the text it was served as, to every record of the generation."
+            "executable calls. A generation a length terminal stopped is refused rather than "
+            "committed: the call it stopped is never made, nothing of it enters the history a request "
+            "is rendered from, and what the provider served of it is carried, as the text it was "
+            "served as, to every record of the generation."
         ),
         removal_condition=(
             "Upstream provides equivalent batch/stream call grammar, terminal and durable commit "
@@ -9231,25 +9566,30 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="context-window-partition",
         rationale=(
-            "The served window is spent from three declared quantities: the static preamble, a "
+            "The served window is spent from four declared quantities: the static preamble, a "
             "capacity proved against the real preamble before the first turn, with the Git "
             "snapshot's values, the startup context's workspace data and the stated turn budget's "
-            "number bounded by their bytes; one inline block; and the per-message framing. A turn's "
-            "room and the compaction trigger are derived from the fit; a turn's output limit is "
-            "that room and nothing else, and a configured ceiling is refused. Compaction summarises "
-            "the prompt the last turn was issued against and carries that turn verbatim behind the "
-            "snapshot, so the snapshot always has at least a turn's room, and each draw is told "
-            "that room as its own limit and that reaching it refuses the answer and asks again, "
-            "not the turn's limit and its ending. Exact before/after sizing "
+            "number bounded by their bytes; one inline block; the per-message framing; and the "
+            "reasoning a turn is given beside one block. A turn's room is one inline block at its "
+            "most tokens and that reasoning, the compaction trigger is what the window has left, "
+            "and what a compaction leaves standing fits below it; a turn's output limit is that "
+            "room and nothing else, and a configured ceiling is refused. A turn that reaches its "
+            "limit is refused rather than truncated and drawn again on its request with the "
+            "refusal notice added, never compacted in between, under the one bound every refused "
+            "answer is drawn under. Compaction summarises the prompt the last turn was issued "
+            "against and carries that turn verbatim behind the snapshot, so the snapshot always "
+            "has at least a turn's room, and each draw is told its own room as its limit and that "
+            "reaching it refuses the answer and asks again. Exact before/after sizing "
             "governs compaction. Original authored inputs are retained independently of model "
             "summaries and carried in the snapshot's all_user_messages; summaries must declare the "
             "snapshot's other sections, upstream's, in upstream's order. No phase budget "
             "forces reasoning to stop."
         ),
         removal_condition=(
-            "Upstream provides the same derived turn room, a preamble proved against its declared "
-            "share, issued-prompt compaction with a verbatim turn, exact request sizing, durable "
-            "authored-input retention, and structural summary validation."
+            "Upstream provides the same sized turn room with a refused turn drawn again, a preamble "
+            "proved against its declared share, issued-prompt compaction with a verbatim turn, "
+            "exact request sizing, durable authored-input retention, and structural summary "
+            "validation."
         ),
         validate_before=_validate_compaction_budget_before,
         validate_after=_validate_compaction_budget_after,
@@ -9332,18 +9672,21 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="incomplete-generation-terminal-state",
         rationale=(
-            "Only a self-ended STOP can satisfy the completed-generation predicate. Missing or "
-            "externally stopped terminals retain an explicit incomplete state in root and child "
-            "reasoning loops and UI. A terminal always carries the served counts and the window its "
-            "generation was issued with, so one stopped at its limit is always described with them, "
+            "Only a self-ended STOP can satisfy the completed-generation predicate. A turn stopped "
+            "at its limit is refused and asked for again, told why, as the next turn, in root and "
+            "child reasoning loops alike, and the refusal that makes MAX_GENERATION_DRAWS in a row "
+            "is the explicit incomplete state; a generation stopped for any other reason, or with "
+            "no terminal, is that state at once. A terminal always carries the served counts and "
+            "the window its generation was issued with, so a limit is always described with them, "
             "and what the generation was writing when it ended, so the description says what the "
             "stop cost -- a call the model had not completed, which was not made, and where what "
             "was served of it is kept; a message cut to a prefix; or nothing visible -- and that "
-            "the run cannot be continued."
+            "the run carries no final answer."
         ),
         removal_condition=(
-            "Upstream distinguishes self-ended generation from a severed response and preserves that "
-            "fact in every renderer."
+            "Upstream distinguishes self-ended generation from a severed response, asks for a turn "
+            "stopped at its limit again rather than ending the run on it, and preserves both facts "
+            "in every renderer."
         ),
         validate_before=_validate_incomplete_generation_before,
         validate_after=_validate_incomplete_generation_after,

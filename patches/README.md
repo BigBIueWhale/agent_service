@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `fed9181f6417a62ed68d6848752c8f1b7e83e481ebf4b717d0b9042028f8cd10`
+- Review-diff SHA-256: `69864efc0537acd9f215eafbaf3cc7426d9c8d2b3a0cc95c2d87e934de4562c0`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `1bb45282a6a4ec178af81ac1ed4264ac962357bc0f4a73dcc2b36b812f1c2816`
+- Transformer-manifest SHA-256: `61d41ad161a9fc133665b13a65f2a239b912d01f2d210031bbfe3e5b79b1cf6f`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -47,12 +47,32 @@ provider terminal. A fresh bounded retry is permitted only before answer content
 has been delivered. Text, whitespace, and literal protocol-like XML remain
 verbatim. Transport failures, invalid usage, malformed calls, and post-terminal
 content retain diagnostic text without publishing executable calls or a normal
-terminal. Empty normally completed output is a valid response. A call a length
-terminal stopped is never made, and what the provider served of it is the
-model's output: it is carried, as the text it was served as, to every record of
-the generation -- the stream's `incomplete_tool_use` block, the assistant
-transcript record beside the message history replays, a subagent's round, and
-a compaction draw's accounting -- and never becomes a function call anywhere.
+terminal. Empty normally completed output is a valid response. A generation a
+length terminal stopped is refused rather than committed: the call it stopped
+is never made, nothing of it enters the history a request is rendered from, and
+what the provider served of it is the model's output, carried, as the text it
+was served as, to every record of the generation -- the stream's
+`incomplete_tool_use` block, the session recording's record of a draw that
+committed no turn, which a resume does not replay, a subagent's round, and a
+compaction draw's accounting -- and it never becomes a function call anywhere.
+
+A turn refused at its limit is drawn again, told why, as the next turn, in the
+headless session and every subagent alike, the way a refused compaction draw is
+drawn again. The chat names the message the refused draw answered and admits
+one kind of send against it, `redrawRefusedTurn`: its whole message is the
+refusal notice, in upstream's `<system-reminder>` envelope and in the voice a
+refused compaction draw is told in -- the answer reached its limit before it was
+complete, is not in the conversation and ran nothing, and the next should reason
+more briefly and write a long file in parts -- and it joins the conversation on
+that message, so the redraw is the refused request with the notice added,
+rendered from the history as every request is, never compacted in between and
+joined by no reminder, context or hook. Every draw is a turn, charged to the
+turn budget and billed in the record like any other. `MAX_GENERATION_DRAWS`, the
+one bound every refused answer is drawn under, ends the run on the fourth
+refusal in a row as the incomplete-generation state, with the limit and the last
+draw's numbers; a generation stopped for any other reason is not drawn again
+and is that state at once. One predicate in core (`refusedTurn`) decides it for
+both reasoning loops.
 
 A turn the model ended itself with no tool call is its final answer only when
 its visible text is one. A message with no visible text, or one carrying the
@@ -78,7 +98,7 @@ notices, and its parent is told the assignment is unfinished.
 
 ## Context and instructions
 
-The context partition spends the window exactly, from three declared quantities.
+The context partition spends the window exactly, from four declared quantities.
 `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a declared
 capacity rather than a derivation: the system prompt and the tool declarations
 are texts this repo ships, so the turn preamble is counted exactly against it by
@@ -90,36 +110,41 @@ and the turn budget the `## Context` section states, its number bounded by the
 sixteen digits a safe integer renders to; a preamble that does not fit is a
 startup refusal naming shorten-or-deploy-larger;
 each compaction's preflight holds what its request adds -- the snapshot's
-declaration and the directive -- to the same share. The
+declaration and the directive -- to the same share, beside the refusal notices
+the prompt it summarises can carry, which the startup proof also holds within
+it so a redraw keeps a turn's room. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof counts the frame every compacted history
 holds around its blocks -- the resume trailer and the acknowledgement turn --
 with it, the blocks left out, and one todo reminder
-with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — the one
+with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — a
 declared magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back rather
 than shortened. `F`, the per-message framing, is the 61 bytes the served
 template wraps around one message at its widest, declared here and verified
-against the template rather than copied from it.
+against the template rather than copied from it. `R`, the reasoning a turn is
+given beside its block, is W/32 tokens — 8,192 — declared from what the model
+was recorded doing rather than derived (`TURN_REASONING_SHARES` says from what).
 
-`C`, the room every generation is issued with, and `T`, the compaction
-trigger, follow. What stands in the window after a compaction is the preamble
-plus `snapshot + authored input + carried turn + one result`; every term but
-the turn is bounded in bytes before it exists, and a text's tokens are at most
-the UTF-8 bytes of its NFC form, the form the served tokenizer splits, so `C`
-is the largest room a turn may be given while `D + 3(M + F) + (C + F)` still
-fits below the trigger, and `T = W - C - D`. At the served window that is
-69,509 and 180,347. Both are
-asserted, not assumed: the fit, the no-overrun property and the compaction
-room are checked at every window the partition can be given, and a window too
-small to leave a turn any room is refused rather than partitioned. `T` does
-not depend on `D`, which cancels, so the preamble trades against turn room and
-never against the trigger. One number is the whole of what a generation is
-given: the output limit of every turn whatever its prompt, and the room a
-compaction's snapshot is issued with. The route refuses a configured ceiling,
-including `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate
-histories are counted using the actual rendered request.
+`C`, the room every generation is issued with, is sized for the largest thing
+a turn legitimately does, write one inline block after reasoning about it: the
+block is at most `M` tokens whatever it holds, because a text's tokens are at
+most the UTF-8 bytes of its NFC form, the form the served tokenizer splits, so
+`C = M + R`. `T`, the compaction trigger, is what the window has left,
+`T = W - C - D`. At the served window they are 40,960 and 208,896. What stands
+in the window after a compaction is the preamble plus
+`snapshot + authored input + carried turn + one result`; every term but the
+turn is bounded in bytes before it exists, so `D + 3(M + F) + (C + F)` must
+stand below the trigger, and does, by 57,099 at the served window. All of it is
+asserted, not assumed: the fit, the no-overrun property and the compaction room
+are checked at every window the partition can be given, and a window where the
+fit fails is refused rather than partitioned. Every token of `C` or `D`, and
+every byte of `M`, is a token `T` does not have. `C` is the output limit of
+every turn whatever its prompt, and the least a compaction's snapshot is issued
+with. The route refuses a configured ceiling, including
+`QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate histories are
+counted using the actual rendered request.
 
 A tool result says whether it is complete. One notice states what was asked
 for, what came back, the bound and its unit, the real total or why the tool
@@ -205,12 +230,14 @@ the trigger could pass the window before the draw had a token, and the
 partition's comment gives the arithmetic. It requests the room left by that
 exact input and by the widest notice a redraw may add, which is never below
 `C`, and refuses insufficient space. It tells the draw that room: the request
-carries the session's system prompt, which states a turn's limit and that
-reaching it ends the session, and neither holds for a draw, so its directive
+carries the session's system prompt, which states a turn's limit, and a draw's
+room is what the request leaves, which is not that number, so its directive
 says the request is not a turn, states the number the request's `max_tokens` is
 set to, and says that an answer reaching it is refused and asked for again, told
 why, up to the draw limit, after which the conversation is not compacted and
-cannot continue. The request is counted with that number at its widest, the
+cannot continue. A turn's room is what the fit charges for the turn a
+compaction carries; a draw's answer is never carried, only the snapshot it
+declares, so it can be given whatever the window has left. The request is counted with that number at its widest, the
 window, and the served tokenizer spends one token per digit, so the room it
 states is the room it is issued with. The accepted snapshot is itself one inline
 block: the bound is stated in the declaration the model is given, and

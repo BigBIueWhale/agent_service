@@ -642,17 +642,18 @@ mod tests {
     #[test]
     fn a_generation_the_provider_cut_short_is_its_own_terminal_state() {
         // The agent reports the shape of the ending, not a verdict on the
-        // work: this run stopped because the model's last generation was
-        // severed at the output cap, which is a different fact from a failure
-        // during execution and from an exhausted turn budget.
-        let terminal = "{\"type\":\"result\",\"subtype\":\"error_incomplete_generation\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":5562113,\"duration_api_ms\":5560686,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"Generation on turn 1 ended as MAX_TOKENS: it was issued at a 42-token prompt with a 69509-token limit and generated 9 tokens, 6 of them reasoning, rather than the model completing its message. It stopped in a call to `write_file` that the model had not completed, so the call was not made; the 57 bytes of arguments served for it are recorded, exactly as served, in this turn's incomplete_tool_use block. This run cannot be continued: a generation that did not end on its own is never resumed or retried, so no turn follows it and this run carries no final answer. What earlier turns wrote to the workspace is kept.\"}}\n";
+        // work: this run stopped because the model's last generation did not
+        // end on its own and was not asked for again, which is a different
+        // fact from a failure during execution and from an exhausted turn
+        // budget.
+        let terminal = "{\"type\":\"result\",\"subtype\":\"error_incomplete_generation\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":5562113,\"duration_api_ms\":5560686,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"Generation on turn 1 ended as SAFETY rather than the model completing its message, and a generation stopped for any reason but its limit is not asked for again. It stopped in a call to `write_file` that the model had not completed, so the call was not made; the 57 bytes of arguments served for it are recorded, exactly as served, in this turn's incomplete_tool_use block. This run carries no final answer; what earlier turns wrote to the workspace is kept.\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{terminal}");
         let parsed = parse_text(&text).expect("a severed generation is a reportable ending");
         assert!(parsed.is_error);
         assert_eq!(parsed.subtype, "error_incomplete_generation");
         // The service's response is the ending's own description, whole.
-        assert!(parsed.response.starts_with("Generation on turn 1 ended as MAX_TOKENS:"));
-        assert!(parsed.response.ends_with("What earlier turns wrote to the workspace is kept."));
+        assert!(parsed.response.starts_with("Generation on turn 1 ended as SAFETY"));
+        assert!(parsed.response.ends_with("what earlier turns wrote to the workspace is kept."));
         assert_eq!(parsed.duration_ms, 5_562_113);
     }
 

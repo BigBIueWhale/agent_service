@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Every code identifier the transformation README names is one the
-# transformation ships, and every count of its semantic concerns a document
-# states is the count the transformer validates.
+# transformation ships, every count of its semantic concerns a document states
+# is the count the transformer validates, and no document states a
+# context-partition number the partition does not derive.
 #
 # The README describes the result of applying the review diff to pinned
 # upstream source, so an identifier it quotes must appear in that result. An
@@ -93,5 +94,26 @@ for document in "${README}" "${PROJECT_README}"; do
     }
   done
 done
+
+# A context-partition number a document states is one the partition derives.
+# The numbers of no deployment this repository describes are the transformer's
+# own list, read from its contracts module, so a document that restates one
+# describes a partition nobody has.
+retired="$(
+  cd -- "${PROJECT_DIR}" &&
+    PYTHONDONTWRITEBYTECODE=1 python3 - README.md patches/README.md docs/*.md <<'PY'
+import sys
+from patches.source_patch_v1.contracts_qwen_code import _RETIRED_PARTITION_NUMBERS
+for path in sys.argv[1:]:
+    for number, line in enumerate(open(path, encoding='utf-8'), start=1):
+        for found in _RETIRED_PARTITION_NUMBERS.finditer(line):
+            print(f'{path}:{number}: {found.group(0)}')
+PY
+)"
+if [[ -n "${retired}" ]]; then
+  printf 'ERROR: a document states a context-partition number the partition does not derive:\n%s\n' \
+    "${retired}" >&2
+  exit 1
+fi
 
 printf 'DOC_IDENTIFIER_CONTRACT_OK identifiers=%s concerns=%s\n' "${#identifiers[@]}" "${concerns}"
