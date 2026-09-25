@@ -97707,7 +97707,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
      ...actual,
      getCachedGitBranch: getCachedGitBranchMock,
    };
-@@ -220,662 +249,1030 @@
+@@ -220,662 +249,1031 @@
          subagentName: 'explore',
          executionAllowedTools: [],
        });
@@ -97733,6 +97733,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +    const attempt = (
 +      overrides: Partial<AgentRoundTextEvent> = {},
 +    ): AgentRoundTextEvent => ({
++      historyDisposition: 'abandoned',
 +      subagentId: 'agent-x',
 +      round: 1,
 +      attempt: 1,
@@ -100946,7 +100947,28 @@ diff --git a/packages/core/src/agents/arena/ArenaManager.ts b/packages/core/src/
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -821,16 +822,13 @@
+@@ -69,13 +70,19 @@
+ const ARENA_POLL_INTERVAL_MS = 500;
+ const ARENA_SUMMARY_TIMEOUT_MS = 20_000;
+ const ARENA_SUMMARY_MAX_DIFF_CHARS = 6_000;
+ const ARENA_SUMMARY_MAX_TRANSCRIPT_CHARS = 6_000;
+ 
+ interface ArenaTranscriptEntry {
+-  role: 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'info';
++  role:
++    | 'user'
++    | 'assistant'
++    | 'generation_attempt'
++    | 'tool_call'
++    | 'tool_result'
++    | 'info';
+   content: string;
+   thought?: boolean;
+   metadata?: Record<string, unknown>;
+   timestamp: number;
+ }
+ 
+@@ -821,16 +828,13 @@
          model,
          status: AgentStatus.INITIALIZING,
          worktree,
@@ -100964,7 +100986,7 @@ diff --git a/packages/core/src/agents/arena/ArenaManager.ts b/packages/core/src/
            failedToolCalls: 0,
          },
          startedAt: 0,
-@@ -1226,16 +1224,14 @@
+@@ -1226,16 +1230,14 @@
          makeArenaAgentCompletedEvent({
            arena_session_id: this.sessionId ?? '',
            agent_session_id: agent.agentSessionId,
@@ -100983,7 +101005,7 @@ diff --git a/packages/core/src/agents/arena/ArenaManager.ts b/packages/core/src/
          }),
        );
  
-@@ -1358,18 +1354,20 @@
+@@ -1358,18 +1360,20 @@
        const emitter = interactive.getEventEmitter();
        if (!emitter) continue;
  
@@ -101010,7 +101032,7 @@ diff --git a/packages/core/src/agents/arena/ArenaManager.ts b/packages/core/src/
  
        const applyStatus = (
          incoming: AgentStatus,
-@@ -1560,13 +1558,13 @@
+@@ -1560,13 +1564,13 @@
     */
    private buildStatusFile(agent: ArenaAgentState): ArenaStatusFile {
      return {
@@ -101025,7 +101047,7 @@ diff --git a/packages/core/src/agents/arena/ArenaManager.ts b/packages/core/src/
      };
    }
  
-@@ -1746,13 +1744,13 @@
+@@ -1746,13 +1750,13 @@
          model: agent.model.modelId,
          status: agent.status,
          metrics: {
@@ -107627,7 +107649,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    getRuntimeContentGenerator,
    runWithAgentContext,
    runWithRuntimeContentGenerator,
-@@ -46,40 +66,1004 @@
+@@ -46,40 +66,1116 @@
  } from '../../core/contentGenerator.js';
  import {
    getInvocationContext,
@@ -107648,6 +107670,8 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +  type AgentCompactionEvent,
 +} from './agent-events.js';
 +import type { CompactionRecord } from '../../core/turn.js';
++import { GeminiEventType } from '../../core/turn.js';
++import { LoopDetectionService } from '../../services/loopDetectionService.js';
 +import { GenerateContentResponse } from '@google/genai';
 +import { FinishReason } from '../../core/genai-compat.js';
 +import { setIncompleteToolCalls } from '../../core/incomplete-tool-call.js';
@@ -107823,25 +107847,30 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +            processStreamResponse(
 +              model: string,
 +              source: AsyncGenerator<GenerateContentResponse>,
-+            ): AsyncGenerator<GenerateContentResponse>;
++            ): AsyncGenerator<{
++              value: GenerateContentResponse;
++              historyDisposition: 'accepted' | 'abandoned' | null;
++            }>;
 +          }
 +        ).processStreamResponse('test-model', source);
 +        const provisional = await stream.next();
-+        expect(provisional.value?.functionCalls ?? []).toEqual([]);
++        expect(provisional.value?.value.functionCalls ?? []).toEqual([]);
 +        expect(
-+          provisional.value?.candidates?.[0]?.finishReason,
++          provisional.value?.value.candidates?.[0]?.finishReason,
 +        ).toBeUndefined();
 +        expect(
 +          fs.readFileSync(transcript, 'utf8').trim().split('\n'),
 +        ).toHaveLength(1);
++        expect(provisional.value?.historyDisposition).toBeNull();
 +        expect(sync).not.toHaveBeenCalled();
 +        if (kind === 'sync refusal') {
 +          await expect(stream.next()).rejects.toBe(cause);
 +          expect(chat.getHistory()).toEqual([]);
 +        } else {
 +          const terminal = await stream.next();
-+          expect(terminal.value?.functionCalls).toEqual([call]);
-+          expect(terminal.value?.candidates?.[0]?.finishReason).toBe(
++          expect(terminal.value?.historyDisposition).toBe('accepted');
++          expect(terminal.value?.value.functionCalls).toEqual([call]);
++          expect(terminal.value?.value.candidates?.[0]?.finishReason).toBe(
 +            FinishReason.STOP,
 +          );
 +          const durable = fs
@@ -107917,7 +107946,14 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +          );
 +        }
 +        return (async function* () {
-+          yield { type: StreamEventType.CHUNK, value: terminal };
++          yield {
++            historyDisposition:
++              terminal.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS
++                ? 'abandoned'
++                : 'accepted',
++            type: StreamEventType.CHUNK,
++            value: terminal,
++          };
 +        })();
 +      };
 +    return {
@@ -108027,7 +108063,14 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +          : endingWith(FinishReason.STOP);
 +        first = false;
 +        return (async function* () {
-+          yield { type: StreamEventType.CHUNK, value: terminal };
++          yield {
++            historyDisposition:
++              terminal.candidates?.[0]?.finishReason === FinishReason.MAX_TOKENS
++                ? 'abandoned'
++                : 'accepted',
++            type: StreamEventType.CHUNK,
++            value: terminal,
++          };
 +        })();
 +      },
 +      redrawRefusedTurn: async (
@@ -108037,6 +108080,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        draws.push({ kind: 'redraw', message: params.message });
 +        return (async function* () {
 +          yield {
++            historyDisposition: 'accepted',
 +            type: StreamEventType.CHUNK,
 +            value: {
 +              candidates: [
@@ -108124,6 +108168,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +          if (!round) throw new Error('the script has no further round');
 +          return (async function* () {
 +            yield {
++              historyDisposition: 'accepted',
 +              type: StreamEventType.CHUNK,
 +              value: {
 +                candidates: [
@@ -108322,6 +108367,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        sendMessageStream: async () =>
 +          (async function* () {
 +            yield {
++              historyDisposition: 'accepted',
 +              type: StreamEventType.CHUNK,
 +              value: {
 +                candidates: [
@@ -108402,6 +108448,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        sendMessageStream: async () =>
 +          (async function* () {
 +            yield {
++              historyDisposition: null,
 +              type: StreamEventType.CHUNK,
 +              value: {
 +                candidates: [
@@ -108414,6 +108461,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +            };
 +            abortController.abort();
 +            yield {
++              historyDisposition: null,
 +              type: StreamEventType.CHUNK,
 +              value: { candidates: [{ content: { parts: [] } }] },
 +            };
@@ -108454,6 +108502,11 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      thought = false,
 +      extra: { usage?: typeof usage; finishReason?: FinishReason } = {},
 +    ): StreamEvent => ({
++      historyDisposition: !extra.finishReason
++        ? null
++        : extra.finishReason === FinishReason.MAX_TOKENS
++          ? 'abandoned'
++          : 'accepted',
 +      type: StreamEventType.CHUNK,
 +      value: Object.assign(new GenerateContentResponse(), {
 +        candidates: [
@@ -108505,7 +108558,13 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      } catch (cause) {
 +        error = cause;
 +      }
-+      return { rounds, compactions, result, error };
++      return {
++        rounds,
++        compactions,
++        result,
++        error,
++        messages: core.getMessages(),
++      };
 +    }
 +    it.each(['reported usage', 'absent usage', 'cancelled'])(
 +      'retains failed stream prefix once with %s',
@@ -108524,6 +108583,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        expect(state.error).toBe(failure);
 +        expect(state.rounds).toHaveLength(1);
 +        expect(state.rounds[0]).toMatchObject({
++          historyDisposition: 'abandoned',
 +          round: 1,
 +          attempt: 1,
 +          finishReason: null,
@@ -108537,8 +108597,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +    );
 +    it('keeps each failed attempt separate from the successful retry', async () => {
 +      const state = await observe(async function* () {
-+        yield chunk('first reasoning', true);
-+        yield chunk('first text', false, { usage });
++        yield chunk('first reasoning', true, { usage });
 +        yield { type: StreamEventType.RETRY };
 +        yield chunk('second reasoning', true);
 +        yield chunk('second text', false, {
@@ -108548,15 +108607,29 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      });
 +      expect(state.error).toBeUndefined();
 +      expect(state.result?.text).toBe('second text');
++      expect(
++        state.messages
++          .filter((message) => message.role === 'assistant')
++          .map((message) => message.content),
++      ).toEqual(['second reasoning', 'second text']);
++      expect(
++        state.messages.find((message) => message.content === 'first reasoning'),
++      ).toMatchObject({
++        role: 'generation_attempt',
++        thought: true,
++        metadata: { round: 1, attempt: 1, historyDisposition: 'abandoned' },
++      });
 +      expect(state.rounds).toHaveLength(2);
 +      expect(state.rounds[0]).toMatchObject({
++        historyDisposition: 'abandoned',
 +        attempt: 1,
-+        text: 'first text',
++        text: '',
 +        thoughtText: 'first reasoning',
 +        finishReason: null,
 +        usageMetadata: usage,
 +      });
 +      expect(state.rounds[1]).toMatchObject({
++        historyDisposition: 'accepted',
 +        attempt: 2,
 +        text: 'second text',
 +        thoughtText: 'second reasoning',
@@ -108564,6 +108637,37 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        usageMetadata: { promptTokenCount: 20, totalTokenCount: 24 },
 +      });
 +    });
++    it('does not duplicate abandoned output when loop detection stops at a retry', async () => {
++      const check = vi
++        .spyOn(LoopDetectionService.prototype, 'checkAlwaysOnSafeties')
++        .mockImplementation((event) => event.type === GeminiEventType.Retry);
++      try {
++        const state = await observe(async function* () {
++          yield chunk('unfinished reasoning', true, { usage });
++          yield { type: StreamEventType.RETRY };
++          throw new Error('stopped retry must not resume');
++        });
++        expect(state.error).toBeUndefined();
++        expect(state.result?.terminateMode).toBe(
++          AgentTerminateMode.LOOP_DETECTED,
++        );
++        expect(state.rounds).toHaveLength(1);
++        expect(state.rounds[0]).toMatchObject({
++          attempt: 1,
++          historyDisposition: 'abandoned',
++          thoughtText: 'unfinished reasoning',
++          usageMetadata: usage,
++        });
++        expect(
++          state.messages.filter(
++            (message) => message.role === 'generation_attempt',
++          ),
++        ).toHaveLength(1);
++      } finally {
++        check.mockRestore();
++      }
++    });
++
 +    it('ingests delivered text and usage before acting on cancellation', async () => {
 +      const state = await observe(async function* (abort) {
 +        yield chunk('thinking ', true);
@@ -108580,9 +108684,38 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        text: 'delivered answer ',
 +        thoughtText: 'thinking ',
 +        usageMetadata: usage,
-+        finishReason: null,
++        finishReason: FinishReason.STOP,
++        historyDisposition: 'accepted',
 +      });
 +    });
++    it('retains terminal incomplete arguments received as cancellation arrives', async () => {
++      const incomplete = {
++        name: 'write_file',
++        arguments: '{"content":"unterminated',
++      };
++      const state = await observe(async function* (abort) {
++        yield chunk('thinking ', true);
++        const terminal = chunk('', false, {
++          usage,
++          finishReason: FinishReason.MAX_TOKENS,
++        });
++        if (terminal.type !== StreamEventType.CHUNK)
++          throw new Error('invalid test terminal');
++        setIncompleteToolCalls(terminal.value, [incomplete]);
++        abort.abort(new Error('cancelled'));
++        yield terminal;
++      });
++      expect(state.result?.terminateMode).toBe(AgentTerminateMode.CANCELLED);
++      expect(state.rounds).toHaveLength(1);
++      expect(state.rounds[0]).toMatchObject({
++        historyDisposition: 'abandoned',
++        finishReason: FinishReason.MAX_TOKENS,
++        incompleteToolCalls: [incomplete],
++        thoughtText: 'thinking ',
++        usageMetadata: usage,
++      });
++    });
++
 +    it('publishes compaction evidence after cancellation without inventing served usage', async () => {
 +      const record: CompactionRecord = {
 +        postCompactionHistory: null,
@@ -108615,6 +108748,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      expect(state.error).toBeInstanceOf(Error);
 +      expect(state.rounds).toHaveLength(1);
 +      expect(state.rounds[0]).toMatchObject({
++        historyDisposition: 'abandoned',
 +        text: '',
 +        thoughtText: '',
 +        attempt: 1,
@@ -108643,7 +108777,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  describe('AgentCore.runInAgentFrames', () => {
    // The deferred-approval `respond` callback that AgentCore hands to the
    // UI must restore both ALS frames the agent normally runs under, so any
-@@ -92,14 +1076,15 @@
+@@ -92,14 +1188,15 @@
  
    function makeCore(name: string, runtimeView?: RuntimeContentGeneratorView) {
      const promptConfig: PromptConfig = { systemPrompt: '' };
@@ -108660,7 +108794,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        undefined,
        undefined,
        undefined,
-@@ -207,13 +1192,20 @@
+@@ -207,13 +1304,20 @@
        core as unknown as {
          _runReasoningLoopInner: () => Promise<ReasoningLoopResult>;
        },
@@ -108682,7 +108816,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        core.runReasoningLoop({} as never, [], [], new AbortController()),
      );
  
-@@ -270,21 +1262,25 @@
+@@ -270,21 +1374,25 @@
      let inheritedAgentId: string | null = null;
      let observedAgentId: string | null = null;
      const onConfirm = async () => {
@@ -108717,7 +108851,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  
      await respondClosure!();
  
-@@ -304,28 +1300,38 @@
+@@ -304,28 +1412,38 @@
      const onConfirm = async () => {
        observedDepth = getCurrentAgentDepth();
      };
@@ -108772,7 +108906,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(getCurrentAgentId()).toBeNull();
      await new Promise((resolve) => setImmediate(resolve));
  
-@@ -416,37 +1422,37 @@
+@@ -416,37 +1534,37 @@
    // includes MCP / lsp / cron_* tools would silently lose them once
    // ToolSearch was introduced.
    function buildAgentForTools(
@@ -108813,7 +108947,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        { model: 'test-model' },
        { max_turns: 1 },
        toolConfig,
-@@ -701,104 +1707,81 @@
+@@ -701,104 +1819,81 @@
  
    it.each([ToolNames.ENTER_PLAN_MODE, ToolNames.EXIT_PLAN_MODE])(
      'returns a dedicated message when filtered %s is called directly',
@@ -108974,7 +109108,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    // The AgentTool is depth-gated: available to a sub-agent only while
    // maxSubagentDepth still permits another level. prepareTools() reads the
    // sub-agent's own 0-based depth from getCurrentAgentDepth(); a child sits
-@@ -811,30 +1794,45 @@
+@@ -811,30 +1906,45 @@
      } as FunctionDeclaration,
    ];
  
@@ -109024,7 +109158,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    it('nesting: frameless prepareTools fails closed — AgentTool excluded', async () => {
      // prepareTools() only ever serves agents, never the top-level session.
      // A missing agent frame means the launch path forgot runWithAgentContext
-@@ -849,13 +1847,17 @@
+@@ -849,13 +1959,17 @@
  
    it('nesting: fork execution contexts never receive the AgentTool', async () => {
      // The fork contract is context-sharing, not isolation — forks must not
@@ -109043,7 +109177,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(names).toContain('read_file');
    });
  
-@@ -865,35 +1867,43 @@
+@@ -865,35 +1979,43 @@
        agentId: 'scribe@demo',
        agentName: 'scribe',
        teamName: 'demo',
@@ -109092,7 +109226,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(deniedNames).toContain('read_file');
    });
  });
-@@ -969,6 +1979,210 @@
+@@ -969,6 +2091,211 @@
      expect(extractParentToolNames(undefined)).toEqual([]);
      expect(extractParentToolNames({} as GenerateContentConfig)).toEqual([]);
      expect(extractParentToolNames(configWithTools([]))).toEqual([]);
@@ -109159,6 +109293,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +    thought = false,
 +    usage = false,
 +  ): StreamEvent => ({
++    historyDisposition: null,
 +    type: StreamEventType.CHUNK,
 +    value: Object.assign(new GenerateContentResponse(), {
 +      candidates: [
@@ -109826,7 +109961,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
        let durationMin = (Date.now() - startTime) / (1000 * 60);
        if (options?.maxTimeMinutes && durationMin >= options.maxTimeMinutes) {
-@@ -901,24 +969,59 @@
+@@ -901,126 +969,213 @@
        // Per-round child controller so model-SDK retry layers don't accumulate
        // listeners on the long-lived parent. createChildAbortController handles
        // parent propagation; the try/finally below guarantees reverse-cleanup
@@ -109842,14 +109977,12 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +      // The round's terminal, with what its generation was issued with.
 +      let roundTerminal: GenerationTerminal | undefined;
 +      let attempt = 1;
++      let observedFinishReason: string | null = null;
 +      let pendingEvidence = false;
-+      // What the agent most recently said about where it got to. Banked on
-+      // every path out of a round rather than at each exit: `finalText` was
-+      // assigned only where a round ended normally, so every abnormal exit --
-+      // the turn budget, a detected loop, a timeout, cancellation -- reported
-+      // an empty result for a run that had produced work, and each new exit
-+      // path inherited that by omission. A round that only called tools said
-+      // nothing and does not erase what the previous round said.
++      let historyDisposition: import('../../core/geminiChat.js').ChatHistoryDisposition =
++        'abandoned';
++      // Abnormal run results describe partial work; transcript role and team
++      // reporting separately preserve whether the chat accepted the attempt.
 +      const bankRoundText = () => {
 +        const banked = roundText.trim();
 +        if (banked) finalText = banked;
@@ -109862,7 +109995,8 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +          runId,
 +          round: this.reasoningTurnsUsed,
 +          attempt,
-+          finishReason: roundTerminal?.reason ?? null,
++          historyDisposition,
++          finishReason: observedFinishReason,
 +          text: roundText,
 +          thoughtText: roundThoughtText,
 +          incompleteToolCalls: roundIncompleteToolCalls,
@@ -109891,7 +110025,6 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -        const responseStream = await chat.sendMessageStream(
 +        const roundModel =
            this.modelConfig.model ||
-@@ -925,102 +1028,146 @@
 -            this.runtimeContext.getModel() ||
 -            DEFAULT_QWEN_MODEL,
 -          messageParams,
@@ -109940,21 +110073,24 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              };
            }
  
-           // Handle retry events — reset all per-attempt state so a successful
-           // retry does not inherit stale data (e.g. wasOutputTruncated) from a
-           // previous attempt that may have hit MAX_TOKENS.
+-          // Handle retry events — reset all per-attempt state so a successful
+-          // retry does not inherit stale data (e.g. wasOutputTruncated) from a
+-          // previous attempt that may have hit MAX_TOKENS.
++          // Clear the completed observation before a retry-boundary stop can
++          // publish it again under another attempt number.
            if (streamEvent.type === 'retry') {
 +            publishAttempt();
 +            attempt++;
-+            pendingEvidence = true;
-             if (checkSubagentLoop({ type: GeminiEventType.Retry })) {
-               terminateMode = AgentTerminateMode.LOOP_DETECTED;
-               loopDetectedInStream = true;
-               break;
-             }
+-            if (checkSubagentLoop({ type: GeminiEventType.Retry })) {
+-              terminateMode = AgentTerminateMode.LOOP_DETECTED;
+-              loopDetectedInStream = true;
+-              break;
+-            }
 -            if (streamEvent.maxOutputTokensEscalated !== undefined) {
 -              stickyMaxOutputTokens = streamEvent.maxOutputTokensEscalated;
 -            }
++            historyDisposition = 'abandoned';
++            observedFinishReason = null;
              functionCalls.length = 0;
              roundText = '';
              roundThoughtText = '';
@@ -109963,6 +110099,12 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              currentResponseId = undefined;
              wasOutputTruncated = false;
 +            roundTerminal = undefined;
++            if (checkSubagentLoop({ type: GeminiEventType.Retry })) {
++              terminateMode = AgentTerminateMode.LOOP_DETECTED;
++              loopDetectedInStream = true;
++              break;
++            }
++            pendingEvidence = true;
              continue;
            }
  
@@ -110000,7 +110142,16 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +
            // Handle chunk events
            if (streamEvent.type === 'chunk') {
++            pendingEvidence = true;
++            if (streamEvent.historyDisposition !== null) {
++              historyDisposition = streamEvent.historyDisposition;
++            }
              const resp = streamEvent.value;
++            observedFinishReason =
++              resp.candidates?.[0]?.finishReason ?? observedFinishReason;
++            if (resp.candidates?.[0]?.finishReason) {
++              roundIncompleteToolCalls = getIncompleteToolCalls(resp);
++            }
              // Track the response ID for tool call correlation
              if (resp.responseId) {
                currentResponseId = resp.responseId;
@@ -110048,7 +110199,6 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +            functionCalls.push(...chunkFunctionCalls);
 +            const chunkFinishReason = resp.candidates?.[0]?.finishReason;
 +            if (chunkFinishReason) {
-+              roundIncompleteToolCalls = getIncompleteToolCalls(resp);
 +              roundTerminal = generationTerminal(
 +                chunkFinishReason,
 +                resp.usageMetadata,
@@ -110066,7 +110216,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                checkSubagentLoop({
                  type: GeminiEventType.Thought,
                  value: thoughtSummary,
-@@ -1044,25 +1191,28 @@
+@@ -1044,25 +1199,28 @@
                break;
              }
  
@@ -110107,7 +110257,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
                  break;
                }
              }
-@@ -1089,50 +1239,54 @@
+@@ -1089,50 +1247,54 @@
          }
  
          if (loopDetectedInStream) {
@@ -110177,7 +110327,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
              break;
            }
            currentMessages = toolCallResult.messages;
-@@ -1143,118 +1297,181 @@
+@@ -1143,118 +1305,181 @@
              // alongside the tool results the model is about to see.
              // processFunctionCalls always returns exactly one user-role entry.
              const last = currentMessages[currentMessages.length - 1];
@@ -110418,7 +110568,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    private drainExternalInputs(
      options?: ReasoningLoopOptions,
    ): AgentExternalInput[] {
-@@ -1269,46 +1486,49 @@
+@@ -1269,46 +1494,49 @@
        typeof input === 'string'
          ? `${EXTERNAL_MESSAGE_PREFIX} ${input}`
          : input.text;
@@ -110485,7 +110635,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
      options: ReasoningLoopOptions | undefined,
      startTime: number,
    ): number | undefined {
-@@ -1317,13 +1537,13 @@
+@@ -1317,13 +1545,13 @@
    }
  
    private async waitForExternalInputs(
@@ -110500,7 +110650,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    }> {
      while (true) {
        const immediate = this.drainExternalInputs(options);
-@@ -1332,13 +1552,13 @@
+@@ -1332,13 +1560,13 @@
        }
  
        if (abortController.signal.aborted) {
@@ -110515,7 +110665,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
        const remainingTimeMs = this.getRemainingTimeMs(options, startTime);
        if (remainingTimeMs !== undefined && remainingTimeMs <= 0) {
          return { inputs: [], terminateMode: AgentTerminateMode.TIMEOUT };
-@@ -1511,12 +1731,13 @@
+@@ -1511,12 +1739,13 @@
      currentRound: number,
      toolsList: FunctionDeclaration[],
      responseId?: string,
@@ -110529,7 +110679,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
    }> {
      const responseByCallId = new Map<
        string,
-@@ -1587,13 +1808,21 @@
+@@ -1587,13 +1816,21 @@
  
        if (errorMessage) {
 -        const functionResponsePart = {
@@ -110558,7 +110708,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
          this.emitSyntheticToolError({
            callId,
            name: toolName,
-@@ -1600,13 +1829,13 @@
+@@ -1600,13 +1837,13 @@
            args,
            errorMessage,
 -          responseParts: [functionResponsePart],
@@ -110574,7 +110724,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
            durationMs: 0,
          });
          continue;
-@@ -1852,21 +2081,23 @@
+@@ -1852,21 +2089,23 @@
      // Prepare requests and emit TOOL_CALL events
      const requests: ToolCallRequestInfo[] = authorizedCalls.map((fc) => {
        const toolName = String(fc.name || 'unknown');
@@ -110598,7 +110748,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
        const isOutputMarkdown = this.getToolIsOutputMarkdown(toolName);
        this.eventEmitter?.emit(AgentEventType.TOOL_CALL, {
          subagentId: this.subagentId,
-@@ -1956,49 +2187,49 @@
+@@ -1956,49 +2195,49 @@
          // TOOL_RESULT events for every un-emitted callId (corrupting the
          // transcript and misleading the model on the next round).
          abortController.signal.removeEventListener('abort', onAbort);
@@ -110668,7 +110818,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
            responseParts: response.responseParts,
            ...(collected?.durationMs !== undefined
              ? { durationMs: collected.durationMs }
-@@ -2072,64 +2303,23 @@
+@@ -2072,64 +2311,23 @@
      this.pendingApprovals.clear();
    }
  
@@ -110733,7 +110883,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
     * Note: Assumes tools are warmed via warmAll() before the reasoning loop.
     */
    getToolDescription(toolName: string, args: Record<string, unknown>): string {
-@@ -2162,46 +2352,13 @@
+@@ -2162,46 +2360,13 @@
    recordToolCallStats(
      toolName: string,
      success: boolean,
@@ -110781,7 +110931,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
  
    /**
     * TOOL_WAITING_APPROVAL is deliberately NOT listened to here because
-@@ -2210,12 +2367,26 @@
+@@ -2210,18 +2375,43 @@
     * (approvals never fire). AgentInteractive owns that listener and
     * writes into `pendingApprovals` via the public mutator API.
     */
@@ -110803,12 +110953,31 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 +    });
 +
      emitter.on(AgentEventType.ROUND_TEXT, (event: AgentRoundTextEvent) => {
++      const role =
++        event.historyDisposition === 'accepted'
++          ? 'assistant'
++          : 'generation_attempt';
++      const metadata = {
++        runId: event.runId,
++        round: event.round,
++        attempt: event.attempt,
++        historyDisposition: event.historyDisposition,
++        finishReason: event.finishReason,
++      };
        if (event.thoughtText) {
-         this.pushMessage('assistant', event.thoughtText, { thought: true });
+-        this.pushMessage('assistant', event.thoughtText, { thought: true });
++        this.pushMessage(role, event.thoughtText, { thought: true, metadata });
        }
        if (event.text) {
-         this.pushMessage('assistant', event.text);
-@@ -2276,91 +2447,63 @@
+-        this.pushMessage('assistant', event.text);
++        this.pushMessage(role, event.text, { metadata });
+       }
+     });
+ 
+     emitter.on(AgentEventType.TOOL_CALL, (event: AgentToolCallEvent) => {
+       this.pushMessage('tool_call', `Tool call: ${event.name}`, {
+         metadata: {
+@@ -2276,91 +2466,63 @@
          this.pushMessage('user', event.text);
        },
      );
@@ -110989,13 +111158,14 @@ diff --git a/packages/core/src/agents/runtime/agent-events.ts b/packages/core/sr
  }
  
  // ─── Event Payloads ─────────────────────────────────────────
-@@ -83,12 +91,16 @@
+@@ -83,12 +91,17 @@
    round: number;
    promptId: string;
    timestamp: number;
  }
  
  export interface AgentRoundTextEvent {
++  historyDisposition: import('../../core/geminiChat.js').ChatHistoryDisposition;
 +  attempt: number;
 +  finishReason: string | null;
    subagentId: string;
@@ -111006,7 +111176,7 @@ diff --git a/packages/core/src/agents/runtime/agent-events.ts b/packages/core/sr
 +  /** Calls the round's output limit stopped, as served; empty when none. */
 +  incompleteToolCalls: readonly IncompleteToolCall[];
    usageMetadata?: GenerateContentResponseUsageMetadata;
-@@ -189,36 +201,87 @@
+@@ -189,36 +202,87 @@
    ) => Promise<void>;
    timestamp: number;
  }
@@ -111099,7 +111269,7 @@ diff --git a/packages/core/src/agents/runtime/agent-events.ts b/packages/core/sr
  export interface AgentStatusChangeEvent {
    agentId: string;
    previousStatus: AgentStatus;
-@@ -243,12 +306,13 @@
+@@ -243,12 +307,13 @@
    [AgentEventType.TOOL_RESULT]: AgentToolResultEvent;
    [AgentEventType.TOOL_RESPONSES_FINALIZED]: AgentToolResponsesFinalizedEvent;
    [AgentEventType.TOOL_OUTPUT_UPDATE]: AgentToolOutputUpdateEvent;
@@ -114066,13 +114236,14 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
  
    it('should survive round errors and recover', async () => {
      const { core } = createMockCore();
-@@ -543,12 +665,15 @@
+@@ -543,12 +665,16 @@
    it('should record assistant text from ROUND_TEXT events', async () => {
      const { core, emitter } = createMockCore();
  
      (core.runReasoningLoop as ReturnType<typeof vi.fn>).mockImplementation(
        () => {
          emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'accepted',
 +          incompleteToolCalls: [],
 +          attempt: 1,
 +          finishReason: 'STOP',
@@ -114082,13 +114253,14 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
            thoughtText: '',
            timestamp: Date.now(),
          });
-@@ -582,12 +707,15 @@
+@@ -582,12 +708,16 @@
  
      let runCount = 0;
      (core.runReasoningLoop as ReturnType<typeof vi.fn>).mockImplementation(
        () => {
          runCount++;
          emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'accepted',
 +          incompleteToolCalls: [],
 +          attempt: 1,
 +          finishReason: 'STOP',
@@ -114098,13 +114270,14 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
            thoughtText: '',
            timestamp: Date.now(),
          });
-@@ -629,12 +757,15 @@
+@@ -629,12 +759,16 @@
    it('should capture thinking text as assistant messages with thought=true', async () => {
      const { core, emitter } = createMockCore();
  
      (core.runReasoningLoop as ReturnType<typeof vi.fn>).mockImplementation(
        () => {
          emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'accepted',
 +          incompleteToolCalls: [],
 +          attempt: 1,
 +          finishReason: 'STOP',
@@ -114114,13 +114287,14 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
            thoughtText: 'Let me think...',
            timestamp: Date.now(),
          });
-@@ -671,12 +802,15 @@
+@@ -671,12 +805,16 @@
    it('should record tool_call and tool_result with correct roles', async () => {
      const { core, emitter } = createMockCore();
  
      (core.runReasoningLoop as ReturnType<typeof vi.fn>).mockImplementation(
        () => {
          emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'accepted',
 +          incompleteToolCalls: [],
 +          attempt: 1,
 +          finishReason: 'STOP',
@@ -114130,13 +114304,14 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
            thoughtText: '',
            timestamp: Date.now(),
          });
-@@ -730,12 +864,15 @@
+@@ -730,12 +868,16 @@
    it('should place text before tool_call to preserve temporal ordering', async () => {
      const { core, emitter } = createMockCore();
  
      (core.runReasoningLoop as ReturnType<typeof vi.fn>).mockImplementation(
        () => {
          emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'accepted',
 +          incompleteToolCalls: [],
 +          attempt: 1,
 +          finishReason: 'STOP',
@@ -114146,7 +114321,7 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
            thoughtText: '',
            timestamp: Date.now(),
          });
-@@ -795,13 +932,12 @@
+@@ -795,13 +937,12 @@
      const config = createConfig({ chatHistory });
      const agent = new AgentInteractive(config, core);
  
@@ -114160,7 +114335,7 @@ diff --git a/packages/core/src/agents/runtime/agent-interactive.test.ts b/packag
      await agent.shutdown();
    });
  
-@@ -841,13 +977,12 @@
+@@ -841,13 +982,12 @@
      const config = createConfig();
      const agent = new AgentInteractive(config, core);
  
@@ -114919,6 +115094,43 @@ diff --git a/packages/core/src/agents/runtime/agent-types.ts b/packages/core/src
  
  /**
   * Canonical lifecycle status for any agent (headless, interactive, arena).
+@@ -200,25 +218,32 @@
+   runInContext?: <T>(fn: () => T) => T;
+ }
+ 
+ /**
+  * A message exchanged with or produced by an interactive agent.
+  *
+- * This is a UI-oriented data model (not the Gemini API Content type).
+- * AgentInteractive is the sole writer; the UI reads via getMessages().
++ * AgentCore owns this observable transcript; the UI reads via getMessages().
++ * The generation_attempt role preserves abandoned output separately from
++ * accepted assistant turns. This is not the history supplied to the model.
+  */
+ export interface AgentMessage {
+   /** Discriminator for the message kind. */
+-  role: 'user' | 'assistant' | 'tool_call' | 'tool_result' | 'info';
++  role:
++    | 'user'
++    | 'assistant'
++    | 'generation_attempt'
++    | 'tool_call'
++    | 'tool_result'
++    | 'info';
+   /** The text content of the message. */
+   content: string;
+   /** When the message was created (ms since epoch). */
+   timestamp: number;
+   /**
+    * Whether this assistant message contains thinking/reasoning content.
+-   * Mirrors AgentStreamTextEvent.thought. Only meaningful when role is 'assistant'.
++   * Meaningful for assistant and generation_attempt observations.
+    */
+   thought?: boolean;
+   /**
+    * Optional metadata.
+    *
+    * For role='info': metadata.level?: 'info' | 'warning' | 'success' | 'error'
 diff --git a/packages/core/src/agents/runtime/subagent-plan-tool-policy.test.ts b/packages/core/src/agents/runtime/subagent-plan-tool-policy.test.ts
 --- a/packages/core/src/agents/runtime/subagent-plan-tool-policy.test.ts
 +++ b/packages/core/src/agents/runtime/subagent-plan-tool-policy.test.ts
@@ -116178,7 +116390,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
        }),
      } as unknown as Config;
      return {
-@@ -2725,16 +3053,31 @@
+@@ -2725,16 +3053,32 @@
      try {
        const { config, calls } = fakeConfigWithMgr({
          transcriptDir,
@@ -116200,6 +116412,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
 +              },
 +            });
              emitter.emit(AgentEventType.ROUND_TEXT, {
++              historyDisposition: 'accepted',
 +              incompleteToolCalls: [],
                subagentId: 'sub',
                round: 1,
@@ -116211,7 +116424,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              });
            },
          }),
-@@ -2877,13 +3220,13 @@
+@@ -2877,13 +3221,13 @@
    });
  
    // The agentType definition is resolved exactly once per dispatch:
@@ -116226,7 +116439,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
        findSubagentByName: async (name) => {
          lookups += 1;
          return name === 'Explore'
-@@ -2988,18 +3331,13 @@
+@@ -2988,18 +3332,13 @@
        expect(first['agentName']).toBe('workflow-agent');
      } finally {
        fs.rmSync(transcriptDir, { recursive: true, force: true });
@@ -116246,7 +116459,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
            ? {
                name: 'rev\n',
                description: 'newline-named reviewer',
-@@ -3029,18 +3367,16 @@
+@@ -3029,18 +3368,16 @@
      const error: unknown = await dispatch('doomed', {
        agentType: 'rev\n',
        stallMs: 5,
@@ -116269,7 +116482,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
          description: 'fast read-only',
          systemPrompt: 'You are Explore.',
          level: 'builtin',
-@@ -3051,13 +3387,13 @@
+@@ -3051,13 +3388,13 @@
          terminateMode: 'GOAL',
        }),
      });
@@ -116284,7 +116497,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
    it('agentType not found throws upstream-aligned error', async () => {
      const { config } = fakeConfigWithMgr({
        findSubagentByName: async () => null,
-@@ -3125,23 +3461,23 @@
+@@ -3125,23 +3462,23 @@
      const { config } = fakeConfigWithMgr({
        onCreate: async (_call, _ee) => ({
          finalText: '',
@@ -116310,7 +116523,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3156,30 +3492,30 @@
+@@ -3156,30 +3493,30 @@
      const result = await dispatch('extract', {
        schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
      });
@@ -116345,7 +116558,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3187,71 +3523,67 @@
+@@ -3187,71 +3524,67 @@
              durationMs: 1,
              timestamp: 2,
            });
@@ -116435,7 +116648,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
                name: 'structured_output',
                success: false,
                error: 'validation failed',
-@@ -3298,23 +3630,23 @@
+@@ -3298,23 +3631,23 @@
    it('schema-mode attaches an event emitter to the subagent', async () => {
      const { config, calls } = fakeConfigWithMgr({
        onCreate: async (_call, _ee) => ({
@@ -116461,7 +116674,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3341,23 +3673,23 @@
+@@ -3341,23 +3674,23 @@
      const { config } = fakeConfigWithMgr({
        onCreate: async () => ({
          finalText: '',
@@ -116487,7 +116700,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: false,
              error: 'validation failed',
-@@ -3365,23 +3697,23 @@
+@@ -3365,23 +3698,23 @@
              resultDisplay: '',
              durationMs: 1,
              timestamp: 1,
@@ -116513,7 +116726,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3403,46 +3735,46 @@
+@@ -3403,46 +3736,46 @@
      const { config } = fakeConfigWithMgr({
        onCreate: async () => ({
          finalText: '',
@@ -116564,7 +116777,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3477,23 +3809,23 @@
+@@ -3477,23 +3810,23 @@
          disallowedTools: ['Foo'],
        }),
        onCreate: async (_call, _ee) => ({
@@ -116590,7 +116803,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3608,13 +3940,13 @@
+@@ -3608,13 +3941,13 @@
  
    // R2 self-review (test-5): dispose() MUST still run even when
    // subagent.execute throws synchronously from inside the in-flight
@@ -116605,7 +116818,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
          terminateMode: 'GOAL', // not reached
          runWithEmitter: (_emitter) => {
            throw new Error('simulated subagent failure');
-@@ -3624,12 +3956,58 @@
+@@ -3624,12 +3957,58 @@
      const dispatch = createProductionDispatch(helper.config);
      await expect(
        dispatch('extract', { schema: { type: 'object' } }),
@@ -116664,7 +116877,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
    // error branch had no unit test. Coverage came only from the real-
    // LLM E2E S7 happy path. Adversarial review noted the parent-dirty
    // refuse, nested-worktree refuse, and git-not-available paths can
-@@ -3845,23 +4223,23 @@
+@@ -3845,23 +4224,23 @@
    it("schema + isolation:'worktree': structured payload returned, worktree info logged", async () => {
      const { config } = fakeConfigWithMgr({
        onCreate: async (_call, _ee) => ({
@@ -116690,7 +116903,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -3950,23 +4328,23 @@
+@@ -3950,23 +4329,23 @@
          disallowedTools: [],
        }),
        onCreate: async (_call, _ee) => ({
@@ -116716,7 +116929,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -4003,23 +4381,23 @@
+@@ -4003,23 +4382,23 @@
          level: 'builtin',
        }),
        onCreate: async () => ({
@@ -116742,7 +116955,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -4069,23 +4447,23 @@
+@@ -4069,23 +4448,23 @@
  
      const { config } = fakeConfigWithMgr({
        onCreate: async (_call, _ee) => ({
@@ -116768,7 +116981,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
              name: 'structured_output',
              success: true,
              responseParts: [],
-@@ -4138,23 +4516,23 @@
+@@ -4138,23 +4517,23 @@
      const { config } = fakeConfigWithMgr({
        onCreate: async (_call, _ee) => ({
          finalText: '',
@@ -116794,7 +117007,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
                name: 'structured_output',
                success: false,
                error: 'validation failed',
-@@ -4195,12 +4573,13 @@
+@@ -4195,12 +4574,13 @@
    afterEach(() => {
      fs.rmSync(projectDir, { recursive: true, force: true });
    });
@@ -116808,7 +117021,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
        storage: { getProjectDir: () => projectDir },
      } as unknown as Config;
    }
-@@ -4231,13 +4610,20 @@
+@@ -4231,13 +4611,20 @@
      const names = transcriptNames();
      expect(names).toHaveLength(1);
      const recs = recordsIn(names[0]!);
@@ -116830,7 +117043,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
      // Launch metadata flows through buildAgentTranscriptAttach — pin it
      // here so a dropped builder wiring line fails the suite.
      expect(recs[0]!['version']).toBe('9.9.9');
-@@ -4271,12 +4657,32 @@
+@@ -4271,12 +4658,32 @@
      const recs = recordsIn(transcriptNames()[0]!);
      expect(recs[0]!['agentName']).toBe('workflow-agent');
    });
@@ -116863,7 +117076,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
          callId: 'c1',
          name: 'read_file',
          args: { absolute_path: '/tmp/diff.txt', offset: 0, limit: 40 },
-@@ -4318,79 +4724,56 @@
+@@ -4318,79 +4725,56 @@
        },
      ]);
      expect(recs[2]!['type']).toBe('tool_result');
@@ -116971,7 +117184,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.test.ts b/pa
    // failed agent is invisible there. The transcript is what keeps it
    // visible — the run left evidence of what it was asked and how far it got.
    it('leaves a transcript for a dispatch that ends on a non-GOAL terminal', async () => {
-@@ -4400,17 +4783,247 @@
+@@ -4400,17 +4784,247 @@
      await expect(dispatch('doomed', { label: 'd1' })).rejects.toThrow(
        /did not complete \(terminate mode: MAX_TURNS\)/,
      );
@@ -119596,13 +119809,14 @@ diff --git a/packages/core/src/agents/team/TeamManager.plan-approval.test.ts b/p
 diff --git a/packages/core/src/agents/team/test-utils/coordination-harness.test.ts b/packages/core/src/agents/team/test-utils/coordination-harness.test.ts
 --- a/packages/core/src/agents/team/test-utils/coordination-harness.test.ts
 +++ b/packages/core/src/agents/team/test-utils/coordination-harness.test.ts
-@@ -87,12 +87,15 @@
+@@ -87,12 +87,16 @@
    describe('message routing', () => {
      it('notifies the leader when a teammate does not report explicitly', async () => {
        const h = await createHarness();
        const worker = await h.spawnTeammate('worker', {
          onMessage: (_message, agent) => {
            agent.getEventEmitter().emit(AgentEventType.ROUND_TEXT, {
++            historyDisposition: 'accepted',
 +            incompleteToolCalls: [],
 +            attempt: 1,
 +            finishReason: 'STOP',
@@ -119612,13 +119826,14 @@ diff --git a/packages/core/src/agents/team/test-utils/coordination-harness.test.
              thoughtText: '',
              timestamp: Date.now(),
            });
-@@ -110,12 +113,15 @@
+@@ -110,12 +114,16 @@
            }),
          ]);
        });
        expect(worker.getReceivedMessages()).toHaveLength(1);
  
        worker.getEventEmitter().emit(AgentEventType.ROUND_TEXT, {
++        historyDisposition: 'accepted',
 +        incompleteToolCalls: [],
 +        attempt: 1,
 +        finishReason: 'STOP',
@@ -119628,13 +119843,50 @@ diff --git a/packages/core/src/agents/team/test-utils/coordination-harness.test.
          thoughtText: '',
          timestamp: Date.now(),
        });
-@@ -157,12 +163,15 @@
+@@ -147,22 +155,52 @@
+             ),
+           }),
+         ]);
+       });
+     });
+ 
++    it('preserves accepted report state across an abandoned thought-only attempt', async () => {
++      const h = await createHarness();
++      const worker = await h.spawnTeammate('worker');
++      const reports = h.teamManager as unknown as {
++        pendingFinalReports: Map<string, string>;
++        explicitLeaderReports: Set<string>;
++      };
++      reports.pendingFinalReports.set(worker.agentId, 'accepted report');
++      reports.explicitLeaderReports.add(worker.agentId);
++      worker.getEventEmitter().emit(AgentEventType.ROUND_TEXT, {
++        subagentId: worker.agentId,
++        round: 2,
++        attempt: 1,
++        historyDisposition: 'abandoned',
++        finishReason: null,
++        text: '',
++        thoughtText: 'unfinished reasoning',
++        incompleteToolCalls: [],
++        timestamp: Date.now(),
++      });
++      expect(reports.pendingFinalReports.get(worker.agentId)).toBe(
++        'accepted report',
++      );
++      expect(reports.explicitLeaderReports.has(worker.agentId)).toBe(true);
++    });
++
+     it('forwards final text after an interim leader message', async () => {
+       const h = await createHarness();
+       await h.spawnTeammate('worker', {
+         onMessage: async (_message, agent) => {
            await h.teamManager.sendMessage(
              'leader',
              'interim finding',
              'worker',
            );
            agent.getEventEmitter().emit(AgentEventType.ROUND_TEXT, {
++            historyDisposition: 'accepted',
 +            incompleteToolCalls: [],
 +            attempt: 1,
 +            finishReason: 'STOP',
@@ -119644,13 +119896,14 @@ diff --git a/packages/core/src/agents/team/test-utils/coordination-harness.test.
              thoughtText: '',
              timestamp: Date.now(),
            });
-@@ -185,12 +194,15 @@
+@@ -185,12 +223,16 @@
          onMessage: (_message, agent) => {
            for (const [round, text] of [
              [1, 'interim narration'],
              [2, ''],
            ] as const) {
              agent.getEventEmitter().emit(AgentEventType.ROUND_TEXT, {
++              historyDisposition: 'accepted',
 +              incompleteToolCalls: [],
 +              attempt: 1,
 +              finishReason: 'STOP',
@@ -163317,7 +163570,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -191,849 +170,71 @@
+@@ -191,849 +170,78 @@
        value,
        writable: true,
        configurable: true,
@@ -163566,9 +163819,17 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  COMPACTION = 'compaction',
  }
  
++export type ChatHistoryDisposition = 'accepted' | 'abandoned';
++
++interface ProcessedStreamChunk {
++  value: GenerateContentResponse;
++  historyDisposition: ChatHistoryDisposition | null;
++}
++
  export type StreamEvent =
 +  | { type: StreamEventType.REQUEST_ADMITTED }
-   | { type: StreamEventType.CHUNK; value: GenerateContentResponse }
+-  | { type: StreamEventType.CHUNK; value: GenerateContentResponse }
++  | ({ type: StreamEventType.CHUNK } & ProcessedStreamChunk)
    | {
        type: StreamEventType.RETRY;
        retryInfo?: RetryInfo;
@@ -164184,7 +164445,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1245,199 +446,58 @@
+@@ -1245,199 +453,58 @@
    return {
      ...content,
      parts,
@@ -164418,7 +164679,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1680,6 +740,15 @@
+@@ -1680,6 +747,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -164434,7 +164695,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1712,72 +781,37 @@
+@@ -1712,72 +788,37 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -164532,7 +164793,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Monotonically counts user-content pushes that survived into history.
     * Incremented when `sendMessageStream` pushes the user content and decremented
-@@ -1787,109 +821,101 @@
+@@ -1787,109 +828,101 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -164681,7 +164942,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,241 +923,435 @@
+@@ -1897,241 +930,435 @@
        }
        return requestHistory;
      }
@@ -165314,7 +165575,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  /** The startup context every history of this chat opens with, compacted or not. */
 +  getStartupContext(): Content | undefined {
 +    return this.startupContext?.content;
-@@ -2153,6 +1373,16 @@
+@@ -2153,6 +1380,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -165331,7 +165592,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2192,1724 +1422,581 @@
+@@ -2192,1724 +1429,581 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -166396,8 +166657,8 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -              authType: cgConfig?.authType,
 -              extraRetryErrorCodes,
 +          for await (const chunk of stream) {
-+            deliveredContent ||= hasNonThoughtCandidateParts(chunk);
-+            yield { type: StreamEventType.CHUNK, value: chunk };
++            deliveredContent ||= hasNonThoughtCandidateParts(chunk.value);
++            yield { type: StreamEventType.CHUNK, ...chunk };
 +          }
 +          return;
 +        } catch (error) {
@@ -167524,9 +167785,10 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    goalContext: GoalTurnPermit | undefined,
 +    refusedBefore: number,
 -    transportContinuationPrefix?: string,
-   ): Promise<AsyncGenerator<GenerateContentResponse>> {
+-  ): Promise<AsyncGenerator<GenerateContentResponse>> {
 -    const generator =
 -      overrides?.contentGenerator ?? this.config.getContentGenerator();
++  ): Promise<AsyncGenerator<ProcessedStreamChunk>> {
 +    const {
 +      model,
 +      contentGenerator: generator,
@@ -167560,7 +167822,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +2020,14 @@
+@@ -3933,23 +2027,14 @@
          }
  
          return false;
@@ -167585,7 +167847,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +2041,18 @@
+@@ -3963,41 +2048,18 @@
        },
      });
  
@@ -167629,7 +167891,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4145,197 +2200,33 @@
+@@ -4145,197 +2207,33 @@
  
    /**
     * Clears the chat history.
@@ -167827,7 +168089,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Pop orphaned trailing user entries from chat history.
     * In a valid conversation the last entry is always a model response;
     * any trailing user entries are leftovers from a request that failed.
-@@ -4362,24 +2253,12 @@
+@@ -4362,24 +2260,12 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -167852,7 +168114,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Instance wrapper around the free-function {@link repairOrphanedToolUseTurns}.
     * See the canonical note above `ORPHAN_TOOL_USE_REPAIR_REASON`.
-@@ -4393,13 +2272,13 @@
+@@ -4393,13 +2279,13 @@
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -167867,7 +168129,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2306,275 @@
+@@ -4427,693 +2313,278 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -167890,7 +168152,8 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    goalContext: GoalTurnPermit | undefined,
 +    refusedBefore: number,
 -    transportContinuationPrefix?: string,
-   ): AsyncGenerator<GenerateContentResponse> {
+-  ): AsyncGenerator<GenerateContentResponse> {
++  ): AsyncGenerator<ProcessedStreamChunk> {
      // Collect ALL parts from the model response (including thoughts for recording)
      const allModelParts: Part[] = [];
 +    // Calls the generation's limit stopped, as the provider served them. They
@@ -168192,7 +168455,8 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -          !protocolTextWasSuppressed ||
 -          !protocolTagDetector.blockingOutput
 -        ) {
-           yield chunk;
+-          yield chunk;
++          yield { value: chunk, historyDisposition: null };
          }
 +      } catch (e) {
 +        streamError = { error: e };
@@ -168666,7 +168930,10 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        if (incompleteToolCalls.length > 0) {
 +          setIncompleteToolCalls(terminal, incompleteToolCalls);
 +        }
-+        yield terminal;
++        yield {
++          value: terminal,
++          historyDisposition: refused ? 'abandoned' : 'accepted',
++        };
        }
 -      throw streamError;
 -    }
@@ -244606,7 +244873,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -2059,29 +2227,902 @@
+@@ -2059,29 +2227,903 @@
        vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({
          subagent: mockAgent,
          dispose: vi.fn().mockResolvedValue(undefined),
@@ -245117,6 +245384,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +          vi.mocked(mockAgent.execute).mockImplementation(async () => {
 +            admitOwnedEvidence();
 +            invocation.eventEmitter.emit(AgentEventType.ROUND_TEXT, {
++              historyDisposition: 'abandoned',
 +              incompleteToolCalls: [],
 +              subagentId: 'child',
 +              round: 1,
@@ -245512,7 +245780,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
        // Foreground subagents now run with a composed AbortSignal so the
        // dialog's per-agent cancel can abort just this child without aborting
-@@ -2106,20 +3147,20 @@
+@@ -2106,20 +3148,20 @@
        // with background: true — which is only known after loadSubagent.
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
          ...mockSubagents[0],
@@ -245541,7 +245809,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
      });
  
-@@ -2146,34 +3187,36 @@
+@@ -2146,34 +3188,36 @@
          vi.mocked(config.getWorkingDir).mockReturnValue(nonRepo);
          vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
            ...mockSubagents[0],
@@ -245589,7 +245857,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            'Scratchpad details should stay out of the parent context.',
            '</analysis>',
            '',
-@@ -2189,23 +3232,21 @@
+@@ -2189,23 +3233,21 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -245619,7 +245887,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const raw = '<analysis>debug</analysis><summary>partial</summary>';
        vi.mocked(mockAgent.getFinalText).mockReturnValue(raw);
        vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
-@@ -2216,39 +3257,322 @@
+@@ -2216,39 +3258,322 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -245951,7 +246219,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('passes custom ignore files into worktree isolation file service', async () => {
        vi.useRealTimers();
        const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-agent-wt-'));
-@@ -2275,25 +3599,25 @@
+@@ -2275,25 +3600,25 @@
          vi.mocked(config.getFileFilteringOptions).mockReturnValue({
            respectGitIgnore: true,
            respectQwenIgnore: true,
@@ -245986,7 +246254,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          ).toBe('.qwenignore, .cursorignore');
          expect(
            agentConfig.getFileService().shouldQwenIgnoreFile('secret.txt'),
-@@ -2341,25 +3665,25 @@
+@@ -2341,25 +3666,25 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246021,7 +246289,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(agentConfig.getCwd()).toBe(wt);
          expect(agentConfig.getWorkingDir()).toBe(wt);
          expect(agentConfig.getProjectRoot()).not.toBe(repo);
-@@ -2422,20 +3746,20 @@
+@@ -2422,20 +3747,20 @@
            subagent_type: 'file-search',
            working_dir: wt,
            isolation: 'worktree',
@@ -246046,7 +246314,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            execFileSync('git', ['worktree', 'list', '--porcelain'], {
              cwd: repo,
              encoding: 'utf8',
-@@ -2479,21 +3803,21 @@
+@@ -2479,21 +3804,21 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246077,7 +246345,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // launch through the background registry path.
          expect(partToString(result.llmContent)).not.toContain(
            'Background agent launched',
-@@ -2531,20 +3855,20 @@
+@@ -2531,20 +3856,20 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246106,7 +246374,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            /not a registered linked worktree/i,
          );
          expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
-@@ -2580,25 +3904,25 @@
+@@ -2580,25 +3905,25 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246141,7 +246409,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        }
      }, 20000);
  
-@@ -2632,26 +3956,26 @@
+@@ -2632,26 +3957,26 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246178,7 +246446,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(agentConfig.getCwd()).toBe(wt);
          expect(agentConfig.getWorkingDir()).toBe(wt);
        } finally {
-@@ -2680,22 +4004,22 @@
+@@ -2680,22 +4005,22 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246211,7 +246479,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
        } finally {
          fs.rmSync(repo, { recursive: true, force: true });
-@@ -2711,20 +4035,20 @@
+@@ -2711,20 +4036,20 @@
        try {
          vi.mocked(config.getProjectRoot).mockReturnValue(nonRepo);
          vi.mocked(config.getTargetDir).mockReturnValue(nonRepo);
@@ -246240,7 +246508,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // the confusing "not a registered git worktree" fallback.
          expect(partToString(result.llmContent)).toMatch(
            /not a git repository/i,
-@@ -2764,25 +4088,25 @@
+@@ -2764,25 +4089,25 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -246275,7 +246543,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          fs.rmSync(repo, { recursive: true, force: true });
          vi.useFakeTimers();
        }
-@@ -2822,20 +4146,20 @@
+@@ -2822,20 +4147,20 @@
          // must still stop it from removing the caller's worktree — this is the
          // error-recovery path where teardown bugs hide.
          vi.mocked(mockAgent.execute).mockRejectedValue(
@@ -246304,7 +246572,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(partToString(result.llmContent)).not.toContain(
            '[worktree preserved',
          );
-@@ -2877,26 +4201,26 @@
+@@ -2877,26 +4202,26 @@
          // helper's `repoRoot !== parentCwd` re-anchoring branch executes.
          vi.mocked(config.getProjectRoot).mockReturnValue(subdir);
          vi.mocked(config.getTargetDir).mockReturnValue(subdir);
@@ -246341,7 +246609,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          fs.rmSync(repo, { recursive: true, force: true });
          vi.useFakeTimers();
        }
-@@ -2943,27 +4267,27 @@
+@@ -2943,27 +4268,27 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(subdir);
          vi.mocked(config.getTargetDir).mockReturnValue(subdir);
@@ -246380,7 +246648,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          fs.rmSync(repo, { recursive: true, force: true });
          vi.useFakeTimers();
        }
-@@ -2975,15 +4299,15 @@
+@@ -2975,15 +4300,15 @@
        const params: AgentParams = {
          description: 'Search files',
          prompt: 'Find all TypeScript files',
@@ -246399,7 +246667,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Subagent "non-existent" not found');
        const display = result.returnDisplay as AgentResultDisplay;
        expect(display.status).toBe('failed');
-@@ -2999,15 +4323,27 @@
+@@ -2999,15 +4324,27 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -246430,7 +246698,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      ).toBe(llmText);
        const display = result.returnDisplay as AgentResultDisplay;
  
-@@ -3019,15 +4355,15 @@
+@@ -3019,15 +4356,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -246449,7 +246717,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(result.llmContent).toBeDefined();
        expect(result.returnDisplay).toBeDefined();
  
-@@ -3043,15 +4379,15 @@
+@@ -3043,15 +4380,15 @@
        const params: AgentParams = {
          description: 'Search files',
          prompt: 'Find all TypeScript files',
@@ -246468,7 +246736,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'task_prompt',
          'Find all TypeScript files',
        );
-@@ -3062,15 +4398,15 @@
+@@ -3062,15 +4399,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -246487,7 +246755,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(result.returnDisplay).toHaveProperty('type', 'task_execution');
        expect(result.returnDisplay).toHaveProperty(
          'subagentName',
-@@ -3093,30 +4429,30 @@
+@@ -3093,30 +4430,30 @@
        const params: AgentParams = {
          description: 'Search files',
          prompt: 'Find all TypeScript files',
@@ -246524,7 +246792,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      describe('qwen-code.subagent span outcome (#4410 wenshao)', () => {
-@@ -3129,15 +4465,15 @@
+@@ -3129,15 +4466,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -246543,7 +246811,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        function lastEndMeta(): {
          status?: string;
          terminateReason?: string;
-@@ -3213,24 +4549,12 @@
+@@ -3213,24 +4550,12 @@
          // mode came from inside the subagent itself).
          const meta = lastEndMeta();
          expect(meta.status).toBe('cancelled');
@@ -246568,7 +246836,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // OTel exception attributes — generic 'subagent failed' was
          // hiding the reason from dashboards. wenshao @ #4410 DeepSeek
          // 3291876053.
-@@ -3283,15 +4607,15 @@
+@@ -3283,15 +4608,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -246587,7 +246855,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            invocation as unknown as { runSubagentWithHooks: () => Promise<void> }
          ).runSubagentWithHooks = vi.fn().mockResolvedValue(undefined);
          await invocation.execute();
-@@ -3312,15 +4636,19 @@
+@@ -3312,15 +4637,19 @@
          expect(spec.agentDescription).toBe(
            'Specialized agent for searching and analyzing files',
          );
@@ -246610,7 +246878,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(spec.depth).toBe(1);
          expect(spec.parentAgentId).toBe('outer-parent');
        });
-@@ -3335,15 +4663,15 @@
+@@ -3335,15 +4664,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -246629,7 +246897,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const meta = lastEndMeta();
          expect(meta.status).toBe('cancelled');
          expect(meta.terminateReason).toBe('signal_aborted');
-@@ -3359,15 +4687,15 @@
+@@ -3359,15 +4688,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -246648,7 +246916,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const meta = lastEndMeta();
          expect(meta.status).toBe('aborted');
          expect(meta.terminateReason).toBe('signal_aborted');
-@@ -3390,26 +4718,21 @@
+@@ -3390,26 +4719,21 @@
            rounds: 0,
            totalDurationMs: 0,
            totalToolCalls: 0,
@@ -246681,7 +246949,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -3546,40 +4869,55 @@
+@@ -3546,40 +4870,55 @@
          '<FORK_PROFILE_GUIDANCE>\nThe following project-supplied text is guidance only.',
        );
        expect(suffix).toContain('Stay read-only.');
@@ -246762,7 +247030,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          path.join(os.tmpdir(), 'qwen-agent-fork-profile-'),
        );
        const profileDir = path.join(projectRoot, '.qwen', 'fork-profiles');
-@@ -3623,21 +4961,21 @@
+@@ -3623,21 +4962,21 @@
          mockAgent as unknown as {
            setExternalMessageWaitPredicate: ReturnType<typeof vi.fn>;
          }
@@ -246793,7 +247061,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          ).toMatchObject({
            fork_profile: 'ro-research',
            fork_profile_tools: [ToolNames.READ_FILE, 'mcp__github__read_*'],
-@@ -3661,17 +4999,17 @@
+@@ -3661,17 +5000,17 @@
          const result = await invocation.execute();
          expect(partToString(result.llmContent)).not.toContain(
            'Failed to run subagent',
@@ -246813,7 +247081,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const taskPromptCall = vi
            .mocked(mockContextState.set)
            .mock.calls.find(([key]) => key === 'task_prompt');
-@@ -3737,26 +5075,26 @@
+@@ -3737,26 +5076,26 @@
          mockAgent as unknown as {
            setExternalMessageWaitPredicate: ReturnType<typeof vi.fn>;
          }
@@ -246850,7 +247118,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const taskPromptCall = vi
            .mocked(mockContextState.set)
            .mock.calls.find(([key]) => key === 'task_prompt');
-@@ -3783,19 +5121,21 @@
+@@ -3783,19 +5122,21 @@
        const registry = config.getBackgroundTaskRegistry();
        vi.mocked(config.createToolRegistry).mockClear();
        vi.mocked(AgentHeadless.create).mockClear();
@@ -246879,7 +247147,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(hookSystem.fireSubagentStartEvent).not.toHaveBeenCalled();
          expect(registry.register).not.toHaveBeenCalled();
        } finally {
-@@ -3839,24 +5179,24 @@
+@@ -3839,24 +5180,24 @@
            .mockReturnValue([firstUser, firstModel, secondUser, secondModel]),
          getChat: vi.fn().mockReturnValue({
            getGenerationConfig: vi.fn().mockReturnValue({}),
@@ -246913,7 +247181,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
      });
  
-@@ -3899,28 +5239,28 @@
+@@ -3899,28 +5240,28 @@
          getHistoryShallow,
          getChat: vi.fn().mockReturnValue({
            getGenerationConfig: vi.fn().mockReturnValue({}),
@@ -246951,7 +247219,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
              firstUser,
              firstModel,
              secondUser,
-@@ -3974,25 +5314,25 @@
+@@ -3974,25 +5315,25 @@
          getHistoryShallow,
          getChat: vi.fn().mockReturnValue({
            getGenerationConfig: vi.fn().mockReturnValue({}),
@@ -246986,7 +247254,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'SIBLING_SECRET_DIRECTIVE',
        );
        // The seed still ends on a model message so the task_prompt can follow.
-@@ -4062,27 +5402,27 @@
+@@ -4062,27 +5403,27 @@
          getHistory,
          getChat: vi.fn().mockReturnValue({
            getGenerationConfig: vi.fn().mockReturnValue({}),
@@ -247023,7 +247291,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
      });
  
-@@ -4095,28 +5435,26 @@
+@@ -4095,28 +5436,26 @@
          filePath: '<builtin:general-purpose>',
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -247062,7 +247330,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('passes fork_tools separately from inherited tool names', async () => {
        const parentToolDecls = [
          {
-@@ -4142,24 +5480,24 @@
+@@ -4142,24 +5481,24 @@
              systemInstruction: 'parent system',
              tools: [{ functionDeclarations: parentToolDecls }],
            }),
@@ -247097,7 +247365,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(toolConfig?.tools).toStrictEqual([
          ToolNames.READ_FILE,
          ToolNames.EDIT,
-@@ -4197,25 +5535,25 @@
+@@ -4197,25 +5536,25 @@
              systemInstruction: 'parent system',
              tools: [{ functionDeclarations: parentToolDecls }],
            }),
@@ -247133,7 +247401,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          ToolNames.EDIT,
        ]);
        expect(toolConfig?.executionAllowedTools).toEqual([ToolNames.READ_FILE]);
-@@ -4244,127 +5582,133 @@
+@@ -4244,127 +5583,133 @@
  
        const params: AgentParams = {
          description: 'some task',
@@ -247368,7 +247636,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'subagent_type "fork" is not supported',
        );
        expect(result.error?.message).toContain(
-@@ -4376,66 +5720,53 @@
+@@ -4376,66 +5721,53 @@
  
      it('should call AgentHeadless.create directly and execute without options', async () => {
        const params: AgentParams = {
@@ -247445,7 +247713,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          getAllTools: vi.fn().mockReturnValue([]),
          getAllToolNames: vi.fn().mockReturnValue([]),
          stop: stopSpy,
-@@ -4458,21 +5789,19 @@
+@@ -4458,21 +5790,19 @@
        );
  
        const params: AgentParams = {
@@ -247471,7 +247739,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('routes owned monitor notifications and cleanup for forks', async () => {
        let releaseExecute: (() => void) | undefined;
        vi.mocked(mockAgent.execute).mockImplementation(
-@@ -4492,80 +5821,99 @@
+@@ -4492,80 +5822,99 @@
        ] = vi.fn();
  
        const params: AgentParams = {
@@ -247629,7 +247897,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // Removing the `!isFork` guard from the slot-reservation condition
        // silently subjected fork agents to background slot reservation and
        // per-model concurrency caps. This test pins the contract: a fork
-@@ -4601,15 +5949,15 @@
+@@ -4601,15 +5950,15 @@
          description: 'fork task',
          prompt: 'do the thing',
          subagent_type: 'fork',
@@ -247648,7 +247916,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // branch, so AgentHeadless.create fires once for the foreground
        // probe and again for the background agent body. The load-bearing
        // assertions are on the registry calls below.
-@@ -4653,26 +6001,21 @@
+@@ -4653,26 +6002,21 @@
            rounds: 1,
            totalDurationMs: 500,
            totalToolCalls: 1,
@@ -247681,7 +247949,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4705,15 +6048,15 @@
+@@ -4705,15 +6049,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247700,7 +247968,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.stringContaining('file-search-'),
          'file-search',
          PermissionMode.AutoEdit,
-@@ -4738,15 +6081,15 @@
+@@ -4738,15 +6082,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247719,7 +247987,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'hook_context',
          'Extra context from hook',
        );
-@@ -4764,15 +6107,15 @@
+@@ -4764,15 +6108,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247738,7 +248006,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // systemPrompt does not throw even when hook returns no additional context.
        expect(mockContextState.set).toHaveBeenCalledWith('hook_context', '');
        expect(mockContextState.set).not.toHaveBeenCalledWith(
-@@ -4790,15 +6133,15 @@
+@@ -4790,15 +6134,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247757,7 +248025,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const llmText = partToString(result.llmContent);
        expect(llmText).toBe('Task completed successfully');
        const display = result.returnDisplay as AgentResultDisplay;
-@@ -4814,15 +6157,15 @@
+@@ -4814,15 +6158,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247776,7 +248044,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // hook_context is always set so ${hook_context} in systemPrompt does not throw.
        expect(mockContextState.set).toHaveBeenCalledWith('hook_context', '');
        const llmText = partToString(result.llmContent);
-@@ -4849,26 +6192,21 @@
+@@ -4849,26 +6193,21 @@
            rounds: 1,
            totalDurationMs: 500,
            totalToolCalls: 1,
@@ -247809,7 +248077,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4901,15 +6239,15 @@
+@@ -4901,15 +6240,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247828,7 +248096,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.stringContaining('file-search-'),
          'file-search',
          '/test/transcript',
-@@ -4942,15 +6280,15 @@
+@@ -4942,15 +6281,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247847,7 +248115,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockAgent.execute).toHaveBeenCalledTimes(2);
        // Stop hook should have been called twice
        expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledTimes(2);
-@@ -4983,15 +6321,15 @@
+@@ -4983,15 +6322,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247866,7 +248134,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('uses the configured SubagentStop blocking cap', async () => {
-@@ -5014,15 +6352,15 @@
+@@ -5014,15 +6353,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247885,7 +248153,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockAgent.execute).toHaveBeenCalledTimes(2);
        expect(partToString(result.llmContent)).toContain(
          'SubagentStop hook blocked continuation 2 consecutive times; overriding and ending the turn.',
-@@ -5038,15 +6376,15 @@
+@@ -5038,15 +6377,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247904,7 +248172,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const llmText = partToString(result.llmContent);
        expect(llmText).toBe('Task completed successfully');
        const display = result.returnDisplay as AgentResultDisplay;
-@@ -5061,15 +6399,15 @@
+@@ -5061,15 +6400,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247923,7 +248191,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('should stop re-execution loop when signal is aborted during block handling', async () => {
-@@ -5097,15 +6435,15 @@
+@@ -5097,15 +6436,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247942,7 +248210,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockAgent.execute).toHaveBeenCalledTimes(2);
      });
  
-@@ -5129,15 +6467,15 @@
+@@ -5129,15 +6468,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247961,7 +248229,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('should pass consistent agentId to both start and stop hooks', async () => {
-@@ -5145,15 +6483,15 @@
+@@ -5145,15 +6484,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -247980,7 +248248,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          .calls[0]?.[0] as string;
        const stopAgentId = vi.mocked(mockHookSystem.fireSubagentStopEvent).mock
          .calls[0]?.[0] as string;
-@@ -5201,25 +6539,21 @@
+@@ -5201,25 +6540,21 @@
            rounds: 1,
            totalDurationMs: 100,
            totalToolCalls: 1,
@@ -248012,7 +248280,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          emitDuringExecute(capturedInvocation.eventEmitter);
        });
  
-@@ -5232,15 +6566,15 @@
+@@ -5232,15 +6567,15 @@
          description: 'Edit files',
          prompt: 'Fix the bug',
          subagent_type: 'file-search',
@@ -248031,7 +248299,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
      it('preserves subagent tool protocol payloads in non-interactive mode', async () => {
        vi.mocked(config.isInteractive).mockReturnValue(false);
-@@ -5283,13 +6617,174 @@
+@@ -5283,13 +6618,178 @@
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
@@ -248052,6 +248320,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +
 +      const invocation = createInvocationWithEventDrivenAgent((emitter) => {
 +        emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'accepted',
 +          incompleteToolCalls: [],
 +          subagentId: 'sub-1',
 +          round: 1,
@@ -248064,6 +248333,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +        } satisfies AgentRoundTextEvent);
 +
 +        emitter.emit(AgentEventType.ROUND_TEXT, {
++          historyDisposition: 'abandoned',
 +          incompleteToolCalls: [],
 +          subagentId: 'sub-1',
 +          round: 2,
@@ -248173,7 +248443,9 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      expect(withBoth.at(-1)?.compactions).toEqual([
 +        {
 +          status: 'COMPRESSED',
-+          postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
++          postCompactionHistory: [
++            { role: 'user', parts: [{ text: 'snapshot' }] },
++          ],
 +          succeeded: true,
 +          originalTokenCount: 198_400,
 +          newTokenCount: 32_118,
@@ -248207,7 +248479,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
        const invocation = createInvocationWithEventDrivenAgent((emitter) => {
          emitter.emit(AgentEventType.TOOL_CALL, {
-@@ -5326,16 +6821,107 @@
+@@ -5326,16 +6826,107 @@
        );
        const toolCall = resultSnapshot?.toolCalls?.find(
          (entry) => entry.callId === 'call-read-1',
@@ -248317,7 +248589,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // can't serialize functions).
        const snapshots: Array<{
          hasPendingConfirmation: boolean;
-@@ -5590,12 +7176,15 @@
+@@ -5590,12 +7181,15 @@
      beforeEach(() => {
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
@@ -248333,7 +248605,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // whose getEventEmitter() yields a minimal on/off surface so the
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
-@@ -5641,13 +7230,13 @@
+@@ -5641,13 +7235,13 @@
          .fn()
          .mockReturnValue(true);
        (config as unknown as Record<string, unknown>)[
@@ -248348,7 +248620,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        ] = vi.fn();
        (mockAgent as unknown as Record<string, unknown>)[
          'setExternalMessageWaiter'
-@@ -5670,15 +7259,15 @@
+@@ -5670,15 +7264,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -248367,7 +248639,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Background agent launched');
        expect(llmText).toContain(
          `Use ${ToolNames.SEND_MESSAGE} to continue this agent`,
-@@ -5724,44 +7313,53 @@
+@@ -5724,44 +7318,53 @@
            }),
          }),
        );
@@ -248431,7 +248703,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            modelConfigOverrides: { model: 'mapped-model' },
          }),
        );
-@@ -5783,86 +7381,86 @@
+@@ -5783,86 +7386,86 @@
              authType: AuthType.USE_ANTHROPIC,
            },
          },
@@ -248546,7 +248818,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
          setAgentLifecycleCallback: ReturnType<typeof vi.fn>;
-@@ -5899,15 +7497,15 @@
+@@ -5899,15 +7502,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -248565,7 +248837,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
          setAgentLifecycleCallback: ReturnType<typeof vi.fn>;
-@@ -5942,19 +7540,19 @@
+@@ -5942,19 +7545,19 @@
          );
        });
        expect(mockSubagentDispose).toHaveBeenCalledOnce();
@@ -248592,7 +248864,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalledTimes(1);
        });
  
-@@ -5975,12 +7573,13 @@
+@@ -5975,12 +7578,13 @@
        expect(mockContextState.set).toHaveBeenCalledWith(
          'task_prompt',
          'Now inspect the helper',
@@ -248606,7 +248878,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            modelConfigOverrides: { model: 'parent-model' },
            runtimeAuthOverrides: expect.objectContaining({
              authType: 'openai',
-@@ -5991,19 +7590,19 @@
+@@ -5991,19 +7595,19 @@
      });
  
      it('claims finishing-window input before publishing completion', async () => {
@@ -248633,7 +248905,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalledOnce();
        });
  
-@@ -6017,19 +7616,19 @@
+@@ -6017,19 +7621,19 @@
          vi.mocked(mockAgent.executeExternalInputs).mock.invocationCallOrder[0],
        ).toBeLessThan(mockRegistry.complete.mock.invocationCallOrder[0]!);
      });
@@ -248660,7 +248932,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
        });
  
-@@ -6045,19 +7644,19 @@
+@@ -6045,19 +7649,19 @@
  
      it('does not retain an agent whose frontmatter hooks are globally registered', async () => {
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -248687,7 +248959,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
          expect(mockSubagentDispose).toHaveBeenCalledOnce();
        });
-@@ -6073,19 +7672,19 @@
+@@ -6073,19 +7677,19 @@
            }),
        );
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -248714,7 +248986,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        releaseExecution?.();
        await vi.waitFor(() => {
          expect(mockRegistry.complete).toHaveBeenCalled();
-@@ -6097,19 +7696,19 @@
+@@ -6097,19 +7701,19 @@
      it('disposes an idle AUTO resident if the parent leaves AUTO mode', async () => {
        vi.mocked(config.getApprovalMode).mockReturnValue(ApprovalMode.AUTO);
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -248741,7 +249013,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
        });
        const resident = mockRegistry.registerResidentAgent.mock.calls[0]?.[1] as
-@@ -6119,13 +7718,16 @@
+@@ -6119,13 +7723,16 @@
        expect(mockSubagentDispose).not.toHaveBeenCalled();
  
        vi.mocked(config.getApprovalMode).mockReturnValue(ApprovalMode.DEFAULT);
@@ -248759,7 +249031,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const fgSubagent: SubagentConfig = {
          ...bgSubagent,
          name: 'file-search',
-@@ -6137,15 +7739,15 @@
+@@ -6137,15 +7744,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -248778,7 +249050,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Background agent launched');
        expect(mockRegistry.register).toHaveBeenCalled();
      });
-@@ -6157,19 +7759,19 @@
+@@ -6157,19 +7764,19 @@
          background: undefined,
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -248805,7 +249077,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'Background agent launched',
        );
        expect(mockRegistry.register).toHaveBeenCalled();
-@@ -6189,21 +7791,21 @@
+@@ -6189,21 +7796,21 @@
          background: undefined,
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -248836,7 +249108,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // the background registry path.
        expect(partToString(result.llmContent)).not.toContain(
          'Background agent launched',
-@@ -6211,20 +7813,20 @@
+@@ -6211,20 +7818,20 @@
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
@@ -248865,7 +249137,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6240,20 +7842,20 @@
+@@ -6240,20 +7847,20 @@
          name: 'file-search',
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -248894,7 +249166,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6268,17 +7870,19 @@
+@@ -6268,17 +7875,19 @@
          description: 'Start monitor from a nested sub-agent',
          prompt: 'Watch for changes',
          subagent_type: 'monitor',
@@ -248919,7 +249191,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('run_in_background: true');
        expect(llmText).toContain('not supported from within a sub-agent');
        expect(result.error?.message).toBe(llmText);
-@@ -6293,22 +7897,24 @@
+@@ -6293,22 +7902,24 @@
        expect(mockRegistry.register).not.toHaveBeenCalled();
        expect(mockRegistry.tryReserveBackgroundSlot).not.toHaveBeenCalled();
      });
@@ -248953,7 +249225,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6319,31 +7925,44 @@
+@@ -6319,31 +7930,44 @@
        const errorMessage =
          'Cannot start background agent: maximum concurrent background agents ' +
          '(1) reached. Stop an existing agent first.';
@@ -249003,7 +249275,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        } finally {
          attachSpy.mockRestore();
        }
-@@ -6367,15 +7986,15 @@
+@@ -6367,15 +7991,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -249022,7 +249294,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockHookSystem.fireSubagentStartEvent).toHaveBeenCalledOnce();
        expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledWith(
          expect.stringContaining('monitor-'),
-@@ -6415,15 +8034,15 @@
+@@ -6415,15 +8039,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -249041,7 +249313,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        });
        await Promise.resolve();
  
-@@ -6471,18 +8090,18 @@
+@@ -6471,18 +8095,18 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -249064,7 +249336,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
        await vi.waitFor(() => {
          expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledWith(
-@@ -6511,15 +8130,15 @@
+@@ -6511,15 +8135,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -249083,7 +249355,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).not.toContain('Background agent launched');
        // Foreground subagents register in the same registry with
        // isBackgrounded: false so the pill+dialog can surface them while
-@@ -6569,20 +8188,20 @@
+@@ -6569,20 +8193,20 @@
          name: 'file-search',
          background: undefined,
        };
@@ -249112,7 +249384,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6608,15 +8227,15 @@
+@@ -6608,15 +8232,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -249131,7 +249403,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const agentId = mockRegistry.register.mock.calls[0][0].agentId as string;
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
-@@ -6687,15 +8306,15 @@
+@@ -6687,15 +8311,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -249150,7 +249422,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.objectContaining({
            isBackgrounded: false,
            outputFile: expect.stringMatching(
-@@ -6707,16 +8326,24 @@
+@@ -6707,16 +8331,24 @@
          }),
        );
        // Writer attached to the AgentTool's emitter so foreground tool
@@ -249177,7 +249449,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // discovery can surface paused foreground runs.
        expect(writeMetaSpy).toHaveBeenCalledWith(
          expect.stringMatching(/agent-file-search-.*\.meta\.json$/),
-@@ -6731,7 +8358,6 @@
+@@ -6731,7 +8363,6 @@
              screenReader: false,
              model: 'subagent-model',
              maxSessionTurns: -1,
@@ -249185,7 +249457,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
              maxSubagentDepth: 5,
            }),
          }),
-@@ -6780,15 +8406,15 @@
+@@ -6780,15 +8411,15 @@
            description: 'Search files',
            prompt: 'Find all TypeScript files',
            subagent_type: 'file-search',
@@ -249204,7 +249476,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            expect.stringMatching(/agent-file-search-.*\.meta\.json$/),
            expect.objectContaining({ status: expectedStatus }),
          );
-@@ -6820,15 +8446,15 @@
+@@ -6820,15 +8451,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -249223,7 +249495,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Agent was cancelled by the user.');
        expect(llmText).toContain('halfway through');
      });
-@@ -6841,57 +8467,55 @@
+@@ -6841,57 +8472,55 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -249297,7 +249569,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        await invocation.execute();
  
        expect(mockRegistry.register).toHaveBeenCalledWith(
-@@ -6932,15 +8556,15 @@
+@@ -6932,15 +8561,15 @@
          const params: AgentParams = {
            description: 'Start monitor',
            prompt: 'Watch for changes',
@@ -249316,7 +249588,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          await invocation.execute();
  
          const meta = readSidecar('monitor-top-1');
-@@ -6952,22 +8576,26 @@
+@@ -6952,22 +8581,26 @@
          const params: AgentParams = {
            description: 'Start monitor',
            prompt: 'Watch for changes',
@@ -249349,7 +249621,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(meta.parentSessionId).toBe('test-session-id');
          expect(meta.toolUseId).toBe('nested-1');
        });
-@@ -7022,38 +8650,43 @@
+@@ -7022,38 +8655,43 @@
          const attachSpy = vi.spyOn(transcript, 'attachJsonlTranscriptWriter');
          const writeMetaSpy = vi.spyOn(transcript, 'writeAgentMeta');
          const createSpy = vi
@@ -316706,3 +316978,121 @@ diff --git a/packages/core/src/utils/runtimeFetchOptions.test.ts b/packages/core
        'Error: connect ECONNREFUSED token@proxy.local:8080\n    at test';
  
      const result = redactProxyError(error);
+diff --git a/packages/core/src/agents/team/TeamManager.ts b/packages/core/src/agents/team/TeamManager.ts
+--- /dev/null
++++ b/packages/core/src/agents/team/TeamManager.ts
+@@ -1544,12 +1544,13 @@
+     const onToolResult = (_event: AgentToolResultEvent) => {
+       recordActivity();
+     };
+ 
+     const onRoundText = (event: AgentRoundTextEvent) => {
+       recordActivity();
++      if (event.historyDisposition !== 'accepted') return;
+       const text = event.text.trim();
+       this.pendingFinalReports.delete(agentId);
+       if (text) {
+         this.pendingFinalReports.set(agentId, text);
+         this.explicitLeaderReports.delete(agentId);
+       }
+diff --git a/packages/core/src/agents/arena/arena-attempt-disposition.test.ts b/packages/core/src/agents/arena/arena-attempt-disposition.test.ts
+--- /dev/null
++++ b/packages/core/src/agents/arena/arena-attempt-disposition.test.ts
+@@ -0,0 +1,30 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { describe, expect, it } from 'vitest';
++import { ArenaManager } from './ArenaManager.js';
++import type { AgentMessage } from '../runtime/agent-types.js';
++
++describe('arena fallback report', () => {
++  it('selects the accepted answer while retaining the abandoned observation', () => {
++    const transcript: AgentMessage[] = [
++      { role: 'assistant', content: 'accepted answer', timestamp: 1 },
++      {
++        role: 'generation_attempt',
++        content: 'unfinished next answer',
++        timestamp: 2,
++        metadata: { round: 2, attempt: 1, historyDisposition: 'abandoned' },
++      },
++    ];
++    const selector = Object.create(ArenaManager.prototype) as {
++      getFinalTextFromTranscript(messages: AgentMessage[]): string | undefined;
++    };
++    expect(selector.getFinalTextFromTranscript(transcript)).toBe(
++      'accepted answer',
++    );
++    expect(transcript[1]?.content).toBe('unfinished next answer');
++  });
++});
+diff --git a/packages/cli/src/ui/components/agent-view/agentHistoryAdapter.ts b/packages/cli/src/ui/components/agent-view/agentHistoryAdapter.ts
+--- /dev/null
++++ b/packages/cli/src/ui/components/agent-view/agentHistoryAdapter.ts
+@@ -53,12 +53,24 @@
+     // ── user ──────────────────────────────────────────────────
+     if (msg.role === 'user') {
+       items.push({ type: 'user', text: msg.content, id: nextId++ });
+       i++;
+ 
+       // ── assistant ─────────────────────────────────────────────
++    } else if (msg.role === 'generation_attempt') {
++      items.push({
++        type: 'info',
++        text: `Abandoned generation: round ${msg.metadata?.['round']}, attempt ${msg.metadata?.['attempt']}.`,
++        id: nextId++,
++      });
++      items.push({
++        type: msg.thought ? 'gemini_thought' : 'gemini',
++        text: msg.content,
++        id: nextId++,
++      });
++      i++;
+     } else if (msg.role === 'assistant') {
+       if (msg.metadata?.['error']) {
+         items.push({ type: 'error', text: msg.content, id: nextId++ });
+       } else if (msg.thought) {
+         items.push({ type: 'gemini_thought', text: msg.content, id: nextId++ });
+       } else {
+diff --git a/packages/cli/src/ui/components/agent-view/agentHistoryAdapter.test.ts b/packages/cli/src/ui/components/agent-view/agentHistoryAdapter.test.ts
+--- /dev/null
++++ b/packages/cli/src/ui/components/agent-view/agentHistoryAdapter.test.ts
+@@ -66,12 +66,35 @@
+     const items = agentMessagesToHistoryItems(
+       [msg('user', 'hello')],
+       noApprovals,
+     );
+     expect(items).toHaveLength(1);
+     expect(items[0]).toMatchObject({ type: 'user', text: 'hello' });
++  });
++
++  it('labels abandoned observations without changing their text', () => {
++    const content = '  unfinished\nreasoning  ';
++    const items = agentMessagesToHistoryItems(
++      [
++        msg('generation_attempt', content, {
++          thought: true,
++          metadata: { round: 2, attempt: 1, historyDisposition: 'abandoned' },
++        }),
++        msg('assistant', 'accepted answer'),
++      ],
++      noApprovals,
++    );
++    expect(items).toEqual([
++      {
++        type: 'info',
++        text: 'Abandoned generation: round 2, attempt 1.',
++        id: 0,
++      },
++      { type: 'gemini_thought', text: content, id: 1 },
++      { type: 'gemini', text: 'accepted answer', id: 2 },
++    ]);
+   });
+ 
+   it('maps plain assistant message', () => {
+     const items = agentMessagesToHistoryItems(
+       [msg('assistant', 'response')],
+       noApprovals,

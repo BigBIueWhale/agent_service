@@ -582,7 +582,7 @@ def _validate_stream_commit_after(state: State) -> None:
             "this.history.push({",
             "recorded = true;",
             "syncFunctionCallsField(terminal, committedCalls)",
-            "yield terminal;",
+            "historyDisposition: refused ? 'abandoned' : 'accepted',",
         ),
         label=label,
         location=chat,
@@ -698,14 +698,14 @@ def _validate_stream_commit_after(state: State) -> None:
         (
             "const incompleteToolCalls: IncompleteToolCall[] = [];",
             "incompleteToolCalls.push(...takeIncompleteToolCalls(chunk));",
-            "yield chunk;",
+            "yield { value: chunk, historyDisposition: null };",
             "await this.chatRecordingService.recordGenerationFailure(",
             "incompleteToolCalls,",
             "await this.chatRecordingService.recordAssistantTurn({",
             "incompleteToolCalls,",
             "this.history.push({",
             "setIncompleteToolCalls(terminal, incompleteToolCalls);",
-            "yield terminal;",
+            "historyDisposition: refused ? 'abandoned' : 'accepted',",
             "this.chatRecordingService.recordGenerationFailure(",
             "incompleteToolCalls,",
         ),
@@ -3583,6 +3583,40 @@ def _validate_subagent_progress_before(state: State) -> None:
 
 def _validate_subagent_progress_after(state: State) -> None:
     label = "subagent terminal-progress result"
+    _require_all(state, "packages/core/src/core/geminiChat.ts", (
+        "export type ChatHistoryDisposition = 'accepted' | 'abandoned';",
+        "historyDisposition: ChatHistoryDisposition | null;",
+        "yield { type: StreamEventType.CHUNK, ...chunk };",
+    ), label=label)
+    _require_all(state, "packages/core/src/agents/runtime/agent-core.ts", (
+        "if (streamEvent.historyDisposition !== null)",
+        "historyDisposition = streamEvent.historyDisposition;",
+        "finishReason: observedFinishReason,",
+        "event.historyDisposition === 'accepted'",
+        ": 'generation_attempt';",
+        "this.pushMessage(role, event.thoughtText, { thought: true, metadata });",
+        "this.pushMessage(role, event.text, { metadata });",
+    ), label=label)
+    _require_ordered(_source(state, "packages/core/src/agents/runtime/agent-core.ts", label=label), (
+        "if (streamEvent.type === 'chunk') {",
+        "roundIncompleteToolCalls = getIncompleteToolCalls(resp);",
+        "if (resp.usageMetadata) lastUsage = resp.usageMetadata;",
+        "if (roundAbortController.signal.aborted) {",
+    ), label=label, location="received terminal evidence before cancellation")
+    _require_ordered(_source(state, "packages/core/src/agents/team/TeamManager.ts", label=label), (
+        "const onRoundText = (event: AgentRoundTextEvent) => {",
+        "if (event.historyDisposition !== 'accepted') return;",
+        "this.pendingFinalReports.delete(agentId);",
+    ), label=label, location="accepted team report ownership")
+    _require_all(state, "packages/cli/src/ui/components/agent-view/agentHistoryAdapter.ts", (
+        "msg.role === 'generation_attempt'",
+        "Abandoned generation: round",
+        "text: msg.content,",
+    ), label=label)
+    _require_all(state, "packages/core/src/agents/arena/arena-attempt-disposition.test.ts", (
+        "selects the accepted answer while retaining the abandoned observation",
+    ), label=label)
+
     events = "packages/core/src/agents/runtime/agent-events.ts"
     headless = "packages/core/src/agents/runtime/agent-headless.ts"
     core = "packages/core/src/agents/runtime/agent-core.ts"
