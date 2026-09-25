@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `a388fe2c86aa381ab7fdeed4905bc2998ab3250d429e33e2db3754c2dc21960b`
+- Review-diff SHA-256: `16ace8a650cda9cb2b98e234ec09928950386b0c788153c69351bfa6234257b8`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `c7606edd931a5f89e79b51e29549f55e9cf0523656333eb68357a084cb35868b`
+- Transformer-manifest SHA-256: `9d24a2c808042067d401a86a0d5b151fd7b5bbb7cb1daaa59aefafa04703f194`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -177,8 +177,11 @@ applied travels back with its items rather than being discarded, because a
 layer cannot declare a limit it was never told about.
 
 Every tool result is held to `M`, one inline block, where its model copy is
-made, and nowhere else. The scheduler finishes each call's copy once every
-hook, rule and skill reminder has joined it, and each runtime that executes a
+made, and nowhere else. JSON and stream-JSON records retain that result in full,
+including characters whose JSON escaping expands its serialized byte size.
+Transport serialization applies no additional content bound. The scheduler
+finishes each call's copy once every hook, rule and skill reminder has joined
+it, and each runtime that executes a
 call itself — the ACP session, speculation, a subagent's refusal of a tool it
 does not have — finishes its copy the same way. The joined text is measured
 once, whole; a longer one keeps its start and its end, split as upstream's own

@@ -724,6 +724,10 @@ print(json.dumps(found))
                 uses[0]["name"] == "read_file" and replies[0]["tool_use_id"] == "composition_read" and
                 replies[0]["is_error"] is False and replies[0]["content"] == self.nonce + "\n",
                 "captured tool execution did not return the complete successful proof")
+        received = [message for message in generations[1]["messages"] if message.get("role") == "tool"]
+        require(len(received) == 1 and received[0]["content"] ==
+                [{"type": "text", "text": replies[0]["content"]}],
+                "tool-result evidence differs from the model's input; inspect result serialization")
         require(any(record.get("event") == {"type": "goal_state", "goal_state": {"v": 2, "goal": None, "activity": "idle"}}
                     for record in records), "initial idle goal state was not retained")
         require(records[-1]["usage"] == {"requests": 2, "usageReports": 2, "unfinalizedRequests": 0,

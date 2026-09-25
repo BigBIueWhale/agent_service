@@ -205,6 +205,10 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             and replies[0]["content"] == nonce + "\n", "tool result did not carry the file content")
     generations = [r["body"] for r in requests if r["path"] == "/v1/chat/completions"]
     require(len(generations) == 2, "stub did not serve both generations")
+    received = [message for message in generations[1]["messages"] if message.get("role") == "tool"]
+    require(len(received) == 1 and received[0]["content"] ==
+            [{"type": "text", "text": replies[0]["content"]}],
+            "tool-result evidence differs from the model's input; inspect result serialization")
     require(all(g["kv_scope"] == session for g in generations), "provider requests lost their session owner")
     transcripts = list(runtime.rglob(f"chats/{session}.jsonl"))
     require(len(transcripts) == 1, "canonical session transcript is missing or ambiguous")

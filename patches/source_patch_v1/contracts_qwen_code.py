@@ -1585,6 +1585,18 @@ def _validate_stream_evidence_after(state: State) -> None:
     # tool_result content must be the model-facing responseParts, with the
     # short human-facing display string only as a fallback.
     adapter_source = _source(state, adapter, label=label)
+    require_text(state, adapter, "block.content = content;", label=label)
+    forbid_text(state, adapter, "projectHeadlessToolResultContent", label=label)
+    _require(
+        "packages/cli/src/nonInteractive/io/headless-tool-result-text-projection.ts" not in state,
+        f"{label}: the stream-only tool-result bound must not ship",
+    )
+    require_text(
+        state,
+        "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts",
+        "preserves every escaped byte of an inline model-facing result for main and child tools",
+        label=label,
+    )
     _require_ordered(
         adapter_source,
         (

@@ -36129,7 +36129,7 @@ diff --git a/packages/cli/src/config/settingsSchema.ts b/packages/cli/src/config
 diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli/src/dualOutput/DualOutputBridge.test.ts
 --- a/packages/cli/src/dualOutput/DualOutputBridge.test.ts
 +++ b/packages/cli/src/dualOutput/DualOutputBridge.test.ts
-@@ -3,29 +3,44 @@
+@@ -3,29 +3,40 @@
   * Copyright 2025 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
   */
@@ -36143,10 +36143,10 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
  import { execSync } from 'node:child_process';
  import type { Config } from '@qwen-code/qwen-code-core';
 +import { RuntimeContractAdmission } from '@qwen-code/qwen-code-core';
- import {
-   HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
-   HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
- } from '../nonInteractive/io/headless-tool-result-text-projection.js';
+-import {
+-  HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
+-  HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-} from '../nonInteractive/io/headless-tool-result-text-projection.js';
  import {
    DualOutputBridge,
    DUAL_OUTPUT_PROTOCOL_VERSION,
@@ -36174,7 +36174,7 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
  }
  
  function readJsonl(file: string): Array<Record<string, unknown>> {
-@@ -47,12 +62,13 @@
+@@ -47,12 +58,13 @@
      target = path.join(tmpDir, 'events.jsonl');
      fs.writeFileSync(target, '');
      config = createMockConfig();
@@ -36188,7 +36188,7 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
    });
  
    describe('--json-fd validation', () => {
-@@ -66,12 +82,33 @@
+@@ -66,12 +78,33 @@
          /file descriptor is not open/,
        );
      });
@@ -36222,7 +36222,7 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
          | undefined;
        const unsubscribe = vi.fn();
        config = {
-@@ -102,31 +139,38 @@
+@@ -102,31 +135,38 @@
        listener?.({ sessionId: 'late-session', error: new Error('ENOSPC') });
        expect(readJsonl(target)).not.toContainEqual(
          expect.objectContaining({ session_id: 'late-session' }),
@@ -36263,7 +36263,41 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
        const newFile = path.join(tmpDir, 'does-not-exist.jsonl');
        // newFile is NOT pre-created — tests the ENOENT fallback path
        bridge = new DualOutputBridge(config, { filePath: newFile });
-@@ -317,60 +361,370 @@
+@@ -170,13 +210,13 @@
+       expect(data['version']).toBe('1.2.3');
+       expect(data['protocol_version']).toBe(DUAL_OUTPUT_PROTOCOL_VERSION);
+       expect(data['supported_events']).toEqual([...SUPPORTED_EVENTS]);
+       expect(DUAL_OUTPUT_PROTOCOL_VERSION).toBe(2);
+     });
+ 
+-    it('writes bounded tool result content to the sidecar file', async () => {
++    it('writes the complete tool result content to the sidecar file', async () => {
+       bridge = new DualOutputBridge(config, { filePath: target });
+       const display = 'HEAD-' + 'x'.repeat(100_000) + '-TAIL';
+ 
+       bridge.emitToolResult(
+         {
+           callId: 'tool-large',
+@@ -199,17 +239,13 @@
+       const content = (
+         user as {
+           message: { content: Array<{ content: string }> };
+         }
+       ).message.content[0].content;
+ 
+-      expect(
+-        Buffer.byteLength(JSON.stringify(content), 'utf8'),
+-      ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
+-      expect(content).toContain(HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER);
+-      expect(content).not.toBe(display);
++      expect(content).toBe(display);
+     });
+ 
+     it('emits session_end on shutdown for a clean termination signal', async () => {
+       bridge = new DualOutputBridge(config, { filePath: target });
+       await bridge.shutdown();
+ 
+@@ -317,60 +353,370 @@
          bridge!.emitPermissionRequest('req', 'tool', 'tu', {}),
        ).not.toThrow();
        expect(() => bridge!.emitControlResponse('req', true)).not.toThrow();
@@ -36652,7 +36686,7 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
    describe.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
      'FIFO (named pipe) support',
      () => {
-@@ -389,13 +743,17 @@
+@@ -389,13 +735,17 @@
          expect(elapsed).toBeLessThan(500);
          expect(bridge.isConnected).toBe(true);
        });
@@ -36671,7 +36705,7 @@ diff --git a/packages/cli/src/dualOutput/DualOutputBridge.test.ts b/packages/cli
            const reader = fs.createReadStream(fifoPath);
            reader.on('data', (chunk) => chunks.push(chunk as Buffer));
            reader.on('end', () => resolve(Buffer.concat(chunks).toString()));
-@@ -409,16 +767,21 @@
+@@ -409,16 +759,21 @@
          expect(lines[0]).toMatchObject({
            type: 'system',
            subtype: 'session_start',
@@ -38369,11 +38403,14 @@ diff --git a/packages/cli/src/nonInteractive/control/controllers/systemControlle
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-@@ -4,33 +4,38 @@
+@@ -1,41 +1,41 @@
+ /**
+  * @license
+  * Copyright 2025 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
   */
  
- import { Buffer } from 'node:buffer';
+-import { Buffer } from 'node:buffer';
  import { describe, it, expect, beforeEach, vi } from 'vitest';
  import {
 +  AgentTerminateMode,
@@ -38404,12 +38441,17 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
    extractTextFromBlocks,
 -  createExtendedUsage,
  } from './BaseJsonOutputAdapter.js';
- import {
-   HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
-   HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
- } from './headless-tool-result-text-projection.js';
+-import {
+-  HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
+-  HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-} from './headless-tool-result-text-projection.js';
  
-@@ -156,17 +161,35 @@
+ /**
+  * Test implementation of BaseJsonOutputAdapter for unit testing.
+  * Captures emitted messages for verification.
+  */
+ class TestJsonOutputAdapter extends BaseJsonOutputAdapter {
+@@ -156,17 +156,35 @@
    }
  
    exposeBuildResultMessage(options: ResultOptions) {
@@ -38447,7 +38489,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      getModel: vi.fn().mockReturnValue('test-model'),
    } as unknown as Config;
  }
-@@ -185,16 +208,13 @@
+@@ -185,16 +203,13 @@
        const state = adapter.exposeCreateMessageState();
  
        expect(state.messageId).toBeNull();
@@ -38465,7 +38507,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
    });
  
-@@ -220,63 +240,229 @@
+@@ -220,63 +235,229 @@
  
        expect(state1).not.toBe(state2);
      });
@@ -38712,7 +38754,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
  
      it('should throw error if message not started', () => {
-@@ -310,12 +496,40 @@
+@@ -310,12 +491,40 @@
          type: 'text',
          text: 'Hello world',
        });
@@ -38753,7 +38795,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          type: GeminiEventType.ToolCallRequest,
          value: {
            callId: 'tool-1',
-@@ -457,24 +671,30 @@
+@@ -457,24 +666,30 @@
    describe('startAssistantMessageInternal', () => {
      it('should reset message state', () => {
        const state = adapter.exposeCreateMessageState();
@@ -38786,7 +38828,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
    });
  
-@@ -859,5 +1079,49 @@
+@@ -859,5 +1074,49 @@
          name: 'test_tool',
          input: { param: 'value' },
        });
@@ -38836,7 +38878,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +      expect(messages[1].message.stop_reason).toBeNull();
      });
  
-@@ -864,22 +1128,28 @@
+@@ -864,22 +1123,28 @@
      it('should process Finished events with usage metadata', () => {
        adapter.processEvent({
          type: GeminiEventType.Finished,
@@ -38865,7 +38907,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should ignore events after finalization', () => {
        adapter.processEvent({
          type: GeminiEventType.Content,
-@@ -895,12 +1165,137 @@
+@@ -895,12 +1160,137 @@
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
@@ -39003,7 +39045,110 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      beforeEach(() => {
        adapter.startAssistantMessage();
      });
-@@ -1244,12 +1639,32 @@
+@@ -1070,13 +1460,13 @@
+     const persistedOutputCases: Array<[string, string[] | undefined]> = [
+       ['unhandled', undefined],
+       ['handled without artifact', []],
+       ['reusable artifact', ['/tmp/private-output.txt']],
+     ];
+     it.each(persistedOutputCases)(
+-      'bounds %s tool display without mutating or serializing persistence metadata',
++      'records complete %s tool display without mutating or serializing persistence metadata',
+       (_name, persistedOutputFiles) => {
+         const display = 'HEAD-' + 'x'.repeat(100_000) + '-TAIL';
+         const request = {
+           callId: 'tool-large',
+           name: 'test_tool',
+           args: {},
+@@ -1107,18 +1497,13 @@
+           block.type !== 'tool_result' ||
+           typeof block.content !== 'string'
+         ) {
+           throw new Error('Expected textual tool result');
+         }
+ 
+-        expect(
+-          Buffer.byteLength(JSON.stringify(block.content), 'utf8'),
+-        ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
+-        expect(block.content).toContain(
+-          HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-        );
++        expect(block.content).toBe(display);
+         expect(block.content.startsWith('HEAD-')).toBe(true);
+         expect(block.content.endsWith('-TAIL')).toBe(true);
+         expect(JSON.stringify(block)).not.toContain('/tmp/private-output.txt');
+         expect(response.resultDisplay).toBe(display);
+         expect(response.persistedOutputFiles).toBe(persistedOutputFiles);
+       },
+@@ -1153,13 +1538,14 @@
+       }
+       expect(Object.hasOwn(block, 'content')).toBe(false);
+     });
+ 
+     it.each([
+       {
+-        name: 'responseParts fallback',
++        name: 'model-facing response parts',
++        expected: 'HEAD-' + 'p'.repeat(100_000) + '-TAIL',
+         response: {
+           responseParts: [
+             {
+               functionResponse: {
+                 response: {
+                   output: 'HEAD-' + 'p'.repeat(100_000) + '-TAIL',
+@@ -1170,28 +1556,30 @@
+           resultDisplay: undefined,
+           error: undefined,
+         },
+       },
+       {
+         name: 'top-level error',
++        expected: 'HEAD-' + 'e'.repeat(100_000) + '-TAIL',
+         response: {
+           responseParts: [],
+           resultDisplay: 'ignored display',
+           error: new Error('HEAD-' + 'e'.repeat(100_000) + '-TAIL'),
+         },
+       },
+       {
+         name: 'vision bridge notice',
++        expected: 'Vision disclosure\nHEAD-' + 'v'.repeat(100_000) + '-TAIL',
+         response: {
+           responseParts: [],
+           resultDisplay: 'HEAD-' + 'v'.repeat(100_000) + '-TAIL',
+           visionBridgeNotice: 'Vision disclosure',
+           error: undefined,
+         },
+       },
+-    ])('projects oversized $name after semantic selection', ({ response }) => {
++    ])('records all $name after semantic selection', ({ response, expected }) => {
+       adapter.emitToolResult(
+         {
+           callId: 'tool-semantic',
+           name: 'test_tool',
+           args: {},
+           isClientInitiated: false,
+@@ -1213,18 +1601,13 @@
+         block.type !== 'tool_result' ||
+         typeof block.content !== 'string'
+       ) {
+         throw new Error('Expected textual tool result');
+       }
+ 
+-      expect(
+-        Buffer.byteLength(JSON.stringify(block.content), 'utf8'),
+-      ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
+-      expect(block.content).toContain(
+-        HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-      );
++      expect(block.content).toBe(expected);
+       expect(block.content.endsWith('-TAIL')).toBe(true);
+     });
+   });
+ 
+   describe('emitSystemMessage', () => {
+     it('should emit system message', () => {
+@@ -1244,12 +1627,32 @@
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -39036,7 +39181,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1280,13 +1695,14 @@
+@@ -1280,13 +1683,14 @@
        // Update lastAssistantMessage manually since test adapter doesn't do it automatically
        adapter['lastAssistantMessage'] = message;
      });
@@ -39052,7 +39197,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1717,14 @@
+@@ -1301,13 +1705,14 @@
          expect(result.num_turns).toBe(1);
        }
      });
@@ -39068,7 +39213,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1320,13 +1737,14 @@
+@@ -1320,13 +1725,14 @@
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -39084,7 +39229,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1335,19 +1753,27 @@
+@@ -1335,19 +1741,27 @@
        if (!result.is_error) {
          expect(result.result).toBe('Custom summary');
        }
@@ -39117,7 +39262,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1355,12 +1781,13 @@
+@@ -1355,12 +1769,13 @@
  
        expect(result.usage).toEqual(usage);
      });
@@ -39131,7 +39276,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -1375,13 +1802,14 @@
+@@ -1375,13 +1790,14 @@
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -39147,7 +39292,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +1820,14 @@
+@@ -1392,13 +1808,14 @@
        }
      });
  
@@ -39163,7 +39308,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1837,14 @@
+@@ -1408,13 +1825,14 @@
        }
      });
  
@@ -39179,7 +39324,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +1856,16 @@
+@@ -1426,15 +1844,16 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -39198,7 +39343,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1882,14 @@
+@@ -1451,13 +1870,14 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -39214,7 +39359,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1502,13 +1934,18 @@
+@@ -1502,13 +1922,18 @@
  
    describe('emitSubagentErrorResult', () => {
      it('should emit subagent error result', () => {
@@ -39234,7 +39379,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1525,13 +1962,18 @@
+@@ -1525,13 +1950,18 @@
      it('should finalize pending assistant message before emitting error', () => {
        const parentToolUseId = 'parent-tool-1';
        adapter.startSubagentAssistantMessage(parentToolUseId);
@@ -39254,7 +39399,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,26 +2061,283 @@
+@@ -1619,26 +2049,283 @@
      });
    });
  
@@ -39541,7 +39686,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1764,12 +2463,46 @@
+@@ -1764,12 +2451,46 @@
  
          const result = toolResultContent(response);
  
@@ -39588,7 +39733,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2543,13 @@
+@@ -1810,13 +2531,13 @@
            error: undefined,
            errorType: undefined,
          };
@@ -39603,7 +39748,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        it('prefers a top-level tool error over content with a vision bridge disclosure', () => {
          const response = {
            callId: 'pdf-failure',
-@@ -1992,19 +2725,8 @@
+@@ -1992,19 +2713,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -39626,7 +39771,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-@@ -1,79 +1,89 @@
+@@ -1,79 +1,88 @@
 +import {
 +  requireServedUsage,
 +  formatVisionBridgeNoticeDisplay,
@@ -39685,7 +39830,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  } from '../types.js';
 +import { TERMINAL_RESULT_BY_STATE } from '../types.js';
  import { functionResponsePartsToString } from '../../utils/nonInteractiveHelpers.js';
- import { projectHeadlessToolResultContent } from './headless-tool-result-text-projection.js';
+-import { projectHeadlessToolResultContent } from './headless-tool-result-text-projection.js';
  
  /**
   * Internal state for managing a single message context (main agent or subagent).
@@ -39728,7 +39873,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * top-level `structured_result` field is added to the result message.
     */
    readonly structuredResult?: unknown;
-@@ -91,13 +101,17 @@
+@@ -91,13 +100,17 @@
    emitUserMessage(parts: Part[], parentToolUseId?: string | null): void;
    emitToolResult(
      request: ToolCallRequestInfo,
@@ -39747,7 +39892,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * In non-streaming mode, this is a no-op.
     *
     * @param request - Tool call request info
-@@ -116,22 +130,25 @@
+@@ -116,22 +129,25 @@
   */
  export interface JsonOutputAdapterInterface extends MessageEmitter {
    startAssistantMessage(): void;
@@ -39773,7 +39918,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    ): void;
  
    getSessionId(): string;
-@@ -193,44 +210,25 @@
+@@ -193,44 +209,25 @@
        state = this.createMessageState();
        this.subagentMessageStates.set(parentToolUseId, state);
      }
@@ -39828,7 +39973,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * Builds a CLIAssistantMessage from the current message state.
     *
     * @param parentToolUseId - null for main agent, string for subagent
-@@ -545,6 +543,25 @@
+@@ -545,6 +542,25 @@
    }
  
    /**
@@ -39854,7 +39999,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * Hook method called when a block is closed.
     * Subclasses can override this to emit stream events.
     *
-@@ -633,4 +650,7 @@
+@@ -633,4 +649,7 @@
          break;
        case GeminiEventType.ToolCallRequest:
          this.appendToolUse(state, event.value, null);
@@ -39862,7 +40007,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +      case GeminiEventType.IncompleteToolCall:
 +        this.appendIncompleteToolUse(state, event.value, null);
          break;
-@@ -637,32 +657,32 @@
+@@ -637,32 +656,32 @@
        case GeminiEventType.Finished:
          if (event.value?.usageMetadata) {
            state.usage = this.createUsage(event.value.usageMetadata);
@@ -39914,7 +40059,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      }
    }
  
-@@ -694,28 +714,35 @@
+@@ -694,28 +713,35 @@
    }
  
    /**
@@ -39951,7 +40096,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    /**
     * Processes a subagent tool call.
     * This is a shared implementation used by both streaming and non-streaming adapters.
-@@ -760,12 +787,47 @@
+@@ -760,12 +786,47 @@
  
      // Finalize tool_use message immediately
      this.finalizeSubagentAssistantMessage(parentToolUseId);
@@ -39999,7 +40144,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * input setting, and closure. Subclasses can override this to customize behavior.
     *
     * @param state - Message state
-@@ -936,6 +998,42 @@
+@@ -936,6 +997,42 @@
      this.onToolUseBlockCreated(state, index, startBlock, parentToolUseId);
      this.onToolUseInputSet(state, index, request.args ?? {}, parentToolUseId);
  
@@ -40042,7 +40187,22 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      this.onBlockClosed(state, index, parentToolUseId);
      this.closeBlock(state, index);
    }
-@@ -1077,20 +1175,28 @@
+@@ -1057,13 +1154,13 @@
+       type: 'tool_result',
+       tool_use_id: request.callId,
+       is_error: hasError,
+     };
+     const content = toolResultContent(response);
+     if (content !== undefined) {
+-      block.content = projectHeadlessToolResultContent(content);
++      block.content = content;
+     }
+ 
+     const message: CLIUserMessage = {
+       type: 'user',
+       uuid: randomUUID(),
+       session_id: this.getSessionId(),
+@@ -1077,20 +1174,28 @@
    }
  
    /**
@@ -40073,7 +40233,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -1180,31 +1286,31 @@
+@@ -1180,31 +1285,31 @@
     * @returns CLIResultMessage
     */
    protected buildResultMessage(
@@ -40110,7 +40270,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
          num_turns: options.numTurns,
          usage,
          permission_denials: [...this.permissionDenials],
-@@ -1231,16 +1337,16 @@
+@@ -1231,16 +1336,16 @@
          : resultText;
        const success: CLIResultMessageSuccess & {
          stats?: SessionMetrics;
@@ -40129,7 +40289,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
          num_turns: options.numTurns,
          result: finalResult,
          usage,
-@@ -1260,33 +1366,43 @@
+@@ -1260,33 +1365,43 @@
  
    /**
     * Builds a subagent error result message.
@@ -40180,7 +40340,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        error: { message: errorMessage },
      };
    }
-@@ -1436,23 +1552,29 @@
+@@ -1436,23 +1551,29 @@
    if (responsePartsError) {
      return responsePartsError;
    }
@@ -40215,7 +40375,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  /**
   * Extracts text from content blocks.
   *
-@@ -1462,18 +1584,6 @@
+@@ -1462,18 +1583,6 @@
  export function extractTextFromBlocks(blocks: ContentBlock[]): string {
    return blocks
      .filter((block) => block.type === 'text')
@@ -40237,7 +40397,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts
 --- a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts
-@@ -1,51 +1,162 @@
+@@ -1,51 +1,157 @@
 +import { RuntimeContractAdmission } from '@qwen-code/qwen-code-core';
  /**
   * @license
@@ -40247,7 +40407,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
  
 +import { Writable } from 'node:stream';
 +
- import { Buffer } from 'node:buffer';
+-import { Buffer } from 'node:buffer';
 -import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 +import {
 +  describe,
@@ -40272,10 +40432,10 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
  import { JsonOutputAdapter } from './JsonOutputAdapter.js';
 +import { StreamJsonOutputAdapter } from './StreamJsonOutputAdapter.js';
 +import { outputWriter } from '../../utils/output-writer.js';
- import {
-   HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
-   HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
- } from './headless-tool-result-text-projection.js';
+-import {
+-  HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
+-  HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-} from './headless-tool-result-text-projection.js';
  
 +import type { CLIAssistantMessage, GenerationUsageSummary } from '../types.js';
 +
@@ -40406,7 +40566,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        adapter.startAssistantMessage();
        adapter.startAssistantMessage(); // Start second message
        // Should not throw
-@@ -229,34 +340,75 @@
+@@ -229,34 +335,75 @@
        expect(
          message.message.content.every((block) => block.type === 'tool_use'),
        ).toBe(true);
@@ -40485,7 +40645,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
      it('should finalize pending blocks on Finished event', () => {
        // Add some text first
        adapter.processEvent({
-@@ -391,13 +543,14 @@
+@@ -391,13 +538,14 @@
        });
        adapter.finalizeAssistantMessage();
      });
@@ -40501,7 +40661,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        expect(stdoutWriteSpy).toHaveBeenCalled();
-@@ -422,13 +575,14 @@
+@@ -422,13 +570,14 @@
      });
  
      it('should emit success result as text to stdout in text mode', () => {
@@ -40517,7 +40677,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        expect(stdoutWriteSpy).toHaveBeenCalled();
-@@ -436,17 +590,18 @@
+@@ -436,17 +585,18 @@
        expect(output).toBe('Response text\n');
      });
  
@@ -40538,7 +40698,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
          numTurns: 1,
        });
  
-@@ -458,13 +613,14 @@
+@@ -458,13 +608,14 @@
      });
  
      it('should use custom summary in text mode', () => {
@@ -40554,7 +40714,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
          numTurns: 1,
        });
  
-@@ -473,17 +629,18 @@
+@@ -473,17 +624,18 @@
        expect(output).toBe('Custom summary text\n');
      });
  
@@ -40575,7 +40735,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        expect(stderrWriteSpy).toHaveBeenCalled();
-@@ -493,13 +650,14 @@
+@@ -493,13 +645,14 @@
  
        stderrWriteSpy.mockRestore();
      });
@@ -40591,7 +40751,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
          numTurns: 1,
        });
  
-@@ -517,13 +675,14 @@
+@@ -517,13 +670,14 @@
        expect(resultMessage.subtype).toBe('error_during_execution');
        expect(resultMessage.error?.message).toBe('Test error');
      });
@@ -40607,7 +40767,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
          numTurns: 1,
        });
  
-@@ -538,20 +697,28 @@
+@@ -538,20 +692,28 @@
        );
  
        expect(resultMessage.result).toBe('Custom summary');
@@ -40644,7 +40804,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
          numTurns: 1,
        });
  
-@@ -567,12 +734,13 @@
+@@ -567,12 +729,13 @@
  
        expect(resultMessage.usage).toEqual(usage);
      });
@@ -40658,7 +40818,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -588,13 +756,14 @@
+@@ -588,13 +751,14 @@
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
          },
@@ -40674,7 +40834,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
          numTurns: 1,
        });
  
-@@ -615,13 +784,14 @@
+@@ -615,13 +779,14 @@
    describe('emitUserMessage', () => {
      it('should add user message to collection', () => {
        const parts: Part[] = [{ text: 'Hello user' }];
@@ -40690,7 +40850,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -647,13 +817,14 @@
+@@ -647,13 +812,14 @@
  
      it('should handle parent_tool_use_id', () => {
        const parts: Part[] = [{ text: 'Tool response' }];
@@ -40706,7 +40866,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -688,13 +859,14 @@
+@@ -688,13 +854,14 @@
          errorType: undefined,
        };
  
@@ -40722,7 +40882,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -749,13 +921,14 @@
+@@ -749,13 +916,14 @@
          errorType: undefined,
        };
  
@@ -40738,7 +40898,22 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -797,13 +970,14 @@
+@@ -778,13 +946,13 @@
+       const block = toolResult.message.content[0] as {
+         is_error?: boolean;
+       };
+       expect(block.is_error).toBe(true);
+     });
+ 
+-    it('serializes a bounded tool result in JSON output', () => {
++    it('serializes the complete tool result in JSON output', () => {
+       const display = 'HEAD-' + 'x'.repeat(100_000) + '-TAIL';
+       adapter.emitToolResult(
+         {
+           callId: 'tool-large',
+           name: 'test_tool',
+           args: {},
+@@ -797,32 +965,29 @@
            resultDisplay: display,
            error: undefined,
            errorType: undefined,
@@ -40754,11 +40929,39 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const parsed = JSON.parse(stdoutWriteSpy.mock.calls[0][0] as string);
-@@ -861,27 +1035,44 @@
-       expect(
-         Buffer.byteLength(JSON.stringify(content), 'utf8'),
-       ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
-       expect(content).not.toBe(display);
+       const user = parsed.find(
+         (message: { type?: string }) => message.type === 'user',
+       );
+       const content = user.message.content[0].content as string;
+ 
+-      expect(
+-        Buffer.byteLength(JSON.stringify(content), 'utf8'),
+-      ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
+-      expect(content).toContain(HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER);
+-      expect(content).not.toBe(display);
++      expect(content).toBe(display);
+     });
+ 
+-    it('retains only the bounded preview while text output stays unchanged', () => {
++    it('retains the complete tool result while text output stays unchanged', () => {
+       mockConfig = {
+         ...createMockConfig(),
+         getOutputFormat: vi.fn().mockReturnValue(OutputFormat.TEXT),
+       } as unknown as Config;
+       adapter = new JsonOutputAdapter(mockConfig);
+       const display = 'HEAD-' + 'x'.repeat(100_000) + '-TAIL';
+@@ -855,33 +1020,47 @@
+         }
+       ).messages;
+       const user = storedMessages.find((message) => message.type === 'user');
+       const content = user?.message?.content?.[0]?.content;
+ 
+       expect(typeof content).toBe('string');
+-      expect(
+-        Buffer.byteLength(JSON.stringify(content), 'utf8'),
+-      ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
+-      expect(content).not.toBe(display);
++      expect(content).toBe(display);
  
        adapter.emitResult({
 -        isError: false,
@@ -40805,7 +41008,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -892,14 +1083,124 @@
+@@ -892,14 +1071,124 @@
            msg !== null &&
            'type' in msg &&
            msg.type === 'system',
@@ -40932,7 +41135,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
    describe('getSessionId and getModel', () => {
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
-@@ -911,22 +1212,25 @@
+@@ -911,22 +1200,25 @@
        expect(mockConfig.getModel).toHaveBeenCalled();
      });
    });
@@ -40960,7 +41163,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.test.ts b/pack
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -955,7 +1259,184 @@
+@@ -955,7 +1247,184 @@
              'type' in msg &&
              (msg as { type?: string }).type === 'result',
          ),
@@ -41878,7 +42081,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.dualOutp
 diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts
 --- a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts
-@@ -1,6 +1,7 @@
+@@ -1,29 +1,43 @@
 +import { RuntimeContractAdmission } from '@qwen-code/qwen-code-core';
  /**
   * @license
@@ -41886,7 +42089,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -8,22 +9,36 @@
+-import { Buffer } from 'node:buffer';
  import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  import type {
    Config,
@@ -41894,13 +42097,17 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
    ServerGeminiStreamEvent,
  } from '@qwen-code/qwen-code-core';
 -import { GeminiEventType } from '@qwen-code/qwen-code-core';
-+import { AgentTerminateMode, GeminiEventType } from '@qwen-code/qwen-code-core';
++import {
++  AgentTerminateMode,
++  GeminiEventType,
++  partitionContextWindow,
++} from '@qwen-code/qwen-code-core';
  import type { Part } from '@google/genai';
  import { StreamJsonOutputAdapter } from './StreamJsonOutputAdapter.js';
- import {
-   HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
-   HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
- } from './headless-tool-result-text-projection.js';
+-import {
+-  HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
+-  HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-} from './headless-tool-result-text-projection.js';
  
 +import type { GenerationUsageSummary } from '../types.js';
 +
@@ -41924,7 +42131,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
  }
  
  const goalSnapshot: GoalSnapshotV2 = {
-@@ -50,13 +65,26 @@
+@@ -50,13 +64,26 @@
    let stdoutWriteSpy: any;
  
    beforeEach(() => {
@@ -41952,7 +42159,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
      stdoutWriteSpy.mockRestore();
    });
  
-@@ -257,6 +285,35 @@
+@@ -257,6 +284,35 @@
          });
  
          expect(messageStartCall).toBeDefined();
@@ -41988,7 +42195,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
        });
  
        it('should emit content_block_start for new blocks', () => {
-@@ -669,33 +726,74 @@
+@@ -669,33 +725,74 @@
        expect(
          message.message.content.every((block) => block.type === 'tool_use'),
        ).toBe(true);
@@ -42066,7 +42273,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
      it('should ignore events after finalization', () => {
        adapter.finalizeAssistantMessage();
        const originalContent =
-@@ -881,13 +979,14 @@
+@@ -881,13 +978,14 @@
        adapter.finalizeAssistantMessage();
      });
  
@@ -42082,7 +42289,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
        });
  
        expect(stdoutWriteSpy).toHaveBeenCalled();
-@@ -902,13 +1001,14 @@
+@@ -902,13 +1000,14 @@
        expect(parsed.num_turns).toBe(1);
      });
  
@@ -42098,7 +42305,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          numTurns: 1,
        });
  
-@@ -920,13 +1020,14 @@
+@@ -920,13 +1019,14 @@
        expect(parsed.error?.message).toBe('Test error');
      });
  
@@ -42114,7 +42321,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          numTurns: 1,
        });
  
-@@ -934,21 +1035,29 @@
+@@ -934,21 +1034,29 @@
        const parsed = JSON.parse(output);
  
        expect(parsed.result).toBe('Custom summary');
@@ -42149,7 +42356,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          numTurns: 1,
        });
  
-@@ -959,13 +1068,14 @@
+@@ -959,13 +1067,14 @@
      });
  
      it('should handle result without assistant message', () => {
@@ -42165,9 +42372,75 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -1107,27 +1217,33 @@
-       expect(content).toContain(HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER);
-       expect(content).not.toBe(display);
+@@ -1073,13 +1182,13 @@
+       const parsed = JSON.parse(output);
+ 
+       const block = parsed.message.content[0];
+       expect(block.is_error).toBe(true);
+     });
+ 
+-    it('emits a parseable line with bounded tool result content', () => {
++    it('emits a parseable line with complete tool result content', () => {
+       stdoutWriteSpy.mockClear();
+       const display = 'HEAD-' + 'x'.repeat(100_000) + '-TAIL';
+       adapter.emitToolResult(
+         {
+           callId: 'tool-large',
+           name: 'test_tool',
+@@ -1098,36 +1207,79 @@
+ 
+       const output = stdoutWriteSpy.mock.calls[0][0] as string;
+       const parsed = JSON.parse(output);
+       const content = parsed.message.content[0].content as string;
+ 
+       expect(output.endsWith('\n')).toBe(true);
+-      expect(
+-        Buffer.byteLength(JSON.stringify(content), 'utf8'),
+-      ).toBeLessThanOrEqual(HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET);
+-      expect(content).toContain(HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER);
+-      expect(content).not.toBe(display);
++      expect(content).toBe(display);
++    });
++
++    it('preserves every escaped byte of an inline model-facing result for main and child tools', () => {
++      // Control characters cost one inline byte and six JSON bytes. Evidence
++      // serialisation must not impose a second bound on an admitted block.
++      const content = '\u0001'.repeat(
++        partitionContextWindow(262_144).inlineBlockBytes,
++      );
++      for (const parentToolUseId of [null, 'child-call']) {
++        stdoutWriteSpy.mockClear();
++        adapter.emitToolResult(
++          {
++            callId: 'escaped-result',
++            name: 'run_shell_command',
++            args: {},
++            isClientInitiated: false,
++            prompt_id: 'prompt-1',
++          },
++          {
++            callId: 'escaped-result',
++            responseParts: [
++              {
++                functionResponse: {
++                  id: 'escaped-result',
++                  name: 'run_shell_command',
++                  response: { output: content },
++                },
++              },
++            ],
++            resultDisplay: 'Display summary',
++            error: undefined,
++            errorType: undefined,
++          },
++          parentToolUseId,
++        );
++        const wire = stdoutWriteSpy.mock.calls[0][0] as string;
++        const record = JSON.parse(wire);
++        expect(record.parent_tool_use_id).toBe(parentToolUseId);
++        expect(record.message.content[0].content).toBe(content);
++        expect(wire).toContain(JSON.stringify(content));
++      }
      });
    });
  
@@ -42202,7 +42475,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
    describe('emitToolProgress', () => {
      const mockRequest = {
        callId: 'tool-call-1',
-@@ -1266,12 +1382,123 @@
+@@ -1266,12 +1418,123 @@
  
        // All events should share the same tool_use_id
        for (const event of events) {
@@ -299581,3 +299854,26 @@ diff --git a/scripts/tests/stream-contract-assets.test.js b/scripts/tests/stream
 +    },
 +  );
 +});
+diff --git a/packages/cli/src/nonInteractive/io/headless-tool-result-text-projection.ts b/packages/cli/src/nonInteractive/io/headless-tool-result-text-projection.ts
+--- a/packages/cli/src/nonInteractive/io/headless-tool-result-text-projection.ts
++++ /dev/null
+@@ -1,19 +0,0 @@
+-/**
+- * @license
+- * Copyright 2026 Qwen Team
+- * SPDX-License-Identifier: Apache-2.0
+- */
+-
+-import { projectJsonStringToByteBudget } from '../../utils/json-string-byte-projection.js';
+-
+-export const HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET = 65_536;
+-export const HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER =
+-  '\n[... truncated for Headless transport ...]\n';
+-
+-export function projectHeadlessToolResultContent(value: string): string {
+-  return projectJsonStringToByteBudget(
+-    value,
+-    HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
+-    HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
+-  );
+-}
