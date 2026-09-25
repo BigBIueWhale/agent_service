@@ -709,6 +709,8 @@ print(json.dumps(found))
         require(events and events.endswith(b"\n"), "captured stream is empty or torn")
         self.certified_events = events
         records = [json.loads(line) for line in events.splitlines()]
+        require(all("recordingVersion" not in record for record in records),
+                "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
         schema_hash = digest((self.source / "protocol/stream-contract-v1.json").read_bytes())

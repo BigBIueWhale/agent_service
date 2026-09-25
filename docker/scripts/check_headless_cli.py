@@ -223,6 +223,10 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 1 for r in records),
+            "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
+    require(all("recordingVersion" not in event for event in events),
+            "canonical history entered stdout evidence; inspect the two recording paths")
     require(all(r["sessionId"] == session for r in records), "transcript ownership drifted")
     require(records[0]["parentUuid"] is None and
             all(r["parentUuid"] == p["uuid"] for p, r in zip(records, records[1:])),

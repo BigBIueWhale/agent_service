@@ -8034,10 +8034,53 @@ def _validate_served_accounting_after(state: State) -> None:
         core + "services/sessionService.ts",
         (
             "private async withMutationLease<T>",
-            "await jsonl.readStrict<ChatRecord>(filePath)",
+            "await readCanonicalChatRecords(filePath)",
         ),
         label=label,
     )
+    _require_all(
+        state,
+        core + "utils/transcript-records.ts",
+        (
+            "export const CHAT_RECORDING_VERSION = 1;",
+            "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
+            "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
+            "'unsupported_recording_version'",
+            "export function requireTranscriptRecord(",
+            "validated.diagnostics.length > 0",
+        ),
+        label=label,
+    )
+    for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
+        require_text(state, path, "recordingVersion: CHAT_RECORDING_VERSION", label=label)
+    _require_all(
+        state,
+        core + "services/chat-recording-io.ts",
+        ("decodeJsonlRecord<unknown>", "requireTranscriptRecord(value)",
+         "Unterminated JSONL record", "export function* iterateCanonicalChatRecordsSync"),
+        label=label,
+    )
+    for path in (core + "services/sessionService.ts", core + "services/usageHistoryService.ts",
+                 core + "agents/background-agent-resume.ts"):
+        _require_all(state, path, ("readCanonicalChatRecords",), label=label)
+        forbid_text(state, path, "readStrict<ChatRecord>", label=label)
+        forbid_text(state, path, "read<ChatRecord>", label=label)
+    for path in (core + "services/session-transcript-reader.ts", core + "services/session-api-history.ts"):
+        _require_all(state, path, ("requireTranscriptRecord",), label=label)
+    _require_all(state, core + "utils/sessionStorageUtils.ts", ("iterateCanonicalChatRecordsSync",), label=label)
+    forbid_text(state, core + "utils/sessionStorageUtils.ts", "extractJsonStringField", label=label)
+    forbid_text(state, core + "services/chatRecordingService.ts", "TITLE_REANCHOR_BYTES", label=label)
+    _require_all(
+        state,
+        cli + "serve/virtual-subagent-sessions.ts",
+        ("decodeChatRecord(", "if (this.readFailure) throw this.readFailure;",
+         "type: 'stream_error'", "this.bus.close()"),
+        label=label,
+    )
+    require_text(state, cli + "commands/review/cost-ledger.ts", "readCanonicalChatRecordsSync(file)", label=label)
+    require_text(state, cli + "commands/review/lib/transcripts.ts", "readCanonicalChatRecordsSync(file)", label=label)
+    forbid_text(state, cli + "commands/review/lib/transcripts.ts", "JSON.parse(line)", label=label)
+    require_text(state, "packages/vscode-ide-companion/src/services/qwenSessionReader.ts", "readCanonicalChatRecords(filePath)", label=label)
     for path in (core + "config/config.ts", core + "services/chatRecordingService.ts"):
         for symbol in ("sessionWriterLeaseEnabled", "writerLeaseRequired"):
             forbid_text(state, path, symbol, label=label)

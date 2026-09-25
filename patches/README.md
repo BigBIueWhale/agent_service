@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `8befa8e12fff8ff8131ad94f5d807b3d63d8f1a56016e8f84b60d5d993bf235b`
+- Review-diff SHA-256: `0e56c0d01bf1f4a6683648a7b772912fac39434aef7db01eda50469029552cbe`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `433e5be1a2900ee1baaff809b0adcbde3ea1d30eba0eaaf2e63b8c14e29ee95c`
+- Transformer-manifest SHA-256: `045ec940ab64d5ca2081e2acba949f558c7fd792d802c215bb4c6952441abb22`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -338,6 +338,18 @@ The persistent storage anchor remains fixed while execution directories can
 change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
+
+Every physical canonical chat record carries `recordingVersion: 1`, independently
+of the client release string. Missing or unknown versions, unknown record kinds
+or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
+restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
+admission rule. An inactive branch cannot hide an unsupported record. Live child
+read failures reach subscribers as a terminal error and remain refusals on later
+loads. Title metadata is selected from a complete validated scan with memory
+bounded by the largest physical record; title writes are not duplicated to keep
+them within a tail window. This format governs the runtime chat JSONL that resume
+reads. `output/events.jsonl` retains stdout bytes under the separate stream
+contract and cannot serve as canonical history.
 
 Every chat requires a canonical commit recorder. Root chats, ordinary children,
 background and resumed children, workflow calls, utility forks, and speculation
