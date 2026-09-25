@@ -1,5 +1,7 @@
 //! Exact captured-stream admission and native validation of the shared schema.
 
+mod model_requests;
+
 mod stream;
 pub use stream::*;
 

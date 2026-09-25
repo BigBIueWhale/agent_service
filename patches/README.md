@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `0e56c0d01bf1f4a6683648a7b772912fac39434aef7db01eda50469029552cbe`
+- Review-diff SHA-256: `e91b7e65697348c13bfab568ef90606a32e22422796c0ee01c472910a48393b6`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `045ec940ab64d5ca2081e2acba949f558c7fd792d802c215bb4c6952441abb22`
+- Transformer-manifest SHA-256: `dba5b8cba148c64ada48f41431f298769cf71e1193d80bb47e389e524dfb9c7d`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -339,17 +339,56 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 1`, independently
+Every physical canonical chat record carries `recordingVersion: 2`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
 admission rule. An inactive branch cannot hide an unsupported record. Live child
 read failures reach subscribers as a terminal error and remain refusals on later
 loads. Title metadata is selected from a complete validated scan with memory
-bounded by the largest physical record; title writes are not duplicated to keep
-them within a tail window. This format governs the runtime chat JSONL that resume
+holding the current physical record and the request replay state; title writes
+are not duplicated to keep them within a tail window. This format governs the runtime chat JSONL that resume
 reads. `output/events.jsonl` retains stdout bytes under the separate stream
 contract and cannot serve as canonical history.
+
+Every supported generation request is admitted by `pipeline.ts` immediately after
+`buildRequest`, before optional diagnostics and the SDK transport. The canonical
+writer must accept a `model_request` record before dispatch. The record carries
+the UTF-8 byte count and SHA-256 of the complete serialized body, its invocation
+and compaction segment, and a replayable full body or message delta. Serialization
+is frozen before diagnostics, so the SDK sends precisely those bytes. A failed
+canonical write prevents dispatch. SDK-internal retries are disabled for these
+calls: the existing controlled retry loop re-enters capture for every attempt.
+A request record establishes a dispatch intent, not proof of server receipt.
+
+Each invocation starts with a full body, and the first request after its committed
+compaction also carries a full body. Deltas retain the unchanged message prefix
+and replace the rest, including changed reminders. They retain the exact serialized
+non-message envelope, including tool declarations. The journal keeps the most
+recent message slices per invocation, with no output queue when no renderer needs
+one. Each active renderer owns a queue and releases it on closure. An ordinary
+multi-turn renderer keeps its delta base across turn results.
+
+Stream format 2 exposes these same request records, declares the journal origin
+in `system/init`, and accounts for the output window at every root result. Native
+certification and SDK admission replay message deltas, verify byte lengths and
+hashes, and refuse missing, repeated, reordered, foreign, or unknown evidence.
+The native terminal check also refuses fewer requests than billed model turns.
+The composition and headless harnesses compare reconstructed bodies with the
+actual bytes received by their fake providers. Canonical readers validate request
+evidence in physical order before selecting conversation branches. Evidence has
+no conversation message or subtype and cannot become the active history tail;
+resume still reads canonical chat JSONL, never stdout. Forks copy the complete
+physical request journal, including delta bases on abandoned branches, while
+copying only active conversation history. Exact provider, canonical
+writer, full-history and indexed-history tests exercise this separation together.
+
+This is shared client request construction and recording, so it applies to all
+client entry points using the deployment. A direct vLLM caller does not have this
+client's conversation, reminders, compaction segments or canonical recorder; this
+change does not add backend logging for such callers. Backend-owned omissions
+must be addressed in the backend. Request capture alone does not establish that
+every response byte and abandoned attempt is recorded.
 
 Every chat requires a canonical commit recorder. Root chats, ordinary children,
 background and resumed children, workflow calls, utility forks, and speculation

@@ -316,7 +316,11 @@ mod tests {
         )
     }
 
-    const INIT: &str = concat!("{\"type\":\"system\",\"subtype\":\"init\",\"stream_contract_sha256\":\"", env!("STREAM_CONTRACT_SHA256"), "\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n");
+    const INIT: &str = concat!(
+        "{\"type\":\"system\",\"subtype\":\"init\",\"request_evidence_origin\":{\"journal_id\":\"fixture\",\"first_sequence\":1},\"stream_contract_sha256\":\"",
+        env!("STREAM_CONTRACT_SHA256"),
+        "\",\"uuid\":\"u1\",\"session_id\":\"a\",\"cwd\":\"/workspace\",\"tools\":[\"agent\",\"edit\",\"glob\",\"grep_search\",\"list_directory\",\"notebook_edit\",\"read_file\",\"run_shell_command\",\"todo_write\",\"write_file\"],\"mcp_servers\":[],\"model\":\"qwen3.8-27b-nvfp4-k8v4\",\"permission_mode\":\"yolo\",\"slash_commands\":[],\"qwen_code_version\":\"0.21.12\",\"agents\":[\"general-purpose\",\"Explore\"]}\n"
+    );
 
     // One completed main turn that issues the delegating tool_use, one
     // completed subagent turn under that tool call, the subagent's own
@@ -327,7 +331,127 @@ mod tests {
     const MAIN_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"chatcmpl-tool-9d45d85b\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":51}}}\n";
     const SUBAGENT_TURN: &str = "{\"type\":\"assistant\",\"uuid\":\"u3\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"message\":{\"usage\":{\"input_tokens\":11,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":20}}}\n";
     const SUBAGENT_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"is_error\":true,\"duration_ms\":0,\"duration_api_ms\":0,\"num_turns\":3,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"MAX_TURNS\"}}\n";
-    const MAIN_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[]}\n";
+    const MAIN_RESULT: &str = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"request_evidence\":{\"journal_id\":\"fixture\",\"first_sequence\":1,\"request_count\":0},\"permission_denials\":[]}\n";
+
+    /// Supply the provider-input side of a turn fixture. Response bytes remain
+    /// untouched so malformed JSON, exact numbers and first-refusal tests still
+    /// exercise the actual byte boundary. Tests for missing evidence use the
+    /// raw reader directly.
+    fn request_fixture(text: &str) -> String {
+        use sha2::{Digest, Sha256};
+        let mut output = String::new();
+        let mut sequence = 0u64;
+        for framed in text.split_inclusive('\n') {
+            let raw = framed.strip_suffix('\n').unwrap_or(framed);
+            let value = serde_json::from_str::<serde_json::Value>(raw).ok();
+            if let Some(record) = value.as_ref() {
+                let generation =
+                    record["type"] == "assistant" && record["message"]["usage"].is_object();
+                if generation {
+                    sequence += 1;
+                    let scope = record["parent_tool_use_id"].as_str().unwrap_or("main");
+                    let body = serde_json::json!({"model":"fixture", "kv_scope":scope, "messages":[{"role":"user","content":"fixture turn"}]}).to_string();
+                    let digest = Sha256::digest(body.as_bytes())
+                        .iter()
+                        .map(|byte| format!("{byte:02x}"))
+                        .collect::<String>();
+                    let request = serde_json::json!({
+                        "type":"model_request", "uuid":format!("request-evidence-{sequence}"),
+                        "session_id":record["session_id"], "parent_tool_use_id":null,
+                        "request":{"journal_id":"fixture", "sequence":sequence,
+                            "request_id":format!("request-{sequence}"), "kv_scope":scope, "segment_id":"fixture-segment",
+                            "prompt_id":"fixture", "body_bytes":body.len(), "body_sha256":digest,
+                            "body":{"kind":"full","json":body}}
+                    });
+                    output.push_str(&request.to_string());
+                    output.push('\n');
+                }
+                if record["type"] == "result" && record["parent_tool_use_id"].is_null() {
+                    // Preserve every original number spelling. Replace only
+                    // the summary value when the terminal template has one.
+                    let summary = format!(
+                        r#"{{"journal_id":"fixture","first_sequence":1,"request_count":{sequence}}}"#
+                    );
+                    let document = runtime_contract::json::Document::decode(
+                        raw.as_bytes(),
+                        runtime_contract::json::Limits {
+                            bytes: raw.len(),
+                            nodes: raw.len(),
+                            depth: raw.len(),
+                        },
+                    );
+                    if let Some(range) = document.as_ref().ok().and_then(|doc| {
+                        doc.root()
+                            .get("request_evidence")
+                            .map(|value| value.byte_range())
+                    }) {
+                        output.push_str(&raw[..range.start]);
+                        output.push_str(&summary);
+                        output.push_str(&raw[range.end..]);
+                        if framed.ends_with('\n') {
+                            output.push('\n');
+                        }
+                        continue;
+                    }
+                    if let Some(end) = raw.rfind('}') {
+                        output.push_str(&raw[..end]);
+                        output.push_str(", \"request_evidence\":");
+                        output.push_str(&summary);
+                        output.push_str(&raw[end..]);
+                        if framed.ends_with('\n') {
+                            output.push('\n');
+                        }
+                        continue;
+                    }
+                }
+            }
+            output.push_str(framed);
+        }
+        output
+    }
+
+    #[test]
+    fn refuses_missing_or_corrupted_request_evidence_in_the_actual_reader() {
+        let complete = request_fixture(&format!("{INIT}{MAIN_TURN}{MAIN_RESULT}"));
+        parse_text(&complete).expect("complete request evidence certifies");
+        let records = complete
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>();
+        for defect in ["omission", "hash", "kind", "origin", "sequence"] {
+            let mut damaged = records.clone();
+            let request = damaged
+                .iter()
+                .position(|row| row["type"] == "model_request")
+                .unwrap();
+            match defect {
+                "omission" => {
+                    damaged.remove(request);
+                    damaged.last_mut().unwrap()["request_evidence"]["request_count"] =
+                        serde_json::json!(0);
+                }
+                "hash" => {
+                    damaged[request]["request"]["body_sha256"] = serde_json::json!("0".repeat(64))
+                }
+                "kind" => {
+                    damaged[request]["request"]["body"]["kind"] = serde_json::json!("unknown")
+                }
+                "origin" => {
+                    damaged[0]
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("request_evidence_origin");
+                }
+                "sequence" => damaged[request]["request"]["sequence"] = serde_json::json!(2),
+                _ => unreachable!(),
+            }
+            let bytes = damaged
+                .iter()
+                .map(|row| format!("{row}\n"))
+                .collect::<String>();
+            assert!(parse_text(&bytes).is_err(), "{defect} must refuse");
+        }
+    }
 
     fn snapshot_text(text: &str) -> ServiceResult<EventSnapshot> {
         snapshot_bytes(text.as_bytes())
@@ -419,7 +543,9 @@ mod tests {
             "agent-service-shortened-{}.jsonl",
             uuid::Uuid::new_v4()
         ));
-        let retained = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{MAIN_RESULT}");
+        let retained = request_fixture(&format!(
+            "{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{MAIN_RESULT}"
+        ));
         let all = format!("{retained}not JSON\n");
         let file = std::fs::OpenOptions::new()
             .create_new(true)
@@ -457,7 +583,7 @@ mod tests {
             MAIN_RESULT.trim_end().to_string(),
         ] {
             let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{tail}");
-            let snapshot = snapshot_text(&text).unwrap();
+            let snapshot = snapshot_text(&request_fixture(&text)).unwrap();
             assert!(snapshot
                 .certified
                 .unwrap_err()
@@ -468,15 +594,18 @@ mod tests {
             assert_eq!(snapshot.observed.observed_reasoning_tokens, 12);
             assert_eq!(snapshot.observed.observed_subagent_scope_count, 1);
             assert_eq!(snapshot.observed.observed_unaccounted_records, 1);
-            assert_eq!(snapshot.observed.output_event_bytes, text.len() as u64);
+            assert_eq!(
+                snapshot.observed.output_event_bytes,
+                request_fixture(&text).len() as u64
+            );
         }
     }
 
     #[test]
     fn complete_result_and_observations_come_from_the_same_snapshot() {
-        let snapshot = snapshot_text(&format!(
+        let snapshot = snapshot_text(&request_fixture(&format!(
             "{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{MAIN_RESULT}"
-        ))
+        )))
         .unwrap();
         let result = snapshot.certified.unwrap();
         assert_eq!(snapshot.observed.num_turns, result.num_turns);
@@ -493,7 +622,7 @@ mod tests {
             "{INIT}{MAIN_TURN}{{bad-json}}\n[]{newline}{SUBAGENT_TURN}{MAIN_RESULT}",
             newline = "\n"
         );
-        let snapshot = snapshot_text(&text).unwrap();
+        let snapshot = snapshot_text(&request_fixture(&text)).unwrap();
         assert!(snapshot.certified.is_err());
         assert_eq!(snapshot.observed.observed_output_tokens, 18);
         assert_eq!(snapshot.observed.observed_reasoning_tokens, 12);
@@ -506,7 +635,8 @@ mod tests {
             "\"reasoning_output_tokens\":6",
             "\"reasoning_output_tokens\":10",
         );
-        let snapshot = snapshot_text(&format!("{INIT}{invalid}{SUBAGENT_TURN}")).unwrap();
+        let snapshot =
+            snapshot_text(&request_fixture(&format!("{INIT}{invalid}{SUBAGENT_TURN}"))).unwrap();
         assert!(snapshot.certified.is_err());
         assert_eq!(snapshot.observed.num_turns, 0);
         assert_eq!(snapshot.observed.observed_output_tokens, 9);
@@ -577,10 +707,16 @@ mod tests {
         let text = format!(
             "{INIT}{{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{{\"usage\":{{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":51}}}}}}\n{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u3\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}}}},\"permission_denials\":[]}}\n"
         );
-        let parsed = parse_text(&text).expect("strict valid stream parses");
+        let parsed = parse_text(&request_fixture(&text)).expect("strict valid stream parses");
         assert_eq!(parsed.response, "ok");
         assert_eq!(parsed.num_turns, 1);
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 1);
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            1
+        );
         // A run that delegated nothing reports no scopes, not a fabricated
         // main-scope row: the main session is accounting, not a subagent.
         assert!(parsed.scopes.is_empty());
@@ -592,14 +728,20 @@ mod tests {
         // its own result under its agent tool-call id, and the parent then
         // recovers and finishes the session normally.
         let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{MAIN_RESULT}");
-        let parsed = parse_text(&text)
+        let parsed = parse_text(&request_fixture(&text))
             .expect("a subagent's result belongs to the subagent, not to the session");
         assert!(!parsed.is_error);
         assert_eq!(parsed.response, "ok");
         // The subagent's billed turn is the subagent's own, so the session's
         // main-turn count and its terminal cross-check are unchanged by it.
         assert_eq!(parsed.num_turns, 1);
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 1);
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            1
+        );
         // The same events that used to be validated and discarded are now the
         // scope's account: the spawning call, the turn billed under it, and
         // the terminal record it reported for itself — including the reported
@@ -624,11 +766,18 @@ mod tests {
         // run's real timings.
         let error_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":19180714,\"duration_api_ms\":18037819,\"num_turns\":2,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"[API Error: Connection error.]\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{error_result}");
-        let parsed = parse_text(&text).expect("an error result may leave its final turn unbilled");
+        let parsed = parse_text(&request_fixture(&text))
+            .expect("an error result may leave its final turn unbilled");
         assert!(parsed.is_error);
         assert!(parsed.response.contains("Connection error"));
         assert_eq!(parsed.num_turns, 2);
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 1);
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            1
+        );
         // The real timings survive; they were the whole point of parsing it.
         assert_eq!(parsed.duration_ms, 19_180_714);
         // Including the API half. This run spent 18,037,819 ms of its
@@ -648,7 +797,8 @@ mod tests {
         // budget.
         let terminal = "{\"type\":\"result\",\"subtype\":\"error_incomplete_generation\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":5562113,\"duration_api_ms\":5560686,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"Generation on turn 1 ended as SAFETY rather than the model completing its message, and a generation stopped for any reason but its limit is not asked for again. It stopped in a call to `write_file` that the model had not completed, so the call was not made; the 57 bytes of arguments served for it are recorded, exactly as served, in this turn's incomplete_tool_use block. This run carries no final answer; what earlier turns wrote to the workspace is kept.\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{terminal}");
-        let parsed = parse_text(&text).expect("a severed generation is a reportable ending");
+        let parsed = parse_text(&request_fixture(&text))
+            .expect("a severed generation is a reportable ending");
         assert!(parsed.is_error);
         assert_eq!(parsed.subtype, "error_incomplete_generation");
         // The service's response is the ending's own description, whole.
@@ -668,7 +818,8 @@ mod tests {
         // message the caller reads.
         let terminal = "{\"type\":\"result\",\"subtype\":\"error_slipped_final_message\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":91237,\"duration_api_ms\":90411,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"The model ended three consecutive turns with a message that was not a final answer (tool-call markup outside a structured call), after being told twice; this run carries no final answer.\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{terminal}");
-        let parsed = parse_text(&text).expect("a slipped final message is a reportable ending");
+        let parsed = parse_text(&request_fixture(&text))
+            .expect("a slipped final message is a reportable ending");
         assert!(parsed.is_error);
         assert_eq!(parsed.subtype, "error_slipped_final_message");
         assert!(ERROR_SUBTYPES.contains(&"error_slipped_final_message"));
@@ -678,7 +829,7 @@ mod tests {
         // The same spelling on a success envelope is not an ending this
         // service interprets.
         let success = terminal.replace("\"is_error\":true", "\"is_error\":false");
-        assert!(parse_text(&format!("{INIT}{MAIN_TURN}{success}")).is_err());
+        assert!(parse_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{success}"))).is_err());
     }
 
     #[test]
@@ -688,15 +839,15 @@ mod tests {
         // any other spelling must be refused rather than mapped onto one of
         // them.
         let success = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":1,\"result\":\"ok\",\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[]}\n";
-        let parsed =
-            parse_text(&format!("{INIT}{MAIN_TURN}{success}")).expect("a completed run parses");
+        let parsed = parse_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{success}")))
+            .expect("a completed run parses");
         assert_eq!(parsed.subtype, SUCCESS_SUBTYPE);
 
         for subtype in ERROR_SUBTYPES {
             let terminal = format!(
                 "{{\"type\":\"result\",\"subtype\":\"{subtype}\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}}}},\"permission_denials\":[],\"error\":{{\"message\":\"boom\"}}}}\n"
             );
-            let parsed = parse_text(&format!("{INIT}{MAIN_TURN}{terminal}"))
+            let parsed = parse_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{terminal}")))
                 .expect("every defined error state parses");
             assert!(parsed.is_error);
             assert_eq!(parsed.subtype, subtype);
@@ -716,7 +867,7 @@ mod tests {
             let terminal = format!(
                 "{{\"type\":\"result\",\"subtype\":\"{subtype}\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":{is_error},\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}}}},\"permission_denials\":[],{tail}}}\n"
             );
-            let error = parse_text(&format!("{INIT}{MAIN_TURN}{terminal}"))
+            let error = parse_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{terminal}")))
                 .expect_err("an undefined terminal state is not interpretable");
             // The contract's terminal table refuses it: its alternatives pair
             // every name with the one error flag it is reported under.
@@ -742,11 +893,11 @@ mod tests {
                 "{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,{bad},\"num_turns\":1,\"result\":\"ok\",\"usage\":{{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}}}},\"permission_denials\":[]}}\n"
             );
             let valid = terminal.replace(bad, "\"duration_api_ms\":1");
-            parse_text(&format!("{INIT}{MAIN_TURN}{valid}"))
+            parse_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{valid}")))
                 .expect("the identical stream with a valid duration is certified");
             let text = format!("{INIT}{MAIN_TURN}{terminal}");
-            let error =
-                parse_text(&text).expect_err("duration_api_ms must be a non-negative integer");
+            let error = parse_text(&request_fixture(&text))
+                .expect_err("duration_api_ms must be a non-negative integer");
             let expected = if bad.ends_with(":null") {
                 "terminal result lacks non-negative integer duration_api_ms"
             } else {
@@ -760,9 +911,16 @@ mod tests {
     fn an_error_between_turns_still_has_to_balance() {
         let error_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":9,\"duration_api_ms\":8,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"boom\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{error_result}");
-        let parsed = parse_text(&text).expect("equal counts are valid for an error too");
+        let parsed =
+            parse_text(&request_fixture(&text)).expect("equal counts are valid for an error too");
         assert_eq!(parsed.num_turns, 1);
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 1);
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            1
+        );
     }
 
     #[test]
@@ -775,7 +933,8 @@ mod tests {
         let error_under_count = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u5\",\"session_id\":\"a\",\"is_error\":true,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"boom\"}}\n";
         for terminal in [success_off_by_one, error_off_by_two, error_under_count] {
             let text = format!("{INIT}{MAIN_TURN}{terminal}");
-            let error = parse_text(&text).expect_err("inconsistent turn accounting is refused");
+            let error = parse_text(&request_fixture(&text))
+                .expect_err("inconsistent turn accounting is refused");
             assert!(error.to_string().contains("is not consistent with"));
         }
     }
@@ -783,7 +942,8 @@ mod tests {
     #[test]
     fn rejects_a_stream_that_ends_at_a_subagent_result() {
         let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}");
-        let error = parse_text(&text).expect_err("the session itself never reported an outcome");
+        let error = parse_text(&request_fixture(&text))
+            .expect_err("the session itself never reported an outcome");
         assert!(error
             .to_string()
             .contains("no main-session terminal result"));
@@ -792,8 +952,8 @@ mod tests {
     #[test]
     fn rejects_a_subagent_result_after_the_session_result() {
         let text = format!("{INIT}{MAIN_TURN}{MAIN_RESULT}{SUBAGENT_RESULT}");
-        let error =
-            parse_text(&text).expect_err("nothing may follow the session's own terminal result");
+        let error = parse_text(&request_fixture(&text))
+            .expect_err("nothing may follow the session's own terminal result");
         assert!(error.to_string().contains("is followed by another event"));
     }
 
@@ -804,9 +964,10 @@ mod tests {
         // against recorded evidence, so an unresolvable scope is refused by
         // line and id — never absorbed into an "unknown subagent" bucket.
         let text = format!("{INIT}{SUBAGENT_TURN}{MAIN_RESULT}");
-        let error = parse_text(&text).expect_err("an orphan scope is contradictory evidence");
+        let error = parse_text(&request_fixture(&text))
+            .expect_err("an orphan scope is contradictory evidence");
         let message = error.to_string();
-        assert!(message.contains("line 2"));
+        assert!(message.contains("line 3"));
         assert!(message.contains("chatcmpl-tool-9d45d85b"));
         assert!(message.contains("no earlier assistant message issued"));
     }
@@ -819,9 +980,10 @@ mod tests {
         // so resolution against a later issuance is refused at the line
         // where the premature reference occurred.
         let text = format!("{INIT}{SUBAGENT_TURN}{MAIN_TURN}{MAIN_RESULT}");
-        let error = parse_text(&text).expect_err("a scope cannot borrow a future tool call");
+        let error = parse_text(&request_fixture(&text))
+            .expect_err("a scope cannot borrow a future tool call");
         let message = error.to_string();
-        assert!(message.contains("line 2"));
+        assert!(message.contains("line 3"));
         assert!(message.contains("no earlier assistant message issued"));
     }
 
@@ -837,8 +999,14 @@ mod tests {
         let sub_result = "{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u5\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-77\",\"is_error\":false,\"duration_ms\":4,\"duration_api_ms\":3,\"num_turns\":5,\"result\":\"sub done\",\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[]}\n";
         let main_result = MAIN_RESULT.replace("\"uuid\":\"u5\"", "\"uuid\":\"main-result\"");
         let text = format!("{INIT}{spawn}{sub_turn_one}{sub_turn_two}{sub_result}{main_result}");
-        let parsed = parse_text(&text).expect("an id-resolved scope parses");
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 1);
+        let parsed = parse_text(&request_fixture(&text)).expect("an id-resolved scope parses");
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            1
+        );
         assert_eq!(parsed.scopes.len(), 1);
         let scope = &parsed.scopes[0];
         assert_eq!(scope.tool_use_id, "call-77");
@@ -861,8 +1029,15 @@ mod tests {
         let a_result = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u6\",\"session_id\":\"a\",\"parent_tool_use_id\":\"call-a\",\"is_error\":true,\"duration_ms\":1,\"duration_api_ms\":1,\"num_turns\":1,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"boom-a\"}}\n";
         let main_result = MAIN_RESULT.replace("\"uuid\":\"u5\"", "\"uuid\":\"main-result\"");
         let text = format!("{INIT}{spawn}{a_turn}{b_turn_one}{b_turn_two}{a_result}{main_result}");
-        let parsed = parse_text(&text).expect("independent scopes account independently");
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 1);
+        let parsed =
+            parse_text(&request_fixture(&text)).expect("independent scopes account independently");
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            1
+        );
         assert_eq!(parsed.scopes.len(), 2);
         // Stream order of first appearance, and strictly separate billing.
         let first = &parsed.scopes[0];
@@ -895,10 +1070,11 @@ mod tests {
             let text = format!(
                 "{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{post_terminal}{MAIN_RESULT}"
             );
-            let error = parse_text(&text).expect_err("a reported scope accepts no further output");
+            let error = parse_text(&request_fixture(&text))
+                .expect_err("a reported scope accepts no further output");
             let message = error.to_string();
             assert!(message.contains("subagent scope \"chatcmpl-tool-9d45d85b\""));
-            assert!(message.contains("after its terminal result at line 4"));
+            assert!(message.contains("after its terminal result at line 6"));
         }
     }
 
@@ -909,7 +1085,8 @@ mod tests {
         // owner even when the report does not reconcile with the stream.
         let thrown = "{\"type\":\"result\",\"subtype\":\"error_during_execution\",\"uuid\":\"u4\",\"session_id\":\"a\",\"parent_tool_use_id\":\"chatcmpl-tool-9d45d85b\",\"is_error\":true,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"usage\":{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}},\"permission_denials\":[],\"error\":{\"message\":\"Error: fetch failed\"}}\n";
         let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{thrown}{MAIN_RESULT}");
-        let parsed = parse_text(&text).expect("a zero-turn error report is recorded, not judged");
+        let parsed = parse_text(&request_fixture(&text))
+            .expect("a zero-turn error report is recorded, not judged");
         assert_eq!(parsed.scopes.len(), 1);
         let scope = &parsed.scopes[0];
         assert_eq!(scope.billed_turns, 1);
@@ -925,8 +1102,8 @@ mod tests {
         // instead of letting first-wins or last-wins pick a scope silently.
         let spawn_twice = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}},{\"type\":\"tool_use\",\"id\":\"call-dup\",\"name\":\"agent\",\"input\":{}}],\"usage\":{\"input_tokens\":7,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":16}}}\n";
         let text = format!("{INIT}{spawn_twice}{MAIN_RESULT}");
-        let error =
-            parse_text(&text).expect_err("a duplicated tool_use id is ambiguity, not reuse");
+        let error = parse_text(&request_fixture(&text))
+            .expect_err("a duplicated tool_use id is ambiguity, not reuse");
         assert!(error
             .to_string()
             .contains("re-issues tool_use id \"call-dup\""));
@@ -940,7 +1117,7 @@ mod tests {
                 &format!("\"parent_tool_use_id\":{malformed}"),
             );
             let text = format!("{INIT}{corrupt}{MAIN_RESULT}");
-            let error = parse_text(&text).expect_err(
+            let error = parse_text(&request_fixture(&text)).expect_err(
                 "a scope of an unexpected shape is contradictory evidence, not a subagent",
             );
             assert!(error.to_string().contains("parent_tool_use_id"));
@@ -953,7 +1130,8 @@ mod tests {
         let second_result = result.replace("\"uuid\":\"u2\"", "\"uuid\":\"u3\"");
         let late_init = INIT.replace("\"uuid\":\"u1\"", "\"uuid\":\"u4\"");
         for later in [second_result, late_init] {
-            let error = parse_text(&format!("{INIT}{result}{later}")).unwrap_err();
+            let error =
+                parse_text(&request_fixture(&format!("{INIT}{result}{later}"))).unwrap_err();
             assert!(error
                 .to_string()
                 .contains("terminal result at line 2 is followed by another event"));
@@ -962,19 +1140,20 @@ mod tests {
 
     #[test]
     fn rejects_malformed_and_truncated_streams() {
-        assert!(parse_text("not-json\n").is_err());
-        assert!(parse_text(INIT).is_err());
-        assert!(
-            parse_text("{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\"}\n").is_err()
-        );
-        assert!(
-            parse_text("{\"type\":\"stream_event\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n")
-                .is_err()
-        );
+        assert!(parse_text(&request_fixture("not-json\n")).is_err());
+        assert!(parse_text(&request_fixture(INIT)).is_err());
+        assert!(parse_text(&request_fixture(
+            "{\"type\":\"system\",\"subtype\":\"init\",\"uuid\":\"u1\"}\n"
+        ))
+        .is_err());
+        assert!(parse_text(&request_fixture(
+            "{\"type\":\"stream_event\",\"uuid\":\"u1\",\"session_id\":\"a\"}\n"
+        ))
+        .is_err());
         let complete_looking_but_torn = format!(
             "{INIT}{{\"type\":\"result\",\"subtype\":\"success\",\"uuid\":\"u2\",\"session_id\":\"a\",\"is_error\":false,\"duration_ms\":2,\"duration_api_ms\":1,\"num_turns\":0,\"result\":\"ok\",\"usage\":{{\"requests\":1,\"usageReports\":1,\"unfinalizedRequests\":0,\"unreportedUsageRequests\":0,\"usage\":{{\"promptTokenCount\":42,\"candidatesTokenCount\":9,\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":6,\"totalTokenCount\":51}}}},\"permission_denials\":[]}}"
         );
-        let error = parse_text(&complete_looking_but_torn)
+        let error = parse_text(&request_fixture(&complete_looking_but_torn))
             .expect_err("a terminal JSON object without its record delimiter is torn evidence");
         assert!(error.to_string().contains("not newline-terminated"));
     }
@@ -1042,8 +1221,14 @@ mod tests {
         let text = format!(
             "{INIT}{main_turn}{sub_thinking}{sub_round_one}{sub_round_two}{main_final}{main_result}"
         );
-        let parsed = parse_text(&text).expect("served splits parse");
-        assert_eq!(snapshot_text(&text).unwrap().observed.num_turns, 2);
+        let parsed = parse_text(&request_fixture(&text)).expect("served splits parse");
+        assert_eq!(
+            snapshot_text(&request_fixture(&text))
+                .unwrap()
+                .observed
+                .num_turns,
+            2
+        );
         assert_eq!(parsed.main_output_tokens, 106);
         assert_eq!(parsed.main_reasoning_tokens, 75);
         let scope = &parsed.scopes[0];
@@ -1060,7 +1245,7 @@ mod tests {
         // a usage without it, so its absence marks a stream this service
         // does not recognise.
         let unsplit = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"cache_read_input_tokens\":0,\"total_tokens\":51}}}\n";
-        let error = parse_text(&format!("{INIT}{unsplit}{MAIN_RESULT}"))
+        let error = parse_text(&request_fixture(&format!("{INIT}{unsplit}{MAIN_RESULT}")))
             .expect_err("a billed turn without its reasoning split is refused");
         assert!(
             error
@@ -1069,7 +1254,7 @@ mod tests {
             "{error}"
         );
         let uncached = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"total_tokens\":51}}}\n";
-        let error = parse_text(&format!("{INIT}{uncached}{MAIN_RESULT}"))
+        let error = parse_text(&request_fixture(&format!("{INIT}{uncached}{MAIN_RESULT}")))
             .expect_err("a billed turn without its cached-prompt count is refused");
         assert!(
             error
@@ -1082,7 +1267,7 @@ mod tests {
     #[test]
     fn refuses_a_split_that_does_not_nest() {
         let inverted = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":10,\"cache_read_input_tokens\":0,\"total_tokens\":51}}}\n";
-        let error = parse_text(&format!("{INIT}{inverted}{MAIN_RESULT}"))
+        let error = parse_text(&request_fixture(&format!("{INIT}{inverted}{MAIN_RESULT}")))
             .expect_err("reasoning larger than the output it is part of is refused");
         assert!(
             error
@@ -1091,8 +1276,10 @@ mod tests {
             "{error}"
         );
         let overcached = "{\"type\":\"assistant\",\"uuid\":\"u2\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":42,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":43,\"total_tokens\":51}}}\n";
-        let error = parse_text(&format!("{INIT}{overcached}{MAIN_RESULT}"))
-            .expect_err("more cached prompt tokens than prompt tokens is refused");
+        let error = parse_text(&request_fixture(&format!(
+            "{INIT}{overcached}{MAIN_RESULT}"
+        )))
+        .expect_err("more cached prompt tokens than prompt tokens is refused");
         assert!(
             error
                 .to_string()
@@ -1165,7 +1352,7 @@ mod tests {
         for observation in [output, interrupted, serde_json::Value::Null] {
             let compaction = compaction_record(observation);
             let result = MAIN_RESULT.replace("\"num_turns\":1", "\"num_turns\":0");
-            parse_text(&format!("{INIT}{compaction}{result}"))
+            parse_text(&request_fixture(&format!("{INIT}{compaction}{result}")))
                 .expect("served, interrupted, and unattempted records are distinct valid facts");
         }
     }
@@ -1175,8 +1362,11 @@ mod tests {
         for field in ["rawResponses", "text", "newTokenCount", "snapshotBytes"] {
             let mut output = observed_compaction_output();
             output.as_object_mut().unwrap().remove(field);
-            parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(output)))
-                .expect_err("a draw cannot omit content or measurement evidence");
+            parse_text(&request_fixture(&format!(
+                "{INIT}{}{MAIN_RESULT}",
+                compaction_record(output)
+            )))
+            .expect_err("a draw cannot omit content or measurement evidence");
         }
         for responses in [
             serde_json::json!([]),
@@ -1185,15 +1375,18 @@ mod tests {
         ] {
             let mut output = observed_compaction_output();
             output["rawResponses"] = responses;
-            parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(output)))
-                .expect_err("served usage needs recorded provider objects");
+            parse_text(&request_fixture(&format!(
+                "{INIT}{}{MAIN_RESULT}",
+                compaction_record(output)
+            )))
+            .expect_err("served usage needs recorded provider objects");
         }
         let mut unknown = observed_compaction_output();
         unknown["unknown_evidence"] = serde_json::json!(true);
-        let error = parse_text(&format!(
+        let error = parse_text(&request_fixture(&format!(
             "{INIT}{}{MAIN_RESULT}",
             compaction_record(unknown)
-        ))
+        )))
         .expect_err("ununderstood evidence is refused");
         assert!(error.to_string().contains("violates stream contract"));
     }
@@ -1204,7 +1397,7 @@ mod tests {
             serde_json::from_str(&compaction_record(observed_compaction_output())).unwrap();
         record["data"]["succeeded"] = serde_json::json!(true);
         record["data"]["status"] = serde_json::json!("COMPRESSED");
-        parse_text(&format!("{INIT}{record}\n{MAIN_RESULT}"))
+        parse_text(&request_fixture(&format!("{INIT}{record}\n{MAIN_RESULT}")))
             .expect_err("a committed composition cannot be absent");
         record["data"]["postCompactionHistory"] = serde_json::json!([
             {"role":"user", "parts":[{"text":"<all_user_messages>\n"},
@@ -1212,10 +1405,10 @@ mod tests {
             {"role":"model", "parts":[{"functionCall":{"id":"carried", "name":"read_file", "args":{"path":"a"}}}]}
         ]);
         let result = MAIN_RESULT.replace("\"num_turns\":1", "\"num_turns\":0");
-        parse_text(&format!("{INIT}{record}\n{result}"))
+        parse_text(&request_fixture(&format!("{INIT}{record}\n{result}")))
             .expect("a committed composition preserves every part boundary");
         record["data"]["succeeded"] = serde_json::json!(false);
-        parse_text(&format!("{INIT}{record}\n{result}"))
+        parse_text(&request_fixture(&format!("{INIT}{record}\n{result}")))
             .expect_err("a refused transition cannot claim to have installed a composition");
     }
 
@@ -1231,7 +1424,7 @@ mod tests {
                 serde_json::json!([refused.clone(), refused.clone()]),
             );
             let result = MAIN_RESULT.replace("\"num_turns\":1", "\"num_turns\":0");
-            parse_text(&format!("{INIT}{record}{result}"))
+            parse_text(&request_fixture(&format!("{INIT}{record}{result}")))
                 .expect("refused candidates are retained beside the settling one");
         }
     }
@@ -1276,8 +1469,8 @@ mod tests {
         ];
         for (rejected, expected) in cases {
             let record = compaction_record_with(observed_compaction_output(), rejected);
-            let error =
-                parse_text(&format!("{INIT}{record}{MAIN_RESULT}")).expect_err(expected);
+            let error = parse_text(&request_fixture(&format!("{INIT}{record}{MAIN_RESULT}")))
+                .expect_err(expected);
             assert!(error.to_string().contains(expected), "{error}");
         }
         // Absent is not the same answer as empty, and only one of them is
@@ -1288,7 +1481,7 @@ mod tests {
             .as_object_mut()
             .unwrap()
             .remove("rejectedAttempts");
-        let error = parse_text(&format!("{INIT}{record}\n{MAIN_RESULT}"))
+        let error = parse_text(&request_fixture(&format!("{INIT}{record}\n{MAIN_RESULT}")))
             .expect_err("a record without the field");
         assert!(
             error.to_string().contains("without a rejectedAttempts field"),
@@ -1350,8 +1543,11 @@ mod tests {
         for (field, value, expected) in cases {
             let mut bad = output.clone();
             bad[field] = value;
-            let error = parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(bad)))
-                .expect_err(field);
+            let error = parse_text(&request_fixture(&format!(
+                "{INIT}{}{MAIN_RESULT}",
+                compaction_record(bad)
+            )))
+            .expect_err(field);
             assert!(error.to_string().contains(expected), "{error}");
         }
         for (field, value) in [
@@ -1361,37 +1557,44 @@ mod tests {
         ] {
             let mut bad = output.clone();
             bad["usage"][field] = serde_json::json!(value);
-            let error = parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(bad)))
-                .expect_err(field);
+            let error = parse_text(&request_fixture(&format!(
+                "{INIT}{}{MAIN_RESULT}",
+                compaction_record(bad)
+            )))
+            .expect_err(field);
             assert!(error.to_string().contains("does not nest"), "{error}");
         }
         for field in ["usage", "requestAttempts", "finishReason"] {
             let mut bad = output.clone();
             bad.as_object_mut().unwrap().remove(field);
-            parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(bad)))
-                .expect_err("mandatory observation fields cannot be omitted");
+            parse_text(&request_fixture(&format!(
+                "{INIT}{}{MAIN_RESULT}",
+                compaction_record(bad)
+            )))
+            .expect_err("mandatory observation fields cannot be omitted");
         }
         let mut partial = output;
         partial["usage"]
             .as_object_mut()
             .unwrap()
             .remove("promptTokenCount");
-        parse_text(&format!(
+        parse_text(&request_fixture(&format!(
             "{INIT}{}{MAIN_RESULT}",
             compaction_record(partial)
-        ))
+        )))
         .expect_err("partial served usage is refused");
     }
 
     #[test]
     fn rejects_advertised_slash_commands() {
         let unexpected = INIT.replace("\"slash_commands\":[]", "\"slash_commands\":[\"status\"]");
-        assert!(parse_text(&unexpected).is_err());
+        assert!(parse_text(&request_fixture(&unexpected)).is_err());
     }
     #[test]
     fn every_nonempty_unterminated_suffix_is_uncertified_even_when_parseable() {
         for tail in [b"{}".as_slice(), b" \t\r", b"null", b"{\"text\":\"\xe6\x80"] {
-            let mut bytes = format!("{INIT}{MAIN_TURN}{MAIN_RESULT}").into_bytes();
+            let mut bytes =
+                request_fixture(&format!("{INIT}{MAIN_TURN}{MAIN_RESULT}")).into_bytes();
             bytes.extend_from_slice(tail);
             let snapshot = snapshot_bytes(&bytes).unwrap();
             assert!(snapshot.certified.is_err());
@@ -1405,7 +1608,7 @@ mod tests {
 
     #[test]
     fn invalid_utf8_middle_record_cannot_erase_readable_records_on_either_side() {
-        let mut bytes = format!("{INIT}{MAIN_TURN}").into_bytes();
+        let mut bytes = request_fixture(&format!("{INIT}{MAIN_TURN}")).into_bytes();
         bytes.extend_from_slice(b"{\"type\":\"system\",\"text\":\"\xff\"}\n");
         bytes.extend_from_slice(SUBAGENT_TURN.as_bytes());
         bytes.extend_from_slice(MAIN_RESULT.as_bytes());
@@ -1437,7 +1640,7 @@ mod tests {
         for usage in malformed {
             middle["message"]["usage"] = usage;
             let text = format!("{INIT}{MAIN_TURN}{middle}\n{later}\n{MAIN_RESULT}");
-            let snapshot = snapshot_text(&text).unwrap();
+            let snapshot = snapshot_text(&request_fixture(&text)).unwrap();
             assert!(snapshot.certified.is_err());
             assert_eq!(snapshot.observed.num_turns, 2);
             assert_eq!(snapshot.observed.observed_output_tokens, 18);
@@ -1453,8 +1656,10 @@ mod tests {
         ] {
             middle["message"]["usage"] = usage;
             let result = MAIN_RESULT.replace("\"num_turns\":1", &format!("\"num_turns\":{turns}"));
-            let snapshot =
-                snapshot_text(&format!("{INIT}{MAIN_TURN}{middle}\n{later}\n{result}")).unwrap();
+            let snapshot = snapshot_text(&request_fixture(&format!(
+                "{INIT}{MAIN_TURN}{middle}\n{later}\n{result}"
+            )))
+            .unwrap();
             assert!(snapshot.certified.is_ok());
             assert_eq!(snapshot.observed.num_turns, turns);
             assert_eq!(snapshot.observed.observed_output_tokens, 18);
@@ -1554,9 +1759,9 @@ mod tests {
             } else {
                 invalid.as_object_mut().unwrap().remove(key);
             }
-            let snapshot = snapshot_text(&format!(
+            let snapshot = snapshot_text(&request_fixture(&format!(
                 "{INIT}{MAIN_TURN}{invalid}\n{later}\n{MAIN_RESULT}"
-            ))
+            )))
             .unwrap();
             assert!(snapshot.certified.is_err());
             assert_eq!(snapshot.observed.num_turns, 2, "{invalid}");
@@ -1579,7 +1784,9 @@ mod tests {
             String::new(),
             INIT.replace("qwen3.8-27b-nvfp4-k8v4", "other-model"),
         ] {
-            let snapshot = snapshot_text(&format!("{init}{MAIN_TURN}{MAIN_RESULT}")).unwrap();
+            let snapshot =
+                snapshot_text(&request_fixture(&format!("{init}{MAIN_TURN}{MAIN_RESULT}")))
+                    .unwrap();
             assert!(snapshot.certified.is_err());
             assert_eq!(snapshot.observed.num_turns, 0);
             assert_eq!(snapshot.observed.observed_output_tokens, 0);
@@ -1615,7 +1822,7 @@ mod tests {
         for (label, usage) in cases {
             let terminal = terminal_with_generation_summary(usage);
             let text = format!("{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{terminal}");
-            let snapshot = snapshot_text(&text).unwrap();
+            let snapshot = snapshot_text(&request_fixture(&text)).unwrap();
             assert_eq!(snapshot.observed.num_turns, 1, "{label}");
             assert_eq!(snapshot.observed.observed_output_tokens, 18, "{label}");
             assert_eq!(snapshot.observed.observed_reasoning_tokens, 12, "{label}");
@@ -1654,7 +1861,8 @@ mod tests {
         );
         let mut terminal: serde_json::Value = serde_json::from_str(MAIN_RESULT).unwrap();
         terminal.as_object_mut().unwrap().remove("usage");
-        let snapshot = snapshot_text(&format!("{INIT}{MAIN_TURN}{terminal}\n")).unwrap();
+        let snapshot =
+            snapshot_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{terminal}\n"))).unwrap();
         assert!(snapshot.certified.is_err());
         assert_eq!(snapshot.observed.observed_output_tokens, 9);
     }
@@ -1841,7 +2049,7 @@ mod tests {
             } else {
                 INIT.to_string()
             };
-            let snapshot = snapshot_text(&format!("{prefix}{result}\n")).unwrap();
+            let snapshot = snapshot_text(&request_fixture(&format!("{prefix}{result}\n"))).unwrap();
             let parsed = snapshot.certified.expect(label);
             assert_eq!(parsed.is_error, failed, "{label}");
             assert_eq!(
@@ -1867,7 +2075,8 @@ mod tests {
                 "unfinalizedRequests":0,"unreportedUsageRequests":max,"usage":null}),
         ] {
             let terminal = terminal_with_generation_summary(usage);
-            let snapshot = snapshot_text(&format!("{INIT}{MAIN_TURN}{terminal}")).unwrap();
+            let snapshot =
+                snapshot_text(&request_fixture(&format!("{INIT}{MAIN_TURN}{terminal}"))).unwrap();
             let parsed = snapshot
                 .certified
                 .expect("each maximum is valid and independent of billed event totals");
@@ -1884,9 +2093,9 @@ mod tests {
                 "promptTokenCount":100,"candidatesTokenCount":20,
                 "cachedContentTokenCount":80,"thoughtsTokenCount":15,"totalTokenCount":120}});
         let terminal = terminal_with_generation_summary(summary);
-        let snapshot = snapshot_text(&format!(
+        let snapshot = snapshot_text(&request_fixture(&format!(
             "{INIT}{MAIN_TURN}{SUBAGENT_TURN}{SUBAGENT_RESULT}{terminal}"
-        ))
+        )))
         .unwrap();
         let parsed = snapshot.certified.unwrap();
         assert_eq!(parsed.main_output_tokens, 9);
@@ -1944,8 +2153,10 @@ mod tests {
                         _ => unreachable!("the field table contains only served counts here"),
                     }
                 }
-                let snapshot =
-                    snapshot_text(&format!("{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}")).unwrap();
+                let snapshot = snapshot_text(&request_fixture(&format!(
+                    "{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}"
+                )))
+                .unwrap();
                 assert_eq!(snapshot.observed.num_turns, 1);
                 assert_eq!(snapshot.observed.observed_output_tokens, 9);
                 assert_eq!(snapshot.observed.observed_reasoning_tokens, 6);
@@ -1977,8 +2188,10 @@ mod tests {
             if child {
                 record["parent_tool_use_id"] = serde_json::json!("chatcmpl-tool-9d45d85b");
             }
-            let snapshot =
-                snapshot_text(&format!("{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}")).unwrap();
+            let snapshot = snapshot_text(&request_fixture(&format!(
+                "{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}"
+            )))
+            .unwrap();
             let parsed = snapshot
                 .certified
                 .expect("all counts fit the shared safe-integer contract");

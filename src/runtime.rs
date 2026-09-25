@@ -4504,7 +4504,7 @@ mod tests {
 
     fn event_init() -> String {
         serde_json::json!({
-            "type": "system", "subtype": "init", "uuid": "init", "session_id": "a",
+            "type": "system", "subtype": "init", "request_evidence_origin": {"journal_id":"fixture","first_sequence":1}, "uuid": "init", "session_id": "a",
             "stream_contract_sha256": agent_service::stream_contract::STREAM_CONTRACT_SHA256,
             "cwd": "/workspace", "tools": ["agent", "edit", "glob", "grep_search", "list_directory", "notebook_edit", "read_file", "run_shell_command", "todo_write", "write_file"],
             "mcp_servers": [], "model": "qwen3.8-27b-nvfp4-k8v4", "permission_mode": "yolo", "slash_commands": [], "qwen_code_version": "0.21.12", "agents": ["Explore", "general-purpose"]

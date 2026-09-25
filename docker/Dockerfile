@@ -49,7 +49,7 @@ COPY patches/qwen-code-0.21.12-agent-service.patch \
   /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch
 COPY patches/source_patch_v1 \
   /opt/agent-artifacts/patches/source_patch_v1
-COPY protocol/stream-contract-v1.json /opt/agent-artifacts/protocol/stream-contract-v1.json
+COPY protocol/stream-contract-v2.json /opt/agent-artifacts/protocol/stream-contract-v2.json
 COPY protocol/test-vectors /opt/agent-artifacts/protocol/test-vectors
 COPY scripts/generate-protocol-bindings.mjs \
   /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs
@@ -249,7 +249,9 @@ COPY src/bin/agent_exec.rs /tmp/runtime-contract-tests/src/bin/agent_exec.rs
 COPY docker/scripts/verify_runtime_contract.py /tmp/runtime-contract-tests/docker/scripts/verify_runtime_contract.py
 COPY docker/tests/test_verify_runtime_contract.py /tmp/runtime-contract-tests/docker/tests/test_verify_runtime_contract.py
 COPY docker/scripts/check_headless_cli.py /tmp/runtime-contract-tests/docker/scripts/check_headless_cli.py
+COPY docker/scripts/request_evidence.py /tmp/runtime-contract-tests/docker/scripts/request_evidence.py
 COPY docker/tests/test_headless_cli_smoke.py /tmp/runtime-contract-tests/docker/tests/test_headless_cli_smoke.py
+COPY docker/tests/test_request_evidence.py /tmp/runtime-contract-tests/docker/tests/test_request_evidence.py
 COPY docker/scripts/verify_toolchain.py /tmp/toolchain-tests/docker/scripts/verify_toolchain.py
 COPY docker/tests/test_verify_toolchain.py /tmp/toolchain-tests/docker/tests/test_verify_toolchain.py
 COPY LICENSE /usr/share/doc/agent_service/UNLICENSE
@@ -275,6 +277,7 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
  && bash /tmp/run_agent_signal_contract.sh /opt/agent/run_agent.sh \
  && python3 /tmp/runtime-contract-tests/docker/tests/test_verify_runtime_contract.py -v \
  && python3 /tmp/runtime-contract-tests/docker/tests/test_headless_cli_smoke.py -v \
+ && python3 /tmp/runtime-contract-tests/docker/tests/test_request_evidence.py -v \
  && python3 /opt/agent/verify_runtime_contract.py \
       /opt/agent/runtime-contract.json \
       /opt/agent/settings.json \
@@ -300,12 +303,13 @@ RUN test "$(sha256sum /opt/agent/settings.json | cut -d' ' -f1)" = "${SETTINGS_S
  && chmod -R a-w /opt/agent
 ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 COPY --chown=1000:1000 docker/scripts/check_headless_cli.py /tmp/check_headless_cli.py
+COPY --chown=1000:1000 docker/scripts/request_evidence.py /tmp/request_evidence.py
 RUN install -d -o 1000 -g 1000 -m 0700 /workspace
 USER 1000:1000
 RUN PYTHONPATH=/opt/agent python3 /tmp/check_headless_cli.py \
       /opt/qwen-code/dist/cli.js /opt/agent/settings.json \
       /usr/share/agent-service/agent_exec.rs /opt/agent/event_certifier \
- && rm /tmp/check_headless_cli.py
+ && rm /tmp/check_headless_cli.py /tmp/request_evidence.py
 WORKDIR /workspace
 ENTRYPOINT ["/opt/agent/run_agent.sh"]
 

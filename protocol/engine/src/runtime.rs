@@ -631,6 +631,8 @@ struct ToolUse {
     returned: bool,
 }
 struct AdmissionPlan {
+    request_origin: Option<crate::model_requests::RequestOrigin>,
+    request: Option<crate::model_requests::RequestAdmission>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -650,6 +652,7 @@ pub struct AdmissionToken {
 }
 
 pub struct RuntimeContract {
+    requests: crate::model_requests::ModelRequests,
     identity: std::sync::Arc<()>,
     bindings: RuntimeBindings,
     limits: RuntimeLimits,
@@ -668,6 +671,7 @@ pub struct RuntimeContract {
 impl RuntimeContract {
     pub fn new(bindings: RuntimeBindings, limits: RuntimeLimits) -> Self {
         Self {
+            requests: crate::model_requests::ModelRequests::default(),
             identity: std::sync::Arc::new(()),
             bindings,
             limits,
@@ -859,6 +863,9 @@ impl RuntimeContract {
             return Err(error.clone());
         }
         let PendingAdmission { plan, .. } = self.pending.take().expect("checked pending admission");
+        if let Some(origin) = plan.request_origin {
+            self.requests.commit_origin(origin);
+        }
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -870,6 +877,9 @@ impl RuntimeContract {
             self.scope_states.push(plan.state);
         } else {
             self.scope_states[plan.row] = plan.state;
+        }
+        if let Some(request) = plan.request {
+            self.requests.commit(request);
         }
         self.tool_uses.extend(plan.additions);
         for id in plan.returns {
@@ -932,9 +942,13 @@ impl RuntimeContract {
                 id: scope.map(str::to_string),
                 ..ScopeState::default()
             });
+        let mut request = None;
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         match record.kind() {
+            EventKind::ModelRequest => {
+                request = Some(self.requests.plan(object, line, self.limits.json)?);
+            }
             EventKind::Assistant => {
                 state.partial.complete_message(line)?;
                 if let Some(content) = field(object, "message", line)?.get("content") {
@@ -1027,10 +1041,23 @@ impl RuntimeContract {
                 state.terminal = Some(terminal(object, line, scope.is_none())?);
                 if scope.is_none() {
                     validate_main_counts(&state)?;
+                    let billed = self.scope_states.iter().try_fold(0u64, |total, state| {
+                        add(total, state.billed_turns, "all billed turns")
+                    })?;
+                    self.requests.validate_summary(object, line, billed)?;
                 }
             }
         }
         Ok(AdmissionPlan {
+            request_origin: if self.prefix == 0 {
+                Some(
+                    self.requests
+                        .plan_origin(field(object, "request_evidence_origin", line)?, line)?,
+                )
+            } else {
+                None
+            },
+            request,
             row,
             state,
             additions,
@@ -1245,7 +1272,7 @@ mod tests {
     }
     fn init() -> String {
         format!(
-            r#"{{"type":"system","subtype":"init","uuid":"init","session_id":"session","stream_contract_sha256":"{STREAM_CONTRACT_SHA256}","cwd":"/owned","model":"model","permission_mode":"default","qwen_code_version":"version","tools":["tool"],"agents":[],"slash_commands":[],"mcp_servers":[]}}"#
+            r#"{{"type":"system","subtype":"init","request_evidence_origin":{{"journal_id":"fixture","first_sequence":1}},"uuid":"init","session_id":"session","stream_contract_sha256":"{STREAM_CONTRACT_SHA256}","cwd":"/owned","model":"model","permission_mode":"default","qwen_code_version":"version","tools":["tool"],"agents":[],"slash_commands":[],"mcp_servers":[]}}"#
         )
     }
     fn admit(owner: &mut RuntimeContract, raw: &str) -> ContractResult<()> {

@@ -117,6 +117,9 @@ impl<'a> Value<'a> {
     pub(crate) fn node(self) -> &'a Node {
         &self.document.entries[self.id.0].node
     }
+    pub fn byte_range(self) -> Range<usize> {
+        self.document.entries[self.id.0].span.clone()
+    }
     pub fn raw(self) -> &'a str {
         &self.document.source[self.document.entries[self.id.0].span.clone()]
     }

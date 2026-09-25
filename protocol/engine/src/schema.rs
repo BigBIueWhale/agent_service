@@ -532,7 +532,7 @@ mod tests {
     #[test]
     fn every_compiled_schema_node_agrees_with_the_pinned_oracle_on_representable_values() {
         let schema: serde_json::Value =
-            serde_json::from_str(include_str!("../../stream-contract-v1.json")).unwrap();
+            serde_json::from_str(include_str!("../../stream-contract-v2.json")).unwrap();
         let mut corpus = vec![
             "null".to_string(),
             "true".into(),

@@ -13,6 +13,7 @@ import fcntl
 import hashlib
 from http.server import BaseHTTPRequestHandler
 import json
+import sys
 import os
 from pathlib import Path
 import re
@@ -27,6 +28,10 @@ import threading
 import time
 import uuid
 import zipfile
+
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from request_evidence import require_request_evidence
 
 
 class GateFailure(RuntimeError):
@@ -136,7 +141,7 @@ class StubHandler(BaseHTTPRequestHandler):
             require(len(raw) == size, "request body ended early")
             body = json.loads(raw)
             with self.server.lock:
-                self.server.requests.append({"method": "POST", "path": self.path, "body": body})
+                self.server.requests.append({"method": "POST", "path": self.path, "body": body, "raw_body": raw.decode("utf-8")})
                 require(len(self.server.requests) <= 20, "fixture request bound exceeded")
             require(body["model"] == self.server.model, "model identity changed")
             if self.path == "/tokenize":
@@ -709,11 +714,12 @@ print(json.dumps(found))
         require(events and events.endswith(b"\n"), "captured stream is empty or torn")
         self.certified_events = events
         records = [json.loads(line) for line in events.splitlines()]
+        require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require(all("recordingVersion" not in record for record in records),
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v1.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v2.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")
@@ -1250,6 +1256,7 @@ print(json.dumps(found))
         require(events.endswith(b"\n") and b"PROVIDER_FAILURE_PREFIX" in events,
                 "the refused generation's observed prefix was lost")
         records = [json.loads(line) for line in events.splitlines()]
+        require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         terminal = records[-1]
         require(terminal["type"] == "result" and terminal["subtype"] == "error_during_execution" and
                 terminal["usage"] == {"requests": 1, "usageReports": 0, "unfinalizedRequests": 0,

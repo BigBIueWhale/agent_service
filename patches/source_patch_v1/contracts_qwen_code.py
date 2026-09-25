@@ -2093,7 +2093,7 @@ def _validate_subagent_result_scope_after(state: State) -> None:
     require_text(
         state,
         adapter,
-        "        parent_tool_use_id: null,\n",
+        "        parent_tool_use_id: null,\n        is_error:",
         count=2,
         label=label,
     )
@@ -8035,6 +8035,8 @@ def _validate_served_accounting_after(state: State) -> None:
         (
             "private async withMutationLease<T>",
             "await readCanonicalChatRecords(filePath)",
+            "includeActiveRecordsAndEvidence",
+            "!isArtifactRecord && record.type !== 'model_request'",
         ),
         label=label,
     )
@@ -8042,7 +8044,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 1;",
+            "export const CHAT_RECORDING_VERSION = 2;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8051,6 +8053,35 @@ def _validate_served_accounting_after(state: State) -> None:
         ),
         label=label,
     )
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "export class ModelRequestJournal", "export class ModelRequestReplay",
+        "export class ModelRequestStreamReplay", "await this.persist(evidence)",
+        "body_sha256", "retain_messages", "segment_id", "openOutputWindow",
+        "previous.segmentId !== evidence.segment_id", "this.outputs.delete(output)",
+    ), label=label)
+    pipeline = core + "core/openaiContentGenerator/pipeline.ts"
+    capture = _source(state, pipeline, label=label).split("const executeAttempt = async () => {", 1)[1]
+    _require_ordered(capture, (
+        "openaiRequest = await this.buildRequest(",
+        "const body = JSON.stringify(openaiRequest)",
+        "getChatRecordingService()",
+        ".modelRequests.capture(",
+        "openaiRequest = JSON.parse(",
+        "return executor(openaiRequest, context, telemetryAttempt)",
+    ), label=label, location=pipeline)
+    require_text(state, pipeline, "maxRetries: 0", count=2, label=label)
+    require_text(state, core + "core/geminiChat.ts", "this.generationContext.startRequestSegment()", label=label)
+    recorder = _source(state, core + "services/chatRecordingService.ts", label=label)
+    evidence_writer = recorder.split("readonly modelRequests = new ModelRequestJournal(", 1)[1].split("/**", 1)[0]
+    _require("updateActiveTail: false" in evidence_writer,
+             f"{label}: request evidence must not become the canonical history tail")
+    for path in (core + "utils/transcript-records.ts", core + "services/chat-recording-io.ts", core + "services/session-transcript-reader.ts"):
+        require_text(state, path, "new ModelRequestReplay()", label=label)
+    _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
+        "messagesWithRequestEvidence", "request_evidence_origin", "request_evidence:",
+        "closeRequestEvidence", "type: 'model_request'",
+    ), label=label)
+    require_text(state, "packages/sdk-typescript/src/query/Query.ts", "this.recordAdmission.admit(message)", label=label)
     for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
         require_text(state, path, "recordingVersion: CHAT_RECORDING_VERSION", label=label)
     _require_all(
@@ -8074,7 +8105,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         cli + "serve/virtual-subagent-sessions.ts",
         ("decodeChatRecord(", "if (this.readFailure) throw this.readFailure;",
-         "type: 'stream_error'", "this.bus.close()"),
+         "type: 'stream_error'", "this.bus.close()", "this.requestReplay.observe(record.modelRequest)"),
         label=label,
     )
     require_text(state, cli + "commands/review/cost-ledger.ts", "readCanonicalChatRecordsSync(file)", label=label)
