@@ -4,6 +4,7 @@ use crate::{
     stream::{field, text, unsigned},
     ContractError, ContractResult, SAFE_INTEGER,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -25,8 +26,10 @@ pub(crate) struct ModelRequests {
     journal_id: Option<String>,
     first_sequence: Option<u64>,
     count: u64,
+    observed_responses: u64,
     ids: BTreeSet<String>,
     scopes: BTreeMap<String, RequestBody>,
+    responses: BTreeMap<String, ResponseState>,
 }
 
 pub(crate) struct RequestBody {
@@ -45,6 +48,19 @@ pub(crate) struct RequestAdmission {
     sequence: u64,
     scope: String,
     body: RequestBody,
+}
+
+#[derive(Clone, Default)]
+struct ResponseState {
+    sequence: u64,
+    http: bool,
+    bytes: u64,
+    digest: Sha256,
+}
+pub(crate) struct ResponseAdmission {
+    request_id: String,
+    observed: bool,
+    state: Option<ResponseState>,
 }
 
 impl ModelRequests {
@@ -217,7 +233,113 @@ impl ModelRequests {
         self.first_sequence.get_or_insert(admission.sequence);
         self.count += 1;
         self.ids.insert(admission.body.id.clone());
+        self.responses
+            .insert(admission.body.id.clone(), ResponseState::default());
         self.scopes.insert(admission.scope, admission.body);
+    }
+
+    pub(crate) fn plan_response(
+        &self,
+        record: Value<'_>,
+        line: usize,
+    ) -> ContractResult<ResponseAdmission> {
+        let response = field(record, "response", line)?;
+        let id = text(response, "request_id", line)?;
+        let mut state = self
+            .responses
+            .get(id)
+            .cloned()
+            .ok_or_else(|| refusal("response has no open request"))?;
+        let sequence = unsigned(
+            field(response, "sequence", line)?,
+            "response sequence",
+            SAFE_INTEGER,
+        )?;
+        if self.journal_id.as_deref() != Some(text(response, "journal_id", line)?)
+            || state.sequence.checked_add(1) != Some(sequence)
+        {
+            return Err(refusal(
+                "response is foreign, missing, repeated or reordered",
+            ));
+        }
+        let event = field(response, "event", line)?;
+        let mut ended = false;
+        match text(event, "kind", line)? {
+            "http" => {
+                if state.http || state.sequence != 0 {
+                    return Err(refusal("response repeats HTTP headers"));
+                }
+                state.http = true;
+            }
+            "body" => {
+                if !state.http
+                    || state.bytes
+                        != unsigned(
+                            field(event, "offset", line)?,
+                            "response offset",
+                            SAFE_INTEGER,
+                        )?
+                {
+                    return Err(refusal("response has no HTTP headers or has a byte gap"));
+                }
+                let encoded = text(event, "base64", line)?;
+                let bytes = STANDARD
+                    .decode(encoded)
+                    .map_err(|_| refusal("response has invalid base64 bytes"))?;
+                if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
+                    return Err(refusal("response has noncanonical base64 bytes"));
+                }
+                state.bytes = state
+                    .bytes
+                    .checked_add(bytes.len() as u64)
+                    .filter(|bytes| *bytes <= SAFE_INTEGER)
+                    .ok_or_else(|| refusal("response exceeds exact byte accounting"))?;
+                state.digest.update(bytes);
+            }
+            "end" => {
+                let termination = text(event, "termination", line)?;
+                if (termination == "eof" && !state.http)
+                    || (termination == "not_dispatched" && state.sequence != 0)
+                    || state.bytes
+                        != unsigned(
+                            field(event, "body_bytes", line)?,
+                            "response bytes",
+                            SAFE_INTEGER,
+                        )?
+                    || state
+                        .digest
+                        .clone()
+                        .finalize()
+                        .iter()
+                        .map(|byte| format!("{byte:02x}"))
+                        .collect::<String>()
+                        != text(event, "body_sha256", line)?
+                {
+                    return Err(refusal(
+                        "response completion does not account for the exact observed bytes",
+                    ));
+                }
+                ended = true;
+            }
+            _ => return Err(refusal("response uses an unknown event")),
+        }
+        state.sequence = sequence;
+        Ok(ResponseAdmission {
+            request_id: id.to_string(),
+            observed: ended && state.http && state.bytes > 0,
+            state: if ended { None } else { Some(state) },
+        })
+    }
+
+    pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
+        if admission.observed {
+            self.observed_responses += 1;
+        }
+        if let Some(state) = admission.state {
+            self.responses.insert(admission.request_id, state);
+        } else {
+            self.responses.remove(&admission.request_id);
+        }
     }
 
     pub(crate) fn validate_summary(
@@ -237,8 +359,15 @@ impl ModelRequests {
             "first request sequence",
             SAFE_INTEGER,
         )?;
-        if count != self.count
+        if field(summary, "open_response_ids", line)?
+            .elements()
+            .ok_or_else(|| refusal("terminal lacks open-response accounting"))?
+            .next()
+            .is_some()
+            || !self.responses.is_empty()
+            || count != self.count
             || self.count < billed_turns
+            || self.observed_responses < billed_turns
             || self
                 .first_sequence
                 .is_some_and(|sequence| sequence != first)
@@ -290,10 +419,23 @@ mod tests {
         admit(&mut state, &b).unwrap();
         assert!(admit(&mut state, &b).is_err());
         let terminal = Document::decode(
-            br#"{"request_evidence":{"journal_id":"j","first_sequence":3,"request_count":2}}"#,
+            br#"{"request_evidence":{"journal_id":"j","first_sequence":3,"request_count":2,"open_response_ids":[]}}"#,
             LIMITS,
         )
         .unwrap();
+        assert!(state.validate_summary(terminal.root(), 3, 2).is_err());
+        for id in ["a", "b"] {
+            for (sequence,event) in [
+                json!({"kind":"http","status":200,"content_type":"application/json"}),
+                json!({"kind":"body","offset":0,"base64":"e30="}),
+                json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
+            ].into_iter().enumerate() {
+                let record = json!({"response":{"journal_id":"j","request_id":id,"sequence":sequence+1,"event":event}}).to_string();
+                let doc = Document::decode(record.as_bytes(),LIMITS).unwrap();
+                let admission = state.plan_response(doc.root(),1).unwrap();
+                state.commit_response(admission);
+            }
+        }
         state.validate_summary(terminal.root(), 3, 2).unwrap();
         assert!(state.validate_summary(terminal.root(), 3, 3).is_err());
         let mut changed: serde_json::Value = serde_json::from_str(&a).unwrap();

@@ -365,12 +365,23 @@ mod tests {
                     });
                     output.push_str(&request.to_string());
                     output.push('\n');
+                    let raw_response = "{}";
+                    let response_hash = Sha256::digest(raw_response.as_bytes()).iter().map(|byte|format!("{byte:02x}")).collect::<String>();
+                    for (index,event) in [
+                        serde_json::json!({"kind":"http","status":200,"content_type":"application/json"}),
+                        serde_json::json!({"kind":"body","offset":0,"base64":"e30="}),
+                        serde_json::json!({"kind":"end","termination":"eof","body_bytes":raw_response.len(),"body_sha256":response_hash,"error":null}),
+                    ].into_iter().enumerate() {
+                        let response = serde_json::json!({"type":"model_response","uuid":format!("response-evidence-{sequence}-{index}"),"session_id":record["session_id"],"parent_tool_use_id":null,
+                            "response":{"journal_id":"fixture","request_id":format!("request-{sequence}"),"sequence":index+1,"event":event}});
+                        output.push_str(&response.to_string());output.push('\n');
+                    }
                 }
                 if record["type"] == "result" && record["parent_tool_use_id"].is_null() {
                     // Preserve every original number spelling. Replace only
                     // the summary value when the terminal template has one.
                     let summary = format!(
-                        r#"{{"journal_id":"fixture","first_sequence":1,"request_count":{sequence}}}"#
+                        r#"{{"journal_id":"fixture","first_sequence":1,"request_count":{sequence},"open_response_ids":[]}}"#
                     );
                     let document = runtime_contract::json::Document::decode(
                         raw.as_bytes(),
@@ -408,6 +419,31 @@ mod tests {
             output.push_str(framed);
         }
         output
+    }
+
+    #[test]
+    fn refuses_missing_or_corrupted_raw_response_evidence() {
+        let complete = request_fixture(&format!("{INIT}{MAIN_TURN}{MAIN_RESULT}"));
+        parse_text(&complete).expect("complete response evidence certifies");
+        let records = complete.lines().map(|line|serde_json::from_str::<serde_json::Value>(line).unwrap()).collect::<Vec<_>>();
+        for defect in ["omission","gap","base64","hash","size","identity","unknown","open"] {
+            let mut damaged = records.clone();
+            let body = damaged.iter().position(|row|row["type"]=="model_response" && row["response"]["event"]["kind"]=="body").unwrap();
+            let end = body + 1;
+            match defect {
+                "omission" => { damaged.remove(end); }
+                "gap" => damaged[body]["response"]["event"]["offset"] = serde_json::json!(1),
+                "base64" => damaged[body]["response"]["event"]["base64"] = serde_json::json!("e30=\n"),
+                "hash" => damaged[end]["response"]["event"]["body_sha256"] = serde_json::json!("0".repeat(64)),
+                "size" => damaged[end]["response"]["event"]["body_bytes"] = serde_json::json!(0),
+                "identity" => damaged[body]["response"]["request_id"] = serde_json::json!("unissued"),
+                "unknown" => damaged[body]["response"]["event"]["kind"] = serde_json::json!("unknown"),
+                "open" => damaged.last_mut().unwrap()["request_evidence"]["open_response_ids"] = serde_json::json!(["request-1"]),
+                _ => unreachable!(),
+            }
+            let bytes = damaged.iter().map(|row|format!("{row}\n")).collect::<String>();
+            assert!(parse_text(&bytes).is_err(), "{defect} must refuse");
+        }
     }
 
     #[test]

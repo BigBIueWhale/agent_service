@@ -12,6 +12,7 @@ import argparse
 import fcntl
 import hashlib
 from http.server import BaseHTTPRequestHandler
+import base64
 import json
 import sys
 import os
@@ -31,7 +32,7 @@ import zipfile
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from request_evidence import require_request_evidence
+from request_evidence import require_request_evidence, require_response_evidence
 
 
 class GateFailure(RuntimeError):
@@ -107,12 +108,27 @@ class StubHandler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         pass
 
+    def send_response(self, code, message=None):
+        if hasattr(self, "response_record"):
+            self.response_record["response_status"] = code
+        super().send_response(code, message)
+
+    def send_header(self, keyword, value):
+        if keyword.lower() == "content-type" and hasattr(self, "response_record"):
+            self.response_record["response_content_type"] = value
+        super().send_header(keyword, value)
+
+    def observe_response(self, data):
+        if hasattr(self, "response_record"):
+            self.response_record["response_chunks"].append(base64.b64encode(data).decode())
+
     def reply(self, status, body, content_type="application/json"):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Connection", "close")
         self.end_headers()
+        self.observe_response(body)
         self.wfile.write(body)
         self.wfile.flush()
         self.close_connection = True
@@ -141,7 +157,8 @@ class StubHandler(BaseHTTPRequestHandler):
             require(len(raw) == size, "request body ended early")
             body = json.loads(raw)
             with self.server.lock:
-                self.server.requests.append({"method": "POST", "path": self.path, "body": body, "raw_body": raw.decode("utf-8")})
+                self.response_record = {"method": "POST", "path": self.path, "body": body, "raw_body": raw.decode("utf-8"), "response_chunks": []}
+                self.server.requests.append(self.response_record)
                 require(len(self.server.requests) <= 20, "fixture request bound exceeded")
             require(body["model"] == self.server.model, "model identity changed")
             if self.path == "/tokenize":
@@ -176,6 +193,7 @@ class StubHandler(BaseHTTPRequestHandler):
                 self.send_header("Transfer-Encoding", "chunked")
                 self.end_headers()
                 data = ("data: " + json.dumps(chunk) + "\n\n").encode()
+                self.observe_response(data)
                 self.wfile.write(f"{len(data):x}\r\n".encode() + data + b"\r\n")
                 self.wfile.flush()
                 with self.server.lock:
@@ -205,6 +223,7 @@ class StubHandler(BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(len(prefix) + 1024))
                     self.send_header("Connection", "close")
                     self.end_headers()
+                    self.observe_response(prefix)
                     self.wfile.write(prefix)
                     self.wfile.flush()
                     # Close before the declared HTTP body completes. No terminal,
@@ -715,11 +734,12 @@ print(json.dumps(found))
         self.certified_events = events
         records = [json.loads(line) for line in events.splitlines()]
         require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require(all("recordingVersion" not in record for record in records),
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v2.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v3.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")
@@ -1257,6 +1277,7 @@ print(json.dumps(found))
                 "the refused generation's observed prefix was lost")
         records = [json.loads(line) for line in events.splitlines()]
         require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         terminal = records[-1]
         require(terminal["type"] == "result" and terminal["subtype"] == "error_during_execution" and
                 terminal["usage"] == {"requests": 1, "usageReports": 0, "unfinalizedRequests": 0,

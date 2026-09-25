@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
+import base64
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,7 @@ import threading
 import urllib.parse
 
 from verify_runtime_contract import cli_arguments
-from request_evidence import require_request_evidence
+from request_evidence import require_request_evidence, require_response_evidence
 
 WORKSPACE = Path("/workspace")
 # The client's own system-scope settings files. Production names no override for them and
@@ -180,6 +181,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     certificate = certify(stdout, certifier, runtime / "events.jsonl")
     events = [json.loads(line) for line in stdout.splitlines()]
     request_evidence = require_request_evidence(events, [request["raw_body"] for request in requests if request["path"] == "/v1/chat/completions"])
+    response_evidence = require_response_evidence(events, [request for request in requests if request["path"] == "/v1/chat/completions"])
     require(not any(e.get("subtype") == "compaction" for e in events),
             "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
     init = [e for e in events if e.get("type") == "system" and e.get("subtype") == "init"]
@@ -225,17 +227,19 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 2 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 3 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all("recordingVersion" not in event for event in events),
             "canonical history entered stdout evidence; inspect the two recording paths")
     require(all(r["sessionId"] == session for r in records), "transcript ownership drifted")
     require([r["modelRequest"] for r in records if r["type"] == "model_request"] == request_evidence,
             "canonical and stdout request evidence differ")
+    require([r["modelResponse"] for r in records if r["type"] == "model_response"] == response_evidence,
+            "canonical and stdout response evidence differ")
     parent = None
     for record in records:
         require(record["parentUuid"] == parent, "canonical transcript chain is incomplete")
-        if record["type"] == "model_request":
+        if record["type"] in ("model_request", "model_response"):
             require("message" not in record, "request evidence entered replayable history")
         else:
             parent = record["uuid"]
@@ -329,6 +333,9 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Connection", "close")
                 self.end_headers()
+                if hasattr(self, "response_record"):
+                    self.response_record.update(response_status=status, response_content_type=content_type)
+                    self.response_record["response_chunks"].append(base64.b64encode(body).decode())
                 self.wfile.write(body)
 
             def do_POST(self):
@@ -338,7 +345,8 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     require(0 < size < 2 * 1024 * 1024, "unexpected request size")
                     raw_body = self.rfile.read(size).decode("utf-8")
                     body = json.loads(raw_body)
-                    requests.append({"path": self.path, "body": body, "raw_body": raw_body})
+                    self.response_record = {"path": self.path, "body": body, "raw_body": raw_body, "response_chunks": []}
+                    requests.append(self.response_record)
                     require(len(requests) <= len(EXPECTED_ROUTES), "CLI exceeded the smoke request bound")
                     require(body["model"] == model, "CLI selected a different model")
                     if self.path == "/tokenize":

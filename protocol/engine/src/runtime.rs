@@ -633,6 +633,7 @@ struct ToolUse {
 struct AdmissionPlan {
     request_origin: Option<crate::model_requests::RequestOrigin>,
     request: Option<crate::model_requests::RequestAdmission>,
+    response: Option<crate::model_requests::ResponseAdmission>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -866,6 +867,7 @@ impl RuntimeContract {
         if let Some(origin) = plan.request_origin {
             self.requests.commit_origin(origin);
         }
+        if let Some(response) = plan.response { self.requests.commit_response(response); }
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -943,12 +945,14 @@ impl RuntimeContract {
                 ..ScopeState::default()
             });
         let mut request = None;
+        let mut response = None;
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         match record.kind() {
             EventKind::ModelRequest => {
                 request = Some(self.requests.plan(object, line, self.limits.json)?);
             }
+            EventKind::ModelResponse => { response = Some(self.requests.plan_response(object,line)?); }
             EventKind::Assistant => {
                 state.partial.complete_message(line)?;
                 if let Some(content) = field(object, "message", line)?.get("content") {
@@ -1058,6 +1062,7 @@ impl RuntimeContract {
                 None
             },
             request,
+            response,
             row,
             state,
             additions,

@@ -8036,7 +8036,9 @@ def _validate_served_accounting_after(state: State) -> None:
             "private async withMutationLease<T>",
             "await readCanonicalChatRecords(filePath)",
             "includeActiveRecordsAndEvidence",
-            "!isArtifactRecord && record.type !== 'model_request'",
+            "!isArtifactRecord &&",
+            "record.type !== 'model_request'",
+            "record.type !== 'model_response'",
         ),
         label=label,
     )
@@ -8044,7 +8046,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 2;",
+            "export const CHAT_RECORDING_VERSION = 3;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8067,19 +8069,56 @@ def _validate_served_accounting_after(state: State) -> None:
         "getChatRecordingService()",
         ".modelRequests.capture(",
         "openaiRequest = JSON.parse(",
-        "return executor(openaiRequest, context, telemetryAttempt)",
+        "responseAttemptContext.run(responseEvidence",
+        "executor(openaiRequest!, context, telemetryAttempt, responseEvidence)",
     ), label=label, location=pipeline)
     require_text(state, pipeline, "maxRetries: 0", count=2, label=label)
+    _require_all(state, pipeline, (
+        "client.fetchWithTimeout.bind(client)", "attempt.capture(await fetchWithTimeout(...args))",
+        "await createPromise.withResponse()", "clock.subscribe(rearm)",
+        "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.close(failed)",
+        "request.generationContext.requestSegmentId,\n          request.config?.abortSignal,",
+    ), label=label)
+    _require_all(state, core + "core/model-response-evidence.ts", (
+        "export class ModelResponseRecorder", "export class ModelResponseReplay",
+        "requireModelResponseEvidence", "body_sha256", "Buffer.from(bytes).toString('base64')",
+        "await this.body(bytes)", "controller.enqueue(bytes)",
+        "this.clock.persist", "openRequestIds()", "terminal omits a response completion",
+    ), label=label)
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "export class ModelEvidenceReplay", "open_response_ids", "await this.persistResponse(evidence)",
+        "async flush(): Promise<void>", "if (this.failure) throw this.failure.cause;",
+        "let cancelledBeforeAdmission = false;", "signal.throwIfAborted();",
+        "if (!cancelledBeforeAdmission) this.failure = { cause: error };",
+    ), label=label)
     require_text(state, core + "core/geminiChat.ts", "this.generationContext.startRequestSegment()", label=label)
     recorder = _source(state, core + "services/chatRecordingService.ts", label=label)
     evidence_writer = recorder.split("readonly modelRequests = new ModelRequestJournal(", 1)[1].split("/**", 1)[0]
     _require("updateActiveTail: false" in evidence_writer,
              f"{label}: request evidence must not become the canonical history tail")
+    _require_all(state, core + "services/chatRecordingService.ts", (
+        "private autoTitleTask: Promise<void> | undefined;",
+        "record.type === 'model_response' && this.state === 'closing'",
+        "await this.modelRequests.flush();", "await this.finalize();",
+        "this.enterWriteFailure(cause, this.getSessionId(), 'model_evidence');",
+        "this.autoTitleTask = (async () =>", "async finalize(): Promise<void>",
+        "await this.autoTitleTask;",
+    ), label=label)
+    _require_all(state, core + "config/config.ts", (
+        "await this.chatRecordingService.finalize();",
+        "() => this.chatRecordingService.finalize(),",
+    ), label=label)
+    require_text(state, cli + "acp-integration/acpAgent.ts", "await recorder.finalize();", label=label)
+    require_text(state, cli + "ui/hooks/useBranchCommand.ts", "await outgoingRecording.finalize();", label=label)
+    _require_all(state, core + "utils/runtimeFetchOptions.ts", (
+        "const clone = cloneErrorForRedaction(error);", "error instanceof DOMException",
+        "new DOMException('', error.name)",
+    ), label=label)
     for path in (core + "utils/transcript-records.ts", core + "services/chat-recording-io.ts", core + "services/session-transcript-reader.ts"):
-        require_text(state, path, "new ModelRequestReplay()", label=label)
+        require_text(state, path, "new ModelEvidenceReplay()", label=label)
     _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
         "messagesWithRequestEvidence", "request_evidence_origin", "request_evidence:",
-        "closeRequestEvidence", "type: 'model_request'",
+        "closeRequestEvidence", "this.takeModelEvidence()", "this.requestOutput.setDrain",
     ), label=label)
     require_text(state, "packages/sdk-typescript/src/query/Query.ts", "this.recordAdmission.admit(message)", label=label)
     for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
@@ -8105,7 +8144,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         cli + "serve/virtual-subagent-sessions.ts",
         ("decodeChatRecord(", "if (this.readFailure) throw this.readFailure;",
-         "type: 'stream_error'", "this.bus.close()", "this.requestReplay.observe(record.modelRequest)"),
+         "type: 'stream_error'", "this.bus.close()", "this.requestReplay.observe(record)"),
         label=label,
     )
     require_text(state, cli + "commands/review/cost-ledger.ts", "readCanonicalChatRecordsSync(file)", label=label)
@@ -9296,16 +9335,17 @@ def _validate_stream_bounds_after(state: State) -> None:
             "  const boundMs = Math.ceil((maxTokens * 1000) / DECODE_FLOOR_TPS);",
             "export class StreamStartTimeoutError extends Error {",
             "  const startDeadline = bounds.dispatchedAt + bounds.requestTimeoutMs;",
-            "        : startDeadline - performance.now();",
+            "        : startDeadline - clock.now();",
             "        const idleIn = started ? idleMs : Number.POSITIVE_INFINITY;",
-            "      if (started) upstreamMs += performance.now() - awaitedAt;",
+            "      if (started) upstreamMs += clock.now() - awaitedAt;",
             "      if (error instanceof StreamStartTimeoutError) {",
         ),
         label=label,
     )
     # The generation's bound comes from the request's own max_tokens, and the
     # start deadline from the request timeout the SDK client was built with,
-    # counted from the moment the request is dispatched.
+    # counted from dispatch on the recording-aware monotonic clock. Durable
+    # local writes pause that clock and its timer without changing network policy.
     _require_ordered(
         source,
         (
@@ -9313,13 +9353,16 @@ def _validate_stream_bounds_after(state: State) -> None:
             "        const requestTimeoutMs = resolveRequestTimeout(\n"
             "          this.contentGeneratorConfig.timeout,\n"
             "        );",
-            "        const dispatchedAt = performance.now();",
+            "        const dispatchedAt = responseEvidence.clock.now();",
             "          const createPromise = this.client.chat.completions.create(",
-            "          { dispatchedAt, requestTimeoutMs, generationMs },",
+            "clock: responseEvidence.clock,",
         ),
         label=label,
         location=pipeline,
     )
+    _require_all(state, pipeline, ("clock.subscribe(rearm)", "if (clock.paused) return;", "unsubscribe?.()"), label=label)
+    require_text(state, "packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts",
+                 "does not count durable recording delay toward first-chunk or idle guards", label=label)
     # One mode: no knob, no default beside the derived bound, nothing that
     # disables a bound, and the retired names do not return.
     for path in (constants, pipeline, content):

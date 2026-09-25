@@ -80,7 +80,7 @@ pub fn compile(bytes: &[u8]) -> Result<Compilation, String> {
     {
         return Err(error("/$schema", "expected the owned Draft-07 dialect"));
     }
-    if root.get("$id").and_then(Value::as_str) != Some("urn:agent-service:stream-contract:2") {
+    if root.get("$id").and_then(Value::as_str) != Some("urn:agent-service:stream-contract:3") {
         return Err(error("/$id", "unexpected owned schema identity"));
     }
     let mut compiler = Compiler::default();
@@ -397,7 +397,7 @@ impl Compiler {
             }
         }
         if let Some(identity) = value.get("$id") {
-            if !path.is_empty() || string(identity, path)? != "urn:agent-service:stream-contract:2"
+            if !path.is_empty() || string(identity, path)? != "urn:agent-service:stream-contract:3"
             {
                 return Err(error(path, "unsupported nested schema resource identity"));
             }
@@ -693,18 +693,18 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const SOURCE: &[u8] = include_bytes!("../stream-contract-v2.json");
+    const SOURCE: &[u8] = include_bytes!("../stream-contract-v3.json");
 
     #[test]
     fn owned_vocabulary_inventory_is_complete() {
         let compiled = compile(SOURCE).unwrap();
         let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
-        assert_eq!(inventory["object_schemas"], 474);
-        assert_eq!(inventory["false_schemas"], 65);
+        assert_eq!(inventory["object_schemas"], 509);
+        assert_eq!(inventory["false_schemas"], 70);
         assert_eq!(inventory["keywords"].as_object().unwrap().len(), 24);
-        assert_eq!(inventory["references"].as_array().unwrap().len(), 26);
+        assert_eq!(inventory["references"].as_array().unwrap().len(), 27);
         assert!(!compiled.rust.is_empty());
-        assert_eq!(compiled.discriminators["EventKind"].len(), 6);
+        assert_eq!(compiled.discriminators["EventKind"].len(), 7);
         assert_eq!(compiled.success_subtype, crate::SUCCESS_SUBTYPE);
         assert_eq!(compiled.error_subtypes, crate::ERROR_SUBTYPES);
         assert_eq!(

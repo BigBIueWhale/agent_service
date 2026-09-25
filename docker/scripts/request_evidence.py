@@ -1,5 +1,6 @@
 """Replay exact client request evidence and compare it to bytes received by a provider."""
 from __future__ import annotations
+import base64
 import hashlib
 import json
 
@@ -64,3 +65,59 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
             raise ValueError("request body and evidence name different invocations")
         scopes[request["kv_scope"]] = request["request_id"], request["segment_id"], message_bytes(body)
     return requests
+
+
+def require_response_evidence(events: list[dict], served: list[dict]) -> list[dict]:
+    """Verify every observed byte against the fake provider, including failed prefixes."""
+    requests = [event["request"] for event in events if event.get("type") == "model_request"]
+    if len(requests) != len(served) or events[-1]["request_evidence"]["open_response_ids"] != []:
+        raise ValueError("response recording is incomplete; inspect the provider and recorder")
+    states = {request["request_id"]: {"journal": request["journal_id"], "actual": actual,
+              "sequence": 0, "http": False, "ended": False, "bytes": bytearray()}
+              for request, actual in zip(requests, served)}
+    if len(states) != len(requests):
+        raise ValueError("response requests reuse an identity; inspect the original stream")
+    admitted = set()
+    responses = []
+    for envelope in events:
+        if envelope.get("type") == "model_request":
+            admitted.add(envelope["request"]["request_id"])
+        if envelope.get("type") != "model_response":
+            continue
+        response = envelope["response"]
+        responses.append(response)
+        state = states.get(response["request_id"])
+        if response["request_id"] not in admitted or state is None or state["ended"] or state["journal"] != response["journal_id"] or response["sequence"] != state["sequence"] + 1:
+            raise ValueError("response identity or sequence is incomplete")
+        event = response["event"]
+        actual = state["actual"]
+        if event["kind"] == "http":
+            if state["http"] or state["sequence"] or event["status"] != actual["response_status"] or event["content_type"] != actual["response_content_type"]:
+                raise ValueError("recorded HTTP response differs from provider")
+            state["http"] = True
+        elif event["kind"] == "body":
+            decoded = base64.b64decode(event["base64"], validate=True)
+            if not state["http"] or not decoded or base64.b64encode(decoded).decode() != event["base64"] or event["offset"] != len(state["bytes"]):
+                raise ValueError("response bytes are malformed or out of order")
+            state["bytes"].extend(decoded)
+        elif event["kind"] == "end":
+            observed = bytes(state["bytes"])
+            expected = b"".join(base64.b64decode(part, validate=True) for part in actual["response_chunks"])
+            termination = event["termination"]
+            if event["body_bytes"] != len(observed) or event["body_sha256"] != hashlib.sha256(observed).hexdigest():
+                raise ValueError("response completion omits or changes observed bytes")
+            if termination == "eof":
+                if not state["http"] or event["error"] is not None or observed != expected:
+                    raise ValueError("complete response differs from provider bytes")
+            elif termination in ("failed", "cancelled"):
+                if not expected.startswith(observed):
+                    raise ValueError("failed response prefix differs from provider bytes")
+            else:
+                raise ValueError("served response was incorrectly called undispatched")
+            state["ended"] = True
+        else:
+            raise ValueError("unknown response event; use the matching harness")
+        state["sequence"] += 1
+    if any(not state["ended"] for state in states.values()):
+        raise ValueError("response completion is missing; inspect the original stream")
+    return responses

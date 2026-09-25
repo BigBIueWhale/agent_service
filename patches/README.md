@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `e91b7e65697348c13bfab568ef90606a32e22422796c0ee01c472910a48393b6`
+- Review-diff SHA-256: `8c651e4829638c854cfb95e6d8c7773e1930b5b32dff05b8c6bf7905c8752039`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `dba5b8cba148c64ada48f41431f298769cf71e1193d80bb47e389e524dfb9c7d`
+- Transformer-manifest SHA-256: `ec770a769f57eeef9ff633c921fdaab2ee3b9b2840643d9efc9427b25d75d082`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -339,7 +339,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 2`, independently
+Every physical canonical chat record carries `recordingVersion: 3`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -369,8 +369,11 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream format 2 exposes these same request records, declares the journal origin
-in `system/init`, and accounts for the output window at every root result. Native
+Stream format 3 exposes these same request records, declares the journal origin
+in `system/init`, and accounts for the output window at every root result. Each
+checkpoint lists its open response identities so an ordinary turn can finish
+while a background child remains active. The native complete-recording certifier
+requires that list to be empty and verifies that every request's response ended. Native
 certification and SDK admission replay message deltas, verify byte lengths and
 hashes, and refuse missing, repeated, reordered, foreign, or unknown evidence.
 The native terminal check also refuses fewer requests than billed model turns.
@@ -379,7 +382,7 @@ actual bytes received by their fake providers. Canonical readers validate reques
 evidence in physical order before selecting conversation branches. Evidence has
 no conversation message or subtype and cannot become the active history tail;
 resume still reads canonical chat JSONL, never stdout. Forks copy the complete
-physical request journal, including delta bases on abandoned branches, while
+physical request and response journal, including delta bases on abandoned branches, while
 copying only active conversation history. Exact provider, canonical
 writer, full-history and indexed-history tests exercise this separation together.
 
@@ -389,6 +392,37 @@ client's conversation, reminders, compaction segments or canonical recorder; thi
 change does not add backend logging for such callers. Backend-owned omissions
 must be addressed in the backend. Request capture alone does not establish that
 every response byte and abandoned attempt is recorded.
+
+The shared pipeline wraps the provider SDK's public `fetchWithTimeout` result
+before status, JSON or SSE parsing, preserving its configured transport and proxy.
+The bytes are the fetch entity body after transport content decoding (such as
+gzip), before any SDK text or event decoding.
+Each `model_response` record names its physical request and records HTTP status
+and content type, ordered base64 body bytes, or a terminal with the exact observed
+byte count and SHA-256. EOF, failed read, cancellation and an undispatched intent
+are distinct. Arbitrary malformed UTF-8 and JSON survive as bytes. Capture uses
+one pull-through stream; it durably writes each bounded record before parser
+delivery. The record quantum never truncates a response. Active stdout renderers
+drain each admitted record before generation proceeds. Detached renderers release
+their window without poisoning the canonical writer. Recorder waits are excluded
+from the request's start, idle and generation clocks; configured network limits
+and normal-session behavior remain in force.
+
+Canonical format 3 structurally excludes response evidence from messages,
+conversation branches and the active parent chain. Full, indexed and live readers
+validate physical response sequence, ownership, byte offsets and terminal hashes.
+They can inspect an explicitly open live prefix; they do not certify that prefix
+as a complete record set. The stdout native certifier rejects missing response
+completion, including an otherwise valid successful assistant message. Both fake
+providers compare recorded bytes with their actual response body, including
+malformed SSE and cancelled prefixes. Full/indexed/fork resume tests compare the
+entire restored model history byte for byte while preserving raw evidence.
+
+These records cover the HTTP response observed by every shared-client generation,
+including side queries and children. They cannot establish tokens generated but
+never transmitted, parser omissions inside a backend, or why an attempt was
+accepted or abandoned. Transport EOF is not semantic acceptance. Those obligations
+remain separate; no backend record is inferred from client bytes.
 
 Every chat requires a canonical commit recorder. Root chats, ordinary children,
 background and resumed children, workflow calls, utility forks, and speculation

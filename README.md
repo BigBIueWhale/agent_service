@@ -781,7 +781,7 @@ consecutive turns with a message that was not a final answer after being told
 twice, and `error_cancelled` for an abort from outside. The names, whether each
 is an error, and the exit code a process that ended with each leaves are one
 table in the stream contract, `terminalOutcome` in
-`protocol/stream-contract-v2.json`, which validates a record's pairing and from
+`protocol/stream-contract-v3.json`, which validates a record's pairing and from
 which both the client's and the service's bindings are generated: `success`
 exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
 The table also names `error_timeout`, which no session ends in: only a subagent
@@ -919,7 +919,7 @@ ends this way is reported to its parent as unfinished, with the shape of the sli
 and its turn count, in the same form as an exhausted budget or a cut-off
 generation, and its scoped terminal record carries the same name. The name is a
 row of the terminal table, `terminalOutcome` in
-`protocol/stream-contract-v2.json`, which is the one place the vocabulary is
+`protocol/stream-contract-v3.json`, which is the one place the vocabulary is
 written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.
