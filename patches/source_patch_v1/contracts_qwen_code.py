@@ -8230,7 +8230,39 @@ def _validate_served_accounting_after(state: State) -> None:
         "messagesWithRequestEvidence", "request_evidence_origin", "request_evidence:",
         "closeRequestEvidence", "this.takeModelEvidence()", "this.requestOutput.setDrain",
     ), label=label)
-    require_text(state, "packages/sdk-typescript/src/query/Query.ts", "this.recordAdmission.admit(message)", label=label)
+    sdk = "packages/sdk-typescript/"
+    _require_all(state, sdk + "src/query/Query.ts", (
+        "this.recordAdmission.admit(message)", "this.assertOpen();",
+        "this.inputEndReadyResolve?.();", "await this.close();",
+        "if (this.closed || this.transportReadFinalized)",
+        "throw this.inputStream.hasError;",
+        "!(this.inputStream.hasError instanceof AbortError)",
+    ), label=label)
+    _require_all(state, sdk + "src/utils/jsonLines.ts", (
+        "chunks: AsyncIterable<Uint8Array>", "fatal: true, ignoreBOM: true",
+        "chunk.indexOf(0x0a, start)", "Buffer.concat(fragments, length)",
+        "expected an object with a string type", "invalid UTF-8", "invalid JSON",
+        "unterminated record at EOF", "invalid JSONL record at line ${line}",
+    ), label=label)
+    forbid_text(state, sdk + "src/utils/jsonLines.ts", "parseJsonLineSafe", label=label)
+    forbid_text(state, sdk + "src/transport/ProcessTransport.ts", "readline", label=label)
+    require_text(state, sdk + "src/transport/ProcessTransport.ts",
+                 "yield* parseJsonLinesStream(this.childStdout, 'ProcessTransport');", label=label)
+    _require_all(state, sdk + "test/unit/recordFraming.test.ts", (
+        "retains the prefix and refuses corruption before success",
+        "keeps valid Unicode records and completes at clean EOF",
+        "rejects pending controls and first-result input waits with the same framing error",
+        "refuses waiting input after framing failure, including later abort",
+        "keeps a valid live query open for subsequent controls",
+        "preserves framing refusal when transport cleanup also fails",
+    ), label=label)
+    _require_all(state, sdk + "test/unit/jsonLines.test.ts", (
+        "preserves Unicode and CRLF across every split and single-byte chunks",
+        "accepts terminated ASCII blank lines and preserves physical line numbers",
+        "refuses invalid record %j without reading the next chunk",
+        "refuses an uncommitted EOF suffix %j",
+        "keeps a large inline result exact across fragmented input",
+    ), label=label)
     for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
         require_text(state, path, "recordingVersion: CHAT_RECORDING_VERSION", label=label)
     _require_all(
@@ -10051,7 +10083,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "total. Durable dispatch and finalization share request identity; no request, reported "
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
-            "generating chats require canonical recording under shared session write ownership."
+            "generating chats require canonical recording under shared session write ownership. "
+            "SDK byte framing refuses malformed or uncommitted records before admission; a "
+            "finalized query cannot accept more work or hide refusal behind a later abort."
         ),
         removal_condition=(
             "Upstream supplies durable owned observations, required canonical writers, strict replay, "

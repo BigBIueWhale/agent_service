@@ -302221,7 +302221,16 @@ diff --git a/packages/sdk-typescript/src/query/createQuery.ts b/packages/sdk-typ
 diff --git a/packages/sdk-typescript/src/transport/ProcessTransport.ts b/packages/sdk-typescript/src/transport/ProcessTransport.ts
 --- a/packages/sdk-typescript/src/transport/ProcessTransport.ts
 +++ b/packages/sdk-typescript/src/transport/ProcessTransport.ts
-@@ -374,10 +374,6 @@
+@@ -1,8 +1,7 @@
+ import { spawn, fork, type ChildProcess } from 'node:child_process';
+-import * as readline from 'node:readline';
+ import type { Writable, Readable } from 'node:stream';
+ import type { TransportOptions } from '../types/types.js';
+ import type { Transport } from './Transport.js';
+ import { parseJsonLinesStream } from '../utils/jsonLines.js';
+ import { prepareSpawnInfo } from '../utils/cliPath.js';
+ import { AbortError } from '../types/errors.js';
+@@ -374,10 +373,6 @@
        args.push('--fork-session');
      }
  
@@ -302232,7 +302241,7 @@ diff --git a/packages/sdk-typescript/src/transport/ProcessTransport.ts b/package
      if (this.options.maxSubagentDepth !== undefined) {
        args.push('--max-subagent-depth', String(this.options.maxSubagentDepth));
      }
-@@ -403,16 +399,12 @@
+@@ -403,16 +398,12 @@
        args.push(
          '--allowed-mcp-server-names',
          this.options.allowedMcpServerNames.join(','),
@@ -302249,6 +302258,39 @@ diff --git a/packages/sdk-typescript/src/transport/ProcessTransport.ts b/package
  
      if (this.options.sandbox) {
        args.push('--sandbox');
+@@ -590,30 +581,14 @@
+ 
+   async *readMessages(): AsyncGenerator<unknown, void, unknown> {
+     if (!this.childStdout) {
+       throw new Error('Cannot read messages: process not started');
+     }
+ 
+-    const rl = readline.createInterface({
+-      input: this.childStdout,
+-      crlfDelay: Infinity,
+-      terminal: false,
+-    });
+-
+-    try {
+-      for await (const message of parseJsonLinesStream(
+-        rl,
+-        'ProcessTransport',
+-      )) {
+-        yield message;
+-      }
+-
+-      await this.waitForExit();
+-    } finally {
+-      rl.close();
+-    }
++    yield* parseJsonLinesStream(this.childStdout, 'ProcessTransport');
++    await this.waitForExit();
+   }
+ 
+   get isReady(): boolean {
+     return this.ready;
+   }
+ 
 diff --git a/packages/sdk-typescript/src/types/protocol.ts b/packages/sdk-typescript/src/types/protocol.ts
 --- a/packages/sdk-typescript/src/types/protocol.ts
 +++ b/packages/sdk-typescript/src/types/protocol.ts
@@ -320483,9 +320525,58 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
    SDKUserMessage,
    CLIControlRequest,
    CLIControlResponse,
-@@ -387,12 +388,14 @@
+@@ -105,14 +106,14 @@
+   readonly initialized: Promise<void>;
+   private initialEffortStatus: EffortStatus | undefined;
+   private closed = false;
+   private messageRouterStarted = false;
+   private transportReadFinalized = false;
+ 
+-  private firstResultReceivedPromise?: Promise<void>;
+-  private firstResultReceivedResolve?: () => void;
++  private inputEndReadyPromise?: Promise<void>;
++  private inputEndReadyResolve?: () => void;
+ 
+   private readonly isSingleTurn: boolean;
+   private abortHandler: (() => void) | null = null;
+ 
+   constructor(
+     transport: Transport,
+@@ -137,18 +138,18 @@
+      * If errors occur before iteration starts, they'll be stored in hasError and
+      * properly rejected when the user starts iterating.
+      */
+     this.sdkMessages = this.readSdkMessages();
+ 
+     /**
+-     * Promise that resolves when the first SDKResultMessage is received.
++     * Promise that resolves at the first result or when the query terminates.
+      * Used to coordinate endInput() timing - ensures all initialization
+      * (SDK MCP servers, control responses) is complete before closing CLI stdin.
+      */
+-    this.firstResultReceivedPromise = new Promise((resolve) => {
+-      this.firstResultReceivedResolve = resolve;
++    this.inputEndReadyPromise = new Promise((resolve) => {
++      this.inputEndReadyResolve = resolve;
+     });
+ 
+     /**
+      * Handle abort signal if controller is provided and already aborted or will be aborted.
+      * If already aborted, set error immediately. Otherwise, listen for abort events
+      * and set abort error on the stream before closing.
+@@ -383,16 +384,24 @@
+         // pending control + MCP request, otherwise continueLastTurn() and MCP
+         // callers hang until their timeout (MCP responses have none). Route
+         // through finishTransportRead so the real error propagates.
+         this.finishTransportRead(
            error instanceof Error ? error : new Error(String(error)),
          );
++      } finally {
++        try {
++          await this.close();
++        } catch (error) {
++          logger.error('Error closing finalized query:', error);
++        }
        }
      })();
    }
@@ -320498,7 +320589,7 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
        return;
      }
  
-@@ -400,12 +403,21 @@
+@@ -400,12 +409,21 @@
        this.handleControlResponse(message);
        return;
      }
@@ -320520,7 +320611,24 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
      if (isSDKSystemMessage(message)) {
        /**
         * SystemMessage contains session info (cwd, tools, model, etc.)
-@@ -436,14 +448,15 @@
+@@ -413,14 +431,14 @@
+        */
+       this.inputStream.enqueue(message);
+       return;
+     }
+ 
+     if (isSDKResultMessage(message)) {
+-      if (this.firstResultReceivedResolve) {
+-        this.firstResultReceivedResolve();
++      if (this.inputEndReadyResolve) {
++        this.inputEndReadyResolve();
+       }
+       /**
+        * In single-turn mode, automatically close input after receiving result
+        * to signal completion to the CLI.
+        */
+       if (this.isSingleTurn && 'endInput' in this.transport) {
+@@ -436,22 +454,24 @@
        isSDKPartialAssistantMessage(message)
      ) {
        this.inputStream.enqueue(message);
@@ -320538,6 +320646,184 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
      // Idempotent: close() and the transport-read loop can both reach here.
      if (this.transportReadFinalized) {
        return;
+     }
+     this.transportReadFinalized = true;
++    this.inputEndReadyResolve?.();
+ 
+     const rejectionError =
+       error ??
+       this.transport.exitError ??
+       new Error('Transport closed before control response');
+ 
+@@ -737,24 +757,18 @@
+   }
+ 
+   private async sendControlRequest(
+     subtype: string,
+     data: Record<string, unknown> = {},
+   ): Promise<Record<string, unknown> | null> {
+-    if (this.closed) {
+-      return Promise.reject(new Error('Query is closed'));
+-    }
+-
+-    // Check if transport has already exited with an error
+-    if (this.transport.exitError) {
+-      return Promise.reject(this.transport.exitError);
+-    }
++    this.assertOpen();
+ 
+     if (subtype !== ControlRequestType.INITIALIZE) {
+       // Ensure all other control requests get processed after initialization
+       await this.initialized;
++      this.assertOpen();
+     }
+ 
+     const requestId = randomUUID();
+ 
+     const request: CLIControlRequest = {
+       type: 'control_request',
+@@ -837,25 +851,29 @@
+   async close(): Promise<void> {
+     if (this.closed) {
+       return;
+     }
+ 
+     this.closed = true;
++    this.inputEndReadyResolve?.();
+ 
+     // Remove abort listener to prevent memory leak
+     if (this.abortHandler) {
+       this.abortController.signal.removeEventListener(
+         'abort',
+         this.abortHandler,
+       );
+       this.abortHandler = null;
+     }
+ 
+-    // Use transport's exit error if available, otherwise use generic error
++    // Preserve the first stream failure when settling pending requests.
+     const transportError = this.transport.exitError;
+-    const rejectionError = transportError ?? new Error('Query is closed');
++    const rejectionError =
++      this.inputStream.hasError ??
++      transportError ??
++      new Error('Query is closed');
+ 
+     for (const pending of this.pendingControlRequests.values()) {
+       pending.abortController.abort();
+       clearTimeout(pending.timeout);
+       pending.reject(rejectionError);
+     }
+@@ -911,81 +929,96 @@
+   }
+ 
+   [Symbol.asyncIterator](): AsyncIterator<SDKMessage> {
+     return this.sdkMessages;
+   }
+ 
++  private assertOpen(): void {
++    if (this.inputStream.hasError) throw this.inputStream.hasError;
++    if (this.closed || this.transportReadFinalized) {
++      throw new Error('Query is closed. Start a new query to send more input.');
++    }
++    if (this.transport.exitError) throw this.transport.exitError;
++  }
++
+   async streamInput(messages: AsyncIterable<SDKUserMessage>): Promise<void> {
+-    if (this.closed) {
+-      throw new Error('Query is closed');
+-    }
++    this.assertOpen();
+ 
+     try {
+       /**
+        * Wait for initialization to complete before sending messages.
+        * This prevents "write after end" errors when streamInput is called
+        * with an empty iterable before initialization finishes.
+        */
+       await this.initialized;
++      this.assertOpen();
+ 
+       for await (const message of messages) {
+         if (this.abortController.signal.aborted) {
+           break;
+         }
++        this.assertOpen();
+         this.transport.write(serializeJsonLine(message));
+       }
+ 
+       /**
+        * After all user messages are sent (for-await loop ended), determine when to
+        * close the CLI's stdin via endInput().
+        *
+        * - If a result message was already received: All initialization (SDK MCP servers,
+        *   control responses, etc.) is complete, safe to close stdin immediately.
+-       * - If no result yet: Wait for either the result to arrive, or the timeout to expire.
++       * - If no result yet: Wait for a result, query termination, or the timeout.
+        *   This gives pending control_responses from SDK MCP servers or other modules
+        *   time to complete their initialization before we close the input stream.
+        *
+        * The timeout ensures we don't hang indefinitely - either the turn proceeds
+        * normally, or it fails with a timeout, but Promise.race will always resolve.
+        */
+-      if (this.firstResultReceivedPromise) {
++      if (this.inputEndReadyPromise) {
+         const streamCloseTimeout =
+           this.options.timeout?.streamClose ?? DEFAULT_STREAM_CLOSE_TIMEOUT;
+         let timeoutId: NodeJS.Timeout | undefined;
+ 
+         const timeoutPromise = new Promise<void>((resolve) => {
+           timeoutId = setTimeout(() => {
+             logger.info('streamCloseTimeout resolved');
+             resolve();
+           }, streamCloseTimeout);
+         });
+ 
+-        await Promise.race([this.firstResultReceivedPromise, timeoutPromise]);
++        await Promise.race([this.inputEndReadyPromise, timeoutPromise]);
+ 
+         if (timeoutId) {
+           clearTimeout(timeoutId);
+         }
+       }
+ 
+-      this.endInput();
++      if (this.inputStream.hasError) throw this.inputStream.hasError;
++      if (!this.closed && !this.transportReadFinalized) this.endInput();
+     } catch (error) {
++      if (
++        this.inputStream.hasError &&
++        !(this.inputStream.hasError instanceof AbortError)
++      ) {
++        throw this.inputStream.hasError;
++      }
+       if (this.abortController.signal.aborted) {
+         logger.info('Aborted during input streaming');
+-        this.inputStream.error(
+-          new AbortError('Query aborted during input streaming'),
+-        );
++        if (this.inputStream.hasError === undefined) {
++          this.inputStream.error(
++            new AbortError('Query aborted during input streaming'),
++          );
++        }
+         return;
+       }
+       throw error;
+     }
+   }
+ 
+   endInput(): void {
+-    if (this.closed) {
+-      throw new Error('Query is closed');
+-    }
++    this.assertOpen();
+ 
+     if (
+       'endInput' in this.transport &&
+       typeof this.transport.endInput === 'function'
+     ) {
+       (this.transport as TransportWithEndInput).endInput();
 diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response-evidence.md
 --- /dev/null
 +++ b/docs/design/model-response-evidence.md
@@ -323502,3 +323788,721 @@ diff --git a/packages/vscode-ide-companion/src/webview/components/messages/toolc
                    },
                  ],
                  executionSummary: {
+diff --git a/packages/sdk-typescript/src/utils/jsonLines.ts b/packages/sdk-typescript/src/utils/jsonLines.ts
+--- a/packages/sdk-typescript/src/utils/jsonLines.ts
++++ b/packages/sdk-typescript/src/utils/jsonLines.ts
+@@ -1,65 +1,88 @@
+-import { SdkLogger } from './logger.js';
++import { TextDecoder } from 'node:util';
+ 
+ export function serializeJsonLine(message: unknown): string {
+   try {
+     return JSON.stringify(message) + '\n';
+   } catch (error) {
+     throw new Error(
+       `Failed to serialize message to JSON: ${error instanceof Error ? error.message : String(error)}`,
+     );
+   }
+ }
+ 
+-export function parseJsonLineSafe(
+-  line: string,
+-  context = 'JsonLines',
+-): unknown | null {
+-  const logger = SdkLogger.createLogger(context);
+-  try {
+-    return JSON.parse(line);
+-  } catch (error) {
+-    logger.warn(
+-      'Failed to parse JSON line, skipping:',
+-      line.substring(0, 100),
+-      error instanceof Error ? error.message : String(error),
+-    );
+-    return null;
+-  }
+-}
+-
+-export function isValidMessage(message: unknown): boolean {
+-  return (
+-    message !== null &&
+-    typeof message === 'object' &&
+-    'type' in message &&
+-    typeof (message as { type: unknown }).type === 'string'
++function refuseFrame(context: string, line: number, reason: string): never {
++  throw new Error(
++    `${context}: invalid JSONL record at line ${line}: ${reason}. ` +
++      'Capture the CLI stdout and inspect this line; use a matching CLI and SDK.',
+   );
+ }
+ 
++function parseRecord(
++  bytes: Uint8Array,
++  context: string,
++  line: number,
++): unknown {
++  let text: string;
++  try {
++    // Preserve a BOM so JSON parsing refuses it instead of deleting wire bytes.
++    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
++      bytes,
++    );
++  } catch {
++    return refuseFrame(context, line, 'invalid UTF-8');
++  }
++  let message: unknown;
++  try {
++    message = JSON.parse(text);
++  } catch {
++    return refuseFrame(context, line, 'invalid JSON');
++  }
++  if (
++    message === null ||
++    typeof message !== 'object' ||
++    Array.isArray(message) ||
++    !('type' in message) ||
++    typeof message.type !== 'string'
++  ) {
++    return refuseFrame(context, line, 'expected an object with a string type');
++  }
++  return message;
++}
++
+ export async function* parseJsonLinesStream(
+-  lines: AsyncIterable<string>,
++  chunks: AsyncIterable<Uint8Array>,
+   context = 'JsonLines',
+ ): AsyncGenerator<unknown, void, unknown> {
+-  const logger = SdkLogger.createLogger(context);
+-  for await (const line of lines) {
+-    if (line.trim().length === 0) {
+-      continue;
++  let line = 1;
++  let fragments: Uint8Array[] = [];
++  let length = 0;
++  for await (const chunk of chunks) {
++    if (!(chunk instanceof Uint8Array)) {
++      refuseFrame(context, line, 'expected raw stdout bytes');
+     }
+-
+-    const message = parseJsonLineSafe(line, context);
+-
+-    if (message === null) {
+-      continue;
++    let start = 0;
++    while (start < chunk.length) {
++      const newline = chunk.indexOf(0x0a, start);
++      const end = newline === -1 ? chunk.length : newline;
++      const fragment = chunk.subarray(start, end);
++      fragments.push(fragment);
++      length += fragment.length;
++      if (newline === -1) break;
++      const record = Buffer.concat(fragments, length);
++      fragments = [];
++      length = 0;
++      const physicalLine = line++;
++      // Terminated ASCII whitespace carries no record, as in the service reader.
++      if (
++        !record.every(
++          (byte) =>
++            byte === 0x09 || byte === 0x0c || byte === 0x0d || byte === 0x20,
++        )
++      ) {
++        yield parseRecord(record, context, physicalLine);
++      }
++      start = newline + 1;
+     }
+-
+-    if (!isValidMessage(message)) {
+-      logger.warn(
+-        "Invalid message structure (missing 'type' field), skipping:",
+-        line.substring(0, 100),
+-      );
+-      continue;
+-    }
+-
+-    yield message;
+   }
++  if (length !== 0) refuseFrame(context, line, 'unterminated record at EOF');
+ }
+diff --git a/packages/sdk-typescript/test/unit/jsonLines.test.ts b/packages/sdk-typescript/test/unit/jsonLines.test.ts
+--- /dev/null
++++ b/packages/sdk-typescript/test/unit/jsonLines.test.ts
+@@ -0,0 +1,176 @@
++import { describe, expect, it } from 'vitest';
++import { parseJsonLinesStream } from '../../src/utils/jsonLines.js';
++
++async function* chunks(...parts: Uint8Array[]): AsyncGenerator<Uint8Array> {
++  yield* parts;
++}
++
++async function observe(source: AsyncIterable<unknown>) {
++  const records: unknown[] = [];
++  try {
++    for await (const record of source) records.push(record);
++    return { records, error: undefined };
++  } catch (error) {
++    return { records, error };
++  }
++}
++
++const prefix = { type: 'assistant', text: '  exact שלום 😀\n' };
++const prefixBytes = Buffer.from(JSON.stringify(prefix) + '\n');
++
++describe('SDK JSONL byte framing', () => {
++  it('preserves Unicode and CRLF across every split and single-byte chunks', async () => {
++    const wire = Buffer.from(JSON.stringify(prefix) + '\r\n');
++    for (let split = 0; split <= wire.length; split++) {
++      expect(
++        await observe(
++          parseJsonLinesStream(
++            chunks(wire.subarray(0, split), wire.subarray(split)),
++          ),
++        ),
++      ).toEqual({ records: [prefix], error: undefined });
++    }
++    expect(
++      await observe(
++        parseJsonLinesStream(
++          chunks(...Array.from(wire, (byte) => Buffer.from([byte]))),
++        ),
++      ),
++    ).toEqual({ records: [prefix], error: undefined });
++  });
++
++  it('accepts terminated ASCII blank lines and preserves physical line numbers', async () => {
++    const source = Buffer.concat([
++      Buffer.from('\n \t\f\r\n'),
++      prefixBytes,
++      Buffer.from('invalid\n'),
++    ]);
++    const result = await observe(
++      parseJsonLinesStream(chunks(source), 'fixture'),
++    );
++    expect(result.records).toEqual([prefix]);
++    expect(result.error).toEqual(
++      expect.objectContaining({
++        message: expect.stringContaining(
++          'fixture: invalid JSONL record at line 4: invalid JSON',
++        ),
++      }),
++    );
++  });
++
++  it.each([
++    '{"type":',
++    'null',
++    '0',
++    'true',
++    '[]',
++    '{}',
++    '{"type":7}',
++    '\uFEFF{"type":"assistant"}',
++    '\u00a0',
++  ])(
++    'refuses invalid record %j without reading the next chunk',
++    async (invalid) => {
++      let pulledAfterFailure = false;
++      let closed = false;
++      const input = (async function* () {
++        try {
++          yield prefixBytes;
++          yield Buffer.from(invalid + '\n{"type":"after"}\n');
++          pulledAfterFailure = true;
++          yield prefixBytes;
++        } finally {
++          closed = true;
++        }
++      })();
++      const result = await observe(parseJsonLinesStream(input, 'fixture'));
++      expect(result.records).toEqual([prefix]);
++      expect(result.error).toEqual(
++        expect.objectContaining({
++          message: expect.stringMatching(/line 2:.*Capture the CLI stdout/),
++        }),
++      );
++      expect(pulledAfterFailure).toBe(false);
++      expect(closed).toBe(true);
++    },
++  );
++
++  it.each([[0xff], [0xc0, 0xaf], [0xed, 0xa0, 0x80], [0xe2, 0x98]])(
++    'refuses invalid UTF-8 %j instead of replacement text',
++    async (...invalid) => {
++      const line = Buffer.concat([
++        Buffer.from('{"type":"assistant","text":"'),
++        Buffer.from(invalid),
++        Buffer.from('"}\n'),
++      ]);
++      const result = await observe(
++        parseJsonLinesStream(chunks(prefixBytes, line, prefixBytes)),
++      );
++      expect(result.records).toEqual([prefix]);
++      expect(result.error).toEqual(
++        expect.objectContaining({
++          message: expect.stringContaining('line 2: invalid UTF-8'),
++        }),
++      );
++    },
++  );
++
++  it.each(['{"type":"assistant"}', '{"type":', ' ', '\r'])(
++    'refuses an uncommitted EOF suffix %j',
++    async (suffix) => {
++      const result = await observe(
++        parseJsonLinesStream(chunks(prefixBytes, Buffer.from(suffix))),
++      );
++      expect(result.records).toEqual([prefix]);
++      expect(result.error).toEqual(
++        expect.objectContaining({
++          message: expect.stringContaining(
++            'line 2: unterminated record at EOF',
++          ),
++        }),
++      );
++    },
++  );
++
++  it('keeps a large inline result exact across fragmented input', async () => {
++    const message = { type: 'user', content: '\\"שלום\n'.repeat(65_536) };
++    const wire = Buffer.from(JSON.stringify(message) + '\n');
++    async function* fragmented() {
++      for (let offset = 0; offset < wire.length; offset += 997)
++        yield wire.subarray(offset, offset + 997);
++    }
++    expect(await observe(parseJsonLinesStream(fragmented()))).toEqual({
++      records: [message],
++      error: undefined,
++    });
++  });
++
++  it('leaves message vocabulary validation to record admission', async () => {
++    const message = { type: 'unknown-versioned-record', value: 'exact' };
++    expect(
++      await observe(
++        parseJsonLinesStream(
++          chunks(Buffer.from(JSON.stringify(message) + '\n')),
++        ),
++      ),
++    ).toEqual({ records: [message], error: undefined });
++  });
++
++  it('preserves an upstream read failure and closes the source', async () => {
++    const failure = new Error('read failed');
++    let closed = false;
++    const input = (async function* () {
++      try {
++        yield prefixBytes;
++        throw failure;
++      } finally {
++        closed = true;
++      }
++    })();
++    expect(await observe(parseJsonLinesStream(input))).toEqual({
++      records: [prefix],
++      error: failure,
++    });
++    expect(closed).toBe(true);
++  });
++});
+diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/sdk-typescript/test/unit/recordFraming.test.ts
+--- /dev/null
++++ b/packages/sdk-typescript/test/unit/recordFraming.test.ts
+@@ -0,0 +1,398 @@
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { EventEmitter } from 'node:events';
++import { Readable, Writable } from 'node:stream';
++import { spawn, type ChildProcess } from 'node:child_process';
++import { STREAM_CONTRACT_SHA256 } from '@qwen-code/qwen-code-core';
++import { Query } from '../../src/query/Query.js';
++import { ProcessTransport } from '../../src/transport/ProcessTransport.js';
++import type {
++  CLIControlRequest,
++  SDKUserMessage,
++} from '../../src/types/protocol.js';
++
++vi.mock('node:child_process', async (importOriginal) => ({
++  ...(await importOriginal<typeof import('node:child_process')>()),
++  spawn: vi.fn(),
++}));
++
++const cleanups: Array<() => Promise<void>> = [];
++afterEach(async () => {
++  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
++  vi.restoreAllMocks();
++});
++
++function setup() {
++  const stdout = new Readable({ read() {} });
++  const writes: string[] = [];
++  const stdin = new Writable({
++    write(chunk: Buffer, _encoding, done) {
++      const text = chunk.toString();
++      writes.push(text);
++      const request = JSON.parse(text) as CLIControlRequest;
++      if (
++        request.type === 'control_request' &&
++        request.request.subtype === 'initialize'
++      ) {
++        queueMicrotask(() =>
++          stdout.push(
++            line({
++              type: 'control_response',
++              response: {
++                subtype: 'success',
++                request_id: request.request_id,
++                response: {},
++              },
++            }),
++          ),
++        );
++      }
++      done();
++    },
++  });
++  const child = Object.assign(new EventEmitter(), {
++    stdin,
++    stdout,
++    stderr: new Readable({ read() {} }),
++    killed: false,
++    exitCode: null as number | null,
++    kill: vi.fn(() => {
++      child.killed = true;
++      return true;
++    }),
++  });
++  vi.mocked(spawn).mockReturnValue(child as unknown as ChildProcess);
++  const transport = new ProcessTransport({
++    spawnInfo: {
++      command: 'fixture',
++      args: [],
++      type: 'native',
++      originalInput: 'fixture',
++    },
++    stderr: () => {},
++  });
++  cleanups.push(async () => {
++    await transport.close();
++    child.exitCode = 0;
++    child.emit('close', 0, null);
++  });
++  return {
++    transport,
++    child,
++    stdout,
++    writes,
++    end() {
++      stdout.push(null);
++      child.exitCode = 0;
++      child.emit('close', 0, null);
++    },
++  };
++}
++
++function line(record: unknown): string {
++  return JSON.stringify(record) + '\n';
++}
++async function observe(source: AsyncIterable<unknown>) {
++  const records: unknown[] = [];
++  try {
++    for await (const record of source) records.push(record);
++    return { records, error: undefined };
++  } catch (error) {
++    return { records, error };
++  }
++}
++async function rejection(promise: Promise<unknown>): Promise<unknown> {
++  try {
++    await promise;
++    return undefined;
++  } catch (error) {
++    return error;
++  }
++}
++function makeQuery(
++  transport: ProcessTransport,
++  singleTurn = false,
++  abortController?: AbortController,
++) {
++  const query = new Query(
++    transport,
++    { sessionId: 'session', abortController },
++    singleTurn,
++  );
++  cleanups.push(() => query.close());
++  return query;
++}
++const init = {
++  type: 'system',
++  subtype: 'init',
++  stream_contract_sha256: STREAM_CONTRACT_SHA256,
++  request_evidence_origin: { journal_id: 'fixture', first_sequence: 1 },
++  uuid: 'init',
++  session_id: 'session',
++  parent_tool_use_id: null,
++  cwd: '/tmp',
++  tools: [],
++  model: 'fixture',
++};
++const assistant = (text: string) => ({
++  type: 'assistant',
++  origin: { kind: 'runtime' },
++  uuid: 'assistant',
++  session_id: 'session',
++  parent_tool_use_id: null,
++  message: {
++    id: 'assistant',
++    type: 'message',
++    role: 'assistant',
++    model: 'fixture',
++    content: [{ type: 'text', text }],
++    stop_reason: null,
++    usage: null,
++  },
++});
++const result = {
++  type: 'result',
++  subtype: 'success',
++  uuid: 'result',
++  session_id: 'session',
++  parent_tool_use_id: null,
++  is_error: false,
++  duration_ms: 0,
++  duration_api_ms: 0,
++  num_turns: 0,
++  result: 'done',
++  usage: {
++    requests: 0,
++    usageReports: 0,
++    unfinalizedRequests: 0,
++    unreportedUsageRequests: 0,
++    usage: null,
++  },
++  permission_denials: [],
++  request_evidence: {
++    journal_id: 'fixture',
++    first_sequence: 1,
++    request_count: 0,
++    open_response_ids: [],
++  },
++};
++const prompt: SDKUserMessage = {
++  type: 'user',
++  session_id: 'session',
++  parent_tool_use_id: null,
++  message: { role: 'user', content: 'next prompt' },
++};
++
++// Only spawning is mocked: Query, admission, ProcessTransport and byte framing run together.
++describe('SDK process record admission', () => {
++  it.each([true, false])(
++    'retains the prefix and refuses corruption before success (singleTurn %s)',
++    async (singleTurn) => {
++      const t = setup();
++      const query = makeQuery(t.transport, singleTurn);
++      await query.initialized;
++      const output = observe(query);
++      const before = assistant('before');
++      t.stdout.push(
++        line(init) +
++          line(before) +
++          '{"type":\n' +
++          line(assistant('after')) +
++          line(result),
++      );
++      const observed = await output;
++      expect(observed.records).toEqual([init, before]);
++      expect(observed.error).toEqual(
++        expect.objectContaining({
++          message: expect.stringContaining('line 4: invalid JSON'),
++        }),
++      );
++      expect(t.stdout.destroyed).toBe(true);
++      expect(t.child.kill).toHaveBeenCalledWith('SIGTERM');
++      expect(query.isClosed()).toBe(true);
++      const written = t.writes.length;
++      expect(await rejection(query.continueLastTurn())).toBe(observed.error);
++      expect(
++        await rejection(
++          query.streamInput(
++            (async function* () {
++              yield prompt;
++            })(),
++          ),
++        ),
++      ).toBe(observed.error);
++      expect(t.writes).toHaveLength(written);
++    },
++  );
++
++  it.each([true, false])(
++    'keeps valid Unicode records and completes at clean EOF (singleTurn %s)',
++    async (singleTurn) => {
++      const t = setup();
++      const query = makeQuery(t.transport, singleTurn);
++      await query.initialized;
++      const records = [init, assistant('exact שלום 😀'), result];
++      const output = observe(query);
++      for (const byte of Buffer.from(records.map(line).join('')))
++        t.stdout.push(Buffer.from([byte]));
++      t.end();
++      expect(await output).toEqual({ records, error: undefined });
++      expect(query.isClosed()).toBe(true);
++      expect(t.child.kill).not.toHaveBeenCalled();
++    },
++  );
++
++  it('rejects invalid UTF-8 without publishing replacement model text', async () => {
++    const t = setup();
++    const query = makeQuery(t.transport);
++    await query.initialized;
++    const output = observe(query);
++    const [left, right] = line(assistant('PREFIX_REPLACE_SUFFIX')).split(
++      'REPLACE',
++    );
++    t.stdout.push(line(init));
++    t.stdout.push(
++      Buffer.concat([
++        Buffer.from(left!),
++        Buffer.from([0xff]),
++        Buffer.from(right!),
++      ]),
++    );
++    const observed = await output;
++    expect(observed.records).toEqual([init]);
++    expect(observed.error).toEqual(
++      expect.objectContaining({
++        message: expect.stringContaining('invalid UTF-8'),
++      }),
++    );
++  });
++
++  it.each(['{"type":', line(result).slice(0, -1), ' '])(
++    'refuses uncommitted stdout at EOF: %j',
++    async (suffix) => {
++      const t = setup();
++      const query = makeQuery(t.transport);
++      await query.initialized;
++      const output = observe(query);
++      t.stdout.push(line(init) + suffix);
++      t.end();
++      const observed = await output;
++      expect(observed.records).toEqual([init]);
++      expect(observed.error).toEqual(
++        expect.objectContaining({
++          message: expect.stringContaining('unterminated record at EOF'),
++        }),
++      );
++    },
++  );
++
++  it('rejects pending controls and first-result input waits with the same framing error', async () => {
++    const t = setup();
++    const query = makeQuery(t.transport);
++    await query.initialized;
++    const output = observe(query);
++    const control = rejection(query.continueLastTurn());
++    let inputSettled = false;
++    const input = rejection(
++      query.streamInput(
++        (async function* () {
++          yield prompt;
++        })(),
++      ),
++    ).then((error) => {
++      inputSettled = true;
++      return error;
++    });
++    await vi.waitFor(() => expect(t.writes).toHaveLength(3));
++    t.stdout.push('{"type":\n');
++    const observed = await output;
++    expect(observed.error).toBeInstanceOf(Error);
++    expect(await control).toBe(observed.error);
++    await vi.waitFor(() => expect(inputSettled).toBe(true));
++    expect(await input).toBe(observed.error);
++  });
++
++  it.each([false, true])(
++    'refuses waiting input after framing failure, including later abort (%s)',
++    async (abortAfterFailure) => {
++      const t = setup();
++      const abortController = new AbortController();
++      const query = makeQuery(t.transport, false, abortController);
++      await query.initialized;
++      let release!: () => void;
++      const gate = new Promise<void>((resolve) => {
++        release = resolve;
++      });
++      let closed = false;
++      const input = rejection(
++        query.streamInput(
++          (async function* () {
++            try {
++              await gate;
++              yield prompt;
++            } finally {
++              closed = true;
++            }
++          })(),
++        ),
++      );
++      const output = observe(query);
++      t.stdout.push('{"type":\n');
++      const observed = await output;
++      if (abortAfterFailure) abortController.abort();
++      release();
++      expect(await input).toBe(observed.error);
++      expect(closed).toBe(true);
++      expect(t.writes).toHaveLength(1);
++    },
++  );
++
++  it('keeps a valid live query open for subsequent controls', async () => {
++    const t = setup();
++    const query = makeQuery(t.transport);
++    await query.initialized;
++    t.stdout.push(line(init) + line(result));
++    expect((await query.next()).value).toEqual(init);
++    expect((await query.next()).value).toEqual(result);
++    expect(query.isClosed()).toBe(false);
++    const control = query.continueLastTurn();
++    await vi.waitFor(() => expect(t.writes).toHaveLength(2));
++    const request = JSON.parse(t.writes[1]!) as CLIControlRequest;
++    t.stdout.push(
++      line({
++        type: 'control_response',
++        response: {
++          subtype: 'success',
++          request_id: request.request_id,
++          response: { continued: true },
++        },
++      }),
++    );
++    expect(await control).toEqual({ continued: true });
++    expect(query.isClosed()).toBe(false);
++  });
++
++  it('preserves framing refusal when transport cleanup also fails', async () => {
++    const t = setup();
++    const close = t.transport.close.bind(t.transport);
++    const cleanupFailure = new Error('cleanup failed');
++    const closeSpy = vi
++      .spyOn(t.transport, 'close')
++      .mockImplementation(async () => {
++        await close();
++        throw cleanupFailure;
++      });
++    const query = makeQuery(t.transport);
++    await query.initialized;
++    const output = observe(query);
++    t.stdout.push('{"type":\n');
++    const observed = await output;
++    expect(observed.error).toEqual(
++      expect.objectContaining({
++        message: expect.stringContaining('invalid JSON'),
++      }),
++    );
++    expect(await rejection(query.continueLastTurn())).toBe(observed.error);
++    expect(query.isClosed()).toBe(true);
++    closeSpy.mockRestore();
++  });
++});
