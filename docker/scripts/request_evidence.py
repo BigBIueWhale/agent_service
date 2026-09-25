@@ -73,7 +73,7 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
     if len(requests) != len(served) or events[-1]["request_evidence"]["open_response_ids"] != []:
         raise ValueError("response recording is incomplete; inspect the provider and recorder")
     states = {request["request_id"]: {"journal": request["journal_id"], "actual": actual,
-              "sequence": 0, "http": False, "ended": False, "bytes": bytearray()}
+              "sequence": 0, "http": False, "ended": False, "outcome": False, "bytes": bytearray()}
               for request, actual in zip(requests, served)}
     if len(states) != len(requests):
         raise ValueError("response requests reuse an identity; inspect the original stream")
@@ -87,10 +87,12 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
         response = envelope["response"]
         responses.append(response)
         state = states.get(response["request_id"])
-        if response["request_id"] not in admitted or state is None or state["ended"] or state["journal"] != response["journal_id"] or response["sequence"] != state["sequence"] + 1:
+        if response["request_id"] not in admitted or state is None or state["outcome"] or state["journal"] != response["journal_id"] or response["sequence"] != state["sequence"] + 1:
             raise ValueError("response identity or sequence is incomplete")
         event = response["event"]
         actual = state["actual"]
+        if (event["kind"] == "outcome") != state["ended"]:
+            raise ValueError("response outcome must follow transport completion; inspect the original stream")
         if event["kind"] == "http":
             if state["http"] or state["sequence"] or event["status"] != actual["response_status"] or event["content_type"] != actual["response_content_type"]:
                 raise ValueError("recorded HTTP response differs from provider")
@@ -115,9 +117,13 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             else:
                 raise ValueError("served response was incorrectly called undispatched")
             state["ended"] = True
+        elif event["kind"] == "outcome":
+            if set(event) != {"kind", "status", "error"} or event["status"] not in ("completed", "failed", "cancelled") or not (event["error"] is None or isinstance(event["error"], str)) or (event["status"] == "completed" and event["error"] is not None) or (event["status"] == "failed" and not isinstance(event["error"], str)):
+                raise ValueError("invalid response processing outcome; inspect the original stream")
+            state["outcome"] = True
         else:
             raise ValueError("unknown response event; use the matching harness")
         state["sequence"] += 1
-    if any(not state["ended"] for state in states.values()):
+    if any(not state["outcome"] for state in states.values()):
         raise ValueError("response completion is missing; inspect the original stream")
     return responses

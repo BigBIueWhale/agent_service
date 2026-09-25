@@ -4567,7 +4567,7 @@ diff --git a/docs/design/shared-stream-gate.md b/docs/design/shared-stream-gate.
 +
 +Addendum 2 authorizes one first bank for items 1 and 2, followed by an implementation/lock commit pair. The first bank establishes the emitted-wire contract and the actual service gate. Configuration authorization, provider-operation settlement and transactional continuation remain later obligations; the first certificate must not claim them.
 +
-+The sole versioned JSON definition in `protocol/stream-contract-v3.json` owns the accepted top-level and nested event variants and their structural constraints. Build-time generators derive the Rust discriminators and TypeScript validators from that exact definition. The existing real CLI envelope remains the one production format. Initial `stream_event/goal_state` is retained. Unknown or malformed variants are refused with their bytes/evidence retained.
++The sole versioned JSON definition in `protocol/stream-contract-v4.json` owns the accepted top-level and nested event variants and their structural constraints. Build-time generators derive the Rust discriminators and TypeScript validators from that exact definition. The existing real CLI envelope remains the one production format. Initial `stream_event/goal_state` is retained. Unknown or malformed variants are refused with their bytes/evidence retained.
 +
 +The production Rust captured-stream owner is shared by the service and `event_certifier`. It owns initialization, identity, scope/tool ancestry, partial ordering, served accounting and terminal interpretation. The descriptor reader supplies exact LF-framed bytes and independently established capture facts. Native parsing retains exact JSON numbers and refuses duplicate keys and invalid Unicode before host conversion; reverting to the older lossy serde/jsonschema bridge is not part of the correction. A certificate describes conforming captured output, not provider reclamation, configuration authorization or semantic fidelity of a model result.
 +
@@ -4577,7 +4577,7 @@ diff --git a/docs/design/shared-stream-gate.md b/docs/design/shared-stream-gate.
 +
 +Qualification must include native contract and service tests, exact schema/generator/output identity checks, current source transformation and mandatory package test discovery, CLI and browser/declaration/package builds, and the complete final-image launcher/relay/capture/service composition. Preserve nonce/tool/recording/usage tests and the existing cancellation/capture/publication fault cases. A reused old image pass, expected rejection or component pass is not first-bank closure. Pin actual inputs/images, qualify the pair, then push. Future constrained compaction, retries, provider/recovery ownership, stored reasoning and metrics are not closed by this bank.
 +
-+Request evidence is a separate `model_request` event in stream format 3. The init
++Request evidence is a separate `model_request` event in stream format 4. The init
 +record declares its journal and first sequence, and root results declare the
 +cumulative request count for that output window. The engine prepares replay and
 +hash validation before committing state; refusal retains the observed bytes.
@@ -4585,12 +4585,12 @@ diff --git a/docs/design/shared-stream-gate.md b/docs/design/shared-stream-gate.
 +starts each invocation and committed compaction segment; subsequent records retain
 +an unchanged message prefix and carry the replacement suffix and exact envelope.
 +The native reader and SDK validate physical order and reconstructed UTF-8 hashes.
-+Canonical history uses `recordingVersion: 3` and its own structurally disjoint
++Canonical history uses `recordingVersion: 4` and its own structurally disjoint
 +request record. Full and indexed restoration validate evidence before projecting
 +history; `output/events.jsonl` remains byte-exact stdout evidence.
 +
 +Raw provider response evidence is a distinct `model_response` event tied to a
-+physical request. Ordered HTTP/body/end records retain the exact received bytes,
++physical request. Ordered HTTP/body/end/outcome records retain the exact received bytes and the separate SDK processing decision,
 +including parser failures, and declare EOF versus failed or cancelled prefixes.
 +A live turn checkpoint names its open responses; the service's complete artifact
 +certifier refuses open or missing completions. Canonical readers validate physical
@@ -43104,7 +43104,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
  }
  
  const goalSnapshot: GoalSnapshotV2 = {
-@@ -50,17 +77,129 @@
+@@ -50,17 +77,132 @@
    let stdoutWriteSpy: any;
  
    beforeEach(() => {
@@ -43175,6 +43175,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
 +      await (
 +        await response.capture(new Response(`literal response ${turn}`))
 +      ).text();
++      await response.finish({ status: 'completed', error: null });
 +      adapter.emitResult({
 +        usage: noRecordedUsage,
 +        terminateMode: AgentTerminateMode.GOAL,
@@ -43194,24 +43195,26 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
 +      'model_response',
 +      'model_response',
 +      'model_response',
++      'model_response',
 +      'result',
 +      'system',
 +      'model_request',
 +      'model_response',
 +      'model_response',
 +      'model_response',
++      'model_response',
 +      'result',
 +    ]);
 +    expect(records[0].request_evidence_origin).toEqual(
-+      records[6].request_evidence_origin,
++      records[7].request_evidence_origin,
 +    );
 +    expect(records[1].request.body).toEqual({ kind: 'full', json: bodies[0] });
-+    expect(records[7].request.body).toMatchObject({
++    expect(records[8].request.body).toMatchObject({
 +      kind: 'delta',
 +      retain_messages: 1,
 +    });
-+    expect(records[5].request_evidence.request_count).toBe(1);
-+    expect(records[11].request_evidence.request_count).toBe(2);
++    expect(records[6].request_evidence.request_count).toBe(1);
++    expect(records[13].request_evidence.request_count).toBe(2);
 +    const reader = new RuntimeContractAdmission();
 +    for (const record of records)
 +      expect(() => reader.admit(record)).not.toThrow();
@@ -43220,14 +43223,14 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
 +      for (const [index, record] of records.entries())
 +        if (index !== 1) omitted.admit(record);
 +    }).toThrow('response');
-+    for (const missing of [3, 4]) {
++    for (const missing of [3, 4, 5]) {
 +      const invalid = new RuntimeContractAdmission();
 +      expect(() => {
 +        for (const [index, record] of records.entries())
 +          if (index !== missing) invalid.admit(record);
 +      }).toThrow();
 +    }
-+    expect(records[5].request_evidence.open_response_ids).toEqual([]);
++    expect(records[6].request_evidence.open_response_ids).toEqual([]);
 +    adapter.closeRequestEvidence();
    });
  
@@ -43235,7 +43238,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
      beforeEach(() => {
        adapter = new StreamJsonOutputAdapter(mockConfig, true);
      });
-@@ -257,6 +396,35 @@
+@@ -257,6 +399,35 @@
          });
  
          expect(messageStartCall).toBeDefined();
@@ -43271,7 +43274,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
        });
  
        it('should emit content_block_start for new blocks', () => {
-@@ -669,33 +837,74 @@
+@@ -669,33 +840,74 @@
        expect(
          message.message.content.every((block) => block.type === 'tool_use'),
        ).toBe(true);
@@ -43349,7 +43352,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
      it('should ignore events after finalization', () => {
        adapter.finalizeAssistantMessage();
        const originalContent =
-@@ -881,13 +1090,14 @@
+@@ -881,13 +1093,14 @@
        adapter.finalizeAssistantMessage();
      });
  
@@ -43365,7 +43368,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
        });
  
        expect(stdoutWriteSpy).toHaveBeenCalled();
-@@ -902,13 +1112,14 @@
+@@ -902,13 +1115,14 @@
        expect(parsed.num_turns).toBe(1);
      });
  
@@ -43381,7 +43384,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          numTurns: 1,
        });
  
-@@ -920,13 +1131,14 @@
+@@ -920,13 +1134,14 @@
        expect(parsed.error?.message).toBe('Test error');
      });
  
@@ -43397,7 +43400,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          numTurns: 1,
        });
  
-@@ -934,21 +1146,29 @@
+@@ -934,21 +1149,29 @@
        const parsed = JSON.parse(output);
  
        expect(parsed.result).toBe('Custom summary');
@@ -43432,7 +43435,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          numTurns: 1,
        });
  
-@@ -959,13 +1179,14 @@
+@@ -959,13 +1182,14 @@
      });
  
      it('should handle result without assistant message', () => {
@@ -43448,7 +43451,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
        });
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
-@@ -1073,13 +1294,13 @@
+@@ -1073,13 +1297,13 @@
        const parsed = JSON.parse(output);
  
        const block = parsed.message.content[0];
@@ -43463,7 +43466,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
          {
            callId: 'tool-large',
            name: 'test_tool',
-@@ -1098,36 +1319,85 @@
+@@ -1098,36 +1322,85 @@
  
        const output = stdoutWriteSpy.mock.calls[0][0] as string;
        const parsed = JSON.parse(output);
@@ -43557,7 +43560,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts 
    describe('emitToolProgress', () => {
      const mockRequest = {
        callId: 'tool-call-1',
-@@ -1266,12 +1536,123 @@
+@@ -1266,12 +1539,123 @@
  
        // All events should share the same tool_use_id
        for (const event of events) {
@@ -45320,7 +45323,7 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 + * The stream contract's terminal table, read from its generated binding:
 + * every result subtype, whether it is an error, and the exit code a process
 + * that ended with it leaves. It is stated once, in
-+ * `protocol/stream-contract-v3.json`, and nowhere in this client.
++ * `protocol/stream-contract-v4.json`, and nowhere in this client.
 + */
 +type TerminalOutcomes = typeof TERMINAL_OUTCOMES;
 +
@@ -181653,9 +181656,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.tes
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-@@ -1,37 +1,58 @@
+@@ -1,37 +1,62 @@
 +import { AsyncLocalStorage } from 'node:async_hooks';
-+import type { ModelResponseRecorder } from '../model-response-evidence.js';
++import {
++  describeResponseFailure,
++  type ModelResponseOutcome,
++  type ModelResponseRecorder,
++} from '../model-response-evidence.js';
 +import type { RecordingClock } from '../recording-clock.js';
 +import { ResponseObservationError } from '../served-usage.js';
  /**
@@ -181720,7 +181727,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
 -  DEFAULT_STREAM_MAX_LIFETIME_MS,
 +  DECODE_FLOOR_TPS,
-@@ -39,14 +60,12 @@
+@@ -39,14 +64,12 @@
 -  QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
 -  QWEN_STREAM_MAX_LIFETIME_MS_ENV,
 +  STREAM_IDLE_TIMEOUT_MS,
@@ -181737,7 +181744,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    reportOpenAiChunk,
    reportOpenAiRequest,
    reportOpenAiResponse,
-@@ -81,7 +100,31 @@
+@@ -81,7 +104,31 @@
  }
  
  /**
@@ -181770,7 +181777,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   * `code: 'ETIMEDOUT'` makes `classifyRetryError` treat it as a retryable
   * transport error, identical to a real socket read timeout.
   */
-@@ -95,25 +138,23 @@
+@@ -95,25 +142,23 @@
    ) {
      super(
        `No stream activity for ${idleMs}ms after ${chunksReceived} chunks ` +
@@ -181807,7 +181814,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   */
  export class StreamLifetimeExceededError extends Error {
    readonly code = 'ETIMEDOUT' as const;
-@@ -124,11 +165,11 @@
+@@ -124,11 +169,11 @@
      readonly streamLifetimeMs: number,
    ) {
      super(
@@ -181824,7 +181831,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      );
      this.name = 'StreamLifetimeExceededError';
    }
-@@ -180,20 +221,17 @@
+@@ -180,20 +225,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -181849,7 +181856,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,75 +258,41 @@
+@@ -220,75 +262,41 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -181958,7 +181965,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  readonly requestTimeoutMs: number;
 +  /** The upstream wait the generation may take from its first chunk. */
 +  readonly generationMs: number;
-@@ -298,32 +302,29 @@
+@@ -298,32 +306,29 @@
 - * Wraps a streaming chunk source with two guards. The inactivity watchdog: if
 - * no chunk arrives for `idleMs`, `abortRequest()` is invoked (to abort the
 - * underlying request and free the socket) and the iterator throws — a user
@@ -182011,7 +182018,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const it = source[Symbol.asyncIterator]();
    // Monotonic, never `Date.now()`: an NTP step must not kill a healthy
    // generation on the next iteration (a forward jump) nor silently disable
-@@ -331,97 +332,109 @@
+@@ -331,97 +336,109 @@
    // guard exists to bound. The setTimeout this races is a monotonic clock
    // too, so the two agree.
    const streamStartedAt = performance.now();
@@ -182178,7 +182185,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    } finally {
      abortRequest();
      try {
-@@ -435,193 +448,308 @@
+@@ -435,196 +452,367 @@
  export type { PipelineConfig } from './types.js';
  
 +/** Every request this pipeline sends names the model it is for. */
@@ -182568,23 +182575,84 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
            telemetryAttempt,
 +          providerOutputContext.getStore(),
          );
++        let cancelled = false;
++        let started = false;
++        const failedOutcome = (cause: unknown): ModelResponseOutcome => ({
++          status: cancelled || parentSignal?.aborted ? 'cancelled' : 'failed',
++          error: describeResponseFailure(cause),
++        });
++        const finish = async (
++          outcome: ModelResponseOutcome,
++          failed?: { cause: unknown },
++        ) => {
++          perRequestAc.abort();
++          try {
++            await responseEvidence.finish(outcome);
++          } catch (recordingError) {
++            if (failed && failed.cause !== recordingError)
++              throw new AggregateError(
++                [failed.cause, recordingError],
++                'Generation and response recording failed',
++              );
++            throw recordingError;
++          }
++        };
          async function* drainThenCleanup(): AsyncGenerator<GenerateContentResponse> {
++          started = true;
 +          let failed: { cause: unknown } | undefined;
++          let outcome: ModelResponseOutcome = {
++            status: 'cancelled',
++            error: null,
++          };
            try {
              yield* innerStream;
++            outcome = {
++              status:
++                cancelled || parentSignal?.aborted ? 'cancelled' : 'completed',
++              error: null,
++            };
 +          } catch (cause) {
 +            failed = { cause };
++            outcome = failedOutcome(cause);
 +            throw cause;
            } finally {
-             perRequestAc.abort();
-+            await responseEvidence.close(failed);
+-            perRequestAc.abort();
++            await finish(outcome, failed);
            }
          }
-         return drainThenCleanup();
+-        return drainThenCleanup();
++        const result = drainThenCleanup();
++        const owned: AsyncGenerator<GenerateContentResponse> = {
++          [Symbol.asyncIterator]() {
++            return owned;
++          },
++          next: (value?: unknown) => result.next(value),
++          return: async (value: void) => {
++            cancelled = true;
++            perRequestAc.abort();
++            const unstarted = !started;
++            const returned = await result.return(value);
++            if (unstarted) await finish({ status: 'cancelled', error: null });
++            return returned;
++          },
++          throw: async (cause: unknown) => {
++            perRequestAc.abort();
++            const unstarted = !started;
++            try {
++              return await result.throw(cause);
++            } finally {
++              if (unstarted) await finish(failedOutcome(cause), { cause });
++            }
++          },
++        };
++        return owned;
        },
      );
    }
-@@ -635,192 +763,97 @@
+ 
+   /**
+    * Stage 2: Process OpenAI stream with conversion and logging
+@@ -635,192 +823,97 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -182849,7 +182917,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +862,18 @@
+@@ -829,16 +922,18 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -182875,7 +182943,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -845,9 +880,9 @@
+@@ -845,9 +940,9 @@
            isLifetime
 -            ? 'OpenAI stream lifetime cap exceeded'
 +            ? 'OpenAI stream generation bound exceeded'
@@ -182887,7 +182955,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              // the log reconcile the same way the error message does.
              wallClockMs: error.streamLifetimeMs,
              ...(isLifetime
-@@ -858,100 +893,19 @@
+@@ -858,100 +953,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -182989,7 +183057,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -991,13 +945,12 @@
+@@ -991,13 +1005,12 @@
        // classifier's respond_in_schema) can force the model to emit a tool
        // call instead of free-texting. Without this, thinking-heavy models
        // may consume the tiny output budget on reasoning and skip the tool.
@@ -183008,7 +183076,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        }
      }
  
-@@ -1029,13 +982,13 @@
+@@ -1029,13 +1042,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -183023,7 +183091,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +1000,14 @@
+@@ -1047,15 +1060,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -183041,7 +183109,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1125,20 @@
+@@ -1173,12 +1185,20 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -183062,7 +183130,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,39 +1278,76 @@
+@@ -1318,39 +1338,82 @@
    }
  
    /**
@@ -183127,11 +183195,17 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +        const result = await responseAttemptContext.run(responseEvidence, () =>
 +          executor(openaiRequest!, context, telemetryAttempt, responseEvidence),
 +        );
-+        if (!isStreaming) await responseEvidence.close();
++        if (!isStreaming)
++          await responseEvidence.finish({ status: 'completed', error: null });
 +        return result;
 +      } catch (cause) {
 +        try {
-+          await responseEvidence.close({ cause });
++          await responseEvidence.finish({
++            status: request.config?.abortSignal?.aborted
++              ? 'cancelled'
++              : 'failed',
++            error: describeResponseFailure(cause),
++          });
 +        } catch (recordingError) {
 +          if (recordingError !== cause)
 +            throw new AggregateError(
@@ -183147,7 +183221,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        return await executeAttempt();
      } catch (error) {
        const model = context.model.toLowerCase();
-@@ -1400,13 +1397,16 @@
+@@ -1400,13 +1463,16 @@
     * Create request context with common properties
     */
    private createRequestContext(
@@ -183165,7 +183239,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1414,21 @@
+@@ -1414,15 +1480,21 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -207042,7 +207116,7 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
      // Model rejects when the signal fires — mirrors what a real provider's
      // fetch layer does when the AbortController aborts. Previously this
      // test only checked that `signal.aborted` flipped; but what we actually
-@@ -672,44 +641,246 @@
+@@ -672,44 +641,252 @@
            signal.addEventListener('abort', () => {
              reject(new Error('aborted'));
            });
@@ -207108,10 +207182,10 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
 +            else
 +              signal.addEventListener('abort', () => resolve(), { once: true });
 +          });
-+          await response.close(
-+            { cause: new Error('title aborted') },
-+            'cancelled',
-+          );
++          await response.finish({
++            status: 'cancelled',
++            error: 'Error: title aborted',
++          });
 +          return { ok: false };
 +        },
 +      );
@@ -207160,7 +207234,13 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
 +      replay.finish();
 +      expect(records.at(-1)).toMatchObject({
 +        type: 'model_response',
-+        modelResponse: { event: { kind: 'end', termination: 'cancelled' } },
++        modelResponse: {
++          event: {
++            kind: 'outcome',
++            status: 'cancelled',
++            error: 'Error: title aborted',
++          },
++        },
 +      });
 +      expect(output.summary().open_response_ids).toEqual([]);
 +      expect(mockLease.release).toHaveBeenCalledTimes(
@@ -207193,7 +207273,7 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
 +          'title-segment',
 +          signal,
 +        );
-+        await response.close();
++        await response.finish({ status: 'completed', error: null });
 +        return { ok: false };
 +      },
 +    );
@@ -207250,7 +207330,7 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
 +          'title-prompt',
 +          'title-segment',
 +        );
-+        await response.close();
++        await response.finish({ status: 'completed', error: null });
 +        return { ok: false };
 +      });
 +      await chatRecordingService.recordAssistantTurn({
@@ -207293,7 +207373,7 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
      await flushMicrotasks();
  
      // User renames while the title LLM call is still pending.
-@@ -732,13 +903,15 @@
+@@ -732,13 +909,15 @@
        () =>
          new Promise((resolve) => {
            resolveLlm = resolve;
@@ -207310,7 +207390,7 @@ diff --git a/packages/core/src/services/chatRecordingService.autoTitle.test.ts b
      await flushMicrotasks();
  
      await expect(
-@@ -774,42 +947,51 @@
+@@ -774,42 +953,51 @@
      const explicit = chatRecordingService.recordCustomTitle(
        'Pending Explicit',
        'auto',
@@ -293400,7 +293480,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +  type ModelRequestEvidence,
 +} from '../core/model-request-evidence.js';
 +
-+export const CHAT_RECORDING_VERSION = 3;
++export const CHAT_RECORDING_VERSION = 4;
  
  export type TranscriptRecordType =
    | 'user'
@@ -314354,7 +314434,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,338 @@
+@@ -0,0 +1,340 @@
 +import { describe, it, expect } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import {
@@ -314573,10 +314653,12 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +    controller.abort(failure);
 +    const refused = expect(cancelled).rejects.toBe(failure);
 +    release();
-+    await (await first).close();
++    await (await first).finish({ status: 'cancelled', error: null });
 +    await refused;
 +    await journal.flush();
-+    await (await journal.capture(serialize([]), 'root', 'next', 's')).close();
++    await (
++      await journal.capture(serialize([]), 'root', 'next', 's')
++    ).finish({ status: 'cancelled', error: null });
 +    expect(
 +      records.map((record) => [record.sequence, record.prompt_id]),
 +    ).toEqual([
@@ -314626,9 +314708,9 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +      throw new Error('detached renderer');
 +    });
 +    const first = await f.journal.capture(serialize([]), 'root', 'p', 's');
-+    await first.close();
++    await first.finish({ status: 'cancelled', error: null });
 +    const next = await f.journal.capture(serialize([]), 'root', 'p', 's');
-+    await next.close();
++    await next.finish({ status: 'cancelled', error: null });
 +    expect(f.records).toHaveLength(2);
 +  });
 +  it('starts a full body when a chat advances its compaction segment', async () => {
@@ -315834,12 +315916,13 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,283 @@
+@@ -0,0 +1,378 @@
 +import { createHash } from 'node:crypto';
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
 +import {
 +  ModelResponseRecorder,
++  describeResponseFailure,
 +  type ModelResponseEvidence,
 +} from './model-response-evidence.js';
 +
@@ -315917,13 +316000,21 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +        error = cause;
 +      }
 +      expect(error).toBeInstanceOf(SyntaxError);
-+      await f.recorder.close({ cause: error });
++      await f.recorder.finish({
++        status: 'failed',
++        error: describeResponseFailure(error),
++      });
 +      expect(raw(f.records)).toEqual(bytes);
 +      expect(f.records[0].event).toMatchObject({ kind: 'http', status: 200 });
-+      expect(f.records.at(-1)?.event).toMatchObject({
++      expect(f.records.at(-2)?.event).toMatchObject({
 +        kind: 'end',
 +        body_bytes: bytes.length,
 +        body_sha256: createHash('sha256').update(bytes).digest('hex'),
++      });
++      expect(f.records.at(-1)?.event).toEqual({
++        kind: 'outcome',
++        status: 'failed',
++        error: describeResponseFailure(error),
 +      });
 +      expect(f.records.map((record) => record.sequence)).toEqual(
 +        f.records.map((_, index) => index + 1),
@@ -315951,9 +316042,9 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    await expect(
 +      client.chat.completions.create({ model: 'fixture', messages: [] }),
 +    ).rejects.toThrow('literal backend refusal');
-+    await f.recorder.close();
++    await f.recorder.finish({ status: 'failed', error: 'server refusal' });
 +    expect(raw(f.records).toString()).toBe(body);
-+    expect(f.records.at(-1)?.event).toMatchObject({
++    expect(f.records.at(-2)?.event).toMatchObject({
 +      kind: 'end',
 +      termination: 'eof',
 +    });
@@ -316047,6 +316138,42 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    });
 +  });
 +
++  it('preserves transport cancellation and outcome persistence failures together', async () => {
++    const cleanup = new Error('transport cancellation failed');
++    const persistence = new Error('outcome persistence failed');
++    const records: ModelResponseEvidence[] = [];
++    const recorder = new ModelResponseRecorder('j', 'r', async (record) => {
++      if (record.event.kind === 'outcome') throw persistence;
++      records.push(record);
++    });
++    recorder.dispatched();
++    await recorder.capture(
++      new Response(
++        new ReadableStream({
++          cancel() {
++            throw cleanup;
++          },
++        }),
++      ),
++    );
++    let error: unknown;
++    try {
++      await recorder.finish({ status: 'cancelled', error: null });
++    } catch (cause) {
++      error = cause;
++    }
++    expect(error).toBeInstanceOf(AggregateError);
++    expect((error as AggregateError).errors).toEqual([cleanup, persistence]);
++    expect(records.at(-1)?.event).toMatchObject({
++      kind: 'end',
++      termination: 'failed',
++      error: 'Error: transport cancellation failed',
++    });
++    await expect(
++      recorder.finish({ status: 'cancelled', error: null }),
++    ).rejects.toBe(error);
++  });
++
 +  it('refuses parser delivery after recording failure and retains falsy failures', async () => {
 +    const recorder = new ModelResponseRecorder('j', 'r', async (record) => {
 +      if (record.event.kind === 'body') throw false;
@@ -316056,7 +316183,9 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      new Response('must stay undelivered'),
 +    );
 +    await expect(response.text()).rejects.toBe(false);
-+    await expect(recorder.close()).rejects.toBe(false);
++    await expect(
++      recorder.finish({ status: 'failed', error: 'false' }),
++    ).rejects.toBe(false);
 +  });
 +});
 +
@@ -316070,6 +316199,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    await (
 +      await f.recorder.capture(new Response('data: {broken שלום\n\n'))
 +    ).text();
++    await f.recorder.finish({ status: 'completed', error: null });
 +    const replay = new ModelResponseReplay();
 +    replay.begin('journal', 'request');
 +    for (const record of f.records.slice(0, -1)) replay.observe(record);
@@ -316079,6 +316209,48 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    expect(replay.openRequestIds()).toEqual([]);
 +    expect(() => replay.finish()).not.toThrow();
 +    expect(() => replay.observe(f.records.at(-1))).toThrow();
++  });
++  it.each([
++    'early',
++    'duplicate',
++    'late_body',
++    'unknown_status',
++    'missing_error',
++    'completed_error',
++    'failed_null',
++  ])('refuses invalid processing outcome: %s', async (defect) => {
++    const { ModelResponseReplay } = await import(
++      './model-response-evidence.js'
++    );
++    const f = fixture();
++    f.recorder.dispatched();
++    await (await f.recorder.capture(new Response('exact'))).text();
++    await f.recorder.finish({ status: 'completed', error: null });
++    const records = structuredClone(f.records);
++    const last = records.at(-1)!;
++    if (defect === 'early') records.splice(2, 1);
++    if (defect === 'duplicate') records.push(structuredClone(last));
++    if (defect === 'late_body')
++      records.splice(3, 0, structuredClone(records[1]));
++    if (last.event.kind === 'outcome') {
++      if (defect === 'unknown_status')
++        Object.assign(last.event, { status: 'unknown' });
++      if (defect === 'missing_error')
++        Reflect.deleteProperty(last.event, 'error');
++      if (defect === 'completed_error')
++        Object.assign(last.event, { error: 'failure' });
++      if (defect === 'failed_null')
++        Object.assign(last.event, { status: 'failed' });
++    }
++    records.forEach((record, index) =>
++      Object.assign(record, { sequence: index + 1 }),
++    );
++    const replay = new ModelResponseReplay();
++    replay.begin('journal', 'request');
++    expect(() => {
++      for (const record of records) replay.observe(record);
++      replay.finish();
++    }).toThrow('Invalid model response');
 +  });
 +  it.each([
 +    'unknown',
@@ -316096,6 +316268,11 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    const f = fixture();
 +    f.recorder.dispatched();
 +    await (await f.recorder.capture(new Response('exact bytes'))).text();
++    await f.recorder.finish({ status: 'completed', error: null });
++    const valid = new ModelResponseReplay();
++    valid.begin('journal', 'request');
++    f.records.forEach((record) => valid.observe(record));
++    valid.finish();
 +    const records = structuredClone(f.records) as unknown as Array<{
 +      journal_id: string;
 +      sequence: number;
@@ -316107,8 +316284,8 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    if (defect === 'gap') records[1].event['offset'] = 1;
 +    if (defect === 'base64') records[1].event['base64'] += '\n';
 +    if (defect === 'hash')
-+      records.at(-1)!.event['body_sha256'] = '0'.repeat(64);
-+    if (defect === 'size') records.at(-1)!.event['body_bytes'] = 0;
++      records.at(-2)!.event['body_sha256'] = '0'.repeat(64);
++    if (defect === 'size') records.at(-2)!.event['body_bytes'] = 0;
 +    if (defect === 'headers') records.splice(0, 1);
 +    const replay = new ModelResponseReplay();
 +    replay.begin('journal', 'request');
@@ -316121,7 +316298,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,433 @@
+@@ -0,0 +1,500 @@
 +import { createHash } from 'node:crypto';
 +import { RecordingClock } from './recording-clock.js';
 +
@@ -316130,6 +316307,11 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  | 'cancelled'
 +  | 'failed'
 +  | 'not_dispatched';
++
++export type ModelResponseOutcome =
++  | { readonly status: 'completed'; readonly error: null }
++  | { readonly status: 'failed'; readonly error: string }
++  | { readonly status: 'cancelled'; readonly error: string | null };
 +
 +export interface ModelResponseEvidence {
 +  readonly journal_id: string;
@@ -316152,7 +316334,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        readonly body_bytes: number;
 +        readonly body_sha256: string;
 +        readonly error: string | null;
-+      };
++      }
++    | ({ readonly kind: 'outcome' } & ModelResponseOutcome);
 +}
 +
 +// A persistence quantum bounds each encoded response record and temporary copy.
@@ -316180,6 +316363,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  private readonly digest = createHash('sha256');
 +  private tail: Promise<void> = Promise.resolve();
 +  private refusal: { cause: unknown } | undefined;
++  private outcome: Promise<void> | undefined;
 +  private cancelBody: (() => Promise<void>) | undefined;
 +
 +  constructor(
@@ -316355,7 +316539,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          return pull;
 +        },
 +        cancel: async (reason) => {
-+          await this.close(
++          await this.closeBody(
 +            reason === undefined ? undefined : { cause: reason },
 +            'cancelled',
 +          );
@@ -316374,7 +316558,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  }
 +
 +  /** Settle an unconsumed response on parser failure, cancellation or preflight refusal. */
-+  async close(
++  private async closeBody(
 +    failed?: { cause: unknown },
 +    termination: 'failed' | 'cancelled' = 'failed',
 +  ): Promise<void> {
@@ -316405,6 +316589,46 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      throw recordingError;
 +    }
 +    if (cancellation) throw cancellation.cause;
++  }
++
++  /** The executor owns this decision; HTTP EOF cannot make it for the SDK. */
++  finish(outcome: ModelResponseOutcome): Promise<void> {
++    this.outcome ??= (async () => {
++      let cleanup: { cause: unknown } | undefined;
++      try {
++        await this.closeBody(
++          outcome.error === null ? undefined : { cause: outcome.error },
++          outcome.status === 'cancelled' ? 'cancelled' : 'failed',
++        );
++      } catch (cause) {
++        cleanup = { cause };
++      }
++      try {
++        await this.enqueue(() =>
++          this.write({
++            kind: 'outcome',
++            ...(cleanup
++              ? {
++                  status: 'failed' as const,
++                  error:
++                    outcome.error === null
++                      ? describeResponseFailure(cleanup.cause)
++                      : `${outcome.error}\nResponse cleanup: ${describeResponseFailure(cleanup.cause)}`,
++                }
++              : outcome),
++          }),
++        );
++      } catch (recordingError) {
++        if (cleanup && cleanup.cause !== recordingError)
++          throw new AggregateError(
++            [cleanup.cause, recordingError],
++            'Response cleanup and outcome recording failed',
++          );
++        throw recordingError;
++      }
++      if (cleanup) throw cleanup.cause;
++    })();
++    return this.outcome;
 +  }
 +}
 +
@@ -316478,6 +316702,18 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      )
 +        return failure('invalid response completion');
 +      break;
++    case 'outcome':
++      if (
++        !keys(event, ['kind', 'status', 'error']) ||
++        !['completed', 'failed', 'cancelled'].includes(
++          String(event['status']),
++        ) ||
++        !(event['error'] === null || typeof event['error'] === 'string') ||
++        (event['status'] === 'completed' && event['error'] !== null) ||
++        (event['status'] === 'failed' && typeof event['error'] !== 'string')
++      )
++        return failure('invalid response processing outcome');
++      break;
 +    default:
 +      return failure('unknown response event');
 +  }
@@ -316494,7 +316730,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      sequence: number;
 +      http: boolean;
 +      bytes: number;
-+      digest: ReturnType<typeof createHash>;
++      digest: ReturnType<typeof createHash> | null;
 +    }
 +  >();
 +  begin(journalId: string, requestId: string): void {
@@ -316520,6 +316756,15 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        'response is missing, repeated, reordered or belongs to another request',
 +      );
 +    const event = record.event;
++    if (event.kind === 'outcome') {
++      if (state.digest !== null)
++        failure('response outcome precedes transport completion');
++      this.requests.delete(record.request_id);
++      this.ended.add(record.request_id);
++      return;
++    }
++    if (state.digest === null)
++      failure('transport event follows transport completion');
 +    if (event.kind === 'http') {
 +      if (state.http || state.sequence !== 0)
 +        failure('repeated or late HTTP headers');
@@ -316542,8 +316787,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        failure(
 +          'response termination does not account for the exact observed bytes',
 +        );
-+      this.requests.delete(record.request_id);
-+      this.ended.add(record.request_id);
++      state.digest = null;
 +    }
 +    state.sequence++;
 +  }
@@ -316558,7 +316802,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,264 @@
+@@ -0,0 +1,401 @@
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
 +import type { Config } from '../../config/config.js';
@@ -316607,6 +316851,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +    baseUrl: 'http://fixture.invalid/v1',
 +    timeout: 1000,
 +    samplingParams: { max_tokens: 1000 },
++    strictToolCalling: true,
 +  };
 +  const config = {
 +    getSessionId: () => 'session',
@@ -316664,6 +316909,137 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +afterEach(() => vi.useRealTimers());
 +
 +describe('pipeline raw response ownership', () => {
++  it.each([false, true])(
++    'settles an iterator returned early, afterRead=%s',
++    async (afterRead) => {
++      const cancel = vi.fn();
++      let sent = false;
++      const f = fixture(async () =>
++        sse(
++          new ReadableStream<Uint8Array>(
++            {
++              pull(controller) {
++                if (!sent) {
++                  sent = true;
++                  controller.enqueue(Buffer.from(wire('partial')));
++                }
++              },
++              cancel,
++            },
++            { highWaterMark: 0 },
++          ),
++        ),
++      );
++      const stream = await f.pipeline.executeStream(f.request, 'early');
++      if (afterRead) expect((await stream.next()).done).toBe(false);
++      await stream.return(undefined);
++      expect(cancel).toHaveBeenCalledTimes(1);
++      expect(f.responses.at(-1)?.event).toEqual({
++        kind: 'outcome',
++        status: 'cancelled',
++        error: null,
++      });
++      validate(f);
++    },
++  );
++
++  it.each([false, true])(
++    'preserves provider and outcome persistence failures, streaming=%s',
++    async (streaming) => {
++      const refused = new Error('outcome disk refusal');
++      const f = fixture(
++        async () =>
++          streaming
++            ? sse('data: {broken\n\n')
++            : new Response('{broken', {
++                headers: { 'content-type': 'application/json' },
++              }),
++        async (record) => {
++          if (record.event.kind === 'outcome') throw refused;
++        },
++      );
++      let error: unknown;
++      try {
++        if (streaming)
++          for await (const _ of await f.pipeline.executeStream(
++            f.request,
++            'persist',
++          )) {
++            /* drain */
++          }
++        else await f.pipeline.execute(f.request, 'persist');
++      } catch (cause) {
++        error = cause;
++      }
++      expect(error).toBeInstanceOf(AggregateError);
++      const failures = (error as AggregateError).errors;
++      expect(failures[0]).toBeInstanceOf(SyntaxError);
++      expect(failures[1]).toBe(refused);
++      expect(() => validate(f)).toThrow('completion');
++      await expect(f.pipeline.execute(f.request, 'later')).rejects.toBe(
++        refused,
++      );
++      expect(f.requests).toHaveLength(1);
++    },
++  );
++
++  it('settles a stream thrown into before its first read', async () => {
++    const f = fixture(async () => sse(wire('unread')));
++    const stream = await f.pipeline.executeStream(f.request, 'throw');
++    const cause = new Error('caller refusal');
++    await expect(stream.throw(cause)).rejects.toBe(cause);
++    expect(f.responses.at(-1)?.event).toEqual({
++      kind: 'outcome',
++      status: 'failed',
++      error: 'Error: caller refusal',
++    });
++    validate(f);
++  });
++
++  it('records conversion failure after successful transport EOF', async () => {
++    const body = JSON.stringify({
++      id: 'reply',
++      object: 'chat.completion',
++      model: 'test',
++      created: 0,
++      choices: [
++        {
++          index: 0,
++          message: {
++            role: 'assistant',
++            content: null,
++            tool_calls: [
++              {
++                id: 'bad',
++                type: 'function',
++                function: { name: 'read_file', arguments: '{broken' },
++              },
++            ],
++          },
++          finish_reason: 'tool_calls',
++        },
++      ],
++      usage: { prompt_tokens: 2, completion_tokens: 1, total_tokens: 3 },
++    });
++    const f = fixture(
++      async () =>
++        new Response(body, { headers: { 'content-type': 'application/json' } }),
++    );
++    await expect(f.pipeline.execute(f.request, 'conversion')).rejects.toThrow();
++    expect(raw(f.responses).toString()).toBe(body);
++    expect(f.responses.at(-2)?.event).toMatchObject({
++      kind: 'end',
++      termination: 'eof',
++      error: null,
++    });
++    expect(f.responses.at(-1)?.event).toMatchObject({
++      kind: 'outcome',
++      status: 'failed',
++      error: expect.any(String),
++    });
++    validate(f);
++  });
++
 +  it.each([undefined, new Error('caller cancelled')])(
 +    'refuses a cancelled caller before journal admission and provider dispatch (%s)',
 +    async (reason) => {
@@ -316714,6 +317090,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +      await expect(run()).rejects.toThrow();
 +      expect(f.requests).toHaveLength(1);
 +      expect(raw(f.responses)).toEqual(bytes);
++      expect(f.responses.at(-1)?.event).toMatchObject({
++        kind: 'outcome',
++        status: 'failed',
++        error: expect.any(String),
++      });
 +      validate(f);
 +    },
 +  );
@@ -316814,7 +317195,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +    const f = fixture(fetch);
 +    await expect(f.pipeline.execute(f.request, 'p')).rejects.toThrow();
 +    expect(fetch).toHaveBeenCalledTimes(1);
-+    expect(f.responses).toHaveLength(1);
++    expect(f.responses).toHaveLength(2);
 +    expect(f.responses[0].event).toMatchObject({
 +      kind: 'end',
 +      termination: 'failed',

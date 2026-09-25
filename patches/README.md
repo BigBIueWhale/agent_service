@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `910101d7b47a20c7d9f2a8e9b576d165a26305a2da9c9ccd96dd41bf0b1eabf2`
+- Review-diff SHA-256: `8d6efa5efa2467d347bf98c3ec13bfcc925e5e258615d585c4491ba66eeb3562`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `c7158c801a525bfb1d98e30183aad419b6b5df143ba23e94ab8a286ae5455bec`
+- Transformer-manifest SHA-256: `ebfa780e1474f67d50babd300b46949a5e4140667cb219094b5f9cf22df9e997`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -339,7 +339,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 3`, independently
+Every physical canonical chat record carries `recordingVersion: 4`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -369,11 +369,11 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream format 3 exposes these same request records, declares the journal origin
+Stream format 4 exposes these same request records, declares the journal origin
 in `system/init`, and accounts for the output window at every root result. Each
 checkpoint lists its open response identities so an ordinary turn can finish
 while a background child remains active. The native complete-recording certifier
-requires that list to be empty and verifies that every request's response ended. Native
+requires that list to be empty and verifies that every request's response has both a transport end and a processing outcome. Native
 certification and SDK admission replay message deltas, verify byte lengths and
 hashes, and refuse missing, repeated, reordered, foreign, or unknown evidence.
 The native terminal check also refuses fewer requests than billed model turns.
@@ -398,9 +398,12 @@ before status, JSON or SSE parsing, preserving its configured transport and prox
 The bytes are the fetch entity body after transport content decoding (such as
 gzip), before any SDK text or event decoding.
 Each `model_response` record names its physical request and records HTTP status
-and content type, ordered base64 body bytes, or a terminal with the exact observed
-byte count and SHA-256. EOF, failed read, cancellation and an undispatched intent
-are distinct. Arbitrary malformed UTF-8 and JSON survive as bytes. Capture uses
+and content type, ordered base64 body bytes, a transport end with the exact
+observed byte count and SHA-256, or a processing outcome. EOF, failed read,
+cancellation and an undispatched intent are distinct. SDK and conversion
+completion, failure or cancellation are recorded after the transport end, so an
+EOF cannot hide a later parser failure. Arbitrary malformed UTF-8 and JSON survive
+as bytes. Capture uses
 one pull-through stream; it durably writes each bounded record before parser
 delivery. The record quantum never truncates a response. Active stdout renderers
 drain each admitted record before generation proceeds. Detached renderers release
@@ -408,7 +411,7 @@ their window without poisoning the canonical writer. Recorder waits are excluded
 from the request's start, idle and generation clocks; configured network limits
 and normal-session behavior remain in force.
 
-Canonical format 3 structurally excludes response evidence from messages,
+Canonical format 4 structurally excludes response evidence from messages,
 conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix

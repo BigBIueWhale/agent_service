@@ -734,12 +734,14 @@ print(json.dumps(found))
         self.certified_events = events
         records = [json.loads(line) for line in events.splitlines()]
         require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
-        require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        require(all(response["event"]["status"] == "completed" for response in responses if response["event"]["kind"] == "outcome"),
+                "ordinary provider responses did not complete decoding; inspect processing outcomes")
         require(all("recordingVersion" not in record for record in records),
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v3.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v4.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")
@@ -1277,7 +1279,9 @@ print(json.dumps(found))
                 "the refused generation's observed prefix was lost")
         records = [json.loads(line) for line in events.splitlines()]
         require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
-        require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        require([response["event"]["status"] for response in responses if response["event"]["kind"] == "outcome"] == ["failed"],
+                "provider refusal lost its processing failure; inspect the pipeline outcome")
         terminal = records[-1]
         require(terminal["type"] == "result" and terminal["subtype"] == "error_during_execution" and
                 terminal["usage"] == {"requests": 1, "usageReports": 0, "unfinalizedRequests": 0,

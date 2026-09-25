@@ -55,7 +55,7 @@ struct ResponseState {
     sequence: u64,
     http: bool,
     bytes: u64,
-    digest: Sha256,
+    digest: Option<Sha256>,
 }
 pub(crate) struct ResponseAdmission {
     request_id: String,
@@ -233,8 +233,13 @@ impl ModelRequests {
         self.first_sequence.get_or_insert(admission.sequence);
         self.count += 1;
         self.ids.insert(admission.body.id.clone());
-        self.responses
-            .insert(admission.body.id.clone(), ResponseState::default());
+        self.responses.insert(
+            admission.body.id.clone(),
+            ResponseState {
+                digest: Some(Sha256::default()),
+                ..ResponseState::default()
+            },
+        );
         self.scopes.insert(admission.scope, admission.body);
     }
 
@@ -264,7 +269,13 @@ impl ModelRequests {
         }
         let event = field(response, "event", line)?;
         let mut ended = false;
-        match text(event, "kind", line)? {
+        let kind = text(event, "kind", line)?;
+        if (kind == "outcome") != state.digest.is_none() {
+            return Err(refusal(
+                "response processing outcome must follow transport completion",
+            ));
+        }
+        match kind {
             "http" => {
                 if state.http || state.sequence != 0 {
                     return Err(refusal("response repeats HTTP headers"));
@@ -294,7 +305,7 @@ impl ModelRequests {
                     .checked_add(bytes.len() as u64)
                     .filter(|bytes| *bytes <= SAFE_INTEGER)
                     .ok_or_else(|| refusal("response exceeds exact byte accounting"))?;
-                state.digest.update(bytes);
+                state.digest.as_mut().unwrap().update(bytes);
             }
             "end" => {
                 let termination = text(event, "termination", line)?;
@@ -308,6 +319,8 @@ impl ModelRequests {
                         )?
                     || state
                         .digest
+                        .as_ref()
+                        .unwrap()
                         .clone()
                         .finalize()
                         .iter()
@@ -319,6 +332,9 @@ impl ModelRequests {
                         "response completion does not account for the exact observed bytes",
                     ));
                 }
+                state.digest = None;
+            }
+            "outcome" => {
                 ended = true;
             }
             _ => return Err(refusal("response uses an unknown event")),
@@ -429,7 +445,14 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
+                json!({"kind":"outcome","status":"completed","error":null}),
             ].into_iter().enumerate() {
+                if id == "b" && event["kind"] == "outcome" {
+                    assert!(state.validate_summary(terminal.root(), 3, 2).is_err());
+                    let late_body = json!({"response":{"journal_id":"j","request_id":id,"sequence":sequence+1,"event":{"kind":"body","offset":2,"base64":"e30="}}}).to_string();
+                    let doc = Document::decode(late_body.as_bytes(), LIMITS).unwrap();
+                    assert!(state.plan_response(doc.root(), 1).is_err());
+                }
                 let record = json!({"response":{"journal_id":"j","request_id":id,"sequence":sequence+1,"event":event}}).to_string();
                 let doc = Document::decode(record.as_bytes(),LIMITS).unwrap();
                 let admission = state.plan_response(doc.root(),1).unwrap();

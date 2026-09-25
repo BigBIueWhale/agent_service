@@ -10,7 +10,7 @@ mod number;
 mod schema_compiler;
 
 fn main() {
-    let path = "../stream-contract-v3.json";
+    let path = "../stream-contract-v4.json";
     println!("cargo:rerun-if-changed={path}");
     let bytes = fs::read(path).expect("read the shared stream contract");
     let compiled =

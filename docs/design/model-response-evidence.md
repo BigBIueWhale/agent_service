@@ -8,10 +8,13 @@ provider's existing fetch implementation, proxy and retry ownership intact.
 
 Each response has a request identity and consecutive local sequence. A header
 record precedes all body records. Body records contain canonical base64 and an
-exact byte offset. The terminal declares EOF, cancellation, failure or an
+exact byte offset. The transport end declares EOF, cancellation, failure or an
 undispatched intent, with the complete observed byte count and SHA-256. EOF
 establishes transport completion, never conversation acceptance. A cancelled or
-failed response establishes only its observed prefix.
+failed response establishes only its observed prefix. A separate processing
+outcome records SDK/converter completion, failure, or cancellation, including
+failures that occur after transport EOF. Neither fact establishes acceptance
+into conversation history.
 
 One pull-through stream writes before delivering bytes to the SDK. A persistence
 quantum bounds each temporary encoded record, without a total response limit.
@@ -32,12 +35,12 @@ evidence remains mandatory even if cancellation precedes network dispatch.
 The shared proxy error redactor constructs native `DOMException` clones so abort
 classification and diagnostic accessors remain valid after redaction.
 
-Stream and canonical formats are version 3. Response evidence is structurally
+Stream and canonical formats are version 4. Response evidence is structurally
 separate from conversation messages and cannot advance the parent chain. Readers
 validate physical ordering, hashes and ownership before projecting a branch.
 Live checkpoints list unfinished responses; this supports background agents in
 ordinary multi-turn sessions. Complete native certification additionally requires
-all responses to have ended. The two fake-provider harnesses compare captured
+all responses to have both a transport end and a processing outcome. The two fake-provider harnesses compare captured
 request and response bytes with those actually received and served.
 
 Source tests cover malformed wire, Unicode, server errors, cancellation, large

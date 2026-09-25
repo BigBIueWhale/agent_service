@@ -8080,7 +8080,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 3;",
+            "export const CHAT_RECORDING_VERSION = 4;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8110,7 +8110,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, pipeline, (
         "client.fetchWithTimeout.bind(client)", "attempt.capture(await fetchWithTimeout(...args))",
         "await createPromise.withResponse()", "clock.subscribe(rearm)",
-        "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.close(failed)",
+        "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.finish(outcome)",
         "request.generationContext.requestSegmentId,\n          request.config?.abortSignal,",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
@@ -8118,6 +8118,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "requireModelResponseEvidence", "body_sha256", "Buffer.from(bytes).toString('base64')",
         "await this.body(bytes)", "controller.enqueue(bytes)",
         "this.clock.persist", "openRequestIds()", "terminal omits a response completion",
+        "finish(outcome: ModelResponseOutcome)", "response outcome precedes transport completion",
+        "transport event follows transport completion", "state.digest = null",
     ), label=label)
     _require_all(state, core + "core/model-request-evidence.ts", (
         "export class ModelEvidenceReplay", "open_response_ids", "await this.persistResponse(evidence)",

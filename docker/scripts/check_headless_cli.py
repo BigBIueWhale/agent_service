@@ -182,6 +182,8 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     events = [json.loads(line) for line in stdout.splitlines()]
     request_evidence = require_request_evidence(events, [request["raw_body"] for request in requests if request["path"] == "/v1/chat/completions"])
     response_evidence = require_response_evidence(events, [request for request in requests if request["path"] == "/v1/chat/completions"])
+    require(all(response["event"]["status"] == "completed" for response in response_evidence if response["event"]["kind"] == "outcome"),
+            "ordinary provider responses did not complete decoding; inspect the processing outcomes")
     require(not any(e.get("subtype") == "compaction" for e in events),
             "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
     init = [e for e in events if e.get("type") == "system" and e.get("subtype") == "init"]
@@ -227,7 +229,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 3 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 4 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all("recordingVersion" not in event for event in events),
             "canonical history entered stdout evidence; inspect the two recording paths")
