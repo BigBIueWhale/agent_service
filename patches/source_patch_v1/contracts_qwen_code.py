@@ -8263,6 +8263,44 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses an uncommitted EOF suffix %j",
         "keeps a large inline result exact across fragmented input",
     ), label=label)
+    python_sdk = "packages/sdk-python/"
+    _require_all(state, python_sdk + "src/qwen_code_sdk/json_lines.py", (
+        'frame.decode("utf-8")', "reader.read(io.DEFAULT_BUFFER_SIZE)",
+        'chunk.find(b"\\n", start)', "parse_constant=_reject_constant",
+        "parse_float=_parse_float", "math.isfinite(number)",
+        "expected an object with a string type", "unterminated record at EOF",
+        "invalid JSONL record at line {line}",
+    ), label=label)
+    _require_all(state, python_sdk + "src/qwen_code_sdk/transport.py", (
+        'read_json_lines(self._process.stdout, "ProcessTransport")', "yield record",
+    ), label=label)
+    forbid_text(state, python_sdk + "src/qwen_code_sdk/transport.py",
+                "self._process.stdout.readline()", label=label)
+    _require_all(state, python_sdk + "src/qwen_code_sdk/query.py", (
+        "self._assert_open()", "self._input_end_ready_event.set()",
+        "await asyncio.shield(self._cleanup_task)", "self._record_failure(error)",
+        "self._message_queue.put_nowait(error)", "raise self._failure from None",
+        "self._input_senders.add(sender)", "self._input_senders.discard(sender)",
+        "tasks |= self._input_senders - {initiator}", "self._record_failure(result)",
+        "if not self._started and self._cleanup_task is None:",
+    ), label=label)
+    _require_all(state, python_sdk + "tests/unit/test_transport.py", (
+        "test_read_messages_refuses_malformed_json_after_valid_prefix",
+        "test_byte_framing_retains_prefix_and_refuses_invalid_record",
+        "test_byte_framing_refuses_every_nonempty_eof_suffix",
+        "test_byte_framing_preserves_unicode_across_every_read_boundary",
+        "test_transport_preserves_records_larger_than_reader_buffer",
+    ), label=label)
+    _require_all(state, python_sdk + "tests/unit/test_query_core.py", (
+        "test_slow_reader_keeps_prefix_and_first_error_through_cleanup",
+        "test_router_cancellation_during_cleanup_keeps_original_error",
+        "test_input_cleanup_failure_precedes_end_of_output",
+        "test_input_source_error_survives_iterator_close_error",
+        "test_close_joins_pending_start_without_launching_query_tasks",
+        "test_input_iterator_can_join_query_close_during_its_own_cleanup",
+        "test_refused_input_after_clean_close_does_not_change_terminal_output",
+        "test_input_failure_precedes_iterator_cleanup",
+    ), label=label)
     for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
         require_text(state, path, "recordingVersion: CHAT_RECORDING_VERSION", label=label)
     _require_all(
@@ -10084,8 +10122,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
-            "SDK byte framing refuses malformed or uncommitted records before admission; a "
-            "finalized query cannot accept more work or hide refusal behind a later abort."
+            "TypeScript and Python SDK byte framing preserves whole records independent of I/O "
+            "buffer size and refuses malformed or uncommitted records before admission. A "
+            "finalized query cannot accept more work or hide refusal behind abort or cleanup; "
+            "Python startup and input cleanup settle before successful reader termination."
         ),
         removal_condition=(
             "Upstream supplies durable owned observations, required canonical writers, strict replay, "

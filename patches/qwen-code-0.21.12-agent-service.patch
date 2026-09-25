@@ -300565,7 +300565,58 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/protocol.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-python/src/qwen_code_sdk/transport.py
 --- a/packages/sdk-python/src/qwen_code_sdk/transport.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/transport.py
-@@ -243,9 +243,6 @@
+@@ -1,22 +1,21 @@
+ """Process transport for qwen CLI stream-json protocol."""
+ 
+ from __future__ import annotations
+ 
+ import asyncio
+-import json
+ import os
+ import subprocess
+ import sys
+ from collections.abc import AsyncIterator
+ from dataclasses import dataclass
+ from pathlib import Path
+ from typing import Any
+ 
+ from .errors import ProcessExitError
+-from .json_lines import parse_json_line
++from .json_lines import read_json_lines
+ from .types import QueryOptions
+ 
+ 
+ @dataclass(frozen=True)
+ class SpawnInfo:
+     command: str
+@@ -129,24 +128,14 @@
+         self._input_closed = True
+ 
+     async def read_messages(self) -> AsyncIterator[Any]:
+         if self._process is None or self._process.stdout is None:
+             raise RuntimeError("Transport is not started")
+ 
+-        while True:
+-            line = await self._process.stdout.readline()
+-            if not line:
+-                break
+-
+-            raw = line.decode("utf-8", errors="replace").strip()
+-            if not raw:
+-                continue
+-            try:
+-                yield parse_json_line(raw)
+-            except json.JSONDecodeError:
+-                continue
++        async for record in read_json_lines(self._process.stdout, "ProcessTransport"):
++            yield record
+ 
+         await self._finalize_exit()
+ 
+     async def wait_for_exit(self) -> None:
+         if self._process is None:
+             return
+@@ -243,9 +232,6 @@
      if options.fork_session:
          args.append("--fork-session")
  
@@ -300575,7 +300626,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-p
      if options.max_subagent_depth is not None:
          args.extend(["--max-subagent-depth", str(options.max_subagent_depth)])
  
-@@ -260,14 +257,12 @@
+@@ -260,15 +246,12 @@
              [
                  "--allowed-mcp-server-names",
                  ",".join(options.allowed_mcp_server_names),
@@ -300584,12 +300635,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-p
  
 -    if options.fallback_model:
 -        args.extend(["--fallback-model", ",".join(options.fallback_model)])
- 
+-
      if options.proxy:
          args.extend(["--proxy", options.proxy])
  
      if options.sandbox:
          args.append("--sandbox")
+ 
 diff --git a/packages/sdk-python/src/qwen_code_sdk/types.py b/packages/sdk-python/src/qwen_code_sdk/types.py
 --- a/packages/sdk-python/src/qwen_code_sdk/types.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/types.py
@@ -300832,7 +300884,55 @@ diff --git a/packages/sdk-python/tests/integration/conftest.py b/packages/sdk-py
 diff --git a/packages/sdk-python/tests/unit/test_query_core.py b/packages/sdk-python/tests/unit/test_query_core.py
 --- a/packages/sdk-python/tests/unit/test_query_core.py
 +++ b/packages/sdk-python/tests/unit/test_query_core.py
-@@ -482,24 +482,35 @@
+@@ -1,15 +1,18 @@
+ from __future__ import annotations
+ 
+ import asyncio
+-from collections.abc import Callable
++from collections.abc import AsyncIterator, Callable
++from dataclasses import replace
+ from typing import Any, cast
+ 
+ import pytest
++
+ from qwen_code_sdk.errors import AbortError, ControlRequestTimeoutError
+ from qwen_code_sdk.json_lines import parse_json_line
++from qwen_code_sdk.protocol import SDKUserMessage
+ from qwen_code_sdk.query import Query
+ from qwen_code_sdk.types import QueryOptions, TimeoutOptions
+ 
+ VALID_UUID = "123e4567-e89b-12d3-a456-426614174000"
+ _EOF = object()
+ 
+@@ -37,22 +40,27 @@
+ 
+     async def read_messages(self):  # type: ignore[no-untyped-def]
+         while True:
+             item = await self._queue.get()
+             if item is _EOF:
+                 break
++            if isinstance(item, Exception):
++                raise item
+             yield item
+ 
+     async def close(self) -> None:
+         self.closed = True
+         self.close_calls += 1
+         self.input_closed = True
+         self._queue.put_nowait(_EOF)
+ 
+     def push(self, payload: dict[str, Any]) -> None:
+         self._queue.put_nowait(payload)
++
++    def fail(self, error: Exception) -> None:
++        self._queue.put_nowait(error)
+ 
+ 
+ async def _wait_for(predicate: Callable[[], bool], timeout: float = 1.0) -> None:
+     loop = asyncio.get_running_loop()
+     deadline = loop.time() + timeout
+     while loop.time() < deadline:
+@@ -482,24 +490,35 @@
          {
              "type": "assistant",
              "session_id": VALID_UUID,
@@ -300868,7 +300968,7 @@ diff --git a/packages/sdk-python/tests/unit/test_query_core.py b/packages/sdk-py
      await transport.close()
  
      # Consume all messages until exhaustion.
-@@ -687,13 +698,61 @@
+@@ -687,13 +706,61 @@
  
      task = asyncio.create_task(query.get_usage_info(time_range="week"))
      request = await _wait_for_request(transport, "get_usage_info")
@@ -300931,10 +301031,384 @@ diff --git a/packages/sdk-python/tests/unit/test_query_core.py b/packages/sdk-py
              "response": {
                  "subtype": "success",
                  "request_id": request["request_id"],
+@@ -875,6 +942,359 @@
+         options=QueryOptions(resume=VALID_UUID),
+         prompt="hello",
+         session_id=VALID_UUID,
+     )
+ 
+     assert query._session_id_locked is True
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("cleanup_fails", [False, True])
++async def test_slow_reader_keeps_prefix_and_first_error_through_cleanup(
++    monkeypatch: pytest.MonkeyPatch,
++    caplog: pytest.LogCaptureFixture,
++    cleanup_fails: bool,
++) -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    failure = ValueError("original stdout refusal")
++    cleanup_failure = RuntimeError("cleanup failed")
++    real_close = transport.close
++
++    async def close() -> None:
++        await real_close()
++        if cleanup_fails:
++            raise cleanup_failure
++
++    monkeypatch.setattr(transport, "close", close)
++    record = {
++        "type": "assistant",
++        "session_id": VALID_UUID,
++        "message": {
++            "role": "assistant",
++            "content": [{"type": "text", "text": "prefix"}],
++            "usage": None,
++        },
++    }
++    transport.push(record)
++    transport.fail(failure)
++    await query._router_task
++    assert await anext(query) == record
++    with pytest.raises(ValueError) as output_error:
++        await anext(query)
++    assert output_error.value is failure
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++    with pytest.raises(ValueError) as control_error:
++        await query.supported_commands()
++    assert control_error.value is failure
++    assert query.is_closed() and transport.closed
++    if cleanup_fails:
++        assert "cleanup failed" in caplog.text
++    await query.close()
++
++
++@pytest.mark.asyncio
++async def test_router_cancellation_during_cleanup_keeps_original_error(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    entered = asyncio.Event()
++    release = asyncio.Event()
++    real_close = transport.close
++
++    async def close() -> None:
++        entered.set()
++        await release.wait()
++        await real_close()
++
++    monkeypatch.setattr(transport, "close", close)
++    failure = ValueError("first stream failure")
++    transport.fail(failure)
++    await entered.wait()
++    query._router_task.cancel()
++    with pytest.raises(asyncio.CancelledError):
++        await query._router_task
++    with pytest.raises(ValueError) as output_error:
++        await anext(query)
++    assert output_error.value is failure
++    release.set()
++    await query.close()
++    assert transport.closed
++
++
++@pytest.mark.asyncio
++async def test_pending_control_is_settled_at_clean_eof() -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    pending = asyncio.create_task(query.supported_commands())
++    await _wait_for_request(transport, "supported_commands")
++    await transport.close()
++    await query._router_task
++    assert pending.done()
++    with pytest.raises(RuntimeError, match="Query is closed"):
++        await pending
++    assert query.is_closed()
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("wait_for_message", [False, True])
++async def test_input_waits_close_and_reject_original_failure(
++    wait_for_message: bool,
++) -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    entered = asyncio.Event()
++    closed = asyncio.Event()
++
++    async def messages() -> AsyncIterator[SDKUserMessage]:
++        try:
++            entered.set()
++            if wait_for_message:
++                await asyncio.Event().wait()
++            if False:
++                yield cast(SDKUserMessage, {})
++        finally:
++            closed.set()
++
++    # Exercise the multi-turn completion wait as well as a pending next input.
++    query._single_turn = False
++    query._options.timeout = replace(query._options.timeout, stream_close=60)
++    sending = asyncio.create_task(query.stream_input(messages()))
++    await entered.wait()
++    before = len(transport.writes)
++    failure = ValueError("stdout framing refusal")
++    transport.fail(failure)
++    with pytest.raises(ValueError) as input_error:
++        await asyncio.wait_for(sending, 1)
++    assert input_error.value is failure
++    assert closed.is_set()
++    assert len(transport.writes) == before
++    with pytest.raises(ValueError) as output_error:
++        await anext(query)
++    assert output_error.value is failure
++    await query.close()
++
++
++@pytest.mark.asyncio
++async def test_cleanup_failure_without_stream_error_is_delivered(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    failure = RuntimeError("transport cleanup failed")
++
++    async def close() -> None:
++        raise failure
++
++    monkeypatch.setattr(transport, "close", close)
++    await query.close()
++    with pytest.raises(RuntimeError) as output_error:
++        await anext(query)
++    assert output_error.value is failure
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("managed", [False, True])
++@pytest.mark.parametrize("eof", [False, True])
++async def test_input_cleanup_failure_precedes_end_of_output(
++    managed: bool, eof: bool
++) -> None:
++    transport = FakeTransport()
++    entered = asyncio.Event()
++    failure = ValueError("input iterator cleanup failed")
++
++    async def messages() -> AsyncIterator[SDKUserMessage]:
++        try:
++            entered.set()
++            await asyncio.Event().wait()
++            yield cast(SDKUserMessage, {})
++        finally:
++            raise failure
++
++    query = Query(
++        transport,  # type: ignore[arg-type]
++        QueryOptions(),
++        messages() if managed else "hello",
++        VALID_UUID,
++    )
++    await query._ensure_started()
++    initialize = await _wait_for_request(transport, "initialize")
++    transport.push(
++        {
++            "type": "control_response",
++            "response": {
++                "subtype": "success",
++                "request_id": initialize["request_id"],
++                "response": {},
++            },
++        }
++    )
++    await query._initialize_task
++    if managed:
++        sending = query._input_task
++    else:
++        await query._input_task
++        sending = asyncio.create_task(query.stream_input(messages()))
++    await entered.wait()
++    if eof:
++        await transport.close()
++    else:
++        await query.close()
++    with pytest.raises(ValueError) as output_error:
++        await asyncio.wait_for(anext(query), 1)
++    assert output_error.value is failure
++    with pytest.raises(ValueError) as input_error:
++        await sending
++    assert input_error.value is failure
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++    assert transport.closed
++    await query.close()
++
++
++@pytest.mark.asyncio
++async def test_input_source_error_survives_iterator_close_error(
++    caplog: pytest.LogCaptureFixture,
++) -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    failure = ValueError("input source failed")
++    cleanup_failure = RuntimeError("iterator close failed")
++
++    class Source:
++        def __aiter__(self) -> Source:
++            return self
++
++        async def __anext__(self) -> SDKUserMessage:
++            raise failure
++
++        async def aclose(self) -> None:
++            raise cleanup_failure
++
++    with pytest.raises(ValueError) as input_error:
++        await query.stream_input(Source())
++    assert input_error.value is failure
++    with pytest.raises(ValueError) as output_error:
++        await anext(query)
++    assert output_error.value is failure
++    assert "iterator close failed" in caplog.text
++    assert transport.closed
++    await query.close()
++
++
++@pytest.mark.asyncio
++async def test_close_joins_pending_start_without_launching_query_tasks(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    transport = FakeTransport()
++    query = Query(transport, QueryOptions(), "hello", VALID_UUID)  # type: ignore[arg-type]
++    entered = asyncio.Event()
++    release = asyncio.Event()
++
++    async def start() -> None:
++        entered.set()
++        await release.wait()
++
++    monkeypatch.setattr(transport, "start", start)
++    starting = asyncio.create_task(query._ensure_started())
++    await entered.wait()
++    closing = asyncio.create_task(query.close())
++    await _wait_for(query.is_closed)
++    assert not closing.done()
++    release.set()
++    with pytest.raises(RuntimeError, match="Query is closed"):
++        await starting
++    await closing
++    assert transport.closed
++    assert query._router_task is None
++    assert query._initialize_task is None
++    assert query._input_task is None
++    assert transport.writes == []
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++
++
++@pytest.mark.asyncio
++async def test_input_iterator_can_join_query_close_during_its_own_cleanup() -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    entered = asyncio.Event()
++    closed = asyncio.Event()
++
++    async def messages() -> AsyncIterator[SDKUserMessage]:
++        try:
++            entered.set()
++            await asyncio.Event().wait()
++            yield cast(SDKUserMessage, {})
++        finally:
++            await query.close()
++            closed.set()
++
++    sending = asyncio.create_task(query.stream_input(messages()))
++    await entered.wait()
++    await asyncio.wait_for(query.close(), 1)
++    await sending
++    assert closed.is_set()
++    assert transport.closed
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++
++
++@pytest.mark.asyncio
++async def test_refused_input_after_clean_close_does_not_change_terminal_output() -> (
++    None
++):
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    await query.close()
++
++    async def messages() -> AsyncIterator[SDKUserMessage]:
++        raise AssertionError("a closed query must not start an input iterator")
++        yield cast(SDKUserMessage, {})
++
++    with pytest.raises(RuntimeError, match="Query is closed"):
++        await query.stream_input(messages())
++    assert query._failure is None
++    with pytest.raises(StopAsyncIteration):
++        await anext(query)
++    assert query._message_queue.empty()
++
++
++@pytest.mark.asyncio
++async def test_input_failure_precedes_iterator_cleanup() -> None:
++    transport = FakeTransport()
++    query = await _start_query(transport)
++    entered = asyncio.Event()
++    release = asyncio.Event()
++    failure = ValueError("first input source failure")
++
++    class Source:
++        def __aiter__(self) -> Source:
++            return self
++
++        async def __anext__(self) -> SDKUserMessage:
++            raise failure
++
++        async def aclose(self) -> None:
++            entered.set()
++            await release.wait()
++
++    sending = asyncio.create_task(query.stream_input(Source()))
++    await entered.wait()
++    transport.fail(RuntimeError("later transport failure"))
++    try:
++        with pytest.raises(ValueError) as output_error:
++            await asyncio.wait_for(anext(query), 1)
++        assert output_error.value is failure
++        assert query.is_closed()
++    finally:
++        release.set()
++        with pytest.raises(ValueError) as input_error:
++            await sending
++        assert input_error.value is failure
++        await query.close()
 diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-python/tests/unit/test_transport.py
 --- a/packages/sdk-python/tests/unit/test_transport.py
 +++ b/packages/sdk-python/tests/unit/test_transport.py
-@@ -88,13 +88,11 @@
+@@ -4,12 +4,13 @@
+ import subprocess
+ import sys
+ from pathlib import Path
+ from typing import Any
+ 
+ import pytest
++
+ from qwen_code_sdk.transport import build_cli_arguments, prepare_spawn_info
+ from qwen_code_sdk.types import QueryOptions, TimeoutOptions
+ 
+ VALID_UUID = "123e4567-e89b-12d3-a456-426614174000"
+ 
+ 
+@@ -88,13 +89,11 @@
              fork_session=True,
 -            max_tool_calls=50,
              max_subagent_depth=3,
@@ -300948,7 +301422,7 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
              insecure=True,
              worktree=True,
              disabled_slash_commands=["/init", "/vim"],
-@@ -103,7 +101,5 @@
+@@ -103,7 +102,5 @@
      )
  
      assert "--fork-session" in args
@@ -300956,7 +301430,7 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
 -    assert args[args.index("--max-tool-calls") + 1] == "50"
      assert "--max-subagent-depth" in args
      assert args[args.index("--max-subagent-depth") + 1] == "3"
-@@ -110,14 +106,12 @@
+@@ -110,14 +107,12 @@
      assert "--include-directories" in args
      assert args[args.index("--include-directories") + 1] == "/extra/dir1,/extra/dir2"
      assert "--extensions" in args
@@ -300971,6 +301445,180 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
      assert "--safe-mode" in args
      assert "--insecure" in args
      assert "--worktree" in args
+@@ -235,56 +230,29 @@
+ 
+     with pytest.raises(RuntimeError, match="Transport is closed"):
+         await transport.start()
+ 
+ 
+ @pytest.mark.asyncio
+-async def test_read_messages_skips_malformed_json_lines() -> None:
+-    """Malformed JSON lines should be skipped, not crash the stream."""
++async def test_read_messages_refuses_malformed_json_after_valid_prefix() -> None:
++    from qwen_code_sdk.transport import ProcessTransport
+ 
+-    class FakeStdout:
+-        def __init__(self, lines: list[bytes]) -> None:
+-            self._lines = iter(lines)
+-
+-        async def readline(self) -> bytes:
+-            return next(self._lines, b"")
+-
+-    transport_module = __import__(
+-        "qwen_code_sdk.transport",
+-        fromlist=["ProcessTransport"],
+-    )
+-    transport = transport_module.ProcessTransport(
+-        QueryOptions(timeout=TimeoutOptions())
+-    )
+-
+-    class FakeProcess:
+-        returncode = 0
+-        stdin = None
+-        stderr = None
+-
+-        def __init__(self) -> None:
+-            self.stdout = FakeStdout(
+-                [
+-                    b"not valid json\n",
+-                    b'{"type":"system","subtype":"init","uuid":"u","session_id":"s"}\n',
+-                    b"also bad\n",
+-                    b"",
+-                ]
+-            )
+-
+-        async def wait(self) -> int:
+-            return 0
+-
+-    transport._process = FakeProcess()
+-
+-    messages: list[Any] = []
+-    async for msg in transport.read_messages():
+-        messages.append(msg)
+-
+-    assert len(messages) == 1
+-    assert messages[0]["type"] == "system"
++    stdout = asyncio.StreamReader()
++    stdout.feed_data(b'{"type":"system"}\n{"type":\n{"type":"result"}\n')
++    stdout.feed_eof()
++    process = DummyProcess()
++    process.stdout = stdout
++    transport = ProcessTransport(QueryOptions())
++    transport._process = process
++    records: list[Any] = []
++    with pytest.raises(
++        ValueError, match="line 2: invalid JSON.*Capture the CLI stdout"
++    ):
++        async for record in transport.read_messages():
++            records.append(record)
++    assert records == [{"type": "system"}]
+ 
+ 
+ @pytest.mark.asyncio
+ async def test_stderr_callback_exceptions_do_not_fail_transport() -> None:
+     class FakeStdout:
+         async def readline(self) -> bytes:
+@@ -331,6 +299,100 @@
+     transport._process = FakeProcess()
+     transport._stderr_task = asyncio.create_task(transport._forward_stderr())
+ 
+     await transport.wait_for_exit()
+ 
+     assert callback_calls == 1
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize(
++    "invalid",
++    [
++        b'{"type":',
++        b"null",
++        b"0",
++        b"true",
++        b"[]",
++        b"{}",
++        b'{"type":7}',
++        b'\xef\xbb\xbf{"type":"assistant"}',
++        b"\xc2\xa0",
++        b'{"type":"assistant","value":NaN}',
++        b'{"type":"assistant","value":Infinity}',
++        b'{"type":"assistant","value":-Infinity}',
++        b'{"type":"assistant","value":1e999}',
++        b'{"type":"assistant","text":"\xff"}',
++        b'{"type":"assistant","text":"\xc0\xaf"}',
++        b'{"type":"assistant","text":"\xed\xa0\x80"}',
++        b'{"type":"assistant","text":"\xe2\x98"}',
++    ],
++)
++async def test_byte_framing_retains_prefix_and_refuses_invalid_record(
++    invalid: bytes,
++) -> None:
++    from qwen_code_sdk.json_lines import read_json_lines
++
++    reader = asyncio.StreamReader()
++    reader.feed_data(
++        b'\n \t\f\r\n{"type":"before"}\n' + invalid + b'\n{"type":"after"}\n'
++    )
++    reader.feed_eof()
++    records: list[Any] = []
++    with pytest.raises(ValueError, match="line 4:.*Capture the CLI stdout"):
++        async for record in read_json_lines(reader, "fixture"):
++            records.append(record)
++    assert records == [{"type": "before"}]
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("suffix", [b'{"type":"assistant"}', b'{"type":', b" ", b"\r"])
++async def test_byte_framing_refuses_every_nonempty_eof_suffix(suffix: bytes) -> None:
++    from qwen_code_sdk.json_lines import read_json_lines
++
++    reader = asyncio.StreamReader()
++    reader.feed_data(b'{"type":"before"}\n' + suffix)
++    reader.feed_eof()
++    output = read_json_lines(reader)
++    assert await anext(output) == {"type": "before"}
++    with pytest.raises(ValueError, match="line 2: unterminated record at EOF"):
++        await anext(output)
++
++
++@pytest.mark.asyncio
++async def test_byte_framing_preserves_unicode_across_every_read_boundary() -> None:
++    from qwen_code_sdk.json_lines import read_json_lines, serialize_json_line
++
++    record = {"type": "assistant", "text": " exact שלום 😀\n "}
++    wire = serialize_json_line(record).replace("\n", "\r\n").encode()
++    for split in range(len(wire) + 1):
++        reader = asyncio.StreamReader()
++
++        async def feed(reader: asyncio.StreamReader, split: int) -> None:
++            reader.feed_data(wire[:split])
++            await asyncio.sleep(0)
++            reader.feed_data(wire[split:])
++            reader.feed_eof()
++
++        feeder = asyncio.create_task(feed(reader, split))
++        assert [item async for item in read_json_lines(reader)] == [record]
++        await feeder
++
++
++@pytest.mark.asyncio
++@pytest.mark.parametrize("record_type", ["user", "model_request"])
++async def test_transport_preserves_records_larger_than_reader_buffer(
++    record_type: str,
++) -> None:
++    from qwen_code_sdk.json_lines import serialize_json_line
++    from qwen_code_sdk.transport import ProcessTransport
++
++    # A full request or tool result must be able to span many default read buffers.
++    record = {"type": record_type, "content": '\\"שלום\n' * (2**17)}
++    stdout = asyncio.StreamReader()
++    stdout.feed_data(serialize_json_line(record).encode())
++    stdout.feed_eof()
++    process = DummyProcess()
++    process.stdout = stdout
++    transport = ProcessTransport(QueryOptions())
++    transport._process = process
++    assert [item async for item in transport.read_messages()] == [record]
 diff --git a/packages/sdk-python/tests/unit/test_validation.py b/packages/sdk-python/tests/unit/test_validation.py
 --- a/packages/sdk-python/tests/unit/test_validation.py
 +++ b/packages/sdk-python/tests/unit/test_validation.py
@@ -324506,3 +325154,472 @@ diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/
 +    closeSpy.mockRestore();
 +  });
 +});
+diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-python/src/qwen_code_sdk/json_lines.py
+--- a/packages/sdk-python/src/qwen_code_sdk/json_lines.py
++++ b/packages/sdk-python/src/qwen_code_sdk/json_lines.py
+@@ -1,14 +1,77 @@
+ """JSON lines utilities."""
+ 
+ from __future__ import annotations
+ 
++import asyncio
++import io
+ import json
+-from typing import Any
++import math
++from collections.abc import AsyncIterator
++from typing import Any, NoReturn
+ 
+ 
+ def serialize_json_line(payload: Any) -> str:
+     return json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
+ 
+ 
++def _reject_constant(value: str) -> NoReturn:
++    raise ValueError(f"Non-finite JSON number: {value}")
++
++
++def _parse_float(value: str) -> float:
++    number = float(value)
++    if not math.isfinite(number):
++        _reject_constant(value)
++    return number
++
++
+ def parse_json_line(line: str) -> Any:
+-    return json.loads(line)
++    return json.loads(line, parse_constant=_reject_constant, parse_float=_parse_float)
++
++
++def _refuse_frame(context: str, line: int, reason: str) -> NoReturn:
++    raise ValueError(
++        f"{context}: invalid JSONL record at line {line}: {reason}. "
++        "Capture the CLI stdout and inspect this line; use a matching CLI and SDK."
++    )
++
++
++def _parse_record(frame: bytearray, context: str, line: int) -> dict[str, Any]:
++    try:
++        text = frame.decode("utf-8")
++    except UnicodeDecodeError:
++        _refuse_frame(context, line, "invalid UTF-8")
++    try:
++        record = parse_json_line(text)
++    except ValueError:
++        _refuse_frame(context, line, "invalid JSON")
++    if not isinstance(record, dict) or not isinstance(record.get("type"), str):
++        _refuse_frame(context, line, "expected an object with a string type")
++    return record
++
++
++async def read_json_lines(
++    reader: asyncio.StreamReader, context: str = "JsonLines"
++) -> AsyncIterator[dict[str, Any]]:
++    frame = bytearray()
++    line = 1
++    # The standard I/O buffer size bounds each read, never a complete record.
++    while chunk := await reader.read(io.DEFAULT_BUFFER_SIZE):
++        start = 0
++        while start < len(chunk):
++            newline = chunk.find(b"\n", start)
++            end = len(chunk) if newline < 0 else newline
++            frame.extend(chunk[start:end])
++            if newline < 0:
++                break
++            physical_line = line
++            line += 1
++            if any(byte not in b" \t\f\r" for byte in frame):
++                record = _parse_record(frame, context, physical_line)
++                frame.clear()
++                yield record
++            else:
++                frame.clear()
++            start = newline + 1
++    if frame:
++        _refuse_frame(context, line, "unterminated record at EOF")
+diff --git a/packages/sdk-python/src/qwen_code_sdk/query.py b/packages/sdk-python/src/qwen_code_sdk/query.py
+--- a/packages/sdk-python/src/qwen_code_sdk/query.py
++++ b/packages/sdk-python/src/qwen_code_sdk/query.py
+@@ -1,12 +1,13 @@
+ """Async Query implementation for qwen_code_sdk."""
+ 
+ from __future__ import annotations
+ 
+ import asyncio
+ import contextlib
++import logging
+ from collections.abc import AsyncIterable, Mapping, MutableMapping
+ from dataclasses import dataclass, replace
+ from types import TracebackType
+ from typing import Any, Literal, cast
+ from uuid import uuid4
+ 
+@@ -36,12 +37,13 @@
+     QueryOptions,
+     QueryOptionsDict,
+ )
+ from .validation import validate_query_options
+ 
+ _DONE = object()
++_LOGGER = logging.getLogger(__name__)
+ 
+ 
+ def _parse_effort_status(value: Any) -> EffortStatus | None:
+     if not isinstance(value, dict) or not isinstance(value.get("applied"), bool):
+         return None
+     status: EffortStatus = {
+@@ -91,43 +93,59 @@
+         self._started = False
+         self._start_lock = asyncio.Lock()
+         self._cancel_event = asyncio.Event()
+ 
+         self._router_task: asyncio.Task[None] | None = None
+         self._input_task: asyncio.Task[None] | None = None
++        self._input_senders: set[asyncio.Task[None]] = set()
+         self._initialize_task: asyncio.Task[None] | None = None
+-        self._first_result_event = asyncio.Event()
++        self._input_end_ready_event = asyncio.Event()
+         self._terminal_event_sent = False
++        self._failure: Exception | None = None
++        self._cleanup_task: asyncio.Task[None] | None = None
+         self._exhausted = False
+ 
+         self._pending_control_requests: dict[str, _PendingControlRequest] = {}
+         self._incoming_control_requests: dict[str, _IncomingControlRequest] = {}
+         self._initial_effort_status: EffortStatus | None = None
+ 
+     async def _ensure_started(self) -> None:
+-        if self._closed:
+-            raise RuntimeError("Query is closed")
++        self._assert_open()
+         if self._started:
+             return
+ 
+         async with self._start_lock:
+-            if self._closed:
+-                raise RuntimeError("Query is closed")
++            self._assert_open()
+             if self._started:
+                 return
+             await self._transport.start()
++            self._assert_open()
+             self._router_task = asyncio.create_task(self._message_router())
+             self._initialize_task = asyncio.create_task(self._initialize())
+ 
++            self._input_task = asyncio.create_task(self._run_input())
++            self._input_task.add_done_callback(self._input_finished)
++            self._started = True
++
++    @staticmethod
++    def _input_finished(task: asyncio.Task[None]) -> None:
++        # Input failures are delivered through the query as well as this task.
++        if not task.cancelled():
++            task.exception()
++
++    async def _run_input(self) -> None:
++        try:
+             if self._single_turn:
+-                self._input_task = asyncio.create_task(self._send_single_turn_prompt())
++                await self._send_single_turn_prompt()
+             else:
+-                self._input_task = asyncio.create_task(
+-                    self.stream_input(self._prompt)  # type: ignore[arg-type]
++                await self.stream_input(
++                    cast(AsyncIterable[SDKUserMessage], self._prompt)
+                 )
+-            self._started = True
++        except Exception as exc:
++            await self._finish_with_error(exc)
++            raise
+ 
+     async def _initialize(self) -> None:
+         try:
+             payload: dict[str, Any] = {"hooks": None}
+             if self._options.mcp_servers:
+                 payload["mcpServers"] = self._options.mcp_servers
+@@ -161,13 +179,14 @@
+             await self._finish_with_error(exc)
+             raise
+ 
+     async def _wait_initialized(self) -> None:
+         if self._initialize_task is None:
+             return
+-        await self._initialize_task
++        await asyncio.shield(self._initialize_task)
++        self._assert_open()
+ 
+     async def _message_router(self) -> None:
+         try:
+             async for message in self._transport.read_messages():
+                 await self._route_message(message)
+                 if self._closed:
+@@ -197,13 +216,13 @@
+ 
+         if is_control_cancel(message):
+             self._handle_control_cancel_request(message)
+             return
+ 
+         if is_sdk_result_message(message):
+-            self._first_result_event.set()
++            self._input_end_ready_event.set()
+             if self._single_turn:
+                 self._transport.end_input()
+             await self._message_queue.put(message)
+             return
+ 
+         if (
+@@ -382,14 +401,13 @@
+ 
+     async def _send_control_request(
+         self,
+         subtype: str,
+         data: dict[str, Any] | None = None,
+     ) -> dict[str, Any] | None:
+-        if self._closed:
+-            raise RuntimeError("Query is closed")
++        self._assert_open()
+ 
+         if subtype != "initialize":
+             await self._wait_initialized()
+ 
+         request_id = str(uuid4())
+ 
+@@ -457,41 +475,90 @@
+                     "error": str(response),
+                 },
+             }
+ 
+         await self._write_payload(payload)
+ 
++    def _assert_open(self) -> None:
++        if self._failure is not None:
++            raise self._failure
++        if self._closed:
++            raise RuntimeError("Query is closed. Start a new query to send more input.")
++
+     async def _write_payload(self, payload: Any) -> None:
++        self._assert_open()
+         self._transport.write(serialize_json_line(payload))
+         await self._transport.drain()
+ 
+     async def stream_input(self, messages: AsyncIterable[SDKUserMessage]) -> None:
++        async def send_messages() -> None:
++            iterator = aiter(messages)
++            failure: Exception | None = None
++            try:
++                async for message in iterator:
++                    await self._write_payload(message)
++            except Exception as exc:
++                failure = exc
++                await self._finish_with_error(exc)
++                raise
++            finally:
++                close = getattr(iterator, "aclose", None)
++                if close is not None:
++                    try:
++                        await close()
++                    except Exception:
++                        if failure is None:
++                            raise
++                        _LOGGER.warning(
++                            "Input iterator cleanup failed after input refusal",
++                            exc_info=True,
++                        )
++
++        self._assert_open()
++        await self._wait_initialized()
+         try:
+-            if self._closed:
+-                raise RuntimeError("Query is closed")
++            sender = asyncio.create_task(send_messages())
++            self._input_senders.add(sender)
++            stopped = asyncio.create_task(self._cancel_event.wait())
++            try:
++                await asyncio.wait(
++                    (sender, stopped), return_when=asyncio.FIRST_COMPLETED
++                )
++            finally:
++                stopped.cancel()
++                if not sender.done():
++                    sender.cancel()
++                with contextlib.suppress(asyncio.CancelledError):
++                    await stopped
++                try:
++                    with contextlib.suppress(asyncio.CancelledError):
++                        await sender
++                finally:
++                    self._input_senders.discard(sender)
+ 
+-            await self._wait_initialized()
+-
+-            async for message in messages:
+-                if self._cancel_event.is_set() or self._closed:
+-                    break
+-                await self._write_payload(message)
+-
++            if self._failure is not None:
++                raise self._failure
+             if not self._single_turn:
+                 try:
+                     await asyncio.wait_for(
+-                        self._first_result_event.wait(),
++                        self._input_end_ready_event.wait(),
+                         timeout=self._options.timeout.stream_close,
+                     )
+                 except asyncio.TimeoutError:
+                     pass
+-
+-                self._transport.end_input()
++                if self._failure is not None:
++                    raise self._failure
++                if not self._closed:
++                    self._transport.end_input()
++        except asyncio.CancelledError:
++            if self._failure is not None:
++                raise self._failure from None
++            raise
+         except Exception as exc:
+             await self._finish_with_error(exc)
+-            raise
++            raise self._failure if self._failure is not None else exc from None
+ 
+     async def interrupt(self) -> None:
+         await self._ensure_started()
+         await self._send_control_request("interrupt")
+ 
+     async def set_permission_mode(self, mode: str) -> None:
+@@ -562,75 +629,86 @@
+             pending.timeout_handle.cancel()
+             pending.cancel_event.set()
+             if not pending.future.done():
+                 pending.future.set_exception(error)
+             self._pending_control_requests.pop(request_id, None)
+ 
+-    async def _cancel_incoming_control_requests(self) -> None:
+-        current_task = asyncio.current_task()
+-        tasks: list[asyncio.Task[None]] = []
++    async def close(self) -> None:
++        if self._cleanup_task is None:
++            await self._finish()
++        elif asyncio.current_task() not in self._owned_tasks() | self._input_senders:
++            await asyncio.shield(self._cleanup_task)
+ 
+-        for incoming in list(self._incoming_control_requests.values()):
+-            incoming.cancel_event.set()
+-            if incoming.task is current_task:
+-                continue
+-            incoming.task.cancel()
+-            tasks.append(incoming.task)
++    def _owned_tasks(self) -> set[asyncio.Task[None]]:
++        tasks = {
++            self._router_task,
++            self._input_task,
++            self._initialize_task,
++            *(incoming.task for incoming in self._incoming_control_requests.values()),
++        }
++        return {task for task in tasks if task is not None}
+ 
+-        if tasks:
+-            await asyncio.gather(*tasks, return_exceptions=True)
++    async def _cleanup(self, initiator: asyncio.Task[Any] | None) -> None:
++        try:
++            for incoming in self._incoming_control_requests.values():
++                incoming.cancel_event.set()
++            tasks = self._owned_tasks() - {initiator}
++            for task in tasks:
++                task.cancel()
++            # Public input calls stop through _cancel_event and own cancellation
++            # of their senders. Join those senders before publishing clean EOF.
++            tasks |= self._input_senders - {initiator}
++            if tasks:
++                for result in await asyncio.gather(*tasks, return_exceptions=True):
++                    if isinstance(result, Exception):
++                        self._record_failure(result)
++            async with self._start_lock:
++                await self._transport.close()
++        except Exception as exc:
++            self._record_failure(exc)
++        finally:
++            if not self._terminal_event_sent:
++                self._message_queue.put_nowait(_DONE)
++            self._terminal_event_sent = True
+ 
+-    async def close(self) -> None:
+-        if self._closed:
++    def _record_failure(self, error: Exception) -> None:
++        if self._failure is None:
++            self._failure = error
++            self._message_queue.put_nowait(error)
++        elif self._failure is not error:
++            _LOGGER.warning(
++                "Query cleanup failed after stream refusal",
++                exc_info=(type(error), error, error.__traceback__),
++            )
++
++    async def _finish(self, error: Exception | None = None) -> None:
++        if error is not None:
++            self._record_failure(error)
++        if self._cleanup_task is not None:
+             return
+-
+         self._closed = True
+         self._cancel_event.set()
+-
+-        error = RuntimeError("Query is closed")
+-        self._fail_pending_control_requests(error)
+-        await self._cancel_incoming_control_requests()
+-
+-        await self._transport.close()
+-
+-        if self._input_task is not None:
+-            self._input_task.cancel()
+-            with contextlib.suppress(asyncio.CancelledError, Exception):
+-                await self._input_task
+-
+-        if self._router_task is not None:
+-            with contextlib.suppress(Exception):
+-                await self._router_task
+-
+-        await self._finish()
+-
+-    async def _finish(self) -> None:
+-        if self._terminal_event_sent:
+-            return
+-        self._terminal_event_sent = True
+-        await self._message_queue.put(_DONE)
++        self._input_end_ready_event.set()
++        self._fail_pending_control_requests(error or RuntimeError("Query is closed"))
++        if error is not None:
++            self._message_queue.put_nowait(_DONE)
++            self._terminal_event_sent = True
++        self._cleanup_task = asyncio.create_task(self._cleanup(asyncio.current_task()))
++        await asyncio.shield(self._cleanup_task)
+ 
+     async def _finish_with_error(self, exc: Exception) -> None:
+-        if self._terminal_event_sent:
+-            return
+-        self._closed = True
+-        self._terminal_event_sent = True
+-        self._cancel_event.set()
+-        self._fail_pending_control_requests(exc)
+-        await self._cancel_incoming_control_requests()
+-        await self._transport.close()
+-        await self._message_queue.put(exc)
+-        await self._message_queue.put(_DONE)
++        await self._finish(exc)
+ 
+     def __aiter__(self) -> Query:
+         return self
+ 
+     async def __anext__(self) -> SDKMessage:
+         if self._exhausted:
+             raise StopAsyncIteration
+-        await self._ensure_started()
++        if not self._started and self._cleanup_task is None:
++            await self._ensure_started()
+         item = await self._message_queue.get()
+ 
+         if item is _DONE:
+             self._exhausted = True
+             raise StopAsyncIteration
+ 
