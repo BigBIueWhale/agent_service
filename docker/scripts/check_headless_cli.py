@@ -338,6 +338,9 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                             "function": {"name": "read_file", "arguments": json.dumps({"file_path": str(fixture), "offset": 0})}}]}
                         finish = "tool_calls"
                     elif generation_count == 2:
+                        carried = [m for m in body["messages"] if m.get("role") == "assistant"]
+                        require(len(carried) == 1 and carried[0].get("content") is None,
+                                "carried model call acquired text the provider never produced; inspect history composition")
                         responses = [m for m in body["messages"] if m.get("role") == "tool"
                                      and m.get("tool_call_id") == "smoke_read"]
                         require(len(responses) == 1 and nonce in json.dumps(responses[0]),

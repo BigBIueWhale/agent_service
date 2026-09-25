@@ -214,6 +214,9 @@ class StubHandler(BaseHTTPRequestHandler):
                         "file_path": "/workspace/proof.txt", "offset": 0})}}]}
                 finish = "tool_calls"
             elif attempt == 2:
+                carried = [message for message in body["messages"] if message.get("role") == "assistant"]
+                require(len(carried) == 1 and carried[0].get("content") is None,
+                        "carried model call acquired text the provider never produced; inspect history composition")
                 replies = [message for message in body["messages"] if message.get("role") == "tool"
                            and message.get("tool_call_id") == "composition_read"]
                 require(len(replies) == 1 and nonce in json.dumps(replies[0]), "actual read did not return proof")

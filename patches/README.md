@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `69864efc0537acd9f215eafbaf3cc7426d9c8d2b3a0cc95c2d87e934de4562c0`
+- Review-diff SHA-256: `a388fe2c86aa381ab7fdeed4905bc2998ab3250d429e33e2db3754c2dc21960b`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `61d41ad161a9fc133665b13a65f2a239b912d01f2d210031bbfe3e5b79b1cf6f`
+- Transformer-manifest SHA-256: `c7606edd931a5f89e79b51e29549f55e9cf0523656333eb68357a084cb35868b`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -115,9 +115,9 @@ the prompt it summarises can carry, which the startup proof also holds within
 it so a redraw keeps a turn's room. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
-and cannot go missing, and the proof counts the frame every compacted history
-holds around its blocks -- the resume trailer and the acknowledgement turn --
-with it, the blocks left out, and one todo reminder
+and cannot go missing, and the proof bounds the frame around a compacted
+history's blocks -- the resume trailer and a standalone acknowledgement when
+needed -- with it, the blocks left out, and one todo reminder
 with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — a
 declared magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back rather
@@ -289,11 +289,12 @@ holds the retained original inputs verbatim, as the parts they are, so their
 provenance survives the next compaction. The block is bounded at acceptance with
 that element empty; the inputs are bounded where they were submitted. The history a compaction
 commits is composed in upstream's order: the startup context, the snapshot with
-its resume trailer as a user message, the model's acknowledgement in upstream's
-words, the attachments -- the state reminders, each block set off from the
-next -- as one user message, then the carried turn. Upstream keeps the last turn as a model message of its own after
-the attachments, and folds its call into the acknowledgement when nothing is
-attached; the carried turn is kept whole in both places, reasoning included.
+its resume trailer as a user message, a standalone acknowledgement in upstream's
+words before attachments, the attachments -- the state reminders, each block set
+off from the next -- as one user message, then the carried turn. When nothing is
+attached, the carried model turn answers the snapshot directly. Its parts are
+kept whole and unchanged, reasoning included; runtime words never prefix them.
+With no carried turn, a standalone acknowledgement answers the snapshot.
 The trailer is upstream's own, word for word. The carried turn follows the
 snapshot in time as well as in the history -- the snapshot is the state as of
 the prompt that turn was issued against, and the turn is the step taken next --

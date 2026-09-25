@@ -5040,12 +5040,10 @@ def _validate_compaction_budget_after(state: State) -> None:
     # The post-compact history is composed as upstream's composer composes
     # it: the snapshot with its resume trailer as a user message, the
     # retained inputs as their own parts in its all_user_messages, the
-    # model's acknowledgement in upstream's words, the attachments -- the
-    # state reminders, each block set off from the next -- as one user
-    # message, then the turn. Upstream keeps the last turn as a model message
-    # of its own after the attachments and folds its call into the
-    # acknowledgement when nothing is attached; ours keeps the whole turn,
-    # reasoning included, in both places.
+    # standalone acknowledgement in upstream's words before attachments --
+    # the state reminders, each block set off from the next -- as one user
+    # message, then the turn. Without attachments the carried model turn
+    # answers the snapshot directly, with no runtime words added to its parts.
     _require_all(
         state,
         attachments,
@@ -5061,7 +5059,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],",
             "  turn?: Content[];",
             "    return [\n      snapshot,\n      { role: 'model', parts: [acknowledgement] },\n      { role: 'user', parts: attachments },\n      ...carried,\n    ];",
-            "      { ...first, parts: [acknowledgement, ...(first.parts ?? [])] },",
+            "  if (carried[0]?.role === 'model') {\n    return [snapshot, ...carried];",
             "  return [snapshot, { role: 'model', parts: [acknowledgement] }, ...carried];",
             # The frame the startup proof counts is built from the same text.
             "export function compactionFrame(): Content[] {",
@@ -5070,6 +5068,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
+    forbid_text(state, attachments, "parts: [acknowledgement,", label=label)
     # The carried turn follows the snapshot in time as well as in the
     # history: the snapshot is the state as of the prompt the turn was issued
     # against, and the turn is the step taken next, after the
@@ -5090,8 +5089,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         "places the carried turn after the snapshot in upstream's words, never as a turn that came before it",
         label=label,
     )
-    # The frame is fixed text every compacted history holds beside its
-    # blocks, so the startup proof counts it with the static preamble: the fit
+    # The frame bounds the fixed text beside a compacted history's blocks,
+    # so the startup proof counts it with the static preamble: the fit
     # charges the blocks, and the frame around them is inside `D`.
     _require_all(
         state,
@@ -5120,8 +5119,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             "packages/core/src/services/postCompactAttachments.test.ts",
         ),
         (
-            "leads the turn with the acknowledgement when nothing is attached, as upstream folds its call in",
+            "carries the model turn verbatim directly after the snapshot when nothing is attached",
             "packages/core/src/services/postCompactAttachments.test.ts",
+        ),
+        (
+            "resumes and forks the exact composed history with attachments=%s and no added model words",
+            "packages/core/src/services/session-transcript-reader.test.ts",
         ),
         (
             "sets every block of an attachments message off from the next",
@@ -5148,7 +5151,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "packages/core/src/services/state-snapshot.test.ts",
         ),
         (
-            "commits upstream's composition: the snapshot block holding the retained input and its trailer, then the acknowledgement leading the turn",
+            "commits the snapshot with its retained input and trailer followed by the verbatim model turn",
             "packages/core/src/services/chatCompressionService.test.ts",
         ),
     ):

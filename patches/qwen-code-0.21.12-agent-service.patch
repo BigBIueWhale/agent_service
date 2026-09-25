@@ -193105,7 +193105,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1844 @@
+@@ -1,4405 +1,1838 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -198109,7 +198109,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    ).toHaveLength(1);
 +  });
 +
-+  it("commits upstream's composition: the snapshot block holding the retained input and its trailer, then the acknowledgement leading the turn", async () => {
++  it('commits the snapshot with its retained input and trailer followed by the verbatim model turn', async () => {
 +    // The composer itself, not a stub: this is the history the next turn
 +    // sends, in the order upstream's composer gives it.
 +    vi.mocked(attachments.composePostCompactHistory).mockRestore();
@@ -198147,8 +198147,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +
 +    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 +    const history = result.newHistory!;
-+    // Nothing is attached, so the acknowledgement leads the carried turn, as
-+    // upstream folds the last turn's call into it when nothing is attached.
++    // Nothing is attached, so the carried turn answers the snapshot directly.
 +    expect(history.map((content) => content.role)).toEqual([
 +      'user',
 +      'user',
@@ -198169,13 +198168,8 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        '<state_snapshot>\n    <primary_request_and_intent>\n',
 +      ),
 +    ).toBe(true);
-+    expect(history[2]).toEqual({
-+      ...turn,
-+      parts: [
-+        { text: 'Got it. Thanks for the additional context!' },
-+        ...turn.parts!,
-+      ],
-+    });
++    expect(history[2]).toEqual(turn);
++    expect(JSON.stringify(history[2])).toBe(JSON.stringify(turn));
 +  });
 +
 -  it('200K window NOOPs at 160K (auto = min(0.85 × 200K, ew − 13K) = 167K)', async () => {
@@ -211141,7 +211135,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
              },
            },
          ],
-@@ -183,871 +83,245 @@
+@@ -183,1050 +83,253 @@
          parts: [
            {
              functionResponse: {
@@ -211842,10 +211836,9 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    expect(result[3]).not.toBe(turn[0]);
 +  });
 +
-+  it('leads the turn with the acknowledgement when nothing is attached, as upstream folds its call in', () => {
-+    // Upstream folds the last turn's call into the acknowledgement when no
-+    // attachment stands between them, so no model message follows another.
-+    // The turn keeps every part it had, after the acknowledgement.
++  it('carries the model turn verbatim directly after the snapshot when nothing is attached', () => {
++    // The turn itself answers the snapshot. Every part is model output, and
++    // runtime context must not prefix it with words the model never produced.
 +    const turn: Content[] = [
 +      {
 +        role: 'model',
@@ -211872,10 +211865,6 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    expect(texts(result[0].parts)).toEqual(
 +      snapshotTexts(declared(), 'read on'),
 +    );
-+    expect(result[1]).toEqual({
-+      role: 'model',
-+      parts: [{ text: ACK }, ...turn[0].parts!],
-+    });
 -  });
 -
 -  it('emits role-alternating history with multiple file/image attachments merged into a single user Content (Finding 2)', async () => {
@@ -211910,6 +211899,9 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 -    for (let i = 1; i < result.length; i++) {
 -      expect(result[i].role).not.toBe(result[i - 1].role);
 -    }
++    expect(result[1]).toEqual(turn[0]);
++    expect(JSON.stringify(result[1])).toBe(JSON.stringify(turn[0]));
++    expect(result[1]).not.toBe(turn[0]);
    });
  
 -  it('preserves a trailing model+functionCall so a pending functionResponse has its match (Finding 3)', async () => {
@@ -212200,10 +212192,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    expect(result[0].parts?.at(-1)?.text?.endsWith(`\n\n${TRAILER}`)).toBe(
 +      true,
 +    );
-+    expect(result.at(-1)).toEqual({
-+      ...turn,
-+      parts: [{ text: ACK }, ...turn.parts!],
-+    });
++    expect(result.at(-1)).toEqual(turn);
 +    const read = result
 +      .flatMap((content) => content.parts ?? [])
 +      .map((part) => (part as { text?: string }).text ?? '')
@@ -212241,7 +212230,6 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 +    );
 +    expect(frame[1]).toEqual(composed[1]);
 -    );
-@@ -1054,173 +328,7 @@
 -  });
 -
 -  it('respects maxFiles / maxImages caps from options', async () => {
@@ -212415,7 +212403,6 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
    it('injects a plan-mode reminder when planModeActive is true', async () => {
      const history: Content[] = [
        { role: 'user', parts: [{ text: 'u' }] },
-@@ -1227,6 +335,6 @@
        { role: 'model', parts: [{ text: 'm' }] },
      ];
 -    const result = await composePostCompactHistory(history, 'SUMMARY', {
@@ -212423,7 +212410,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        planModeActive: true,
      });
      const flat = result
-@@ -1249,7 +357,11 @@
+@@ -1249,7 +352,11 @@
        { role: 'model', parts: [{ text: 'm' }] },
      ];
      for (const opts of [{}, { planModeActive: false }]) {
@@ -212436,7 +212423,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        const flat = result
          .flatMap((c) => c.parts ?? [])
          .map((p) => (p as { text?: string }).text ?? '')
-@@ -1265,7 +377,7 @@
+@@ -1265,7 +372,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212445,7 +212432,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-1',
-@@ -1299,10 +411,14 @@
+@@ -1299,10 +406,14 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212462,7 +212449,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
      for (const r of [empty, undefSnap]) {
        const flat = r
          .flatMap((c) => c.parts ?? [])
-@@ -1317,7 +433,7 @@
+@@ -1317,7 +428,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212471,7 +212458,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-x',
-@@ -1340,7 +456,7 @@
+@@ -1340,7 +451,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212480,7 +212467,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-a',
-@@ -1377,7 +493,7 @@
+@@ -1377,7 +488,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212489,7 +212476,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent-x',
-@@ -1408,7 +524,7 @@
+@@ -1408,7 +519,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212498,7 +212485,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: [
          {
            id: 'agent</background-tasks>&<inject>',
-@@ -1440,7 +556,7 @@
+@@ -1440,7 +551,7 @@
        status: 'running' as const,
        startTime: i,
      }));
@@ -212507,7 +212494,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: subs,
      });
      const flat = result
-@@ -1466,7 +582,7 @@
+@@ -1466,7 +577,7 @@
        status: 'running' as const,
        startTime: i,
      }));
@@ -212516,7 +212503,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        runningSubagents: subs,
      });
      const flat = result
-@@ -1481,7 +597,7 @@
+@@ -1481,7 +592,7 @@
        { role: 'user', parts: [{ text: 'u' }] },
        { role: 'model', parts: [{ text: 'm' }] },
      ];
@@ -212528,7 +212515,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/core/src/services/postCompactAttachments.ts
 --- a/packages/core/src/services/postCompactAttachments.ts
 +++ b/packages/core/src/services/postCompactAttachments.ts
-@@ -1,6 +1,8 @@
+@@ -1,550 +1,79 @@
 +import { retainedInstructionParts } from '../core/authored-instructions.js';
 +import { renderStateSnapshot, type StateSnapshot } from './state-snapshot.js';
  /**
@@ -212537,7 +212524,6 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -7,19 +9,17 @@
  /**
 - * postCompactAttachments — pure builders for the message blocks injected
 - * AFTER the summary in a compacted history. Replaces qwen-code's tail-
@@ -212546,9 +212532,10 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 + * postCompactAttachments — the pure builder of a compacted history, in the
 + * shape upstream's composer gives one: the snapshot with its resume trailer
 + * as a user message, its `all_user_messages` holding the retained original
-+ * inputs, the model's acknowledgement, the attachments the runtime carries --
-+ * here the state reminders -- and then the turn the snapshot does not cover,
-+ * verbatim.
++ * inputs, the attachments the runtime carries -- here the state reminders --
++ * and then the turn the snapshot does not cover, verbatim. A standalone
++ * acknowledgement separates the snapshot from attachments, or answers a
++ * snapshot with no carried turn.
   *
 - * Everything in this module is message-history-driven: no separate state
 - * caches, no new message types. Extractors walk `Content[]`, builders
@@ -212567,7 +212554,6 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -import { getFunctionResponseParts } from './compactionInputSlimming.js';
  import { escapeXml } from '../utils/xml.js';
  import { ToolNames } from '../tools/tool-names.js';
-@@ -26,525 +26,54 @@
 -
 -export const POST_COMPACT_MAX_FILES_TO_RESTORE = 5;
 -
@@ -213118,9 +213104,8 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 +
 +/**
 + * The model turn that acknowledges the snapshot, in upstream's words. It is
-+ * what keeps a user message from being answered by the next user message,
-+ * and it is where upstream puts the last turn's call when nothing is
-+ * attached.
++ * what keeps a user message from being answered by the next user message.
++ * It is runtime context and never part of a carried model turn.
 + */
 +export const COMPACTION_ACKNOWLEDGEMENT =
 +  'Got it. Thanks for the additional context!';
@@ -213279,7 +213264,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
  }): Part[] {
    const parts: Part[] = [];
    if (options.planModeActive) {
-@@ -766,89 +210,82 @@
+@@ -766,89 +210,74 @@
      const snap = buildSubagentSnapshotPart(options.runningSubagents);
      if (snap) parts.push(snap);
    }
@@ -213294,7 +213279,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 + *   1. The snapshot with its resume trailer, as a user message, the retained
 + *      original inputs verbatim in its `all_user_messages`: that element is
 + *      where upstream carries the user's messages forward.
-+ *   2. The model's acknowledgement.
++ *   2. A standalone acknowledgement when attachments follow or no turn is carried.
 + *   3. The attachments, as one user message, when there are any: the state
 + *      reminders, each block of text separated from the next, so no two run
 + *      together.
@@ -213303,13 +213288,10 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 + *      call, when one was added). It is what the next request's pending user
 + *      content pairs with.
 + *
-+ * Upstream keeps the last turn as a model message of its own after the
-+ * attachments, and folds its call into the acknowledgement when there is
-+ * nothing to attach, so that no model message follows another. The turn is
-+ * kept whole in both places -- its reasoning and text too, not only its call
-+ * -- because it is the model's own output and the partition charges it as
-+ * one: when nothing is attached, the acknowledgement leads the turn's own
-+ * content rather than standing as a message before it.
++ * A carried model turn answers the snapshot directly when nothing is attached.
++ * Its reasoning, visible text, calls and part boundaries are model output;
++ * composing runtime context cannot add to or rewrite any of them. This also
++ * keeps model turns alternating with user messages without a synthetic prefix.
 + */
 -export async function composePostCompactHistory(
 +export function composePostCompactHistory(
@@ -213415,21 +213397,16 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 +      ...carried,
 +    ];
 +  }
-+  const [first, ...rest] = carried;
-+  if (first?.role === 'model') {
-+    return [
-+      snapshot,
-+      { ...first, parts: [acknowledgement, ...(first.parts ?? [])] },
-+      ...rest,
-+    ];
++  if (carried[0]?.role === 'model') {
++    return [snapshot, ...carried];
 +  }
 +  return [snapshot, { role: 'model', parts: [acknowledgement] }, ...carried];
  }
 +
 +/**
-+ * The text every compacted history carries around its blocks, with the
-+ * blocks left out: the resume trailer after the snapshot, and the
-+ * acknowledgement. It is fixed text, so the startup proof counts it with the
++ * The widest fixed text a compacted history carries around its blocks, with
++ * the blocks left out: the resume trailer after the snapshot, and a standalone
++ * acknowledgement when needed. The startup proof counts it with the
 + * rest of the static preamble; the blocks it frames are bounded where they
 + * are made -- the snapshot, its element tags included, at acceptance, and the
 + * retained inputs its `all_user_messages` holds each when it was submitted.
@@ -213884,11 +213861,16 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
  const { mockDebugLogger, mockAddDaemonRequestAttribute } = vi.hoisted(() => ({
    mockDebugLogger: {
-@@ -44,13 +46,13 @@
+@@ -42,15 +44,18 @@
+     },
+   };
  });
  
  import { Storage } from '../config/storage.js';
  import type { ChatRecord } from './chatRecordingService.js';
++import { composePostCompactHistory } from './postCompactAttachments.js';
++import { STATE_SNAPSHOT_SECTIONS, type StateSnapshot } from './state-snapshot.js';
++import { retainUserInput } from '../core/authored-instructions.js';
  import {
    buildApiHistoryFromConversation,
 -  getResumeTokenCounts,
@@ -213899,7 +213881,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  import { recoverGoalFromRecords } from '../goals/goal-persistence.js';
  import type { GoalStateRecordPayloadV2 } from '../goals/goal-protocol.js';
  import { buildGoalEvidenceCheckpointWindow } from '../goals/goal-evidence.js';
-@@ -108,13 +110,13 @@
+@@ -108,13 +113,13 @@
        'chats',
      );
      await fs.mkdir(chatsDir, { recursive: true });
@@ -213914,7 +213896,83 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    }
  
    async function writeRawTranscript(content: string): Promise<string> {
-@@ -225,12 +227,211 @@
+@@ -124,12 +129,75 @@
+     );
+     await fs.mkdir(chatsDir, { recursive: true });
+     const filePath = path.join(chatsDir, `${sessionId}.jsonl`);
+     await fs.writeFile(filePath, content, 'utf8');
+     return filePath;
+   }
++
++  it.each([false, true])(
++    'resumes and forks the exact composed history with attachments=%s and no added model words',
++    async (planModeActive) => {
++      const user = record('u1', null, 'Keep the original input.');
++      user.message!.parts = retainUserInput(
++        'Keep the original input.',
++        'Keep the original input.',
++      );
++      const assistant = toolCallRecord('a1', 'u1', 'read-1');
++      assistant.message!.parts!.unshift(
++        { text: 'First inspect.\n', thought: true },
++        { text: 'Inspecting now.\n' },
++      );
++      const originalTurn = JSON.stringify(assistant.message);
++      const declared = Object.fromEntries(
++        STATE_SNAPSHOT_SECTIONS.map((section) => [section, 'Recorded state.']),
++      ) as StateSnapshot;
++      const composed = composePostCompactHistory(
++        [user.message!, assistant.message!],
++        declared,
++        { planModeActive, turn: [assistant.message!] },
++      );
++      const checkpoint: ChatRecord = {
++        ...record('checkpoint', 'a1', ''),
++        type: 'system',
++        subtype: 'chat_compression',
++        message: undefined,
++        systemPayload: {
++          info: {
++            compressionStatus: CompressionStatus.COMPRESSED,
++            originalTokenCount: 1000,
++            newTokenCount: 200,
++            rejectedAttempts: [],
++          },
++          compressedHistory: composed,
++        },
++      };
++      const result = toolResultRecord('result', 'checkpoint', 'read-1');
++      const answer = record('a2', 'result', 'Inspected.');
++      const expected = [...composed, result.message!, answer.message!];
++      await writeRecords([user, assistant, checkpoint, result, answer]);
++
++      const service = new SessionService(workspaceDir);
++      const forkId = '550e8400-e29b-41d4-a716-446655440001';
++      await service.forkSession(sessionId, forkId);
++      for (const id of [sessionId, forkId]) {
++        const loaded = await service.loadSession(id);
++        const resumed = buildApiHistoryFromConversation(loaded!.conversation);
++        const indexed = await new SessionTranscriptReader(workspaceDir)
++          .readRestoreProjection(id, { replay: { kind: 'none' } });
++        expect(JSON.stringify(resumed)).toBe(JSON.stringify(expected));
++        expect(JSON.stringify(indexed!.runtime.apiHistory)).toBe(
++          JSON.stringify(expected),
++        );
++        const carried = resumed.find((content) =>
++          content.parts?.some((part) => part.functionCall?.id === 'read-1'),
++        );
++        expect(JSON.stringify(carried)).toBe(originalTurn);
++      }
++      expect(JSON.stringify(assistant.message)).toBe(originalTurn);
++    },
++  );
+ 
+   // Monotonic, always-valid ISO 8601 timestamps in call order. Deriving the
+   // seconds field from `text.length` produced invalid values (e.g. `00:00:013`)
+   // once a record's text reached 10+ chars; a base + per-record offset keeps
+   // every timestamp valid and strictly increasing regardless of count.
+   const RECORD_BASE_MS = Date.UTC(2026, 0, 1, 0, 0, 0);
+@@ -225,12 +293,211 @@
      expect(page.filePath).toBe(filePath);
      const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
      expect(page.startTime).toMatch(ISO_8601);
@@ -214126,7 +214184,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([invalidTimestamp]);
  
      const page = await new SessionTranscriptReader(workspaceDir).readPage(
-@@ -720,25 +921,32 @@
+@@ -720,25 +987,32 @@
      const firstAssistant: ChatRecord = {
        ...record('a1', 'u1', 'first answer'),
        usageMetadata: {
@@ -214160,7 +214218,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const telemetry: ChatRecord = {
        ...record('telemetry', 'compression', ''),
        type: 'system',
-@@ -876,14 +1084,14 @@
+@@ -876,14 +1150,14 @@
      expect(loaded).toBeDefined();
      expect(projection).toBeDefined();
      expect(projection?.replay).toBeUndefined();
@@ -214177,7 +214235,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      );
      expect(projection?.runtime.artifactSnapshot).toEqual(
        loaded?.artifactSnapshot,
-@@ -1387,23 +1595,31 @@
+@@ -1387,23 +1661,31 @@
  
    it('uses the aggregated final usage metadata when selecting resume tokens', async () => {
      const earlier = record('a1', 'u1', 'earlier answer');
@@ -214209,7 +214267,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        earlier,
        record('u2', 'a1', 'second'),
        latest,
-@@ -1417,17 +1633,17 @@
+@@ -1417,17 +1699,17 @@
        service.loadSession(sessionId),
        service.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
@@ -214231,7 +214289,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    it('ignores a later non-snapshot attribution record like the full loader', async () => {
      const snapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1529,13 +1745,13 @@
+@@ -1529,13 +1811,13 @@
          },
        ),
      ).rejects.toBeInstanceOf(RangeError);
@@ -214246,7 +214304,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
        }),
-@@ -1543,13 +1759,13 @@
+@@ -1543,13 +1825,13 @@
  
      await writeRawTranscript('{not-json}\n');
      await expect(
@@ -214261,7 +214319,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(
          sessionId,
          { replay: { kind: 'none' } },
-@@ -1643,28 +1859,28 @@
+@@ -1643,28 +1925,28 @@
            activeTimeMs: 0,
            createdAt: 1,
            updatedAt: 1,
@@ -214295,7 +214353,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        systemPayload: validGoal,
      };
      const malformed: ChatRecord = {
-@@ -1677,13 +1893,13 @@
+@@ -1677,13 +1959,13 @@
          cause: 'create',
          snapshot: null,
        } as unknown as ChatRecord['systemPayload'],
@@ -214310,7 +214368,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const projection = await new SessionTranscriptReader(
-@@ -1694,17 +1910,17 @@
+@@ -1694,17 +1976,17 @@
        kind: 'v2',
        payload: validGoal,
      });
@@ -214330,7 +214388,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        expect.objectContaining({ uuid: 'valid-goal', systemPayload: validGoal }),
        expect.objectContaining({ uuid: 'malformed-goal', systemPayload: null }),
      ]);
-@@ -1811,14 +2027,14 @@
+@@ -1811,14 +2093,14 @@
      expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
        'qwen-code.daemon.session_restore.index_cache_state',
        'hit',
@@ -214347,7 +214405,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        message: undefined,
        systemPayload: {
          rawCommand: '/goal keep the live goal visible',
-@@ -1831,13 +2047,13 @@
+@@ -1831,13 +2113,13 @@
              iterations: 0,
            },
          ],
@@ -214362,7 +214420,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a2', 'u2', 'two answer'),
      ]);
  
-@@ -2323,23 +2539,22 @@
+@@ -2323,23 +2605,22 @@
            position: 999,
          }),
        }),
@@ -214392,7 +214450,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('u1', null, ' world'),
-@@ -2355,36 +2570,25 @@
+@@ -2355,36 +2636,25 @@
        { text: 'hello' },
        { text: ' world' },
      ]);
@@ -214436,7 +214494,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('a1', 'u1', 'reply'),
-@@ -2506,61 +2710,60 @@
+@@ -2506,61 +2776,60 @@
  
      await expect(
        otherReader.readPage(sessionId, { cursor }),
@@ -214529,7 +214587,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const initial = `${JSON.stringify(record('u1', null, 'hello'))}\n`;
      const filePath = await writeRawTranscript(initial);
      const fixed = new Date('2026-02-02T02:02:02.000Z');
-@@ -2643,32 +2846,33 @@
+@@ -2643,32 +2912,33 @@
  
      expect(page.records.map((item) => item.uuid)).toEqual(['u1', 'a1', 'u2']);
      expect(yielded.length).toBeGreaterThanOrEqual(6);
