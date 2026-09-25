@@ -8355,6 +8355,48 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_refused_input_after_clean_close_does_not_change_terminal_output",
         "test_input_failure_precedes_iterator_cleanup",
     ), label=label)
+    java_cli = "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/"
+    _require_all(state, java_cli + "transport/process/JsonLineReader.java", (
+        "new BufferedInputStream(input)", "value != '\\n'", "frame.size() != 0",
+        "StandardCharsets.UTF_8.newDecoder()", "CodingErrorAction.REPORT",
+        "unterminated record at EOF", "Capture the CLI stdout", "throw failure;",
+    ), label=label)
+    _require_all(state, java_cli + "transport/process/ProcessTransport.java", (
+        "protected JsonLineReader processOutput", "StandardCharsets.UTF_8.newEncoder()",
+        "synchronized (inputLock)", "reading.compareAndSet(false, true)",
+        "public synchronized void start()", "public synchronized void close()",
+        "ThreadPoolConfig.execute(task)", "failure.compareAndSet(null, error)",
+        "process.destroyForcibly()", "return primaryFailure()",
+        "CLI stdout ended before the requested response completed",
+    ), label=label)
+    java_wait = _source(state, java_cli + "transport/process/ProcessTransport.java", label=label).split(
+        "private <T> T waitForRead", 1
+    )[1].split("private String readRecord", 1)[0]
+    _require_ordered(java_wait, ("throw fail(e)", "finally", "task.cancel(true)"),
+                     label=label, location=java_cli + "transport/process/ProcessTransport.java")
+    _require_all(state, java_cli + "utils/MyConcurrentUtils.java", (
+        "FutureTask<T>", "ThreadPoolConfig.execute(future)", "future.cancel(true)",
+        "Thread.currentThread().interrupt()", "throw (RuntimeException) cause",
+        "future.whenComplete(errorCallback)",
+    ), label=label)
+    forbid_text(state, java_cli + "utils/MyConcurrentUtils.java", 'log.warn("Operation error"', label=label)
+    _require_all(state, java_cli + "utils/ThreadPoolConfig.java", (
+        "public static void execute(Runnable task)", "executor.isShutdown()",
+        "Thread.currentThread() == caller", "SDK executor cannot admit asynchronous work",
+    ), label=label)
+    java_tests = "packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/"
+    _require_all(state, java_tests + "transport/process/JsonLineReaderTest.java", (
+        "preservesLargeUnicodeRecordsAcrossEveryFragmentSize", "preservesPrefixThenLatchesMalformedUtf8",
+        "refusesEveryNonemptyEofSuffix", "bareCarriageReturnDoesNotCommitARecord",
+    ), label=label)
+    _require_all(state, java_tests + "transport/process/ProcessTransportRecordTest.java", (
+        "successfulTurnBoundaryKeepsNextTurnAvailable", "callbackFailureClosesAdmissionAndKeepsOriginalFailure",
+        "corruptRecordRetainsPrefixAndRefusesSuccess", "timedOutCallbackCannotConsumeNextRecordAfterInterruption",
+    ), label=label)
+    _require_all(state, java_tests + "utils/MyConcurrentUtilsTest.java", (
+        "runnableFailureIsTheOriginalException", "interruptedCallerFailsAndRetainsInterruptFlag",
+        "asyncFailureReachesErrorCallback", "saturatedCallerRunsExecutorCannotBypassWaitOwnership",
+    ), label=label)
     for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
         require_text(state, path, "recordingVersion: CHAT_RECORDING_VERSION", label=label)
     _require_all(
@@ -10186,7 +10228,12 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "lower bound, not queued-input causal correlation. Both SDKs validate controls, and "
             "shared Core admission refuses repeated terminal identities."
             " Shared JSON writers publish the versioned journal origin before startup errors "
-            "or other first records; authentication exits await output flush."
+            "or other first records; authentication exits await output flush. "
+            "Java CLI stdout uses strict UTF-8 and LF commitment with no record-size cap. "
+            "Its shared task helper propagates failures; transport reads latch the first "
+            "failure before cancellation and refuse later work. Executor dispatch must be "
+            "asynchronous, and startup rejection closes the owned process. Java versioned "
+            "schema and evidence admission remain separate required interpretation work."
         ),
         removal_condition=(
             "Upstream supplies durable owned observations, required canonical writers, strict replay, "

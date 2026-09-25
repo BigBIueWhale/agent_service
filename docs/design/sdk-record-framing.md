@@ -30,7 +30,8 @@ later abort or cleanup error cannot convert an established framing failure into
 success. A valid result on a live multi-turn stream leaves the query open; clean
 EOF completes it. The output iterator retains valid records preceding the refusal.
 
-Other readers must receive the same audit. Python currently replaces invalid UTF-8
-and skips malformed JSON, and its query router drops unknown record types. Java's
-session router passes unknown types to an optional callback. Those wider record
-admission gaps are not proved closed by TypeScript framing tests.
+Python's strict framing and shared v5 admission are documented in
+`python-sdk-record-framing.md` and `python-sdk-record-admission.md`. Java's byte
+framing and failure ownership are documented in `java-sdk-record-framing.md`;
+its session router still passes unknown types to an optional callback. Those
+wider Java admission gaps are not proved closed by transport framing tests.

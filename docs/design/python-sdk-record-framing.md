@@ -31,19 +31,20 @@ The canonical runtime recording and its resume replay are unchanged, as are mode
 request bodies and the stdout schema. Tests use source implementations and real
 asyncio streams, with only the process boundary mocked.
 
-Versioned record admission is a separate required part of the full repair. Python
-currently lacks the shared schema, model-request/response replay and partial-stream
-validation. A framing repair alone cannot prove that complete JSON records were
-understood or that a complete request/response sequence was delivered. That work
-must bind Python to the authoritative version 5 contract, preserve evidence records
-and refuse unknown versions and record types, including semantically invalid known
-records. Java and other reader boundaries retain their own corresponding work.
+Versioned record admission is a separate part of the full repair, documented in
+`python-sdk-record-admission.md`. Python binds to the authoritative version 5
+contract, replays model request/response evidence and validates partial streams
+before delivery. It refuses unknown versions and record types, including
+semantically invalid known records. Framing tests alone do not prove that complete
+JSON records were understood or that a complete request/response sequence was
+delivered. Java and other reader boundaries retain their own corresponding work.
 
 Validation uses frozen-source reproductions and permanent Python unit tests. The
 framing fixtures exercise malformed middle records, strict decoding across every
 Unicode byte boundary, all nonempty EOF suffixes, finite numbers, and full records
 larger than the process reader's default buffer. Query fixtures cover both prompt
 modes, slow readers, pending controls, synchronous consumption, blocked input,
-startup, cancellation and cleanup-error ordering. The three admission defects stay
-explicitly failing in the independent audit; these tests do not establish complete
-version 5 admission.
+startup, cancellation and cleanup-error ordering. Independent admission fixtures
+also cover unknown types, invalid recognized records and preserved model evidence;
+their scope and remaining causal-completeness limit are recorded in the admission
+design. Byte-framing tests do not establish complete version 5 admission.

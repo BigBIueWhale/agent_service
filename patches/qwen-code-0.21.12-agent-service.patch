@@ -332592,3 +332592,1038 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +    }
 +  ]
 +}
+diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReader.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReader.java
+--- /dev/null
++++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReader.java
+@@ -0,0 +1,76 @@
++package com.alibaba.qwen.code.cli.transport.process;
++
++import java.io.BufferedInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.Closeable;
++import java.io.IOException;
++import java.io.InputStream;
++import java.nio.ByteBuffer;
++import java.nio.charset.CharacterCodingException;
++import java.nio.charset.CodingErrorAction;
++import java.nio.charset.StandardCharsets;
++
++/** Frames LF-committed stdout records before strict UTF-8 decoding. */
++public final class JsonLineReader implements Closeable {
++    private final InputStream input;
++    private long line = 1;
++    private IOException failure;
++
++    public JsonLineReader(InputStream input) {
++        this.input = new BufferedInputStream(input);
++    }
++
++    public String readLine() throws IOException {
++        if (failure != null) {
++            throw failure;
++        }
++        try {
++            for (;;) {
++                ByteArrayOutputStream frame = new ByteArrayOutputStream();
++                boolean blank = true;
++                int value;
++                while ((value = input.read()) != -1 && value != '\n') {
++                    frame.write(value);
++                    blank &= value == ' ' || value == '\t' || value == '\r' || value == '\f';
++                }
++                if (value == -1) {
++                    if (frame.size() != 0) {
++                        throw refusal("unterminated record at EOF", null);
++                    }
++                    return null;
++                }
++                if (blank) {
++                    line++;
++                    continue;
++                }
++                String record;
++                try {
++                    record = StandardCharsets.UTF_8.newDecoder()
++                            .onMalformedInput(CodingErrorAction.REPORT)
++                            .onUnmappableCharacter(CodingErrorAction.REPORT)
++                            .decode(ByteBuffer.wrap(frame.toByteArray())).toString();
++                } catch (CharacterCodingException e) {
++                    throw refusal("invalid UTF-8", e);
++                }
++                line++;
++                return record;
++            }
++        } catch (IOException e) {
++            if (failure == null) {
++                failure = refusal("I/O read failed", e);
++            }
++            throw failure;
++        }
++    }
++
++    private IOException refusal(String reason, Exception cause) {
++        failure = new IOException("CLI stdout record at line " + line + ": " + reason
++                + ". Capture the CLI stdout and inspect this line; use a matching CLI and SDK.", cause);
++        return failure;
++    }
++
++    @Override
++    public void close() throws IOException {
++        input.close();
++    }
++}
+diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransport.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransport.java
+--- a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransport.java
++++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransport.java
+@@ -1,30 +1,39 @@
+ package com.alibaba.qwen.code.cli.transport.process;
+ 
+ import com.alibaba.qwen.code.cli.transport.Transport;
+ import com.alibaba.qwen.code.cli.transport.TransportOptions;
+ import com.alibaba.qwen.code.cli.utils.MyConcurrentUtils;
+ import com.alibaba.qwen.code.cli.utils.Timeout;
++import com.alibaba.qwen.code.cli.utils.ThreadPoolConfig;
+ 
+-import org.apache.commons.lang3.exception.ContextedRuntimeException;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
+ import java.io.BufferedReader;
+ import java.io.BufferedWriter;
++import java.io.Closeable;
++import java.io.EOFException;
+ import java.io.File;
+ import java.io.IOException;
+ import java.io.InputStreamReader;
+ import java.io.OutputStreamWriter;
++import java.io.UncheckedIOException;
+ import java.lang.ProcessBuilder.Redirect;
++import java.nio.charset.CodingErrorAction;
++import java.nio.charset.StandardCharsets;
+ import java.util.Map;
+ import java.util.concurrent.ExecutionException;
++import java.util.concurrent.FutureTask;
++import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.TimeoutException;
+ import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.concurrent.atomic.AtomicReference;
+ import java.util.function.Consumer;
+ import java.util.function.Function;
++import java.util.function.Supplier;
+ 
+ /**
+  * Implementation of the Transport interface that communicates with the Qwen CLI via a process.
+  *
+  * @author skyfire
+  * @version $Id: 0.0.1
+@@ -34,17 +43,20 @@
+     private final TransportOptions transportOptions;
+     protected Timeout turnTimeout;
+     protected Timeout messageTimeout;
+ 
+     protected Process process;
+     protected BufferedWriter processInput;
+-    protected BufferedReader processOutput;
++    protected JsonLineReader processOutput;
+     protected BufferedReader processError;
+     protected final Consumer<String> errorHandler;
+ 
+     private final AtomicBoolean reading = new AtomicBoolean(false);
++    private final AtomicReference<Throwable> failure = new AtomicReference<>();
++    private final AtomicBoolean closed = new AtomicBoolean(false);
++    private final Object inputLock = new Object();
+ 
+     /**
+      * Constructs a new ProcessTransport with default options.
+      *
+      * @throws java.io.IOException if starting the process fails
+      */
+@@ -86,13 +98,20 @@
+     public boolean isReading() {
+         return reading.get();
+     }
+ 
+     /** {@inheritDoc} */
+     @Override
+-    public void start() throws IOException {
++    public synchronized void start() throws IOException {
++        checkFailure();
++        if (reading.get()) {
++            throw new IllegalStateException("CLI stdout still has a reader; wait for it before starting a process");
++        }
++        if (process != null && process.isAlive()) {
++            throw new IllegalStateException("CLI process is already running; close it before starting another process");
++        }
+         TransportOptionsAdapter transportOptionsAdapter = new TransportOptionsAdapter(transportOptions);
+         this.turnTimeout = transportOptionsAdapter.getHandledTransportOptions().getTurnTimeout();
+         this.messageTimeout = transportOptionsAdapter.getHandledTransportOptions().getMessageTimeout();
+ 
+         String[] commandArgs = transportOptionsAdapter.buildCommandArgs();
+         log.debug("trans to command args: {}", transportOptionsAdapter);
+@@ -109,62 +128,78 @@
+             Map<String, String> processEnv = processBuilder.environment();
+             processEnv.clear();
+             processEnv.putAll(env);
+         }
+ 
+         process = processBuilder.start();
+-        processInput = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
+-        processOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
+-        processError = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+-        startErrorReading();
++        processInput = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),
++                StandardCharsets.UTF_8.newEncoder()
++                        .onMalformedInput(CodingErrorAction.REPORT)
++                        .onUnmappableCharacter(CodingErrorAction.REPORT)));
++        processOutput = new JsonLineReader(process.getInputStream());
++        processError = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8));
++        closed.set(false);
++        try {
++            startErrorReading();
++        } catch (RuntimeException | Error e) {
++            throw fail(e);
++        }
+     }
+ 
+     /** {@inheritDoc} */
+     @Override
+-    public void close() throws IOException {
+-        if (processInput != null) {
+-            processInput.close();
+-        }
+-        if (processOutput != null) {
+-            processOutput.close();
+-        }
+-        if (processError != null) {
+-            processError.close();
+-        }
++    public synchronized void close() throws IOException {
++        closed.set(true);
+         if (process != null) {
+             process.destroy();
++        }
++        IOException closeError = null;
++        for (Closeable resource : new Closeable[] {processInput, processOutput, processError}) {
++            if (resource != null) {
++                try {
++                    resource.close();
++                } catch (IOException e) {
++                    if (closeError == null) {
++                        closeError = e;
++                    } else {
++                        closeError.addSuppressed(e);
++                    }
++                }
++            }
++        }
++        if (closeError != null) {
++            if (failure.get() != null) {
++                failure.get().addSuppressed(closeError);
++                throw primaryFailure();
++            }
++            throw closeError;
+         }
+     }
+ 
+     /** {@inheritDoc} */
+     @Override
+     public boolean isAvailable() {
+-        return process != null && process.isAlive();
++        return failure.get() == null && !closed.get() && process != null && process.isAlive();
+     }
+ 
+     /** {@inheritDoc} */
+     @Override
+     public String inputWaitForOneLine(String message) throws IOException, ExecutionException, InterruptedException, TimeoutException {
+         return inputWaitForOneLine(message, turnTimeout);
+     }
+ 
+     private String inputWaitForOneLine(String message, Timeout timeOut)
+             throws IOException, TimeoutException, InterruptedException, ExecutionException {
+-        inputNoWaitResponse(message);
++        beginRead();
+         try {
+-            reading.set(true);
+-            String line = MyConcurrentUtils.runAndWait(() -> {
+-                try {
+-                    return processOutput.readLine();
+-                } catch (IOException e) {
+-                    throw new ContextedRuntimeException("read line error", e)
+-                            .addContextValue("message", message);
+-                }
+-            }, timeOut);
++            inputNoWaitResponse(message);
++            String line = waitForRead(this::readRecord, timeOut.getUnit().toNanos(timeOut.getValue()));
+             log.info("inputWaitForOneLine result: {}", line);
+             return line;
++        } catch (Exception | Error e) {
++            throw fail(e);
+         } finally {
+             reading.set(false);
+         }
+     }
+ 
+     /** {@inheritDoc} */
+@@ -172,23 +207,42 @@
+     public void inputWaitForMultiLine(String message, Function<String, Boolean> callBackFunction) throws IOException {
+         inputWaitForMultiLine(message, callBackFunction, turnTimeout);
+     }
+ 
+     private void inputWaitForMultiLine(String message, Function<String, Boolean> callBackFunction, Timeout timeOut) throws IOException {
+         log.debug("input message for multiLine: {}", message);
+-        inputNoWaitResponse(message);
+-        MyConcurrentUtils.runAndWait(() -> iterateOutput(callBackFunction), timeOut);
++        beginRead();
++        try {
++            inputNoWaitResponse(message);
++            long timeoutNanos = Math.min(timeOut.getUnit().toNanos(timeOut.getValue()),
++                    messageTimeout.getUnit().toNanos(messageTimeout.getValue()));
++            waitForRead(() -> {
++                iterateOutput(callBackFunction);
++                return null;
++            }, timeoutNanos);
++        } catch (Exception | Error e) {
++            throw fail(e);
++        } finally {
++            reading.set(false);
++        }
+     }
+ 
+     /** {@inheritDoc} */
+     @Override
+     public void inputNoWaitResponse(String message) throws IOException {
+-        log.debug("input message to process: {}", message);
+-        processInput.write(message);
+-        processInput.newLine();
+-        processInput.flush();
++        synchronized (inputLock) {
++            checkOpen();
++            try {
++                log.debug("input message to process: {}", message);
++                processInput.write(message);
++                processInput.write('\n');
++                processInput.flush();
++            } catch (IOException e) {
++                throw fail(e);
++            }
++        }
+     }
+ 
+     private void startErrorReading() {
+         MyConcurrentUtils.asyncRun(() -> {
+             try {
+                 for (;;) {
+@@ -204,29 +258,117 @@
+                         }
+                     }
+                 }
+             } catch (IOException e) {
+                 log.warn("Failed read error {}, caused by {}", e.getMessage(), e.getCause(), e);
+             }
+-        }, (e, t) -> log.warn("read error {}", t.getMessage(), t));
++        }, (e, t) -> {
++            if (t != null && !closed.get()) {
++                log.warn("read error {}", t.getMessage(), t);
++            }
++        });
+     }
+ 
+     private void iterateOutput(Function<String, Boolean> callBackFunction) {
+-        try {
+-            reading.set(true);
+-            MyConcurrentUtils.runAndWait(() -> {
+-                try {
+-                    for (String line = processOutput.readLine(); line != null; line = processOutput.readLine()) {
+-                        log.debug("read a message from process {}", line);
+-                        if (callBackFunction.apply(line)) {
+-                            break;
+-                        }
+-                    }
+-                } catch (IOException e) {
+-                    throw new RuntimeException("read process output error", e);
+-                }
+-            }, messageTimeout);
+-        } finally {
+-            reading.set(false);
++        for (;;) {
++            String line = readRecord();
++            checkOpen();
++            log.debug("read a message from process {}", line);
++            if (callBackFunction.apply(line)) {
++                return;
++            }
+         }
+     }
++
++    private <T> T waitForRead(Supplier<T> action, long timeoutNanos) {
++        FutureTask<T> task = new FutureTask<>(() -> {
++            try {
++                return action.get();
++            } catch (Exception | Error e) {
++                throw fail(e);
++            }
++        });
++        try {
++            ThreadPoolConfig.execute(task);
++            return task.get(timeoutNanos, TimeUnit.NANOSECONDS);
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            throw fail(e);
++        } catch (ExecutionException e) {
++            throw fail(e.getCause());
++        } catch (Exception | Error e) {
++            throw fail(e);
++        } finally {
++            if (!task.isDone()) {
++                task.cancel(true);
++            }
++        }
++    }
++
++    private String readRecord() {
++        checkOpen();
++        try {
++            String line = processOutput.readLine();
++            if (line == null) {
++                throw new EOFException("CLI stdout ended before the requested response completed; "
++                        + "capture stdout and stderr and inspect the CLI exit status");
++            }
++            checkOpen();
++            return line;
++        } catch (IOException e) {
++            throw fail(new UncheckedIOException(e));
++        }
++    }
++
++    private void beginRead() {
++        checkOpen();
++        if (!reading.compareAndSet(false, true)) {
++            throw new IllegalStateException("CLI stdout already has a reader; wait for its response before starting another read");
++        }
++    }
++
++    private void checkFailure() {
++        if (failure.get() != null) {
++            throw primaryFailure();
++        }
++    }
++
++    private RuntimeException primaryFailure() {
++        Throwable error = failure.get();
++        if (error instanceof Error) {
++            throw (Error) error;
++        }
++        return (RuntimeException) error;
++    }
++
++    private void checkOpen() {
++        checkFailure();
++        if (closed.get()) {
++            throw new IllegalStateException("CLI transport is closed; create a session before sending more work");
++        }
++    }
++
++    private RuntimeException fail(Throwable cause) {
++        Throwable error = cause instanceof RuntimeException || cause instanceof Error ? cause
++                : new IllegalStateException("CLI transport failed; inspect the original cause and captured stdout", cause);
++        if (failure.compareAndSet(null, error)) {
++            closed.set(true);
++            try {
++                if (process != null) {
++                    process.destroyForcibly();
++                }
++            } catch (Exception cleanupError) {
++                if (cleanupError != error) {
++                    error.addSuppressed(cleanupError);
++                }
++            }
++            try {
++                close();
++            } catch (Exception cleanupError) {
++                if (cleanupError != error) {
++                    error.addSuppressed(cleanupError);
++                }
++            }
++        }
++        return primaryFailure();
++    }
+ }
+diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java
+--- a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java
++++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java
+@@ -1,51 +1,48 @@
+ package com.alibaba.qwen.code.cli.utils;
+ 
+ import java.util.concurrent.CompletableFuture;
+ import java.util.concurrent.ExecutionException;
++import java.util.concurrent.FutureTask;
+ import java.util.concurrent.TimeoutException;
+ import java.util.function.BiConsumer;
+ import java.util.function.Supplier;
+-
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+ 
+ /**
+  * Utility class for concurrent operations.
+  *
+  * @author skyfire
+  * @version $Id: 0.0.1
+  */
+ public class MyConcurrentUtils {
+-    private static final Logger log = LoggerFactory.getLogger(MyConcurrentUtils.class);
+-
+     /**
+      * Runs a task and waits for it to complete with a timeout.
+      *
+      * @param runnable The task to run
+      * @param timeOut The timeout for the operation
+      */
+     public static void runAndWait(Runnable runnable, Timeout timeOut) {
+-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+-            try {
++        try {
++            runAndWait(() -> {
+                 runnable.run();
+-            } catch (Exception e) {
+-                throw new RuntimeException(e);
++                return null;
++            }, timeOut);
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            throw new IllegalStateException("Operation interrupted; inspect caller cancellation and CLI stdout", e);
++        } catch (TimeoutException e) {
++            throw new IllegalStateException("Operation timed out; inspect the stalled CLI or callback and its SDK timeout", e);
++        } catch (ExecutionException e) {
++            Throwable cause = e.getCause();
++            if (cause instanceof RuntimeException) {
++                throw (RuntimeException) cause;
+             }
+-        }, ThreadPoolConfig.getExecutor());
+-        try {
+-            future.get(timeOut.getValue(), timeOut.getUnit());
+-        } catch (InterruptedException e) {
+-            log.warn("task interrupted", e);
+-            future.cancel(true);
+-        } catch (TimeoutException e) {
+-            log.warn("Operation timed out", e);
+-            future.cancel(true);
+-        } catch (Exception e) {
+-            future.cancel(true);
+-            log.warn("Operation error", e);
++            if (cause instanceof Error) {
++                throw (Error) cause;
++            }
++            throw new IllegalStateException("Operation failed; inspect the original cause and CLI stdout", cause);
+         }
+     }
+ 
+     /**
+      * Runs a task that returns a value and waits for it to complete with a timeout.
+      *
+@@ -56,39 +53,35 @@
+      * @throws java.util.concurrent.ExecutionException if an execution error occurs
+      * @throws java.lang.InterruptedException if the operation is interrupted
+      * @throws java.util.concurrent.TimeoutException if the operation times out
+      */
+     public static <T> T runAndWait(Supplier<T> supplier, Timeout timeOut)
+             throws ExecutionException, InterruptedException, TimeoutException {
+-        CompletableFuture<T> future = CompletableFuture.supplyAsync(() -> {
+-            try {
+-                return supplier.get();
+-            } catch (Exception e) {
+-                throw new RuntimeException(e);
+-            }
+-        }, ThreadPoolConfig.getExecutor());
++        FutureTask<T> future = new FutureTask<>(supplier::get);
+ 
+         try {
++            ThreadPoolConfig.execute(future);
+             return future.get(timeOut.getValue(), timeOut.getUnit());
+-        } catch (TimeoutException | InterruptedException | ExecutionException e) {
++        } catch (InterruptedException e) {
++            future.cancel(true);
++            Thread.currentThread().interrupt();
++            throw e;
++        } catch (TimeoutException | ExecutionException e) {
++            future.cancel(true);
++            throw e;
++        } catch (RuntimeException | Error e) {
+             future.cancel(true);
+             throw e;
+         }
+     }
+ 
+     /**
+      * Runs a task asynchronously with an error callback.
+      *
+      * @param runnable The task to run
+      * @param errorCallback The error callback
+      */
+     public static void asyncRun(Runnable runnable, BiConsumer<Void, Throwable> errorCallback) {
+-        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+-            try {
+-                runnable.run();
+-            } catch (Exception e) {
+-                log.warn("async task error", e);
+-            }
+-        }, ThreadPoolConfig.getExecutor());
++        CompletableFuture<Void> future = CompletableFuture.runAsync(runnable, ThreadPoolConfig::execute);
+         future.whenComplete(errorCallback);
+     }
+ }
+diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/ThreadPoolConfig.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/ThreadPoolConfig.java
+--- a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/ThreadPoolConfig.java
++++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/ThreadPoolConfig.java
+@@ -1,11 +1,12 @@
+ package com.alibaba.qwen.code.cli.utils;
+ 
+ import java.util.Optional;
+ import java.util.concurrent.ExecutorService;
+ import java.util.concurrent.LinkedBlockingQueue;
++import java.util.concurrent.RejectedExecutionException;
+ import java.util.concurrent.ThreadFactory;
+ import java.util.concurrent.ThreadPoolExecutor;
+ import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicInteger;
+ import java.util.function.Supplier;
+ 
+@@ -49,12 +50,27 @@
+      * @return The default executor
+      */
+     public static ThreadPoolExecutor getDefaultExecutor() {
+         return defaultExecutor;
+     }
+ 
++    public static void execute(Runnable task) {
++        Thread caller = Thread.currentThread();
++        ExecutorService executor = getExecutor();
++        if (executor.isShutdown()) {
++            throw new RejectedExecutionException("SDK executor is shut down; provide an active asynchronous executor before starting work");
++        }
++        executor.execute(() -> {
++            // Inline execution bypasses deadlines and gives the waiting caller reader ownership.
++            if (Thread.currentThread() == caller) {
++                throw new RejectedExecutionException("SDK executor cannot admit asynchronous work; wait for active tasks or increase executor capacity");
++            }
++            task.run();
++        });
++    }
++
+     static ExecutorService getExecutor() {
+         return Optional.ofNullable(executorSupplier).map(s -> {
+             try {
+                 return s.get();
+             } catch (Exception e) {
+                 return defaultExecutor;
+diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReaderTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReaderTest.java
+--- /dev/null
++++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReaderTest.java
+@@ -0,0 +1,93 @@
++package com.alibaba.qwen.code.cli.transport.process;
++
++import java.io.ByteArrayInputStream;
++import java.io.IOException;
++import java.io.InputStream;
++import java.nio.charset.StandardCharsets;
++import java.util.Arrays;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class JsonLineReaderTest {
++    @Test
++    void preservesLargeUnicodeRecordsAcrossEveryFragmentSize() throws Exception {
++        String record = "{\"type\":\"model_request\",\"body\":\"" + "אב😀".repeat(32769) + "\"}";
++        byte[] bytes = (" \t\r\n" + record + "\r\nlast\n").getBytes(StandardCharsets.UTF_8);
++        for (int size : new int[] {1, 2, 3, 7, 8192}) {
++            ByteArrayInputStream source = new ByteArrayInputStream(bytes) {
++                @Override
++                public synchronized int read(byte[] buffer, int offset, int length) {
++                    return super.read(buffer, offset, Math.min(size, length));
++                }
++            };
++            try (JsonLineReader reader = new JsonLineReader(source)) {
++                assertEquals(record + "\r", reader.readLine());
++                assertEquals("last", reader.readLine());
++                assertNull(reader.readLine());
++            }
++        }
++    }
++
++    @Test
++    void preservesPrefixThenLatchesMalformedUtf8() throws Exception {
++        for (byte[] invalid : new byte[][] {
++                {(byte) 0xc3}, {(byte) 0xff}, {(byte) 0xc0, (byte) 0xaf},
++                {(byte) 0xed, (byte) 0xa0, (byte) 0x80}, {(byte) 0xf4, (byte) 0x90, (byte) 0x80, (byte) 0x80}}) {
++            byte[] wire = new byte[invalid.length + 5];
++            wire[0] = 'A';
++            wire[1] = '\n';
++            System.arraycopy(invalid, 0, wire, 2, invalid.length);
++            wire[invalid.length + 2] = '\n';
++            wire[invalid.length + 3] = 'Z';
++            wire[invalid.length + 4] = '\n';
++            try (JsonLineReader reader = new JsonLineReader(new ByteArrayInputStream(wire))) {
++                assertEquals("A", reader.readLine());
++                IOException first = assertThrows(IOException.class, reader::readLine);
++                assertTrue(first.getMessage().contains("line 2: invalid UTF-8"));
++                assertSame(first, assertThrows(IOException.class, reader::readLine));
++            }
++        }
++    }
++
++    @Test
++    void refusesEveryNonemptyEofSuffix() throws Exception {
++        byte[] record = "{\"type\":\"assistant\",\"text\":\"😀\"}".getBytes(StandardCharsets.UTF_8);
++        for (int end = 1; end <= record.length; end++) {
++            try (JsonLineReader reader = new JsonLineReader(new ByteArrayInputStream(Arrays.copyOf(record, end)))) {
++                IOException first = assertThrows(IOException.class, reader::readLine);
++                assertTrue(first.getMessage().contains("unterminated record at EOF"));
++                assertSame(first, assertThrows(IOException.class, reader::readLine));
++            }
++        }
++        for (String suffix : new String[] {" ", "\t", "\r", "\f", " \r\t"}) {
++            try (JsonLineReader reader = new JsonLineReader(new ByteArrayInputStream(suffix.getBytes(StandardCharsets.UTF_8)))) {
++                assertThrows(IOException.class, reader::readLine);
++            }
++        }
++    }
++
++    @Test
++    void bareCarriageReturnDoesNotCommitARecord() throws Exception {
++        try (JsonLineReader reader = new JsonLineReader(new ByteArrayInputStream("one\rtwo\n".getBytes(StandardCharsets.UTF_8)))) {
++            assertEquals("one\rtwo", reader.readLine());
++            assertNull(reader.readLine());
++        }
++    }
++
++    @Test
++    void ioFailureRetainsItsCauseAndDiagnosticAction() throws Exception {
++        IOException failure = new IOException("pipe failed");
++        InputStream source = new InputStream() {
++            @Override
++            public int read() throws IOException {
++                throw failure;
++            }
++        };
++        try (JsonLineReader reader = new JsonLineReader(source)) {
++            IOException first = assertThrows(IOException.class, reader::readLine);
++            assertSame(failure, first.getCause());
++            assertTrue(first.getMessage().contains("Capture the CLI stdout"));
++            assertSame(first, assertThrows(IOException.class, reader::readLine));
++        }
++    }
++}
+diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransportRecordTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransportRecordTest.java
+--- /dev/null
++++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransportRecordTest.java
+@@ -0,0 +1,176 @@
++package com.alibaba.qwen.code.cli.transport.process;
++
++import com.alibaba.qwen.code.cli.transport.TransportOptions;
++import com.alibaba.qwen.code.cli.utils.Timeout;
++import com.alibaba.qwen.code.cli.utils.ThreadPoolConfig;
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.BufferedWriter;
++import java.io.IOException;
++import java.io.InputStream;
++import java.io.OutputStream;
++import java.io.OutputStreamWriter;
++import java.nio.charset.StandardCharsets;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.LinkedBlockingQueue;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.atomic.AtomicReference;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class ProcessTransportRecordTest {
++    private static final Timeout WAIT = new Timeout(5L, TimeUnit.SECONDS);
++
++    private static class MemoryProcess extends Process {
++        final ByteArrayOutputStream input = new ByteArrayOutputStream();
++        final InputStream output;
++        boolean alive = true;
++
++        MemoryProcess(byte[] bytes) {
++            output = new ByteArrayInputStream(bytes);
++        }
++
++        @Override public OutputStream getOutputStream() { return input; }
++        @Override public InputStream getInputStream() { return output; }
++        @Override public InputStream getErrorStream() { return new ByteArrayInputStream(new byte[0]); }
++        @Override public int waitFor() { return 0; }
++        @Override public int exitValue() { return 0; }
++        @Override public void destroy() { alive = false; }
++        @Override public boolean isAlive() { return alive; }
++    }
++
++    private static class MemoryTransport extends ProcessTransport {
++        final MemoryProcess child;
++
++        MemoryTransport(byte[] output) throws IOException {
++            super(new TransportOptions());
++            child = new MemoryProcess(output);
++            process = child;
++            processInput = new BufferedWriter(new OutputStreamWriter(child.input, StandardCharsets.UTF_8));
++            processOutput = new JsonLineReader(child.output);
++            turnTimeout = WAIT;
++            messageTimeout = WAIT;
++        }
++
++        @Override public void start() { }
++
++        void restart() throws IOException { super.start(); }
++    }
++
++    @Test
++    void successfulTurnBoundaryKeepsNextTurnAvailable() throws Exception {
++        MemoryTransport transport = new MemoryTransport("first\nnext\n".getBytes(StandardCharsets.UTF_8));
++        try {
++            assertThrows(IllegalStateException.class, transport::restart);
++            List<String> records = new ArrayList<>();
++            transport.inputWaitForMultiLine("אב😀", line -> { records.add(line); return true; });
++            assertTrue(transport.isAvailable());
++            assertFalse(transport.isReading());
++            assertEquals("next", transport.inputWaitForOneLine("second"));
++            assertEquals(List.of("first"), records);
++            assertEquals("אב😀\nsecond\n", transport.child.input.toString(StandardCharsets.UTF_8));
++        } finally {
++            transport.close();
++        }
++        assertFalse(transport.isAvailable());
++        assertThrows(IllegalStateException.class, () -> transport.inputNoWaitResponse("late"));
++    }
++
++    @Test
++    void callbackFailureClosesAdmissionAndKeepsOriginalFailure() throws Exception {
++        MemoryTransport transport = new MemoryTransport("first\nnext\n".getBytes(StandardCharsets.UTF_8));
++        RuntimeException failure = new RuntimeException("record refused");
++        List<String> records = new ArrayList<>();
++        try {
++            assertSame(failure, assertThrows(RuntimeException.class,
++                    () -> transport.inputWaitForMultiLine("prompt", line -> {
++                        records.add(line);
++                        throw failure;
++                    })));
++            assertEquals(List.of("first"), records);
++            assertFalse(transport.isAvailable());
++            assertFalse(transport.isReading());
++            assertSame(failure, assertThrows(RuntimeException.class, () -> transport.inputNoWaitResponse("late")));
++            assertSame(failure, assertThrows(RuntimeException.class, () -> transport.inputWaitForOneLine("late")));
++            assertSame(failure, assertThrows(RuntimeException.class, transport::restart));
++            assertEquals("prompt\n", transport.child.input.toString(StandardCharsets.UTF_8));
++        } finally {
++            transport.close();
++        }
++    }
++
++    @Test
++    void corruptRecordRetainsPrefixAndRefusesSuccess() throws Exception {
++        for (byte[] bytes : new byte[][] {
++                {'A', '\n', (byte) 0xc3, '\n', 'Z', '\n'},
++                {'A', '\n', 'Z'},
++                {'A', '\n'},
++                {}}) {
++            MemoryTransport transport = new MemoryTransport(bytes);
++            List<String> records = new ArrayList<>();
++            try {
++                RuntimeException failure = assertThrows(RuntimeException.class,
++                        () -> transport.inputWaitForMultiLine("prompt", line -> { records.add(line); return false; }));
++                assertEquals(bytes.length == 0 ? List.of() : List.of("A"), records);
++                assertFalse(transport.isAvailable());
++                assertSame(failure, assertThrows(RuntimeException.class, () -> transport.inputNoWaitResponse("late")));
++            } finally {
++                transport.close();
++            }
++        }
++    }
++
++    @Test
++    void timedOutCallbackCannotConsumeNextRecordAfterInterruption() throws Exception {
++        MemoryTransport transport = new MemoryTransport("first\nnext\n".getBytes(StandardCharsets.UTF_8));
++        CountDownLatch entered = new CountDownLatch(1);
++        CountDownLatch workerFinished = new CountDownLatch(1);
++        ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.SECONDS,
++                new LinkedBlockingQueue<>()) {
++            @Override
++            protected void afterExecute(Runnable task, Throwable error) {
++                workerFinished.countDown();
++            }
++        };
++        List<String> records = new ArrayList<>();
++        AtomicReference<Throwable> failure = new AtomicReference<>();
++        Thread caller = new Thread(() -> {
++            try {
++                transport.inputWaitForMultiLine("prompt", line -> {
++                    records.add(line);
++                    entered.countDown();
++                    try {
++                        new CountDownLatch(1).await();
++                    } catch (InterruptedException e) {
++                        // User callbacks can handle interruption and return normally.
++                    }
++                    return false;
++                });
++            } catch (Throwable e) {
++                failure.set(e);
++            }
++        });
++        try {
++            ThreadPoolConfig.setExecutorSupplier(() -> executor);
++            caller.start();
++            assertTrue(entered.await(WAIT.getValue(), WAIT.getUnit()));
++            caller.join(WAIT.getUnit().toMillis(WAIT.getValue()) * 2);
++            assertFalse(caller.isAlive());
++            assertNotNull(failure.get());
++            assertTrue(workerFinished.await(WAIT.getValue(), WAIT.getUnit()));
++            assertEquals(List.of("first"), records);
++            assertFalse(transport.isAvailable());
++            assertSame(failure.get(), assertThrows(RuntimeException.class, () -> transport.inputNoWaitResponse("late")));
++        } finally {
++            ThreadPoolConfig.setExecutorSupplier(null);
++            transport.close();
++            caller.interrupt();
++            caller.join(WAIT.getUnit().toMillis(WAIT.getValue()));
++            executor.shutdownNow();
++            assertTrue(executor.awaitTermination(WAIT.getValue(), WAIT.getUnit()));
++        }
++    }
++}
+diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtilsTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtilsTest.java
+--- /dev/null
++++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtilsTest.java
+@@ -0,0 +1,130 @@
++package com.alibaba.qwen.code.cli.utils;
++
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.TimeoutException;
++import java.util.concurrent.ArrayBlockingQueue;
++import java.util.concurrent.RejectedExecutionException;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.atomic.AtomicBoolean;
++import java.util.function.Supplier;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class MyConcurrentUtilsTest {
++    private static final Timeout WAIT = new Timeout(5L, TimeUnit.SECONDS);
++
++    @Test
++    void runnableFailureIsTheOriginalException() {
++        RuntimeException failure = new RuntimeException("record refused");
++        assertSame(failure, assertThrows(RuntimeException.class,
++                () -> MyConcurrentUtils.runAndWait((Runnable) () -> { throw failure; }, WAIT)));
++    }
++
++    @Test
++    void supplierFailureRetainsOriginalCause() {
++        RuntimeException failure = new RuntimeException("record refused");
++        ExecutionException thrown = assertThrows(ExecutionException.class,
++                () -> MyConcurrentUtils.runAndWait((Supplier<String>) () -> { throw failure; }, WAIT));
++        assertSame(failure, thrown.getCause());
++    }
++
++    @Test
++    void successfulCallsRemainAvailable() throws Exception {
++        AtomicBoolean called = new AtomicBoolean();
++        MyConcurrentUtils.runAndWait(() -> called.set(true), WAIT);
++        assertTrue(called.get());
++        assertEquals("next", MyConcurrentUtils.runAndWait(() -> "next", WAIT));
++    }
++
++    @Test
++    void timeoutIsFailureAndInterruptsOwnedTask() throws Exception {
++        CountDownLatch interrupted = new CountDownLatch(1);
++        IllegalStateException failure = assertThrows(IllegalStateException.class,
++                () -> MyConcurrentUtils.runAndWait((Runnable) () -> {
++                    try {
++                        new CountDownLatch(1).await();
++                    } catch (InterruptedException e) {
++                        interrupted.countDown();
++                        Thread.currentThread().interrupt();
++                    }
++                }, new Timeout(100L, TimeUnit.MILLISECONDS)));
++        assertInstanceOf(TimeoutException.class, failure.getCause());
++        assertTrue(interrupted.await(WAIT.getValue(), WAIT.getUnit()));
++    }
++
++    @Test
++    void interruptedCallerFailsAndRetainsInterruptFlag() {
++        Thread.currentThread().interrupt();
++        try {
++            IllegalStateException failure = assertThrows(IllegalStateException.class,
++                    () -> MyConcurrentUtils.runAndWait((Runnable) () -> {
++                        try {
++                            new CountDownLatch(1).await();
++                        } catch (InterruptedException e) {
++                            Thread.currentThread().interrupt();
++                        }
++                    }, WAIT));
++            assertInstanceOf(InterruptedException.class, failure.getCause());
++            assertTrue(Thread.currentThread().isInterrupted());
++        } finally {
++            Thread.interrupted();
++        }
++    }
++
++    @Test
++    void asyncFailureReachesErrorCallback() throws Exception {
++        RuntimeException failure = new RuntimeException("async failed");
++        CompletableFuture<Throwable> observed = new CompletableFuture<>();
++        MyConcurrentUtils.asyncRun(() -> { throw failure; }, (value, error) -> observed.complete(error));
++        Throwable error = observed.get(WAIT.getValue(), WAIT.getUnit());
++        assertNotNull(error);
++        assertSame(failure, error.getCause());
++    }
++
++    @Test
++    void saturatedCallerRunsExecutorCannotBypassWaitOwnership() throws Exception {
++        ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.SECONDS,
++                new ArrayBlockingQueue<>(1), new ThreadPoolExecutor.CallerRunsPolicy());
++        CountDownLatch occupied = new CountDownLatch(1);
++        CountDownLatch release = new CountDownLatch(1);
++        AtomicBoolean called = new AtomicBoolean();
++        try {
++            executor.execute(() -> {
++                occupied.countDown();
++                try {
++                    release.await();
++                } catch (InterruptedException e) {
++                    Thread.currentThread().interrupt();
++                }
++            });
++            assertTrue(occupied.await(WAIT.getValue(), WAIT.getUnit()));
++            executor.execute(() -> {});
++            ThreadPoolConfig.setExecutorSupplier(() -> executor);
++            assertThrows(RejectedExecutionException.class,
++                    () -> MyConcurrentUtils.runAndWait(() -> called.set(true), WAIT));
++            assertFalse(called.get());
++        } finally {
++            ThreadPoolConfig.setExecutorSupplier(null);
++            release.countDown();
++            executor.shutdownNow();
++            assertTrue(executor.awaitTermination(WAIT.getValue(), WAIT.getUnit()));
++        }
++    }
++
++    @Test
++    void shutdownCallerRunsExecutorRefusesInsteadOfDiscardingWork() {
++        ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.SECONDS,
++                new ArrayBlockingQueue<>(1), new ThreadPoolExecutor.CallerRunsPolicy());
++        executor.shutdown();
++        try {
++            ThreadPoolConfig.setExecutorSupplier(() -> executor);
++            assertThrows(RejectedExecutionException.class,
++                    () -> MyConcurrentUtils.runAndWait((Runnable) () -> {}, WAIT));
++        } finally {
++            ThreadPoolConfig.setExecutorSupplier(null);
++        }
++    }
++}
