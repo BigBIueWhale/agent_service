@@ -693,7 +693,7 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const SOURCE: &[u8] = include_bytes!("../stream-contract-v4.json");
+    const SOURCE: &[u8] = include_bytes!("../stream-contract-v5.json");
 
     #[test]
     fn owned_vocabulary_inventory_is_complete() {

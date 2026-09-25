@@ -206,11 +206,32 @@ pub fn validate_goal_evidence(
 /// Complete messages delimit block indices in both scopes.
 #[derive(Clone, Default)]
 pub struct PartialStreamState {
+    origin: Option<(String, String)>,
     root_turn_open: bool,
     blocks: BTreeMap<u64, (String, bool)>,
 }
 
 impl PartialStreamState {
+    pub fn observe_origin(&mut self, origin: Value<'_>, line: usize) -> ContractResult<()> {
+        let key = if text(origin, "kind", line)? == "runtime" {
+            ("runtime".to_string(), String::new())
+        } else {
+            (
+                text(origin, "attempt_id", line)?.to_string(),
+                text(origin, "kv_scope", line)?.to_string(),
+            )
+        };
+        if self
+            .origin
+            .as_ref()
+            .is_some_and(|previous| previous != &key)
+        {
+            return Err(ContractError::InvalidRecord("Partial assistant output changes producing attempt before closure; inspect the attempt boundary".into()));
+        }
+        self.origin = Some(key);
+        Ok(())
+    }
+
     pub fn observe(
         &mut self,
         partial: PartialRecord<'_>,
@@ -277,6 +298,7 @@ impl PartialStreamState {
                     ));
                 }
                 self.root_turn_open = false;
+                self.origin = None;
             }
             // State projections and tool liveness are complete notices, not
             // model deltas. Their payload and scope have already been decoded;
@@ -293,6 +315,9 @@ impl PartialStreamState {
             )));
         }
         self.blocks.clear();
+        if !self.root_turn_open {
+            self.origin = None;
+        }
         Ok(())
     }
 
@@ -353,9 +378,15 @@ mod tests {
     }
 
     fn partial(state: &mut PartialStreamState, event: Value, root: bool) -> ContractResult<()> {
-        let record = serde_json::json!({"type":"stream_event", "uuid":"fixture",
+        let mut record = serde_json::json!({"type":"stream_event", "uuid":"fixture",
             "session_id":"session", "parent_tool_use_id": if root { Value::Null } else { Value::String("tool".into()) },
             "event":event});
+        if !matches!(
+            record["event"]["type"].as_str(),
+            Some("tool_progress" | "active_goal" | "goal_state")
+        ) {
+            record["origin"] = serde_json::json!({"kind":"runtime"});
+        }
         let document = document(&record);
         let decoded = DecodedRecord::decode(
             document.root(),
@@ -467,13 +498,18 @@ mod tests {
     fn mathematical_integer_spellings_survive_partial_admission_and_observation() {
         for token in ["0", "0.0", "0e0", "-0.0"] {
             let mut owner = PartialStreamState::default();
-            for (kind, spelling) in [("content_block_start", token), ("content_block_stop", "0.0")] {
+            for (kind, spelling) in [
+                ("content_block_start", token),
+                ("content_block_stop", "0.0"),
+            ] {
                 let block = if kind == "content_block_start" {
                     r#", "content_block":{"type":"text","text":""}"#
                 } else {
                     ""
                 };
-                let bytes = format!(r#"{{"type":"stream_event","uuid":"fixture","session_id":"session","parent_tool_use_id":"tool","event":{{"type":"{kind}","index":{spelling}{block}}}}}"#);
+                let bytes = format!(
+                    r#"{{"type":"stream_event","origin":{{"kind":"runtime"}},"uuid":"fixture","session_id":"session","parent_tool_use_id":"tool","event":{{"type":"{kind}","index":{spelling}{block}}}}}"#
+                );
                 let document = Document::decode(
                     bytes.as_bytes(),
                     crate::json::Limits {
@@ -492,8 +528,15 @@ mod tests {
                 )
                 .unwrap();
                 assert_eq!(
-                    record.value().get("event").unwrap().get("index").unwrap()
-                        .as_number().unwrap().token(),
+                    record
+                        .value()
+                        .get("event")
+                        .unwrap()
+                        .get("index")
+                        .unwrap()
+                        .as_number()
+                        .unwrap()
+                        .token(),
                     spelling,
                 );
                 owner.observe(record.partial().unwrap(), false, 1).unwrap();

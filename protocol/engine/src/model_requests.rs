@@ -30,6 +30,7 @@ pub(crate) struct ModelRequests {
     ids: BTreeSet<String>,
     scopes: BTreeMap<String, RequestBody>,
     responses: BTreeMap<String, ResponseState>,
+    attempts: BTreeMap<String, (String, bool)>,
 }
 
 pub(crate) struct RequestBody {
@@ -48,10 +49,13 @@ pub(crate) struct RequestAdmission {
     sequence: u64,
     scope: String,
     body: RequestBody,
+    attempt: Option<String>,
 }
 
 #[derive(Clone, Default)]
 struct ResponseState {
+    attempt: Option<String>,
+    processing: Option<bool>,
     sequence: u64,
     http: bool,
     bytes: u64,
@@ -61,6 +65,7 @@ pub(crate) struct ResponseAdmission {
     request_id: String,
     observed: bool,
     state: Option<ResponseState>,
+    accepted_attempt: Option<String>,
 }
 
 impl ModelRequests {
@@ -117,6 +122,24 @@ impl ModelRequests {
             return Err(refusal("reuses a request identity"));
         }
         let scope = text(request, "kv_scope", line)?;
+        let owner = field(request, "owner", line)?;
+        let attempt = match text(owner, "kind", line)? {
+            "chat" => {
+                let id = text(owner, "attempt_id", line)?;
+                if self
+                    .attempts
+                    .get(id)
+                    .is_some_and(|(previous, accepted)| previous != scope || *accepted)
+                {
+                    return Err(refusal(
+                        "chat attempt changes scope or issues a request after acceptance",
+                    ));
+                }
+                Some(id.to_string())
+            }
+            "utility" => None,
+            _ => return Err(refusal("unknown request owner")),
+        };
         let segment_id = text(request, "segment_id", line)?;
         let body = field(request, "body", line)?;
         let json = match text(body, "kind", line)? {
@@ -220,6 +243,7 @@ impl ModelRequests {
             journal_id: journal_id.to_string(),
             sequence,
             scope: scope.to_string(),
+            attempt,
             body: RequestBody {
                 id: id.to_string(),
                 segment_id: segment_id.to_string(),
@@ -232,11 +256,17 @@ impl ModelRequests {
         self.journal_id.get_or_insert(admission.journal_id);
         self.first_sequence.get_or_insert(admission.sequence);
         self.count += 1;
+        if let Some(id) = &admission.attempt {
+            self.attempts
+                .entry(id.clone())
+                .or_insert((admission.scope.clone(), false));
+        }
         self.ids.insert(admission.body.id.clone());
         self.responses.insert(
             admission.body.id.clone(),
             ResponseState {
                 digest: Some(Sha256::default()),
+                attempt: admission.attempt,
                 ..ResponseState::default()
             },
         );
@@ -269,8 +299,11 @@ impl ModelRequests {
         }
         let event = field(response, "event", line)?;
         let mut ended = false;
+        let mut accepted_attempt = None;
         let kind = text(event, "kind", line)?;
-        if (kind == "outcome") != state.digest.is_none() {
+        if (kind == "history") != state.processing.is_some()
+            || (kind != "history" && (kind == "outcome") != state.digest.is_none())
+        {
             return Err(refusal(
                 "response processing outcome must follow transport completion",
             ));
@@ -335,6 +368,27 @@ impl ModelRequests {
                 state.digest = None;
             }
             "outcome" => {
+                state.processing = Some(text(event, "status", line)? == "completed");
+                ended = state.attempt.is_none();
+            }
+            "history" => {
+                let attempt = state
+                    .attempt
+                    .as_ref()
+                    .ok_or_else(|| refusal("utility response has a chat history decision"))?;
+                if text(event, "disposition", line)? == "accepted" {
+                    if state.processing != Some(true)
+                        || self
+                            .attempts
+                            .get(attempt)
+                            .is_none_or(|(_, accepted)| *accepted)
+                    {
+                        return Err(refusal(
+                            "chat history acceptance is repeated or has no completed response",
+                        ));
+                    }
+                    accepted_attempt = Some(attempt.clone());
+                }
                 ended = true;
             }
             _ => return Err(refusal("response uses an unknown event")),
@@ -342,12 +396,19 @@ impl ModelRequests {
         state.sequence = sequence;
         Ok(ResponseAdmission {
             request_id: id.to_string(),
+            accepted_attempt,
             observed: ended && state.http && state.bytes > 0,
             state: if ended { None } else { Some(state) },
         })
     }
 
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
+        if let Some(attempt) = admission.accepted_attempt {
+            self.attempts
+                .get_mut(&attempt)
+                .expect("planned chat attempt")
+                .1 = true;
+        }
         if admission.observed {
             self.observed_responses += 1;
         }
@@ -356,6 +417,23 @@ impl ModelRequests {
         } else {
             self.responses.remove(&admission.request_id);
         }
+    }
+
+    pub(crate) fn validate_output_origin(
+        &self,
+        origin: Value<'_>,
+        line: usize,
+    ) -> ContractResult<Option<String>> {
+        if text(origin, "kind", line)? == "runtime" {
+            return Ok(None);
+        }
+        let id = text(origin, "attempt_id", line)?;
+        if self.attempts.get(id).is_none_or(|(scope, _)| {
+            Some(scope.as_str()) != origin.get("kv_scope").and_then(Value::as_str)
+        }) {
+            return Err(refusal("assistant output has no matching chat request"));
+        }
+        Ok(Some(id.to_string()))
     }
 
     pub(crate) fn validate_summary(
@@ -410,7 +488,7 @@ mod tests {
         depth: 100,
     };
     fn request(sequence: u64, id: &str, body: serde_json::Value, json: &str) -> String {
-        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"kv_scope":"owner","segment_id":"segment","prompt_id":"p","body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
+        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
     }
     fn admit(state: &mut ModelRequests, json: &str) -> ContractResult<()> {
         let document = Document::decode(json.as_bytes(), LIMITS).unwrap();
@@ -464,5 +542,57 @@ mod tests {
         let mut changed: serde_json::Value = serde_json::from_str(&a).unwrap();
         changed["request"]["body_bytes"] = json!(1);
         assert!(admit(&mut ModelRequests::default(), &changed.to_string()).is_err());
+    }
+    #[test]
+    fn chat_processing_requires_one_history_decision_and_a_matching_origin() {
+        for status in ["completed", "failed"] {
+            let mut state = ModelRequests::default();
+            let body = r#"{"kv_scope":"owner","messages":[]}"#;
+            let mut value: serde_json::Value =
+                serde_json::from_str(&request(1, "r", json!({"kind":"full","json":body}), body))
+                    .unwrap();
+            value["request"]["owner"] = json!({"kind":"chat","attempt_id":"attempt"});
+            admit(&mut state, &value.to_string()).unwrap();
+            for (index, event) in [
+                json!({"kind":"http","status":200,"content_type":"application/json"}),
+                json!({"kind":"body","offset":0,"base64":"e30="}),
+                json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
+                json!({"kind":"outcome","status":status,"error":if status == "failed" {json!("failure")} else {json!(null)}}),
+            ].into_iter().enumerate() {
+                let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
+                let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                let plan = state.plan_response(doc.root(), 1).unwrap();
+                state.commit_response(plan);
+            }
+            let terminal = Document::decode(br#"{"request_evidence":{"journal_id":"j","first_sequence":1,"request_count":1,"open_response_ids":[]}}"#, LIMITS).unwrap();
+            assert!(state.validate_summary(terminal.root(), 1, 1).is_err());
+            let accepted = json!({"response":{"journal_id":"j","request_id":"r","sequence":5,"event":{"kind":"history","disposition":"accepted"}}}).to_string();
+            let doc = Document::decode(accepted.as_bytes(), LIMITS).unwrap();
+            if status == "failed" {
+                assert!(state.plan_response(doc.root(), 1).is_err());
+            }
+            let history = accepted.replace(
+                "accepted",
+                if status == "failed" {
+                    "abandoned"
+                } else {
+                    "accepted"
+                },
+            );
+            let doc = Document::decode(history.as_bytes(), LIMITS).unwrap();
+            let plan = state.plan_response(doc.root(), 1).unwrap();
+            state.commit_response(plan);
+            assert!(state.plan_response(doc.root(), 1).is_err());
+            state.validate_summary(terminal.root(), 1, 1).unwrap();
+            for (id, scope, valid) in [
+                ("attempt", "owner", true),
+                ("unknown", "owner", false),
+                ("attempt", "foreign", false),
+            ] {
+                let raw = json!({"kind":"model","attempt_id":id,"kv_scope":scope}).to_string();
+                let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                assert_eq!(state.validate_output_origin(doc.root(), 1).is_ok(), valid);
+            }
+        }
     }
 }

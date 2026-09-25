@@ -29,7 +29,7 @@ class RequestEvidenceTests(unittest.TestCase):
             events.append({"type": "model_request", "request": {
                 "journal_id": "journal", "sequence": sequence,
                 "request_id": f"r{sequence}", "kv_scope": "root", "segment_id": "s",
-                "prompt_id": "prompt", "body": representation,
+                "prompt_id": "prompt", "owner": {"kind": "utility"}, "body": representation,
                 "body_bytes": len(body.encode()), "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
             }})
         events.append({"type": "result", "request_evidence": {**origin, "request_count": 2}})
@@ -68,7 +68,7 @@ class ResponseEvidenceTests(unittest.TestCase):
         request = {"journal_id": "j", "request_id": "r"}
         envelope = lambda sequence, event: {"type": "model_response", "response": {**request, "sequence": sequence, "event": event}}
         events = [
-            {"type": "model_request", "request": request},
+            {"type": "model_request", "request": {**request, "owner": {"kind": "utility"}}},
             envelope(1, {"kind": "http", "status": 200, "content_type": "text/event-stream"}),
             envelope(2, {"kind": "body", "offset": 0, "base64": base64.b64encode(body).decode()}),
             envelope(3, {"kind": "end", "termination": termination, "body_bytes": len(body), "body_sha256": hashlib.sha256(body).hexdigest(), "error": None}),
@@ -102,6 +102,32 @@ class ResponseEvidenceTests(unittest.TestCase):
                 if defect == "open": events[-1]["request_evidence"]["open_response_ids"] = ["r"]
                 if defect == "headers": served[0]["response_status"] = 500
                 with self.assertRaises(ValueError): require_response_evidence(events, served)
+
+    def test_chat_processing_requires_its_history_decision(self):
+        from request_evidence import require_response_evidence
+        events, served = self.fixture()
+        events[0]["request"]["owner"] = {"kind": "chat", "attempt_id": "attempt"}
+        with self.assertRaises(ValueError): require_response_evidence(events, served)
+        history = {"type": "model_response", "response": {"journal_id": "j", "request_id": "r", "sequence": 5, "event": {"kind": "history", "disposition": "abandoned"}}}
+        events.insert(-1, history)
+        self.assertEqual(len(require_response_evidence(events, served)), 5)
+        history["response"]["event"]["disposition"] = "accepted"
+        with self.assertRaises(ValueError): require_response_evidence(events, served)
+        events[-3]["response"]["event"] = {"kind": "outcome", "status": "completed", "error": None}
+        self.assertEqual(len(require_response_evidence(events, served)), 5)
+
+    def test_output_cannot_claim_an_unissued_or_foreign_attempt(self):
+        from request_evidence import require_output_ownership
+        events, _ = self.fixture()
+        events[0]["request"].update(owner={"kind": "chat", "attempt_id": "attempt"}, kv_scope="session")
+        assistant = {"type": "assistant", "session_id": "session", "parent_tool_use_id": None, "origin": {"kind": "model", "attempt_id": "attempt", "kv_scope": "session"}}
+        events.insert(1, assistant)
+        require_output_ownership(events)
+        for defect in ("unknown", "foreign"):
+            broken = copy.deepcopy(events)
+            if defect == "unknown": broken[1]["origin"]["attempt_id"] = "unissued"
+            else: broken[1]["parent_tool_use_id"] = "child"
+            with self.assertRaises(ValueError): require_output_ownership(broken)
 
 
 if __name__ == "__main__":

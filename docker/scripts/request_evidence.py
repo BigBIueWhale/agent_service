@@ -47,6 +47,9 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
         if request["journal_id"] != terminal["journal_id"] or request["sequence"] != terminal["first_sequence"] + offset or request["request_id"] in seen:
             raise ValueError("request capture identity or sequence is incomplete")
         seen.add(request["request_id"])
+        owner = request["owner"]
+        if owner != {"kind": "utility"} and not (set(owner) == {"kind", "attempt_id"} and owner["kind"] == "chat" and isinstance(owner["attempt_id"], str) and owner["attempt_id"]):
+            raise ValueError("request ownership is unknown; inspect the matching client")
         representation = request["body"]
         if representation["kind"] == "full":
             body = representation["json"]
@@ -73,7 +76,7 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
     if len(requests) != len(served) or events[-1]["request_evidence"]["open_response_ids"] != []:
         raise ValueError("response recording is incomplete; inspect the provider and recorder")
     states = {request["request_id"]: {"journal": request["journal_id"], "actual": actual,
-              "sequence": 0, "http": False, "ended": False, "outcome": False, "bytes": bytearray()}
+              "sequence": 0, "http": False, "ended": False, "outcome": None, "closed": False, "owner": request["owner"], "bytes": bytearray()}
               for request, actual in zip(requests, served)}
     if len(states) != len(requests):
         raise ValueError("response requests reuse an identity; inspect the original stream")
@@ -87,11 +90,11 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
         response = envelope["response"]
         responses.append(response)
         state = states.get(response["request_id"])
-        if response["request_id"] not in admitted or state is None or state["outcome"] or state["journal"] != response["journal_id"] or response["sequence"] != state["sequence"] + 1:
+        if response["request_id"] not in admitted or state is None or state["closed"] or state["journal"] != response["journal_id"] or response["sequence"] != state["sequence"] + 1:
             raise ValueError("response identity or sequence is incomplete")
         event = response["event"]
         actual = state["actual"]
-        if (event["kind"] == "outcome") != state["ended"]:
+        if (event["kind"] == "history") != (state["outcome"] is not None) or (event["kind"] != "history" and (event["kind"] == "outcome") != state["ended"]):
             raise ValueError("response outcome must follow transport completion; inspect the original stream")
         if event["kind"] == "http":
             if state["http"] or state["sequence"] or event["status"] != actual["response_status"] or event["content_type"] != actual["response_content_type"]:
@@ -120,10 +123,50 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
         elif event["kind"] == "outcome":
             if set(event) != {"kind", "status", "error"} or event["status"] not in ("completed", "failed", "cancelled") or not (event["error"] is None or isinstance(event["error"], str)) or (event["status"] == "completed" and event["error"] is not None) or (event["status"] == "failed" and not isinstance(event["error"], str)):
                 raise ValueError("invalid response processing outcome; inspect the original stream")
-            state["outcome"] = True
+            state["outcome"] = event["status"]
+            state["closed"] = state["owner"]["kind"] == "utility"
+        elif event["kind"] == "history":
+            if set(event) != {"kind", "disposition"} or state["owner"]["kind"] != "chat" or event["disposition"] not in ("accepted", "abandoned") or (event["disposition"] == "accepted" and state["outcome"] != "completed"):
+                raise ValueError("chat history decision has no valid processing owner")
+            state["closed"] = True
         else:
             raise ValueError("unknown response event; use the matching harness")
         state["sequence"] += 1
-    if any(not state["outcome"] for state in states.values()):
+    if any(not state["closed"] for state in states.values()):
         raise ValueError("response completion is missing; inspect the original stream")
     return responses
+
+
+def require_output_ownership(events: list[dict]) -> None:
+    """Every model output fragment resolves to one chat attempt and decision."""
+    attempts = {}
+    requests = {}
+    for envelope in events:
+        if envelope.get("type") == "model_request":
+            request = envelope["request"]
+            requests[request["request_id"]] = request
+            owner = request["owner"]
+            if owner["kind"] == "chat":
+                previous = attempts.setdefault(owner["attempt_id"], {"scope": request["kv_scope"], "accepted": False, "output_scope": []})
+                if previous["scope"] != request["kv_scope"] or previous["accepted"]:
+                    raise ValueError("chat attempt changes scope or continues after acceptance")
+        if envelope.get("type") == "model_response" and envelope["response"]["event"]["kind"] == "history":
+            response = envelope["response"]
+            attempt = attempts[requests[response["request_id"]]["owner"]["attempt_id"]]
+            if response["event"]["disposition"] == "accepted":
+                if attempt["accepted"]:
+                    raise ValueError("chat attempt accepts multiple physical responses")
+                attempt["accepted"] = True
+        content = envelope.get("type") == "assistant" or (envelope.get("type") == "stream_event" and envelope["event"]["type"] not in ("goal_state", "active_goal", "tool_progress"))
+        if not content:
+            continue
+        origin = envelope["origin"]
+        if origin == {"kind": "runtime"}:
+            continue
+        if set(origin) != {"kind", "attempt_id", "kv_scope"} or origin["kind"] != "model":
+            raise ValueError("assistant output has unknown ownership")
+        attempt = attempts.get(origin["attempt_id"])
+        scope = envelope.get("parent_tool_use_id")
+        if origin["kv_scope"] != (scope or envelope["session_id"]) or attempt is None or attempt["scope"] != origin["kv_scope"] or (attempt["output_scope"] and attempt["output_scope"] != [scope]):
+            raise ValueError("assistant output has no matching request owner")
+        attempt["output_scope"] = [scope]

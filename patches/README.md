@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `8d6efa5efa2467d347bf98c3ec13bfcc925e5e258615d585c4491ba66eeb3562`
+- Review-diff SHA-256: `613fab0748231ee0bcfa9288125f8479d94114df1a546f5f1ccec70fa4fe8ef9`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `ebfa780e1474f67d50babd300b46949a5e4140667cb219094b5f9cf22df9e997`
+- Transformer-manifest SHA-256: `dd31a2a9f470023890118ee82748b2b4e97ae9a6bb272eebf8c1bf05ae1f5aa6`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -339,7 +339,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 4`, independently
+Every physical canonical chat record carries `recordingVersion: 5`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -360,6 +360,23 @@ is frozen before diagnostics, so the SDK sends precisely those bytes. A failed
 canonical write prevents dispatch. SDK-internal retries are disabled for these
 calls: the existing controlled retry loop re-enters capture for every attempt.
 A request record establishes a dispatch intent, not proof of server receipt.
+
+Every request declares chat-attempt or utility ownership outside the model body.
+Chat responses retain separate transport completion, processing outcome, and
+history disposition. Only the chat consumer can accept history, after its durable
+commit. A failed physical retry remains abandoned when a subsequent physical
+request succeeds. Root and child assistant fragments, including partial blocks,
+name their producing attempt and generation scope. The shared readers resolve
+those references and refuse unknown attempts, foreign scopes, repeated acceptance,
+or a complete certificate with an unsettled response. Runtime-authored assistant
+replies declare runtime origin. Main retries close the prior partial turn and
+preserve its exact reasoning as a separately owned observation.
+
+Canonical evidence does not join the conversation parent chain. A live or
+interrupted canonical file can retain an open response while exposing its durable
+conversation; that does not certify complete generation evidence. Full, indexed,
+and fork restoration reproduce the same committed parts with accepted and
+abandoned physical attempts interleaved.
 
 Each invocation starts with a full body, and the first request after its committed
 compaction also carries a full body. Deltas retain the unchanged message prefix

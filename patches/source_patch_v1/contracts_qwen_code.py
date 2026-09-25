@@ -396,7 +396,7 @@ def _validate_exact_tokens_after(state: State) -> None:
     require_text(
         state,
         "packages/core/src/core/generation-context.ts",
-        "{ ...request, generationContext: this.context }",
+        "{ ...request, generationContext: this.context, chatAttempt: null }",
         count=3,
         label="captured generation owner precedence",
     )
@@ -419,7 +419,7 @@ def _validate_exact_tokens_after(state: State) -> None:
         label=label,
     )
     require_text(
-        state, context, "generationContext: this.context", count=3, label=label
+        state, context, "generationContext: this.context", count=4, label=label
     )
     _require_all(
         state,
@@ -3584,7 +3584,7 @@ def _validate_subagent_progress_before(state: State) -> None:
 def _validate_subagent_progress_after(state: State) -> None:
     label = "subagent terminal-progress result"
     _require_all(state, "packages/core/src/core/geminiChat.ts", (
-        "export type ChatHistoryDisposition = 'accepted' | 'abandoned';",
+        "export type { ChatHistoryDisposition } from './chat-attempt.js';",
         "historyDisposition: ChatHistoryDisposition | null;",
         "yield { type: StreamEventType.CHUNK, ...chunk };",
     ), label=label)
@@ -8080,7 +8080,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 4;",
+            "export const CHAT_RECORDING_VERSION = 5;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8111,7 +8111,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "client.fetchWithTimeout.bind(client)", "attempt.capture(await fetchWithTimeout(...args))",
         "await createPromise.withResponse()", "clock.subscribe(rearm)",
         "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.finish(outcome)",
-        "request.generationContext.requestSegmentId,\n          request.config?.abortSignal,",
+        "request.generationContext.requestSegmentId,", "request.chatAttempt.owner",
+        "request.chatAttempt?.attach(responseEvidence)", "request.config?.abortSignal,",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
         "export class ModelResponseRecorder", "export class ModelResponseReplay",
@@ -8128,6 +8129,30 @@ def _validate_served_accounting_after(state: State) -> None:
         "if (!cancelledBeforeAdmission) this.failure = { cause: error };",
     ), label=label)
     require_text(state, core + "core/geminiChat.ts", "this.generationContext.startRequestSegment()", label=label)
+    _require_all(state, core + "core/chat-attempt.ts", (
+        "export class ChatAttempt", "readonly id = randomUUID()", "kind: 'chat'",
+        "response.finishHistory(disposition)", "Promise.allSettled",
+    ), label=label)
+    _require_all(state, core + "core/generation-context.ts", (
+        "chatAttempt: ChatAttempt | null", "generateChatContentStream(", "chatAttempt: null",
+    ), label=label)
+    _require_all(state, core + "core/geminiChat.ts", (
+        "new ChatAttempt(this.generationContext.kvScope)", "StreamEventType.ATTEMPT_STARTED",
+        "attempt.finish(disposition)", "generator.generateChatContentStream(",
+    ), label=label)
+    _require_all(state, core + "core/model-response-evidence.ts", (
+        "finishHistory(disposition: ChatHistoryDisposition)", "kind: 'history'", "state.owner.kind !== 'chat'",
+        "state.processing.status !== 'completed'", "chat attempt accepts multiple physical responses",
+    ), label=label)
+    _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
+        "origin: this.requireOutputOrigin(state)", "case GeminiEventType.Thought:",
+        "event.type === GeminiEventType.Retry", "this.startAssistantMessage(event.value)",
+        "state.origin = round.origin", "state.origin = toolCall.origin",
+    ), label=label)
+    _require_all(state, core + "utils/runtime-contract-admission.ts", (
+        "origin.kv_scope !== (scope ?? wire.session_id)", "requests.observeOrigin(origin, scope)",
+        "partial.observeOrigin(origin)",
+    ), label=label)
     recorder = _source(state, core + "services/chatRecordingService.ts", label=label)
     evidence_writer = recorder.split("readonly modelRequests = new ModelRequestJournal(", 1)[1].split("/**", 1)[0]
     _require("updateActiveTail: false" in evidence_writer,
@@ -8434,7 +8459,7 @@ def _validate_correctable_repetition_after(state: State) -> None:
         "event.value.repetitionRefusal = repetitionRefusal;",
     ), label=label)
     _require_all(state, core + "agents/runtime/agent-core.ts", (
-        "const repetitionRefusals = new Map<FunctionCall, ToolCallRepetitionRefusal>();",
+        "const repetitionRefusals = new Map<\n      FunctionCall,\n      ToolCallRepetitionRefusal\n    >();",
         "repetitionRefusals.set(functionCall, refusal);",
         "const repetitionRefusal = repetitionRefusals.get(fc);",
         "...(repetitionRefusal ? { repetitionRefusal } : {}),",

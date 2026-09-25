@@ -617,6 +617,7 @@ struct Terminal {
 }
 #[derive(Clone, Default)]
 struct ScopeState {
+    attempts: BTreeSet<String>,
     id: Option<String>,
     billed_turns: u64,
     output_tokens: u64,
@@ -867,7 +868,9 @@ impl RuntimeContract {
         if let Some(origin) = plan.request_origin {
             self.requests.commit_origin(origin);
         }
-        if let Some(response) = plan.response { self.requests.commit_response(response); }
+        if let Some(response) = plan.response {
+            self.requests.commit_response(response);
+        }
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -944,6 +947,28 @@ impl RuntimeContract {
                 id: scope.map(str::to_string),
                 ..ScopeState::default()
             });
+        if let Some(origin) = object.get("origin") {
+            if text(origin, "kind", line)? == "model"
+                && text(origin, "kv_scope", line)?
+                    != scope.unwrap_or(text(object, "session_id", line)?)
+            {
+                return Err(ContractError::InvalidRecord("Assistant output belongs to another session scope; inspect its request ownership".into()));
+            }
+            if let Some(attempt) = self.requests.validate_output_origin(origin, line)? {
+                if self
+                    .scope_states
+                    .iter()
+                    .enumerate()
+                    .any(|(index, state)| index != row && state.attempts.contains(&attempt))
+                {
+                    return Err(ContractError::InvalidRecord(
+                        "Chat output changes assistant scope; inspect its request ownership".into(),
+                    ));
+                }
+                state.attempts.insert(attempt);
+            }
+            state.partial.observe_origin(origin, line)?;
+        }
         let mut request = None;
         let mut response = None;
         let mut additions = BTreeMap::new();
@@ -952,7 +977,9 @@ impl RuntimeContract {
             EventKind::ModelRequest => {
                 request = Some(self.requests.plan(object, line, self.limits.json)?);
             }
-            EventKind::ModelResponse => { response = Some(self.requests.plan_response(object,line)?); }
+            EventKind::ModelResponse => {
+                response = Some(self.requests.plan_response(object, line)?);
+            }
             EventKind::Assistant => {
                 state.partial.complete_message(line)?;
                 if let Some(content) = field(object, "message", line)?.get("content") {
@@ -1290,13 +1317,22 @@ mod tests {
         owner
     }
     fn partial(id: &str, event: &str) -> String {
+        let parsed: serde_json::Value = serde_json::from_str(event).unwrap();
+        let origin = if matches!(
+            parsed["type"].as_str(),
+            Some("tool_progress" | "active_goal" | "goal_state")
+        ) {
+            ""
+        } else {
+            r#""origin":{"kind":"runtime"},"#
+        };
         format!(
-            r#"{{"type":"stream_event","uuid":"{id}","session_id":"session","parent_tool_use_id":null,"event":{event}}}"#
+            r#"{{"type":"stream_event",{origin}"uuid":"{id}","session_id":"session","parent_tool_use_id":null,"event":{event}}}"#
         )
     }
     fn assistant(id: &str, scope: &str, content: &str, output: &str) -> String {
         format!(
-            r#"{{"type":"assistant","uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"content":{content},"usage":{{"input_tokens":0,"output_tokens":{output},"reasoning_output_tokens":0,"cache_read_input_tokens":0,"total_tokens":{output}}}}}}}"#
+            r#"{{"type":"assistant","origin":{{"kind":"runtime"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"content":{content},"usage":{{"input_tokens":0,"output_tokens":{output},"reasoning_output_tokens":0,"cache_read_input_tokens":0,"total_tokens":{output}}}}}}}"#
         )
     }
     fn issued_owner() -> RuntimeContract {
@@ -1376,7 +1412,11 @@ mod tests {
         ] {
             admit(&mut owner, &partial(id, &event)).unwrap();
         }
-        admit(&mut owner, &assistant("cut", "null", &format!("[{block}]"), "7")).unwrap();
+        admit(
+            &mut owner,
+            &assistant("cut", "null", &format!("[{block}]"), "7"),
+        )
+        .unwrap();
         // The model's output, and never a call: nothing is issued, so no
         // result can answer it and no scope can claim it, while the turn that
         // wrote it is billed.
@@ -1421,7 +1461,8 @@ mod tests {
                 ),
             )
             .unwrap();
-            let start = format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
+            let start =
+                format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
             admit(&mut owner, &partial("block", &start)).unwrap();
         }
         for shape in [
@@ -1440,7 +1481,8 @@ mod tests {
                 ),
             )
             .unwrap();
-            let start = format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
+            let start =
+                format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
             assert!(
                 admit(&mut owner, &partial("block", &start)).is_err(),
                 "admitted {shape}"

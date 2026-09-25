@@ -349,7 +349,7 @@ mod tests {
                     record["type"] == "assistant" && record["message"]["usage"].is_object();
                 if generation {
                     sequence += 1;
-                    let scope = record["parent_tool_use_id"].as_str().unwrap_or("main");
+                    let scope = record["parent_tool_use_id"].as_str().unwrap_or(record["session_id"].as_str().unwrap());
                     let body = serde_json::json!({"model":"fixture", "kv_scope":scope, "messages":[{"role":"user","content":"fixture turn"}]}).to_string();
                     let digest = Sha256::digest(body.as_bytes())
                         .iter()
@@ -359,7 +359,7 @@ mod tests {
                         "type":"model_request", "uuid":format!("request-evidence-{sequence}"),
                         "session_id":record["session_id"], "parent_tool_use_id":null,
                         "request":{"journal_id":"fixture", "sequence":sequence,
-                            "request_id":format!("request-{sequence}"), "kv_scope":scope, "segment_id":"fixture-segment",
+                            "request_id":format!("request-{sequence}"), "owner":{"kind":"chat","attempt_id":format!("attempt-{sequence}")}, "kv_scope":scope, "segment_id":"fixture-segment",
                             "prompt_id":"fixture", "body_bytes":body.len(), "body_sha256":digest,
                             "body":{"kind":"full","json":body}}
                     });
@@ -372,11 +372,24 @@ mod tests {
                         serde_json::json!({"kind":"body","offset":0,"base64":"e30="}),
                         serde_json::json!({"kind":"end","termination":"eof","body_bytes":raw_response.len(),"body_sha256":response_hash,"error":null}),
                         serde_json::json!({"kind":"outcome","status":"completed","error":null}),
+                        serde_json::json!({"kind":"history","disposition":"accepted"}),
                     ].into_iter().enumerate() {
                         let response = serde_json::json!({"type":"model_response","uuid":format!("response-evidence-{sequence}-{index}"),"session_id":record["session_id"],"parent_tool_use_id":null,
                             "response":{"journal_id":"fixture","request_id":format!("request-{sequence}"),"sequence":index+1,"event":event}});
                         output.push_str(&response.to_string());output.push('\n');
                     }
+                }
+                if record["type"] == "assistant" {
+                    let origin = if generation {
+                        serde_json::json!({"kind":"model", "attempt_id":format!("attempt-{sequence}"), "kv_scope":record["parent_tool_use_id"].as_str().unwrap_or(record["session_id"].as_str().unwrap())})
+                    } else { serde_json::json!({"kind":"runtime"}) };
+                    let object_start = framed.find('{').unwrap();
+                    output.push_str(&framed[..object_start + 1]);
+                    output.push_str("\"origin\":");
+                    output.push_str(&origin.to_string());
+                    output.push(',');
+                    output.push_str(&framed[object_start + 1..]);
+                    continue;
                 }
                 if record["type"] == "result" && record["parent_tool_use_id"].is_null() {
                     // Preserve every original number spelling. Replace only

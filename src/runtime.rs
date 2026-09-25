@@ -6422,8 +6422,8 @@ mod tests {
         let tree = TestTree::new("partial-known-usage");
         let events = tree.0.join("events.jsonl");
         let bytes = concat!(
-            "{\"type\":\"assistant\",\"uuid\":\"main\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":7,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":16}}}\n",
-            "{\"type\":\"assistant\",\"uuid\":\"child\",\"session_id\":\"a\",\"parent_tool_use_id\":\"child-scope\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":8,\"reasoning_output_tokens\":4,\"cache_read_input_tokens\":0,\"total_tokens\":13}}}\n",
+            "{\"type\":\"assistant\",\"origin\":{\"kind\":\"runtime\"},\"uuid\":\"main\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":7,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":16}}}\n",
+            "{\"type\":\"assistant\",\"origin\":{\"kind\":\"runtime\"},\"uuid\":\"child\",\"session_id\":\"a\",\"parent_tool_use_id\":\"child-scope\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":8,\"reasoning_output_tokens\":4,\"cache_read_input_tokens\":0,\"total_tokens\":13}}}\n",
             "{\"type\":\"result\"}"
         );
         let bytes = event_init() + bytes;

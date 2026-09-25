@@ -25,7 +25,7 @@ import threading
 import urllib.parse
 
 from verify_runtime_contract import cli_arguments
-from request_evidence import require_request_evidence, require_response_evidence
+from request_evidence import require_request_evidence, require_response_evidence, require_output_ownership
 
 WORKSPACE = Path("/workspace")
 # The client's own system-scope settings files. Production names no override for them and
@@ -181,6 +181,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     certificate = certify(stdout, certifier, runtime / "events.jsonl")
     events = [json.loads(line) for line in stdout.splitlines()]
     request_evidence = require_request_evidence(events, [request["raw_body"] for request in requests if request["path"] == "/v1/chat/completions"])
+    require_output_ownership(events)
     response_evidence = require_response_evidence(events, [request for request in requests if request["path"] == "/v1/chat/completions"])
     require(all(response["event"]["status"] == "completed" for response in response_evidence if response["event"]["kind"] == "outcome"),
             "ordinary provider responses did not complete decoding; inspect the processing outcomes")
@@ -229,7 +230,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 4 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 5 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all("recordingVersion" not in event for event in events),
             "canonical history entered stdout evidence; inspect the two recording paths")
