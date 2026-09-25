@@ -3047,7 +3047,7 @@ def _validate_literal_response_after(state: State) -> None:
         (
             "const consolidatedHistoryParts: Part[] = [];",
             "await this.chatRecordingService.recordAssistantTurn({",
-            "message: message",
+            "          message,",
             "...consolidatedHistoryParts",
         ),
         label=label,
@@ -3063,16 +3063,36 @@ def _validate_literal_response_after(state: State) -> None:
         label=label,
     )
 
-    # This patch rewrites nothing the model wrote. The model learns in context
-    # from its own history, so a past call whose argument was swapped for a
-    # pointer is a demonstration of calling the tool with that pointer, and no
-    # wording of the pointer changes that. Swapping a completed write's
-    # `content` for "[Content written to ...]" was exactly such a
-    # demonstration: in the probe that ran with it, 20 of 26 note writes sent
-    # the placeholder itself as the file's content, and the tool wrote it. The
-    # mechanism is retired by name in every file the patch touches, so it
-    # cannot come back under another caller. Upstream's approved-plan redaction
-    # is upstream's own and is left exactly as upstream has it.
+    core = "packages/core/src/"
+    chat_path = chat
+    chat_source = _source(state, chat_path, label="verbatim canonical model parts")
+    _require_ordered(
+        chat_source,
+        (
+            "await this.chatRecordingService.recordAssistantTurn({\n          model,\n          message,",
+            "this.history.push({\n          role: 'model',\n          parts: message,",
+        ),
+        label="one model-part sequence for recording and live history",
+        location=chat_path,
+    )
+    for symbol in (
+        "redactStructuredOutputArgsForRecording",
+        "redactApprovedPlansFromLoadedHistory",
+        "redactApprovedPlanFromHistory",
+        "redactApprovedPlansInHistory",
+        "approvedPlanRedactionText",
+    ):
+        for path in (chat_path, core + "core/coreToolScheduler.ts"):
+            forbid_text(state, path, symbol, label="verbatim canonical model parts")
+    require_text(
+        state,
+        core + "services/session-model-output.test.ts",
+        "records and resumes the same %s parts through both readers and a fork",
+        label="durable model-part round trip",
+    )
+    # Canonical recording, live history and loaded history retain the same
+    # model arguments. A saved file is mutable runtime state, never a source
+    # from which a past model turn may be reconstructed or rewritten.
     for path in state:
         for retired in _RETIRED_ARGUMENT_DISPLACEMENT:
             forbid_text(state, path, retired, label=label)

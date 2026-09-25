@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `d37acded3c740afd4acb6cc9daa9133dddb9e7bb8bab2481b5217ec2cdd4785b`
+- Review-diff SHA-256: `8befa8e12fff8ff8131ad94f5d807b3d63d8f1a56016e8f84b60d5d993bf235b`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `334cab70837568f9b26d978754c6c74df0dc838836acc814047f682f5dfd5a4a`
+- Transformer-manifest SHA-256: `433e5be1a2900ee1baaff809b0adcbde3ea1d30eba0eaaf2e63b8c14e29ee95c`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -55,6 +55,13 @@ was served as, to every record of the generation -- the stream's
 `incomplete_tool_use` block, the session recording's record of a draw that
 committed no turn, which a resume does not replay, a subagent's round, and a
 compaction draw's accounting -- and it never becomes a function call anywhere.
+
+The canonical assistant record and live history receive the same model-part
+sequence. Structured-output payloads and approved plan arguments remain whole
+through tool completion, ordinary resume, indexed restore, and fork. Loading
+history never rewrites an argument from the current plan file. Operational
+tool-call telemetry can omit a structured answer payload; that diagnostic
+projection is never a conversation turn.
 
 A turn refused at its limit is drawn again, told why, as the next turn, in the
 headless session and every subagent alike, the way a refused compaction draw is

@@ -730,6 +730,12 @@ print(json.dumps(found))
         require(len(received) == 1 and received[0]["content"] ==
                 [{"type": "text", "text": replies[0]["content"]}],
                 "tool-result evidence differs from the model's input; inspect result serialization")
+        carried_calls = [call for message in generations[1]["messages"]
+                         if message.get("role") == "assistant" for call in message.get("tool_calls", [])]
+        require(len(carried_calls) == 1 and carried_calls[0]["id"] == uses[0]["id"] and
+                carried_calls[0]["function"]["name"] == uses[0]["name"] and
+                json.loads(carried_calls[0]["function"]["arguments"]) == uses[0]["input"],
+                "the next request rewrote the model's call; inspect canonical model-part commitment")
         require(any(record.get("event") == {"type": "goal_state", "goal_state": {"v": 2, "goal": None, "activity": "idle"}}
                     for record in records), "initial idle goal state was not retained")
         require(records[-1]["usage"] == {"requests": 2, "usageReports": 2, "unfinalizedRequests": 0,

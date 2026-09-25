@@ -139022,7 +139022,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        contentGeneratorConfig: { model: 'vision-agent' },
      } as RuntimeContentGeneratorView;
  
-@@ -1289,28 +1501,39 @@
+@@ -1289,31 +1501,42 @@
      );
      await vi.waitFor(() => expect(onAllToolCallsComplete).toHaveBeenCalled());
      expect(execute).toHaveBeenCalledWith({ plan: 'Original plan' });
@@ -139072,11 +139072,94 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 +    );
    }
  
-   it('redacts the plan argument from history after an approved exit_plan_mode', async () => {
+-  it('redacts the plan argument from history after an approved exit_plan_mode', async () => {
++  it('preserves the model turn after an approved exit_plan_mode', async () => {
      const bigPlan = '## Plan\n\n1. huge section\n2. code blocks\n3. tables';
      const planFile = path.join(
        os.tmpdir(),
-@@ -1570,6 +1793,7 @@
+       `qwen-plan-${process.pid}-${Math.random().toString(16).slice(2)}.md`,
+     );
+     fsSync.writeFileSync(planFile, bigPlan, 'utf-8');
+@@ -1352,23 +1575,20 @@
+       new AbortController().signal,
+     );
+     await vi.waitFor(() => expect(onAllToolCallsComplete).toHaveBeenCalled());
+ 
+     const history = chat.getHistory();
+     const fnCall = history[1]!.parts![1]!.functionCall!;
+-    expect(fnCall.args!['plan']).not.toContain('huge section');
+-    expect(fnCall.args!['plan']).toContain(
+-      `Plan approved and saved to ${planFile}`,
+-    );
++    expect(fnCall.args!['plan']).toBe(bigPlan);
+     fsSync.unlinkSync(planFile);
+     // Sibling parts and other args survive untouched.
+     expect(history[1]!.parts![0]).toEqual({ text: 'Here is my plan.' });
+     expect(fnCall.args!['originalRequest']).toBe('please plan this');
+   });
+ 
+-  it('redacts an approved plan before post-processing cancellation completes', async () => {
++  it('preserves the model turn through post-processing cancellation', async () => {
+     const bigPlan = '## Plan\n\nprivate implementation details';
+     const planFile = path.join(
+       os.tmpdir(),
+       `qwen-plan-cancel-${process.pid}-${Math.random().toString(16).slice(2)}.md`,
+     );
+     fsSync.writeFileSync(planFile, bigPlan, 'utf-8');
+@@ -1423,18 +1643,17 @@
+     const completedCall = onAllToolCallsComplete.mock.calls[0][0][0];
+     expect(completedCall).toMatchObject({
+       status: 'cancelled',
+       response: { executionStatus: 'success' },
+     });
+     const plan = chat.getHistory()[1]!.parts![1]!.functionCall!.args!['plan'];
+-    expect(plan).not.toContain('private implementation details');
+-    expect(plan).toContain(`Plan approved and saved to ${planFile}`);
++    expect(plan).toBe(bigPlan);
+     fsSync.unlinkSync(planFile);
+   });
+ 
+-  it('redacts the plan for a leader-approved (teammate) exit_plan_mode', async () => {
++  it('preserves the model turn after a leader-approved exit_plan_mode', async () => {
+     const bigPlan = '## Plan\n\nleader path fixture';
+     const planFile = path.join(
+       os.tmpdir(),
+       `qwen-plan-leader-${process.pid}-${Math.random().toString(16).slice(2)}.md`,
+     );
+     fsSync.writeFileSync(planFile, bigPlan, 'utf-8');
+@@ -1472,16 +1691,13 @@
+       ],
+       new AbortController().signal,
+     );
+     await vi.waitFor(() => expect(onAllToolCallsComplete).toHaveBeenCalled());
+ 
+     const fnCall = chat.getHistory()[1]!.parts![1]!.functionCall!;
+-    expect(fnCall.args!['plan']).not.toContain('leader path fixture');
+-    expect(fnCall.args!['plan']).toContain(
+-      `Plan approved and saved to ${planFile}`,
+-    );
++    expect(fnCall.args!['plan']).toBe(bigPlan);
+     fsSync.unlinkSync(planFile);
+   });
+ 
+   it('keeps the plan argument when the plan file was never written (save failed)', async () => {
+     const bigPlan = '## Plan\n\nnothing on disk backs this';
+     const chat = createChatWithPlanCall('plan-call-3', bigPlan);
+@@ -1518,13 +1734,12 @@
+         },
+       ],
+       new AbortController().signal,
+     );
+     await vi.waitFor(() => expect(onAllToolCallsComplete).toHaveBeenCalled());
+ 
+-    // Never point the model at a file that is not there — the plan stays.
+     const fnCall = chat.getHistory()[1]!.parts![1]!.functionCall!;
+     expect(fnCall.args!['plan']).toBe(bigPlan);
+   });
+ 
+   it('keeps the plan argument in history when exit_plan_mode is not approved', async () => {
+     const bigPlan = '## Plan\n\nkeep me for revision';
+@@ -1570,6 +1785,7 @@
        setApprovalMode: vi.fn(),
        savePlan: vi.fn(),
        getTeamManager: () => undefined,
@@ -139084,7 +139167,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const realTool = new ExitPlanModeTool(exitPlanConfig);
      const permissionManager = {
-@@ -1641,6 +1865,7 @@
+@@ -1641,6 +1857,7 @@
        setApprovalMode: vi.fn(),
        savePlan: vi.fn(),
        getTeamManager: () => undefined,
@@ -139092,7 +139175,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const realTool = new ExitPlanModeTool(exitPlanConfig);
      const onAllToolCallsComplete = vi.fn();
-@@ -1852,6 +2077,7 @@
+@@ -1852,6 +2069,7 @@
        expect(executeByCanonicalName.get(canonicalName)).toHaveBeenCalledOnce();
        expect(ensureTool).toHaveBeenCalledWith(canonicalName);
      }
@@ -139100,7 +139183,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCalls = onAllToolCallsComplete.mock
        .calls[0][0] as ToolCall[];
      expect(completedCalls.every((call) => call.status === 'success')).toBe(
-@@ -2055,6 +2281,7 @@
+@@ -2055,6 +2273,7 @@
        parentController.signal,
      );
  
@@ -139108,7 +139191,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCall = (
        onAllToolCallsComplete.mock.calls[0][0] as ToolCall[]
      )[0];
-@@ -2216,6 +2443,7 @@
+@@ -2216,6 +2435,7 @@
          parentController.signal,
        );
  
@@ -139116,7 +139199,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        const completedCall = (
          onAllToolCallsComplete.mock.calls[0][0] as ToolCall[]
        )[0];
-@@ -2423,43 +2651,12 @@
+@@ -2423,43 +2643,12 @@
        ? ((call.response.responseParts[0]?.functionResponse?.response?.[
            'output'
          ] as string) ?? '')
@@ -139160,7 +139243,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        returnDisplay: 'small',
      });
      const toolsByName = new Map<string, MockTool>([
-@@ -2535,671 +2732,12 @@
+@@ -2535,671 +2724,12 @@
          },
        ]);
        expect(completedCall.response.resultDisplay).toBe('completed');
@@ -139832,7 +139915,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        returnDisplay: 'ok',
      });
      const toolsByName = new Map<string, MockTool>([
-@@ -3267,7 +2805,7 @@
+@@ -3267,7 +2797,7 @@
        new AbortController().signal,
      );
  
@@ -139841,7 +139924,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCalls = onAllToolCallsComplete.mock
        .calls[0][0] as ToolCall[];
      const completedCall = completedCalls[0];
-@@ -4610,6 +4148,74 @@
+@@ -4610,6 +4140,74 @@
      expect(runSideQueryMock).not.toHaveBeenCalled();
    });
  
@@ -139916,7 +139999,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
    it('bridges images returned with a tool error', async () => {
      runSideQueryMock.mockResolvedValue({ text: 'Dialog says access denied' });
      const execute = vi.fn().mockResolvedValue({
-@@ -5626,12 +5232,13 @@
+@@ -5626,12 +5224,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -139930,7 +140013,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5642,14 +5249,11 @@
+@@ -5642,14 +5241,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -139945,13 +140028,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -5656,4 +5260,5 @@
+@@ -5656,4 +5252,5 @@
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -5676,7 +5281,7 @@
+@@ -5676,7 +5273,7 @@
      abortController.abort();
      await scheduler.schedule([request], abortController.signal);
  
@@ -139960,7 +140043,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCalls = onAllToolCallsComplete.mock
        .calls[0][0] as ToolCall[];
      expect(completedCalls[0].status).toBe('cancelled');
-@@ -5709,12 +5314,13 @@
+@@ -5709,12 +5306,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -139974,7 +140057,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5725,14 +5331,11 @@
+@@ -5725,14 +5323,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -139989,13 +140072,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -5739,4 +5342,5 @@
+@@ -5739,4 +5334,5 @@
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -5757,7 +5361,7 @@
+@@ -5757,7 +5353,7 @@
  
      await scheduler.schedule([request], abortController.signal);
  
@@ -140004,7 +140087,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCalls = onAllToolCallsComplete.mock
        .calls[0][0] as ToolCall[];
      expect(completedCalls[0].status).toBe('cancelled');
-@@ -5796,12 +5400,13 @@
+@@ -5796,12 +5392,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140018,7 +140101,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5812,14 +5417,11 @@
+@@ -5812,14 +5409,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140033,13 +140116,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -5826,4 +5428,5 @@
+@@ -5826,4 +5420,5 @@
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -5844,7 +5447,7 @@
+@@ -5844,7 +5439,7 @@
  
      await scheduler.schedule([request], new AbortController().signal);
  
@@ -140048,7 +140131,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCalls = onAllToolCallsComplete.mock
        .calls[0][0] as ToolCall[];
      expect(completedCalls[0].status).toBe('error');
-@@ -5887,6 +5490,7 @@
+@@ -5887,6 +5482,7 @@
            if (!(name in (opts.mcpServers ?? {}))) return undefined;
            return opts.reasons?.[name];
          },
@@ -140056,7 +140139,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        } as unknown as Config;
        return new CoreToolScheduler({
          config: mockConfig,
-@@ -6063,6 +5667,7 @@
+@@ -6063,6 +5659,7 @@
          isInteractive: () => true,
          getMessageBus: vi.fn().mockReturnValue(undefined),
          getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140064,7 +140147,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        } as unknown as Config;
  
        // Create scheduler
-@@ -6107,6 +5712,7 @@
+@@ -6107,6 +5704,7 @@
          isInteractive: () => false, // Value doesn't matter, but included for completeness
          getMessageBus: vi.fn().mockReturnValue(undefined),
          getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140072,7 +140155,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        } as unknown as Config;
  
        // Create scheduler
-@@ -6140,6 +5746,7 @@
+@@ -6140,6 +5738,7 @@
          isInteractive: () => false, // Value doesn't matter
          getMessageBus: vi.fn().mockReturnValue(undefined),
          getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140080,7 +140163,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        } as unknown as Config;
  
        // Create scheduler
-@@ -6185,6 +5792,7 @@
+@@ -6185,6 +5784,7 @@
          isInteractive: () => true,
          getMessageBus: vi.fn().mockReturnValue(undefined),
          getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140088,7 +140171,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        } as unknown as Config;
  
        // Create scheduler
-@@ -6238,12 +5846,13 @@
+@@ -6238,12 +5838,13 @@
          discoverTools: async () => {},
          getAllTools: () => [],
          getToolsByServer: () => [],
@@ -140102,7 +140185,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.DEFAULT,
          getPermissionsAllow: () => [],
          getPermissionsDeny: () => ['write_file', 'edit', 'run_shell_command'],
-@@ -6254,18 +5863,12 @@
+@@ -6254,18 +5855,12 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -140121,13 +140204,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -6272,4 +5875,5 @@
+@@ -6272,4 +5867,5 @@
          getDisableAllHooks: vi.fn().mockReturnValue(true),
 +        getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
        } as unknown as Config;
  
        const scheduler = new CoreToolScheduler({
-@@ -6330,12 +5934,13 @@
+@@ -6330,12 +5926,13 @@
          discoverTools: async () => {},
          getAllTools: () => [],
          getToolsByServer: () => [],
@@ -140141,7 +140224,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.DEFAULT,
          getPermissionsAllow: () => [],
          getPermissionsDeny: () => ['write_file', 'edit'], // Different excluded tools
-@@ -6346,18 +5951,12 @@
+@@ -6346,18 +5943,12 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -140160,13 +140243,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -6364,4 +5963,5 @@
+@@ -6364,4 +5955,5 @@
          getDisableAllHooks: vi.fn().mockReturnValue(true),
 +        getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
        } as unknown as Config;
  
        const scheduler = new CoreToolScheduler({
-@@ -6426,12 +6026,13 @@
+@@ -6426,12 +6018,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140180,7 +140263,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6442,14 +6043,11 @@
+@@ -6442,14 +6035,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140195,7 +140278,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        isInteractive: () => true, // Required to prevent auto-denial of tool calls
        getIdeMode: () => false,
-@@ -6457,6 +6055,7 @@
+@@ -6457,6 +6047,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140203,7 +140286,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -6698,6 +6297,13 @@
+@@ -6698,6 +6289,13 @@
    });
  });
  
@@ -140217,7 +140300,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  describe('convertToFunctionErrorResponse', () => {
    const toolName = 'testTool';
    const callId = 'call1';
-@@ -6856,12 +6462,13 @@
+@@ -6856,12 +6454,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140231,7 +140314,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6884,6 +6491,7 @@
+@@ -6884,6 +6483,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140239,7 +140322,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -6965,12 +6573,13 @@
+@@ -6965,12 +6565,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -140253,7 +140336,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6979,13 +6588,11 @@
+@@ -6979,13 +6580,11 @@
        }),
        getToolRegistry: () => mockToolRegistry,
        getShellExecutionConfig: () => ({
@@ -140267,7 +140350,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        isInteractive: () => isInteractive,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
-@@ -6992,6 +6599,7 @@
+@@ -6992,6 +6591,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140275,7 +140358,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -7082,12 +6690,13 @@
+@@ -7082,12 +6682,13 @@
  
      const onAllToolCallsComplete = vi.fn();
      const onToolCallsUpdate = vi.fn();
@@ -140289,7 +140372,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7099,14 +6708,12 @@
+@@ -7099,14 +6700,12 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -140305,7 +140388,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
-@@ -7235,12 +6842,13 @@
+@@ -7235,12 +6834,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140319,7 +140402,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7255,6 +6863,7 @@
+@@ -7255,6 +6855,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140327,29 +140410,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -7389,12 +6998,13 @@
-     } as unknown as ToolRegistry;
- 
-     const onAllToolCallsComplete = vi.fn();
-     const onToolCallsUpdate = vi.fn();
-     const outputUpdateHandler = vi.fn();
-     const mockConfig = {
-+      assertRuntimeContractAvailable: () => {},
-       getSessionId: () => 'test-session-id',
-       getUsageStatisticsEnabled: () => true,
-       getDebugMode: () => false,
-       getApprovalMode: () => ApprovalMode.DEFAULT,
-       getContentGeneratorConfig: () => ({
-         model: 'test-model',
-@@ -7409,6 +7019,7 @@
-       getChatRecordingService: () => undefined,
-       getMessageBus: vi.fn().mockReturnValue(undefined),
-       getDisableAllHooks: vi.fn().mockReturnValue(true),
-+      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
-     } as unknown as Config;
- 
-     const scheduler = new CoreToolScheduler({
-@@ -7526,12 +7137,13 @@
+@@ -7389,12 +6990,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140363,7 +140424,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7546,6 +7158,7 @@
+@@ -7409,6 +7011,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140371,7 +140432,29 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -7641,12 +7254,13 @@
+@@ -7526,12 +7129,13 @@
+     } as unknown as ToolRegistry;
+ 
+     const onAllToolCallsComplete = vi.fn();
+     const onToolCallsUpdate = vi.fn();
+     const outputUpdateHandler = vi.fn();
+     const mockConfig = {
++      assertRuntimeContractAvailable: () => {},
+       getSessionId: () => 'test-session-id',
+       getUsageStatisticsEnabled: () => true,
+       getDebugMode: () => false,
+       getApprovalMode: () => ApprovalMode.DEFAULT,
+       getContentGeneratorConfig: () => ({
+         model: 'test-model',
+@@ -7546,6 +7150,7 @@
+       getChatRecordingService: () => undefined,
+       getMessageBus: vi.fn().mockReturnValue(undefined),
+       getDisableAllHooks: vi.fn().mockReturnValue(true),
++      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
+     } as unknown as Config;
+ 
+     const scheduler = new CoreToolScheduler({
+@@ -7641,12 +7246,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140385,7 +140468,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO, // Use YOLO to avoid confirmation prompts
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7657,14 +7271,11 @@
+@@ -7657,14 +7263,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140400,13 +140483,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -7671,4 +7282,5 @@
+@@ -7671,4 +7274,5 @@
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -7767,12 +7379,13 @@
+@@ -7767,12 +7371,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
      const onAllToolCallsComplete = vi.fn();
@@ -140420,7 +140503,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7783,14 +7396,11 @@
+@@ -7783,14 +7388,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140435,13 +140518,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null, // No client needed for these tests
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -7797,4 +7407,5 @@
+@@ -7797,4 +7399,5 @@
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -7843,12 +7454,13 @@
+@@ -7843,12 +7446,13 @@
      expect(onAllToolCallsComplete).toHaveBeenCalledTimes(2);
    });
  
@@ -140455,7 +140538,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => approvalMode,
        getPermissionsAllow: () => [],
        setApprovalMode: (mode: ApprovalMode) => {
-@@ -7858,14 +7470,11 @@
+@@ -7858,14 +7462,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140470,7 +140553,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        isInteractive: () => true, // Required to prevent auto-denial of tool calls
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
-@@ -7872,6 +7481,7 @@
+@@ -7872,6 +7473,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140478,7 +140561,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const testTool = new TestApprovalTool(mockConfig);
-@@ -8052,12 +7662,13 @@
+@@ -8052,12 +7654,13 @@
        findMatchingDenyRule: vi.fn(),
      };
      const toolRegistry = {
@@ -140492,7 +140575,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO,
        getTargetDir: () => cwd,
        getCwd: () => cwd,
-@@ -8074,6 +7685,7 @@
+@@ -8074,6 +7677,7 @@
        getDisableAllHooks: vi
          .fn()
          .mockReturnValue(options?.disableHooks ?? true),
@@ -140500,7 +140583,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onToolCallsUpdate = vi.fn();
-@@ -8322,12 +7934,13 @@
+@@ -8322,12 +7926,13 @@
        getAllToolNames: () => toolNames,
        getFunctionDeclarations: () => [],
        tools: new Map(),
@@ -140514,7 +140597,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getPermissionsDeny: () => undefined,
-@@ -8339,14 +7952,11 @@
+@@ -8339,14 +7944,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140529,14 +140612,14 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        isInteractive: () => true,
-@@ -8353,5 +7963,6 @@
+@@ -8353,5 +7955,6 @@
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -8368,6 +7979,7 @@
+@@ -8368,6 +7971,7 @@
    it('should reject Kind.Edit tool calls when wasOutputTruncated is true', async () => {
      const declarativeTool = new TestApprovalTool({
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
@@ -140544,7 +140627,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config);
      const { scheduler, onAllToolCallsComplete } = createTruncationTestScheduler(
        declarativeTool,
-@@ -8410,6 +8022,7 @@
+@@ -8410,6 +8014,7 @@
    it('should allow Kind.Edit tool calls when wasOutputTruncated is false', async () => {
      const declarativeTool = new TestApprovalTool({
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
@@ -140552,7 +140635,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config);
      const { scheduler, onAllToolCallsComplete } = createTruncationTestScheduler(
        declarativeTool,
-@@ -8489,6 +8102,7 @@
+@@ -8489,6 +8094,7 @@
        }),
        getDefaultFileEncoding: () => undefined,
        setApprovalMode: vi.fn(),
@@ -140560,7 +140643,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const writeFileTool = new WriteFileTool(writeFileConfig);
      const { scheduler, onAllToolCallsComplete } = createTruncationTestScheduler(
-@@ -8542,6 +8156,7 @@
+@@ -8542,6 +8148,7 @@
        }),
        getDefaultFileEncoding: () => undefined,
        setApprovalMode: vi.fn(),
@@ -140568,7 +140651,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const writeFileTool = new WriteFileTool(writeFileConfig);
      const { scheduler, onAllToolCallsComplete } = createTruncationTestScheduler(
-@@ -8631,12 +8246,13 @@
+@@ -8631,12 +8238,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140582,7 +140665,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO, // Use YOLO to avoid confirmation prompts
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -8648,14 +8264,12 @@
+@@ -8648,14 +8256,12 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -140598,7 +140681,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
-@@ -8754,12 +8368,13 @@
+@@ -8754,12 +8360,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -140612,7 +140695,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -8771,14 +8386,12 @@
+@@ -8771,14 +8378,12 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -140628,7 +140711,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
-@@ -8940,12 +8553,13 @@
+@@ -8940,12 +8545,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -140642,7 +140725,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.PLAN,
        getSdkMode: () => options.sdkMode ?? false,
        getPermissionsAllow: () => [],
-@@ -8957,14 +8571,11 @@
+@@ -8957,14 +8563,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -140657,7 +140740,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getConditionalRulesRegistry: () => undefined,
        getSkillManager: () => undefined,
        getUseModelRouter: () => false,
-@@ -8978,6 +8589,7 @@
+@@ -8978,6 +8581,7 @@
        getShouldAvoidPermissionPrompts: vi
          .fn()
          .mockReturnValue(options.avoidPermissionPrompts ?? false),
@@ -140665,7 +140748,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      return new CoreToolScheduler({
-@@ -9144,13 +8756,17 @@
+@@ -9144,13 +8748,17 @@
  
    it.each([
      {
@@ -140684,7 +140767,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        promptId: 'prompt-plan-teammate-blocked',
        run: (schedule: () => Promise<void>) =>
          runWithTeammateIdentity(
-@@ -9764,12 +9380,13 @@
+@@ -9764,12 +9372,13 @@
        getAllTools: () => [...tools.values()],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -140698,7 +140781,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: options.mode ?? (() => ApprovalMode.PLAN),
        getApprovalModeRevision: options.revision ?? (() => 0),
        getSdkMode: () => false,
-@@ -9780,14 +9397,11 @@
+@@ -9780,14 +9389,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -140713,7 +140796,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getTargetDir: options.targetDir ?? (() => '/tmp'),
        getConditionalRulesRegistry: () => undefined,
        getSkillManager: () => undefined,
-@@ -9804,6 +9418,7 @@
+@@ -9804,6 +9410,7 @@
          options.avoidPermissionPrompts ?? false,
        getOnPersistPermissionRule: () => undefined,
        getToolInvocationGuard: () => options.toolInvocationGuard,
@@ -140721,7 +140804,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      return {
-@@ -10602,12 +10217,13 @@
+@@ -10602,12 +10209,13 @@
        discoverTools: async () => {},
        getAllTools: () => tools,
        getToolsByServer: () => [],
@@ -140735,7 +140818,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -10616,14 +10232,11 @@
+@@ -10616,14 +10224,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -140750,7 +140833,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(options.messageBus),
-@@ -10640,6 +10253,7 @@
+@@ -10640,6 +10245,7 @@
          options.includeSensitiveSpanAttributes ?? false,
        getTelemetrySensitiveSpanAttributeMaxLength: () =>
          options.sensitiveSpanAttributeMaxLength ?? 1024 * 1024,
@@ -140758,7 +140841,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onAllToolCallsComplete = vi.fn();
-@@ -11058,18 +10672,29 @@
+@@ -11058,18 +10664,29 @@
        }),
      });
  
@@ -140789,7 +140872,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        },
      });
    });
-@@ -11620,18 +11245,17 @@
+@@ -11620,18 +11237,17 @@
        executionStatus: 'error',
        errorType: ToolErrorType.EXECUTION_TIMEOUT,
        cancelled: false,
@@ -140812,7 +140895,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        execute: vi.fn().mockImplementation(
          () =>
            new Promise<ToolResult>((_resolve, reject) => {
-@@ -11646,17 +11270,19 @@
+@@ -11646,17 +11262,19 @@
      });
  
      const completedCall = completedCalls[0] as CompletedToolCall;
@@ -140835,7 +140918,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        execute: vi.fn().mockImplementation(async () => {
          abortController.abort();
          return { llmContent: 'done', returnDisplay: 'done' };
-@@ -11664,14 +11290,14 @@
+@@ -11664,14 +11282,14 @@
      });
  
      const completedCall = completedCalls[0] as CompletedToolCall;
@@ -140852,7 +140935,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
    // references to files the tool already spilled to disk must survive —
    // otherwise nothing points at them and they are orphaned (#8180 review).
  
-@@ -12794,12 +12420,13 @@
+@@ -12794,12 +12412,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -140866,7 +140949,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -12820,6 +12447,7 @@
+@@ -12820,6 +12439,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140874,7 +140957,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const onAllToolCallsComplete = vi.fn();
      const onToolCallsUpdate = vi.fn();
-@@ -13279,12 +12907,13 @@
+@@ -13279,12 +12899,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -140888,7 +140971,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13305,6 +12934,7 @@
+@@ -13305,6 +12926,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140896,7 +140979,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const onToolCallsUpdate = vi.fn();
      const onAllToolCallsComplete = vi.fn();
-@@ -13382,12 +13012,13 @@
+@@ -13382,12 +13004,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -140910,7 +140993,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13396,14 +13027,11 @@
+@@ -13396,14 +13019,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -140925,7 +141008,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        isInteractive: () => true,
-@@ -13411,6 +13039,7 @@
+@@ -13411,6 +13031,7 @@
        getExperimentalZedIntegration: () => false,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140933,7 +141016,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -13602,21 +13231,21 @@
+@@ -13602,21 +13223,21 @@
      expect(completedCalls[0].status).toBe('error');
      expect(
        (completedCalls[0] as CompletedToolCall).response.executionStatus,
@@ -140957,7 +141040,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(toolSpan?.spanAttributes['tool.failure_kind']).toBe(
        'tool_exception',
      );
-@@ -13665,12 +13294,13 @@
+@@ -13665,12 +13286,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -140971,7 +141054,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13688,6 +13318,7 @@
+@@ -13688,6 +13310,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -140979,7 +141062,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -13736,12 +13367,13 @@
+@@ -13736,12 +13359,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -140993,7 +141076,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13760,6 +13392,7 @@
+@@ -13760,6 +13384,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141001,7 +141084,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -13822,12 +13455,13 @@
+@@ -13822,12 +13447,13 @@
              decision: { behavior: 'deny', message: 'policy says no' },
            },
          },
@@ -141015,7 +141098,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13845,6 +13479,7 @@
+@@ -13845,6 +13471,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(messageBus),
        getDisableAllHooks: vi.fn().mockReturnValue(false),
@@ -141023,7 +141106,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -13895,12 +13530,13 @@
+@@ -13895,12 +13522,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -141037,7 +141120,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13919,6 +13555,7 @@
+@@ -13919,6 +13547,7 @@
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
        getShouldAvoidPermissionPrompts: vi.fn().mockReturnValue(true),
@@ -141045,7 +141128,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -14026,12 +13663,13 @@
+@@ -14026,12 +13655,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -141059,7 +141142,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -14049,6 +13687,7 @@
+@@ -14049,6 +13679,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141067,7 +141150,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -14133,25 +13772,23 @@
+@@ -14133,25 +13764,23 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
      // The auto-approve YOLO path doesn't call _schedule's getMessageBus
@@ -141094,7 +141177,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn(() => {
-@@ -14158,6 +13795,7 @@
+@@ -14158,6 +13787,7 @@
          throw new Error('prelude boom — getMessageBus throws');
        }),
        getDisableAllHooks: vi.fn().mockReturnValue(false),
@@ -141102,7 +141185,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const onAllToolCallsComplete = vi.fn();
      const scheduler = new CoreToolScheduler({
-@@ -14190,7 +13828,7 @@
+@@ -14190,7 +13820,7 @@
  
      // The first failure must not strand the second unsafe sibling in
      // `scheduled`; both become terminal and the batch completes.
@@ -141111,7 +141194,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const completedCalls = onAllToolCallsComplete.mock.calls.at(
        -1,
      )?.[0] as ToolCall[];
-@@ -14298,12 +13936,13 @@
+@@ -14298,12 +13928,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -141125,7 +141208,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.PLAN,
        getSdkMode: () => false,
        getPermissionsAllow: () => [],
-@@ -14322,6 +13961,7 @@
+@@ -14322,6 +13953,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141133,7 +141216,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -14380,6 +14020,7 @@
+@@ -14380,6 +14012,7 @@
      expect(ensureTool).not.toHaveBeenCalled();
      expect(build).not.toHaveBeenCalled();
      expect(execute).not.toHaveBeenCalled();
@@ -141141,7 +141224,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(onAllToolCallsComplete).toHaveBeenCalledWith([
        expect.objectContaining({
          status: 'cancelled',
-@@ -14485,20 +14126,20 @@
+@@ -14485,20 +14118,20 @@
          throwingOnConfirm,
          ToolConfirmationOutcome.ProceedOnce,
          abortController.signal,
@@ -141164,7 +141247,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        code: SpanStatusCode.UNSET,
      });
      expect(toolSpan?.spanAttributes['tool.failure_kind']).toBe('cancelled');
-@@ -14535,12 +14176,13 @@
+@@ -14535,12 +14168,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -141178,7 +141261,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -14558,6 +14200,7 @@
+@@ -14558,6 +14192,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141186,7 +141269,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
      const onToolCallsUpdate = vi.fn();
      const scheduler = new CoreToolScheduler({
-@@ -15173,12 +14816,13 @@
+@@ -15173,12 +14808,13 @@
          discoverTools: async () => {},
          getAllTools: () => [...tools.values()],
          getToolsByServer: () => [],
@@ -141200,7 +141283,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.AUTO_EDIT,
          getAllowedTools: () => [],
          getContentGeneratorConfig: () => ({
-@@ -15188,18 +14832,12 @@
+@@ -15188,18 +14824,12 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -141219,13 +141302,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -15206,4 +14844,5 @@
+@@ -15206,4 +14836,5 @@
          getDisableAllHooks: vi.fn().mockReturnValue(true),
 +        getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
        } as unknown as Config;
  
        return new CoreToolScheduler({
-@@ -15677,7 +15316,7 @@
+@@ -15677,7 +15308,7 @@
  
        await scheduler.schedule(requests, new AbortController().signal);
  
@@ -141234,7 +141317,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        const completedCalls = onAllToolCallsComplete.mock
          .calls[0][0] as ToolCall[];
        expect(completedCalls).toHaveLength(4);
-@@ -15784,7 +15423,7 @@
+@@ -15784,7 +15415,7 @@
  
        await scheduler.schedule(requests, new AbortController().signal);
  
@@ -141243,7 +141326,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
        // "git log" and "ls" should start concurrently (both before either ends)
        const gitStart = executionLog.indexOf('shell:start:git log');
-@@ -15852,12 +15491,13 @@
+@@ -15852,12 +15483,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141257,7 +141340,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => overrides.approvalMode ?? ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -15868,14 +15508,11 @@
+@@ -15868,14 +15500,11 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -141272,7 +141355,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        isInteractive: () => true,
        getIdeMode: () => overrides.ideMode ?? true,
-@@ -15884,6 +15521,7 @@
+@@ -15884,6 +15513,7 @@
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
        setApprovalMode: vi.fn(),
@@ -141280,7 +141363,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      return { mockConfig, mockModifiableTool, mockToolRegistry };
-@@ -16288,12 +15926,13 @@
+@@ -16288,12 +15918,13 @@
        getAllTools: () => [],
        getAllToolNames: () => [StrictStringTool.Name],
        getToolsByServer: () => [],
@@ -141294,7 +141377,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -16302,13 +15941,11 @@
+@@ -16302,13 +15933,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141308,7 +141391,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        isInteractive: () => true,
        getIdeMode: () => false,
-@@ -16317,6 +15954,7 @@
+@@ -16317,6 +15946,7 @@
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
        setApprovalMode: vi.fn(),
@@ -141316,7 +141399,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onAllToolCallsComplete = vi.fn();
-@@ -16370,13 +16008,13 @@
+@@ -16370,13 +16000,13 @@
    }
  
    it('should inject RETRY LOOP DETECTED directive after 3 consecutive validation failures', async () => {
@@ -141331,7 +141414,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      );
      let msg = getLastErrorMessage(onToolCallsUpdate);
      expect(msg).toBeDefined();
-@@ -16632,12 +16270,13 @@
+@@ -16632,12 +16262,13 @@
        getAllTools: () => [],
        getAllToolNames: () => [StrictStringTool.Name, StrictToolAlt.Name],
        getToolsByServer: () => [],
@@ -141345,7 +141428,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -16646,13 +16285,11 @@
+@@ -16646,13 +16277,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141359,7 +141442,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        isInteractive: () => true,
        getIdeMode: () => false,
-@@ -16661,6 +16298,7 @@
+@@ -16661,6 +16290,7 @@
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
        setApprovalMode: vi.fn(),
@@ -141367,7 +141450,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onToolCallsUpdate = vi.fn();
-@@ -17040,12 +16678,13 @@
+@@ -17040,12 +16670,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -141381,7 +141464,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17054,14 +16693,11 @@
+@@ -17054,14 +16685,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141396,7 +141479,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17086,6 +16722,7 @@
+@@ -17086,6 +16714,7 @@
        getDisabledSkillNames: () => new Set<string>(),
        getModelInvocableCommandsProvider: () => null,
        addInlineAnnouncedSkillKeys: vi.fn(),
@@ -141404,7 +141487,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -17251,12 +16888,13 @@
+@@ -17251,12 +16880,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -141418,7 +141501,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.YOLO,
          getPermissionsAllow: () => [],
          getContentGeneratorConfig: () => ({
-@@ -17265,14 +16903,11 @@
+@@ -17265,14 +16895,11 @@
          }),
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
@@ -141433,7 +141516,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getGeminiClient: () => null,
          getChatRecordingService: () => undefined,
          getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17279,6 +16914,7 @@
+@@ -17279,6 +16906,7 @@
          getDisableAllHooks: vi.fn().mockReturnValue(true),
          getConditionalRulesRegistry: () => undefined,
          getSkillManager: () => ({ matchAndActivateByPaths }),
@@ -141441,7 +141524,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        } as unknown as Config,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -17368,12 +17004,13 @@
+@@ -17368,12 +16996,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -141455,7 +141538,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17382,14 +17019,11 @@
+@@ -17382,14 +17011,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141470,7 +141553,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17411,6 +17045,7 @@
+@@ -17411,6 +17037,7 @@
        getDisabledSkillNames: () => new Set<string>(),
        getModelInvocableCommandsProvider: () => null,
        addInlineAnnouncedSkillKeys: vi.fn(),
@@ -141478,7 +141561,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -17488,12 +17123,13 @@
+@@ -17488,12 +17115,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -141492,7 +141575,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17502,14 +17138,11 @@
+@@ -17502,14 +17130,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141507,7 +141590,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17523,6 +17156,7 @@
+@@ -17523,6 +17148,7 @@
        getDisabledSkillNames: () => new Set<string>(),
        getModelInvocableCommandsProvider: () => null,
        addInlineAnnouncedSkillKeys: vi.fn(),
@@ -141515,7 +141598,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -17583,12 +17217,13 @@
+@@ -17583,12 +17209,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -141529,7 +141612,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17597,14 +17232,11 @@
+@@ -17597,14 +17224,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141544,7 +141627,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17618,6 +17250,7 @@
+@@ -17618,6 +17242,7 @@
        getDisabledSkillNames: () => new Set<string>(),
        getModelInvocableCommandsProvider: () => null,
        addInlineAnnouncedSkillKeys: vi.fn(),
@@ -141552,7 +141635,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -17679,12 +17312,13 @@
+@@ -17679,12 +17304,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -141566,7 +141649,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17693,14 +17327,11 @@
+@@ -17693,14 +17319,11 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -141581,7 +141664,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getGeminiClient: () => null,
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
-@@ -17709,6 +17340,7 @@
+@@ -17709,6 +17332,7 @@
        getSkillManager: () => ({
          matchAndActivateByPaths: vi.fn().mockResolvedValue([]),
        }),
@@ -141589,7 +141672,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -17904,6 +17536,10 @@
+@@ -17904,6 +17528,10 @@
  
 -    const tool = new TestShellTool({
 -      getShellDefaultTimeoutMs: () => undefined,
@@ -141603,7 +141686,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 +    );
      const mockToolRegistry = {
        getTool: () => tool,
-@@ -17920,12 +17556,13 @@
+@@ -17920,12 +17548,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -141617,7 +141700,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -17939,6 +17576,7 @@
+@@ -17939,6 +17568,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141625,7 +141708,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -18062,12 +17700,13 @@
+@@ -18062,12 +17692,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141639,7 +141722,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18090,6 +17729,7 @@
+@@ -18090,6 +17721,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141647,7 +141730,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onAllToolCallsComplete = vi.fn();
-@@ -18144,12 +17784,13 @@
+@@ -18144,12 +17776,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141661,7 +141744,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18172,6 +17813,7 @@
+@@ -18172,6 +17805,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141669,7 +141752,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -18217,12 +17859,13 @@
+@@ -18217,12 +17851,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141683,7 +141766,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18245,6 +17888,7 @@
+@@ -18245,6 +17880,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141691,7 +141774,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const scheduler = new CoreToolScheduler({
-@@ -18276,6 +17920,7 @@
+@@ -18276,6 +17912,7 @@
      const tool = new TestApprovalTool({
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        setApprovalMode: () => {},
@@ -141699,7 +141782,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config);
  
      const mockToolRegistry = {
-@@ -18291,12 +17936,13 @@
+@@ -18291,12 +17928,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -141713,7 +141796,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18319,6 +17965,7 @@
+@@ -18319,6 +17957,7 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -141721,7 +141804,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      } as unknown as Config;
  
      const onAllToolCallsComplete = vi.fn();
-@@ -18348,6 +17995,66 @@
+@@ -18348,6 +17987,66 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -141805,7 +141888,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    ToolExecutionStatus,
    ToolCallConfirmationDetails,
    ToolResult,
-@@ -33,30 +34,21 @@
+@@ -33,61 +34,49 @@
    firePermissionRequestHook,
    appendAdditionalContext,
  } from './toolHookTriggers.js';
@@ -141837,7 +141920,18 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    FunctionResponsePart,
    Part,
    PartListUnion,
-@@ -75,19 +67,19 @@
+ } from '@google/genai';
+ import { fileURLToPath } from 'node:url';
+ import { ToolNames, canonicalToolName } from '../tools/tool-names.js';
+-import { PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES } from '../tools/exitPlanMode.js';
+-import { approvedPlanRedactionText } from './geminiChat.js';
+-import * as fsSync from 'node:fs';
+ import {
+   collectAvailableSkillEntries,
+   renderAvailableSkillsBlock,
+   type AvailableSkillEntry,
+ } from '../tools/skill-utils.js';
+ import { escapeSystemReminderTags } from '../utils/xml.js';
  import {
    promptIdContext,
    todoWorkChainContext,
@@ -141862,7 +141956,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from './permission-helpers.js';
  import {
    evaluatePermissionFlow,
-@@ -127,12 +119,17 @@
+@@ -127,12 +116,17 @@
  } from '../permissions/denialTracking.js';
  import {
    getResponseTextFromParts,
@@ -141880,7 +141974,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  } from '../tools/modifiable-tool.js';
  import * as Diff from 'diff';
  import levenshtein from 'fast-levenshtein';
-@@ -226,27 +223,12 @@
+@@ -226,27 +220,12 @@
  ): T {
    return request.goalContext
      ? goalTurnContext.run(request.goalContext, callback)
@@ -141908,7 +142002,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const parts = toParts(c);
      return parts.map((p) => p.text ?? '').join('\n');
    }
-@@ -295,15 +277,15 @@
+@@ -295,15 +274,15 @@
  // The cancellation notice handed to the model depends on whether the tool's
  // work actually finished. Claiming a tool "already completed" when it was
  // interrupted mid-flight makes the model skip work that never happened; the
@@ -141926,7 +142020,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
   * execution timeout. Reported as a normal tool error so the model can adapt
   * (narrow scope, retry, etc.) instead of the session hanging.
   */
-@@ -849,12 +831,51 @@
+@@ -849,12 +828,51 @@
    }
  
    // Default case for other kinds of parts.
@@ -141979,7 +142073,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 -  fallbackError: string,
 +  fallbackError: string,
  ): Part[] {
-@@ -876,13 +897,16 @@
+@@ -876,13 +894,16 @@
      const { output: _output, ...responseWithoutOutput } = response;
  
      return {
@@ -141997,7 +142091,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  }
  
  function toParts(input: PartListUnion): Part[] {
-@@ -920,30 +944,39 @@
+@@ -920,30 +941,39 @@
    request: ToolCallRequestInfo,
    error: Error,
    errorType: ToolErrorType,
@@ -142054,7 +142148,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
    reason: string,
    executionStatus: ToolExecutionStatus,
    artifacts?: ToolArtifact[],
-@@ -1738,13 +1771,13 @@
+@@ -1738,13 +1768,13 @@
      toolSpan = this.toolSpans.get(callId),
    ): boolean {
      if (!signal.aborted) return false;
@@ -142069,7 +142163,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      if (toolSpan) {
        setToolSpanCancelled(toolSpan);
      }
-@@ -1920,49 +1953,26 @@
+@@ -1920,49 +1950,26 @@
        ? { success: false, error: r.hookError }
        : {
            success: true,
@@ -142121,7 +142215,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        };
        throw err;
      } finally {
-@@ -1986,13 +1996,13 @@
+@@ -1986,13 +1993,13 @@
      tool: AnyDeclarativeTool,
      args: object,
      callId?: string,
@@ -142136,7 +142230,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            maybeAware.setCallId(callId);
          }
        }
-@@ -2307,23 +2317,48 @@
+@@ -2307,23 +2314,48 @@
            if (!signal.aborted) return false;
            newToolCalls.push({
              status: 'cancelled',
@@ -142186,7 +142280,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            ) {
              newToolCalls.push({
                status: 'error',
-@@ -3510,12 +3545,13 @@
+@@ -3510,12 +3542,13 @@
                call_id: reqInfo.callId,
              });
              this.blockedSpans.set(reqInfo.callId, blockedSpan);
@@ -142200,7 +142294,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                  NotificationType.PermissionPrompt,
                  'Permission needed',
                ).catch((error) => {
-@@ -3671,12 +3707,28 @@
+@@ -3671,12 +3704,28 @@
        // Branch on signal.aborted so a throw caused by the abort signal
        // (e.g. ModifyWithEditor child interrupted by Ctrl+C) lands as
        // 'aborted'/'system' + UNSET status — matching the sister catch
@@ -142229,7 +142323,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            'cancelled',
            'Tool call cancelled by user.',
            'not_started',
-@@ -3691,24 +3743,12 @@
+@@ -3691,24 +3740,12 @@
              ToolErrorType.UNHANDLED_EXCEPTION,
              'not_started',
            ),
@@ -142254,7 +142348,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        // grepping logs by callId would otherwise see nothing if the
        // caller doesn't log the rejection itself (#4321 review-5
        // wenshao Suggestion).
-@@ -3834,15 +3874,13 @@
+@@ -3834,15 +3871,13 @@
          // filesystem paths (request.args may still hold escaped values
          // since buildInvocation normalizes a structuredClone) — UNLESS this
          // tool was bounced by a PreToolUse 'ask', in which case
@@ -142271,7 +142365,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                (normalizedArgs as Record<string, unknown>)[key] = unescapePath(
                  String(normalizedArgs[key]).trim(),
                );
-@@ -3864,13 +3902,13 @@
+@@ -3864,13 +3899,13 @@
            fileDiff: updatedDiff,
            isModifying: false,
          } as ToolCallConfirmationDetails);
@@ -142286,7 +142380,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              payload,
              signal,
            ))
-@@ -4010,13 +4048,13 @@
+@@ -4010,13 +4045,13 @@
      signal: AbortSignal,
    ): Promise<boolean> {
      const confirmDetails = toolCall.confirmationDetails;
@@ -142301,7 +142395,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
      const currentContent = confirmDetails.originalContent ?? '';
      const modifyContext = toolCall.tool.getModifyContext(signal);
-@@ -4311,12 +4349,13 @@
+@@ -4311,12 +4346,13 @@
      });
      this.blockedSpans.set(callId, blockedSpan);
  
@@ -142315,7 +142409,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          NotificationType.PermissionPrompt,
          'Permission needed',
        ).catch((error) => {
-@@ -4348,12 +4387,13 @@
+@@ -4348,12 +4384,13 @@
  
    private async _executeToolCallBody(
      scheduledCall: ScheduledToolCall,
@@ -142329,7 +142423,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
      const toolInput = scheduledCall.request.args as Record<string, unknown>;
  
      // Re-execution after the user approved a PreToolUse 'ask' bounce: the
-@@ -4469,12 +4509,13 @@
+@@ -4469,12 +4506,13 @@
            TOOL_SPAN_STATUS_PRE_HOOK_BLOCKED,
          );
          return;
@@ -142343,7 +142437,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const guardDecision = await evaluateToolInvocationGuard(
          toolInvocationGuard,
          {
-@@ -4490,13 +4531,13 @@
+@@ -4490,13 +4528,13 @@
        if (signal.aborted) {
          this.setStatusInternal(
            callId,
@@ -142358,7 +142452,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4531,13 +4572,13 @@
+@@ -4531,13 +4569,13 @@
        ) {
          this.setStatusInternal(
            callId,
@@ -142373,7 +142467,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          if (this.toolSpans.has(callId)) {
            setToolSpanCancelled(span);
          }
-@@ -4674,12 +4715,13 @@
+@@ -4674,12 +4712,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -142387,7 +142481,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
                setPidCallback,
-@@ -4696,12 +4738,13 @@
+@@ -4696,12 +4735,13 @@
              // boundary so setup failures remain not_started.
              this.setStatusInternal(callId, 'executing');
              execSpan = startToolExecutionSpan({
@@ -142401,7 +142495,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                liveOutputCallback,
                shellExecutionConfig,
              );
-@@ -4861,24 +4904,16 @@
+@@ -4861,24 +4901,16 @@
          setToolSpanCancelled(span);
          return true;
        };
@@ -142430,7 +142524,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 +        // are captured here and joined to the result once it is final. The
 +        // bound is taken later, at completion, on the whole joined text, so
 +        // nothing that joins a result can pass it.
-@@ -4926,8 +4961,8 @@
+@@ -4926,8 +4958,8 @@
                    },
            );
  
@@ -142441,7 +142535,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            if (postHookResult.additionalContext) {
              postToolUseAdditionalContext = postHookResult.additionalContext;
            }
-@@ -4962,22 +4997,12 @@
+@@ -4962,22 +4994,12 @@
                TOOL_SPAN_STATUS_POST_HOOK_STOPPED,
              );
              return;
@@ -142464,7 +142558,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          // (ripGrep array form). Conditional rules and skill activation
          // both key off the same path set, so inspect the union — and
          // gate the inspection on a tool-name allowlist (see
-@@ -5086,125 +5111,31 @@
+@@ -5086,125 +5108,31 @@
              const body = escapeSystemReminderTags(reminderBlocks.join('\n\n'));
 -            // Capture; appended after the model-facing truncation below.
 +            // Capture; joined to the result once the result is final.
@@ -142598,7 +142692,74 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          const convertedResponse = convertToFunctionResponse(
            toolName,
            callId,
-@@ -5330,13 +5261,13 @@
+@@ -5248,66 +5176,12 @@
+           ...(toolResult.terminateTurn ? { terminateTurn: true } : {}),
+           ...(processedImages.visionBridgeNotice !== undefined
+             ? { visionBridgeNotice: processedImages.visionBridgeNotice }
+             : {}),
+           ...(artifacts.length > 0 ? { artifacts } : {}),
+         };
+-        // After an APPROVED exit_plan_mode, swap the large `plan` argument
+-        // still sitting in the model turn's functionCall for a pointer to the
+-        // saved plan file. The blob otherwise stays in the model's attention
+-        // window and gets regurgitated into later responses (#6237). Keyed off
+-        // the approval llmContent prefixes (not just tool success) so
+-        // rejected/no-action results keep their plan text for revision. Must
+-        // run BEFORE setStatusInternal: completion callbacks may submit the
+-        // continuation turn synchronously, and it should already see the
+-        // sanitized history.
+-        if (
+-          canonicalName === ToolNames.EXIT_PLAN_MODE &&
+-          typeof toolResult.llmContent === 'string' &&
+-          PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES.some((prefix) =>
+-            (toolResult.llmContent as string).startsWith(prefix),
+-          )
+-        ) {
+-          try {
+-            const planPath = this.config.getPlanFilePath();
+-            // Gate on the on-disk plan actually matching the in-history
+-            // text: savePlanBestEffort swallows filesystem errors, and the
+-            // pointer must never claim a save that failed or reference a
+-            // file holding a different plan. A missing/unreadable file
+-            // throws here and skips the redaction entirely.
+-            const savedPlan = fsSync.readFileSync(planPath, 'utf-8');
+-            const redacted = this.config
+-              .getGeminiClient?.()
+-              ?.getChat()
+-              .redactApprovedPlanFromHistory(
+-                callId,
+-                approvedPlanRedactionText(planPath),
+-                savedPlan,
+-              );
+-            // The rewrite declines silently on a no-match call id, a
+-            // non-string plan argument, or in-history text differing from
+-            // the saved file — trace those so a "plan still in history"
+-            // report can tell a skipped rewrite from a run one.
+-            if (redacted === false) {
+-              debugLogger.debug(
+-                `Approved-plan redaction left history unchanged for ` +
+-                  `${callId}: no matching exit_plan_mode call, or its ` +
+-                  `plan text does not match ${planPath}.`,
+-              );
+-            }
+-          } catch (redactErr) {
+-            debugLogger.warn(
+-              `Skipping approved-plan redaction for ${callId} (plan file ` +
+-                `unavailable?): ${
+-                  redactErr instanceof Error
+-                    ? redactErr.message
+-                    : String(redactErr)
+-                }`,
+-            );
+-          }
+-        }
+         if (
+           cancelAfterPostProcessing(artifacts, {
+             persistedOutputFiles: successResponse.persistedOutputFiles,
+             visionBridgeNotice: successResponse.visionBridgeNotice,
+           })
+         ) {
+@@ -5330,13 +5204,13 @@
          }
        } else {
          // It is a failure
@@ -142613,7 +142774,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          let failureHookArtifacts: ToolArtifact[] | undefined;
          if (hooksEnabled && messageBus) {
            const failureHookResult = await this.withHookSpan(
-@@ -5370,21 +5301,16 @@
+@@ -5370,21 +5244,16 @@
              }
            }
            failureHookArtifacts = failureHookResult.artifacts;
@@ -142637,7 +142798,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              const lastIndex = responseParts.length - 1;
              responseParts = [...responseParts];
              responseParts[lastIndex] = appendContextToResponsePart(
-@@ -5404,21 +5330,15 @@
+@@ -5404,21 +5273,15 @@
            }, 0);
            const artifacts = [
              ...(toolResult.artifacts ?? []),
@@ -142661,7 +142822,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
                visionBridgeNotice: processedImages.visionBridgeNotice,
              })
            ) {
-@@ -5450,33 +5370,20 @@
+@@ -5450,33 +5313,20 @@
              TOOL_FAILURE_KIND_TIMEOUT,
              TOOL_SPAN_STATUS_TOOL_TIMEOUT,
            );
@@ -142704,7 +142865,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            scheduledCall.request,
            error,
            executionErrorType ?? ToolErrorType.UNKNOWN,
-@@ -5484,12 +5391,13 @@
+@@ -5484,12 +5334,13 @@
            failureHookArtifacts,
            typeof toolResult.returnDisplay === 'string'
              ? undefined
@@ -142718,7 +142879,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              new Set(errorPersistedOutputFiles),
            );
          }
-@@ -5557,23 +5465,52 @@
+@@ -5557,23 +5408,52 @@
            span,
            TOOL_FAILURE_KIND_TOOL_ERROR,
            TOOL_SPAN_STATUS_TOOL_ERROR,
@@ -142773,7 +142934,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const executionTimedOut =
          executionThrew && explicitErrorType === ToolErrorType.EXECUTION_TIMEOUT;
        const aborted = signal.aborted && !executionTimedOut;
-@@ -5682,12 +5619,13 @@
+@@ -5682,12 +5562,13 @@
            if (failureHookResult.additionalContext) {
              exceptionErrorMessage += `\n\n${failureHookResult.additionalContext}`;
            }
@@ -142787,7 +142948,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              createCancelledResponse(
                scheduledCall.request,
                // The abort landed while the failure hook was running; the
-@@ -5696,15 +5634,19 @@
+@@ -5696,15 +5577,19 @@
                  ? TOOL_CANCELLED_BEFORE_COMPLETION_MESSAGE
                  : TOOL_CANCELLED_AFTER_COMPLETION_MESSAGE,
                executionStatus,
@@ -142809,7 +142970,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 +          createErrorResponse(
              scheduledCall.request,
              executionError instanceof Error
-@@ -5712,17 +5654,12 @@
+@@ -5712,17 +5597,12 @@
                : new Error(String(executionError)),
              exceptionErrorType,
              executionStatus,
@@ -142827,7 +142988,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        sleepInhibitorHandle.release();
      }
    }
-@@ -5757,19 +5694,20 @@
+@@ -5757,19 +5637,20 @@
          debugLogger.warn(
            `PostToolBatch hook setup failed: ${
              error instanceof Error ? error.message : String(error)
@@ -142854,7 +143015,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              this.withHookSpan(
                { hookEvent: 'PostToolBatch', toolName: 'batch' },
                () =>
-@@ -5817,7 +5755,10 @@
+@@ -5817,7 +5698,10 @@
                  batchHookResult.stopReason || 'no reason given'
                }`,
              );
@@ -142866,7 +143027,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              const stoppedCall = completedCalls.at(-1);
              const stoppedSpan = stoppedCall
                ? this.toolSpans.get(stoppedCall.request.callId)
-@@ -5845,16 +5786,17 @@
+@@ -5845,16 +5729,17 @@
            completedCalls = withPostToolBatchArtifacts(
              completedCalls,
              batchHookResult.artifacts,
@@ -142888,7 +143049,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
  
          for (const call of completedCalls) {
            this.runtimeContentGeneratorViews.delete(call.request.callId);
-@@ -5863,12 +5805,13 @@
+@@ -5863,12 +5748,13 @@
  
          this.recordToolResults(completedCalls);
  
@@ -142902,7 +143063,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            // failure points. Never leave the one span deliberately deferred
            // for PostToolBatch open when one of them throws.
            for (const call of completedCalls) {
-@@ -5882,90 +5825,73 @@
+@@ -5882,90 +5768,73 @@
            this.drainRequestQueueIfIdle();
          }
        }
@@ -143428,7 +143589,7 @@ diff --git a/packages/core/src/core/final-message-slip.ts b/packages/core/src/co
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
-@@ -1,22 +1,34 @@
+@@ -1,28 +1,37 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -143461,10 +143622,16 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  import {
    GeminiChat,
    InvalidStreamError,
-   approvedPlanRedactionText,
-   redactApprovedPlansInHistory,
-   redactStructuredOutputArgsForRecording,
-@@ -30,30 +42,186 @@
+-  approvedPlanRedactionText,
+-  redactApprovedPlansInHistory,
+-  redactStructuredOutputArgsForRecording,
+   StreamEventType,
+   type StreamEvent,
+ } from './geminiChat.js';
+ import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
+ import { classifyRetryError } from '../utils/retryErrorClassification.js';
+ import { StreamContentError } from './openaiContentGenerator/pipeline.js';
+@@ -30,30 +39,186 @@
  import { EnhancedErrorHandler } from './openaiContentGenerator/errorHandler.js';
  import { APIConnectionTimeoutError } from 'openai';
  import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider/index.js';
@@ -143660,7 +143827,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  vi.mock('node:fs', () => {
    const fsModule = {
      mkdirSync: vi.fn(),
-@@ -88,35 +256,29 @@
+@@ -88,35 +253,29 @@
    return {
      ...actual,
      retryWithBackoff: mockRetryWithBackoff,
@@ -143698,7 +143865,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  const { mockAcquireSleepInhibitor, mockSleepInhibitorRelease } = vi.hoisted(
    () => ({
      mockAcquireSleepInhibitor: vi.fn(),
-@@ -154,54 +316,79 @@
+@@ -154,54 +313,79 @@
  
    beforeEach(() => {
      vi.clearAllMocks();
@@ -143791,7 +143958,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          .mockReturnValue({ debug: vi.fn(), warn: vi.fn(), info: vi.fn() }),
        getApprovalMode: vi.fn().mockReturnValue('default'),
        takePendingManualPlanExitNotice: vi.fn().mockReturnValue(undefined),
-@@ -208,3 +395,6 @@
+@@ -208,3 +392,6 @@
        restorePendingManualPlanExitNotice: vi.fn(),
 -      getFileReadCache: vi.fn().mockReturnValue({ clear: vi.fn() }),
 +      getFileReadCache: vi.fn().mockReturnValue({
@@ -143799,7 +143966,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        markAllReadsEvictedFromHistory: vi.fn().mockReturnValue(0),
 +      }),
      } as unknown as Config;
-@@ -211,15 +401,16 @@
+@@ -211,15 +398,16 @@
  
      // Disable 429 simulation for tests
      setSimulate429(false);
@@ -143817,7 +143984,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    afterEach(() => {
      vi.restoreAllMocks();
-@@ -271,12 +462,13 @@
+@@ -271,12 +459,13 @@
        yield* responses;
      })();
    }
@@ -143831,7 +143998,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -284,15 +476,16 @@
+@@ -284,15 +473,16 @@
    }
  
    describe('system instruction helpers', () => {
@@ -143849,7 +144016,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
-@@ -302,15 +495,16 @@
+@@ -302,15 +492,16 @@
        );
      });
  
@@ -143867,7 +144034,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nUser memory\n\n---\n\nAppended rule',
        );
  
-@@ -322,20 +516,21 @@
+@@ -322,20 +513,21 @@
        );
      });
  
@@ -143890,7 +144057,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
  
-@@ -344,15 +539,16 @@
+@@ -344,15 +536,16 @@
        );
      });
  
@@ -143908,7 +144075,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.applySessionStartContext(
          '  Sync ctx  ',
-@@ -364,15 +560,16 @@
+@@ -364,15 +557,16 @@
        );
      });
  
@@ -143926,7 +144093,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nSessionStart additional context:\nLegitimate content',
        );
  
-@@ -389,12 +586,13 @@
+@@ -389,12 +583,13 @@
  
    describe('sendMessageStream', () => {
      it('releases the sleep inhibitor after the stream is consumed', async () => {
@@ -143940,7 +144107,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -415,12 +613,93 @@
+@@ -415,12 +610,93 @@
          mockConfig,
          'Qwen Code is streaming a model response',
        );
@@ -144034,7 +144201,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
            streamResponse(stopResponse([{ text: 'ok' }])),
-@@ -536,18 +815,23 @@
+@@ -536,18 +812,23 @@
            chat as unknown as { getRequestHistory: () => Content[] },
            'getRequestHistory',
          ).mockImplementationOnce(() => {
@@ -144063,7 +144230,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockConfig.restorePendingManualPlanExitNotice,
          ).toHaveBeenCalledWith(11);
  
-@@ -648,60 +932,67 @@
+@@ -648,60 +929,67 @@
                role: 'user',
                parts: [{ text: 'restored attachment context' }],
              },
@@ -144153,7 +144320,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    'changed outside the approved exit_plan_mode flow',
                  ),
                ),
-@@ -725,15 +1016,16 @@
+@@ -725,15 +1013,16 @@
              ),
            );
            expect(noticeTurn?.parts?.at(-1)?.text).toContain(
@@ -144172,7 +144339,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              mockConfig.takePendingManualPlanExitNotice,
            ).toHaveBeenCalledTimes(1);
            expect(
-@@ -764,13 +1056,19 @@
+@@ -764,13 +1053,19 @@
            'prompt-id-plan-exit-before-rebuild',
          );
          for await (const _ of firstStream) {
@@ -144193,7 +144360,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'replacement chat' },
            'prompt-id-plan-exit-after-rebuild',
          );
-@@ -795,12 +1093,13 @@
+@@ -795,12 +1090,13 @@
      });
  
      it('increments the user-content push counter once per surviving send', async () => {
@@ -144207,7 +144374,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -824,12 +1123,13 @@
+@@ -824,12 +1120,13 @@
      });
  
      it('releases the sleep inhibitor when the stream errors', async () => {
@@ -144221,7 +144388,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                },
              ],
            } as unknown as GenerateContentResponse;
-@@ -852,43 +1152,46 @@
+@@ -852,43 +1149,46 @@
        ).rejects.toThrow('stream aborted');
  
        expect(mockSleepInhibitorRelease).toHaveBeenCalledTimes(1);
@@ -144271,7 +144438,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'prompt-id-tool-call-empty-end',
        );
        await expect(
-@@ -907,38 +1210,40 @@
+@@ -907,38 +1207,40 @@
        expect(modelTurn?.parts![0]!.functionCall).toBeDefined();
      });
  
@@ -144317,7 +144484,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test message' },
            'prompt-id-no-finish-empty-end',
          );
-@@ -949,23 +1254,25 @@
+@@ -949,23 +1251,25 @@
      });
  
      it('should succeed if the stream ends with an invalid part but has a finishReason and contained a valid part', async () => {
@@ -144343,7 +144510,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '' }], // Invalid part
                },
-@@ -1002,20 +1309,22 @@
+@@ -1002,20 +1306,22 @@
      });
  
      it('should consolidate subsequent text chunks after receiving an empty text chunk', async () => {
@@ -144366,7 +144533,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1045,39 +1354,44 @@
+@@ -1045,39 +1351,44 @@
      });
  
      it('should consolidate adjacent text parts that arrive in separate stream chunks', async () => {
@@ -144411,7 +144578,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        })();
  
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
-@@ -1110,12 +1424,13 @@
+@@ -1110,12 +1421,13 @@
        expect(modelTurn.parts![2]!.text).toBe('This is the second part.');
      });
      it('should preserve text parts that stream in the same chunk as a thought', async () => {
@@ -144425,7 +144592,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    { thought: 'This is a thought.' },
-@@ -1160,14 +1475,13 @@
+@@ -1160,14 +1472,13 @@
        );
      });
  
@@ -144441,7 +144608,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'first message' }] },
          {
            role: 'model',
-@@ -1182,12 +1496,13 @@
+@@ -1182,12 +1493,13 @@
            ],
          },
        ]);
@@ -144455,7 +144622,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1256,12 +1571,13 @@
+@@ -1256,12 +1568,13 @@
            ],
          },
        ]);
@@ -144469,7 +144636,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1295,114 +1611,70 @@
+@@ -1295,114 +1608,70 @@
        expect(frParts[0]!.functionResponse?.id).toBe('call_retry_real_fr');
        expect(
          (frParts[0]!.functionResponse?.response as { output?: string })?.output,
@@ -144632,7 +144799,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            role: 'model',
            parts: [
-@@ -1426,21 +1698,23 @@
+@@ -1426,21 +1695,23 @@
                },
              },
            ],
@@ -144656,7 +144823,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    role: 'model',
                    parts: [
                      {
-@@ -1452,12 +1726,13 @@
+@@ -1452,12 +1723,13 @@
                      },
                    ],
                  },
@@ -144670,7 +144837,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const stream = await chat.sendMessageStream(
          'test-model',
          { message: 'second request' },
-@@ -1479,157 +1754,18 @@
+@@ -1479,157 +1751,18 @@
          functionCall?.type === StreamEventType.CHUNK
            ? functionCall.value.functionCalls?.[0]?.id
            : undefined,
@@ -144830,7 +144997,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: 'partial reply that will be lost' }],
                },
-@@ -1663,62 +1799,30 @@
+@@ -1663,62 +1796,30 @@
      });
  
      it('should throw InvalidStreamError when no tool call and no finish reason', async () => {
@@ -144899,7 +145066,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test' },
            'prompt-id-1',
          );
-@@ -1730,12 +1834,13 @@
+@@ -1730,12 +1831,13 @@
  
      it('should succeed when there is finish reason and only thought content (reasoning models)', async () => {
        // This test verifies that responses containing only thought/reasoning content
@@ -144913,7 +145080,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -1777,215 +1882,13 @@
+@@ -1777,215 +1879,13 @@
        expect(modelTurn.parts![0]).toEqual({
          thought: true,
          text: 'Let me think through this problem step by step...',
@@ -145130,7 +145297,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -2045,172 +1948,16 @@
+@@ -2045,172 +1945,16 @@
                (part) => part.functionCall?.id === 'call_list_files',
              ),
          ),
@@ -145305,7 +145472,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '(empty content)' }],
                },
-@@ -2259,12 +2006,14 @@
+@@ -2259,12 +2003,14 @@
          } as unknown as GenerateContentResponse;
  
          // Some providers emit a trailing usage-only chunk after finishReason.
@@ -145320,7 +145487,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2289,24 +2038,26 @@
+@@ -2289,24 +2035,26 @@
      });
  
      it('should succeed for thought-only content when finish reason arrives in a later chunk', async () => {
@@ -145347,7 +145514,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [],
                },
-@@ -2356,12 +2107,14 @@
+@@ -2356,12 +2104,14 @@
          } as unknown as GenerateContentResponse;
  
          // Provider can emit trailing usage-only chunk after finish.
@@ -145362,7 +145529,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2404,12 +2157,14 @@
+@@ -2404,12 +2154,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -145377,7 +145544,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2425,87 +2180,40 @@
+@@ -2425,87 +2177,40 @@
        for await (const _ of stream) {
          // consume stream
        }
@@ -145478,7 +145645,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        vi.mocked(mockConfig.getChatCompression).mockReturnValue({
          maxRecentImagesToRetain: 1,
          imagePayloadThreshold: 1,
-@@ -2527,12 +2235,13 @@
+@@ -2527,12 +2232,13 @@
            role: 'model',
            parts: [{ text: 'I see the second image' }],
          },
@@ -145492,7 +145659,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2594,12 +2303,13 @@
+@@ -2594,12 +2300,13 @@
              },
            ],
          },
@@ -145506,7 +145673,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2664,12 +2374,13 @@
+@@ -2664,12 +2371,13 @@
        chat.setHistory([
          { role: 'user', parts: [{ text: 'prior question' }] },
          { role: 'model', parts: [{ text: 'prior answer' }] },
@@ -145520,7 +145687,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2714,13 +2425,19 @@
+@@ -2714,13 +2422,19 @@
          'prompt-id-no-request-clone',
        );
      });
@@ -145541,7 +145708,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: {
-@@ -2731,12 +2448,14 @@
+@@ -2731,12 +2445,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -145556,7 +145723,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2751,25 +2470,27 @@
+@@ -2751,25 +2467,27 @@
        );
        for await (const _ of stream) {
          // consume stream
@@ -145586,7 +145753,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              candidates: [
                {
                  content: {
-@@ -2779,173 +2500,180 @@
+@@ -2779,173 +2497,186 @@
                  finishReason: 'STOP',
                  index: 0,
                  safetyRatings: [],
@@ -145707,7 +145874,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -                  ],
 -                },
 -                finish_reason: 'tool_calls',
-+    it.each([false, true])(
++    it.each([false, 'read_file', 'structured_output'])(
 +      'preserves literal closing thinking tags with structured calls: %s',
 +      async (withToolCall) => {
 +        const literal = '\n</think> literal visible text\n';
@@ -145791,7 +145958,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +                            index: 0,
 +                            id: 'call_read',
 +                            type: 'function',
-+                            function: { name: 'read_file', arguments: '{}' },
++                            function: {
++                              name: withToolCall,
++                              arguments: '{"payload":"verbatim\\n  answer","nested":{"items":[null,0,false]}}',
++                            },
 +                          },
 +                        ]
 +                      : undefined,
@@ -145876,8 +146046,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +                  {
 +                    functionCall: {
 +                      id: 'call_read',
-+                      name: 'read_file',
-+                      args: {},
++                      name: withToolCall,
++                      args: {
++                        payload: 'verbatim\n  answer',
++                        nested: { items: [null, 0, false] },
++                      },
 +                    },
 +                  },
 +                ]
@@ -145905,7 +146078,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              {
                content: {
                  parts: [{ text: 'response' }],
-@@ -2953,12 +2681,13 @@
+@@ -2953,12 +2684,13 @@
                },
                finishReason: 'STOP',
              },
@@ -145919,7 +146092,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2966,27 +2695,35 @@
+@@ -2966,27 +2698,35 @@
          response,
        );
  
@@ -145962,7 +146135,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -3015,13 +2752,13 @@
+@@ -3015,13 +2755,13 @@
      });
    });
  
@@ -145977,7 +146150,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: { parts: [{ text }], role: 'model' },
-@@ -3038,31 +2775,35 @@
+@@ -3038,31 +2778,35 @@
  
      it('releases the send-lock when auto-compression throws (no deadlock)', async () => {
        const compressSpy = vi
@@ -146021,7 +146194,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
  
-@@ -3084,31 +2825,37 @@
+@@ -3084,31 +2828,37 @@
          .mockResolvedValue({
            newHistory: null,
            info: {
@@ -146068,7 +146241,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
        const stream = await chat.sendMessageStream(
-@@ -3127,35 +2874,43 @@
+@@ -3127,35 +2877,43 @@
            .some((content) =>
              content.parts?.some((part) => part.text === 'first'),
            ),
@@ -146124,7 +146297,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse(),
        );
  
-@@ -3166,16 +2921,16 @@
+@@ -3166,16 +2924,16 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -146143,7 +146316,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        ];
        vi.spyOn(
          ChatCompressionService.prototype,
-@@ -3183,12 +2938,13 @@
+@@ -3183,12 +2941,13 @@
        ).mockResolvedValueOnce({
          newHistory: compressedHistory,
          info: {
@@ -146157,7 +146330,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +2955,1516 @@
+@@ -3199,2262 +2958,1516 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -149730,7 +149903,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5858,20 +4868,22 @@
+@@ -5858,20 +4871,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -149754,7 +149927,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +4927,296 @@
+@@ -5915,33 +4930,296 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -150055,7 +150228,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +5226,22 @@
+@@ -5951,22 +5229,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -150082,7 +150255,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +5253,13 @@
+@@ -5978,99 +5256,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -150182,7 +150355,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +5268,23 @@
+@@ -6079,23 +5271,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -150208,7 +150381,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6111,18 +5300,27 @@
+@@ -6111,18 +5303,27 @@
              buildRequest: (request: OpenAI.Chat.ChatCompletionCreateParams) =>
                request,
              buildHeaders: () => ({}),
@@ -150238,7 +150411,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,76 +5344,23 @@
+@@ -6146,76 +5347,23 @@
          } finally {
            vi.useRealTimers();
          }
@@ -150320,7 +150493,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-invalid-stream-abort-delay',
          );
-@@ -6239,41 +5384,46 @@
+@@ -6239,41 +5387,46 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -150369,7 +150542,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6308,29 +5458,21 @@
+@@ -6308,29 +5461,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -150401,7 +150574,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +5487,13 @@
+@@ -6345,12 +5490,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -150415,7 +150588,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +5503,29 @@
+@@ -6360,21 +5506,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -150446,7 +150619,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +5540,18 @@
+@@ -6389,24 +5543,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -150473,7 +150646,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +5571,13 @@
+@@ -6426,12 +5574,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -150487,7 +150660,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +5587,29 @@
+@@ -6441,21 +5590,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -150518,7 +150691,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +5623,12 @@
+@@ -6469,56 +5626,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -150575,7 +150748,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +5636,13 @@
+@@ -6526,12 +5639,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -150589,7 +150762,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +5654,17 @@
+@@ -6543,14 +5657,17 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -150608,7 +150781,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +5675,13 @@
+@@ -6561,12 +5678,13 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -150622,7 +150795,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +5692,13 @@
+@@ -6577,13 +5695,13 @@
                  },
                },
              ],
@@ -150637,7 +150810,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +5725,13 @@
+@@ -6610,15 +5728,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -150654,7 +150827,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +5742,13 @@
+@@ -6629,12 +5745,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -150668,7 +150841,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +5785,12 @@
+@@ -6671,752 +5788,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -151421,7 +151594,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +5805,13 @@
+@@ -7431,12 +5808,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -151435,7 +151608,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +5872,13 @@
+@@ -7497,13 +5875,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -151450,7 +151623,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +5895,37 @@
+@@ -7520,116 +5898,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -151572,7 +151745,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +5936,13 @@
+@@ -7640,12 +5939,13 @@
                throw transportError;
              })(),
            )
@@ -151586,7 +151759,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +5975,22 @@
+@@ -7678,103 +5978,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -151691,7 +151864,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +6001,13 @@
+@@ -7785,12 +6004,13 @@
                throw transportError;
              })(),
            )
@@ -151705,7 +151878,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +6032,206 @@
+@@ -7815,1231 +6035,206 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -153094,7 +153267,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +6262,13 @@
+@@ -9070,12 +6265,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -153108,7 +153281,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +6318,17 @@
+@@ -9125,13 +6321,17 @@
              timeoutError,
              {
                model: 'test-model',
@@ -153127,7 +153300,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +6339,13 @@
+@@ -9142,12 +6342,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153141,7 +153314,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +6398,13 @@
+@@ -9200,12 +6401,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153155,7 +153328,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +6454,13 @@
+@@ -9255,12 +6457,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -153169,7 +153342,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,13 +6591,17 @@
+@@ -9391,13 +6594,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -153188,7 +153361,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the retry delay.
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9409,41 +6613,35 @@
+@@ -9409,41 +6616,35 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -153235,7 +153408,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +6656,13 @@
+@@ -9458,12 +6659,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -153249,7 +153422,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +6672,42 @@
+@@ -9473,130 +6675,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -153389,7 +153562,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +6717,13 @@
+@@ -9606,12 +6720,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -153403,7 +153576,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,24 +6738,28 @@
+@@ -9626,24 +6741,28 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -153433,7 +153606,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9652,13 +6768,13 @@
+@@ -9652,13 +6771,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -153448,7 +153621,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,14 +6812,17 @@
+@@ -9696,14 +6815,17 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -153467,7 +153640,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).toHaveBeenCalledTimes(1);
        } finally {
-@@ -9733,12 +6852,13 @@
+@@ -9733,12 +6855,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153481,7 +153654,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,21 +6872,25 @@
+@@ -9752,21 +6875,25 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -153509,7 +153682,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -9792,12 +6916,13 @@
+@@ -9792,12 +6919,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -153523,7 +153696,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,26 +6943,30 @@
+@@ -9818,26 +6946,30 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -153556,7 +153729,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9884,13 +7013,17 @@
+@@ -9884,13 +7016,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -153575,7 +153748,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the 60s delay
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9905,12 +7038,13 @@
+@@ -9905,12 +7041,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -153589,7 +153762,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +7088,13 @@
+@@ -9954,12 +7091,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -153603,7 +153776,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,33 +7109,37 @@
+@@ -9974,33 +7112,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -153647,7 +153820,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -10009,13 +7148,13 @@
+@@ -10009,13 +7151,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -153662,7 +153835,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +7167,14 @@
+@@ -10028,12 +7170,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -153677,7 +153850,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +7199,13 @@
+@@ -10058,12 +7202,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153691,7 +153864,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,35 +7217,37 @@
+@@ -10075,35 +7220,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -153734,7 +153907,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10123,12 +7267,14 @@
+@@ -10123,12 +7270,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -153749,7 +153922,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +7300,13 @@
+@@ -10154,12 +7303,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153763,7 +153936,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,30 +7317,31 @@
+@@ -10170,30 +7320,31 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -153800,7 +153973,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10261,12 +7409,13 @@
+@@ -10261,12 +7412,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -153814,7 +153987,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +7488,13 @@
+@@ -10339,12 +7491,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -153828,7 +154001,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +7522,13 @@
+@@ -10372,12 +7525,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -153842,7 +154015,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +7536,22 @@
+@@ -10385,20 +7539,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -153866,7 +154039,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +7603,177 @@
+@@ -10450,103 +7606,177 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -154104,7 +154277,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +7788,58 @@
+@@ -10561,41 +7791,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -154175,7 +154348,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +7850,13 @@
+@@ -10606,12 +7853,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -154189,7 +154362,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +7886,281 @@
+@@ -10641,275 +7889,281 @@
          }),
          'prompt-id-res3',
        );
@@ -154704,7 +154877,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +8205,31 @@
+@@ -10954,28 +8208,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -154737,7 +154910,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +8250,55 @@
+@@ -10996,138 +8253,55 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -154887,7 +155060,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +8309,33 @@
+@@ -11138,33 +8312,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -154932,7 +155105,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +8345,30 @@
+@@ -11174,22 +8348,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -154964,7 +155137,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +8422,34 @@
+@@ -11243,31 +8425,34 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -155002,7 +155175,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +8460,64 @@
+@@ -11278,59 +8463,64 @@
                      },
                    ],
                  },
@@ -155071,7 +155244,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +8558,12 @@
+@@ -11371,252 +8561,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -155324,7 +155497,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +8737,636 @@
+@@ -11790,179 +8740,636 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -156095,7 +156268,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +9479,12 @@
+@@ -12075,17 +9482,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -156113,7 +156286,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,1792 +9967,412 @@
+@@ -12568,2978 +9970,980 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -158251,87 +158424,393 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +    });
    });
  
-   describe('redactApprovedPlanFromHistory', () => {
-     // After an approved exit_plan_mode the full plan text would otherwise
-     // stay in history as the model's own tool-call argument and get
-     // regurgitated into later responses (#6237). These tests pin the
-     // targeted history rewrite the tool scheduler performs post-approval.
- 
-     const REPLACEMENT = '[Plan approved and saved to /tmp/p.md]';
- 
-     function chatWith(history: Content[]): GeminiChat {
+-  describe('redactApprovedPlanFromHistory', () => {
+-    // After an approved exit_plan_mode the full plan text would otherwise
+-    // stay in history as the model's own tool-call argument and get
+-    // regurgitated into later responses (#6237). These tests pin the
+-    // targeted history rewrite the tool scheduler performs post-approval.
+-
+-    const REPLACEMENT = '[Plan approved and saved to /tmp/p.md]';
+-
+-    function chatWith(history: Content[]): GeminiChat {
 -      return new GeminiChat({} as unknown as Config, {}, history);
-+      return new GeminiChat(
-+        {} as unknown as Config,
-+        new GenerationContext('test-owned-invocation'),
-+        {},
-+        history,
-+        createCommitRecorder(),
-+      );
-     }
- 
-     it('rewrites only the plan arg of the matching exit_plan_mode call', () => {
-       const chat = chatWith([
-         { role: 'user', parts: [{ text: 'plan it' }] },
-         {
-@@ -14615,14 +10634,16 @@
-       // mockFileSystem, so "writing" the plan file is a Map insert.
-       const planFile = '/plans/wired-session.md';
-       mockFileSystem.set(planFile, PLAN);
-       try {
-         const chat = new GeminiChat(
-           { getPlanFilePath: () => planFile } as unknown as Config,
-+          new GenerationContext('test-owned-invocation'),
-           {},
-           [],
-+          createCommitRecorder(),
-         );
-         chat.setHistory(approvedHistory());
-         const fnCall = chat.getHistory()[1]!.parts![0]!.functionCall!;
-         expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
-       } finally {
-         mockFileSystem.delete(planFile);
-@@ -14632,14 +10653,16 @@
-     it('is applied by the constructor for rehydrated history', () => {
-       const planFile = '/plans/ctor-session.md';
-       mockFileSystem.set(planFile, PLAN);
-       try {
-         const chat = new GeminiChat(
-           { getPlanFilePath: () => planFile } as unknown as Config,
-+          new GenerationContext('test-owned-invocation'),
-           {},
-           approvedHistory(),
-+          createCommitRecorder(),
-         );
-         const fnCall = chat.getHistory()[1]!.parts![0]!.functionCall!;
-         expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
-       } finally {
-         mockFileSystem.delete(planFile);
-       }
-@@ -14647,14 +10670,16 @@
- 
-     it('setHistory leaves history alone when no plan file exists', () => {
-       const chat = new GeminiChat(
-         {
-           getPlanFilePath: () => '/plans/never-written.md',
-         } as unknown as Config,
-+        new GenerationContext('test-owned-invocation'),
-         {},
-         [],
-+        createCommitRecorder(),
-       );
-       chat.setHistory(approvedHistory());
-       const fnCall = chat.getHistory()[1]!.parts![0]!.functionCall!;
-       expect(fnCall.args!['plan']).toBe(PLAN);
-     });
-   });
-@@ -14725,821 +10750,596 @@
-       const snapshot = JSON.parse(JSON.stringify(original));
-       redactStructuredOutputArgsForRecording(original);
-       expect(original).toEqual(snapshot);
-     });
-   });
- 
+-    }
+-
+-    it('rewrites only the plan arg of the matching exit_plan_mode call', () => {
+-      const chat = chatWith([
+-        { role: 'user', parts: [{ text: 'plan it' }] },
+-        {
+-          role: 'model',
+-          parts: [
+-            { text: 'My plan follows.' },
+-            {
+-              functionCall: {
+-                id: 'call-plan',
+-                name: 'exit_plan_mode',
+-                args: { plan: 'SECRET BIG PLAN', originalRequest: 'plan it' },
+-              },
+-            },
+-          ],
+-        },
+-      ]);
+-
+-      expect(chat.redactApprovedPlanFromHistory('call-plan', REPLACEMENT)).toBe(
+-        true,
+-      );
+-
+-      const entry = chat.getHistory()[1]!;
+-      const fnCall = entry.parts![1]!.functionCall!;
+-      expect(fnCall.args!['plan']).toBe(REPLACEMENT);
+-      expect(fnCall.args!['originalRequest']).toBe('plan it');
+-      expect(fnCall.id).toBe('call-plan');
+-      expect(entry.parts![0]).toEqual({ text: 'My plan follows.' });
+-      expect(JSON.stringify(chat.getHistory())).not.toContain(
+-        'SECRET BIG PLAN',
+-      );
+-    });
+-
+-    it('returns false when no matching call id or tool name exists', () => {
+-      const chat = chatWith([
+-        {
+-          role: 'model',
+-          parts: [
+-            {
+-              functionCall: {
+-                id: 'call-other',
+-                name: 'write_file',
+-                args: { plan: 'not a plan tool' },
+-              },
+-            },
+-          ],
+-        },
+-      ]);
+-      expect(chat.redactApprovedPlanFromHistory('call-plan', REPLACEMENT)).toBe(
+-        false,
+-      );
+-      expect(
+-        chat.redactApprovedPlanFromHistory('call-other', REPLACEMENT),
+-      ).toBe(false);
+-      expect(chat.getHistory()[0]!.parts![0]!.functionCall!.args!['plan']).toBe(
+-        'not a plan tool',
+-      );
+-    });
+-
+-    it('returns false when expectedPlan differs from the in-history plan', () => {
+-      const chat = chatWith([
+-        {
+-          role: 'model',
+-          parts: [
+-            {
+-              functionCall: {
+-                id: 'call-plan',
+-                name: 'exit_plan_mode',
+-                args: { plan: 'SECRET BIG PLAN' },
+-              },
+-            },
+-          ],
+-        },
+-      ]);
+-      // Never-lie invariant: a stale/different on-disk plan blocks the
+-      // rewrite entirely.
+-      expect(
+-        chat.redactApprovedPlanFromHistory(
+-          'call-plan',
+-          REPLACEMENT,
+-          'a different plan',
+-        ),
+-      ).toBe(false);
+-      expect(chat.getHistory()[0]!.parts![0]!.functionCall!.args!['plan']).toBe(
+-        'SECRET BIG PLAN',
+-      );
+-      // Matching expectedPlan still rewrites.
+-      expect(
+-        chat.redactApprovedPlanFromHistory(
+-          'call-plan',
+-          REPLACEMENT,
+-          'SECRET BIG PLAN',
+-        ),
+-      ).toBe(true);
+-    });
+-
+-    it('returns false when the matching call has no string plan arg', () => {
+-      const chat = chatWith([
+-        {
+-          role: 'model',
+-          parts: [
+-            {
+-              functionCall: {
+-                id: 'call-plan',
+-                name: 'exit_plan_mode',
+-                args: {},
+-              },
+-            },
+-          ],
+-        },
+-      ]);
+-      expect(chat.redactApprovedPlanFromHistory('call-plan', REPLACEMENT)).toBe(
+-        false,
+-      );
+-    });
+-  });
+-
+-  describe('redactApprovedPlansInHistory (load-side, #6237)', () => {
+-    // The chat-recording JSONL captures the assistant turn with the full
+-    // plan argument before the tool runs, so --resume re-feeds the text the
+-    // in-session redaction removed. These tests pin the history-wide pass
+-    // applied on every wholesale history load.
+-    const PLAN = '## Plan\n\nresume leak fixture';
+-    const PLAN_PATH = '/plans/session.md';
+-
+-    const approvedHistory = (): Content[] => [
+-      { role: 'user', parts: [{ text: 'plan it' }] },
+-      {
+-        role: 'model',
+-        parts: [
+-          {
+-            functionCall: {
+-              id: 'call-a',
+-              name: 'exit_plan_mode',
+-              args: { plan: PLAN, originalRequest: 'plan it' },
+-            },
+-          },
+-        ],
+-      },
+-      {
+-        role: 'user',
+-        parts: [
+-          {
+-            functionResponse: {
+-              id: 'call-a',
+-              name: 'exit_plan_mode',
+-              response: {
+-                output:
+-                  'User approved. You can now start coding. Start with updating your todo list if applicable.',
+-              },
+-            },
+-          },
+-        ],
+-      },
+-    ];
+-
+-    it('rewrites approved calls whose plan matches the on-disk file', () => {
+-      const out = redactApprovedPlansInHistory(
+-        approvedHistory(),
+-        PLAN,
+-        PLAN_PATH,
+-      );
+-      expect(out).not.toBeNull();
+-      const fnCall = out![1]!.parts![0]!.functionCall!;
+-      expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(PLAN_PATH));
+-      expect(fnCall.args!['originalRequest']).toBe('plan it');
+-      expect(JSON.stringify(out)).not.toContain('resume leak fixture');
+-    });
+-
+-    it('redacts only the approved call when a rejected call shares the plan text', () => {
+-      const history: Content[] = [
+-        { role: 'user', parts: [{ text: 'plan it' }] },
+-        {
+-          role: 'model',
+-          parts: [
+-            {
+-              functionCall: {
+-                id: 'call-rejected',
+-                name: 'exit_plan_mode',
+-                args: { plan: PLAN },
+-              },
+-            },
+-          ],
+-        },
+-        {
+-          role: 'user',
+-          parts: [
+-            {
+-              functionResponse: {
+-                id: 'call-rejected',
+-                name: 'exit_plan_mode',
+-                response: {
+-                  output:
+-                    'Plan execution was not approved. Remaining in plan mode.',
+-                },
+-              },
+-            },
+-          ],
+-        },
+-        {
+-          role: 'model',
+-          parts: [
+-            {
+-              functionCall: {
+-                id: 'call-approved',
+-                name: 'exit_plan_mode',
+-                args: { plan: PLAN },
+-              },
+-            },
+-          ],
+-        },
+-        {
+-          role: 'user',
+-          parts: [
+-            {
+-              functionResponse: {
+-                id: 'call-approved',
+-                name: 'exit_plan_mode',
+-                response: {
+-                  output: 'User approved. You can now start coding.',
+-                },
+-              },
+-            },
+-          ],
+-        },
+-      ];
+-
+-      const out = redactApprovedPlansInHistory(history, PLAN, PLAN_PATH);
+-      expect(out).not.toBeNull();
+-      // The rejected call keeps its plan text (the model needs it for
+-      // revision); only the approved call is rewritten.
+-      expect(out![1]!.parts![0]!.functionCall!.args!['plan']).toBe(PLAN);
+-      expect(out![3]!.parts![0]!.functionCall!.args!['plan']).toBe(
+-        approvedPlanRedactionText(PLAN_PATH),
+-      );
+-    });
+-
+-    it('returns null when the response was not an approval', () => {
+-      const history = approvedHistory();
+-      (
+-        history[2]!.parts![0]!.functionResponse!.response as {
+-          output: string;
+-        }
+-      ).output = 'Plan execution was not approved. Remaining in plan mode.';
+-      expect(redactApprovedPlansInHistory(history, PLAN, PLAN_PATH)).toBeNull();
+-    });
+-
+-    it('returns null when the on-disk plan differs (stale file)', () => {
+-      expect(
+-        redactApprovedPlansInHistory(
+-          approvedHistory(),
+-          'a different, later plan',
+-          PLAN_PATH,
+-        ),
+-      ).toBeNull();
+-    });
+-
+-    it('is applied by setHistory when the plan file exists', () => {
+-      // The module-level node:fs mock backs readFileSync with
+-      // mockFileSystem, so "writing" the plan file is a Map insert.
+-      const planFile = '/plans/wired-session.md';
+-      mockFileSystem.set(planFile, PLAN);
+-      try {
+-        const chat = new GeminiChat(
+-          { getPlanFilePath: () => planFile } as unknown as Config,
+-          {},
+-          [],
+-        );
+-        chat.setHistory(approvedHistory());
+-        const fnCall = chat.getHistory()[1]!.parts![0]!.functionCall!;
+-        expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
+-      } finally {
+-        mockFileSystem.delete(planFile);
+-      }
+-    });
+-
+-    it('is applied by the constructor for rehydrated history', () => {
+-      const planFile = '/plans/ctor-session.md';
+-      mockFileSystem.set(planFile, PLAN);
+-      try {
+-        const chat = new GeminiChat(
+-          { getPlanFilePath: () => planFile } as unknown as Config,
+-          {},
+-          approvedHistory(),
+-        );
+-        const fnCall = chat.getHistory()[1]!.parts![0]!.functionCall!;
+-        expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
+-      } finally {
+-        mockFileSystem.delete(planFile);
+-      }
+-    });
+-
+-    it('setHistory leaves history alone when no plan file exists', () => {
+-      const chat = new GeminiChat(
+-        {
+-          getPlanFilePath: () => '/plans/never-written.md',
+-        } as unknown as Config,
+-        {},
+-        [],
+-      );
+-      chat.setHistory(approvedHistory());
+-      const fnCall = chat.getHistory()[1]!.parts![0]!.functionCall!;
+-      expect(fnCall.args!['plan']).toBe(PLAN);
+-    });
+-  });
+-
+-  describe('redactStructuredOutputArgsForRecording', () => {
+-    // The chat-recording JSONL persists assistant turns to disk and re-feeds
+-    // them on `--continue` / `--resume`. For `--json-schema` runs the
+-    // structured_output args ARE the user's structured payload, already
+-    // emitted on stdout; recording them verbatim here would silently
+-    // contradict the redaction the ToolCallEvent telemetry path applies.
+-    // These tests pin the helper that scrubs them.
+-
+-    it('replaces args on a structured_output functionCall with the placeholder', () => {
+-      const result = redactStructuredOutputArgsForRecording({
+-        functionCall: {
+-          id: 'call-1',
+-          name: 'structured_output',
+-          args: {
+-            extracted: 'sensitive answer',
+-            score: 0.9,
+-            details: { token: 'shhhh' },
+-          },
+-        },
+-      });
+-      expect(result).not.toBeNull();
+-      expect(result!.functionCall.name).toBe('structured_output');
+-      expect(result!.functionCall.id).toBe('call-1');
+-      expect(result!.functionCall.args).toEqual({
+-        __redacted: 'structured_output payload (see stdout result)',
+-      });
+-      // The original payload must NOT survive in any field of the output.
+-      expect(JSON.stringify(result)).not.toContain('sensitive answer');
+-      expect(JSON.stringify(result)).not.toContain('shhhh');
+-    });
+-
+-    it('passes non-structured_output functionCalls through untouched', () => {
+-      const original = {
+-        id: 'call-2',
+-        name: 'write_file',
+-        args: { path: '/tmp/x', content: 'hello' },
+-      };
+-      const result = redactStructuredOutputArgsForRecording({
+-        functionCall: original,
+-      });
+-      expect(result).not.toBeNull();
+-      expect(result!.functionCall).toEqual(original);
+-      // Reference identity not required, but the args object must equal
+-      // the input (no redaction applied).
+-      expect(result!.functionCall.args).toEqual({
+-        path: '/tmp/x',
+-        content: 'hello',
+-      });
+-    });
+-
+-    it('returns null for parts with no functionCall', () => {
+-      expect(redactStructuredOutputArgsForRecording({ text: 'hi' })).toBeNull();
+-      expect(redactStructuredOutputArgsForRecording({})).toBeNull();
+-    });
+-
+-    it('does not mutate the input part', () => {
+-      const original = {
+-        functionCall: {
+-          id: 'call-3',
+-          name: 'structured_output',
+-          args: { ok: true, data: [1, 2, 3] },
+-        },
+-      };
+-      const snapshot = JSON.parse(JSON.stringify(original));
+-      redactStructuredOutputArgsForRecording(original);
+-      expect(original).toEqual(snapshot);
+-    });
+-  });
+-
 -  // Compression logic is tested in chatCompressionService.test.ts; this
 -  // suite covers per-chat state on GeminiChat: consecutiveFailures
 -  // circuit breaker, token-count mutation, history replacement, and
@@ -159694,7 +160173,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
-@@ -1,62 +1,59 @@
+@@ -1,113 +1,100 @@
 +import { CompactionFinalizationError } from './turn.js';
 +import { requireServedUsage } from './served-usage.js';
  /**
@@ -159775,12 +160254,13 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  turnRefusalNotice,
 +} from './generation-refusal.js';
 +import { hasCycleInSchema } from '../tools/tools.js';
- import { ToolNames, canonicalToolName } from '../tools/tool-names.js';
- import * as fs from 'node:fs';
- import { PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES } from '../tools/exitPlanMode.js';
+-import { ToolNames, canonicalToolName } from '../tools/tool-names.js';
+-import * as fs from 'node:fs';
+-import { PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES } from '../tools/exitPlanMode.js';
 -import { isManagedMemoryPath } from '../memory/paths.js';
- import { STRUCTURED_OUTPUT_REDACTED_ARGS } from '../tools/syntheticOutput.js';
-@@ -65,49 +62,43 @@
+-import { STRUCTURED_OUTPUT_REDACTED_ARGS } from '../tools/syntheticOutput.js';
+ import type { StructuredError } from './turn.js';
+ import {
    logContentRetry,
    logContentRetryFailure,
    logApiRetry,
@@ -159841,7 +160321,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -123,38 +114,30 @@
+@@ -123,38 +110,30 @@
  import {
    getToolCallPreparations,
    setToolCallPreparations,
@@ -159892,11 +160372,141 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -321,719 +304,69 @@
-       ...part.functionCall,
-       args: { ...STRUCTURED_OUTPUT_REDACTED_ARGS },
-     },
-   };
+@@ -191,849 +170,71 @@
+       value,
+       writable: true,
+       configurable: true,
+       enumerable: true,
+     });
+   }
+-}
+-
+-/**
+- * Resolves legacy tool-name aliases via the shared `canonicalToolName` so
+- * the load-side plan redaction keeps matching sessions recorded under a
+- * pre-migration name, in lockstep with the write-side scheduler.
+- */
+-function canonicalPlanToolName(toolName: string | undefined): string {
+-  if (!toolName) return '';
+-  return canonicalToolName(toolName);
+-}
+-
+-/**
+- * Single source of the pointer text that replaces an approved plan's
+- * `functionCall.args.plan` (#6237). Shared by the tool scheduler's
+- * post-approval rewrite and the load-side pass below so the two surfaces
+- * cannot drift.
+- */
+-export function approvedPlanRedactionText(planPath: string): string {
+-  return (
+-    `[Plan approved and saved to ${planPath}. The plan text was ` +
+-    `removed from the conversation after approval; read that ` +
+-    `file if you need to consult it again.]`
+-  );
+-}
+-
+-/**
+- * Pure history-wide variant of the approved-plan redaction: rewrites the
+- * `plan` argument of every `exit_plan_mode` `functionCall` whose paired
+- * `functionResponse` carries an approval `llmContent` AND whose plan text
+- * equals `savedPlanContent` (the current on-disk plan file). Returns a new
+- * array when anything changed, or null when the history is untouched.
+- *
+- * Exported for tests; production callers go through
+- * `GeminiChat.setHistory` / the constructor.
+- */
+-export function redactApprovedPlansInHistory(
+-  history: Content[],
+-  savedPlanContent: string,
+-  planPath: string,
+-): Content[] | null {
+-  const approved = new Set<string>();
+-  for (const entry of history) {
+-    if (!entry?.parts) continue;
+-    for (const part of entry.parts) {
+-      const fr = part.functionResponse;
+-      if (
+-        !fr?.id ||
+-        canonicalPlanToolName(fr.name) !== ToolNames.EXIT_PLAN_MODE
+-      )
+-        continue;
+-      const output = (fr.response as { output?: unknown } | undefined)?.[
+-        'output'
+-      ];
+-      if (
+-        typeof output === 'string' &&
+-        PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES.some((prefix) =>
+-          output.startsWith(prefix),
+-        )
+-      ) {
+-        approved.add(fr.id);
+-      }
+-    }
+-  }
+-  if (approved.size === 0) return null;
+-
+-  let changed = false;
+-  const out = history.map((entry) => {
+-    if (entry?.role !== 'model' || !entry.parts) return entry;
+-    let entryChanged = false;
+-    const parts = entry.parts.map((part) => {
+-      const fc = part.functionCall;
+-      if (
+-        !fc?.id ||
+-        canonicalPlanToolName(fc.name) !== ToolNames.EXIT_PLAN_MODE
+-      )
+-        return part;
+-      if (!approved.has(fc.id)) return part;
+-      if ((fc.args ?? {})['plan'] !== savedPlanContent) return part;
+-      entryChanged = true;
+-      return {
+-        ...part,
+-        functionCall: {
+-          ...fc,
+-          args: { ...fc.args, plan: approvedPlanRedactionText(planPath) },
+-        },
+-      };
+-    });
+-    if (!entryChanged) return entry;
+-    changed = true;
+-    return { ...entry, parts };
+-  });
+-  return changed ? out : null;
+-}
+-
+-/**
+- * Replaces the args on a `structured_output` `functionCall` with the
+- * same `__redacted` placeholder used by `ToolCallEvent` telemetry
+- * (`packages/core/src/telemetry/types.ts`).
+- *
+- * The chat-recording JSONL (`<projectDir>/chats/<sessionId>.jsonl`)
+- * persists assistant turns to disk and re-feeds them on
+- * `--continue` / `--resume`. For `--json-schema` runs the tool args
+- * ARE the user's structured payload — already emitted on stdout via
+- * `result` / `structured_result`. Recording them verbatim here would
+- * mean the same payload (and every validation-failure retry along the
+- * way) sits on disk indefinitely, contradicting the privacy contract
+- * documented next to the telemetry redaction. Mirror the placeholder
+- * here so the chat-recording surface matches.
+- *
+- * Non-`structured_output` `functionCall`s pass through untouched.
+- *
+- * Exported for tests; callers should prefer the inline use inside
+- * `recordAssistantTurn` invocation below.
+- */
+-export function redactStructuredOutputArgsForRecording(
+-  part: Part,
+-): { functionCall: NonNullable<Part['functionCall']> } | null {
+-  if (!part.functionCall) return null;
+-  if (part.functionCall.name !== ToolNames.STRUCTURED_OUTPUT) {
+-    return { functionCall: part.functionCall };
+-  }
+-  return {
+-    functionCall: {
+-      ...part.functionCall,
+-      args: { ...STRUCTURED_OUTPUT_REDACTED_ARGS },
+-    },
+-  };
  }
  
 -function isCompressionFailureStatus(status: CompressionStatus): boolean {
@@ -160629,7 +161239,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1245,199 +578,58 @@
+@@ -1245,199 +446,58 @@
    return {
      ...content,
      parts,
@@ -160863,7 +161473,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1680,6 +872,15 @@
+@@ -1680,6 +740,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -160879,7 +161489,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1712,72 +913,37 @@
+@@ -1712,72 +781,37 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -160977,7 +161587,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Monotonically counts user-content pushes that survived into history.
     * Incremented when `sendMessageStream` pushes the user content and decremented
-@@ -1787,109 +953,102 @@
+@@ -1787,109 +821,101 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -161043,7 +161653,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      private readonly telemetryService?: UiTelemetryService,
    ) {
      validateHistory(history);
-     this.redactApprovedPlansFromLoadedHistory();
+-    this.redactApprovedPlansFromLoadedHistory();
    }
  
    enableManualPlanExitNotices(): void {
@@ -161126,7 +161736,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,241 +1056,433 @@
+@@ -1897,241 +923,433 @@
        }
        return requestHistory;
      }
@@ -161757,7 +162367,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  /** The startup context every history of this chat opens with, compacted or not. */
 +  getStartupContext(): Content | undefined {
 +    return this.startupContext?.content;
-@@ -2153,6 +1504,16 @@
+@@ -2153,6 +1371,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -161774,7 +162384,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2192,1724 +1553,581 @@
+@@ -2192,1724 +1420,581 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -164003,7 +164613,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +2151,14 @@
+@@ -3933,23 +2018,14 @@
          }
  
          return false;
@@ -164028,7 +164638,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +2172,18 @@
+@@ -3963,41 +2039,18 @@
        },
      });
  
@@ -164072,7 +164682,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4145,43 +2331,19 @@
+@@ -4145,197 +2198,33 @@
  
    /**
     * Clears the chat history.
@@ -164112,15 +164722,124 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -    this.clearPendingPartialState();
    }
  
-   /**
-    * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
-    * history with a short reference, keeping every other part and argument
-    * intact.
-@@ -4298,44 +2460,23 @@
-       );
-     }
-   }
- 
+-  /**
+-   * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
+-   * history with a short reference, keeping every other part and argument
+-   * intact.
+-   *
+-   * The full plan text a model submits to `exit_plan_mode` stays in history
+-   * as its own tool-call arguments; on long conversations models
+-   * occasionally regurgitate chunks of that blob in later responses
+-   * (#6237). Once the plan is approved it is persisted to disk by
+-   * `Config.savePlan`, so the in-context copy can be swapped for a pointer
+-   * without losing information. Rejected plans are left untouched — the
+-   * model needs the text to revise them.
+-   *
+-   * When `expectedPlan` is provided the rewrite additionally requires the
+-   * in-history plan to equal it byte-for-byte. Callers pass the on-disk
+-   * plan-file content here so the pointer can never claim a save that
+-   * failed (`savePlanBestEffort` swallows filesystem errors) or reference
+-   * a file that holds a different plan.
+-   *
+-   * The entry is replaced immutably at the same index; the partial-push
+-   * markers compare by index and role, so this cannot desync them.
+-   *
+-   * @returns true when a matching functionCall was found and rewritten.
+-   */
+-  redactApprovedPlanFromHistory(
+-    callId: string,
+-    replacement: string,
+-    expectedPlan?: string,
+-  ): boolean {
+-    for (let i = this.history.length - 1; i >= 0; i--) {
+-      const entry = this.history[i];
+-      if (entry?.role !== 'model' || !entry.parts) continue;
+-      const partIdx = entry.parts.findIndex(
+-        (part) =>
+-          part.functionCall?.id === callId &&
+-          canonicalPlanToolName(part.functionCall.name) ===
+-            ToolNames.EXIT_PLAN_MODE,
+-      );
+-      if (partIdx === -1) continue;
+-      const part = entry.parts[partIdx]!;
+-      const functionCall = part.functionCall!;
+-      const plan = (functionCall.args ?? {})['plan'];
+-      if (typeof plan !== 'string') {
+-        return false;
+-      }
+-      if (expectedPlan !== undefined && plan !== expectedPlan) {
+-        return false;
+-      }
+-      const newParts = [...entry.parts];
+-      newParts[partIdx] = {
+-        ...part,
+-        functionCall: {
+-          ...functionCall,
+-          args: { ...functionCall.args, plan: replacement },
+-        },
+-      };
+-      this.history[i] = { ...entry, parts: newParts };
+-      return true;
+-    }
+-    return false;
+-  }
+-
+-  /**
+-   * Read-side counterpart of {@link redactApprovedPlanFromHistory}: the
+-   * chat-recording JSONL captured the assistant turn (with the full plan
+-   * argument) before the tool ran, so a `--resume` / `--continue` reload
+-   * re-feeds the plan text the in-session redaction already removed
+-   * (#6237). Every wholesale history load re-applies the redaction to
+-   * approved `exit_plan_mode` calls.
+-   *
+-   * Only calls whose in-history plan matches the current on-disk plan file
+-   * are rewritten — same never-lie rule as the write side. With several
+-   * approved plans in one session the file holds only the last one, so
+-   * earlier calls rehydrate unredacted; safe, just not minimal.
+-   */
+-  private redactApprovedPlansFromLoadedHistory(): void {
+-    const hasPlanCall = this.history.some((entry) =>
+-      entry?.parts?.some(
+-        (part) =>
+-          canonicalPlanToolName(part.functionCall?.name) ===
+-          ToolNames.EXIT_PLAN_MODE,
+-      ),
+-    );
+-    if (!hasPlanCall) return;
+-    let planPath: string;
+-    let savedPlan: string;
+-    try {
+-      planPath = this.config.getPlanFilePath();
+-      savedPlan = fs.readFileSync(planPath, 'utf-8');
+-    } catch (err) {
+-      // No plan file (never saved, or save failed): leave history alone —
+-      // never swap plan text for a pointer to a file that is not there.
+-      // Logged (unlike a bare swallow) so a --resume that silently skips
+-      // the redaction is traceable under DEBUG.
+-      debugLogger.debug(
+-        `Skipping load-side plan redaction, plan file unavailable: ${err}`,
+-      );
+-      return;
+-    }
+-    const redacted = redactApprovedPlansInHistory(
+-      this.history,
+-      savedPlan,
+-      planPath,
+-    );
+-    if (redacted) {
+-      this.history = redacted;
+-    } else {
+-      // hasPlanCall was true, so a null here means every exit_plan_mode
+-      // call was skipped (unapproved, id-less, or plan text differing
+-      // from the saved file) — trace it for "plan still in history"
+-      // triage, mirroring the write side.
+-      debugLogger.debug(
+-        `Load-side plan redaction left history unchanged: no approved ` +
+-          `exit_plan_mode call matches the plan file at ${planPath}.`,
+-      );
+-    }
+-  }
+-
    setHistory(history: Content[]): void {
      this.history = history;
 -    // History replacement (compression, /clear, --resume reload) wipes
@@ -164131,7 +164850,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -    // push, corrupting the conversation. Drop the paired deferred-record
 -    // stash too: its referent (the model turn at the old index) is gone.
 -    this.clearPendingPartialState();
-     this.redactApprovedPlansFromLoadedHistory();
+-    this.redactApprovedPlansFromLoadedHistory();
    }
  
    truncateHistory(keepCount: number): void {
@@ -164161,7 +164880,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Pop orphaned trailing user entries from chat history.
     * In a valid conversation the last entry is always a model response;
     * any trailing user entries are leftovers from a request that failed.
-@@ -4362,24 +2503,12 @@
+@@ -4362,24 +2251,12 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -164186,7 +164905,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Instance wrapper around the free-function {@link repairOrphanedToolUseTurns}.
     * See the canonical note above `ORPHAN_TOOL_USE_REPAIR_REASON`.
-@@ -4393,13 +2522,13 @@
+@@ -4393,13 +2270,13 @@
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -164201,7 +164920,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2556,284 @@
+@@ -4427,693 +2304,275 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -164913,13 +165632,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      } else {
 +        await this.chatRecordingService.recordAssistantTurn({
 +          model,
-+          message: message
-+            .map((part) =>
-+              part.functionCall
-+                ? redactStructuredOutputArgsForRecording(part)
-+                : part,
-+            )
-+            .filter((part): part is Part => part !== null),
++          message,
 +          tokens: requireServedUsage(usageMetadata, 'completed chat stream'),
 +          contextWindowSize,
 +          incompleteToolCalls,
@@ -164985,10 +165698,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -            }`,
 +        this.history.push({
 +          role: 'model',
-+          parts: [
-+            ...(thoughtContentPart ? [thoughtContentPart] : []),
-+            ...consolidatedHistoryParts,
-+          ],
++          parts: message,
 +        });
 +        recorded = true;
 +      }
@@ -231877,7 +232587,34 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
      this.file_filtering_respect_git_ignore =
        config.getFileFilteringRespectGitIgnore();
      this.mcp_servers_count = mcpServers ? Object.keys(mcpServers).length : 0;
-@@ -363,17 +361,12 @@
+@@ -197,23 +195,15 @@
+ 
+   constructor(call: CompletedToolCall) {
+     this['event.name'] = 'tool_call';
+     this['event.timestamp'] = new Date().toISOString();
+     this.call_id = call.request.callId;
+     this.function_name = call.request.name;
+-    // structured_output args ARE the user's final structured payload (the
+-    // command's actual answer, already emitted in stdout `result` /
+-    // `structured_result`). Recording them again as ordinary tool-call
+-    // function_args duplicates that data into telemetry surfaces (OTLP
+-    // exports, QwenLogger, ui-telemetry stream, the chat-recording UI
+-    // event mirror) where it can leak off-device. Replace with a shared
+-    // placeholder constant so consumers still see the call happened —
+-    // duration, success, decision metrics are preserved — but the
+-    // payload itself doesn't ride along. The same constant is used by
+-    // `redactStructuredOutputArgsForRecording` in `core/geminiChat.ts`
+-    // for the on-disk JSONL surface so neither side can silently drift.
++    // The telemetry event carries operational measurements without the
++    // structured answer payload. Canonical assistant records carry the full
++    // model output; this diagnostic projection is never replayed as a turn.
+     this.function_args =
+       call.request.name === ToolNames.STRUCTURED_OUTPUT
+         ? { ...STRUCTURED_OUTPUT_REDACTED_ARGS }
+         : call.request.args;
+     this.duration_ms = call.durationMs ?? 0;
+     this.status = call.status;
+@@ -363,17 +353,12 @@
    'event.name': 'api_response';
    'event.timestamp': string; // ISO 8601
    response_id: string;
@@ -231895,7 +232632,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    /** Time from stream dispatch to first user-visible content. */
    ttft_ms?: number;
    /**
-@@ -385,33 +378,74 @@
+@@ -385,33 +370,74 @@
    constructor(
      response_id: string,
      model: string,
@@ -231976,7 +232713,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
  export class FlashFallbackEvent implements BaseTelemetryEvent {
    'event.name': 'flash_fallback';
    'event.timestamp': string;
-@@ -484,7 +518,5 @@
+@@ -484,7 +510,5 @@
    /** Two tools alternating in a fixed pattern (A B A B A B ...). */
    ALTERNATING_TOOL_CALL_PATTERN = 'alternating_tool_call_pattern',
 -  /** Total tool calls in a single turn exceeded the always-on hard cap, regardless of pattern. */
@@ -231984,7 +232721,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    /** The same tool repeatedly failed schema validation with fresh tool-call ids. */
    INVALID_TOOL_PARAMS_STAGNATION = 'invalid_tool_params_stagnation',
    /** The same tool execution failure continued after a corrective reminder. */
-@@ -606,22 +638,6 @@
+@@ -606,22 +630,6 @@
    }
  }
  
@@ -232007,7 +232744,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
  export interface SlashCommandEvent extends BaseTelemetryEvent {
    'event.name': 'slash_command';
    'event.timestamp': string;
-@@ -805,45 +821,19 @@
+@@ -805,45 +813,19 @@
      this.error_type = error_type;
      this.retry_delay_ms = retry_delay_ms;
      this.model = model;
@@ -232054,7 +232791,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
  export class ApiRetryEvent implements BaseTelemetryEvent {
    'event.name': 'api_retry';
    'event.timestamp': string; // ISO 8601
-@@ -940,43 +930,12 @@
+@@ -940,43 +922,12 @@
      this.extension_version = extension_version;
      this.extension_source = extension_source;
      this.status = status;
@@ -232098,7 +232835,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    'event.name': string;
    tool_name: string;
    bytes_written: number;
-@@ -1223,12 +1182,12 @@
+@@ -1223,12 +1174,12 @@
    | UserPromptEvent
    | ToolCallEvent
    | ApiRequestEvent
@@ -232112,7 +232849,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    | RepeatedToolFailureGuardEvent
    | LoopDetectionDisabledEvent
 -  | NextSpeakerCheckEvent
-@@ -1237,20 +1196,18 @@
+@@ -1237,20 +1188,18 @@
    | IdeConnectionEvent
    | ConversationFinishedEvent
    | SlashCommandEvent
@@ -232133,7 +232870,7 @@ diff --git a/packages/core/src/telemetry/types.ts b/packages/core/src/telemetry/
    | HookCallEvent
    | SkillLaunchEvent
    | UserFeedbackEvent
-@@ -1287,47 +1244,38 @@
+@@ -1287,47 +1236,38 @@
    'event.name': 'arena_agent_completed';
    arena_session_id: string;
    agent_session_id: string;
@@ -300275,3 +301012,293 @@ diff --git a/packages/core/src/core/provider-output.ts b/packages/core/src/core/
 +
 +/** A side query retains its output independently of conversion or acceptance. */
 +export const providerOutputContext = new AsyncLocalStorage<ProviderOutput>();
+diff --git a/packages/core/src/tools/exitPlanMode.ts b/packages/core/src/tools/exitPlanMode.ts
+--- /dev/null
++++ b/packages/core/src/tools/exitPlanMode.ts
+@@ -84,24 +84,12 @@
+     },
+     required: ['plan'],
+     additionalProperties: false,
+     $schema: 'http://json-schema.org/draft-07/schema#',
+   },
+ };
+-
+-/**
+- * `llmContent` prefixes that mark a successful plan-mode exit (user or
+- * leader approval). The tool scheduler keys its post-execution history
+- * sanitization (#6237) off these, so they must stay in lockstep with the
+- * success returns in `ExitPlanModeToolInvocation.execute` /
+- * `executePlanRequiredTeammate` below.
+- */
+-export const PLAN_EXIT_APPROVED_LLM_CONTENT_PREFIXES = [
+-  'User approved.',
+-  'Leader approved.',
+-] as const;
+ 
+ interface ExitApprovalSnapshot {
+   plan: string;
+   approvalModeRevision: number;
+   prePlanMode: ApprovalMode;
+ }
+diff --git a/packages/core/src/tools/syntheticOutput.ts b/packages/core/src/tools/syntheticOutput.ts
+--- /dev/null
++++ b/packages/core/src/tools/syntheticOutput.ts
+@@ -14,29 +14,16 @@
+ 
+ The arguments you pass MUST validate against the tool's parameter schema. If validation fails you will receive the error and may retry with corrected fields.`;
+ 
+ export type StructuredOutputParams = Record<string, unknown>;
+ 
+ /**
+- * Placeholder that replaces a `structured_output` tool call's `args` on
+- * every surface that would otherwise persist or re-broadcast the user's
+- * structured payload.
+- *
+- * Two on-device surfaces redact via this constant:
+- *   1. `ToolCallEvent` in `telemetry/types.ts` — keeps the payload out
+- *      of OTLP exports / QwenLogger / ui-telemetry stream / chat-recording
+- *      UI event mirror.
+- *   2. `redactStructuredOutputArgsForRecording` in `core/geminiChat.ts`
+- *      — keeps the payload out of the on-disk chat-recording JSONL
+- *      (which gets re-fed into model context on `--continue` /
+- *      `--resume`).
+- *
+- * Shared so both sites can't drift. The args ARE the user's final
+- * structured payload; they're already on stdout via `result` /
+- * `structured_result`, so persisting them again is duplication that
+- * leaks payload data into long-lived storage.
++ * Tool-call telemetry omits the structured answer payload. This placeholder
++ * belongs only to telemetry (including its diagnostic mirror in the chat
++ * recording). Canonical assistant turns retain the complete model parts so
++ * resume reconstructs the same conversation and tool arguments.
+  */
+ export const STRUCTURED_OUTPUT_REDACTED_ARGS = {
+   __redacted: 'structured_output payload (see stdout result)',
+ } as const;
+ 
+ /**
+diff --git a/packages/core/src/services/session-model-output.test.ts b/packages/core/src/services/session-model-output.test.ts
+--- /dev/null
++++ b/packages/core/src/services/session-model-output.test.ts
+@@ -0,0 +1,221 @@
++/**
++ * @license
++ * Copyright 2026 Qwen Team
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import * as fs from 'node:fs/promises';
++import * as os from 'node:os';
++import * as path from 'node:path';
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import type { Content, GenerateContentResponse, Part } from '@google/genai';
++import type { Config } from '../config/config.js';
++import { Storage } from '../config/storage.js';
++import { AuthType, type ContentGenerator } from '../core/contentGenerator.js';
++import { GenerationContext } from '../core/generation-context.js';
++import { GeminiChat } from '../core/geminiChat.js';
++import { ChatRecordingService } from './chatRecordingService.js';
++import {
++  SessionService,
++  buildApiHistoryFromConversation,
++} from './sessionService.js';
++import {
++  SessionTranscriptReader,
++  resetSessionTranscriptIndexCacheForTest,
++} from './session-transcript-reader.js';
++
++vi.mock('./sleepInhibitor.js', () => ({
++  acquireSleepInhibitor: () => ({ release() {} }),
++}));
++
++describe('canonical model output', () => {
++  let directory: string | undefined;
++  let recording: ChatRecordingService | undefined;
++
++  afterEach(async () => {
++    await recording?.close();
++    recording = undefined;
++    resetSessionTranscriptIndexCacheForTest();
++    Storage.setRuntimeBaseDir(null);
++    if (directory) await fs.rm(directory, { recursive: true, force: true });
++    directory = undefined;
++  });
++
++  it.each(['structured_output', 'exit_plan_mode'])(
++    'records and resumes the same %s parts through both readers and a fork',
++    async (name) => {
++      directory = await fs.mkdtemp(
++        path.join(os.tmpdir(), 'qwen-model-output-'),
++      );
++      const workspace = path.join(directory, 'workspace');
++      await fs.mkdir(workspace);
++      Storage.setRuntimeBaseDir(directory, workspace);
++      const sessionId = '550e8400-e29b-41d4-a716-446655440000';
++      const forkId = '550e8400-e29b-41d4-a716-446655440001';
++      const service = new SessionService(workspace);
++      const context = new GenerationContext(sessionId);
++      const window = 262_144;
++      const profile = {
++        authType: AuthType.USE_OPENAI,
++        baseUrl: 'http://fixture.invalid/v1',
++        model: 'fixture',
++        contextWindowSize: window,
++        maxRetries: 0,
++      };
++      const plan = '## Plan\n\n  Keep these words and spaces.\n';
++      const planPath = path.join(directory, 'plan.md');
++      await fs.writeFile(planPath, plan);
++      const parts: Part[] = [
++        { text: 'Exact reasoning.\n', thought: true },
++        { text: 'Visible preface.\n' },
++        {
++          thoughtSignature: 'opaque-call-signature',
++          functionCall: {
++            id: 'call-original',
++            name,
++            args: { plan, nested: { parts: [null, false, 0, '\u0000雪\n'] } },
++          },
++        },
++      ];
++      const expectedParts = JSON.stringify(parts);
++      let draws = 0;
++      const provider = {
++        generateContentStream: vi.fn(async function* () {
++          yield {
++            candidates: [
++              {
++                content: {
++                  role: 'model',
++                  parts: draws++ === 0 ? parts : [{ text: 'Done.\n' }],
++                },
++                finishReason: 'STOP',
++              },
++            ],
++            usageMetadata: {
++              promptTokenCount: 10,
++              candidatesTokenCount: 5,
++              thoughtsTokenCount: 2,
++              cachedContentTokenCount: 0,
++              totalTokenCount: 15,
++            },
++          } as GenerateContentResponse;
++        }),
++        countRequestTokens: vi.fn(async () => ({
++          totalTokens: 10,
++          maxModelLen: window,
++        })),
++        countTextTokens: vi.fn(async () => ({
++          totalTokens: 1,
++          maxModelLen: window,
++        })),
++        useSummarizedThinking: () => false,
++      } as unknown as ContentGenerator;
++      const config = {
++        getSessionId: () => sessionId,
++        getProjectRoot: () => workspace,
++        getTargetDir: () => workspace,
++        getCliVersion: () => '0.21.12',
++        getModel: () => 'fixture',
++        getFastModel: () => undefined,
++        getResumedSessionData: () => undefined,
++        getSessionService: () => service,
++        getContentGenerator: () => context.bind(provider),
++        getGenerationContext: () => context,
++        getContentGeneratorConfig: () => profile,
++        requireContentGeneratorConfig: () => profile,
++        getEffectiveInputModalities: () => ({ image: true }),
++        getChatCompression: () => undefined,
++        getHookSystem: () => undefined,
++        getApprovalMode: () => 'default',
++        getPlanFilePath: () => planPath,
++        getDebugLogger: () => ({ debug() {}, warn() {}, info() {} }),
++        storage: new Storage(workspace),
++      } as unknown as Config;
++      recording = new ChatRecordingService(config);
++      const writer = recording;
++      recording.activate(
++        await service.acquireSessionWriterLease(sessionId, {
++          processKind: 'daemon',
++          reclaimPolicy: 'never',
++        }),
++      );
++      const chat = new GeminiChat(config, context, {}, [], recording);
++      const input: Part[] = [{ text: 'Keep the complete model output.' }];
++      await recording.recordUserMessage(input);
++      for await (const _ of await chat.sendMessageStream(
++        'fixture',
++        { message: input },
++        'first',
++      )) {
++        /* consume */
++      }
++      expect(JSON.stringify(chat.getHistory().at(-1)?.parts)).toBe(
++        expectedParts,
++      );
++      const result: Part[] = [
++        {
++          functionResponse: {
++            id: 'call-original',
++            name,
++            response: { output: 'User approved. You can now start coding.' },
++          },
++        },
++      ];
++      recording.recordToolResult(result);
++      await recording.flush();
++      for await (const _ of await chat.sendMessageStream(
++        'fixture',
++        { message: result },
++        'second',
++      )) {
++        /* consume */
++      }
++      await recording.close();
++      recording = undefined;
++      const expected = JSON.stringify(chat.getHistory());
++      expect(JSON.stringify(chat.getHistory()[1].parts)).toBe(expectedParts);
++      const nextRequest = vi.mocked(provider.generateContentStream).mock
++        .calls[1][0];
++      const carried = (nextRequest.contents as Content[]).find(
++        (content) => content.role === 'model',
++      );
++      expect(JSON.stringify(carried?.parts)).toBe(expectedParts);
++      await service.forkSession(sessionId, forkId);
++      // A plan file may be edited or removed between invocations. No replay
++      // depends on that mutable file to reconstruct a model's own arguments.
++      for (const fileContents of [plan, 'Another plan', null]) {
++        if (fileContents === null) await fs.unlink(planPath);
++        else await fs.writeFile(planPath, fileContents);
++        for (const id of [sessionId, forkId]) {
++          const loaded = await service.loadSession(id);
++          const restored = buildApiHistoryFromConversation(
++            loaded!.conversation,
++          );
++          const indexed = await new SessionTranscriptReader(
++            workspace,
++          ).readRestoreProjection(id, {
++            replay: { kind: 'none' },
++          });
++          expect(JSON.stringify(restored)).toBe(expected);
++          expect(JSON.stringify(indexed!.runtime.apiHistory)).toBe(expected);
++          for (const history of [
++            restored,
++            indexed!.runtime.apiHistory,
++          ] as Content[][]) {
++            const resumed = new GeminiChat(
++              config,
++              context,
++              {},
++              history,
++              writer,
++            );
++            expect(JSON.stringify(resumed.getHistory())).toBe(expected);
++            resumed.setHistory(history);
++            expect(JSON.stringify(resumed.getHistory())).toBe(expected);
++          }
++        }
++      }
++      expect(JSON.stringify(parts)).toBe(expectedParts);
++    },
++  );
++});

@@ -211,6 +211,12 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(len(received) == 1 and received[0]["content"] ==
             [{"type": "text", "text": replies[0]["content"]}],
             "tool-result evidence differs from the model's input; inspect result serialization")
+    carried_calls = [call for message in generations[1]["messages"]
+                     if message.get("role") == "assistant" for call in message.get("tool_calls", [])]
+    require(len(carried_calls) == 1 and carried_calls[0]["id"] == uses[0]["id"] and
+            carried_calls[0]["function"]["name"] == uses[0]["name"] and
+            json.loads(carried_calls[0]["function"]["arguments"]) == uses[0]["input"],
+            "the next request rewrote the model's call; inspect canonical model-part commitment")
     require(all(g["kv_scope"] == session for g in generations), "provider requests lost their session owner")
     transcripts = list(runtime.rglob(f"chats/{session}.jsonl"))
     require(len(transcripts) == 1, "canonical session transcript is missing or ambiguous")
@@ -230,6 +236,10 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(all(e["kv_scope"] == session for e in dispatches + usages), "durable generation ownership drifted")
     require(any(r.get("type") == "tool_result" and nonce in json.dumps(r) for r in records),
             "tool result was not recorded")
+    recorded_calls = [part["functionCall"] for record in records if record.get("type") == "assistant"
+                      for part in record["message"]["parts"] if "functionCall" in part]
+    require(recorded_calls == [{"id": uses[0]["id"], "name": uses[0]["name"], "args": uses[0]["input"]}],
+            "canonical history rewrote the model's call; inspect assistant recording before testing resume")
     require(records[-1]["type"] == "assistant" and records[-1]["message"]["parts"] ==
             [{"text": "HEADLESS_SMOKE_OK " + nonce}], "final response was not recorded before exit")
     return {"check": "headless_cli", "status": "passed", "events": len(events),
