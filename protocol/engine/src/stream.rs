@@ -63,7 +63,7 @@ pub(crate) fn validate(
     line: usize,
 ) -> ContractResult<()> {
     schema::validate_owned(entry, value, limits).map_err(|error| match error {
-        schema::ValidationError::Rejected { mismatch } => ContractError::InvalidRecord(format!("events.jsonl line {line} violates stream contract {STREAM_CONTRACT_SHA256} at {} (schema rule {})", mismatch.instance_path, mismatch.schema_path)),
+        schema::ValidationError::Rejected { mismatch } => ContractError::InvalidRecord(format!("events.jsonl line {line} violates stream contract {STREAM_CONTRACT_SHA256} at {} (schema rule {}); inspect this record against the named contract and use a matching producer and reader for a new capture", mismatch.instance_path, mismatch.schema_path)),
         schema::ValidationError::InvalidDefinition { cause } => ContractError::InvalidDefinition(cause),
         schema::ValidationError::ResourceLimit { resource, limit } => ContractError::ValidationUnavailable(format!("{resource} limit {limit}")),
     })

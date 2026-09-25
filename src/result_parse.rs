@@ -1117,6 +1117,7 @@ mod tests {
                 "data": {"status": "COMPRESSION_FAILED_OUTPUT_TRUNCATED", "succeeded": false,
                     "originalTokenCount": 233926, "newTokenCount": 233926,
                     "triggerReason": "token_limit", "output": output,
+                    "postCompactionHistory": null,
                     "rejectedAttempts": rejected}
             })
         )
@@ -1128,7 +1129,9 @@ mod tests {
     fn refused_compaction_candidate() -> serde_json::Value {
         serde_json::json!({
             "status": "COMPRESSION_FAILED_EMPTY_SUMMARY", "requestAttempts": 1,
-            "summary": "", "reasoning": "Reasoning that produced nothing.",
+            "text": "", "reasoning": "Reasoning that produced nothing.",
+            "rawResponses": ["{\"choices\":[{\"delta\":{\"reasoning_content\":\"Reasoning that produced nothing.\"}}]}"],
+            "newTokenCount": null, "snapshotBytes": null,
             "incompleteToolCalls": [],
             "finishReason": "STOP",
             "usage": {"promptTokenCount": 233926, "candidatesTokenCount": 40,
@@ -1140,7 +1143,9 @@ mod tests {
     fn observed_compaction_output() -> serde_json::Value {
         serde_json::json!({
             "maxOutputTokens": 49152, "requestAttempts": 2,
-            "summary": "  partial snapshot", "reasoning": "Observed reasoning.  ",
+            "text": "  partial snapshot", "reasoning": "Observed reasoning.  ",
+            "rawResponses": ["{\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"name\":\"state_snapshot\",\"arguments\":\"{\\\"intent\\\":\"}}]}}]}"],
+            "newTokenCount": null, "snapshotBytes": null,
             // The snapshot call the ceiling stopped, as it was served.
             "incompleteToolCalls": [{"name": "state_snapshot",
                 "arguments": "{\"intent\": \"Summarise the corpus \\u2014 cut"}],
@@ -1163,6 +1168,55 @@ mod tests {
             parse_text(&format!("{INIT}{compaction}{result}"))
                 .expect("served, interrupted, and unattempted records are distinct valid facts");
         }
+    }
+
+    #[test]
+    fn refuses_missing_compaction_content_and_measurement_evidence() {
+        for field in ["rawResponses", "text", "newTokenCount", "snapshotBytes"] {
+            let mut output = observed_compaction_output();
+            output.as_object_mut().unwrap().remove(field);
+            parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(output)))
+                .expect_err("a draw cannot omit content or measurement evidence");
+        }
+        for responses in [
+            serde_json::json!([]),
+            serde_json::json!(["not JSON"]),
+            serde_json::json!(["null"]),
+        ] {
+            let mut output = observed_compaction_output();
+            output["rawResponses"] = responses;
+            parse_text(&format!("{INIT}{}{MAIN_RESULT}", compaction_record(output)))
+                .expect_err("served usage needs recorded provider objects");
+        }
+        let mut unknown = observed_compaction_output();
+        unknown["unknown_evidence"] = serde_json::json!(true);
+        let error = parse_text(&format!(
+            "{INIT}{}{MAIN_RESULT}",
+            compaction_record(unknown)
+        ))
+        .expect_err("ununderstood evidence is refused");
+        assert!(error.to_string().contains("violates stream contract"));
+    }
+
+    #[test]
+    fn requires_compaction_history_exactly_when_it_was_committed() {
+        let mut record: serde_json::Value =
+            serde_json::from_str(&compaction_record(observed_compaction_output())).unwrap();
+        record["data"]["succeeded"] = serde_json::json!(true);
+        record["data"]["status"] = serde_json::json!("COMPRESSED");
+        parse_text(&format!("{INIT}{record}\n{MAIN_RESULT}"))
+            .expect_err("a committed composition cannot be absent");
+        record["data"]["postCompactionHistory"] = serde_json::json!([
+            {"role":"user", "parts":[{"text":"<all_user_messages>\n"},
+                {"text":"Original user text, verbatim.\n"}, {"text":"</all_user_messages>"}]},
+            {"role":"model", "parts":[{"functionCall":{"id":"carried", "name":"read_file", "args":{"path":"a"}}}]}
+        ]);
+        let result = MAIN_RESULT.replace("\"num_turns\":1", "\"num_turns\":0");
+        parse_text(&format!("{INIT}{record}\n{result}"))
+            .expect("a committed composition preserves every part boundary");
+        record["data"]["succeeded"] = serde_json::json!(false);
+        parse_text(&format!("{INIT}{record}\n{result}"))
+            .expect_err("a refused transition cannot claim to have installed a composition");
     }
 
     #[test]
@@ -1252,9 +1306,9 @@ mod tests {
                 "lacks the reasoning string",
             ),
             (
-                "summary",
+                "text",
                 serde_json::Value::Null,
-                "lacks the summary string",
+                "lacks the text string",
             ),
             (
                 "requestAttempts",

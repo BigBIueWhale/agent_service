@@ -223,6 +223,7 @@ fn validate_compaction_event(
     object: Value<'_>,
     line: usize,
     scope: Option<&str>,
+    json_limits: Limits,
 ) -> ContractResult<()> {
     let refuse = |what: &str| {
         ContractError::InvalidRecord(format!(
@@ -270,9 +271,32 @@ fn validate_compaction_event(
                 "whose {whose} reports no request attempt for a candidate that was drawn"
             )));
         }
-        for key in ["reasoning", "summary"] {
+        for key in ["reasoning", "text"] {
             if !holder.get(key).is_some_and(Value::is_string) {
                 return Err(refuse(&format!("whose {whose} lacks the {key} string")));
+            }
+        }
+        for key in ["newTokenCount", "snapshotBytes"] {
+            if !field(holder, key, line)?.is_null() {
+                count(holder, key)?;
+            }
+        }
+        let responses = field(holder, "rawResponses", line)?
+            .elements()
+            .ok_or_else(|| {
+                refuse("without raw response objects; capture this run with the current client")
+            })?;
+        for response in responses {
+            let raw = response.as_str().ok_or_else(|| {
+                refuse("with a non-string raw response; inspect the compaction producer")
+            })?;
+            let decoded = Document::decode(raw.as_bytes(), json_limits).map_err(|cause| refuse(
+                &format!("with an undecodable raw response ({cause:?}); inspect the captured provider object"),
+            ))?;
+            if decoded.root().as_object().is_none() {
+                return Err(refuse(
+                    "with a non-object raw response; inspect the captured provider object",
+                ));
             }
         }
         // What a draw its ceiling stopped had written of a call, as served:
@@ -282,7 +306,9 @@ fn validate_compaction_event(
             .get("incompleteToolCalls")
             .and_then(Value::elements)
             .ok_or_else(|| {
-                refuse(&format!("whose {whose} lacks the incompleteToolCalls array"))
+                refuse(&format!(
+                    "whose {whose} lacks the incompleteToolCalls array"
+                ))
             })?;
         for call in stopped {
             let shape_holds = call.members().is_some_and(|members| {
@@ -989,7 +1015,7 @@ impl RuntimeContract {
                 match subtype {
                     SystemKind::Init if self.prefix == 0 => {},
                     SystemKind::Init => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} starts another invocation before this invocation has closed"))),
-                    SystemKind::Compaction => validate_compaction_event(object, line, scope)?,
+                    SystemKind::Compaction => validate_compaction_event(object, line, scope, self.limits.json)?,
                     SystemKind::SessionRecordingDegraded | SystemKind::TurnCleanupFailed | SystemKind::VisionBridgeFailed => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} reports operational failure {}: {}", subtype.wire(), field(object, "data", line)?.raw()))),
                     SystemKind::SessionStart | SystemKind::SessionEnd => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} declares transport ownership inside an already owned invocation"))),
                     SystemKind::TaskNotification => { if let Some(usage) = field(object, "data", line)?.get("usage") { validate_generation_summary(usage.get("ownerUsage"))?; } },

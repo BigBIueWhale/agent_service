@@ -178,6 +178,8 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(stdout.endswith(b"\n"), "CLI emitted an unterminated event")
     certificate = certify(stdout, certifier, runtime / "events.jsonl")
     events = [json.loads(line) for line in stdout.splitlines()]
+    require(not any(e.get("subtype") == "compaction" for e in events),
+            "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
     init = [e for e in events if e.get("type") == "system" and e.get("subtype") == "init"]
     require(len(init) == 1, "CLI must emit exactly one init event")
     session = init[0]["session_id"]

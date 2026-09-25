@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `16ace8a650cda9cb2b98e234ec09928950386b0c788153c69351bfa6234257b8`
+- Review-diff SHA-256: `d37acded3c740afd4acb6cc9daa9133dddb9e7bb8bab2481b5217ec2cdd4785b`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `9d24a2c808042067d401a86a0d5b151fd7b5bbb7cb1daaa59aefafa04703f194`
+- Transformer-manifest SHA-256: `334cab70837568f9b26d978754c6c74df0dc838836acc814047f682f5dfd5a4a`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -256,6 +256,17 @@ reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
 what the model can quote, not what it has seen: it disarms every file-read
 entry's history residency and leaves the read and write evidence in place, so a
 file this session wrote itself is still one it is allowed to overwrite.
+
+Each compaction draw records converted text and reasoning alongside complete
+provider response objects captured before conversion. Argument strings remain verbatim even when
+they are malformed or cut off. Every draw states its measured candidate token
+count and snapshot byte count, using null when that measurement was not reached.
+Rejected draws retain these fields alongside the final draw. The committed
+post-compaction history is a separate field with exact part boundaries and
+filled retained inputs. The runtime installs that same history and writes it
+to the canonical chat checkpoint; model output is never replaced by an
+empty-slot rendering of the snapshot. The shared schema and native certifier
+refuse missing or unknown evidence fields.
 
 The snapshot is declared, not described. Its sections are upstream's: the nine
 elements of the `<state_snapshot>` block upstream's compression prompt asks for,

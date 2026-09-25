@@ -65,7 +65,131 @@
               "const": "compaction"
             },
             "data": {
-              "type": "object"
+              "type": "object",
+              "required": [
+                "postCompactionHistory"
+              ],
+              "properties": {
+                "postCompactionHistory": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "role",
+                          "parts"
+                        ],
+                        "properties": {
+                          "role": {
+                            "enum": [
+                              "user",
+                              "model"
+                            ]
+                          },
+                          "parts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                },
+                "output": {
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/compactionDrawEvidence"
+                    },
+                    {
+                      "properties": {
+                        "status": false
+                      }
+                    }
+                  ]
+                },
+                "rejectedAttempts": {
+                  "items": {
+                    "allOf": [
+                      {
+                        "$ref": "#/definitions/compactionDrawEvidence"
+                      },
+                      {
+                        "properties": {
+                          "maxOutputTokens": false
+                        }
+                      }
+                    ]
+                  }
+                },
+                "status": {},
+                "succeeded": {},
+                "originalTokenCount": {},
+                "newTokenCount": {},
+                "triggerReason": {}
+              },
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "succeeded"
+                    ],
+                    "properties": {
+                      "succeeded": {
+                        "const": true
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "postCompactionHistory": {
+                        "type": "array",
+                        "minItems": 1
+                      },
+                      "output": {
+                        "type": "object",
+                        "required": [
+                          "usage"
+                        ],
+                        "properties": {
+                          "usage": {
+                            "type": "object"
+                          }
+                        }
+                      }
+                    },
+                    "required": [
+                      "output"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "succeeded"
+                    ],
+                    "properties": {
+                      "succeeded": {
+                        "const": false
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "postCompactionHistory": {
+                        "type": "null"
+                      }
+                    }
+                  }
+                }
+              ]
             }
           },
           "required": [
@@ -1873,6 +1997,70 @@
             "required": [
               "error"
             ]
+          }
+        }
+      ]
+    },
+    "nullableEvidenceCount": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      ]
+    },
+    "compactionDrawEvidence": {
+      "required": [
+        "rawResponses",
+        "newTokenCount",
+        "snapshotBytes",
+        "text"
+      ],
+      "properties": {
+        "rawResponses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "newTokenCount": {
+          "$ref": "#/definitions/nullableEvidenceCount"
+        },
+        "snapshotBytes": {
+          "$ref": "#/definitions/nullableEvidenceCount"
+        },
+        "text": {},
+        "status": {},
+        "maxOutputTokens": {},
+        "requestAttempts": {},
+        "reasoning": {},
+        "incompleteToolCalls": {},
+        "finishReason": {},
+        "usage": {}
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "usage"
+            ],
+            "properties": {
+              "usage": {
+                "type": "object"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "rawResponses": {
+                "minItems": 1
+              }
+            }
           }
         }
       ]

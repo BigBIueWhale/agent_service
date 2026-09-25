@@ -38907,7 +38907,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should ignore events after finalization', () => {
        adapter.processEvent({
          type: GeminiEventType.Content,
-@@ -895,12 +1160,137 @@
+@@ -895,12 +1160,148 @@
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
@@ -38920,6 +38920,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        type: GeminiEventType.ChatCompaction,
 +        value: {
 +          status: 'COMPRESSED',
++          postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
 +          succeeded: true,
 +          originalTokenCount: 214883,
 +          newTokenCount: 41207,
@@ -38939,6 +38940,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        expect(message.parent_tool_use_id).toBeNull();
 +        expect(message.data).toEqual({
 +          status: 'COMPRESSED',
++          postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
 +          succeeded: true,
 +          originalTokenCount: 214883,
 +          newTokenCount: 41207,
@@ -38954,6 +38956,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        type: GeminiEventType.ChatCompaction,
 +        value: {
 +          status: 'COMPRESSION_FAILED_OUTPUT_TRUNCATED',
++          postCompactionHistory: null,
 +          succeeded: false,
 +          originalTokenCount: 233926,
 +          newTokenCount: 233926,
@@ -38970,7 +38973,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +            },
 +            requestAttempts: 1,
 +            reasoning: 'Let me first list every file the user touched...',
-+            summary: '',
++            text: '',
++            rawResponses: ['{"choices":[]}'],
++            newTokenCount: null,
++            snapshotBytes: null,
 +            incompleteToolCalls: [
 +              {
 +                name: 'state_snapshot',
@@ -38996,7 +39002,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +            usage: { candidatesTokenCount: 49152, thoughtsTokenCount: 49152 },
 +            requestAttempts: 1,
 +            reasoning: 'Let me first list every file the user touched...',
-+            summary: '',
++            text: '',
++            rawResponses: ['{"choices":[]}'],
++            newTokenCount: null,
++            snapshotBytes: null,
 +            // What the draw had written of its snapshot call when the
 +            // ceiling stopped it, as served.
 +            incompleteToolCalls: [
@@ -39016,6 +39025,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        type: GeminiEventType.ChatCompaction,
 +        value: {
 +          status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++          postCompactionHistory: null,
 +          succeeded: false,
 +          originalTokenCount: 214883,
 +          newTokenCount: 214883,
@@ -39032,6 +39042,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        expect(message.subtype).toBe('compaction');
 +        expect(message.data).toMatchObject({
 +          status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++          postCompactionHistory: null,
 +          succeeded: false,
 +          // The history was preserved, so the "after" count is the "before".
 +          originalTokenCount: 214883,
@@ -39045,7 +39056,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      beforeEach(() => {
        adapter.startAssistantMessage();
      });
-@@ -1070,13 +1460,13 @@
+@@ -1070,13 +1471,13 @@
      const persistedOutputCases: Array<[string, string[] | undefined]> = [
        ['unhandled', undefined],
        ['handled without artifact', []],
@@ -39060,7 +39071,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            callId: 'tool-large',
            name: 'test_tool',
            args: {},
-@@ -1107,18 +1497,13 @@
+@@ -1107,18 +1508,13 @@
            block.type !== 'tool_result' ||
            typeof block.content !== 'string'
          ) {
@@ -39080,7 +39091,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          expect(response.resultDisplay).toBe(display);
          expect(response.persistedOutputFiles).toBe(persistedOutputFiles);
        },
-@@ -1153,13 +1538,14 @@
+@@ -1153,13 +1549,14 @@
        }
        expect(Object.hasOwn(block, 'content')).toBe(false);
      });
@@ -39096,7 +39107,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
                functionResponse: {
                  response: {
                    output: 'HEAD-' + 'p'.repeat(100_000) + '-TAIL',
-@@ -1170,28 +1556,30 @@
+@@ -1170,28 +1567,30 @@
            resultDisplay: undefined,
            error: undefined,
          },
@@ -39128,7 +39139,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            name: 'test_tool',
            args: {},
            isClientInitiated: false,
-@@ -1213,18 +1601,13 @@
+@@ -1213,18 +1612,13 @@
          block.type !== 'tool_result' ||
          typeof block.content !== 'string'
        ) {
@@ -39148,7 +39159,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  
    describe('emitSystemMessage', () => {
      it('should emit system message', () => {
-@@ -1244,12 +1627,32 @@
+@@ -1244,12 +1638,32 @@
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -39181,7 +39192,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1280,13 +1683,14 @@
+@@ -1280,13 +1694,14 @@
        // Update lastAssistantMessage manually since test adapter doesn't do it automatically
        adapter['lastAssistantMessage'] = message;
      });
@@ -39197,7 +39208,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1705,14 @@
+@@ -1301,13 +1716,14 @@
          expect(result.num_turns).toBe(1);
        }
      });
@@ -39213,7 +39224,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1320,13 +1725,14 @@
+@@ -1320,13 +1736,14 @@
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -39229,7 +39240,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1335,19 +1741,27 @@
+@@ -1335,19 +1752,27 @@
        if (!result.is_error) {
          expect(result.result).toBe('Custom summary');
        }
@@ -39262,7 +39273,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1355,12 +1769,13 @@
+@@ -1355,12 +1780,13 @@
  
        expect(result.usage).toEqual(usage);
      });
@@ -39276,7 +39287,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -1375,13 +1790,14 @@
+@@ -1375,13 +1801,14 @@
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -39292,7 +39303,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +1808,14 @@
+@@ -1392,13 +1819,14 @@
        }
      });
  
@@ -39308,7 +39319,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1825,14 @@
+@@ -1408,13 +1836,14 @@
        }
      });
  
@@ -39324,7 +39335,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +1844,16 @@
+@@ -1426,15 +1855,16 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -39343,7 +39354,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1870,14 @@
+@@ -1451,13 +1881,14 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -39359,7 +39370,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1502,13 +1922,18 @@
+@@ -1502,13 +1933,18 @@
  
    describe('emitSubagentErrorResult', () => {
      it('should emit subagent error result', () => {
@@ -39379,7 +39390,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1525,13 +1950,18 @@
+@@ -1525,13 +1961,18 @@
      it('should finalize pending assistant message before emitting error', () => {
        const parentToolUseId = 'parent-tool-1';
        adapter.startSubagentAssistantMessage(parentToolUseId);
@@ -39399,7 +39410,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        );
        expect(assistantMessage).toBeDefined();
      });
-@@ -1619,26 +2049,283 @@
+@@ -1619,26 +2060,283 @@
      });
    });
  
@@ -39686,7 +39697,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1764,12 +2451,46 @@
+@@ -1764,12 +2462,46 @@
  
          const result = toolResultContent(response);
  
@@ -39733,7 +39744,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,13 +2531,13 @@
+@@ -1810,13 +2542,13 @@
            error: undefined,
            errorType: undefined,
          };
@@ -39748,7 +39759,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        it('prefers a top-level tool error over content with a vision bridge disclosure', () => {
          const response = {
            callId: 'pdf-failure',
-@@ -1992,19 +2713,8 @@
+@@ -1992,19 +2724,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -92756,7 +92767,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
        tools: ['tool1', 'tool2'],
        mcp_servers: [
          { name: 'mcp-server-1', status: 'connected' },
-@@ -660,32 +527,128 @@
+@@ -660,32 +527,129 @@
      );
    });
  });
@@ -92859,6 +92870,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +        compactions: [
 +          {
 +            status: 'COMPRESSED',
++            postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
 +            succeeded: true,
 +            originalTokenCount: 100,
 +            newTokenCount: 50,
@@ -92893,7 +92905,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -714,13 +677,12 @@
+@@ -714,13 +678,12 @@
        'parent-tool-id',
      );
    });
@@ -92907,7 +92919,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -753,13 +715,12 @@
+@@ -753,13 +716,12 @@
        'parent-tool-id',
      );
    });
@@ -92921,7 +92933,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
      const responseParts: Part[] = [
        {
          functionResponse: {
-@@ -811,13 +772,12 @@
+@@ -811,13 +773,12 @@
        'parent-tool-id',
      );
    });
@@ -92935,7 +92947,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -841,13 +801,12 @@
+@@ -841,13 +802,12 @@
  
      expect(mockAdapter.processSubagentToolCall).toHaveBeenCalledTimes(1);
    });
@@ -92949,7 +92961,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -872,13 +831,12 @@
+@@ -872,13 +832,12 @@
  
      expect(mockAdapter.emitToolResult).toHaveBeenCalledTimes(1);
    });
@@ -92963,7 +92975,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      // First: executing state
      const executingDisplay: AgentResultDisplay = {
-@@ -921,13 +879,12 @@
+@@ -921,13 +880,12 @@
      expect(mockAdapter.processSubagentToolCall).toHaveBeenCalledTimes(1);
      expect(mockAdapter.emitToolResult).toHaveBeenCalledTimes(1);
    });
@@ -92977,7 +92989,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const runningDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -941,29 +898,73 @@
+@@ -941,29 +899,73 @@
      const failedDisplay: AgentResultDisplay = {
        type: 'task_execution',
        subagentName: 'test-agent',
@@ -93052,7 +93064,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const runningDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -977,28 +978,83 @@
+@@ -977,28 +979,83 @@
      const cancelledDisplay: AgentResultDisplay = {
        type: 'task_execution',
        subagentName: 'test-agent',
@@ -93137,7 +93149,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const nonTaskDisplay = {
        type: 'other',
-@@ -1010,13 +1066,12 @@
+@@ -1010,13 +1067,12 @@
      expect(mockAdapter.processSubagentToolCall).not.toHaveBeenCalled();
      expect(mockAdapter.emitToolResult).not.toHaveBeenCalled();
    });
@@ -93151,7 +93163,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -1047,13 +1102,12 @@
+@@ -1047,13 +1103,12 @@
        'parent-tool-id',
      );
    });
@@ -93165,7 +93177,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
-@@ -1076,19 +1130,164 @@
+@@ -1076,19 +1131,166 @@
      handler('task-call-id', taskDisplay);
  
      // Should not emit tool_result if no content
@@ -93180,6 +93192,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +
 +    const firstCompaction = {
 +      status: 'COMPRESSED',
++      postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
 +      succeeded: true,
 +      originalTokenCount: 198_400,
 +      newTokenCount: 32_118,
@@ -93189,6 +93202,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +    };
 +    const secondCompaction = {
 +      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
++      postCompactionHistory: null,
 +      succeeded: false,
 +      originalTokenCount: 205_112,
 +      newTokenCount: 205_112,
@@ -95819,7 +95833,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
      ...actual,
      getCachedGitBranch: getCachedGitBranchMock,
    };
-@@ -220,662 +249,1027 @@
+@@ -220,662 +249,1030 @@
          subagentName: 'explore',
          executionAllowedTools: [],
        });
@@ -97149,7 +97163,10 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +          output: {
 +            maxOutputTokens: 64,
 +            usage,
-+            summary: 'derived summary',
++            rawResponses: [],
++            newTokenCount: null,
++            snapshotBytes: null,
++            text: 'derived summary',
 +            reasoning: '',
 +            incompleteToolCalls: [],
 +            finishReason: 'STOP',
@@ -104943,7 +104960,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    getRuntimeContentGenerator,
    runWithAgentContext,
    runWithRuntimeContentGenerator,
-@@ -46,40 +66,1000 @@
+@@ -46,40 +66,1004 @@
  } from '../../core/contentGenerator.js';
  import {
    getInvocationContext,
@@ -105901,6 +105918,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +    });
 +    it('publishes compaction evidence after cancellation without inventing served usage', async () => {
 +      const record: CompactionRecord = {
++        postCompactionHistory: null,
 +        status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
 +        succeeded: false,
 +        originalTokenCount: 100,
@@ -105908,7 +105926,10 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        triggerReason: 'token_limit',
 +        rejectedAttempts: [],
 +        output: {
-+          summary: 'partial summary',
++          rawResponses: [],
++          newTokenCount: null,
++          snapshotBytes: null,
++          text: 'partial summary',
 +          reasoning: 'partial thought',
 +          incompleteToolCalls: [],
 +          usage: null,
@@ -105955,7 +105976,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  describe('AgentCore.runInAgentFrames', () => {
    // The deferred-approval `respond` callback that AgentCore hands to the
    // UI must restore both ALS frames the agent normally runs under, so any
-@@ -92,14 +1072,15 @@
+@@ -92,14 +1076,15 @@
  
    function makeCore(name: string, runtimeView?: RuntimeContentGeneratorView) {
      const promptConfig: PromptConfig = { systemPrompt: '' };
@@ -105972,7 +105993,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        undefined,
        undefined,
        undefined,
-@@ -207,13 +1188,20 @@
+@@ -207,13 +1192,20 @@
        core as unknown as {
          _runReasoningLoopInner: () => Promise<ReasoningLoopResult>;
        },
@@ -105994,7 +106015,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        core.runReasoningLoop({} as never, [], [], new AbortController()),
      );
  
-@@ -270,21 +1258,25 @@
+@@ -270,21 +1262,25 @@
      let inheritedAgentId: string | null = null;
      let observedAgentId: string | null = null;
      const onConfirm = async () => {
@@ -106029,7 +106050,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
  
      await respondClosure!();
  
-@@ -304,28 +1296,38 @@
+@@ -304,28 +1300,38 @@
      const onConfirm = async () => {
        observedDepth = getCurrentAgentDepth();
      };
@@ -106084,7 +106105,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(getCurrentAgentId()).toBeNull();
      await new Promise((resolve) => setImmediate(resolve));
  
-@@ -416,37 +1418,37 @@
+@@ -416,37 +1422,37 @@
    // includes MCP / lsp / cron_* tools would silently lose them once
    // ToolSearch was introduced.
    function buildAgentForTools(
@@ -106125,7 +106146,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
        { model: 'test-model' },
        { max_turns: 1 },
        toolConfig,
-@@ -701,104 +1703,81 @@
+@@ -701,104 +1707,81 @@
  
    it.each([ToolNames.ENTER_PLAN_MODE, ToolNames.EXIT_PLAN_MODE])(
      'returns a dedicated message when filtered %s is called directly',
@@ -106286,7 +106307,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    // The AgentTool is depth-gated: available to a sub-agent only while
    // maxSubagentDepth still permits another level. prepareTools() reads the
    // sub-agent's own 0-based depth from getCurrentAgentDepth(); a child sits
-@@ -811,30 +1790,45 @@
+@@ -811,30 +1794,45 @@
      } as FunctionDeclaration,
    ];
  
@@ -106336,7 +106357,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
    it('nesting: frameless prepareTools fails closed — AgentTool excluded', async () => {
      // prepareTools() only ever serves agents, never the top-level session.
      // A missing agent frame means the launch path forgot runWithAgentContext
-@@ -849,13 +1843,17 @@
+@@ -849,13 +1847,17 @@
  
    it('nesting: fork execution contexts never receive the AgentTool', async () => {
      // The fork contract is context-sharing, not isolation — forks must not
@@ -106355,7 +106376,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(names).toContain('read_file');
    });
  
-@@ -865,35 +1863,43 @@
+@@ -865,35 +1867,43 @@
        agentId: 'scribe@demo',
        agentName: 'scribe',
        teamName: 'demo',
@@ -106404,7 +106425,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
      expect(deniedNames).toContain('read_file');
    });
  });
-@@ -969,6 +1975,206 @@
+@@ -969,6 +1979,210 @@
      expect(extractParentToolNames(undefined)).toEqual([]);
      expect(extractParentToolNames({} as GenerateContentConfig)).toEqual([]);
      expect(extractParentToolNames(configWithTools([]))).toEqual([]);
@@ -106533,6 +106554,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      .on(AgentEventType.COMPACTION, (event) => compactions.push(event));
 +    const failure = new Error('failed compaction after partial output');
 +    const record: CompactionRecord = {
++      postCompactionHistory: null,
 +      status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
 +      succeeded: false,
 +      originalTokenCount: 100,
@@ -106540,7 +106562,10 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      triggerReason: 'token_limit',
 +      rejectedAttempts: [],
 +      output: {
-+        summary: 'partial summary',
++        rawResponses: [],
++        newTokenCount: null,
++        snapshotBytes: null,
++        text: 'partial summary',
 +        reasoning: 'partial thought',
 +        incompleteToolCalls: [],
 +        usage: served,
@@ -125328,7 +125353,7 @@ diff --git a/packages/core/src/core/anthropicContentGenerator/anthropicContentGe
 diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/core/src/core/authored-instructions.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/authored-instructions.test.ts
-@@ -0,0 +1,565 @@
+@@ -0,0 +1,566 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -125770,6 +125795,7 @@ diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/cor
 +      ];
 +      const before = structuredClone(history);
 +      const result: GenerateTextResult = {
++        rawResponses: [],
 +        text: '',
 +        thoughtText: '',
 +        incompleteToolCalls: [],
@@ -127664,7 +127690,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
          model: fastModel,
          abortSignal: new AbortController().signal,
          promptId: 'test',
-@@ -1538,7 +1820,383 @@
+@@ -1538,7 +1820,384 @@
        expect(retryWithBackoff).toHaveBeenCalledWith(
          expect.any(Function),
          expect.objectContaining({ authType: AuthType.USE_ANTHROPIC }),
@@ -127851,6 +127877,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 +              }
 +            : undefined;
 +        expect(error.partial).toEqual({
++          rawResponses: [JSON.stringify(response)],
 +          text: '  raw batch text\n',
 +          thoughtText: '  raw reasoning\n',
 +          usage: knownUsage,
@@ -128051,8 +128078,9 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/baseLlmClient.ts
 --- a/packages/core/src/core/baseLlmClient.ts
 +++ b/packages/core/src/core/baseLlmClient.ts
-@@ -1,53 +1,62 @@
+@@ -1,53 +1,63 @@
 +import { FinishReason } from '@google/genai';
++import { ProviderOutput, providerOutputContext } from './provider-output.js';
 +import { SchemaValidator } from '../utils/schemaValidator.js';
 +import {
 +  requireServedUsage,
@@ -128120,7 +128148,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
    const modelPart = model.slice(0, idx);
    if (!modelPart) return { model: modelPart };
    return {
-@@ -62,13 +71,13 @@
+@@ -62,13 +72,13 @@
   * model, both fields are resolved against that model's provider so that
   * per-model `extra_body` / `samplingParams` / reasoning settings — and
   * provider-specific retry/quota behaviour — do not leak from the main
@@ -128135,7 +128163,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
    model: string;
  }
  
-@@ -112,59 +121,51 @@
+@@ -112,59 +122,53 @@
    /**
     * Let the OpenAI adapter mark the unchanged history prefix for cache reuse.
     * This is only for requests ending in a non-reusable trailing directive;
@@ -128157,6 +128185,8 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
   * Result of a generateText call.
   */
  export interface GenerateTextResult {
++  /** Complete provider response objects, serialized before conversion. */
++  rawResponses: string[];
 +  /** Provider calls attempted, including establishments that returned no body. */
 +  requestAttempts: number;
    text: string;
@@ -128224,7 +128254,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
  /**
   * Options for the generateJson utility function.
   */
-@@ -214,19 +215,16 @@
+@@ -214,19 +218,16 @@
     */
    private readonly perModelGeneratorCache = new Map<
      string,
@@ -128247,7 +128277,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      options: GenerateJsonOptions,
    ): Promise<Record<string, unknown>> {
      const {
-@@ -294,13 +292,12 @@
+@@ -294,13 +295,12 @@
          );
  
        const result = await retryWithBackoff(apiCall, {
@@ -128261,7 +128291,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
              `[qwen-code] Waiting for API capacity... attempt ${info.attempt}, retry in ${Math.ceil(info.remainingMs / 1000)}s\n`,
            );
          },
-@@ -317,41 +314,48 @@
+@@ -317,41 +317,48 @@
                subagentName: subagentNameContext.getStore(),
              }),
            );
@@ -128331,7 +128361,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          contents,
          'generateJson-api',
        );
-@@ -360,12 +364,50 @@
+@@ -360,12 +367,50 @@
          { cause: error },
        );
      }
@@ -128382,7 +128412,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
     * `ContentGenerator` directly, so the caller's `systemInstruction` is sent
     * through verbatim — no `getCustomSystemPrompt` wrapping (which would append
     * user memory) and no main-session-prompt fallback when omitted. Side queries
-@@ -393,69 +435,110 @@
+@@ -393,113 +438,182 @@
      const {
        contentGenerator,
        contentGeneratorConfig,
@@ -128397,7 +128427,9 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      ).slimmedHistory;
  
 +    let requestAttempts = 0;
++    const providerOutput = new ProviderOutput();
 +    let partial: GenerateTextResult = {
++      rawResponses: providerOutput.responses,
 +      text: '',
 +      thoughtText: '',
 +      usage: undefined,
@@ -128424,6 +128456,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          ? async () => {
 +            requestAttempts++;
 +            partial = {
++              rawResponses: providerOutput.responses,
 +              text: '',
 +              thoughtText: '',
 +              usage: undefined,
@@ -128474,6 +128507,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          : async () => {
 +            requestAttempts++;
 +            partial = {
++              rawResponses: providerOutput.responses,
 +              text: '',
 +              thoughtText: '',
 +              usage: undefined,
@@ -128487,6 +128521,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
              );
 -            return {
 +            partial = {
++              rawResponses: providerOutput.responses,
 +              requestAttempts,
                text: getResponseText(result) ?? '',
 +              thoughtText: getResponseThoughtText(result) ?? '',
@@ -128499,26 +128534,62 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +            return partial;
            };
  
-       const result = await retryWithBackoff(apiCall, {
-         maxAttempts: maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
-+        shouldRetryOnError: (error) =>
-+          !(error instanceof GenerationTextFailure) &&
-+          defaultShouldRetry(error, retryErrorCodes),
-         authType: retryAuthType,
-         extraRetryErrorCodes: retryErrorCodes,
+-      const result = await retryWithBackoff(apiCall, {
+-        maxAttempts: maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
+-        authType: retryAuthType,
+-        extraRetryErrorCodes: retryErrorCodes,
 -        persistentMode: isUnattendedMode(),
-         signal: abortSignal,
-         heartbeatFn: (info) => {
-           process.stderr.write(
-             `[qwen-code] Waiting for API capacity... attempt ${info.attempt}, retry in ${Math.ceil(info.remainingMs / 1000)}s\n`,
-           );
-         },
-@@ -472,34 +555,54 @@
-               subagentName: subagentNameContext.getStore(),
-             }),
-           );
-         },
-       });
+-        signal: abortSignal,
+-        heartbeatFn: (info) => {
+-          process.stderr.write(
+-            `[qwen-code] Waiting for API capacity... attempt ${info.attempt}, retry in ${Math.ceil(info.remainingMs / 1000)}s\n`,
+-          );
+-        },
+-        onRetry: (info) => {
+-          logApiRetry(
+-            this.config,
+-            new ApiRetryEvent({
+-              model: requestModel,
+-              promptId,
+-              attemptNumber: info.attempt,
+-              error: info.error,
+-              statusCode: info.errorStatus,
+-              retryDelayMs: info.delayMs,
+-              subagentName: subagentNameContext.getStore(),
+-            }),
+-          );
+-        },
+-      });
++      const result = await providerOutputContext.run(providerOutput, () =>
++        retryWithBackoff(apiCall, {
++          maxAttempts: maxAttempts ?? DEFAULT_MAX_ATTEMPTS,
++          shouldRetryOnError: (error) =>
++            !(error instanceof GenerationTextFailure) &&
++            defaultShouldRetry(error, retryErrorCodes),
++          authType: retryAuthType,
++          extraRetryErrorCodes: retryErrorCodes,
++          signal: abortSignal,
++          heartbeatFn: (info) => {
++            process.stderr.write(
++              `[qwen-code] Waiting for API capacity... attempt ${info.attempt}, retry in ${Math.ceil(info.remainingMs / 1000)}s\n`,
++            );
++          },
++          onRetry: (info) => {
++            logApiRetry(
++              this.config,
++              new ApiRetryEvent({
++                model: requestModel,
++                promptId,
++                attemptNumber: info.attempt,
++                error: info.error,
++                statusCode: info.errorStatus,
++                retryDelayMs: info.delayMs,
++                subagentName: subagentNameContext.getStore(),
++              }),
++            );
++          },
++        }),
++      );
  
 +      requireServedUsage(result.usage, 'generateText');
 +      if (
@@ -128530,6 +128601,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +
        return {
 -        text: result.text.trim(),
++        rawResponses: providerOutput.responses,
 +        requestAttempts,
 +        text: result.text,
 +        thoughtText: result.thoughtText,
@@ -128576,7 +128648,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
    async generateEmbedding(texts: string[]): Promise<number[][]> {
      if (!texts || texts.length === 0) {
        return [];
-@@ -507,13 +610,13 @@
+@@ -507,13 +621,13 @@
      const embedModelParams: EmbedContentParameters = {
        model: this.config.getEmbeddingModel(),
        contents: texts,
@@ -128591,7 +128663,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      ) {
        throw new Error('No embeddings found in API response.');
      }
-@@ -537,31 +640,26 @@
+@@ -537,31 +651,26 @@
  
    /**
     * Resolve the ContentGenerator and retry authType for a request targeting
@@ -128628,7 +128700,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
      const matchesMainBaseUrl =
        requested.baseUrl === undefined || requested.baseUrl === mainBaseUrl;
  
-@@ -580,13 +678,12 @@
+@@ -580,13 +689,12 @@
      }
  
      const { contentGenerator, contentGeneratorConfig } =
@@ -128642,7 +128714,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        requested.model,
        selector,
        requested.baseUrl,
-@@ -594,13 +691,15 @@
+@@ -594,13 +702,15 @@
      const retryAuthType =
        resolvedModel?.authType ?? mainAuthType ?? AuthType.USE_OPENAI;
      const retryErrorCodes =
@@ -128659,7 +128731,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        model: resolvedModel?.id ?? requestModel,
      };
    }
-@@ -659,13 +758,12 @@
+@@ -659,13 +769,12 @@
      return undefined;
    }
  
@@ -128673,7 +128745,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        ? modelBaseUrl === undefined
          ? `${selector.authType ?? ''}:${selector.modelId}`
          : `${selector.authType ?? ''}:${selector.modelId}\0${modelBaseUrl}`
-@@ -675,55 +773,24 @@
+@@ -675,55 +784,24 @@
      const normalizeGeneratorError = (err: unknown) =>
        err instanceof Error
          ? err
@@ -128733,7 +128805,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
        try {
          const targetModel = resolvedModel.id ?? selector?.modelId ?? model;
          const targetConfig = buildAgentContentGeneratorConfig(
-@@ -754,13 +821,13 @@
+@@ -754,13 +832,13 @@
          this.perModelGeneratorCache.delete(cacheKey);
          throw normalizeGeneratorError(err);
        }
@@ -146085,7 +146157,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +2955,1513 @@
+@@ -3199,2262 +2955,1516 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -146103,6 +146175,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          .record,
 +      ).toEqual({
 +        status: 'COMPRESSED',
++        postCompactionHistory: [...compressedHistory, { role: 'user', parts: [{ text: 'go' }] }],
 +        succeeded: true,
 +        originalTokenCount: 1000,
 +        newTokenCount: 200,
@@ -146331,6 +146404,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          .record,
 +      ).toEqual({
 +        status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++        postCompactionHistory: null,
 +        succeeded: false,
 +        originalTokenCount: 1000,
 +        newTokenCount: 1000,
@@ -147527,6 +147601,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          expect(events[0]).toMatchObject({
 +            type: StreamEventType.COMPACTION,
 +            record: {
++              postCompactionHistory: finalContents,
 +              succeeded: true,
 +              originalTokenCount: 2000,
 +              newTokenCount: 800,
@@ -149655,7 +149730,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5858,20 +4865,22 @@
+@@ -5858,20 +4868,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -149679,7 +149754,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +4924,296 @@
+@@ -5915,33 +4927,296 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -149980,7 +150055,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +5223,22 @@
+@@ -5951,22 +5226,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -150007,7 +150082,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +5250,13 @@
+@@ -5978,99 +5253,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -150107,7 +150182,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +5265,23 @@
+@@ -6079,23 +5268,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -150133,7 +150208,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6111,18 +5297,27 @@
+@@ -6111,18 +5300,27 @@
              buildRequest: (request: OpenAI.Chat.ChatCompletionCreateParams) =>
                request,
              buildHeaders: () => ({}),
@@ -150163,7 +150238,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,76 +5341,23 @@
+@@ -6146,76 +5344,23 @@
          } finally {
            vi.useRealTimers();
          }
@@ -150245,7 +150320,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-invalid-stream-abort-delay',
          );
-@@ -6239,41 +5381,46 @@
+@@ -6239,41 +5384,46 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -150294,7 +150369,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6308,29 +5455,21 @@
+@@ -6308,29 +5458,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -150326,7 +150401,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +5484,13 @@
+@@ -6345,12 +5487,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -150340,7 +150415,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +5500,29 @@
+@@ -6360,21 +5503,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -150371,7 +150446,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +5537,18 @@
+@@ -6389,24 +5540,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -150398,7 +150473,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +5568,13 @@
+@@ -6426,12 +5571,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -150412,7 +150487,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +5584,29 @@
+@@ -6441,21 +5587,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -150443,7 +150518,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +5620,12 @@
+@@ -6469,56 +5623,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -150500,7 +150575,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +5633,13 @@
+@@ -6526,12 +5636,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -150514,7 +150589,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +5651,17 @@
+@@ -6543,14 +5654,17 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -150533,7 +150608,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +5672,13 @@
+@@ -6561,12 +5675,13 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -150547,7 +150622,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +5689,13 @@
+@@ -6577,13 +5692,13 @@
                  },
                },
              ],
@@ -150562,7 +150637,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +5722,13 @@
+@@ -6610,15 +5725,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -150579,7 +150654,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +5739,13 @@
+@@ -6629,12 +5742,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -150593,7 +150668,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +5782,12 @@
+@@ -6671,752 +5785,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -151346,7 +151421,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +5802,13 @@
+@@ -7431,12 +5805,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -151360,7 +151435,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +5869,13 @@
+@@ -7497,13 +5872,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -151375,7 +151450,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +5892,37 @@
+@@ -7520,116 +5895,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -151497,7 +151572,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +5933,13 @@
+@@ -7640,12 +5936,13 @@
                throw transportError;
              })(),
            )
@@ -151511,7 +151586,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +5972,22 @@
+@@ -7678,103 +5975,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -151616,7 +151691,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +5998,13 @@
+@@ -7785,12 +6001,13 @@
                throw transportError;
              })(),
            )
@@ -151630,7 +151705,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +6029,206 @@
+@@ -7815,1231 +6032,206 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -153019,7 +153094,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +6259,13 @@
+@@ -9070,12 +6262,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -153033,7 +153108,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +6315,17 @@
+@@ -9125,13 +6318,17 @@
              timeoutError,
              {
                model: 'test-model',
@@ -153052,7 +153127,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +6336,13 @@
+@@ -9142,12 +6339,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153066,7 +153141,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +6395,13 @@
+@@ -9200,12 +6398,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153080,7 +153155,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +6451,13 @@
+@@ -9255,12 +6454,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -153094,7 +153169,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,13 +6588,17 @@
+@@ -9391,13 +6591,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -153113,7 +153188,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the retry delay.
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9409,41 +6610,35 @@
+@@ -9409,41 +6613,35 @@
          ).toHaveBeenCalledTimes(1);
        } finally {
          vi.useRealTimers();
@@ -153160,7 +153235,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +6653,13 @@
+@@ -9458,12 +6656,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -153174,7 +153249,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +6669,42 @@
+@@ -9473,130 +6672,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -153314,7 +153389,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +6714,13 @@
+@@ -9606,12 +6717,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -153328,7 +153403,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,24 +6735,28 @@
+@@ -9626,24 +6738,28 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -153358,7 +153433,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9652,13 +6765,13 @@
+@@ -9652,13 +6768,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -153373,7 +153448,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,14 +6809,17 @@
+@@ -9696,14 +6812,17 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -153392,7 +153467,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).toHaveBeenCalledTimes(1);
        } finally {
-@@ -9733,12 +6849,13 @@
+@@ -9733,12 +6852,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153406,7 +153481,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,21 +6869,25 @@
+@@ -9752,21 +6872,25 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -153434,7 +153509,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -9792,12 +6913,13 @@
+@@ -9792,12 +6916,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -153448,7 +153523,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,26 +6940,30 @@
+@@ -9818,26 +6943,30 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -153481,7 +153556,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -9884,13 +7010,17 @@
+@@ -9884,13 +7013,17 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -153500,7 +153575,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Abort while the generator is awaiting the 60s delay
          const nextPromise = iterator.next();
          abortController.abort();
-@@ -9905,12 +7035,13 @@
+@@ -9905,12 +7038,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -153514,7 +153589,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +7085,13 @@
+@@ -9954,12 +7088,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -153528,7 +153603,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,33 +7106,37 @@
+@@ -9974,33 +7109,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -153572,7 +153647,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          for (;;) {
            const next = await iterator.next();
            if (next.done) break;
-@@ -10009,13 +7145,13 @@
+@@ -10009,13 +7148,13 @@
  
          expect(
            mockContentGenerator.generateContentStream,
@@ -153587,7 +153662,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +7164,14 @@
+@@ -10028,12 +7167,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -153602,7 +153677,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +7196,13 @@
+@@ -10058,12 +7199,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153616,7 +153691,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,35 +7214,37 @@
+@@ -10075,35 +7217,37 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -153659,7 +153734,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10123,12 +7264,14 @@
+@@ -10123,12 +7267,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -153674,7 +153749,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +7297,13 @@
+@@ -10154,12 +7300,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -153688,7 +153763,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,30 +7314,31 @@
+@@ -10170,30 +7317,31 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -153725,7 +153800,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.push(next.value);
          }
  
-@@ -10261,12 +7406,13 @@
+@@ -10261,12 +7409,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -153739,7 +153814,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +7485,13 @@
+@@ -10339,12 +7488,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -153753,7 +153828,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +7519,13 @@
+@@ -10372,12 +7522,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -153767,7 +153842,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +7533,22 @@
+@@ -10385,20 +7536,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -153791,7 +153866,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +7600,177 @@
+@@ -10450,103 +7603,177 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -154029,7 +154104,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +7785,58 @@
+@@ -10561,41 +7788,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -154100,7 +154175,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +7847,13 @@
+@@ -10606,12 +7850,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -154114,7 +154189,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +7883,281 @@
+@@ -10641,275 +7886,281 @@
          }),
          'prompt-id-res3',
        );
@@ -154629,7 +154704,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +8202,31 @@
+@@ -10954,28 +8205,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -154662,7 +154737,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +8247,55 @@
+@@ -10996,138 +8250,55 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -154812,7 +154887,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +8306,33 @@
+@@ -11138,33 +8309,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -154857,7 +154932,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +8342,30 @@
+@@ -11174,22 +8345,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -154889,7 +154964,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +8419,34 @@
+@@ -11243,31 +8422,34 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -154927,7 +155002,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +8457,64 @@
+@@ -11278,59 +8460,64 @@
                      },
                    ],
                  },
@@ -154996,7 +155071,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +8555,12 @@
+@@ -11371,252 +8558,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -155249,7 +155324,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +8734,636 @@
+@@ -11790,179 +8737,636 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -156020,7 +156095,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +9476,12 @@
+@@ -12075,17 +9479,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -156038,7 +156113,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,1792 +9964,412 @@
+@@ -12568,1792 +9967,412 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -158199,7 +158274,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const chat = chatWith([
          { role: 'user', parts: [{ text: 'plan it' }] },
          {
-@@ -14615,14 +10631,16 @@
+@@ -14615,14 +10634,16 @@
        // mockFileSystem, so "writing" the plan file is a Map insert.
        const planFile = '/plans/wired-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -158216,7 +158291,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          expect(fnCall.args!['plan']).toBe(approvedPlanRedactionText(planFile));
        } finally {
          mockFileSystem.delete(planFile);
-@@ -14632,14 +10650,16 @@
+@@ -14632,14 +10653,16 @@
      it('is applied by the constructor for rehydrated history', () => {
        const planFile = '/plans/ctor-session.md';
        mockFileSystem.set(planFile, PLAN);
@@ -158233,7 +158308,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          mockFileSystem.delete(planFile);
        }
-@@ -14647,14 +10667,16 @@
+@@ -14647,14 +10670,16 @@
  
      it('setHistory leaves history alone when no plan file exists', () => {
        const chat = new GeminiChat(
@@ -158250,7 +158325,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        expect(fnCall.args!['plan']).toBe(PLAN);
      });
    });
-@@ -14725,821 +10747,593 @@
+@@ -14725,821 +10750,596 @@
        const snapshot = JSON.parse(JSON.stringify(original));
        redactStructuredOutputArgsForRecording(original);
        expect(original).toEqual(snapshot);
@@ -158509,7 +158584,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        pendingUserMessage: pending,
 +      });
 +      expect(recordChatCompression).toHaveBeenCalledWith({
-+        info: compressResult().info,
++        info: {
++          ...compressResult().info,
++          postCompactionHistory: [...compressResult().newHistory, pending],
++        },
 +        compressedHistory: [...compressResult().newHistory, pending],
 +      });
 +      expect(owned.getHistory()).toEqual([
@@ -161048,7 +161126,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            last.parts = [...(last.parts ?? []), ...reattachParts];
          } else {
            requestHistory.push({ role: 'user', parts: reattachParts });
-@@ -1897,241 +1056,428 @@
+@@ -1897,241 +1056,433 @@
        }
        return requestHistory;
      }
@@ -161522,6 +161600,11 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      newHistory && options?.pendingUserMessage
 +        ? [...newHistory, options.pendingUserMessage]
 +        : newHistory;
++    if (
++      info.compressionStatus === CompressionStatus.COMPRESSED && committedHistory
++    ) {
++      info.postCompactionHistory = structuredClone(committedHistory);
++    }
 +    if (info.compressionStatus !== CompressionStatus.NOOP) {
 +      await this.chatRecordingService.recordChatCompression({
 +        info,
@@ -161534,7 +161617,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        info.compressionStatus === CompressionStatus.COMPRESSED &&
 +        committedHistory
 +      ) {
-+        this.setHistory(committedHistory);
++        this.history = committedHistory;
 +        if (options?.pendingUserMessage) this.userContentPushCount++;
 +        // Compaction replaced the history, so nothing in it is quotable
 +        // any more. That is about quotability, not authorship: a file this
@@ -161674,7 +161757,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  /** The startup context every history of this chat opens with, compacted or not. */
 +  getStartupContext(): Content | undefined {
 +    return this.startupContext?.content;
-@@ -2153,6 +1499,16 @@
+@@ -2153,6 +1504,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -161691,7 +161774,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2192,1724 +1548,581 @@
+@@ -2192,1724 +1553,581 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -163920,7 +164003,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +2146,14 @@
+@@ -3933,23 +2151,14 @@
          }
  
          return false;
@@ -163945,7 +164028,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +2167,18 @@
+@@ -3963,41 +2172,18 @@
        },
      });
  
@@ -163989,7 +164072,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4145,43 +2326,19 @@
+@@ -4145,43 +2331,19 @@
  
    /**
     * Clears the chat history.
@@ -164033,7 +164116,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Replaces the `plan` argument of an `exit_plan_mode` `functionCall` in
     * history with a short reference, keeping every other part and argument
     * intact.
-@@ -4298,44 +2455,23 @@
+@@ -4298,44 +2460,23 @@
        );
      }
    }
@@ -164078,7 +164161,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Pop orphaned trailing user entries from chat history.
     * In a valid conversation the last entry is always a model response;
     * any trailing user entries are leftovers from a request that failed.
-@@ -4362,24 +2498,12 @@
+@@ -4362,24 +2503,12 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -164103,7 +164186,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Instance wrapper around the free-function {@link repairOrphanedToolUseTurns}.
     * See the canonical note above `ORPHAN_TOOL_USE_REPAIR_REASON`.
-@@ -4393,13 +2517,13 @@
+@@ -4393,13 +2522,13 @@
  
    setTools(tools: Tool[]): void {
      this.generationConfig.tools = tools;
@@ -164118,7 +164201,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2551,284 @@
+@@ -4427,693 +2556,284 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -172982,7 +173065,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.concurrent.t
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.test.ts
-@@ -1,16 +1,18 @@
+@@ -1,46 +1,44 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -173002,13 +173085,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    Type,
 +  type FunctionCallingConfig,
  } from '@google/genai';
-@@ -17,4 +19,4 @@
 -import type { ErrorHandler, PipelineConfig } from './types.js';
 +import type { ErrorHandler, PipelineConfig, RequestContext } from './types.js';
  import {
    ContentGenerationPipeline,
    NonSSEResponseError,
-@@ -21,6 +23,8 @@
    StreamContentError,
    StreamInactivityTimeoutError,
    StreamLifetimeExceededError,
@@ -173017,7 +173098,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  } from './pipeline.js';
  import { OpenAIContentConverter } from './converter.js';
  import { openaiRequestCaptureContext } from './requestCaptureContext.js';
-@@ -33,14 +37,7 @@
++import { ProviderOutput, providerOutputContext } from '../provider-output.js';
+ import { StreamingToolCallParser } from './streamingToolCallParser.js';
+ import type { Config } from '../../config/config.js';
+ import { AuthType, type ContentGeneratorConfig } from '../contentGenerator.js';
+ import type { OpenAICompatibleProvider } from './provider/index.js';
+ import { DefaultOpenAICompatibleProvider } from './provider/default.js';
+ import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
 -import {
 -  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
 -  DEFAULT_STREAM_MAX_LIFETIME_MS,
@@ -173033,7 +173120,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  } from '../../telemetry/gen-ai-usage.js';
  import { setToolCallPreparations } from '../tool-call-preparation.js';
  import { runWithAgentContext } from '../../agents/runtime/agent-context.js';
-@@ -57,15 +54,12 @@
+@@ -57,15 +55,12 @@
      convertOpenAIResponseToGemini: vi.fn(),
      convertOpenAIChunkToGemini: vi.fn(),
      convertGeminiToolsToOpenAI: vi.fn(),
@@ -173049,12 +173136,92 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
    reportOpenAiChunk: mockReportOpenAiChunk,
  }));
  
-@@ -137,16 +131,201 @@
+@@ -136,17 +131,281 @@
+ 
    describe('constructor', () => {
      it('should initialize with correct configuration', () => {
        expect(mockProvider.buildClient).toHaveBeenCalled();
 +    });
 +  });
++
++  it.each(['batch', 'stream', 'error_finish'] as const)(
++    'retains raw %s provider output before any converter or terminal refusal',
++    async (mode) => {
++      const output = new ProviderOutput();
++      const argumentsText = '  { "unclosed" : "\\u0061';
++      const served = {
++        choices: [
++          {
++            delta: {
++              content: '  visible\n',
++              reasoning_content: ' raw thought ',
++              tool_calls: [
++                {
++                  index: 0,
++                  function: {
++                    name: 'state_snapshot',
++                    arguments: argumentsText,
++                  },
++                },
++              ],
++            },
++            finish_reason:
++              mode === 'error_finish' ? 'error_finish' : 'tool_calls',
++          },
++        ],
++        provider_extension: { preserve: true },
++      };
++      const refuse = () => {
++        expect(output.responses).toEqual([JSON.stringify(served)]);
++        throw new Error('malformed call');
++      };
++      vi.mocked(mockConverter.convertGeminiRequestToOpenAI).mockReturnValue([]);
++      vi.mocked(mockConverter.convertOpenAIResponseToGemini).mockImplementation(
++        refuse,
++      );
++      vi.mocked(mockConverter.convertOpenAIChunkToGemini).mockImplementation(
++        refuse,
++      );
++      (mockClient.chat.completions.create as Mock).mockResolvedValue(
++        mode === 'batch'
++          ? served
++          : (async function* () {
++              yield served;
++            })(),
++      );
++      const request: GenerateContentParameters = {
++        generationContext: new GenerationContext('raw-output-owner'),
++        model: 'test-model',
++        contents: [],
++      };
++      if (mode === 'batch') {
++        await expect(
++          providerOutputContext.run(output, () =>
++            pipeline.execute(request, 'raw'),
++          ),
++        ).rejects.toThrow('malformed call');
++      } else {
++        const stream = await providerOutputContext.run(output, () =>
++          pipeline.executeStream(request, 'raw'),
++        );
++        // Consume outside the capture context: the stream owns its collector.
++        await expect(
++          (async () => {
++            for await (const _ of stream) {
++              /* consume */
++            }
++          })(),
++        ).rejects.toThrow(
++          mode === 'error_finish' ? 'visible' : 'malformed call',
++        );
++      }
++      expect(output.responses).toEqual([JSON.stringify(served)]);
++      expect(
++        JSON.parse(output.responses[0]).choices[0].delta.tool_calls[0].function
++          .arguments,
++      ).toBe(argumentsText);
++    },
++  );
 +
 +  describe('countTextTokens', () => {
 +    beforeEach(() => {
@@ -173251,7 +173418,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -216,12 +395,13 @@
+@@ -216,12 +475,13 @@
        );
      });
  
@@ -173265,7 +173432,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockMessages = [
-@@ -265,12 +445,13 @@
+@@ -265,12 +525,13 @@
          expect.any(Object),
        );
      });
@@ -173279,7 +173446,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -307,12 +488,13 @@
+@@ -307,12 +568,13 @@
          }),
        );
      });
@@ -173293,7 +173460,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -350,12 +532,13 @@
+@@ -350,12 +612,13 @@
          }),
        );
      });
@@ -173307,7 +173474,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -394,12 +577,13 @@
+@@ -394,12 +657,13 @@
          }),
        );
      });
@@ -173321,7 +173488,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -435,12 +619,13 @@
+@@ -435,12 +699,13 @@
          }),
        );
      });
@@ -173335,7 +173502,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -476,65 +661,31 @@
+@@ -476,65 +741,31 @@
          expect.objectContaining({
            toolResultContentFormat: 'string',
          }),
@@ -173412,7 +173579,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            tools: [
              {
                functionDeclarations: [
-@@ -602,12 +753,13 @@
+@@ -602,12 +833,13 @@
        );
      });
  
@@ -173426,7 +173593,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'test-prompt-id';
  
-@@ -662,12 +814,13 @@
+@@ -662,12 +894,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -173440,7 +173607,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        const userPromptId = 'forked_query';
  
-@@ -945,12 +1098,13 @@
+@@ -945,12 +1178,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          ...(testCase.extraBody ?? {}),
@@ -173454,7 +173621,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          contents: [{ parts: [{ text: 'Summarize' }], role: 'user' }],
          config: {
            thinkingConfig: { includeThoughts: testCase.includeThoughts },
-@@ -1025,12 +1179,13 @@
+@@ -1025,12 +1259,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:combined-shape'),
@@ -173468,7 +173635,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1066,12 +1221,174 @@
+@@ -1066,12 +1301,174 @@
  
        const apiCall = (mockClient.chat.completions.create as Mock).mock
          .calls[0][0];
@@ -173643,7 +173810,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        // The provider canonicalizes the documented extra_body
        // `enable_thinking: false` escape hatch into the tiered family's
        // canonical disable shape (`reasoning_effort: 'none'`) even when no
-@@ -1101,12 +1418,13 @@
+@@ -1101,12 +1498,13 @@
        );
        (mockProvider.buildRequest as Mock).mockImplementation((req) =>
          realProvider.buildRequest(req, 'side-query:escape-hatch'),
@@ -173657,7 +173824,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: true },
            tools: [
              {
-@@ -1186,12 +1504,13 @@
+@@ -1186,12 +1584,13 @@
          .mockResolvedValue({
            id: 'r',
            choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
@@ -173671,7 +173838,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            thinkingConfig: { includeThoughts: false },
            tools: [
              {
-@@ -1296,12 +1615,13 @@
+@@ -1296,12 +1695,13 @@
              id: 'r',
              choices: [{ message: { content: '4' }, finish_reason: 'stop' }],
            } as OpenAI.Chat.ChatCompletion);
@@ -173685,7 +173852,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            },
            'forked_query',
          );
-@@ -1355,12 +1675,13 @@
+@@ -1355,12 +1755,13 @@
        const retryError = new Error('retry failed');
        (mockClient.chat.completions.create as Mock)
          .mockRejectedValueOnce(requiredThinkingError)
@@ -173699,7 +173866,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        await expect(pipeline.execute(request, 'forked_query')).rejects.toBe(
-@@ -1391,12 +1712,13 @@
+@@ -1391,12 +1792,13 @@
        );
        (mockClient.chat.completions.create as Mock).mockRejectedValueOnce(
          requiredThinkingError,
@@ -173713,7 +173880,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            abortSignal: AbortSignal.abort(),
            thinkingConfig: { includeThoughts: false },
          },
-@@ -1439,12 +1761,13 @@
+@@ -1439,12 +1841,13 @@
          });
          (mockClient.chat.completions.create as Mock).mockRejectedValue(error);
  
@@ -173727,7 +173894,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
              },
              'forked_query',
            ),
-@@ -1458,12 +1781,13 @@
+@@ -1458,12 +1861,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          reasoning: { effort: 'high' },
@@ -173741,7 +173908,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1503,12 +1827,13 @@
+@@ -1503,12 +1907,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173755,7 +173922,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1534,12 +1859,13 @@
+@@ -1534,12 +1939,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true,
@@ -173769,7 +173936,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockMessages = [
-@@ -1583,12 +1909,13 @@
+@@ -1583,12 +1989,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173783,7 +173950,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1622,12 +1949,13 @@
+@@ -1622,12 +2029,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173797,7 +173964,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1659,12 +1987,13 @@
+@@ -1659,12 +2067,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173811,7 +173978,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1699,12 +2028,13 @@
+@@ -1699,12 +2108,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173825,7 +173992,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1744,12 +2074,13 @@
+@@ -1744,12 +2154,13 @@
  
        // Provider passes the request through unchanged — simulates the
        // common case where the user has not configured
@@ -173839,7 +174006,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1783,12 +2114,13 @@
+@@ -1783,12 +2194,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173853,7 +174020,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
          { role: 'user', content: 'Hello' },
-@@ -1825,12 +2157,13 @@
+@@ -1825,12 +2237,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173867,7 +174034,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1866,12 +2199,13 @@
+@@ -1866,12 +2279,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173881,7 +174048,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1906,12 +2240,13 @@
+@@ -1906,12 +2320,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173895,7 +174062,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1953,12 +2288,13 @@
+@@ -1953,12 +2368,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          enable_thinking: true, // Simulates extra_body injection
@@ -173909,7 +174076,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -1993,12 +2329,13 @@
+@@ -1993,12 +2409,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173923,7 +174090,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2038,12 +2375,13 @@
+@@ -2038,12 +2455,13 @@
        (mockProvider.buildRequest as Mock).mockImplementation((req) => ({
          ...req,
          chat_template_kwargs: { apply_chat_template: true },
@@ -173937,7 +174104,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2082,12 +2420,13 @@
+@@ -2082,12 +2500,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173951,7 +174118,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2122,12 +2461,13 @@
+@@ -2122,12 +2541,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173965,7 +174132,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2161,12 +2501,13 @@
+@@ -2161,12 +2581,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173979,7 +174146,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2203,12 +2544,13 @@
+@@ -2203,12 +2624,13 @@
          ...mockConfig,
          contentGeneratorConfig: mockContentGeneratorConfig,
        };
@@ -173993,7 +174160,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([
-@@ -2229,12 +2571,13 @@
+@@ -2229,12 +2651,13 @@
        expect(apiCall.enable_thinking).toBe(false);
      });
  
@@ -174007,7 +174174,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('API Error');
  
-@@ -2252,12 +2595,13 @@
+@@ -2252,12 +2675,13 @@
          request,
        );
      });
@@ -174021,7 +174188,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -2280,12 +2624,13 @@
+@@ -2280,12 +2704,13 @@
        expect(testError.message).not.toContain('token@');
      });
  
@@ -174035,7 +174202,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
-@@ -2307,12 +2652,13 @@
+@@ -2307,12 +2732,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -174049,7 +174216,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -2381,12 +2727,13 @@
+@@ -2381,12 +2807,13 @@
        (mockClient.chat.completions.create as Mock)
          .mockReturnValueOnce(failedCreate)
          .mockReturnValueOnce(successfulCreate);
@@ -174063,7 +174230,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'forked_query',
        );
-@@ -2404,12 +2751,13 @@
+@@ -2404,12 +2831,13 @@
        expect(mockErrorHandler.handle).not.toHaveBeenCalled();
      });
  
@@ -174077,7 +174244,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2439,13 +2787,13 @@
+@@ -2439,13 +2867,13 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIChunkToGemini as Mock)
@@ -174092,7 +174259,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        );
        const telemetryAttempt = {};
        mockReportOpenAiRequest.mockReturnValueOnce(telemetryAttempt);
-@@ -2472,13 +2820,13 @@
+@@ -2472,13 +2900,13 @@
        ).mock.calls[1];
        expect(firstChunkContext).toEqual(
          expect.objectContaining({
@@ -174107,7 +174274,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          firstChunkContext.toolCallParser,
        );
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
-@@ -2505,12 +2853,13 @@
+@@ -2505,12 +2933,13 @@
        );
      });
  
@@ -174121,7 +174288,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockChunk1 = {
-@@ -2576,539 +2925,516 @@
+@@ -2576,539 +3005,516 @@
  
        // Assert
        expect(results).toHaveLength(1); // Empty response should be filtered out
@@ -175152,7 +175319,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockChunk = {
          id: 'chunk-tool-opener',
          choices: [{ delta: { tool_calls: [] }, finish_reason: null }],
-@@ -3146,12 +3472,13 @@
+@@ -3146,12 +3552,13 @@
        expect(results).toEqual([preparationResponse]);
      });
  
@@ -175166,7 +175333,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('Stream Error');
  
-@@ -3194,12 +3521,13 @@
+@@ -3194,12 +3601,13 @@
          request,
        );
      });
@@ -175180,7 +175347,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error('407 via http://user:pass@proxy.local');
  
-@@ -3219,12 +3547,13 @@
+@@ -3219,12 +3627,13 @@
        );
        expect(testError.message).not.toContain('user:pass');
      });
@@ -175194,7 +175361,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const testError = new Error(
          'connect ECONNREFUSED token@proxy.local:8080',
-@@ -3261,12 +3590,13 @@
+@@ -3261,12 +3670,13 @@
        );
        expect(testError.message).not.toContain('token@');
      });
@@ -175208,7 +175375,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3289,29 +3619,43 @@
+@@ -3289,29 +3699,43 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -175256,7 +175423,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const mockStream = {
          async *[Symbol.asyncIterator]() {
            yield {
-@@ -3329,28 +3673,36 @@
+@@ -3329,28 +3753,36 @@
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
@@ -175297,7 +175464,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -3396,12 +3748,13 @@
+@@ -3396,12 +3828,13 @@
        expect(thrownError!.requestId).toBe('req-123');
        expect(thrownError!.request_id).toBe('req-123');
      });
@@ -175311,7 +175478,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const jsonBody = '{"error":"gateway blocked streaming request"}';
        const mockStream = {
-@@ -3449,12 +3802,13 @@
+@@ -3449,12 +3882,13 @@
        expect(thrownError!.bodyPrefix).toContain('gateway blocked');
        expect(thrownError!.requestId).toBe('req-json');
      });
@@ -175325,7 +175492,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const htmlBody = '<html>' + 'x'.repeat(700) + '</html>';
        const mockStream = {
-@@ -3505,12 +3859,13 @@
+@@ -3505,12 +3939,13 @@
        expect(thrownError!.bodyPrefix).toHaveLength(512);
        expect(thrownError!.requestId).toBeNull();
      });
@@ -175339,7 +175506,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockStream = {
          async *[Symbol.asyncIterator]() {},
-@@ -3554,12 +3909,13 @@
+@@ -3554,12 +3989,13 @@
        expect(thrownError).toBeInstanceOf(NonSSEResponseError);
        expect(thrownError!.bodyPrefix).toBe('');
      });
@@ -175353,7 +175520,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3615,12 +3971,13 @@
+@@ -3615,12 +4051,13 @@
        }
        expect(results.length).toBeGreaterThan(0);
      });
@@ -175367,7 +175534,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockGeminiResponse = new GenerateContentResponse();
        mockGeminiResponse.candidates = [
-@@ -3661,12 +4018,13 @@
+@@ -3661,12 +4098,13 @@
        expect(results.length).toBeGreaterThan(0);
      });
  
@@ -175381,7 +175548,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3698,12 +4056,13 @@
+@@ -3698,12 +4136,13 @@
        expect(sdkSignal).not.toBe(abortController.signal);
      });
  
@@ -175395,7 +175562,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3735,12 +4094,13 @@
+@@ -3735,12 +4174,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -175409,7 +175576,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        const mockStream = {
-@@ -3775,12 +4135,13 @@
+@@ -3775,12 +4215,13 @@
        expect(sdkSignal.aborted).toBe(true);
      });
  
@@ -175423,7 +175590,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
  
        let capturedSignal: AbortSignal | undefined;
-@@ -3799,12 +4160,13 @@
+@@ -3799,12 +4240,13 @@
        expect(capturedSignal!.aborted).toBe(true);
      });
  
@@ -175437,7 +175604,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -3928,12 +4290,13 @@
+@@ -3928,12 +4370,13 @@
        }
      });
  
@@ -175451,7 +175618,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk
-@@ -4010,12 +4373,13 @@
+@@ -4010,12 +4453,13 @@
        });
      });
  
@@ -175465,7 +175632,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage (typical for modelscope)
-@@ -4119,12 +4483,13 @@
+@@ -4119,12 +4563,13 @@
        });
      });
  
@@ -175479,7 +175646,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Content chunk with zero usage
-@@ -4211,12 +4576,13 @@
+@@ -4211,12 +4656,13 @@
        // Reproduces the real-world bug: some providers (e.g. bailian/glm-5)
        // send trailing empty chunks AFTER the finish+usage pair. Before the
        // fix, each trailing chunk re-triggered the merge logic and yielded
@@ -175493,7 +175660,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        // Chunk 1: content text
-@@ -4350,12 +4716,13 @@
+@@ -4350,12 +4796,13 @@
    });
  
    describe('buildRequest', () => {
@@ -175507,7 +175674,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
            temperature: 0.8,
            topP: 0.7,
            maxOutputTokens: 500,
-@@ -4396,12 +4763,13 @@
+@@ -4396,12 +4843,13 @@
        );
      });
  
@@ -175521,7 +175688,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4435,12 +4803,13 @@
+@@ -4435,12 +4883,13 @@
        );
      });
  
@@ -175535,7 +175702,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -4508,12 +4877,13 @@
+@@ -4508,12 +4957,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -175549,7 +175716,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4542,22 +4912,26 @@
+@@ -4542,22 +4992,26 @@
        );
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
@@ -175586,7 +175753,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123:Explore-a1b2c3d4',
          }),
-@@ -4582,22 +4956,26 @@
+@@ -4582,22 +5036,26 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue({
          id: 'test',
          choices: [{ message: { content: 'response' } }],
@@ -175623,7 +175790,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        expect(mockClient.chat.completions.create).toHaveBeenCalledWith(
          expect.objectContaining({
            prompt_cache_key: 'qwen-code:session-123',
-@@ -4630,12 +5008,13 @@
+@@ -4630,12 +5088,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -175637,21 +175804,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          'prompt-id',
        );
  
-@@ -4667,12 +5046,13 @@
-         id: 'test',
-         choices: [{ message: { content: 'response' } }],
-       });
- 
-       await pipeline.execute(
-         {
-+          generationContext: new GenerationContext('provider-test-owner'),
-           model: 'gpt-5.6',
-           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
-           promptCacheSharing: true,
-         },
-         'prompt-id',
-       );
-@@ -4707,12 +5087,13 @@
+@@ -4667,12 +5126,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -175665,7 +175818,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4750,12 +5131,13 @@
+@@ -4707,12 +5167,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -175679,7 +175832,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4797,12 +5179,13 @@
+@@ -4750,12 +5211,13 @@
          id: 'test',
          choices: [{ message: { content: 'response' } }],
        });
@@ -175693,7 +175846,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          },
          'prompt-id',
        );
-@@ -4826,12 +5209,13 @@
+@@ -4797,12 +5259,13 @@
+         id: 'test',
+         choices: [{ message: { content: 'response' } }],
+       });
+ 
+       await pipeline.execute(
+         {
++          generationContext: new GenerationContext('provider-test-owner'),
+           model: 'gpt-5.6',
+           contents: [{ role: 'user', parts: [{ text: 'Hello' }] }],
+           promptCacheSharing: true,
+         },
+         'prompt-id',
+       );
+@@ -4826,12 +5289,13 @@
          reasoning_effort: 'medium',
          verbosity: 'low',
        } as ContentGeneratorConfig['samplingParams'];
@@ -175707,7 +175874,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4867,12 +5251,13 @@
+@@ -4867,12 +5331,13 @@
          max_completion_tokens: 200000,
          reasoning_effort: 'high',
        } as ContentGeneratorConfig['samplingParams'];
@@ -175721,7 +175888,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4907,12 +5292,13 @@
+@@ -4907,12 +5372,13 @@
          max_tokens: 50000,
          max_completion_tokens: 100000,
        } as ContentGeneratorConfig['samplingParams'];
@@ -175735,7 +175902,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4944,12 +5330,13 @@
+@@ -4944,12 +5410,13 @@
        mockContentGeneratorConfig.samplingParams = {
          temperature: 0.7,
        } as ContentGeneratorConfig['samplingParams'];
@@ -175749,7 +175916,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -4976,12 +5363,13 @@
+@@ -4976,12 +5443,13 @@
        // Arrange: no samplingParams — request.config.maxOutputTokens must still
        // fall through to max_tokens on the wire (original behavior unchanged).
        mockContentGeneratorConfig.samplingParams = undefined;
@@ -175763,7 +175930,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        };
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5008,12 +5396,13 @@
+@@ -5008,12 +5476,13 @@
    });
  
    describe('createRequestContext', () => {
@@ -175777,7 +175944,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
        const mockOpenAIResponse = new GenerateContentResponse();
  
-@@ -5032,12 +5421,13 @@
+@@ -5032,12 +5501,13 @@
        // Assert
      });
  
@@ -175791,7 +175958,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const userPromptId = 'test-prompt-id';
  
        const mockStream = {
-@@ -5195,12 +5585,13 @@
+@@ -5195,12 +5665,13 @@
  
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          mockStream,
@@ -175805,7 +175972,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        // Collect responses
        const responses: GenerateContentResponse[] = [];
-@@ -5218,12 +5609,13 @@
+@@ -5218,12 +5689,13 @@
      });
    });
  
@@ -175819,7 +175986,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5271,12 +5663,13 @@
+@@ -5271,12 +5743,13 @@
          }),
        );
      });
@@ -175833,7 +176000,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        const mockMessages = [
          { role: 'user', content: 'Hello' },
-@@ -5322,12 +5715,13 @@
+@@ -5322,12 +5795,13 @@
          }),
        );
      });
@@ -175847,7 +176014,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
        (mockConverter.convertGeminiRequestToOpenAI as Mock).mockReturnValue([]);
        (mockConverter.convertOpenAIResponseToGemini as Mock).mockReturnValue(
-@@ -5370,7 +5764,7 @@
+@@ -5370,7 +5844,7 @@
      });
    });
  
@@ -175856,7 +176023,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
      // A stream whose `next()` is gated by the test: it stays pending until
      // `push()` / `end()` is called, letting us simulate a silent (stalled)
      // stream under fake timers.
-@@ -5457,12 +5851,15 @@
+@@ -5457,12 +5931,15 @@
          choices: [{ delta: { content: text } }],
        } as OpenAI.Chat.ChatCompletionChunk;
      }
@@ -175872,7 +176039,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
  
 +    // max_tokens 1200 bounds a started generation to 100s at the 12 tokens/s
 +    // floor; the request timeout bounds the wait for its first chunk.
-@@ -5469,17 +5866,27 @@
+@@ -5469,17 +5946,27 @@
      function buildPipeline(
 -      streamIdleTimeoutMs?: number,
 -      streamMaxLifetimeMs?: number,
@@ -175904,7 +176071,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
      }
  
      beforeEach(() => {
-@@ -5493,100 +5900,216 @@
+@@ -5493,100 +5980,216 @@
            return r;
          },
        );
@@ -176192,7 +176359,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const pendingSdkNext: {
          reject?: (err: unknown) => void;
        } = {};
-@@ -5613,18 +6136,13 @@
+@@ -5613,18 +6216,13 @@
        process.on('unhandledRejection', handler);
  
        try {
@@ -176214,7 +176381,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
          });
  
          const sdkAbort = new Error('aborted by SDK');
-@@ -5640,91 +6158,13 @@
+@@ -5640,91 +6238,13 @@
        }
      });
  
@@ -176307,7 +176474,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(streamingRequest(), 'id');
        const call = (mockClient.chat.completions.create as Mock).mock.calls[0];
        const sdkSignal = call[1]?.signal;
-@@ -5742,7 +6182,7 @@
+@@ -5742,7 +6262,7 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
        );
@@ -176316,7 +176483,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(streamingRequest(), 'id');
        const results: GenerateContentResponse[] = [];
        gated.push(chunk('hello'));
-@@ -5761,6 +6201,6 @@
+@@ -5761,6 +6281,6 @@
          expect.anything(),
        );
  
@@ -176324,7 +176491,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS);
      });
  
-@@ -5767,367 +6207,32 @@
+@@ -5767,367 +6287,32 @@
 -    it('propagates a user AbortError (not ETIMEDOUT) when the parent signal is aborted', async () => {
 -      const ac = new AbortController();
 -      const gated = gatedStream(); // silent
@@ -176723,7 +176890,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +      // jump lands while `it.next()` is pending, so a wall-clock deadline
 +      // charged it as upstream wait and threw at the next iteration; the
 +      // monotonic clock sees only the 500ms the model actually took.
-@@ -6135,7 +6240,7 @@
+@@ -6135,7 +6320,7 @@
        (mockClient.chat.completions.create as Mock).mockResolvedValue(
          gated.stream,
        );
@@ -176732,7 +176899,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(streamingRequest(), 'id');
        let done = false;
        let error: unknown;
-@@ -6147,40 +6252,7 @@
+@@ -6147,40 +6332,7 @@
          () => (done = true),
          (e: unknown) => (error = e),
        );
@@ -176774,7 +176941,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        await vi.advanceTimersByTimeAsync(500); // next() pending, t=500
        // The wall clock leaps 20 minutes while monotonic time does not.
        const dateNow = vi
-@@ -6190,7 +6262,7 @@
+@@ -6190,7 +6342,7 @@
        await vi.advanceTimersByTimeAsync(0);
        gated.push(chunk('b'));
        await vi.advanceTimersByTimeAsync(500);
@@ -176783,7 +176950,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        await vi.advanceTimersByTimeAsync(0);
        await consume;
        dateNow.mockRestore();
-@@ -6201,259 +6273,2 @@
+@@ -6201,259 +6353,2 @@
 -    it('honours QWEN_STREAM_MAX_LIFETIME_MS when no explicit config is set', async () => {
 -      vi.stubEnv(QWEN_STREAM_MAX_LIFETIME_MS_ENV, '4000');
 -      const gated = gatedStream(); // drip-fed, never ends
@@ -177045,7 +177212,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 -      // The lifetime cap charges only the time the loop is BLOCKED on
 +    it('does not bound a buffered, already-complete stream for a slow consumer — consumer time is not upstream wait', async () => {
 +      // The generation bound charges only the time the loop is BLOCKED on
-@@ -6461,16 +6276,14 @@
+@@ -6461,16 +6356,14 @@
        // after a yield. An upstream that already finished and buffered
        // everything owes nothing, however slowly the consumer drains — so all
        // ten pre-buffered chunks are delivered and the stream completes, even
@@ -177064,7 +177231,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
        const gen = await p.executeStream(
          streamingRequest(new AbortController().signal),
          'id',
-@@ -6481,7 +6294,7 @@
+@@ -6481,7 +6374,7 @@
          for await (const r of gen) {
            received.push(r);
            // A slow consumer: the wall clock jumps 2s per chunk (20s total,
@@ -177144,7 +177311,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.tes
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-@@ -1,19 +1,28 @@
+@@ -1,37 +1,55 @@
 +import { ResponseObservationError } from '../served-usage.js';
  /**
   * @license
@@ -177177,10 +177344,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
  import {
    applyOfficialOpenAIPromptCaching,
-@@ -21,17 +30,22 @@
+   isOfficialOpenAIEndpoint,
  } from './prefix-caching.js';
  import { isDeepSeekHostname } from './provider/deepseek.js';
  import { openaiRequestCaptureContext } from './requestCaptureContext.js';
++import {
++  providerOutputContext,
++  type ProviderOutput,
++} from '../provider-output.js';
  import { StreamingToolCallParser } from './streamingToolCallParser.js';
  import { TaggedThinkingParser } from './taggedThinkingParser.js';
  import type { PipelineConfig, RequestContext } from './types.js';
@@ -177204,7 +177375,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  DEFAULT_STREAM_IDLE_TIMEOUT_MS,
 -  DEFAULT_STREAM_MAX_LIFETIME_MS,
 +  DECODE_FLOOR_TPS,
-@@ -39,14 +53,12 @@
+@@ -39,14 +57,12 @@
 -  QWEN_STREAM_IDLE_TIMEOUT_MS_ENV,
 -  QWEN_STREAM_MAX_LIFETIME_MS_ENV,
 +  STREAM_IDLE_TIMEOUT_MS,
@@ -177221,7 +177392,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    reportOpenAiChunk,
    reportOpenAiRequest,
    reportOpenAiResponse,
-@@ -81,7 +93,31 @@
+@@ -81,7 +97,31 @@
  }
  
  /**
@@ -177254,7 +177425,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   * `code: 'ETIMEDOUT'` makes `classifyRetryError` treat it as a retryable
   * transport error, identical to a real socket read timeout.
   */
-@@ -95,25 +131,23 @@
+@@ -95,25 +135,23 @@
    ) {
      super(
        `No stream activity for ${idleMs}ms after ${chunksReceived} chunks ` +
@@ -177291,7 +177462,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   */
  export class StreamLifetimeExceededError extends Error {
    readonly code = 'ETIMEDOUT' as const;
-@@ -124,11 +158,11 @@
+@@ -124,11 +162,11 @@
      readonly streamLifetimeMs: number,
    ) {
      super(
@@ -177308,7 +177479,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      );
      this.name = 'StreamLifetimeExceededError';
    }
-@@ -180,20 +214,17 @@
+@@ -180,20 +218,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -177333,7 +177504,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,75 +251,40 @@
+@@ -220,75 +255,40 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -177441,7 +177612,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  readonly requestTimeoutMs: number;
 +  /** The upstream wait the generation may take from its first chunk. */
 +  readonly generationMs: number;
-@@ -298,17 +294,19 @@
+@@ -298,17 +298,19 @@
 - * Wraps a streaming chunk source with two guards. The inactivity watchdog: if
 - * no chunk arrives for `idleMs`, `abortRequest()` is invoked (to abort the
 - * underlying request and free the socket) and the iterator throws — a user
@@ -177475,7 +177646,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -  idleMs: number,
 -  maxLifetimeMs: number,
 +  bounds: StreamBounds,
-@@ -315,15 +313,9 @@
+@@ -315,15 +317,9 @@
    abortRequest: () => void,
    parentSignal: AbortSignal | undefined,
  ): AsyncGenerator<OpenAI.Chat.ChatCompletionChunk> {
@@ -177494,7 +177665,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const it = source[Symbol.asyncIterator]();
    // Monotonic, never `Date.now()`: an NTP step must not kill a healthy
    // generation on the next iteration (a forward jump) nor silently disable
-@@ -331,64 +323,65 @@
+@@ -331,64 +327,65 @@
    // guard exists to bound. The setTimeout this races is a monotonic clock
    // too, so the two agree.
    const streamStartedAt = performance.now();
@@ -177595,7 +177766,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              } else {
                abortRequest();
                reject(
-@@ -417,8 +410,10 @@
+@@ -417,8 +414,10 @@
        }
        if (result.done) return;
        // Charge only the time this chunk took to arrive — the upstream
@@ -177608,7 +177779,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        chunksReceived += 1;
        yield result.value;
      }
-@@ -435,30 +430,138 @@
+@@ -435,30 +434,138 @@
  export type { PipelineConfig } from './types.js';
  
 +/** Every request this pipeline sends names the model it is for. */
@@ -177759,7 +177930,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        false,
-@@ -492,13 +595,13 @@
+@@ -475,12 +582,13 @@
+           const openaiResponse = (await this.client.chat.completions.create(
+             openaiRequest,
+             {
+               signal: perRequestAc?.signal,
+             },
+           )) as OpenAI.Chat.ChatCompletion;
++          providerOutputContext.getStore()?.observe(openaiResponse);
+           reportOpenAiResponse(telemetryAttempt, openaiResponse);
+ 
+           const geminiResponse =
+             OpenAIContentConverter.convertOpenAIResponseToGemini(
+               openaiResponse,
+               context,
+@@ -492,13 +600,13 @@
          }
        },
      );
@@ -177774,7 +177959,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        request,
        userPromptId,
        true,
-@@ -505,8 +608,17 @@
+@@ -505,8 +613,17 @@
        async (openaiRequest, context, telemetryAttempt) => {
 -        // Always use a per-request controller so the inactivity watchdog can
 -        // abort the SDK request even when the caller did not provide a signal.
@@ -177794,7 +177979,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
          let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
          try {
            // Stage 1: Create OpenAI stream. Wrapped in try so a network /
-@@ -586,19 +698,9 @@
+@@ -586,19 +703,9 @@
 -        // Two guards wrap the stream (the SDK `timeout` only bounds connect +
 -        // first response). The inactivity watchdog aborts + surfaces a
 -        // retryable ETIMEDOUT after `idleMs` of no chunks; the lifetime cap
@@ -177823,7 +178008,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +          () => perRequestAc.abort(),
 +          parentSignal,
 +        );
-@@ -608,13 +710,12 @@
+@@ -608,14 +715,14 @@
          // once the stream is fully consumed or abandoned, releasing the SDK
          // request and any parent listener.
          const innerStream = this.processStreamWithLogging(
@@ -177832,12 +178017,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
            request,
 -          userPromptId,
            telemetryAttempt,
++          providerOutputContext.getStore(),
          );
          async function* drainThenCleanup(): AsyncGenerator<GenerateContentResponse> {
            try {
              yield* innerStream;
            } finally {
-@@ -635,192 +736,95 @@
+             perRequestAc.abort();
+@@ -635,192 +742,97 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -177846,6 +178033,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      request: GenerateContentParameters,
 -    userPromptId: string,
      telemetryAttempt: GenAiAttemptHandle | undefined,
++    providerOutput: ProviderOutput | undefined,
    ): AsyncGenerator<GenerateContentResponse> {
 -    // State for handling chunk merging.
 -    // pendingFinishResponse holds a finish chunk waiting to be merged with
@@ -177894,6 +178082,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -        // Some providers return errors (e.g., TPM throttling) as a normal SSE chunk
 -        // with finish_reason="error_finish" and the error in delta.content,
 -        // instead of returning a proper HTTP error status.
++        providerOutput?.observe(chunk);
          if ((chunk.choices?.[0]?.finish_reason as string) === 'error_finish') {
 -          const errorContent =
 -            chunk.choices?.[0]?.delta?.content?.trim() ||
@@ -178100,7 +178289,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +833,18 @@
+@@ -829,16 +841,18 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -178126,7 +178315,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -845,9 +851,9 @@
+@@ -845,9 +859,9 @@
            isLifetime
 -            ? 'OpenAI stream lifetime cap exceeded'
 +            ? 'OpenAI stream generation bound exceeded'
@@ -178138,7 +178327,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              // the log reconcile the same way the error message does.
              wallClockMs: error.streamLifetimeMs,
              ...(isLifetime
-@@ -858,100 +864,19 @@
+@@ -858,100 +872,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -178240,7 +178429,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -991,13 +916,12 @@
+@@ -991,13 +924,12 @@
        // classifier's respond_in_schema) can force the model to emit a tool
        // call instead of free-texting. Without this, thinking-heavy models
        // may consume the tiny output budget on reasoning and skip the tool.
@@ -178259,7 +178448,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        }
      }
  
-@@ -1029,13 +953,13 @@
+@@ -1029,13 +961,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -178274,7 +178463,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +971,14 @@
+@@ -1047,15 +979,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -178292,7 +178481,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1096,20 @@
+@@ -1173,12 +1104,20 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -178313,7 +178502,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,13 +1249,13 @@
+@@ -1318,13 +1257,13 @@
    }
  
    /**
@@ -178328,7 +178517,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        openaiRequest: OpenAI.Chat.ChatCompletionCreateParams,
        context: RequestContext,
        telemetryAttempt: GenAiAttemptHandle | undefined,
-@@ -1400,13 +1331,16 @@
+@@ -1400,13 +1339,16 @@
     * Create request context with common properties
     */
    private createRequestContext(
@@ -178346,7 +178535,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1348,21 @@
+@@ -1414,15 +1356,21 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -183289,7 +183478,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    const providerCallId = request.providerCallId ?? request.callId;
    const message = duplicateProviderToolCallMessage(providerCallId);
    return {
-@@ -345,58 +647,226 @@
+@@ -345,62 +647,252 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -183370,9 +183559,15 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  status: CompressionStatus;
 +  /** Validated backend counts, or null when none were served before failure. */
 +  usage: ServedUsage | null;
-+  /** Observed text and reasoning, including an interrupted prefix, verbatim. */
-+  summary: string;
++  /** Converted text and reasoning; rawResponses retains the provider objects. */
++  text: string;
 +  reasoning: string;
++  /** Provider output before validation or argument parsing, in arrival order. */
++  rawResponses: readonly string[];
++  /** Rendered candidate request size, or null when no count was obtained. */
++  newTokenCount: number | null;
++  /** Measured snapshot bytes, or null when no complete snapshot was declared. */
++  snapshotBytes: number | null;
 +  /**
 +   * Calls the candidate's output limit stopped, exactly as served -- a
 +   * snapshot call cut before it was complete among them; empty when none.
@@ -183388,9 +183583,15 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  maxOutputTokens: number;
 +  /** Validated backend counts, or null when none were served before failure. */
 +  usage: ServedUsage | null;
-+  /** Observed text and reasoning, including an interrupted prefix, verbatim. */
-+  summary: string;
++  /** Converted text and reasoning; rawResponses retains the provider objects. */
++  text: string;
 +  reasoning: string;
++  /** Provider output before validation or argument parsing, in arrival order. */
++  rawResponses: readonly string[];
++  /** Rendered candidate request size, or null when no count was obtained. */
++  newTokenCount: number | null;
++  /** Measured snapshot bytes, or null when no complete snapshot was declared. */
++  snapshotBytes: number | null;
 +  /**
 +   * Calls the candidate's output limit stopped, exactly as served -- a
 +   * snapshot call cut before it was complete among them; empty when none.
@@ -183402,6 +183603,8 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +}
 +
  export interface ChatCompressionInfo {
++  /** Exact committed composition, including retained inputs and pending parts. */
++  postCompactionHistory?: Content[];
    originalTokenCount: number;
    newTokenCount: number;
 -  /** Whether newTokenCount ultimately came from a local estimate. */
@@ -183468,6 +183671,8 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 + * failure cannot be read as a compaction that never happened.
 + */
 +export interface CompactionRecord {
++  /** Runtime composition, separate from the model's verbatim output. */
++  postCompactionHistory: Content[] | null;
 +  /** `CompressionStatus` member name, e.g. `COMPRESSED`. */
 +  status: string;
 +  /** True only when the compacted history replaced the original. */
@@ -183503,6 +183708,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  info: ChatCompressionInfo,
 +): CompactionRecord {
 +  return {
++    postCompactionHistory: info.postCompactionHistory ?? null,
 +    status: compressionStatusName(info.compressionStatus),
 +    succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,
 +    originalTokenCount: info.originalTokenCount,
@@ -183535,7 +183741,6 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    type: GeminiEventType.Finished;
    value: GeminiFinishedEventValue;
  };
-@@ -403,4 +873,9 @@
  
 +export type ServerGeminiIncompleteToolCallEvent = {
 +  type: GeminiEventType.IncompleteToolCall;
@@ -183545,7 +183750,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  export type ServerGeminiLoopDetectedEvent = {
    type: GeminiEventType.LoopDetected;
    // The loop type is optional so historical call sites that don't produce one
-@@ -450,29 +925,29 @@
+@@ -450,29 +942,29 @@
  };
  
  // The original union type, now composed of the individual types
@@ -183577,7 +183782,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    response: GenerateContentResponse,
  ): ServerGeminiContentPart[] {
    const parts = response.candidates?.[0]?.content?.parts ?? [];
-@@ -525,61 +1000,86 @@
+@@ -525,61 +1017,86 @@
    async *run(
      model: string,
      req: PartListUnion,
@@ -183693,7 +183898,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  
          // Surface auto-compaction that fired inside chat.sendMessageStream
          // as the top-level ChatCompressed event so existing UI handlers stay
-@@ -656,6 +1156,12 @@
+@@ -656,6 +1173,12 @@
              this.pendingCitations.clear();
            }
  
@@ -193378,7 +193583,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1838 @@
+@@ -1,4405 +1,1877 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -193523,8 +193728,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +}
 +
 +/**
-+ * An accepted call's block with all_user_messages left empty: what acceptance
-+ * measures and what the record keeps.
++ * The empty-slot rendering used only to measure a snapshot's own byte bound.
 + */
 +function snapshot(body = 'complete state'): string {
 +  return stateSnapshotText(snapshotSections(body));
@@ -193559,6 +193763,28 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +  overrides: Partial<GenerateTextResult> = {},
 +): GenerateTextResult {
 +  return {
++    rawResponses: [
++      JSON.stringify({
++        choices: [
++          {
++            message: {
++              content: overrides.text ?? '',
++              reasoning_content: overrides.thoughtText ?? '',
++              tool_calls: (overrides.functionCalls ?? [snapshotCall()]).map(
++                (call) => ({
++                  id: call.id,
++                  type: 'function',
++                  function: {
++                    name: call.name,
++                    arguments: JSON.stringify(call.args),
++                  },
++                }),
++              ),
++            },
++          },
++        ],
++      }),
++    ],
 +    text: '',
 +    requestAttempts: 1,
 +    thoughtText: '',
@@ -196900,13 +197126,16 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(harness.generateText).toHaveBeenCalledTimes(2);
 +    // The accepted draw is the one `output` describes; the refused one is
 +    // kept beside it with the cost it had already incurred.
-+    expect(result.info.output?.summary).toBe(snapshot());
++    expect(result.info.output?.text).toBe('');
 +    expect(result.info.rejectedAttempts).toEqual([
 +      {
 +        status: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 +        usage: refused.usage,
-+        summary: `no snapshot: expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received 0`,
++        text: refused.text,
 +        reasoning: '',
++        rawResponses: refused.rawResponses,
++        newTokenCount: null,
++        snapshotBytes: null,
 +        incompleteToolCalls: [],
 +        finishReason: FinishReason.STOP,
 +        requestAttempts: 1,
@@ -196933,8 +197162,11 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      {
 +        status: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
 +        usage: refused.usage,
-+        summary: snapshot(long),
++        text: refused.text,
 +        reasoning: '',
++        rawResponses: refused.rawResponses,
++        newTokenCount: null,
++        snapshotBytes: Buffer.byteLength(snapshot(long)),
 +        incompleteToolCalls: [],
 +        finishReason: FinishReason.STOP,
 +        requestAttempts: 1,
@@ -197176,6 +197408,10 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      const result = await compress(harness);
 +
 +      expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++      if ('newTokenCount' in refusal) {
++        expect(result.info.rejectedAttempts[0].newTokenCount)
++          .toBe(refusal.newTokenCount);
++      }
 +      const [first, redraw] = harness.generateText.mock.calls.map(
 +        ([options]) => options as GenerateTextOptions,
 +      );
@@ -197328,6 +197564,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +            new GenerationTextFailure(
 +              'stream died',
 +              {
++                rawResponses: [],
 +                text: '',
 +                thoughtText: '',
 +                usage: undefined,
@@ -198114,7 +198351,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      },
 +      requestAttempts: 1,
 +      reasoning: 'Let me first list every file the user touched...',
-+      summary: `no snapshot: expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received 0`,
++      text: '',
++      rawResponses: summaryResult({
++        functionCalls: [],
++        thoughtText: 'Let me first list every file the user touched...',
++      }).rawResponses,
++      newTokenCount: null,
++      snapshotBytes: null,
 +      incompleteToolCalls: [],
 +      finishReason: FinishReason.MAX_TOKENS,
 +    };
@@ -198845,7 +199088,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      expect(result.info.compressionStatus).toBe(
 +        CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +      );
-+      expect(result.info.output?.summary).toBe(snapshot());
++      expect(result.info.output?.text).toBe('');
 +      expect(result.info.warning).toContain('Telemetry unavailable');
 +    } finally {
 +      logger.mockRestore();
@@ -199232,6 +199475,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -          status: 'running',
 -          startTime: 7,
 -          isBackgrounded: true,
++          rawResponses: [],
 +          requestAttempts: 1,
 +          text: 'partial',
 +          thoughtText: 'reasoning',
@@ -199289,7 +199533,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    const result = await compress(harness, { signal: controller.signal });
 +    expect(result.newHistory).toBeNull();
 +    expect(result.info.output).toMatchObject({
-+      summary: 'partial',
++      text: 'partial',
 +      reasoning: 'reasoning',
 +      usage: null,
 +      finishReason: null,
@@ -200157,7 +200401,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +446,746 @@
+@@ -509,619 +446,754 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -200817,6 +201061,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          kind: 'accepted';
 +          accounting: AttemptAccounting;
 +          extraHistory: Content[];
++          renderedSnapshot: string;
 +          newTokenCount: number;
 +        }
 +      | {
@@ -200849,8 +201094,11 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    ): CompactionOutputAccounting => ({
 +      maxOutputTokens: compactionOutputBudget,
 +      usage: attempt.usage,
-+      summary: attempt.summary,
++      text: attempt.text,
 +      reasoning: attempt.reasoning,
++      rawResponses: attempt.rawResponses,
++      newTokenCount: attempt.newTokenCount,
++      snapshotBytes: attempt.snapshotBytes,
 +      incompleteToolCalls: attempt.incompleteToolCalls,
 +      finishReason: attempt.finishReason,
 +      requestAttempts: attempt.requestAttempts,
@@ -200904,8 +201152,11 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          }
 +          accounting = {
 +            usage,
-+            summary: partial.text,
++            text: partial.text,
 +            reasoning: partial.thoughtText,
++            rawResponses: partial.rawResponses,
++            newTokenCount: null,
++            snapshotBytes: null,
 +            incompleteToolCalls: partial.incompleteToolCalls,
 +            finishReason: partial.finishReason ?? null,
 +            requestAttempts: partial.requestAttempts,
@@ -200925,18 +201176,17 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        summaryResult.functionCalls,
 +        partition.inlineBlockBytes,
 +      );
-+      // What the draw produced, as the record keeps it: the snapshot it
-+      // declared, rendered, whether it was accepted or refused for its
-+      // length; or, when it declared no complete snapshot, why not.
-+      const summary = acceptance.snapshot
-+        ? stateSnapshotText(acceptance.snapshot)
-+        : acceptance.refused === 'over_bound'
-+          ? acceptance.rendered
-+          : `no snapshot: ${acceptance.refusal}`;
 +      const accounting: AttemptAccounting = {
 +        usage: summaryUsage,
-+        summary,
++        text: summaryResult.text,
 +        reasoning: summaryResult.thoughtText,
++        rawResponses: summaryResult.rawResponses,
++        newTokenCount: null,
++        snapshotBytes: acceptance.snapshot
++          ? tokenizerText(stateSnapshotText(acceptance.snapshot)).bytes
++          : acceptance.refused === 'over_bound'
++            ? acceptance.bytes
++            : null,
 +        // A draw its ceiling stopped mid-call made no snapshot, and what it
 +        // had written of one is its own output: kept as served.
 +        incompleteToolCalls: summaryResult.incompleteToolCalls,
@@ -201199,6 +201449,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -            );
          }
 +        newTokenCount = candidateCount.totalTokens;
++        accounting.newTokenCount = newTokenCount;
 +      } catch (error) {
 +        // Counting is the tokenizer's answer about a rendered request. A
 +        // failure here is the counter being unavailable or disagreeing about
@@ -201272,6 +201523,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        kind: 'accepted',
 +        accounting,
 +        extraHistory,
++        renderedSnapshot: stateSnapshotText(acceptance.snapshot),
 +        newTokenCount,
        };
 -    } else if (!canCalculateNewTokenCount) {
@@ -201404,7 +201656,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        .getHookSystem()
 +        ?.firePostCompactEvent(
 +          postCompactTrigger,
-+          (outcome.accounting.summary ?? '').trim(),
++          outcome.renderedSnapshot.trim(),
 +          signal,
 +        );
 +    } catch (error) {
@@ -214169,7 +214421,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    }
  
    async function writeRawTranscript(content: string): Promise<string> {
-@@ -124,12 +129,75 @@
+@@ -124,12 +129,88 @@
      );
      await fs.mkdir(chatsDir, { recursive: true });
      const filePath = path.join(chatsDir, `${sessionId}.jsonl`);
@@ -214210,6 +214462,19 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +            originalTokenCount: 1000,
 +            newTokenCount: 200,
 +            rejectedAttempts: [],
++            postCompactionHistory: composed,
++            output: {
++              text: 'Evidence only; never append this as a conversation turn.',
++              reasoning: 'Verbatim reasoning.',
++              rawResponses: ['{"choices":[{"message":{"content":"evidence only"}}]}'],
++              newTokenCount: 200,
++              snapshotBytes: 100,
++              maxOutputTokens: 300,
++              requestAttempts: 1,
++              finishReason: 'STOP',
++              incompleteToolCalls: [],
++              usage: null,
++            },
 +          },
 +          compressedHistory: composed,
 +        },
@@ -214245,7 +214510,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    // once a record's text reached 10+ chars; a base + per-record offset keeps
    // every timestamp valid and strictly increasing regardless of count.
    const RECORD_BASE_MS = Date.UTC(2026, 0, 1, 0, 0, 0);
-@@ -225,12 +293,211 @@
+@@ -225,12 +306,211 @@
      expect(page.filePath).toBe(filePath);
      const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
      expect(page.startTime).toMatch(ISO_8601);
@@ -214457,7 +214722,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([invalidTimestamp]);
  
      const page = await new SessionTranscriptReader(workspaceDir).readPage(
-@@ -720,25 +987,32 @@
+@@ -720,25 +1000,32 @@
      const firstAssistant: ChatRecord = {
        ...record('a1', 'u1', 'first answer'),
        usageMetadata: {
@@ -214491,7 +214756,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const telemetry: ChatRecord = {
        ...record('telemetry', 'compression', ''),
        type: 'system',
-@@ -876,14 +1150,14 @@
+@@ -876,14 +1163,14 @@
      expect(loaded).toBeDefined();
      expect(projection).toBeDefined();
      expect(projection?.replay).toBeUndefined();
@@ -214508,7 +214773,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      );
      expect(projection?.runtime.artifactSnapshot).toEqual(
        loaded?.artifactSnapshot,
-@@ -1387,23 +1661,31 @@
+@@ -1387,23 +1674,31 @@
  
    it('uses the aggregated final usage metadata when selecting resume tokens', async () => {
      const earlier = record('a1', 'u1', 'earlier answer');
@@ -214540,7 +214805,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        earlier,
        record('u2', 'a1', 'second'),
        latest,
-@@ -1417,17 +1699,17 @@
+@@ -1417,17 +1712,17 @@
        service.loadSession(sessionId),
        service.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
@@ -214562,7 +214827,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    it('ignores a later non-snapshot attribution record like the full loader', async () => {
      const snapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1529,13 +1811,13 @@
+@@ -1529,13 +1824,13 @@
          },
        ),
      ).rejects.toBeInstanceOf(RangeError);
@@ -214577,7 +214842,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
        }),
-@@ -1543,13 +1825,13 @@
+@@ -1543,13 +1838,13 @@
  
      await writeRawTranscript('{not-json}\n');
      await expect(
@@ -214592,7 +214857,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(
          sessionId,
          { replay: { kind: 'none' } },
-@@ -1643,28 +1925,28 @@
+@@ -1643,28 +1938,28 @@
            activeTimeMs: 0,
            createdAt: 1,
            updatedAt: 1,
@@ -214626,7 +214891,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        systemPayload: validGoal,
      };
      const malformed: ChatRecord = {
-@@ -1677,13 +1959,13 @@
+@@ -1677,13 +1972,13 @@
          cause: 'create',
          snapshot: null,
        } as unknown as ChatRecord['systemPayload'],
@@ -214641,7 +214906,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const projection = await new SessionTranscriptReader(
-@@ -1694,17 +1976,17 @@
+@@ -1694,17 +1989,17 @@
        kind: 'v2',
        payload: validGoal,
      });
@@ -214661,7 +214926,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        expect.objectContaining({ uuid: 'valid-goal', systemPayload: validGoal }),
        expect.objectContaining({ uuid: 'malformed-goal', systemPayload: null }),
      ]);
-@@ -1811,14 +2093,14 @@
+@@ -1811,14 +2106,14 @@
      expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
        'qwen-code.daemon.session_restore.index_cache_state',
        'hit',
@@ -214678,7 +214943,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        message: undefined,
        systemPayload: {
          rawCommand: '/goal keep the live goal visible',
-@@ -1831,13 +2113,13 @@
+@@ -1831,13 +2126,13 @@
              iterations: 0,
            },
          ],
@@ -214693,7 +214958,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a2', 'u2', 'two answer'),
      ]);
  
-@@ -2323,23 +2605,22 @@
+@@ -2323,23 +2618,22 @@
            position: 999,
          }),
        }),
@@ -214723,7 +214988,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('u1', null, ' world'),
-@@ -2355,36 +2636,25 @@
+@@ -2355,36 +2649,25 @@
        { text: 'hello' },
        { text: ' world' },
      ]);
@@ -214767,7 +215032,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('a1', 'u1', 'reply'),
-@@ -2506,61 +2776,60 @@
+@@ -2506,61 +2789,60 @@
  
      await expect(
        otherReader.readPage(sessionId, { cursor }),
@@ -214860,7 +215125,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const initial = `${JSON.stringify(record('u1', null, 'hello'))}\n`;
      const filePath = await writeRawTranscript(initial);
      const fixed = new Date('2026-02-02T02:02:02.000Z');
-@@ -2643,32 +2912,33 @@
+@@ -2643,32 +2925,33 @@
  
      expect(page.records.map((item) => item.uuid)).toEqual(['u1', 'a1', 'u2']);
      expect(yielded.length).toBeGreaterThanOrEqual(6);
@@ -219986,7 +220251,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/services/state-snapshot.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.ts
-@@ -0,0 +1,319 @@
+@@ -0,0 +1,320 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -220299,8 +220564,9 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +
 +/**
 + * The block with `all_user_messages` left empty: the form acceptance measures
-+ * against the bound, since the inputs it will hold are bounded on their own,
-+ * and the form the record of a draw keeps, since they are not the draw's.
++ * against the bound, since the inputs it will hold are bounded on their own.
++ * Evidence retains the provider's output and the committed composition as
++ * separate facts; this measurement rendering is neither of them.
 + */
 +export function stateSnapshotText(snapshot: StateSnapshot): string {
 +  const { opening, closing } = renderStateSnapshot(snapshot);
@@ -239301,7 +239567,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
      it('preserves subagent tool protocol payloads in non-interactive mode', async () => {
        vi.mocked(config.isInteractive).mockReturnValue(false);
-@@ -5283,13 +6617,170 @@
+@@ -5283,13 +6617,174 @@
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
@@ -239397,6 +239663,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +          round: 4,
 +          compaction: {
 +            status: 'COMPRESSED',
++            postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
 +            succeeded: true,
 +            originalTokenCount: 198_400,
 +            newTokenCount: 32_118,
@@ -239412,6 +239679,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +          round: 9,
 +          compaction: {
 +            status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
++            postCompactionHistory: null,
 +            succeeded: false,
 +            originalTokenCount: 205_112,
 +            newTokenCount: 205_112,
@@ -239441,6 +239709,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      expect(withBoth.at(-1)?.compactions).toEqual([
 +        {
 +          status: 'COMPRESSED',
++          postCompactionHistory: [{ role: 'user', parts: [{ text: 'snapshot' }] }],
 +          succeeded: true,
 +          originalTokenCount: 198_400,
 +          newTokenCount: 32_118,
@@ -239450,6 +239719,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +        },
 +        {
 +          status: 'COMPRESSION_FAILED_EMPTY_SUMMARY',
++          postCompactionHistory: null,
 +          succeeded: false,
 +          originalTokenCount: 205_112,
 +          newTokenCount: 205_112,
@@ -239473,7 +239743,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
        const invocation = createInvocationWithEventDrivenAgent((emitter) => {
          emitter.emit(AgentEventType.TOOL_CALL, {
-@@ -5326,16 +6817,107 @@
+@@ -5326,16 +6821,107 @@
        );
        const toolCall = resultSnapshot?.toolCalls?.find(
          (entry) => entry.callId === 'call-read-1',
@@ -239583,7 +239853,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // can't serialize functions).
        const snapshots: Array<{
          hasPendingConfirmation: boolean;
-@@ -5590,12 +7172,15 @@
+@@ -5590,12 +7176,15 @@
      beforeEach(() => {
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
@@ -239599,7 +239869,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // whose getEventEmitter() yields a minimal on/off surface so the
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
-@@ -5641,13 +7226,13 @@
+@@ -5641,13 +7230,13 @@
          .fn()
          .mockReturnValue(true);
        (config as unknown as Record<string, unknown>)[
@@ -239614,7 +239884,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        ] = vi.fn();
        (mockAgent as unknown as Record<string, unknown>)[
          'setExternalMessageWaiter'
-@@ -5670,15 +7255,15 @@
+@@ -5670,15 +7259,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -239633,7 +239903,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Background agent launched');
        expect(llmText).toContain(
          `Use ${ToolNames.SEND_MESSAGE} to continue this agent`,
-@@ -5724,44 +7309,53 @@
+@@ -5724,44 +7313,53 @@
            }),
          }),
        );
@@ -239697,7 +239967,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            modelConfigOverrides: { model: 'mapped-model' },
          }),
        );
-@@ -5783,86 +7377,86 @@
+@@ -5783,86 +7381,86 @@
              authType: AuthType.USE_ANTHROPIC,
            },
          },
@@ -239812,7 +240082,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
          setAgentLifecycleCallback: ReturnType<typeof vi.fn>;
-@@ -5899,15 +7493,15 @@
+@@ -5899,15 +7497,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -239831,7 +240101,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
          setAgentLifecycleCallback: ReturnType<typeof vi.fn>;
-@@ -5942,19 +7536,19 @@
+@@ -5942,19 +7540,19 @@
          );
        });
        expect(mockSubagentDispose).toHaveBeenCalledOnce();
@@ -239858,7 +240128,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalledTimes(1);
        });
  
-@@ -5975,12 +7569,13 @@
+@@ -5975,12 +7573,13 @@
        expect(mockContextState.set).toHaveBeenCalledWith(
          'task_prompt',
          'Now inspect the helper',
@@ -239872,7 +240142,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            modelConfigOverrides: { model: 'parent-model' },
            runtimeAuthOverrides: expect.objectContaining({
              authType: 'openai',
-@@ -5991,19 +7586,19 @@
+@@ -5991,19 +7590,19 @@
      });
  
      it('claims finishing-window input before publishing completion', async () => {
@@ -239899,7 +240169,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalledOnce();
        });
  
-@@ -6017,19 +7612,19 @@
+@@ -6017,19 +7616,19 @@
          vi.mocked(mockAgent.executeExternalInputs).mock.invocationCallOrder[0],
        ).toBeLessThan(mockRegistry.complete.mock.invocationCallOrder[0]!);
      });
@@ -239926,7 +240196,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
        });
  
-@@ -6045,19 +7640,19 @@
+@@ -6045,19 +7644,19 @@
  
      it('does not retain an agent whose frontmatter hooks are globally registered', async () => {
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -239953,7 +240223,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
          expect(mockSubagentDispose).toHaveBeenCalledOnce();
        });
-@@ -6073,19 +7668,19 @@
+@@ -6073,19 +7672,19 @@
            }),
        );
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -239980,7 +240250,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        releaseExecution?.();
        await vi.waitFor(() => {
          expect(mockRegistry.complete).toHaveBeenCalled();
-@@ -6097,19 +7692,19 @@
+@@ -6097,19 +7696,19 @@
      it('disposes an idle AUTO resident if the parent leaves AUTO mode', async () => {
        vi.mocked(config.getApprovalMode).mockReturnValue(ApprovalMode.AUTO);
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -240007,7 +240277,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
        });
        const resident = mockRegistry.registerResidentAgent.mock.calls[0]?.[1] as
-@@ -6119,13 +7714,16 @@
+@@ -6119,13 +7718,16 @@
        expect(mockSubagentDispose).not.toHaveBeenCalled();
  
        vi.mocked(config.getApprovalMode).mockReturnValue(ApprovalMode.DEFAULT);
@@ -240025,7 +240295,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const fgSubagent: SubagentConfig = {
          ...bgSubagent,
          name: 'file-search',
-@@ -6137,15 +7735,15 @@
+@@ -6137,15 +7739,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -240044,7 +240314,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Background agent launched');
        expect(mockRegistry.register).toHaveBeenCalled();
      });
-@@ -6157,19 +7755,19 @@
+@@ -6157,19 +7759,19 @@
          background: undefined,
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -240071,7 +240341,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'Background agent launched',
        );
        expect(mockRegistry.register).toHaveBeenCalled();
-@@ -6189,21 +7787,21 @@
+@@ -6189,21 +7791,21 @@
          background: undefined,
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -240102,7 +240372,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // the background registry path.
        expect(partToString(result.llmContent)).not.toContain(
          'Background agent launched',
-@@ -6211,20 +7809,20 @@
+@@ -6211,20 +7813,20 @@
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
@@ -240131,7 +240401,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6240,20 +7838,20 @@
+@@ -6240,20 +7842,20 @@
          name: 'file-search',
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -240160,7 +240430,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6268,17 +7866,19 @@
+@@ -6268,17 +7870,19 @@
          description: 'Start monitor from a nested sub-agent',
          prompt: 'Watch for changes',
          subagent_type: 'monitor',
@@ -240185,7 +240455,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('run_in_background: true');
        expect(llmText).toContain('not supported from within a sub-agent');
        expect(result.error?.message).toBe(llmText);
-@@ -6293,22 +7893,24 @@
+@@ -6293,22 +7897,24 @@
        expect(mockRegistry.register).not.toHaveBeenCalled();
        expect(mockRegistry.tryReserveBackgroundSlot).not.toHaveBeenCalled();
      });
@@ -240219,7 +240489,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6319,31 +7921,44 @@
+@@ -6319,31 +7925,44 @@
        const errorMessage =
          'Cannot start background agent: maximum concurrent background agents ' +
          '(1) reached. Stop an existing agent first.';
@@ -240269,7 +240539,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        } finally {
          attachSpy.mockRestore();
        }
-@@ -6367,15 +7982,15 @@
+@@ -6367,15 +7986,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -240288,7 +240558,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockHookSystem.fireSubagentStartEvent).toHaveBeenCalledOnce();
        expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledWith(
          expect.stringContaining('monitor-'),
-@@ -6415,15 +8030,15 @@
+@@ -6415,15 +8034,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -240307,7 +240577,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        });
        await Promise.resolve();
  
-@@ -6471,18 +8086,18 @@
+@@ -6471,18 +8090,18 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -240330,7 +240600,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
        await vi.waitFor(() => {
          expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledWith(
-@@ -6511,15 +8126,15 @@
+@@ -6511,15 +8130,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -240349,7 +240619,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).not.toContain('Background agent launched');
        // Foreground subagents register in the same registry with
        // isBackgrounded: false so the pill+dialog can surface them while
-@@ -6569,20 +8184,20 @@
+@@ -6569,20 +8188,20 @@
          name: 'file-search',
          background: undefined,
        };
@@ -240378,7 +240648,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6608,15 +8223,15 @@
+@@ -6608,15 +8227,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -240397,7 +240667,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const agentId = mockRegistry.register.mock.calls[0][0].agentId as string;
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
-@@ -6687,15 +8302,15 @@
+@@ -6687,15 +8306,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -240416,7 +240686,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.objectContaining({
            isBackgrounded: false,
            outputFile: expect.stringMatching(
-@@ -6707,16 +8322,24 @@
+@@ -6707,16 +8326,24 @@
          }),
        );
        // Writer attached to the AgentTool's emitter so foreground tool
@@ -240443,7 +240713,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // discovery can surface paused foreground runs.
        expect(writeMetaSpy).toHaveBeenCalledWith(
          expect.stringMatching(/agent-file-search-.*\.meta\.json$/),
-@@ -6731,7 +8354,6 @@
+@@ -6731,7 +8358,6 @@
              screenReader: false,
              model: 'subagent-model',
              maxSessionTurns: -1,
@@ -240451,7 +240721,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
              maxSubagentDepth: 5,
            }),
          }),
-@@ -6780,15 +8402,15 @@
+@@ -6780,15 +8406,15 @@
            description: 'Search files',
            prompt: 'Find all TypeScript files',
            subagent_type: 'file-search',
@@ -240470,7 +240740,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            expect.stringMatching(/agent-file-search-.*\.meta\.json$/),
            expect.objectContaining({ status: expectedStatus }),
          );
-@@ -6820,15 +8442,15 @@
+@@ -6820,15 +8446,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -240489,7 +240759,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Agent was cancelled by the user.');
        expect(llmText).toContain('halfway through');
      });
-@@ -6841,57 +8463,55 @@
+@@ -6841,57 +8467,55 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -240563,7 +240833,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        await invocation.execute();
  
        expect(mockRegistry.register).toHaveBeenCalledWith(
-@@ -6932,15 +8552,15 @@
+@@ -6932,15 +8556,15 @@
          const params: AgentParams = {
            description: 'Start monitor',
            prompt: 'Watch for changes',
@@ -240582,7 +240852,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          await invocation.execute();
  
          const meta = readSidecar('monitor-top-1');
-@@ -6952,22 +8572,26 @@
+@@ -6952,22 +8576,26 @@
          const params: AgentParams = {
            description: 'Start monitor',
            prompt: 'Watch for changes',
@@ -240615,7 +240885,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(meta.parentSessionId).toBe('test-session-id');
          expect(meta.toolUseId).toBe('nested-1');
        });
-@@ -7022,38 +8646,43 @@
+@@ -7022,38 +8650,43 @@
          const attachSpy = vi.spyOn(transcript, 'attachJsonlTranscriptWriter');
          const writeMetaSpy = vi.spyOn(transcript, 'writeAgentMeta');
          const createSpy = vi
@@ -276975,7 +277245,7 @@ diff --git a/packages/core/src/utils/retryErrorClassification.ts b/packages/core
 diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packages/core/src/utils/runtime-contract-admission.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.test.ts
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,230 @@
 +import { describe, expect, it } from 'vitest';
 +import {
 +  RuntimeContractAdmission,
@@ -276994,6 +277264,107 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +});
 +
 +describe('required runtime admission', () => {
++  it('requires complete compaction evidence and keeps raw arguments and committed parts intact', () => {
++    const raw = JSON.stringify({
++      choices: [
++        {
++          message: {
++            tool_calls: [
++              {
++                function: {
++                  name: 'state_snapshot',
++                  arguments: ' { "intent" : "verbatim" } ',
++                },
++              },
++            ],
++          },
++        },
++      ],
++    });
++    const draw = {
++      text: '  visible narration\n',
++      reasoning: ' reasoning ',
++      rawResponses: [raw],
++      newTokenCount: 12,
++      snapshotBytes: 8,
++      requestAttempts: 1,
++      finishReason: 'STOP',
++      incompleteToolCalls: [],
++      usage: {
++        promptTokenCount: 24,
++        candidatesTokenCount: 4,
++        thoughtsTokenCount: 1,
++        cachedContentTokenCount: 0,
++        totalTokenCount: 28,
++      },
++    };
++    const record = {
++      type: 'system',
++      subtype: 'compaction',
++      uuid: 'compaction',
++      session_id: 'session',
++      parent_tool_use_id: null,
++      data: {
++        status: 'COMPRESSED',
++        succeeded: true,
++        originalTokenCount: 24,
++        newTokenCount: 12,
++        triggerReason: 'token_limit',
++        output: { ...draw, maxOutputTokens: 16 },
++        rejectedAttempts: [
++          {
++            ...draw,
++            status: 'COMPRESSION_FAILED_INFLATED_TOKEN_COUNT',
++            newTokenCount: 30,
++          },
++        ],
++        postCompactionHistory: [
++          {
++            role: 'user',
++            parts: [
++              { text: '<all_user_messages>\n' },
++              { text: 'Original input\n' },
++              { text: '</all_user_messages>' },
++            ],
++          },
++        ],
++      },
++    };
++    expect(new RuntimeContractAdmission().admit(record)).toBe(
++      JSON.stringify(record),
++    );
++    for (const key of [
++      'text',
++      'rawResponses',
++      'newTokenCount',
++      'snapshotBytes',
++    ]) {
++      for (const select of [
++        (data: typeof record.data) => data.output,
++        (data: typeof record.data) => data.rejectedAttempts[0],
++      ]) {
++        const incomplete = structuredClone(record);
++        delete (select(incomplete.data) as Record<string, unknown>)[key];
++        expect(() => new RuntimeContractAdmission().admit(incomplete)).toThrow(
++          RuntimeContractViolation,
++        );
++      }
++    }
++    for (const data of [
++      { ...record.data, postCompactionHistory: null },
++      { ...record.data, succeeded: false },
++      { ...record.data, unknown_evidence: true },
++      {
++        ...record.data,
++        output: { ...record.data.output, summary: 'synthetic rendering' },
++      },
++    ]) {
++      expect(() =>
++        new RuntimeContractAdmission().admit({ ...record, data }),
++      ).toThrow(RuntimeContractViolation);
++    }
++  });
++
 +  it('retains the offending bytes and failure across an optional subscriber catch', () => {
 +    const owner = new RuntimeContractAdmission();
 +    const malformed = { ...idle(), event: { type: 'unknown' } };
@@ -281899,7 +282270,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
  
  describe('runSideQuery', () => {
    let mockBaseLlmClient: BaseLlmClient;
-@@ -28,12 +29,69 @@
+@@ -28,18 +29,76 @@
        getModel: vi.fn().mockReturnValue('main-model'),
        getFastModel: vi.fn().mockReturnValue(undefined),
        getOutputLanguageFilePath: vi.fn().mockReturnValue(undefined),
@@ -281922,6 +282293,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
 +            ok: true,
 +          });
 +          vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({
++            rawResponses: [],
 +            text: 'answer',
 +            thoughtText: 'full reasoning',
 +            requestAttempts: 1,
@@ -281969,7 +282341,6 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          decision: 'user',
        });
  
-@@ -40,6 +98,6 @@
        const result = await runSideQuery<{ decision: string }>(mockConfig, {
 -        purpose: 'next-speaker',
 -        contents: [{ role: 'user', parts: [{ text: 'Who speaks next?' }] }],
@@ -281978,7 +282349,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          schema: {
            type: 'object',
            properties: { decision: { type: 'string' } },
-@@ -51,15 +109,13 @@
+@@ -51,15 +110,13 @@
        expect(result).toEqual({ decision: 'user' });
        expect(mockBaseLlmClient.generateJson).toHaveBeenCalledWith(
          expect.objectContaining({
@@ -281996,7 +282367,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
  
      it('prefers fastModel when available', async () => {
        vi.mocked(mockConfig.getFastModel).mockReturnValue('fast-model');
-@@ -99,13 +155,13 @@
+@@ -99,13 +156,13 @@
  
        expect(mockBaseLlmClient.generateJson).toHaveBeenCalledWith(
          expect.objectContaining({ model: 'override-model' }),
@@ -282011,7 +282382,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          purpose: 'p',
          contents: [{ role: 'user', parts: [{ text: 'q' }] }],
          schema: {
-@@ -134,17 +190,17 @@
+@@ -134,17 +191,17 @@
          schema: {
            type: 'object',
            properties: { ok: { type: 'boolean' } },
@@ -282031,7 +282402,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
      it('adds the configured output language to JSON side queries', async () => {
        const dir = await mkdtemp(path.join(tmpdir(), 'qwen-side-query-'));
        try {
-@@ -211,30 +267,32 @@
+@@ -211,30 +268,32 @@
        } finally {
          await rm(dir, { recursive: true, force: true });
        }
@@ -282077,12 +282448,14 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
        vi.mocked(mockBaseLlmClient.generateJson).mockResolvedValue({
          status: '',
        });
-@@ -304,16 +362,22 @@
+@@ -303,17 +362,24 @@
+     });
    });
  
    describe('text mode (no schema)', () => {
      function mockTextResult(text: string, withUsage = true) {
        vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({
++        rawResponses: [],
          text,
 +        thoughtText: '',
 +        requestAttempts: 1,
@@ -282100,12 +282473,14 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
        });
      }
  
-@@ -326,24 +390,26 @@
+@@ -325,25 +391,28 @@
+         contents: [{ role: 'user', parts: [{ text: 'recap please' }] }],
          systemInstruction: 'You are a recap generator.',
          abortSignal: abortController.signal,
        });
  
        expect(result).toEqual({
++        rawResponses: [],
          text: 'hello world',
 +        thoughtText: '',
 +        requestAttempts: 1,
@@ -282130,7 +282505,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
  
      it('forwards stream:true to generateText when opted in', async () => {
        mockTextResult('streamed');
-@@ -357,13 +423,13 @@
+@@ -357,13 +426,13 @@
  
        expect(mockBaseLlmClient.generateText).toHaveBeenCalledWith(
          expect.objectContaining({ stream: true }),
@@ -282145,7 +282520,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
          purpose: 'p',
          contents: [{ role: 'user', parts: [{ text: 'q' }] }],
          abortSignal: abortController.signal,
-@@ -416,13 +482,13 @@
+@@ -416,13 +485,13 @@
            validate,
          }),
        ).rejects.toThrow('too short');
@@ -299877,3 +300252,26 @@ diff --git a/packages/cli/src/nonInteractive/io/headless-tool-result-text-projec
 -    HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
 -  );
 -}
+diff --git a/packages/core/src/core/provider-output.ts b/packages/core/src/core/provider-output.ts
+--- /dev/null
++++ b/packages/core/src/core/provider-output.ts
+@@ -0,0 +1,19 @@
++/**
++ * @license
++ * Copyright 2026 Qwen Team
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { AsyncLocalStorage } from 'node:async_hooks';
++
++/** Provider objects before validation, including the exact argument strings. */
++export class ProviderOutput {
++  readonly responses: string[] = [];
++
++  observe(response: unknown): void {
++    this.responses.push(JSON.stringify(response));
++  }
++}
++
++/** A side query retains its output independently of conversion or acceptance. */
++export const providerOutputContext = new AsyncLocalStorage<ProviderOutput>();

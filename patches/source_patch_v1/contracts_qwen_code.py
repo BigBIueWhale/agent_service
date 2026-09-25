@@ -1775,9 +1775,9 @@ def _validate_compaction_event_after(state: State) -> None:
     adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
     helpers_test = "packages/cli/src/utils/nonInteractiveHelpers.test.ts"
 
-    # One projection builds the emitted record, so the main session and every
-    # subagent carry the same field set, and `succeeded` is derived from the
-    # status rather than assumed.
+    # One projection carries each draw's verbatim output and measured size,
+    # and the exact committed history separately. Main and child sessions
+    # use the same fields; an empty-slot rendering cannot stand in for either.
     _require_all(
         state,
         turn,
@@ -1787,6 +1787,10 @@ def _validate_compaction_event_after(state: State) -> None:
             "export function toCompactionRecord(",
             "succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,",
             "ServerGeminiChatCompactionEvent",
+            "postCompactionHistory: info.postCompactionHistory ?? null,",
+            "rawResponses: readonly string[];",
+            "newTokenCount: number | null;",
+            "snapshotBytes: number | null;",
         ),
         label=label,
     )
@@ -1796,6 +1800,29 @@ def _validate_compaction_event_after(state: State) -> None:
         "? info.newTokenCount\n        : info.originalTokenCount",
         label=label,
     )
+    service = "packages/core/src/services/chatCompressionService.ts"
+    _require_all(state, service, (
+        "text: summaryResult.text,",
+        "rawResponses: summaryResult.rawResponses,",
+        "rawResponses: partial.rawResponses,",
+        "accounting.newTokenCount = newTokenCount;",
+        "snapshotBytes: acceptance.snapshot",
+    ), label=label)
+    forbid_text(state, service, "summary: attempt.summary", label=label)
+    _require_ordered(_source(state, chat, label=label), (
+        "info.postCompactionHistory = structuredClone(committedHistory);",
+        "await this.chatRecordingService.recordChatCompression({",
+        "this.history = committedHistory;",
+    ), label=label, location=chat)
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    _require_ordered(_source(state, pipeline, label=label), (
+        "providerOutputContext.getStore()?.observe(openaiResponse);",
+        "OpenAIContentConverter.convertOpenAIResponseToGemini(",
+        "providerOutput?.observe(chunk);",
+        "OpenAIContentConverter.convertOpenAIChunkToGemini(",
+    ), label=label, location=pipeline)
+    require_text(state, "packages/core/src/core/baseLlmClient.ts",
+                 "rawResponses: providerOutput.responses,", count=5, label=label)
     _require_all(
         state,
         "packages/cli/src/ui/hooks/useGeminiStream.ts",
@@ -5261,13 +5288,13 @@ def _validate_compaction_budget_after(state: State) -> None:
             "          functionCallingConfig: {\n            mode: FunctionCallingConfigMode.ANY,\n            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],\n          },",
             "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.inlineBlockBytes,\n      )",
             "if (!acceptance.snapshot) {",
-            # A snapshot refused for its length was not empty. It is recorded
-            # under its own status, with the snapshot it declared, and never
-            # as a draw that produced no summary.
+            # A snapshot refused for its length keeps its raw provider output
+            # and the byte count that exceeded the bound, under its own status.
             "  incomplete: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,",
             "  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,",
             "status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],",
-            "        : acceptance.refused === 'over_bound'\n          ? acceptance.rendered",
+            "rawResponses: summaryResult.rawResponses,",
+            "          : acceptance.refused === 'over_bound'\n            ? acceptance.bytes",
         ),
         label=label,
     )
@@ -5353,7 +5380,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
             "export interface CompactionOutputAccounting {",
             "maxOutputTokens: number;",
             "usage: ServedUsage | null;",
-            "summary: string;",
+            "text: string;",
             "reasoning: string;",
             "finishReason: string | null;",
             "requestAttempts: number;",
@@ -5374,7 +5401,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
         (
             "error instanceof GenerationTextFailure",
             "error.partial.requestAttempts > 0",
-            "summary: partial.text",
+            "text: partial.text",
             "reasoning: partial.thoughtText",
             "finishReason: partial.finishReason ?? null",
             "requestAttempts: partial.requestAttempts",
