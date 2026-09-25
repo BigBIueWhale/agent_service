@@ -39,15 +39,18 @@ def build_patchset(artifact_root: Path) -> PatchSet:
         name: (artifact_root / f"protocol/test-vectors/{name}.json").read_bytes()
         for name in ("goal-state-v1", "partial-stream-v1")
     }
+    schema = (artifact_root / "protocol/stream-contract-v5.json").read_bytes()
 
     def validate_bound_final(state: dict[str, str]) -> None:
         validate_final(state)
         try:
+            if state["packages/sdk-python/src/qwen_code_sdk/stream-contract-v5.json"].encode("utf-8") != schema:
+                raise PatchRefusedError("Python SDK stream schema differs from its authoritative source")
             for name, contents in vectors.items():
                 if state[f"packages/core/src/utils/__fixtures__/{name}.json"].encode("utf-8") != contents:
                     raise PatchRefusedError(f"shared stream test vectors drifted: {name}")
         except (KeyError, TypeError, ValueError) as error:
-            raise PatchRefusedError(f"shared stream test vectors are invalid: {error}") from error
+            raise PatchRefusedError(f"shared stream resources are invalid: {error}") from error
     generated_names = tuple(stage["name"] for stage in GENERATED_STAGES)
     contract_names = tuple(CONTRACTS)
     if set(generated_names) != set(contract_names):

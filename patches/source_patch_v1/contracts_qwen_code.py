@@ -8283,7 +8283,61 @@ def _validate_served_accounting_after(state: State) -> None:
         "self._input_senders.add(sender)", "self._input_senders.discard(sender)",
         "tasks |= self._input_senders - {initiator}", "self._record_failure(result)",
         "if not self._started and self._cleanup_task is None:",
+        "self._record_admission.finish()", "self._record_admission.submitted_input()",
+        "message, self._session_id if self._session_id_locked else None",
     ), label=label)
+    _require_ordered(
+        _source(state, python_sdk + "src/qwen_code_sdk/query.py", label=label).split(
+            "async def _route_message(self, message: Any) -> None:", 1
+        )[1].split("def _maybe_update_session_id", 1)[0],
+        ("self._record_admission.admit(", "if is_control_request(message):",
+         "self._maybe_update_session_id(message)",
+         "await self._message_queue.put(cast(SDKMessage, message))"),
+        label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
+    )
+    _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
+        'joinpath("stream-contract-v5.json").read_bytes()', "Draft7Validator(_SCHEMA)",
+        "require_json_values(record)", "raise self._failure", "expected_session",
+        'identity["stream_contract_sha256"] == STREAM_CONTRACT_SHA256',
+        'session.requests.observe_request(record["request"])',
+        'session.requests.observe_response(record["response"])',
+        'session.requests.summary(record["request_evidence"])',
+        'record["uuid"] not in session.terminal_ids', "partial.observe_origin(origin)",
+        "session.requests.finish()", "partial.finish()", "self._pending_inputs == 0",
+    ), label=label)
+    _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
+        "parse_json_line(body)", "decoder.raw_decode(body, at)",
+        'hashlib.sha256(raw).hexdigest() == request["body_sha256"]',
+        'previous.request_id == representation["base_request_id"]',
+        'previous.segment_id == request["segment_id"]',
+        'record["sequence"] == state.sequence + 1',
+        'base64.b64decode(event["base64"], validate=True)',
+        'event["body_sha256"] == state.digest.hexdigest()',
+        'state.processing_status = event["status"]', "not attempt.accepted",
+        "not self.responses", "not self.root_open and not self.blocks",
+    ), label=label)
+    require_text(state, python_sdk + "src/qwen_code_sdk/json_lines.py",
+                 "object_pairs_hook=_object", label=label)
+    _require_all(state, python_sdk + "tests/unit/test_record_admission.py", (
+        "test_authoritative_request_response_streams", "test_shared_goal_vectors",
+        "test_shared_partial_vectors", "test_request_replay_preserves_raw_json_spelling",
+        "test_delivered_record_mutation_cannot_change_response_owner",
+        "test_duplicate_terminal_cannot_settle_queued_input",
+    ), label=label)
+    require_text(state, core + "utils/runtime-contract-admission.ts",
+                 "Terminal record identity is repeated", label=label)
+    require_text(state, sdk + "src/query/Query.ts",
+                 "this.recordAdmission.admitOutboundControl(message);", count=3, label=label)
+    _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
+        "private requestOriginPublished = false;", "else if (!this.requestOriginPublished)",
+        "request_evidence_origin: origin", "this.requestOriginPublished = true;",
+        "this.requestOriginPublished = false;", "[...initialization, ...requests, message]",
+    ), label=label)
+    _require_ordered(
+        _source(state, cli + "validateNonInterActiveAuth.ts", label=label),
+        ("adapter.emitResult({", "await adapter.flush();", "await runExitCleanup();", "process.exit(1);"),
+        label=label, location=cli + "validateNonInterActiveAuth.ts",
+    )
     _require_all(state, python_sdk + "tests/unit/test_transport.py", (
         "test_read_messages_refuses_malformed_json_after_valid_prefix",
         "test_byte_framing_retains_prefix_and_refuses_invalid_record",
@@ -10125,7 +10179,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "TypeScript and Python SDK byte framing preserves whole records independent of I/O "
             "buffer size and refuses malformed or uncommitted records before admission. A "
             "finalized query cannot accept more work or hide refusal behind abort or cleanup; "
-            "Python startup and input cleanup settle before successful reader termination."
+            "Python startup and input cleanup settle before successful reader termination. "
+            "The Python SDK admits the exact bound schema, replays request bytes and response "
+            "lifetimes, preserves evidence envelopes, and checks partial ownership before delivery. "
+            "Natural EOF refuses open evidence and unmet input/result counts; this count is a "
+            "lower bound, not queued-input causal correlation. Both SDKs validate controls, and "
+            "shared Core admission refuses repeated terminal identities."
+            " Shared JSON writers publish the versioned journal origin before startup errors "
+            "or other first records; authentication exits await output flush."
         ),
         removal_condition=(
             "Upstream supplies durable owned observations, required canonical writers, strict replay, "

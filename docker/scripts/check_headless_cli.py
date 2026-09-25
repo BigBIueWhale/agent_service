@@ -180,6 +180,8 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(stdout.endswith(b"\n"), "CLI emitted an unterminated event")
     certificate = certify(stdout, certifier, runtime / "events.jsonl")
     events = [json.loads(line) for line in stdout.splitlines()]
+    require(not any(event.get("type", "").startswith("control_") for event in events),
+            "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
     request_evidence = require_request_evidence(events, [request["raw_body"] for request in requests if request["path"] == "/v1/chat/completions"])
     require_output_ownership(events)
     response_evidence = require_response_evidence(events, [request for request in requests if request["path"] == "/v1/chat/completions"])

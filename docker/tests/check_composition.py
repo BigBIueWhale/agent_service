@@ -733,6 +733,8 @@ print(json.dumps(found))
         require(events and events.endswith(b"\n"), "captured stream is empty or torn")
         self.certified_events = events
         records = [json.loads(line) for line in events.splitlines()]
+        require(not any(record.get("type", "").startswith("control_") for record in records),
+                "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
         require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require_output_ownership(records)
         responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])

@@ -1175,7 +1175,7 @@ class SourceVectorTransactionTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         artifact_paths = tuple(
             f"protocol/test-vectors/{name}.json" for name in cls.vector_names
-        )
+        ) + ("protocol/stream-contract-v5.json",)
         cls.artifact_bytes = {
             path: (root / path).read_bytes() for path in artifact_paths
         }
@@ -1183,6 +1183,7 @@ class SourceVectorTransactionTests(unittest.TestCase):
             f"packages/core/src/utils/__fixtures__/{name}.json"
             for name in cls.vector_names
         }
+        expected.add("packages/sdk-python/src/qwen_code_sdk/stream-contract-v5.json")
         cls.generated_outputs = {}
         for stage in cls.binding_owner.GENERATED_STAGES:
             for edit in stage["edits"]:
@@ -1312,6 +1313,16 @@ class SourceVectorTransactionTests(unittest.TestCase):
                     f"test vectors drifted: {name}",
                     {path: self.generated_outputs[path] + "\n"},
                 )
+
+    def test_python_schema_drift_refuses_before_writes(self) -> None:
+        path = "packages/sdk-python/src/qwen_code_sdk/stream-contract-v5.json"
+        self._assert_refused(
+            "Python SDK stream schema differs",
+            {path: self.generated_outputs[path] + "\n"},
+        )
+        schema = self.artifact / "protocol/stream-contract-v5.json"
+        schema.write_bytes(schema.read_bytes().replace(b"\n", b"\r\n"))
+        self._assert_refused("Python SDK stream schema differs")
 
 
 
