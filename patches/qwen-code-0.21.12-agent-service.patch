@@ -109165,9 +109165,18 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  import * as path from 'node:path';
  import type { Content, FunctionDeclaration } from '@google/genai';
  import type { Config } from '../config/config.js';
-@@ -22,23 +23,36 @@
+@@ -15,30 +16,45 @@
+   MAX_RETAINED_TERMINAL_AGENTS,
+ } from './background-tasks.js';
+ import { BackgroundAgentResumeService } from './background-agent-resume.js';
+ import {
+   getAgentJsonlPath,
+   getAgentMetaPath,
++  attachJsonlTranscriptWriter,
+   readAgentMeta,
    writeAgentMeta,
  } from './agent-transcript.js';
++import { readCanonicalChatRecords } from '../services/chat-recording-io.js';
  import { ToolNames } from '../tools/tool-names.js';
  import { AgentTerminateMode } from './runtime/agent-types.js';
  import { AgentEventEmitter } from './runtime/agent-events.js';
@@ -109202,7 +109211,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
    let registry: BackgroundTaskRegistry;
  
    beforeEach(() => {
-@@ -175,7 +189,6 @@
+@@ -175,7 +191,6 @@
        getSandbox: () => undefined,
        getScreenReader: () => false,
        getMaxSessionTurns: () => -1,
@@ -109210,7 +109219,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        isTrustedFolder: () => true,
        isInteractive: () => false,
        getSessionId: () => 'session-1',
-@@ -206,6 +219,7 @@
+@@ -206,6 +221,7 @@
        getToolRegistry: () => stubToolRegistry,
        createToolRegistry: vi.fn().mockResolvedValue(overrideToolRegistry),
        getPermissionManager: () => permissionManager,
@@ -109218,7 +109227,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      } as unknown as Config;
  
      return {
-@@ -216,12 +230,39 @@
+@@ -216,12 +232,39 @@
        config,
        permissionManager,
        stubToolRegistry,
@@ -109258,7 +109267,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const completedAgentId = 'agent-completed';
  
      const runningMetaPath = getAgentMetaPath(
-@@ -233,24 +274,26 @@
+@@ -233,24 +276,26 @@
        tempDir,
        sessionId,
        completedAgentId,
@@ -109285,7 +109294,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -262,23 +305,25 @@
+@@ -262,36 +307,44 @@
      });
  
      fs.writeFileSync(
@@ -109310,8 +109319,13 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            sessionId,
            timestamp: '2026-04-20T00:00:01.000Z',
            type: 'assistant',
++          origin: {
++            kind: 'model',
++            kv_scope: 'resume-fixture',
++            attempt_id: 'u2',
++          },
            message: { role: 'model', parts: [{ text: 'Working on it' }] },
-@@ -286,12 +331,13 @@
+         }),
        ].join('\n') + '\n',
        'utf8',
      );
@@ -109325,7 +109339,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          agentId: completedAgentId,
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
-@@ -326,30 +372,31 @@
+@@ -326,30 +379,31 @@
      expect(registry.get(completedAgentId)?.status).toBe('completed');
      expect(onNotification).not.toHaveBeenCalled();
      expect(subagentManager.loadSubagent).toHaveBeenCalledTimes(2);
@@ -109359,7 +109373,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          parentSessionId: item.parentSessionId,
          parentAgentId: null,
          createdAt: '2026-04-20T00:00:00.000Z',
-@@ -366,14 +413,16 @@
+@@ -366,14 +420,16 @@
  
    it('keeps damaged and unsafe retained entries visible but non-continuable', async () => {
      const sessionId = 'session-unsafe';
@@ -109377,7 +109391,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          parentSessionId: sessionId,
          parentAgentId: null,
          createdAt: '2026-04-20T00:00:00.000Z',
-@@ -383,12 +432,13 @@
+@@ -383,12 +439,13 @@
          subagentName: 'researcher',
        });
      }
@@ -109391,7 +109405,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          agentId: wrongCwdId,
          cwd: path.join(tempDir, 'another-workspace'),
          timestamp: '2026-04-20T00:00:00.000Z',
-@@ -397,28 +447,48 @@
+@@ -397,28 +454,48 @@
        }) + '\n',
        'utf8',
      );
@@ -109441,7 +109455,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          'Background task transcript is missing or unreadable.',
      });
      expect(registry.get(wrongCwdId)).toMatchObject({
-@@ -439,12 +509,13 @@
+@@ -439,12 +516,13 @@
    it('preserves model on recovered paused agents for per-model caps', async () => {
      const sessionId = 'session-model';
      const agentId = 'agent-model';
@@ -109455,7 +109469,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -452,12 +523,13 @@
+@@ -452,12 +530,13 @@
        subagentName: 'researcher',
        model: 'qwen3-max',
      });
@@ -109469,7 +109483,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -482,12 +554,13 @@
+@@ -482,12 +561,13 @@
    it('keeps interrupted fork tasks visible as paused entries', async () => {
      const sessionId = 'session-fork';
      const agentId = 'agent-fork';
@@ -109483,7 +109497,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -495,12 +568,13 @@
+@@ -495,12 +575,13 @@
        subagentName: FORK_SUBAGENT_TYPE,
        resolvedApprovalMode: 'default',
      });
@@ -109497,7 +109511,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -527,12 +601,13 @@
+@@ -527,12 +608,13 @@
    it('restores the model from the meta sidecar for per-model cap accounting', async () => {
      const sessionId = 'session-model-resume';
      const agentId = 'agent-model-resume';
@@ -109511,7 +109525,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -541,12 +616,13 @@
+@@ -541,12 +623,13 @@
        resolvedApprovalMode: 'default',
        model: 'gemini-2.5-pro',
      });
@@ -109525,7 +109539,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -566,12 +642,13 @@
+@@ -566,12 +649,13 @@
    it('keeps missing subagents visible so they can be abandoned later', async () => {
      const sessionId = 'session-missing';
      const agentId = 'agent-missing';
@@ -109539,7 +109553,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -579,12 +656,13 @@
+@@ -579,12 +663,13 @@
        subagentName: 'deleted-agent',
        resolvedApprovalMode: 'default',
      });
@@ -109553,7 +109567,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -611,12 +689,13 @@
+@@ -611,12 +696,13 @@
    it('keeps paused tasks resumable when they only carry a stale lastError', async () => {
      const sessionId = 'session-stale-error';
      const agentId = 'agent-stale-error';
@@ -109567,7 +109581,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -625,12 +704,13 @@
+@@ -625,12 +711,13 @@
        resolvedApprovalMode: 'default',
        lastError: 'Temporary resume setup failed',
      });
@@ -109581,7 +109595,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -650,59 +730,65 @@
+@@ -650,59 +737,65 @@
        status: 'paused',
        error: 'Temporary resume setup failed',
      });
@@ -109653,7 +109667,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -710,12 +796,13 @@
+@@ -710,12 +803,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'auto-edit',
      });
@@ -109667,7 +109681,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume with hooks' }] },
-@@ -744,17 +831,13 @@
+@@ -744,17 +838,13 @@
      );
      const setExternalMessageProvider = vi.fn();
      const subagent = {
@@ -109686,7 +109700,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager, hookSystem } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -802,12 +885,13 @@
+@@ -802,12 +892,13 @@
      const sessionId = 'session-no-hook';
      const agentId = 'agent-no-hook';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -109700,7 +109714,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -816,12 +900,13 @@
+@@ -816,12 +907,13 @@
        resolvedApprovalMode: 'auto-edit',
      });
  
@@ -109714,7 +109728,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume without hooks' }] },
-@@ -846,24 +931,20 @@
+@@ -846,24 +938,20 @@
        async (_context: { get: (key: string) => unknown }) => undefined,
      );
      const subagent = {
@@ -109743,7 +109757,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      });
  
      const resumed = await service.resumeBackgroundAgent(agentId, 'continue');
-@@ -873,19 +954,20 @@
+@@ -873,19 +961,20 @@
      const contextArg = execute.mock.calls[0]![0] as {
        get: (key: string) => unknown;
      };
@@ -109767,7 +109781,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -893,12 +975,13 @@
+@@ -893,12 +982,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'auto-edit',
      });
@@ -109781,7 +109795,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -923,26 +1006,13 @@
+@@ -923,26 +1013,13 @@
      });
  
      const subagent = {
@@ -109809,7 +109823,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            '<analysis>',
            'Scratchpad details should stay out of the parent context.',
            '</analysis>',
-@@ -962,22 +1032,32 @@
+@@ -962,22 +1039,32 @@
      const resumed = await service.resumeBackgroundAgent(agentId, 'continue');
  
      expect(resumed).toBeDefined();
@@ -109846,7 +109860,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -985,12 +1065,13 @@
+@@ -985,12 +1072,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'auto-edit',
      });
@@ -109860,7 +109874,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -1015,28 +1096,15 @@
+@@ -1015,28 +1103,15 @@
      });
  
      const subagent = {
@@ -109891,7 +109905,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      subagentManager.createAgentHeadless.mockResolvedValue({
        subagent,
        dispose: vi.fn().mockResolvedValue(undefined),
-@@ -1045,27 +1113,26 @@
+@@ -1045,27 +1120,26 @@
      const resumed = await service.resumeBackgroundAgent(agentId, 'continue');
  
      expect(resumed).toBeDefined();
@@ -109921,7 +109935,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1073,12 +1140,13 @@
+@@ -1073,12 +1147,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -109935,7 +109949,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume at cap' }] },
-@@ -1100,17 +1168,13 @@
+@@ -1100,17 +1175,13 @@
      });
  
      const subagent = {
@@ -109954,7 +109968,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -1145,12 +1209,13 @@
+@@ -1145,12 +1216,13 @@
        startTime: Date.now(),
        abortController: new AbortController(),
        outputFile: path.join(tempDir, 'already-running.jsonl'),
@@ -109968,7 +109982,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1158,12 +1223,13 @@
+@@ -1158,12 +1230,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -109982,7 +109996,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume while full' }] },
-@@ -1199,12 +1265,13 @@
+@@ -1199,12 +1272,13 @@
      const sessionId = 'session-stop-hook';
      const agentId = 'agent-stop-hook';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -109996,7 +110010,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1212,12 +1279,13 @@
+@@ -1212,12 +1286,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110010,7 +110024,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume stop hook path' }] },
-@@ -1239,17 +1307,13 @@
+@@ -1239,17 +1314,13 @@
      });
  
      const subagent = {
@@ -110029,7 +110043,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager, hookSystem } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -1277,12 +1341,13 @@
+@@ -1277,12 +1348,13 @@
      const sessionId = 'session-stop-hook-cap';
      const agentId = 'agent-stop-hook-cap';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110043,7 +110057,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1290,12 +1355,13 @@
+@@ -1290,12 +1362,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110057,7 +110071,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume cap path' }] },
-@@ -1317,17 +1383,13 @@
+@@ -1317,17 +1390,13 @@
      });
  
      const subagent = {
@@ -110076,7 +110090,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const stopOutput = {
        isBlockingDecision: vi.fn().mockReturnValue(true),
        shouldStopExecution: vi.fn().mockReturnValue(false),
-@@ -1364,12 +1426,13 @@
+@@ -1364,12 +1433,13 @@
      const sessionId = 'session-untrusted';
      const agentId = 'agent-untrusted';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110090,7 +110104,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1377,12 +1440,13 @@
+@@ -1377,12 +1447,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'yolo',
      });
@@ -110104,7 +110118,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -1408,17 +1472,13 @@
+@@ -1408,17 +1479,13 @@
  
      const createAgentHeadless = vi.fn().mockResolvedValue({
        subagent: {
@@ -110123,7 +110137,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        dispose: vi.fn().mockResolvedValue(undefined),
      });
  
-@@ -1430,23 +1490,24 @@
+@@ -1430,23 +1497,24 @@
      subagentManager.createAgentHeadless = createAgentHeadless;
  
      const resumed = await service.resumeBackgroundAgent(agentId, 'continue');
@@ -110149,7 +110163,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1462,19 +1523,19 @@
+@@ -1462,19 +1530,19 @@
          authType: 'anthropic',
          baseUrl: 'https://launch-provider.example.com',
          maxSessionTurns: 7,
@@ -110170,7 +110184,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume with flags' }] },
-@@ -1497,17 +1558,13 @@
+@@ -1497,17 +1565,13 @@
  
      const createAgentHeadless = vi.fn().mockResolvedValue({
        subagent: {
@@ -110189,7 +110203,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        dispose: vi.fn().mockResolvedValue(undefined),
      });
  
-@@ -1520,13 +1577,13 @@
+@@ -1520,13 +1584,13 @@
      subagentManager.createAgentHeadless = createAgentHeadless;
  
      const resumed = await service.resumeBackgroundAgent(agentId, 'continue');
@@ -110204,7 +110218,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      expect(overriddenConfig.getBareMode()).toBe(true);
      expect(overriddenConfig.getSandbox()).toEqual({
        command: 'docker',
-@@ -1542,7 +1599,6 @@
+@@ -1542,7 +1606,6 @@
        baseUrl: 'https://launch-provider.example.com',
      });
      expect(overriddenConfig.getMaxSessionTurns()).toBe(7);
@@ -110212,7 +110226,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      expect(overriddenConfig.getMaxSubagentDepth()).toBe(100);
    }, 20000);
  
-@@ -1559,12 +1615,13 @@
+@@ -1559,12 +1622,13 @@
        const sessionId = `session-depth-norm-${expected}`;
        const agentId = `agent-depth-norm-${expected}`;
        const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110226,7 +110240,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          parentSessionId: sessionId,
          parentAgentId: null,
          createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1572,12 +1629,13 @@
+@@ -1572,12 +1636,13 @@
          subagentName: 'researcher',
          persistedCliFlags: { maxSubagentDepth: persisted },
        });
@@ -110240,7 +110254,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            timestamp: '2026-04-20T00:00:00.000Z',
            type: 'user',
            message: { role: 'user', parts: [{ text: 'Resume' }] },
-@@ -1600,17 +1658,13 @@
+@@ -1600,17 +1665,13 @@
  
        const createAgentHeadless = vi.fn().mockResolvedValue({
          subagent: {
@@ -110259,7 +110273,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          dispose: vi.fn().mockResolvedValue(undefined),
        });
  
-@@ -1618,13 +1672,13 @@
+@@ -1618,13 +1679,13 @@
        subagentManager.createAgentHeadless = createAgentHeadless;
  
        const resumed = await service.resumeBackgroundAgent(agentId, 'continue');
@@ -110274,7 +110288,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
    );
  
    it.each([
-@@ -1642,12 +1696,13 @@
+@@ -1642,12 +1703,13 @@
        const sessionId = `session-depth-${expected}`;
        const agentId = `agent-depth-${expected}`;
        const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110288,7 +110302,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          parentSessionId: sessionId,
          parentAgentId: 'agent-parent',
          createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1655,12 +1710,13 @@
+@@ -1655,12 +1717,13 @@
          subagentName: 'researcher',
          depth: persisted,
        });
@@ -110302,7 +110316,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            timestamp: '2026-04-20T00:00:00.000Z',
            type: 'user',
            message: { role: 'user', parts: [{ text: 'Resume nested agent' }] },
-@@ -1686,17 +1742,13 @@
+@@ -1686,17 +1749,13 @@
          subagent: {
            execute: vi.fn(async () => {
              observedDepth = getCurrentAgentDepth();
@@ -110321,7 +110335,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          dispose: vi.fn().mockResolvedValue(undefined),
        });
  
-@@ -1717,12 +1769,13 @@
+@@ -1717,12 +1776,13 @@
      const sessionId = 'session-double';
      const agentId = 'agent-double';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110335,7 +110349,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1730,12 +1783,13 @@
+@@ -1730,12 +1790,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110349,7 +110363,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume once' }] },
-@@ -1766,17 +1820,13 @@
+@@ -1766,17 +1827,13 @@
      const executeExternalInputs = vi.fn().mockResolvedValue(undefined);
      const subagent = {
        execute,
@@ -110368,7 +110382,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -1813,12 +1863,13 @@
+@@ -1813,12 +1870,13 @@
      const sessionId = 'session-monitor';
      const agentId = 'agent-monitor';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110382,7 +110396,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1826,12 +1877,13 @@
+@@ -1826,12 +1884,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110396,7 +110410,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume monitor owner' }] },
-@@ -1860,17 +1912,13 @@
+@@ -1860,17 +1919,13 @@
            }),
        ),
        setExternalMessageProvider: vi.fn(),
@@ -110415,7 +110429,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const { service, subagentManager, monitorRegistry } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
        subagent,
-@@ -1934,12 +1982,13 @@
+@@ -1934,12 +1989,13 @@
      const sessionId = 'session-monitor-setup-fail';
      const agentId = 'agent-monitor-setup-fail';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110429,7 +110443,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -1947,12 +1996,13 @@
+@@ -1947,12 +2003,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110443,7 +110457,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: {
-@@ -1980,17 +2030,13 @@
+@@ -1980,17 +2037,13 @@
        setExternalMessageProvider: vi.fn(),
        setExternalMessageWaiter: vi.fn(),
        setExternalMessageWaitPredicate: vi.fn(),
@@ -110462,7 +110476,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const { service, subagentManager, monitorRegistry, stubToolRegistry } =
        createService();
      const dispose = vi.fn().mockResolvedValue(undefined);
-@@ -2030,59 +2076,50 @@
+@@ -2030,59 +2083,50 @@
        },
      );
    });
@@ -110526,7 +110540,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          parentSessionId: sessionId,
          parentAgentId: null,
          createdAt: '2026-04-20T00:00:00.000Z',
-@@ -2094,49 +2131,47 @@
+@@ -2094,52 +2138,55 @@
            : {}),
        });
        fs.writeFileSync(
@@ -110584,10 +110598,18 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
              sessionId,
              timestamp: '2026-04-20T00:00:01.000Z',
              type: 'assistant',
++            origin: {
++              kind: 'model',
++              kv_scope: 'resume-fixture',
++              attempt_id: 'a1',
++            },
              message: { role: 'model', parts: [{ text: 'Working silently' }] },
            }),
          ].join('\n') + '\n',
-@@ -2162,28 +2197,31 @@
+         'utf8',
+       );
+ 
+@@ -2162,28 +2209,31 @@
        const createSpy = vi
          .spyOn(AgentHeadless, 'create')
          .mockImplementation(async (...args) => {
@@ -110635,7 +110657,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
                ];
            });
            vi.spyOn(subagent, 'getTerminateMode').mockReturnValue(
-@@ -2243,25 +2281,25 @@
+@@ -2243,25 +2293,25 @@
  
        expect(resumed).toBeDefined();
        expect(subagentManager.createAgentHeadless).not.toHaveBeenCalled();
@@ -110664,7 +110686,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            'Edit',
            ToolNames.ASK_USER_QUESTION,
          ],
-@@ -2290,50 +2328,52 @@
+@@ -2290,50 +2340,52 @@
          );
        }
        createSpy.mockRestore();
@@ -110724,7 +110746,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      });
  
      const createSpy = vi.spyOn(AgentHeadless, 'create');
-@@ -2358,74 +2398,72 @@
+@@ -2358,74 +2410,72 @@
      ).toHaveBeenCalledTimes(1);
      expect(permissionManager.restoreDangerousRules).toHaveBeenCalledTimes(1);
      createSpy.mockRestore();
@@ -110813,7 +110835,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      });
  
      const createSpy = vi.spyOn(AgentHeadless, 'create');
-@@ -2446,12 +2484,13 @@
+@@ -2446,12 +2496,13 @@
    // test — rather than short-circuiting earlier on a missing transcript.
    function seedResumableForkTask(sessionId: string, agentId: string) {
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110827,7 +110849,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -2460,40 +2499,37 @@
+@@ -2460,40 +2511,37 @@
        resolvedApprovalMode: 'default',
      });
      fs.writeFileSync(
@@ -110876,7 +110898,249 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        'utf8',
      );
  
-@@ -2577,17 +2613,13 @@
+@@ -2510,12 +2558,241 @@
+       isBackgrounded: true,
+     });
+ 
+     return { metaPath, outputFile };
+   }
+ 
++  it.each([
++    {
++      name: 'ordinary output',
++      tail: [{ role: 'model', parts: [{ text: 'done' }] }],
++    },
++    {
++      name: 'whitespace output',
++      tail: [{ role: 'model', parts: [{ text: ' \n\t  ' }] }],
++    },
++    { name: 'empty output', tail: [{ role: 'model', parts: [] }] },
++    {
++      name: 'accepted output followed by an abandoned attempt',
++      tail: [{ role: 'model', parts: [{ text: 'accepted' }] }],
++      abandoned: true,
++    },
++    {
++      name: 'adjacent user entries',
++      tail: [
++        { role: 'user', parts: [{ text: 'first' }, { text: '\nsecond' }] },
++        { role: 'user', parts: [{ text: 'third 雪' }] },
++        { role: 'model', parts: [{ text: 'done' }] },
++      ],
++    },
++    {
++      name: 'accepted pending call',
++      tail: [
++        {
++          role: 'model',
++          parts: [
++            { text: 'Inspecting now.\n' },
++            {
++              functionCall: {
++                id: 'read-accepted',
++                name: 'Read',
++                args: { file_path: 'input.txt' },
++              },
++            },
++          ],
++        },
++      ],
++    },
++  ] satisfies Array<{ name: string; tail: Content[]; abandoned?: boolean }>)(
++    'preserves $name and its canonical parent on fork resume',
++    async ({ tail, abandoned }) => {
++      const sessionId = 'exact-history-session';
++      const agentId = 'exact-history-agent';
++      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
++      const outputFile = getAgentJsonlPath(tempDir, sessionId, agentId);
++      writeAgentMeta(metaPath, {
++        agentId,
++        toolUseId: 'call-exact-history',
++        agentType: FORK_SUBAGENT_TYPE,
++        description: 'Exact history',
++        parentSessionId: sessionId,
++        parentAgentId: null,
++        createdAt: '2026-04-20T00:00:00.000Z',
++        status: 'running',
++        subagentName: FORK_SUBAGENT_TYPE,
++        resolvedApprovalMode: 'default',
++      });
++      const bootstrap: Content[] = [
++        { role: 'user', parts: [{ text: 'bootstrap' }] },
++        { role: 'model', parts: [{ text: 'inherited output' }] },
++      ];
++      const task: Content = { role: 'user', parts: [{ text: 'task' }] };
++      const writer = attachJsonlTranscriptWriter(
++        new AgentEventEmitter(),
++        outputFile,
++        {
++          sessionId,
++          agentId,
++          cwd: tempDir,
++          version: 'test',
++          bootstrapHistory: bootstrap,
++          initialUserMessage: task,
++        },
++      );
++      try {
++        for (const [index, content] of tail.entries()) {
++          if (content.role === 'user') writer.recordUserMessage(content);
++          else
++            await writer.recorder.recordAssistantTurn({
++              origin: {
++                kind: 'model',
++                kv_scope: 'exact-history-scope',
++                attempt_id: `attempt-${index}`,
++              },
++              model: 'test-model',
++              message: content.parts ?? [],
++              incompleteToolCalls: [],
++              tokens: {
++                promptTokenCount: 1,
++                candidatesTokenCount: 1,
++                thoughtsTokenCount: 0,
++                cachedContentTokenCount: 0,
++                totalTokenCount: 2,
++              },
++            });
++        }
++        if (abandoned) {
++          await writer.recorder.recordGenerationFailure({
++            origin: {
++              kind: 'model',
++              kv_scope: 'exact-history-scope',
++              attempt_id: 'abandoned',
++            },
++            model: 'test-model',
++            message: [{ text: 'diagnostic only' }],
++            usageMetadata: null,
++            finishReason: null,
++            incompleteToolCalls: [],
++          });
++        }
++      } finally {
++        writer.cleanup();
++      }
++      const original = await readCanonicalChatRecords(outputFile);
++      const expected = structuredClone([...bootstrap, task, ...tail]);
++      registry.register({
++        agentId,
++        description: 'Exact history',
++        subagentType: FORK_SUBAGENT_TYPE,
++        status: 'paused',
++        startTime: Date.now(),
++        abortController: new AbortController(),
++        prompt: 'task',
++        outputFile,
++        metaPath,
++        isBackgrounded: true,
++      });
++      const execute = vi.fn(async () => undefined);
++      const subagent = {
++        execute,
++        setExternalMessageProvider: vi.fn(),
++        getCore: () => ({ getEventEmitter: () => new AgentEventEmitter() }),
++        getExecutionSummary: emptyExecutionSummary,
++        getTerminateMode: () => AgentTerminateMode.GOAL,
++        getFinalText: () => 'done',
++      };
++      const create = vi
++        .spyOn(AgentHeadless, 'create')
++        .mockResolvedValue(subagent as unknown as AgentHeadless);
++      try {
++        const { service } = createService({
++          currentForkRuntime: {
++            systemInstruction: 'current instruction',
++            advertisedTools: [{ name: 'Read' }],
++          },
++        });
++        expect(
++          await service.resumeBackgroundAgent(agentId, 'continue'),
++        ).toBeDefined();
++        expect(create).toHaveBeenCalledTimes(1);
++        expect(JSON.stringify(create.mock.calls[0]![3].initialMessages)).toBe(
++          JSON.stringify(expected),
++        );
++        await vi.waitFor(() =>
++          expect(registry.get(agentId)?.status).toBe('completed'),
++        );
++        const resumed = await readCanonicalChatRecords(outputFile);
++        expect(resumed.slice(0, original.length)).toEqual(original);
++        expect(resumed[original.length]?.parentUuid).toBe(
++          original.at(-1)!.uuid,
++        );
++        expect(execute).toHaveBeenCalledTimes(1);
++      } finally {
++        create.mockRestore();
++      }
++    },
++  );
++
++  it.each(
++    ['missing parent', 'parent cycle', 'duplicate UUID'].flatMap((damage) =>
++      ['discovery', 'launch'].map((boundary) => ({ damage, boundary })),
++    ),
++  )(
++    'refuses $damage at $boundary without losing the retained task',
++    async ({ damage, boundary }) => {
++      const sessionId = 'session-1';
++      const agentId = 'damaged-history';
++      const { outputFile } = seedResumableForkTask(sessionId, agentId);
++      registry.reset();
++      const { service } = createService({
++        currentForkRuntime: {
++          systemInstruction: 'current instruction',
++          advertisedTools: [{ name: 'Read' }],
++        },
++      });
++      if (boundary === 'launch') {
++        expect(
++          await service.loadPausedBackgroundAgents(sessionId),
++        ).toHaveLength(1);
++        expect(registry.get(agentId)?.resumeBlockedReason).toBeUndefined();
++      }
++      const records = await readCanonicalChatRecords(outputFile);
++      if (damage === 'missing parent') records[0]!.parentUuid = 'lost-parent';
++      else if (damage === 'parent cycle')
++        records[0]!.parentUuid = records.at(-1)!.uuid;
++      else records.push(structuredClone(records.at(-1)!));
++      const damagedBytes = records
++        .map((record) => JSON.stringify(record) + '\n')
++        .join('');
++      fs.writeFileSync(outputFile, damagedBytes);
++      const create = vi.spyOn(AgentHeadless, 'create');
++      try {
++        if (boundary === 'discovery') {
++          expect(
++            await service.loadPausedBackgroundAgents(sessionId),
++          ).toHaveLength(1);
++          expect(registry.get(agentId)?.resumeBlockedReason).toMatch(
++            /Inspect.*original recording or start a new agent/,
++          );
++        }
++        expect(
++          await service.resumeBackgroundAgent(agentId, 'continue'),
++        ).toBeUndefined();
++        expect(create).not.toHaveBeenCalled();
++        expect(registry.get(agentId)?.status).toBe('paused');
++        expect(
++          registry.get(agentId)?.resumeBlockedReason ??
++            registry.get(agentId)?.error,
++        ).toMatch(/Inspect.*original recording or start a new agent/);
++        expect(fs.readFileSync(outputFile, 'utf8')).toBe(damagedBytes);
++      } finally {
++        create.mockRestore();
++      }
++    },
++  );
++
+   it('keeps fork tasks paused when every advertised parent tool is excluded from subagents', async () => {
+     const sessionId = 'session-fork-cap-excluded';
+     const agentId = 'agent-fork-cap-excluded';
+     seedResumableForkTask(sessionId, agentId);
+ 
+     const createSpy = vi.spyOn(AgentHeadless, 'create');
+@@ -2577,17 +2854,13 @@
  
      const execute = vi.fn(async (_context: unknown) => undefined);
      const subagent = {
@@ -110895,7 +111159,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const createSpy = vi
        .spyOn(AgentHeadless, 'create')
        .mockResolvedValue(subagent as unknown as AgentHeadless);
-@@ -2654,12 +2686,13 @@
+@@ -2654,12 +2927,13 @@
  
    it('does not persist cancelled status on generic launch interruption recovery', async () => {
      const sessionId = 'session-running-shutdown';
@@ -110909,7 +111173,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -2690,12 +2723,13 @@
+@@ -2690,12 +2964,13 @@
      const sessionId = 'session-resume-shutdown';
      const agentId = 'agent-resume-shutdown';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110923,7 +111187,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -2703,12 +2737,13 @@
+@@ -2703,12 +2978,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110937,7 +111201,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume then shutdown' }] },
-@@ -2737,17 +2772,13 @@
+@@ -2737,17 +3013,13 @@
          }),
      );
      const subagent = {
@@ -110956,7 +111220,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -2769,12 +2800,13 @@
+@@ -2769,12 +3041,13 @@
      const sessionId = 'session-resume-cancelled';
      const agentId = 'agent-resume-cancelled';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -110970,7 +111234,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -2782,12 +2814,13 @@
+@@ -2782,12 +3055,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -110984,7 +111248,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Resume then cancel' }] },
-@@ -2816,17 +2849,13 @@
+@@ -2816,17 +3090,13 @@
          }),
      );
      const subagent = {
@@ -111003,7 +111267,15 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -2848,12 +2877,13 @@
+@@ -2841,19 +3111,20 @@
+     await vi.waitFor(() => {
+       expect(registry.get(agentId)?.status).toBe('cancelled');
+     });
+     expect(readMetaStatus(metaPath)).toBe('cancelled');
+   });
+ 
+-  it('drops usage-only assistant records while preserving tool history and pending user text', async () => {
++  it('preserves empty assistant commits, tool history and pending user text', async () => {
      const sessionId = 'session-pending-user';
      const agentId = 'agent-pending-user';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -111017,7 +111289,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -2862,29 +2892,32 @@
+@@ -2862,34 +3133,47 @@
        resolvedApprovalMode: 'default',
      });
      fs.writeFileSync(
@@ -111039,6 +111311,11 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            sessionId,
            timestamp: '2026-04-20T00:00:00.100Z',
            type: 'assistant',
++          origin: {
++            kind: 'model',
++            kv_scope: 'resume-fixture',
++            attempt_id: 'usage-only',
++          },
            message: { role: 'model', parts: [] },
            usageMetadata: { totalTokenCount: 42 },
          }),
@@ -111049,8 +111326,18 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            sessionId,
            timestamp: '2026-04-20T00:00:00.200Z',
            type: 'assistant',
++          origin: {
++            kind: 'model',
++            kv_scope: 'resume-fixture',
++            attempt_id: 'call-1',
++          },
            message: {
-@@ -2898,12 +2931,13 @@
+             role: 'model',
+             parts: [
+               {
+                 functionCall: {
+                   id: 'read-1',
+@@ -2898,12 +3182,13 @@
                  },
                },
              ],
@@ -111064,7 +111351,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            timestamp: '2026-04-20T00:00:00.300Z',
            type: 'tool_result',
            message: {
-@@ -2917,20 +2951,22 @@
+@@ -2917,20 +3202,27 @@
                  },
                },
              ],
@@ -111077,6 +111364,11 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            sessionId,
            timestamp: '2026-04-20T00:00:00.400Z',
            type: 'assistant',
++          origin: {
++            kind: 'model',
++            kv_scope: 'resume-fixture',
++            attempt_id: 'a1',
++          },
            message: { role: 'model', parts: [{ text: 'working' }] },
          }),
          JSON.stringify({
@@ -111087,7 +111379,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            timestamp: '2026-04-20T00:00:00.500Z',
            type: 'user',
            message: { role: 'user', parts: [{ text: 'and another thing' }] },
-@@ -2962,17 +2998,13 @@
+@@ -2962,17 +3254,13 @@
        },
      );
      const subagent = {
@@ -111106,7 +111398,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -2980,12 +3012,13 @@
+@@ -2980,18 +3268,20 @@
        dispose: vi.fn().mockResolvedValue(undefined),
      });
  
@@ -111120,7 +111412,14 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          promptConfigOverrides: {
            initialMessages: [
              { role: 'user', parts: [{ text: 'original task' }] },
-@@ -3026,12 +3059,13 @@
++            { role: 'model', parts: [] },
+             {
+               role: 'model',
+               parts: [
+                 {
+                   functionCall: {
+                     id: 'read-1',
+@@ -3026,12 +3316,13 @@
      const agentId = 'agent-revive';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
      const outputFile = getAgentJsonlPath(tempDir, sessionId, agentId);
@@ -111134,7 +111433,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3041,20 +3075,22 @@
+@@ -3041,25 +3332,32 @@
        resumeCount: 0,
      });
      fs.writeFileSync(
@@ -111156,8 +111455,18 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            sessionId,
            timestamp: '2026-04-20T00:00:01.000Z',
            type: 'assistant',
++          origin: {
++            kind: 'model',
++            kv_scope: 'resume-fixture',
++            attempt_id: 'a1',
++          },
            message: { role: 'model', parts: [{ text: 'All done' }] },
-@@ -3084,17 +3120,13 @@
+         }),
+       ].join('\n') + '\n',
+       'utf8',
+     );
+     const oldSessionMtime = new Date('2026-04-20T00:00:00.000Z');
+@@ -3084,17 +3382,13 @@
        async (_context: { get: (key: string) => unknown }) => undefined,
      );
      const subagent = {
@@ -111176,7 +111485,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
  
      const dispose = vi.fn().mockResolvedValue(undefined);
      const { service, subagentManager } = createService();
-@@ -3162,12 +3194,13 @@
+@@ -3162,12 +3456,13 @@
        tempDir,
        'session-registry-decoy',
        agentId,
@@ -111190,7 +111499,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: launchSessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3175,20 +3208,22 @@
+@@ -3175,25 +3470,32 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -111212,8 +111521,18 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
            sessionId: launchSessionId,
            timestamp: '2026-04-20T00:00:01.000Z',
            type: 'assistant',
++          origin: {
++            kind: 'model',
++            kv_scope: 'resume-fixture',
++            attempt_id: 'a1',
++          },
            message: { role: 'model', parts: [{ text: 'partial answer' }] },
-@@ -3215,17 +3250,13 @@
+         }),
+       ].join('\n') + '\n';
+     fs.writeFileSync(outputFile, seedRecords, 'utf8');
+     // The revive gate and the recovery read the registered outputFile, so
+     // the decoy carries the same seed chain.
+@@ -3215,17 +3517,13 @@
      registry.complete(agentId, 'partial answer');
  
      const subagent = {
@@ -111232,7 +111551,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const dispose = vi.fn().mockResolvedValue(undefined);
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -3267,12 +3298,13 @@
+@@ -3267,12 +3565,13 @@
  
    it('cold-revives a completed worktree-isolated agent without retaining it', async () => {
      const agentId = 'completed-isolated';
@@ -111246,7 +111565,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: 'session-isolated-revive',
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3280,12 +3312,13 @@
+@@ -3280,12 +3579,13 @@
        isolation: 'worktree',
        subagentName: 'researcher',
      });
@@ -111260,7 +111579,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Isolated result' }] },
-@@ -3307,17 +3340,13 @@
+@@ -3307,17 +3607,13 @@
  
      const subagent = {
        execute: vi.fn().mockResolvedValue(undefined),
@@ -111279,7 +111598,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const dispose = vi.fn().mockResolvedValue(undefined);
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
-@@ -3415,12 +3444,13 @@
+@@ -3415,12 +3711,13 @@
        metaPath: path.join(tempDir, 'missing-meta.meta.json'),
      });
      registry.complete(missingMetaAgentId, 'done');
@@ -111293,7 +111612,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: 'session-missing-output',
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3441,12 +3471,13 @@
+@@ -3441,12 +3738,13 @@
      });
      registry.complete(missingOutputAgentId, 'done');
  
@@ -111307,7 +111626,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: 'session-corrupt-output',
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3491,12 +3522,13 @@
+@@ -3491,12 +3789,13 @@
      const sessionId = 'session-revive-setup-fails';
      const agentId = 'agent-revive-setup-fails';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -111321,7 +111640,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3504,12 +3536,13 @@
+@@ -3504,12 +3803,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -111335,7 +111654,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Finished research' }] },
-@@ -3573,12 +3606,13 @@
+@@ -3573,12 +3873,13 @@
      const sessionId = 'session-revive-notify';
      const agentId = 'agent-revive-notify';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -111349,7 +111668,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3586,12 +3620,13 @@
+@@ -3586,12 +3887,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -111363,7 +111682,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Finished research' }] },
-@@ -3625,17 +3660,13 @@
+@@ -3625,17 +3927,13 @@
      });
  
      const subagent = {
@@ -111382,7 +111701,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
      const { service, subagentManager } = createService();
      subagentManager.createAgentHeadless.mockResolvedValue({
        subagent,
-@@ -3656,12 +3687,13 @@
+@@ -3656,12 +3954,13 @@
      const sessionId = 'session-revive-cap';
      const agentId = 'agent-revive-cap';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -111396,7 +111715,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3669,12 +3701,13 @@
+@@ -3669,12 +3968,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -111410,7 +111729,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Finished research' }] },
-@@ -3725,12 +3758,13 @@
+@@ -3725,12 +4025,13 @@
      const sessionId = 'session-revive-rollback-state';
      const agentId = 'agent-revive-rollback-state';
      const metaPath = getAgentMetaPath(tempDir, sessionId, agentId);
@@ -111424,7 +111743,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
        parentSessionId: sessionId,
        parentAgentId: null,
        createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3738,12 +3772,13 @@
+@@ -3738,12 +4039,13 @@
        subagentName: 'researcher',
        resolvedApprovalMode: 'default',
      });
@@ -111438,7 +111757,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          timestamp: '2026-04-20T00:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'Finished research' }] },
-@@ -3798,12 +3833,13 @@
+@@ -3798,12 +4100,13 @@
        const agentId = `cap-agent-${String(i).padStart(3, '0')}`;
        ids.push(agentId);
        // Higher index → newer recovery timestamp, so the newest `cap` entries
@@ -111452,7 +111771,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.test.ts b/packages
          parentSessionId: sessionId,
          parentAgentId: null,
          createdAt: '2026-04-20T00:00:00.000Z',
-@@ -3812,12 +3848,13 @@
+@@ -3812,12 +4115,13 @@
          lastUpdatedAt,
          subagentName: 'researcher',
        });
@@ -111486,7 +111805,26 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
  import type { Config } from '../config/config.js';
  import * as jsonl from '../utils/jsonl-utils.js';
  import { createDebugLogger } from '../utils/debugLogger.js';
-@@ -40,13 +44,16 @@
+@@ -26,13 +30,17 @@
+   readAgentMeta,
+   patchAgentMeta,
+   attachJsonlTranscriptWriter,
+   type AgentMeta,
+ } from './agent-transcript.js';
+ import type { ChatRecord } from '../services/chatRecordingService.js';
+-import { buildOrderedUuidChain } from '../utils/conversation-chain.js';
++import {
++  isTranscriptConversationRecord,
++  selectTranscriptLeaf,
++  walkTranscriptUuidChain,
++} from '../utils/transcript-records.js';
+ import {
+   buildAvailableSkillsReminder,
+   buildDeferredToolsReminder,
+   buildMcpServerInstructionsReminder,
+   getInitialChatHistory,
+ } from '../utils/environmentContext.js';
+@@ -40,13 +48,16 @@
  import { PermissionMode, type StopHookOutput } from '../hooks/types.js';
  import {
    appendStopHookBlockingCapWarning,
@@ -111504,7 +111842,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
    FORK_AGENT,
    FORK_DEFAULT_MAX_TURNS,
    FORK_SUBAGENT_TYPE,
-@@ -71,16 +78,13 @@
+@@ -71,16 +82,13 @@
  import { ToolNames } from '../tools/tool-names.js';
  import type {
    AgentExternalInput,
@@ -111522,18 +111860,20 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
  const META_FILE_SUFFIX = '.meta.json';
  
  export const DEFAULT_BACKGROUND_AGENT_CONTINUATION_MESSAGE =
-@@ -122,17 +126,13 @@
+@@ -121,18 +129,14 @@
+   return tools.includes(ToolNames.SKILL);
  }
  
  interface TranscriptRecovery {
    history: Content[];
    initialPrompt?: string;
-   lastStableUuid: string | null;
+-  lastStableUuid: string | null;
 -  forkBootstrap?: {
 -    history: Content[];
 -    taskPrompt: string;
 -    runtimeHistory: Content[];
 -  };
++  lastRecordUuid: string | null;
 +  forkBootstrap?: { history: Content[] };
  }
  
@@ -111541,8 +111881,115 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
    agentName: string;
    isFork: boolean;
    subagentConfig?: SubagentConfig;
-@@ -303,18 +303,12 @@
-   const bootstrapRecord = filtered.find(
+@@ -215,181 +219,85 @@
+     status: persistedStatus,
+     lastUpdatedAt: new Date().toISOString(),
+     lastError: undefined,
+   });
+ }
+ 
+-function isWhitespaceOnlyAssistant(record: ChatRecord): boolean {
+-  if (record.type !== 'assistant') return false;
+-  if (!record.message?.parts?.length) return true;
+-  const hasFunctionCall = record.message.parts.some(
+-    (part) => !!part.functionCall,
+-  );
+-  if (hasFunctionCall) return false;
+-  return record.message.parts.every((part) => {
+-    if (!('text' in part) || typeof part.text !== 'string') {
+-      return false;
++function reconstructHistory(records: ChatRecord[]): ChatRecord[] {
++  if (records.length === 0) return [];
++  const byUuid = new Map<string, ChatRecord>();
++  for (const record of records) {
++    if (!isTranscriptConversationRecord(record)) continue;
++    if (byUuid.has(record.uuid)) {
++      throw new Error(
++        `Duplicate child history record ${record.uuid}. Inspect the original recording or start a new agent.`,
++      );
+     }
+-    return part.text.trim().length === 0;
+-  });
+-}
+-
+-function extractFunctionCallIds(record: ChatRecord): string[] {
+-  if (record.type !== 'assistant' || !record.message?.parts?.length) {
+-    return [];
++    byUuid.set(record.uuid, record);
+   }
+-  return record.message.parts
+-    .map((part) => part.functionCall?.id)
+-    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+-}
+-
+-function reconstructHistory(
+-  records: ChatRecord[],
+-  leafUuid?: string,
+-): ChatRecord[] {
+-  if (records.length === 0) return [];
+-
+-  // First record per uuid (preserves the historical `?.[0]` selection — this
+-  // path does not aggregate duplicate-uuid records).
+-  const firstByUuid = new Map<string, ChatRecord>();
+-  for (const record of records) {
+-    if (!firstByUuid.has(record.uuid)) firstByUuid.set(record.uuid, record);
++  const leaf = selectTranscriptLeaf(records);
++  if (!leaf) return [];
++  const chain = walkTranscriptUuidChain(leaf, (uuid) => byUuid.get(uuid));
++  if (chain.gaps.length > 0 || chain.cycleUuid !== undefined) {
++    throw new Error(
++      'Child history has a missing parent or parent cycle. Inspect the complete original recording or start a new agent; partial history cannot be resumed.',
++    );
+   }
+-
+-  // Gap detection is intentionally OFF here. Unlike the interactive `/resume`
+-  // (sessionService) and ACP replay (HistoryReplayer) paths, this background
+-  // transcript recovery has no surface to render a gap marker on, so detecting
+-  // gaps only to drop them would be an inconsistent half-measure. The walk
+-  // truncates at a broken parent link either way; here it just truncates.
+-  const { uuids } = buildOrderedUuidChain(records, { leafUuid });
+-
+-  return uuids
+-    .map((uuid) => firstByUuid.get(uuid))
+-    .filter((record): record is ChatRecord => !!record);
++  return chain.uuids.map((uuid) => byUuid.get(uuid)!);
+ }
+ 
+ function extractText(parts: Part[] | undefined): string {
+   if (!parts?.length) return '';
+   return parts
+     .map((part) => ('text' in part && part.text ? part.text : ''))
+     .join('\n')
+     .trim();
+ }
+ 
+-function coalesceAdjacentUserHistory(messages: Content[]): Content[] {
+-  const result: Content[] = [];
+-  for (const message of messages) {
+-    if (
+-      message.role === 'user' &&
+-      result.length > 0 &&
+-      result[result.length - 1]!.role === 'user'
+-    ) {
+-      result[result.length - 1] = {
+-        ...result[result.length - 1]!,
+-        parts: [
+-          ...(result[result.length - 1]!.parts ?? []),
+-          ...structuredClone(message.parts ?? []),
+-        ],
+-      };
+-      continue;
+-    }
+-    result.push(structuredClone(message));
+-  }
+-  return result;
+-}
+-
+ function recoverTranscript(records: ChatRecord[]): TranscriptRecovery {
+   const chain = reconstructHistory(records);
+-  const filtered = chain.filter((record) => !isWhitespaceOnlyAssistant(record));
+-  const bootstrapRecord = filtered.find(
++  const bootstrapRecord = chain.find(
      (record) =>
        record.type === 'system' &&
        record.subtype === 'agent_bootstrap' &&
@@ -111554,18 +112001,27 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
 -      record.subtype === 'agent_launch_prompt' &&
 -      record.systemPayload,
 -  );
-   const initialPrompt = filtered.find((record) => record.type === 'user')
+-  const initialPrompt = filtered.find((record) => record.type === 'user')
++  const initialPrompt = chain.find((record) => record.type === 'user')
      ? extractText(
-         filtered.find((record) => record.type === 'user')?.message?.parts,
+-        filtered.find((record) => record.type === 'user')?.message?.parts,
++        chain.find((record) => record.type === 'user')?.message?.parts,
        )
      : undefined;
- 
-@@ -329,67 +323,42 @@
-       stableForBranch.pop();
-       continue;
-     }
-     break;
-   }
+-
+-  const stableForBranch = [...filtered];
+-  while (stableForBranch.length > 0) {
+-    const last = stableForBranch[stableForBranch.length - 1]!;
+-    if (isWhitespaceOnlyAssistant(last)) {
+-      stableForBranch.pop();
+-      continue;
+-    }
+-    if (extractFunctionCallIds(last).length > 0) {
+-      stableForBranch.pop();
+-      continue;
+-    }
+-    break;
+-  }
  
 -  const nonSystemStableRecords = stableForBranch.filter(
 -    (record) => record.type !== 'system',
@@ -111586,14 +112042,13 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
 +        }
 +      : undefined;
    return {
-     history: coalesceAdjacentUserHistory(
+-    history: coalesceAdjacentUserHistory(
 -      nonSystemStableRecords
 -        .map((record) => record.message)
 -        .filter((message): message is Content => message !== undefined),
-+      buildApiHistoryFromConversation(
-+        { messages: stableForBranch },
-+        { initialHistory: forkBootstrap?.history },
-+      ),
++    history: buildApiHistoryFromConversation(
++      { messages: chain },
++      { initialHistory: forkBootstrap?.history },
      ),
      initialPrompt: initialPrompt || undefined,
 -    lastStableUuid:
@@ -111625,7 +112080,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
 -            ),
 -          }
 -        : undefined,
-+    lastStableUuid: stableForBranch.at(-1)?.uuid ?? null,
++    lastRecordUuid: chain.at(-1)?.uuid ?? null,
 +    forkBootstrap,
    };
  }
@@ -111645,7 +112100,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
  }
  
  function buildRecoveredNotice(count: number): string {
-@@ -499,19 +468,30 @@
+@@ -499,19 +407,31 @@
  
          const outputFile = getAgentJsonlPath(
            projectDir,
@@ -111654,16 +112109,18 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
          );
 -        const records = await jsonl.read<ChatRecord>(outputFile);
 +        let records: ChatRecord[] = [];
++        let recovery: TranscriptRecovery | undefined;
 +        let transcriptRefusal: string | undefined;
 +        try {
 +          records = await readCanonicalChatRecords(outputFile);
++          recovery = recoverTranscript(records);
 +        } catch (error) {
 +          transcriptRefusal =
 +            (error as NodeJS.ErrnoException).code === 'ENOENT'
 +              ? MISSING_TRANSCRIPT_BLOCKED_REASON
 +              : `Cannot continue this retained agent: ${error instanceof Error ? error.message : String(error)}`;
 +        }
-         const recovery = recoverTranscript(records);
+-        const recovery = recoverTranscript(records);
          const parsedStartTime = Date.parse(meta.createdAt);
          const parsedEndTime = Date.parse(meta.lastUpdatedAt ?? meta.createdAt);
          const projectRoot = path.resolve(this.config.getProjectRoot());
@@ -111678,7 +112135,37 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
              (record) =>
                record.sessionId !== sessionId ||
                (record.agentId !== undefined && record.agentId !== meta.agentId),
-@@ -690,15 +670,13 @@
+@@ -535,13 +455,13 @@
+           retainedStateBlockedReason = WORKING_DIRECTORY_BLOCKED_REASON;
+         }
+ 
+         const resumeBlockedReason =
+           retainedStateBlockedReason ||
+           target.unavailableReason ||
+-          (target.isFork && !recovery.forkBootstrap
++          (target.isFork && !recovery?.forkBootstrap
+             ? LEGACY_FORK_RESUME_BLOCKED_REASON
+             : undefined);
+ 
+         const registration: AgentTaskRegistration = {
+           agentId: meta.agentId,
+           description: meta.description,
+@@ -556,13 +476,13 @@
+                 endTime: Number.isFinite(parsedEndTime)
+                   ? parsedEndTime
+                   : Date.now(),
+               }
+             : {}),
+           abortController: new AbortController(),
+-          prompt: recovery.initialPrompt,
++          prompt: recovery?.initialPrompt,
+           toolUseId: meta.toolUseId,
+           outputFile,
+           metaPath,
+           error:
+             meta.lastError === resumeBlockedReason ? undefined : meta.lastError,
+           resumeBlockedReason,
+@@ -690,15 +610,13 @@
        debugLogger.warn(
          `[BackgroundAgentResume] Cannot revive "${agentId}": transcript is missing or empty.`,
        );
@@ -111695,7 +112182,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
          );
          return undefined;
        }
-@@ -847,617 +825,640 @@
+@@ -847,617 +765,640 @@
          void subagentDispose?.().catch(() => {});
        }
        restoreParentPM?.();
@@ -111911,7 +112398,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
 +            agentColor: target.subagentConfig?.color ?? meta.agentColor,
 +            initialUserMessage,
 +            appendToExisting: true,
-+            initialParentUuid: recovery.lastStableUuid,
++            initialParentUuid: recovery.lastRecordUuid,
 +          });
 +        cleanupJsonl = attachJsonlTranscriptWriter(
 +          bgEventEmitter,
@@ -112914,7 +113401,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
          error instanceof Error ? error.message : String(error);
        debugLogger.warn(
          `[BackgroundAgentResume] Failed to resume background agent ${agentId}: ${errorMessage}`,
-@@ -1663,12 +1664,13 @@
+@@ -1663,12 +1604,13 @@
        );
      }
      return reminders.join('\n\n');
@@ -112928,7 +113415,7 @@ diff --git a/packages/core/src/agents/background-agent-resume.ts b/packages/core
      runtime: CurrentForkRuntime,
      executionAllowedTools?: string[],
    ): Promise<AgentHeadless> {
-@@ -1686,12 +1688,13 @@
+@@ -1686,12 +1628,13 @@
          runtime.toolNames,
          buildForkExecutionAllowlist(executionAllowedTools, runtime.toolNames),
        ),
@@ -355297,3 +355784,57 @@ diff --git a/packages/webui/src/components/toolcalls/GenericToolCall.tsx b/packa
  
    // Success with files: show operation + file list in compact format
    if (locations && locations.length > 0) {
+diff --git a/docs/design/background-resume-history.md b/docs/design/background-resume-history.md
+--- /dev/null
++++ b/docs/design/background-resume-history.md
+@@ -0,0 +1,50 @@
++# Exact accepted history on background resume
++
++Background resume reads the child's canonical JSONL, selects its active parent
++chain, and uses the shared API-history accumulator. It preserves each accepted
++assistant Content, including empty and whitespace-only output, pending calls and
++their accompanying text. It preserves adjacent user entries and their part
++boundaries. The continuation record names the actual last active record as its
++parent. Abandoned generation diagnostics remain outside API history by their
++canonical record structure.
++
++The recovery owner must not guess which accepted turns are worth keeping. A
++pending tool call is still an accepted model turn; the common chat repair path
++can supply its explicit unknown-outcome response when preparing continuation.
++Dropping the call also drops any text it carries and can re-root subsequent
++records before accepted output. Coalescing belongs to request preparation when
++the provider requires it, rather than to restoration of the raw conversation.
++
++The chain uses the shared transcript leaf selector and parent walker. A missing
++parent, parent cycle or duplicate conversation UUID refuses recovery. Discovery
++keeps the retained task visible with an actionable refusal. Launch rereads and
++checks the file, so corruption after discovery cannot start a child. A refusal
++does not append to or repair the source transcript. Model request/response
++evidence remains outside the conversation chain.
++
++This is a reader correction under canonical version 6. It adds no record fields,
++record types, provider request fields or stdout schema changes. The existing
++strict version and physical-record validators still apply. Handwritten test
++records include their required producing attempt identities; an empty accepted
++model Content remains a real history entry. Unknown versions remain refusals.
++
++The implementation is shared by retained child discovery, background continuation
++and revival of completed children. It applies to fork and named child sessions
++across the service's interactive, headless and ACP callers. Direct vLLM callers
++have no Qwen background-resume transcript; this client-owned correction cannot
++apply to them. Backend-owned parsing and output fidelity remain backend work.
++
++Source verification uses real canonical child writers and the actual background
++resume service, with only external execution replaced. It compares the complete
++history passed to the resumed runtime and the parent of the newly appended
++continuation, including ordinary output, whitespace, empty output, adjacent users
++and an accepted pending call. Corruption cases cover discovery and launch; the
++file remains unchanged and no child runtime is constructed. The ordinary suite
++also covers completed-child revival and retained execution policy.
++
++This correction is not a claim that all runtime history already round-trips.
++Separately reproduced open issues include unrecorded runtime reminders, startup
++prelude reconstruction and image payload store restoration after reference-only
++checkpoints. Their fix requires explicit ownership of the complete runtime state.
++No provider, remote GPU, built CLI, image build, release or deployment validation
++is claimed by these source tests.

@@ -8481,6 +8481,25 @@ def _validate_served_accounting_after(state: State) -> None:
         forbid_text(state, path, "read<ChatRecord>", label=label)
     for path in (core + "services/session-transcript-reader.ts", core + "services/session-api-history.ts"):
         _require_all(state, path, ("requireTranscriptRecord",), label=label)
+    child_resume = core + "agents/background-agent-resume.ts"
+    _require_all(state, child_resume, (
+        "isTranscriptConversationRecord(record)", "selectTranscriptLeaf(records)",
+        "walkTranscriptUuidChain(leaf, (uuid) => byUuid.get(uuid))",
+        "byUuid.has(record.uuid)", "chain.gaps.length > 0 || chain.cycleUuid !== undefined",
+        "history: buildApiHistoryFromConversation(", "{ messages: chain }",
+        "lastRecordUuid: chain.at(-1)?.uuid ?? null",
+        "initialParentUuid: recovery.lastRecordUuid", "recovery = recoverTranscript(records)",
+        "prompt: recovery?.initialPrompt", "!recovery?.forkBootstrap",
+    ), label=label)
+    for symbol in ("isWhitespaceOnlyAssistant", "coalesceAdjacentUserHistory", "stableForBranch", "lastStableUuid"):
+        forbid_text(state, child_resume, symbol, label=label)
+    _require_all(state, core + "agents/background-agent-resume.test.ts", (
+        "preserves $name and its canonical parent on fork resume",
+        "refuses $damage at $boundary without losing the retained task",
+        "accepted output followed by an abandoned attempt",
+        "preserves empty assistant commits, tool history and pending user text",
+        "attachJsonlTranscriptWriter(", "readCanonicalChatRecords(outputFile)",
+    ), label=label)
     _require_all(state, core + "utils/sessionStorageUtils.ts", ("iterateCanonicalChatRecordsSync",), label=label)
     forbid_text(state, core + "utils/sessionStorageUtils.ts", "extractJsonStringField", label=label)
     forbid_text(state, core + "services/chatRecordingService.ts", "TITLE_REANCHOR_BYTES", label=label)
@@ -10384,7 +10403,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
             "Canonical version 6 binds every atomic accepted or abandoned generation to its real "
-            "chat attempt; abandoned output cannot become resume history. Live child version 2 "
+            "chat attempt; abandoned output cannot become resume history. Background recovery "
+            "preserves accepted empty/whitespace output, pending calls and Content boundaries, "
+            "continues from the actual active leaf, and refuses duplicate, missing-parent or cyclic "
+            "history at discovery and launch without losing the retained task. Live child version 2 "
             "carries the same origin, and exact-prefix reconciliation preserves ordinary streaming, "
             "canonical order, served usage and final dispositions across retained-file snapshots. "
             "Unsettled disappearance, replacement, partial retirement and publication failures refuse. "
