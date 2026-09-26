@@ -62710,7 +62710,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
  } {
    const targets = (
      sessions as unknown as {
-@@ -76,12 +99,414 @@
+@@ -76,12 +99,547 @@
    const target = targets.values().next().value;
    if (!target) throw new Error('Expected an active virtual subagent target');
    return target;
@@ -62864,6 +62864,139 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
 +    expect(
 +      await sessions.resolve(runtime, 'parent-session', 'call-1'),
 +    ).toBeUndefined();
++  });
++
++  it.each([
++    ['running', false],
++    ['completed', false],
++    ['running', true],
++    ['completed', true],
++  ] as const)(
++    'refuses an incomplete canonical replay for %s (reload: %s)',
++    async (status, reload) => {
++      const { runtime, sessions } = await identityFixture({
++        toolUseId: 'call-1',
++        status,
++      });
++      const outputFile = path.join(
++        runtime.sessionRuntimeBaseDir,
++        'agent.jsonl',
++      );
++      const resolved = await sessions.resolve(
++        runtime,
++        'parent-session',
++        'call-1',
++      );
++      if (reload) {
++        await fs.writeFile(
++          outputFile,
++          JSON.stringify(record('root', null, 'user', 'task')) + '\n',
++        );
++        const loaded = await sessions.load(runtime, resolved!.sessionId);
++        expect(JSON.stringify(loaded!.compactedReplay)).toContain('task');
++      }
++      const rows = [
++        record('root', null, 'user', 'task'),
++        {
++          ...record('bad', 'root', 'assistant', 'unreadable answer'),
++          usageMetadata: {
++            promptTokenCount: 1,
++            candidatesTokenCount: 1,
++            totalTokenCount: 2,
++          },
++        },
++        record('tail', 'bad', 'user', 'must not skip to this turn'),
++      ];
++      await fs.writeFile(
++        outputFile,
++        rows.map((row) => JSON.stringify(row) + '\n').join(''),
++      );
++      const failure = await sessions
++        .load(runtime, resolved!.sessionId)
++        .catch((error: unknown) => error);
++      expect(failure).toBeInstanceOf(Error);
++      expect((failure as Error).message).toContain(outputFile);
++      expect((failure as Error).message).toContain('Replay conversion failed');
++      expect((failure as Error).message).toContain(
++        'Inspect the original recording',
++      );
++      await fs.writeFile(
++        outputFile,
++        JSON.stringify(record('root', null, 'user', 'replaced')) + '\n',
++      );
++      await expect(sessions.load(runtime, resolved!.sessionId)).rejects.toBe(
++        failure,
++      );
++    },
++  );
++
++  it('latches a canonical replay failure before publishing its partial page or live suffix', async () => {
++    const { runtime, sessions } = await identityFixture({
++      toolUseId: 'call-1',
++    });
++    const outputFile = path.join(runtime.sessionRuntimeBaseDir, 'agent.jsonl');
++    await fs.writeFile(
++      outputFile,
++      JSON.stringify(record('root', null, 'user', 'task')) + '\n',
++    );
++    const resolved = await sessions.resolve(
++      runtime,
++      'parent-session',
++      'call-1',
++    );
++    const loaded = await sessions.load(runtime, resolved!.sessionId);
++    const abort = new AbortController();
++    const events = await sessions.subscribe(runtime, resolved!.sessionId, {
++      signal: abort.signal,
++      lastEventId: loaded!.lastEventId,
++    });
++    const iterator = events![Symbol.asyncIterator]();
++    try {
++      expect((await iterator.next()).value?.type).toBe('replay_complete');
++      const rows = [
++        record('prefix', 'root', 'user', 'partial page prefix'),
++        {
++          ...record('bad', 'prefix', 'assistant', 'unreadable answer'),
++          usageMetadata: {
++            promptTokenCount: 1,
++            candidatesTokenCount: 1,
++            totalTokenCount: 2,
++          },
++        },
++        record('tail', 'bad', 'user', 'canonical suffix'),
++      ];
++      await fs.appendFile(
++        outputFile,
++        rows.map((row) => JSON.stringify(row) + '\n').join(''),
++      );
++      await fs.writeFile(
++        `${outputFile}.stream`,
++        JSON.stringify({
++          v: 1,
++          runId: 'run-1',
++          round: 1,
++          text: 'live suffix',
++          thought: false,
++          timestamp: Date.now(),
++        }) + '\n',
++      );
++      const failure = await activeTarget(sessions)
++        .refreshLive()
++        .catch((error: unknown) => error);
++      expect(failure).toBeInstanceOf(Error);
++      expect((await iterator.next()).value).toMatchObject({
++        type: 'stream_error',
++        data: { error: (failure as Error).message },
++      });
++      expect((await iterator.next()).done).toBe(true);
++      await expect(activeTarget(sessions).refreshLive()).rejects.toBe(failure);
++      await expect(sessions.load(runtime, resolved!.sessionId)).rejects.toBe(
++        failure,
++      );
++    } finally {
++      abort.abort();
++      await iterator.return?.();
++    }
 +  });
 +
 +  it('refuses a task snapshot belonging to a different parent session', async () => {
@@ -63125,7 +63258,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
      ).toThrow('valid id parts');
      expect(() =>
        createVirtualSubagentSessionId('parent/session', 'agent-1'),
-@@ -309,13 +734,13 @@
+@@ -309,13 +867,13 @@
                label: 'agent: research',
                description: 'research',
                status: 'running' as const,
@@ -63140,7 +63273,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
                outputFile,
                isBackgrounded: false,
                toolUseId: 'call-1',
-@@ -333,13 +758,13 @@
+@@ -333,13 +891,13 @@
  
      expect(resolved?.title).toBe('agent: research');
      expect(resolved).toMatchObject({
@@ -63155,7 +63288,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
        agentId: 'general-purpose-call-1',
      });
  
-@@ -715,13 +1140,13 @@
+@@ -715,13 +1273,13 @@
          toolCallResult: {
            callId: toolCallId,
            status: 'success',
@@ -63170,7 +63303,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
      );
      await fs.writeFile(
        outputFile,
-@@ -748,13 +1173,17 @@
+@@ -748,13 +1306,17 @@
                id: 'general-purpose-running',
                label: 'running agent',
                description: 'running agent',
@@ -63189,7 +63322,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
              },
            ],
          }),
-@@ -768,13 +1197,13 @@
+@@ -768,13 +1330,13 @@
        toolCallId,
      );
  
@@ -63204,7 +63337,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
      const stream = await sessions.subscribe(runtime, resolved!.sessionId, {
        signal: abort.signal,
        lastEventId: loaded!.lastEventId,
-@@ -788,13 +1217,16 @@
+@@ -788,13 +1350,16 @@
        `${JSON.stringify(
          record('final', 'child', 'assistant', 'final canonical output'),
        )}\n`,
@@ -63222,7 +63355,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
        'final canonical output',
      );
  
-@@ -819,26 +1251,26 @@
+@@ -819,26 +1384,26 @@
      vi.useRealTimers();
      abort.abort();
      await next;
@@ -63252,7 +63385,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
        `${JSON.stringify({
          ...record('root', null, 'assistant', ''),
          sessionId: parentSessionId,
-@@ -847,13 +1279,13 @@
+@@ -847,13 +1412,13 @@
            parts: [
              {
                functionCall: {
@@ -63267,7 +63400,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
                },
              },
            ],
-@@ -865,19 +1297,15 @@
+@@ -865,19 +1430,15 @@
          toolCallResult: {
            callId: toolCallId,
            status: 'success',
@@ -63288,7 +63421,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
        })}\n`,
      );
      const sessionDir = getSubagentSessionDir(projectDir, parentSessionId);
-@@ -894,22 +1322,23 @@
+@@ -894,22 +1455,23 @@
        })}\n`,
      );
      await fs.writeFile(
@@ -63314,7 +63447,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
          mode: 'runtime-overlay',
          overlayKeys: ['QWEN_RUNTIME_DIR'],
          effectiveEnv: { QWEN_RUNTIME_DIR: runtimeDir },
-@@ -920,14 +1349,14 @@
+@@ -920,14 +1482,14 @@
            sessionId: parentSessionId,
            now: Date.now(),
            tasks: [
@@ -63331,7 +63464,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
                outputFile,
                isBackgrounded: true,
              },
-@@ -945,13 +1374,10 @@
+@@ -945,13 +1507,10 @@
      expect(parseVirtualSubagentSessionId(resolved!.sessionId)?.agentId).toBe(
        'general-purpose-random',
      );
@@ -63556,7 +63689,25 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
            this.transcriptIdentity = undefined;
            this.resetCanonicalState();
          }
-@@ -594,18 +570,30 @@
+@@ -579,12 +555,17 @@
+       page,
+       encodeCursor: (state) => {
+         nextReplayState = state.replay;
+         return 'virtual-subagent-replay';
+       },
+     });
++    if (replay.partial || replay.replayError !== undefined) {
++      throw new Error(
++        `Cannot replay canonical recording ${this.task.outputFile}: ${replay.replayError}. Inspect the original recording or start a new session.`,
++      );
++    }
+     this.replayState = nextReplayState;
+     const inputs = replay.updates.map((update) => ({
+       type: 'session_update',
+       data: update,
+     }));
+     const published = this.initialized
+@@ -594,22 +575,47 @@
          })
        : this.bus.seedReplayEvents(inputs);
      if (!this.snapshotDelivered) this.events.push(...published);
@@ -63575,24 +63726,42 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 -      }
 -    });
 +    } catch (error) {
-+      this.readFailure =
-+        error instanceof Error ? error : new Error(String(error));
-+      this.bus.publish({
-+        type: 'stream_error',
-+        data: { error: this.readFailure.message },
-+      });
-+      this.bus.close();
-+      if (this.pollTimer) clearInterval(this.pollTimer);
-+      this.pollTimer = undefined;
-+      throw this.readFailure;
++      throw this.failRead(error);
 +    }
    }
  
++  private failRead(error: unknown): Error {
++    if (this.readFailure) return this.readFailure;
++    this.readFailure =
++      error instanceof Error ? error : new Error(String(error));
++    this.bus.publish({
++      type: 'stream_error',
++      data: { error: this.readFailure.message },
++    });
++    this.bus.close();
++    if (this.pollTimer) clearInterval(this.pollTimer);
++    this.pollTimer = undefined;
++    return this.readFailure;
++  }
++
    private enqueueRefresh<T>(work: () => Promise<T>): Promise<T> {
-     const result = this.refreshPromise.catch(() => undefined).then(work);
+-    const result = this.refreshPromise.catch(() => undefined).then(work);
++    const result = this.refreshPromise
++      .catch(() => undefined)
++      .then(() => {
++        if (this.readFailure) throw this.readFailure;
++        return work();
++      })
++      .catch((error: unknown) => {
++        throw this.failRead(error);
++      });
      this.refreshPromise = result.then(
        () => undefined,
-@@ -635,12 +623,13 @@
+       () => undefined,
+     );
+     return result;
+   }
+@@ -635,12 +641,13 @@
    }
  
    private async createSnapshotOnce(): Promise<{
@@ -63606,7 +63775,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        this.events.length = 0;
        this.snapshotDelivered = true;
        return { events: snapshot, lastEventId: this.bus.lastEventId };
-@@ -748,12 +737,15 @@
+@@ -748,12 +755,15 @@
        id: string;
        outputFile?: string;
        toolUseId?: string;
@@ -63622,7 +63791,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
          typeof candidate.outputFile === 'string' &&
          predicate(candidate),
      );
-@@ -766,13 +758,15 @@
+@@ -766,13 +776,15 @@
          startTime: task.startTime,
          durationMs:
            task.stats?.durationMs ??
@@ -63639,7 +63808,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
      const projectDir = Storage.runWithResolvedRuntimeBaseDir(
        runtime.sessionRuntimeBaseDir,
        () => new Storage(runtime.workspaceCwd).getProjectDir(),
-@@ -786,12 +780,17 @@
+@@ -786,12 +798,17 @@
        throw error;
      }
      for (const name of names) {
@@ -63657,7 +63826,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
            kind: 'agent',
            id: meta.agentId,
            toolUseId: meta.toolUseId,
-@@ -811,168 +810,59 @@
+@@ -811,168 +828,59 @@
          durationMs: durationBetween(meta.createdAt, meta.lastUpdatedAt),
        };
      }

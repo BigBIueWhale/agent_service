@@ -8488,9 +8488,23 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         cli + "serve/virtual-subagent-sessions.ts",
         ("decodeChatRecord(", "if (this.readFailure) throw this.readFailure;",
-         "type: 'stream_error'", "this.bus.close()", "this.requestReplay.observe(record)"),
+         "type: 'stream_error'", "this.bus.close()", "this.requestReplay.observe(record)",
+         "if (this.readFailure) return this.readFailure;", "throw this.failRead(error);"),
         label=label,
     )
+    _require_ordered(
+        _source(state, cli + "serve/virtual-subagent-sessions.ts", label=label),
+        ("const replay = await replayTranscriptRecordPage({",
+         "if (replay.partial || replay.replayError !== undefined)",
+         "Cannot replay canonical recording", "this.replayState = nextReplayState;",
+         "const inputs = replay.updates.map"),
+        label=label,
+        location=cli + "serve/virtual-subagent-sessions.ts",
+    )
+    _require_all(state, cli + "serve/virtual-subagent-sessions.test.ts", (
+        "refuses an incomplete canonical replay for %s (reload: %s)",
+        "latches a canonical replay failure before publishing its partial page or live suffix",
+    ), label=label)
     require_text(state, cli + "commands/review/cost-ledger.ts", "readCanonicalChatRecordsSync(file)", label=label)
     require_text(state, cli + "commands/review/lib/transcripts.ts", "readCanonicalChatRecordsSync(file)", label=label)
     forbid_text(state, cli + "commands/review/lib/transcripts.ts", "JSON.parse(line)", label=label)
