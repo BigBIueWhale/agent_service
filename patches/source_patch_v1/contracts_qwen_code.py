@@ -8232,12 +8232,39 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     sdk = "packages/sdk-typescript/"
     _require_all(state, sdk + "src/query/Query.ts", (
-        "this.recordAdmission.admit(message)", "this.assertOpen();",
+        "this.recordAdmission.admit(", "this.sessionIdLocked ? this.sessionId : undefined",
+        "this.assertOpen();", "this.recordAdmission.finish();",
+        "this.activeInputSources !== 0", "this.recordFailure(cause)",
+        "await this.finishTransportRead(failure)", "this.closePromise",
+        "!this.recordAdmission.hasPendingInput()", "this.submittedTurn();",
+        "extractRuntimeUserMessageText(message)",
+        "pending.subtype === ControlRequestType.CONTINUE_LAST_TURN",
+        "pending.subtype === ControlRequestType.INITIALIZE",
+        "CLI initialization omits its selected session",
         "this.inputEndReadyResolve?.();", "await this.close();",
         "if (this.closed || this.transportReadFinalized)",
         "throw this.inputStream.hasError;",
-        "!(this.inputStream.hasError instanceof AbortError)",
+        "this.inputStream.hasError === undefined",
     ), label=label)
+    _require_all(state, core + "utils/runtime-contract-admission.ts", (
+        "finish(): void", "hasPendingInput(): boolean", "this.pendingInputs !== 0",
+        "!session.initialized || session.needsResult", "finishStream()",
+        "{ state: 'ended', kind: 'wire_record' }", "wire.session_id !== expectedSession",
+    ), label=label)
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "finishStream(): void", "this.responses.finish();",
+    ), label=label)
+    _require_all(state, "packages/cli/src/nonInteractive/session.ts", (
+        "extractRuntimeUserMessageText(userMessage)",
+    ), label=label)
+    forbid_text(state, "packages/cli/src/nonInteractive/session.ts",
+                "function extractUserMessageText", label=label)
+    forbid_text(state, sdk + "src/query/createQuery.ts", "transport.write(", label=label)
+    _require_all(state, sdk + "src/query/createQuery.ts", (
+        "continue: options.continue", "session_id: queryInstance.getSessionId()",
+    ), label=label)
+    for path in ("src/query/Query.ts", "src/types/types.ts", "src/types/queryOptionsSchema.ts"):
+        forbid_text(state, sdk + path, "streamClose", label=label)
     _require_all(state, sdk + "src/utils/jsonLines.ts", (
         "chunks: AsyncIterable<Uint8Array>", "fatal: true, ignoreBOM: true",
         "chunk.indexOf(0x0a, start)", "Buffer.concat(fragments, length)",
@@ -10263,6 +10290,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "buffer size and refuses malformed or uncommitted records before admission. A "
             "finalized query cannot accept more work or hide refusal behind abort or cleanup; "
             "Python startup and input cleanup settle before successful reader termination. "
+            "TypeScript EOF uses shared Core completion to require initialized closed windows, "
+            "closed responses and partial messages, and all submitted inputs or accepted "
+            "continuations; unfinished input sources, pending controls and cleanup prevent "
+            "success. Selected identities bind admission. Query termination is cancellation; "
+            "end-input and natural EOF verify completion. One Core input extraction preserves "
+            "CLI no-op semantics, and every queued root result precedes input closure without "
+            "a timer closing the active control channel. Fork and continue identity comes "
+            "from CLI initialization before input envelopes; resume keeps its selected ID. "
             "The Python SDK admits the exact bound schema, replays request bytes and response "
             "lifetimes, preserves evidence envelopes, and checks partial ownership before delivery. "
             "Natural EOF refuses open evidence and unmet input/result counts; this count is a "

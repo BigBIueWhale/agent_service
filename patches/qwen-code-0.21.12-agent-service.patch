@@ -46597,13 +46597,14 @@ diff --git a/packages/cli/src/nonInteractive/session.test.ts b/packages/cli/src/
 diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonInteractive/session.ts
 --- a/packages/cli/src/nonInteractive/session.ts
 +++ b/packages/cli/src/nonInteractive/session.ts
-@@ -1,21 +1,25 @@
+@@ -1,21 +1,26 @@
 +import {
 +  runCleanupSteps,
 +  withCleanup,
 +  uiTelemetryService,
 +  AgentTerminateMode,
 +  createDebugLogger,
++  extractRuntimeUserMessageText,
 +  buildSessionRecoveryPlanFromApiHistory,
 +  SendMessageType,
 +  TURN_INTERRUPTION_HISTORY_TAIL_COUNT,
@@ -46629,7 +46630,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
  import { ControlContext } from './control/ControlContext.js';
  import { ControlDispatcher } from './control/ControlDispatcher.js';
  import { ControlService } from './control/ControlService.js';
-@@ -38,12 +42,13 @@
+@@ -38,12 +43,13 @@
  } from './types.js';
  import { createMinimalSettings } from '../config/settings.js';
  import type { LoadedSettings } from '../config/settings.js';
@@ -46643,7 +46644,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    profileCheckpoint,
  } from '../utils/startupProfiler.js';
  import {
-@@ -86,24 +91,27 @@
+@@ -86,24 +92,27 @@
    private dispatcher: ControlDispatcher | null = null;
    private controlService: ControlService | null = null;
    private controlSystemEnabled: boolean | null = null;
@@ -46672,7 +46673,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      initialPrompt?: CLIUserMessage,
      settings: LoadedSettings = createMinimalSettings(),
    ) {
-@@ -133,18 +141,19 @@
+@@ -133,18 +142,19 @@
      this.initializationPromise = new Promise<void>((resolve, reject) => {
        this.initializationResolve = () => {
          resolve();
@@ -46693,7 +46694,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      this.promptIdCounter++;
      return `${this.sessionId}########${this.promptIdCounter}`;
    }
-@@ -275,13 +284,13 @@
+@@ -275,13 +285,13 @@
      }
    }
  
@@ -46708,7 +46709,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
        this.initializationResolve = null;
        this.initializationReject = null;
      }
-@@ -392,15 +401,13 @@
+@@ -392,15 +402,13 @@
        await this.ensureConfigInitialized({ sendSdkMcpMessage });
  
        // Initialization complete!
@@ -46725,7 +46726,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    /**
     * Direct mode initialization flow
     * Initializes config and enqueues the first user message
-@@ -417,15 +424,13 @@
+@@ -417,15 +425,13 @@
        this.completeInitialization();
  
        // Enqueue the first user message for processing
@@ -46742,8 +46743,15 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    /**
     * Handle control request asynchronously (fire-and-forget from main loop).
     * Errors are handled internally and responses sent by dispatcher.
-@@ -471,32 +476,79 @@
-     const input = extractUserMessageText(userMessage);
+@@ -465,38 +471,85 @@
+     }
+ 
+     dispatcher.handleCancel(cancelRequest.request_id);
+   }
+ 
+   private async processUserMessage(userMessage: CLIUserMessage): Promise<void> {
+-    const input = extractUserMessageText(userMessage);
++    const input = extractRuntimeUserMessageText(userMessage);
      if (!input) {
        debugLogger.debug('[Session] No text content in user message');
        return;
@@ -46842,7 +46850,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
     * Handle a continue_last_turn control request: classify the last turn
     * from chat history and, when it was interrupted, schedule a
     * continuation turn on the work queue. Returns the control reply
-@@ -564,51 +616,18 @@
+@@ -564,51 +617,18 @@
     * re-detection happens inside runNonInteractive (history may have moved
     * since the request was accepted); a turn that became clean by then is
     * a no-op result message.
@@ -46900,7 +46908,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      batch: MonitorQueueItem[],
    ): Promise<void> {
      await this.waitForInitialization();
-@@ -634,34 +653,16 @@
+@@ -634,34 +654,16 @@
        );
      }
  
@@ -46939,7 +46947,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      if (this.isShuttingDown || this.sessionAbortController.signal.aborted) {
        return;
      }
-@@ -673,29 +674,19 @@
+@@ -673,29 +675,19 @@
          this.monitorQueue.length > 0) &&
        !this.isShuttingDown &&
        !this.sessionAbortController.signal.aborted
@@ -46971,7 +46979,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
        const started = this.monitorStartedQueue.shift();
        if (started) {
          this.outputAdapter.emitSystemMessage('task_started', started);
-@@ -703,21 +694,13 @@
+@@ -703,21 +695,13 @@
        }
  
        if (this.monitorQueue.length === 0) {
@@ -46994,7 +47002,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    private enqueueUserMessage(userMessage: CLIUserMessage): void {
      this.userMessageQueue.push(userMessage);
      this.ensureProcessingStarted();
-@@ -735,43 +718,50 @@
+@@ -735,43 +719,50 @@
  
    private ensureProcessingStarted(): void {
      if (this.processingPromise) {
@@ -47060,7 +47068,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      debugLogger.info('[Session] Interrupt requested');
      this.activeTurnAbortController?.abort(new TurnInterruptedError());
    }
-@@ -808,93 +798,62 @@
+@@ -808,93 +799,62 @@
    }
  
    /**
@@ -47204,7 +47212,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      if (
        !this.monitorNotificationsRegistered &&
        !this.monitorRegistrationsRegistered
-@@ -918,14 +877,19 @@
+@@ -918,14 +878,19 @@
        process.removeListener('SIGINT', this.shutdownHandler);
        process.removeListener('SIGTERM', this.shutdownHandler);
        this.shutdownHandler = null;
@@ -47226,7 +47234,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
     * Main message processing loop
     *
     * CRITICAL: This loop must NEVER await handlers that might need to
-@@ -938,90 +902,101 @@
+@@ -938,118 +903,104 @@
     * 2. First message - determines mode, starts async initialization
     * 3. control_request - fire-and-forget, tracked by dispatcher
     * 4. control_cancel - synchronous
@@ -47396,10 +47404,38 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    }
  }
  
- function extractUserMessageText(message: CLIUserMessage): string | null {
-   const content = message.message.content;
-   if (typeof content === 'string') {
-@@ -1064,13 +1039,15 @@
+-function extractUserMessageText(message: CLIUserMessage): string | null {
+-  const content = message.message.content;
+-  if (typeof content === 'string') {
+-    return content;
+-  }
+-
+-  if (Array.isArray(content)) {
+-    const parts = content
+-      .map((block) => {
+-        if (!block || typeof block !== 'object') {
+-          return '';
+-        }
+-        if ('type' in block && block.type === 'text' && 'text' in block) {
+-          return typeof block.text === 'string' ? block.text : '';
+-        }
+-        return JSON.stringify(block);
+-      })
+-      .filter((part) => part.length > 0);
+-
+-    return parts.length > 0 ? parts.join('\n') : null;
+-  }
+-
+-  return null;
+-}
+-
+ export async function runNonInteractiveStreamJson(
+   config: Config,
+   input: string,
+   settings: LoadedSettings = createMinimalSettings(),
+ ): Promise<void> {
+   let initialPrompt: CLIUserMessage | undefined = undefined;
+@@ -1064,13 +1015,15 @@
        },
        parent_tool_use_id: null,
      };
@@ -198532,7 +198568,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +614,24 @@
+@@ -600,24 +614,25 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -198540,6 +198576,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/runtimeStatus.js';
  export * from './utils/schemaValidator.js';
 +export * from './utils/runtime-stream-contract.js';
++export { extractRuntimeUserMessageText } from './utils/runtime-user-input.js';
  export * from './utils/sessionIdContext.js';
  export * from './utils/secure-browser-launcher.js';
  export * from './utils/shell-utils.js';
@@ -198558,7 +198595,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +718,52 @@
+@@ -704,6 +719,52 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -290941,7 +290978,7 @@ diff --git a/packages/core/src/utils/retryErrorClassification.ts b/packages/core
 diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packages/core/src/utils/runtime-contract-admission.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.test.ts
-@@ -0,0 +1,230 @@
+@@ -0,0 +1,267 @@
 +import { describe, expect, it } from 'vitest';
 +import {
 +  RuntimeContractAdmission,
@@ -291172,10 +291209,47 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +    },
 +  );
 +});
++
++describe('runtime stream EOF', () => {
++  it('allows a query with no records or submitted work to end', () => {
++    expect(() => new RuntimeContractAdmission().finish()).not.toThrow();
++  });
++  it.each(['input', 'uninitialized'])(
++    'retains the first %s EOF refusal without fabricating record bytes',
++    (kind) => {
++      const owner = new RuntimeContractAdmission();
++      if (kind === 'input') owner.submittedInput();
++      else owner.admit(idle());
++      let failure: unknown;
++      try {
++        owner.finish();
++      } catch (error) {
++        failure = error;
++      }
++      expect(failure).toBeInstanceOf(RuntimeContractViolation);
++      expect((failure as RuntimeContractViolation).evidence).toEqual({
++        state: 'ended',
++        kind: 'wire_record',
++      });
++      for (const operation of [
++        () => owner.finish(),
++        () => owner.admit(idle()),
++        () => owner.submittedInput(),
++      ]) {
++        try {
++          operation();
++          throw new Error('operation succeeded after EOF refusal');
++        } catch (error) {
++          expect(error).toBe(failure);
++        }
++      }
++    },
++  );
++});
 diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/core/src/utils/runtime-contract-admission.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.ts
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,253 @@
 +import { ModelRequestStreamReplay } from '../core/model-request-evidence.js';
 +import {
 +  STREAM_CONTRACT_SHA256,
@@ -291193,7 +291267,8 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +  constructor(
 +    readonly evidence:
 +      | { state: 'serialized'; kind: AdmissionKind; recordBytes: string }
-+      | { state: 'unserializable'; kind: AdmissionKind; cause: unknown },
++      | { state: 'unserializable'; kind: AdmissionKind; cause: unknown }
++      | { state: 'ended'; kind: 'wire_record' },
 +    cause: string,
 +  ) {
 +    super(
@@ -291210,6 +291285,11 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +  private failure: RuntimeContractViolation | undefined;
 +  private readonly requests = new Map<string, ModelRequestStreamReplay>();
 +  private readonly terminalIds = new Map<string, Set<string>>();
++  private readonly completion = new Map<
++    string,
++    { initialized: boolean; needsResult: boolean }
++  >();
++  private pendingInputs = 0;
 +  private readonly partials = new Map<
 +    string,
 +    Map<string | null, RuntimePartialStream>
@@ -291219,7 +291299,43 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +    if (this.failure) throw this.failure;
 +  }
 +
-+  admit(record: unknown): string {
++  hasPendingInput(): boolean {
++    return this.pendingInputs !== 0;
++  }
++
++  submittedInput(): void {
++    this.assertAvailable();
++    if (!Number.isSafeInteger(this.pendingInputs + 1)) {
++      throw new Error(
++        'Submitted input count exceeds exact representation; finish the current query before submitting more work.',
++      );
++    }
++    this.pendingInputs++;
++  }
++
++  finish(): void {
++    this.assertAvailable();
++    try {
++      if (this.pendingInputs !== 0)
++        throw new Error('EOF omits a terminal result for submitted input');
++      for (const [id, session] of this.completion) {
++        if (!session.initialized || session.needsResult)
++          throw new Error(
++            'EOF omits stream initialization or a terminal result',
++          );
++        this.requests.get(id)!.finishStream();
++        for (const partial of this.partials.get(id)!.values()) partial.finish();
++      }
++    } catch (cause) {
++      this.failure = new RuntimeContractViolation(
++        { state: 'ended', kind: 'wire_record' },
++        `${String(cause)}; retain the complete stdout and inspect the missing evidence before retrying`,
++      );
++      throw this.failure;
++    }
++  }
++
++  admit(record: unknown, expectedSession?: string): string {
 +    return this.validate(
 +      record,
 +      (value) => {
@@ -291231,6 +291347,16 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +          parent_tool_use_id?: string | null;
 +          event: Parameters<RuntimePartialStream['observe']>[0];
 +        };
++        if (
++          expectedSession !== undefined &&
++          wire.session_id !== expectedSession
++        )
++          return 'Record belongs to another query session; select the intended session and retain the original stdout';
++        let completion = this.completion.get(wire.session_id);
++        if (!completion) {
++          completion = { initialized: false, needsResult: false };
++          this.completion.set(wire.session_id, completion);
++        }
 +        let session = this.partials.get(wire.session_id);
 +        if (!session) {
 +          session = new Map();
@@ -291260,14 +291386,22 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +              throw new Error('Terminal record identity is repeated');
 +            ids.add(id);
 +          }
-+          if (wire.type === 'system' && envelope['subtype'] === 'init')
++          if (wire.type === 'system' && envelope['subtype'] === 'init') {
 +            requests.begin(envelope['request_evidence_origin']);
++            completion.initialized = true;
++            completion.needsResult = true;
++          }
 +          if (wire.type === 'model_request')
 +            requests.observe(envelope['request']);
 +          if (wire.type === 'model_response')
 +            requests.observeResponse(envelope['response']);
-+          if (wire.type === 'result' && scope === null)
++          if (wire.type === 'result' && scope === null) {
 +            requests.finish(envelope['request_evidence']);
++            completion.needsResult = false;
++            if (this.pendingInputs !== 0) this.pendingInputs--;
++          }
++          if (['model_request', 'assistant', 'user'].includes(wire.type))
++            completion.needsResult = true;
 +          const origin = envelope['origin'] as
 +            | import('../core/chat-attempt.js').ModelOutputOrigin
 +            | undefined;
@@ -291282,8 +291416,15 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +            requests.observeOrigin(origin, scope);
 +            partial.observeOrigin(origin);
 +          }
-+          if (wire.type === 'stream_event')
++          if (wire.type === 'stream_event') {
 +            partial.observe(wire.event, scope === null);
++            if (
++              !['goal_state', 'active_goal', 'tool_progress'].includes(
++                wire.event.type,
++              )
++            )
++              completion.needsResult = true;
++          }
 +          if (wire.type === 'assistant') partial.completeMessage();
 +          if (wire.type === 'result') partial.finish();
 +        } catch (error) {
@@ -303620,7 +303761,46 @@ diff --git a/packages/sdk-typescript/src/index.ts b/packages/sdk-typescript/src/
 diff --git a/packages/sdk-typescript/src/query/createQuery.ts b/packages/sdk-typescript/src/query/createQuery.ts
 --- a/packages/sdk-typescript/src/query/createQuery.ts
 +++ b/packages/sdk-typescript/src/query/createQuery.ts
-@@ -78,13 +78,11 @@
+@@ -1,12 +1,11 @@
+ /**
+  * Factory function for creating Query instances.
+  */
+ 
+ import type { SDKUserMessage } from '../types/protocol.js';
+-import { serializeJsonLine } from '../utils/jsonLines.js';
+ import { ProcessTransport } from '../transport/ProcessTransport.js';
+ import { prepareSpawnInfo, type SpawnInfo } from '../utils/cliPath.js';
+ import { Query } from './Query.js';
+ import type {
+   QueryOptions,
+   QuerySystemPrompt,
+@@ -43,15 +42,13 @@
+   const isSingleTurn = typeof prompt === 'string';
+ 
+   const pathToQwenExecutable = options.pathToQwenExecutable;
+ 
+   const abortController = options.abortController ?? new AbortController();
+ 
+-  // Generate or use provided session ID for SDK-CLI alignment
+-  // When forkSession is true, generate a new UUID for the forked session
+-  // rather than reusing the resume (source) session ID
++  // Fork and continue identities are finalized by the CLI initialize reply.
+   const sessionId = options.forkSession
+     ? (options.sessionId ?? randomUUID())
+     : (options.resume ?? options.sessionId ?? randomUUID());
+   const resolvedSystemPrompt = resolveSystemPromptOption(options.systemPrompt);
+ 
+   const transport = new ProcessTransport({
+@@ -70,21 +67,20 @@
+     coreTools: options.coreTools,
+     excludeTools: options.excludeTools,
+     allowedTools: options.allowedTools,
+     authType: options.authType,
+     includePartialMessages: options.includePartialMessages,
+     resume: options.resume,
++    continue: options.continue,
+     sessionId,
+     forkSession: options.forkSession,
 -    maxToolCalls: options.maxToolCalls,
      maxSubagentDepth: options.maxSubagentDepth,
      includeDirectories: options.includeDirectories,
@@ -303634,6 +303814,43 @@ diff --git a/packages/sdk-typescript/src/query/createQuery.ts b/packages/sdk-typ
      insecure: options.insecure,
      worktree: options.worktree,
      disabledSlashCommands: options.disabledSlashCommands,
+@@ -107,27 +103,21 @@
+         role: 'user',
+         content: stringPrompt,
+       },
+       parent_tool_use_id: null,
+     };
+ 
+-    (async () => {
+-      try {
+-        await queryInstance.initialized;
+-        // Skip writing if transport has already exited with an error
+-        if (transport.exitError) {
+-          return;
+-        }
+-        transport.write(serializeJsonLine(message));
+-      } catch (err) {
+-        // Only log error if it's not due to transport already being closed
+-        if (!transport.exitError) {
+-          logger.error('Error sending single-turn prompt:', err);
+-        }
+-      }
+-    })();
++    queryInstance
++      .streamInput(
++        (async function* () {
++          yield { ...message, session_id: queryInstance.getSessionId() };
++        })(),
++      )
++      .catch((error) =>
++        logger.error('Error sending single-turn prompt:', error),
++      );
+   } else {
+     queryInstance
+       .streamInput(prompt as AsyncIterable<SDKUserMessage>)
+       .catch((err) => {
+         logger.error('Error streaming input:', err);
+       });
 diff --git a/packages/sdk-typescript/src/transport/ProcessTransport.ts b/packages/sdk-typescript/src/transport/ProcessTransport.ts
 --- a/packages/sdk-typescript/src/transport/ProcessTransport.ts
 +++ b/packages/sdk-typescript/src/transport/ProcessTransport.ts
@@ -303968,7 +304185,21 @@ diff --git a/packages/sdk-typescript/src/types/queryOptionsSchema.ts b/packages/
    '--openai-api-key',
    '--mcp-config',
    '--prompt',
-@@ -248,7 +245,6 @@
+@@ -171,13 +168,12 @@
+ });
+ 
+ export const TimeoutConfigSchema = z.object({
+   canUseTool: z.number().positive().optional(),
+   mcpRequest: z.number().positive().optional(),
+   controlRequest: z.number().positive().optional(),
+-  streamClose: z.number().positive().optional(),
+ });
+ 
+ const QuerySystemPromptPresetSchema = z
+   .object({
+     type: z.literal('preset'),
+     preset: z.literal('qwen_code'),
+@@ -248,7 +244,6 @@
      resume: z.string().optional(),
      sessionId: z.string().optional(),
      forkSession: z.boolean().optional(),
@@ -303976,7 +304207,7 @@ diff --git a/packages/sdk-typescript/src/types/queryOptionsSchema.ts b/packages/
      maxSubagentDepth: z.number().int().min(1).max(100).optional(),
      includeDirectories: z
        .array(
-@@ -283,20 +279,12 @@
+@@ -283,20 +278,12 @@
        .array(
          z.string().refine((s) => !s.includes(','), {
            message: 'allowedMcpServerNames items cannot contain commas',
@@ -304014,7 +304245,23 @@ diff --git a/packages/sdk-typescript/src/types/types.ts b/packages/sdk-typescrip
    insecure?: boolean;
    worktree?: boolean;
    disabledSlashCommands?: string[];
-@@ -522,12 +520,6 @@
+@@ -503,12 +501,15 @@
+    * Resume a previous session by providing its session ID.
+    * This is equivalent to using the `--resume` flag in the Qwen CLI.
+    * @example '123e4567-e89b-12d3-a456-426614174000'
+    */
+   resume?: string;
+ 
++  /** Continue the most recent session in the current directory; resume takes precedence. */
++  continue?: boolean;
++
+   /**
+    * Specify a session ID for the new session.
+    * This ensures the SDK and CLI use the same session ID without resuming a previous session.
+    * Equivalent to CLI's `--session-id` flag.
+    * @example '123e4567-e89b-12d3-a456-426614174000'
+    */
+@@ -522,12 +523,6 @@
    forkSession?: boolean;
  
    /**
@@ -304027,7 +304274,7 @@ diff --git a/packages/sdk-typescript/src/types/types.ts b/packages/sdk-typescrip
     * Maximum nesting depth for sub-agents (1-100).
     * Equivalent to CLI's `--max-subagent-depth` flag.
     */
-@@ -556,18 +548,12 @@
+@@ -556,18 +551,12 @@
     * Whitelist of MCP server names to allow.
     * Equivalent to CLI's `--allowed-mcp-server-names` flag.
     */
@@ -304046,6 +304293,25 @@ diff --git a/packages/sdk-typescript/src/types/types.ts b/packages/sdk-typescrip
    proxy?: string;
  
    /**
+@@ -628,18 +617,8 @@
+      * Timeout for SDK→CLI control requests.
+      * This applies to internal control operations like initialize, interrupt,
+      * setPermissionMode, setModel, etc.
+      * @default 60000 (1 minute)
+      */
+     controlRequest?: number;
+-
+-    /**
+-     * Timeout for waiting before closing CLI's stdin after user messages are sent.
+-     * In multi-turn mode with SDK MCP servers, after all user messages are processed,
+-     * the SDK waits for the first result message to ensure all initialization
+-     * (control responses, MCP server setup, etc.) is complete before closing stdin.
+-     * This timeout is a fallback to avoid hanging indefinitely.
+-     * @default 60000 (1 minute)
+-     */
+-    streamClose?: number;
+   };
+ }
 diff --git a/packages/sdk-typescript/test/daemon-ui-transcript.test.ts b/packages/sdk-typescript/test/daemon-ui-transcript.test.ts
 --- a/packages/sdk-typescript/test/daemon-ui-transcript.test.ts
 +++ b/packages/sdk-typescript/test/daemon-ui-transcript.test.ts
@@ -304331,7 +304597,69 @@ diff --git a/packages/sdk-typescript/test/unit/Query.test.ts b/packages/sdk-type
      } as CLIControlRequest['request'],
    };
  }
-@@ -593,12 +649,69 @@
+@@ -263,19 +319,20 @@
+   };
+ }
+ 
+ async function respondToInitialize(
+   transport: MockTransport,
+   query: Query,
++  response: Record<string, unknown> = {},
+ ): Promise<void> {
+   await vi.waitFor(() => {
+     expect(transport.writtenMessages.length).toBeGreaterThan(0);
+   });
+   const initRequest = transport.getLastWrittenMessage() as CLIControlRequest;
+   transport.simulateMessage(
+-    createControlResponse(initRequest.request_id, true, {}),
++    createControlResponse(initRequest.request_id, true, response),
+   );
+   await query.initialized;
+ }
+ 
+ describe('Query', () => {
+   let transport: MockTransport;
+@@ -535,30 +592,36 @@
+ 
+       expect(query.getSessionId()).not.toBe(resumeId);
+       expect(query.getSessionId()).toMatch(
+         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+       );
+ 
+-      await respondToInitialize(transport, query);
++      await respondToInitialize(transport, query, {
++        session_id: 'cli-selected-fork',
++      });
++      expect(query.getSessionId()).toBe('cli-selected-fork');
+       await query.close();
+     });
+ 
+-    it('should use explicit sessionId when forkSession is true', async () => {
++    it('should replace the provisional fork ID with the CLI-selected identity', async () => {
+       const resumeId = '123e4567-e89b-12d3-a456-426614174000';
+       const forkId = '234e5678-e89b-12d3-a456-426614174001';
+       const query = new Query(transport, {
+         cwd: '/test',
+         forkSession: true,
+         resume: resumeId,
+         sessionId: forkId,
+       });
+ 
+       expect(query.getSessionId()).toBe(forkId);
+       expect(query.getSessionId()).not.toBe(resumeId);
+ 
+-      await respondToInitialize(transport, query);
++      await respondToInitialize(transport, query, {
++        session_id: 'cli-selected-fork',
++      });
++      expect(query.getSessionId()).toBe('cli-selected-fork');
+       await query.close();
+     });
+ 
+     it('should handle initialization errors', async () => {
+       const query = new Query(transport, {
+         cwd: '/test',
+@@ -593,12 +656,69 @@
        const result = await query.next();
        expect(result.done).toBe(false);
        expect(result.value).toEqual(userMsg);
@@ -304401,7 +304729,7 @@ diff --git a/packages/sdk-typescript/test/unit/Query.test.ts b/packages/sdk-type
  
        await respondToInitialize(transport, query);
  
-@@ -614,13 +727,13 @@
+@@ -614,13 +734,13 @@
  
      it('should route system messages to output stream', async () => {
        const query = new Query(transport, { cwd: '/test' });
@@ -304416,7 +304744,7 @@ diff --git a/packages/sdk-typescript/test/unit/Query.test.ts b/packages/sdk-type
        expect(result.done).toBe(false);
        expect(result.value).toEqual(systemMsg);
  
-@@ -654,23 +767,22 @@
+@@ -654,23 +774,22 @@
        expect(result.done).toBe(false);
        expect(result.value).toEqual(partialMsg);
  
@@ -304444,9 +304772,191 @@ diff --git a/packages/sdk-typescript/test/unit/Query.test.ts b/packages/sdk-type
  
      it('should yield messages in order', async () => {
        const query = new Query(transport, { cwd: '/test' });
+@@ -1003,13 +1122,30 @@
+       async function* messageGenerator() {
+         yield createUserMessage('Follow-up 1');
+         yield createUserMessage('Follow-up 2');
+       }
+ 
+       const streamPromise = query.streamInput(messageGenerator());
++      await vi.waitFor(() =>
++        expect(
++          transport
++            .getAllWrittenMessages()
++            .filter(
++              (message) =>
++                typeof message === 'object' &&
++                message !== null &&
++                'type' in message &&
++                message.type === 'user',
++            ),
++        ).toHaveLength(2),
++      );
+       transport.simulateMessage(createResultMessage(true));
++      transport.simulateMessage({
++        ...createResultMessage(true),
++        uuid: 'second-root-result',
++      });
+       await streamPromise;
+ 
+       const messages = transport.getAllWrittenMessages();
+       const userMessages = messages.filter(
+         (msg: unknown) =>
+           typeof msg === 'object' &&
+@@ -1031,13 +1167,30 @@
+       async function* messageGenerator() {
+         yield createUserMessage('Turn 1', sessionId);
+         yield createUserMessage('Turn 2', sessionId);
+       }
+ 
+       const streamPromise = query.streamInput(messageGenerator());
++      await vi.waitFor(() =>
++        expect(
++          transport
++            .getAllWrittenMessages()
++            .filter(
++              (message) =>
++                typeof message === 'object' &&
++                message !== null &&
++                'type' in message &&
++                message.type === 'user',
++            ),
++        ).toHaveLength(2),
++      );
+       transport.simulateMessage(createResultMessage(true));
++      transport.simulateMessage({
++        ...createResultMessage(true),
++        uuid: 'second-root-result',
++      });
+       await streamPromise;
+ 
+       const messages = transport.getAllWrittenMessages();
+       const userMessages = messages.filter(
+         (msg: unknown) =>
+           typeof msg === 'object' &&
+@@ -1081,13 +1234,13 @@
+         abortController.abort();
+         yield createUserMessage('Message 2'); // Should not be sent
+       }
+ 
+       const streamPromise = query.streamInput(messageGenerator());
+       transport.simulateMessage(createResultMessage(true));
+-      await streamPromise;
++      await expect(streamPromise).rejects.toBeInstanceOf(AbortError);
+ 
+       await query.close();
+     });
+   });
+ 
+   describe('Lifecycle Management', () => {
+@@ -1106,13 +1259,13 @@
+       expect(query.isClosed()).toBe(false);
+ 
+       await query.close();
+       expect(query.isClosed()).toBe(true);
+     });
+ 
+-    it('should complete output stream on close()', async () => {
++    it('should cancel unfinished output on close()', async () => {
+       const query = new Query(transport, { cwd: '/test' });
+ 
+       await respondToInitialize(transport, query);
+ 
+       const iterationPromise = (async () => {
+         const messages: SDKMessage[] = [];
+@@ -1122,14 +1275,13 @@
+         return messages;
+       })();
+ 
+       await query.close();
+       transport.simulateClose();
+ 
+-      const messages = await iterationPromise;
+-      expect(Array.isArray(messages)).toBe(true);
++      await expect(iterationPromise).rejects.toBeInstanceOf(AbortError);
+     });
+ 
+     it('should be idempotent when closing multiple times', async () => {
+       const query = new Query(transport, { cwd: '/test' });
+ 
+       await respondToInitialize(transport, query);
+@@ -1194,13 +1346,13 @@
+       expect(messages).toHaveLength(2);
+       expect((messages[0] as SDKUserMessage).message.content).toBe('First');
+ 
+       await query.close();
+     });
+ 
+-    it('should complete iteration when query closes', async () => {
++    it('should retain delivered records and cancel iteration when query closes', async () => {
+       const query = new Query(transport, { cwd: '/test' });
+ 
+       await respondToInitialize(transport, query);
+ 
+       const messages: SDKMessage[] = [];
+       const iterationPromise = (async () => {
+@@ -1214,13 +1366,13 @@
+       // Give time for message to be processed
+       await new Promise((resolve) => setTimeout(resolve, 10));
+ 
+       await query.close();
+       transport.simulateClose();
+ 
+-      await iterationPromise;
++      await expect(iterationPromise).rejects.toBeInstanceOf(AbortError);
+       expect(messages.length).toBeGreaterThanOrEqual(1);
+     });
+ 
+     it('should propagate transport errors', async () => {
+       const query = new Query(transport, { cwd: '/test' });
+ 
+@@ -1865,14 +2017,14 @@
+ 
+     it('should handle close during message iteration', async () => {
+       const query = new Query(transport, { cwd: '/test' });
+ 
+       await respondToInitialize(transport, query);
+ 
++      const messages: SDKMessage[] = [];
+       const iterationPromise = (async () => {
+-        const messages: SDKMessage[] = [];
+         for await (const msg of query) {
+           messages.push(msg);
+           if (messages.length === 2) {
+             await query.close();
+           }
+         }
+@@ -1881,11 +2033,11 @@
+ 
+       transport.simulateMessage(createUserMessage('First'));
+       transport.simulateMessage(createUserMessage('Second'));
+       transport.simulateMessage(createUserMessage('Third'));
+       transport.simulateClose();
+ 
+-      const messages = await iterationPromise;
++      await expect(iterationPromise).rejects.toBeInstanceOf(AbortError);
+       expect(messages.length).toBeGreaterThanOrEqual(2);
+     });
+   });
+ });
 diff --git a/packages/sdk-typescript/test/unit/createQuery.test.ts b/packages/sdk-typescript/test/unit/createQuery.test.ts
 --- a/packages/sdk-typescript/test/unit/createQuery.test.ts
 +++ b/packages/sdk-typescript/test/unit/createQuery.test.ts
+@@ -34,13 +34,13 @@
+       endInput: vi.fn(),
+       exitError: null,
+     }));
+     mockQuery.mockImplementation(() => ({
+       initialized: Promise.resolve(),
+       getSessionId: () => 'test-session-id',
+-      streamInput: vi.fn(),
++      streamInput: vi.fn().mockResolvedValue(undefined),
+     }));
+   });
+ 
+   it('maps string systemPrompt to TransportOptions.systemPrompt', async () => {
+     const { query } = await import('../../src/query/createQuery.js');
+ 
 @@ -106,13 +106,11 @@
 -        maxToolCalls: 10,
          maxSubagentDepth: 3,
@@ -320488,7 +320998,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,382 @@
+@@ -0,0 +1,400 @@
 +import { describe, it, expect } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import {
@@ -320871,10 +321381,28 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +    );
 +  });
 +});
++
++it('an open response cannot disappear at EOF or a new journal origin', async () => {
++  const f = fixture();
++  await f.journal.capture(serialize([]), 'root', 'p', 's', { kind: 'utility' });
++  const replay = new ModelRequestStreamReplay();
++  replay.begin({ journal_id: f.journal.id, first_sequence: 1 });
++  replay.observe(f.records[0]!);
++  replay.finish({
++    journal_id: f.journal.id,
++    first_sequence: 1,
++    request_count: 1,
++    open_response_ids: [f.records[0]!.request_id],
++  });
++  expect(() => replay.finishStream()).toThrow();
++  expect(() =>
++    replay.begin({ journal_id: 'new-journal', first_sequence: 1 }),
++  ).toThrow();
++});
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,629 @@
+@@ -0,0 +1,633 @@
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
 +import type { ModelRequestOwner } from './chat-attempt.js';
@@ -321414,6 +321942,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      this.origin.first_sequence === origin.first_sequence
 +    )
 +      return;
++    this.responses.finish();
 +    this.replay = new ModelRequestReplay();
 +    this.responses = new ModelResponseReplay();
 +    this.first = undefined;
@@ -321455,6 +321984,9 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  }
 +  observeResponse(input: unknown): void {
 +    this.responses.observe(input);
++  }
++  finishStream(): void {
++    this.responses.finish();
 +  }
 +  finish(input: unknown): void {
 +    const summary = input as ModelRequestSummary | undefined;
@@ -321953,26 +322485,63 @@ diff --git a/packages/core/src/services/model-request-recording.test.ts b/packag
 diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescript/src/query/Query.ts
 --- a/packages/sdk-typescript/src/query/Query.ts
 +++ b/packages/sdk-typescript/src/query/Query.ts
-@@ -8,12 +8,13 @@
+@@ -5,15 +5,18 @@
+  * Implements AsyncIterator protocol for message consumption.
+  */
+ 
  const DEFAULT_CAN_USE_TOOL_TIMEOUT = 60_000;
  const DEFAULT_MCP_REQUEST_TIMEOUT = 60_000;
  const DEFAULT_CONTROL_REQUEST_TIMEOUT = 60_000;
- const DEFAULT_STREAM_CLOSE_TIMEOUT = 60_000;
+-const DEFAULT_STREAM_CLOSE_TIMEOUT = 60_000;
  
  import { randomUUID } from 'node:crypto';
-+import { RuntimeContractAdmission } from '@qwen-code/qwen-code-core';
++import {
++  RuntimeContractAdmission,
++  extractRuntimeUserMessageText,
++} from '@qwen-code/qwen-code-core';
  import { SdkLogger } from '../utils/logger.js';
  import type {
    SDKMessage,
    SDKUserMessage,
    CLIControlRequest,
    CLIControlResponse,
-@@ -105,14 +106,14 @@
+@@ -49,12 +52,13 @@
+   SdkControlServerTransport,
+   type SdkControlServerTransportOptions,
+ } from '../daemon-mcp/SdkControlServerTransport.js';
+ import { ControlRequestType } from '../types/protocol.js';
+ 
+ interface PendingControlRequest {
++  subtype: string;
+   resolve: (response: Record<string, unknown> | null) => void;
+   reject: (error: Error) => void;
+   timeout: NodeJS.Timeout;
+   abortController: AbortController;
+ }
+ 
+@@ -91,44 +95,50 @@
+ }
+ 
+ export class Query implements AsyncIterable<SDKMessage> {
+   private transport: Transport;
+   private options: QueryOptions;
+   private sessionId: string;
++  private sessionIdLocked: boolean;
+   private inputStream: Stream<SDKMessage>;
+   private sdkMessages: AsyncGenerator<SDKMessage>;
+   private abortController: AbortController;
+   private pendingControlRequests: Map<string, PendingControlRequest> =
+     new Map();
+   private pendingMcpResponses: Map<string, PendingMcpResponse> = new Map();
+   private sdkMcpTransports: Map<string, SdkControlServerTransport> = new Map();
+   private sdkMcpServers: Map<string, McpServer> = new Map();
    readonly initialized: Promise<void>;
    private initialEffortStatus: EffortStatus | undefined;
    private closed = false;
++  private closePromise?: Promise<void>;
    private messageRouterStarted = false;
    private transportReadFinalized = false;
++  private activeInputSources = 0;
  
 -  private firstResultReceivedPromise?: Promise<void>;
 -  private firstResultReceivedResolve?: () => void;
@@ -321984,7 +322553,28 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
  
    constructor(
      transport: Transport,
-@@ -137,18 +138,18 @@
+     options: QueryOptions,
+     singleTurn: boolean = false,
+   ) {
+     this.transport = transport;
+     this.options = options;
+-    // When forkSession is true, sessionId is a fresh UUID (computed in createQuery)
+-    // that should be used instead of the resume (source) session ID
++    // Fork and continue identities are selected by the CLI initialize reply.
+     this.sessionId = options.forkSession
+       ? (options.sessionId ?? randomUUID())
+       : (options.resume ?? options.sessionId ?? randomUUID());
++    this.sessionIdLocked = Boolean(
++      !options.forkSession &&
++        (options.resume || (!options.continue && options.sessionId)),
++    );
+     this.inputStream = new Stream<SDKMessage>();
+     this.abortController = options.abortController ?? new AbortController();
+     this.isSingleTurn = singleTurn;
+ 
+     /**
+      * Create async generator proxy to ensure stream.next() is called at least once.
+@@ -137,33 +147,33 @@
       * If errors occur before iteration starts, they'll be stored in hasError and
       * properly rejected when the user starts iterating.
       */
@@ -321992,7 +322582,7 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
  
      /**
 -     * Promise that resolves when the first SDKResultMessage is received.
-+     * Promise that resolves at the first result or when the query terminates.
++     * Promise that resolves when submitted inputs have root results or the query terminates.
       * Used to coordinate endInput() timing - ensures all initialization
       * (SDK MCP servers, control responses) is complete before closing CLI stdin.
       */
@@ -322006,19 +322596,87 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
       * Handle abort signal if controller is provided and already aborted or will be aborted.
       * If already aborted, set error immediately. Otherwise, listen for abort events
       * and set abort error on the stream before closing.
-@@ -383,29 +384,49 @@
-         // pending control + MCP request, otherwise continueLastTurn() and MCP
-         // callers hang until their timeout (MCP responses have none). Route
-         // through finishTransportRead so the real error propagates.
-         this.finishTransportRead(
-           error instanceof Error ? error : new Error(String(error)),
+      */
+     if (this.abortController.signal.aborted) {
+-      this.inputStream.error(new AbortError('Query aborted by user'));
++      this.recordFailure(new AbortError('Query aborted by user'));
+       this.close().catch((err) => {
+         logger.error('Error during abort cleanup:', err);
+       });
+     } else {
+       this.abortHandler = () => {
+-        this.inputStream.error(new AbortError('Query aborted by user'));
++        this.recordFailure(new AbortError('Query aborted by user'));
+         this.close().catch((err) => {
+           logger.error('Error during abort cleanup:', err);
+         });
+       };
+       this.abortController.signal.addEventListener('abort', this.abortHandler);
+     }
+@@ -175,18 +185,21 @@
+         error instanceof Error ? error.message : String(error);
+       if (
+         errorMessage.includes('Query is closed') &&
+         this.transport.exitError
+       ) {
+         // If query was closed due to transport error, propagate the transport error
+-        this.inputStream.error(this.transport.exitError);
++        this.recordFailure(this.transport.exitError);
+       } else {
+-        this.inputStream.error(
++        this.recordFailure(
+           error instanceof Error ? error : new Error(errorMessage),
          );
-+      } finally {
-+        try {
-+          await this.close();
-+        } catch (error) {
-+          logger.error('Error closing finalized query:', error);
+       }
++      void this.close().catch((cause) =>
++        logger.error('Initialization cleanup failed:', cause),
++      );
+     });
+ 
+     this.startMessageRouter();
+   }
+ 
+   private async initializeSdkMcpServers(): Promise<void> {
+@@ -365,47 +378,75 @@
+       return;
+     }
+ 
+     this.messageRouterStarted = true;
+ 
+     (async () => {
++      let failure: Error | undefined;
+       try {
+         for await (const message of this.transport.readMessages()) {
+           await this.routeMessage(message);
+ 
+           if (this.closed) {
+             break;
+           }
+         }
+ 
+-        this.finishTransportRead();
++        if (!this.closed) {
++          if (this.activeInputSources !== 0)
++            throw new Error(
++              'CLI stdout ended while an input source was unfinished; finish the input iterable before ending the query and retain stdout for inspection.',
++            );
++          this.recordAdmission.finish();
 +        }
+       } catch (error) {
+-        // A transport-level crash (not clean EOF) must still reject every
+-        // pending control + MCP request, otherwise continueLastTurn() and MCP
+-        // callers hang until their timeout (MCP responses have none). Route
+-        // through finishTransportRead so the real error propagates.
+-        this.finishTransportRead(
+-          error instanceof Error ? error : new Error(String(error)),
+-        );
++        failure = this.recordFailure(error);
++      }
++      try {
++        await this.finishTransportRead(failure);
++      } catch (error) {
++        this.recordFailure(error);
++        logger.error('Error closing finalized query:', error);
        }
      })();
    }
@@ -322044,7 +322702,14 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
 +      return;
 +    }
 +
-+    this.recordAdmission.admit(message);
++    this.recordAdmission.admit(
++      message,
++      this.sessionIdLocked ? this.sessionId : undefined,
++    );
++    if (!this.sessionIdLocked) {
++      this.sessionId = (message as SDKMessage).session_id;
++      this.sessionIdLocked = true;
++    }
 +    if (
 +      (message as SDKMessage).type === 'model_request' ||
 +      (message as SDKMessage).type === 'model_response'
@@ -322056,7 +322721,7 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
      if (isSDKSystemMessage(message)) {
        /**
         * SystemMessage contains session info (cwd, tools, model, etc.)
-@@ -413,14 +434,14 @@
+@@ -413,20 +454,30 @@
         */
        this.inputStream.enqueue(message);
        return;
@@ -322065,15 +322730,32 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
      if (isSDKResultMessage(message)) {
 -      if (this.firstResultReceivedResolve) {
 -        this.firstResultReceivedResolve();
-+      if (this.inputEndReadyResolve) {
++      const root = message['parent_tool_use_id'] == null;
++      if (
++        root &&
++        !this.recordAdmission.hasPendingInput() &&
++        this.inputEndReadyResolve
++      ) {
 +        this.inputEndReadyResolve();
        }
        /**
         * In single-turn mode, automatically close input after receiving result
         * to signal completion to the CLI.
         */
-       if (this.isSingleTurn && 'endInput' in this.transport) {
-@@ -436,22 +457,24 @@
+-      if (this.isSingleTurn && 'endInput' in this.transport) {
++      if (
++        root &&
++        !this.recordAdmission.hasPendingInput() &&
++        this.isSingleTurn &&
++        'endInput' in this.transport
++      ) {
+         (this.transport as TransportWithEndInput).endInput();
+       }
+       this.inputStream.enqueue(message);
+       return;
+     }
+ 
+@@ -436,34 +487,39 @@
        isSDKPartialAssistantMessage(message)
      ) {
        this.inputStream.enqueue(message);
@@ -322087,7 +322769,9 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
 +    );
    }
  
-   private finishTransportRead(error?: Error): void {
+-  private finishTransportRead(error?: Error): void {
++  private async finishTransportRead(error?: Error): Promise<void> {
++    if (error) this.recordFailure(error);
      // Idempotent: close() and the transport-read loop can both reach here.
      if (this.transportReadFinalized) {
        return;
@@ -322096,11 +322780,99 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
 +    this.inputEndReadyResolve?.();
  
      const rejectionError =
++      this.inputStream.hasError ??
        error ??
        this.transport.exitError ??
        new Error('Transport closed before control response');
  
-@@ -737,24 +760,18 @@
+     // Surface a single correlatable line when the transport dies with work
+     // still in flight (e.g. the CLI subprocess crashes mid-continuation):
+     // otherwise oncall sees only scattered rejected promises with no anchor.
+     const pendingCount =
+       this.pendingControlRequests.size + this.pendingMcpResponses.size;
+     if (pendingCount > 0) {
++      this.recordFailure(rejectionError);
+       logger.error('Transport finalized with pending requests rejected', {
+         pendingControl: this.pendingControlRequests.size,
+         pendingMcp: this.pendingMcpResponses.size,
+         error: rejectionError.message,
+       });
+     }
+@@ -477,22 +533,14 @@
+ 
+     for (const pending of this.pendingMcpResponses.values()) {
+       pending.reject(rejectionError);
+     }
+     this.pendingMcpResponses.clear();
+ 
+-    // Skip stream finalization if close() already settled the stream.
+-    if (this.inputStream.hasError === undefined) {
+-      if (this.abortController.signal.aborted) {
+-        this.inputStream.error(new AbortError('Query aborted'));
+-      } else if (error) {
+-        this.inputStream.error(error);
+-      } else {
+-        this.inputStream.done();
+-      }
+-    }
++    if (this.transport.exitError) this.recordFailure(this.transport.exitError);
++    await this.close();
+   }
+ 
+   private async handleControlRequest(
+     request: CLIControlRequest,
+   ): Promise<void> {
+     const { request_id, request: payload } = request;
+@@ -697,12 +745,48 @@
+     this.pendingControlRequests.delete(request_id);
+ 
+     if (payload.subtype === 'success') {
+       logger.debug(
+         `Control response success for request: ${request_id}: ${JSON.stringify(payload.response)}`,
+       );
++      if (pending.subtype === ControlRequestType.INITIALIZE) {
++        try {
++          const id = (
++            payload.response as Record<string, unknown> | undefined
++          )?.['session_id'];
++          if (typeof id === 'string' && id.length > 0) {
++            if (
++              (this.sessionIdLocked && id !== this.sessionId) ||
++              (this.options.forkSession && id === this.options.resume)
++            )
++              throw new Error(
++                'CLI initialization names another session; select the intended session before retrying.',
++              );
++            this.sessionId = id;
++            this.sessionIdLocked = true;
++          } else if (
++            this.options.forkSession ||
++            (this.options.continue && !this.options.resume)
++          ) {
++            throw new Error(
++              'CLI initialization omits its selected session; use a matching CLI that returns the fork or continued session identity.',
++            );
++          }
++        } catch (cause) {
++          const error = this.recordFailure(cause);
++          pending.reject(error);
++          throw error;
++        }
++      }
++      if (
++        pending.subtype === ControlRequestType.CONTINUE_LAST_TURN &&
++        (payload.response as Record<string, unknown> | undefined)?.[
++          'accepted'
++        ] === true
++      )
++        this.submittedTurn();
+       pending.resolve(payload.response as Record<string, unknown> | null);
+     } else {
+       /**
+        * Extract error message from error field.
+        * Error can be either a string or an object with a message property.
+        */
+@@ -737,24 +821,18 @@
    }
  
    private async sendControlRequest(
@@ -322127,12 +322899,43 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
  
      const request: CLIControlRequest = {
        type: 'control_request',
-@@ -837,25 +854,29 @@
-   async close(): Promise<void> {
-     if (this.closed) {
-       return;
-     }
+@@ -774,12 +852,13 @@
+         const timeout = setTimeout(() => {
+           this.pendingControlRequests.delete(requestId);
+           reject(new Error(`Control request timeout: ${subtype}`));
+         }, controlRequestTimeout);
  
+         this.pendingControlRequests.set(requestId, {
++          subtype,
+           resolve,
+           reject,
+           timeout,
+           abortController,
+         });
+       },
+@@ -832,30 +911,44 @@
+         `Failed to send control response for request ${requestId}: ${errorMsg}`,
+       );
+     }
+   }
+ 
+   async close(): Promise<void> {
+-    if (this.closed) {
+-      return;
++    if (!this.closePromise) {
++      if (!this.transportReadFinalized && !this.inputStream.hasError) {
++        this.recordFailure(
++          new AbortError(
++            'Query is closed before complete stdout; use endInput() and consume the iterator through EOF to verify completion.',
++          ),
++        );
++      }
++      this.closePromise = this.closeOwned();
+     }
++    return this.closePromise;
++  }
+ 
++  private async closeOwned(): Promise<void> {
      this.closed = true;
 +    this.inputEndReadyResolve?.();
  
@@ -322159,7 +322962,51 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
        clearTimeout(pending.timeout);
        pending.reject(rejectionError);
      }
-@@ -911,81 +932,96 @@
+@@ -864,35 +957,31 @@
+     // Clean up pending MCP responses
+     for (const pending of this.pendingMcpResponses.values()) {
+       pending.reject(rejectionError);
+     }
+     this.pendingMcpResponses.clear();
+ 
+-    await this.transport.close();
+-
+-    /**
+-     * Complete input stream - check if aborted first.
+-     * Only set error/done if stream doesn't already have an error state.
+-     */
+-    if (this.inputStream.hasError === undefined) {
+-      if (this.abortController.signal.aborted) {
+-        this.inputStream.error(new AbortError('Query aborted'));
+-      } else {
+-        this.inputStream.done();
+-      }
++    let cleanupFailure: Error | undefined;
++    try {
++      await this.transport.close();
++    } catch (cause) {
++      cleanupFailure = this.recordFailure(cause);
+     }
+ 
+     for (const transport of this.sdkMcpTransports.values()) {
+       try {
+         await transport.close();
+       } catch (error) {
++        cleanupFailure = this.recordFailure(error);
+         logger.error('Error closing MCP transport:', error);
+       }
+     }
+     this.sdkMcpTransports.clear();
++    if (this.inputStream.hasError === undefined) this.inputStream.done();
+     logger.info('Query is closed');
++    if (cleanupFailure) throw cleanupFailure;
+   }
+ 
+   private async *readSdkMessages(): AsyncGenerator<SDKMessage> {
+     for await (const message of this.inputStream) {
+       yield message;
+     }
+@@ -911,81 +1000,92 @@
    }
  
    [Symbol.asyncIterator](): AsyncIterator<SDKMessage> {
@@ -322174,6 +323021,23 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
 +    if (this.transport.exitError) throw this.transport.exitError;
 +  }
 +
++  private recordFailure(cause: unknown): Error {
++    const error = cause instanceof Error ? cause : new Error(String(cause));
++    if (this.inputStream.hasError === undefined) this.inputStream.error(error);
++    else if (error !== this.inputStream.hasError)
++      logger.error('Additional query failure:', error);
++    return this.inputStream.hasError!;
++  }
++
++  private submittedTurn(): void {
++    if (!this.recordAdmission.hasPendingInput()) {
++      this.inputEndReadyPromise = new Promise((resolve) => {
++        this.inputEndReadyResolve = resolve;
++      });
++    }
++    this.recordAdmission.submittedInput();
++  }
++
    async streamInput(messages: AsyncIterable<SDKUserMessage>): Promise<void> {
 -    if (this.closed) {
 -      throw new Error('Query is closed');
@@ -322181,80 +323045,101 @@ diff --git a/packages/sdk-typescript/src/query/Query.ts b/packages/sdk-typescrip
 +    this.assertOpen();
  
      try {
-       /**
-        * Wait for initialization to complete before sending messages.
-        * This prevents "write after end" errors when streamInput is called
-        * with an empty iterable before initialization finishes.
-        */
-       await this.initialized;
-+      this.assertOpen();
- 
-       for await (const message of messages) {
-         if (this.abortController.signal.aborted) {
-           break;
-         }
+-      /**
+-       * Wait for initialization to complete before sending messages.
+-       * This prevents "write after end" errors when streamInput is called
+-       * with an empty iterable before initialization finishes.
+-       */
+-      await this.initialized;
++      this.activeInputSources++;
++      try {
++        /**
++         * Wait for initialization to complete before sending messages.
++         * This prevents "write after end" errors when streamInput is called
++         * with an empty iterable before initialization finishes.
++         */
++        await this.initialized;
 +        this.assertOpen();
-         this.transport.write(serializeJsonLine(message));
+ 
+-      for await (const message of messages) {
+-        if (this.abortController.signal.aborted) {
+-          break;
++        for await (const message of messages) {
++          try {
++            if (this.abortController.signal.aborted) {
++              throw new AbortError('Query aborted during input streaming');
++            }
++            this.assertOpen();
++            const serialized = serializeJsonLine(message);
++            if (extractRuntimeUserMessageText(message)) {
++              this.submittedTurn();
++            }
++            this.transport.write(serialized);
++          } catch (cause) {
++            // Record the write failure before the input iterator's return/finally can fail.
++            throw this.recordFailure(cause);
++          }
+         }
+-        this.transport.write(serializeJsonLine(message));
++      } finally {
++        this.activeInputSources--;
        }
  
-       /**
-        * After all user messages are sent (for-await loop ended), determine when to
-        * close the CLI's stdin via endInput().
-        *
-        * - If a result message was already received: All initialization (SDK MCP servers,
-        *   control responses, etc.) is complete, safe to close stdin immediately.
+-      /**
+-       * After all user messages are sent (for-await loop ended), determine when to
+-       * close the CLI's stdin via endInput().
+-       *
+-       * - If a result message was already received: All initialization (SDK MCP servers,
+-       *   control responses, etc.) is complete, safe to close stdin immediately.
 -       * - If no result yet: Wait for either the result to arrive, or the timeout to expire.
-+       * - If no result yet: Wait for a result, query termination, or the timeout.
-        *   This gives pending control_responses from SDK MCP servers or other modules
-        *   time to complete their initialization before we close the input stream.
-        *
-        * The timeout ensures we don't hang indefinitely - either the turn proceeds
-        * normally, or it fails with a timeout, but Promise.race will always resolve.
-        */
+-       *   This gives pending control_responses from SDK MCP servers or other modules
+-       *   time to complete their initialization before we close the input stream.
+-       *
+-       * The timeout ensures we don't hang indefinitely - either the turn proceeds
+-       * normally, or it fails with a timeout, but Promise.race will always resolve.
+-       */
 -      if (this.firstResultReceivedPromise) {
-+      if (this.inputEndReadyPromise) {
-         const streamCloseTimeout =
-           this.options.timeout?.streamClose ?? DEFAULT_STREAM_CLOSE_TIMEOUT;
-         let timeoutId: NodeJS.Timeout | undefined;
- 
-         const timeoutPromise = new Promise<void>((resolve) => {
-           timeoutId = setTimeout(() => {
-             logger.info('streamCloseTimeout resolved');
-             resolve();
-           }, streamCloseTimeout);
-         });
- 
+-        const streamCloseTimeout =
+-          this.options.timeout?.streamClose ?? DEFAULT_STREAM_CLOSE_TIMEOUT;
+-        let timeoutId: NodeJS.Timeout | undefined;
+-
+-        const timeoutPromise = new Promise<void>((resolve) => {
+-          timeoutId = setTimeout(() => {
+-            logger.info('streamCloseTimeout resolved');
+-            resolve();
+-          }, streamCloseTimeout);
+-        });
+-
 -        await Promise.race([this.firstResultReceivedPromise, timeoutPromise]);
-+        await Promise.race([this.inputEndReadyPromise, timeoutPromise]);
- 
-         if (timeoutId) {
-           clearTimeout(timeoutId);
-         }
+-
+-        if (timeoutId) {
+-          clearTimeout(timeoutId);
+-        }
++      // Keep stdin available for permission and MCP replies until submitted
++      // turns have results. An empty iterable or no-op input needs no result.
++      if (this.recordAdmission.hasPendingInput() && this.inputEndReadyPromise) {
++        await this.inputEndReadyPromise;
        }
  
 -      this.endInput();
 +      if (this.inputStream.hasError) throw this.inputStream.hasError;
 +      if (!this.closed && !this.transportReadFinalized) this.endInput();
      } catch (error) {
-+      if (
-+        this.inputStream.hasError &&
-+        !(this.inputStream.hasError instanceof AbortError)
-+      ) {
-+        throw this.inputStream.hasError;
++      const primary = this.recordFailure(error);
++      try {
++        await this.close();
++      } catch (cleanup) {
++        this.recordFailure(cleanup);
 +      }
-       if (this.abortController.signal.aborted) {
-         logger.info('Aborted during input streaming');
+-      if (this.abortController.signal.aborted) {
+-        logger.info('Aborted during input streaming');
 -        this.inputStream.error(
 -          new AbortError('Query aborted during input streaming'),
 -        );
-+        if (this.inputStream.hasError === undefined) {
-+          this.inputStream.error(
-+            new AbortError('Query aborted during input streaming'),
-+          );
-+        }
-         return;
-       }
-       throw error;
+-        return;
+-      }
+-      throw error;
++      throw primary;
      }
    }
  
@@ -325552,7 +326437,7 @@ diff --git a/packages/sdk-typescript/test/unit/jsonLines.test.ts b/packages/sdk-
 diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/sdk-typescript/test/unit/recordFraming.test.ts
 --- /dev/null
 +++ b/packages/sdk-typescript/test/unit/recordFraming.test.ts
-@@ -0,0 +1,424 @@
+@@ -0,0 +1,427 @@
 +import { afterEach, describe, expect, it, vi } from 'vitest';
 +import { EventEmitter } from 'node:events';
 +import { Readable, Writable } from 'node:stream';
@@ -325673,7 +326558,9 @@ diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/
 +    { sessionId: 'session', abortController },
 +    singleTurn,
 +  );
-+  cleanups.push(() => query.close());
++  cleanups.push(async () => {
++    await rejection(query.close());
++  });
 +  return query;
 +}
 +const init = {
@@ -325974,6 +326861,7 @@ diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/
 +    );
 +    expect(await rejection(query.continueLastTurn())).toBe(observed.error);
 +    expect(query.isClosed()).toBe(true);
++    expect(await rejection(query.close())).toBe(observed.error);
 +    closeSpy.mockRestore();
 +  });
 +});
@@ -342972,3 +343860,3270 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +    }
 +  ]
 +}
+diff --git a/packages/core/src/utils/runtime-user-input.ts b/packages/core/src/utils/runtime-user-input.ts
+--- /dev/null
++++ b/packages/core/src/utils/runtime-user-input.ts
+@@ -0,0 +1,26 @@
++export function extractRuntimeUserMessageText(message: {
++  message: { content: unknown };
++}): string | null {
++  const content = message.message.content;
++  if (typeof content === 'string') {
++    return content;
++  }
++
++  if (Array.isArray(content)) {
++    const parts = content
++      .map((block) => {
++        if (!block || typeof block !== 'object') {
++          return '';
++        }
++        if ('type' in block && block.type === 'text' && 'text' in block) {
++          return typeof block.text === 'string' ? block.text : '';
++        }
++        return JSON.stringify(block);
++      })
++      .filter((part) => part.length > 0);
++
++    return parts.length > 0 ? parts.join('\n') : null;
++  }
++
++  return null;
++}
+diff --git a/packages/core/src/utils/runtime-user-input.test.ts b/packages/core/src/utils/runtime-user-input.test.ts
+--- /dev/null
++++ b/packages/core/src/utils/runtime-user-input.test.ts
+@@ -0,0 +1,24 @@
++import { expect, it } from 'vitest';
++import { extractRuntimeUserMessageText } from './runtime-user-input.js';
++it.each([
++  ['', ''],
++  [[], null],
++  [[{ type: 'text', text: '' }], null],
++  ['  ', '  '],
++  ['verbatim\n', 'verbatim\n'],
++  [
++    [
++      { type: 'text', text: 'a' },
++      { type: 'text', text: 'b' },
++    ],
++    'a\nb',
++  ],
++  [
++    [{ type: 'image', source: { data: 'abc' } }],
++    '{"type":"image","source":{"data":"abc"}}',
++  ],
++])('the CLI and SDK agree on input %j', (content, expected) => {
++  expect(extractRuntimeUserMessageText({ message: { content } })).toBe(
++    expected,
++  );
++});
+diff --git a/packages/sdk-typescript/test/unit/recordCompleteness.test.ts b/packages/sdk-typescript/test/unit/recordCompleteness.test.ts
+--- /dev/null
++++ b/packages/sdk-typescript/test/unit/recordCompleteness.test.ts
+@@ -0,0 +1,611 @@
++import { AbortError } from '../../src/types/errors.js';
++import { afterEach, expect, it, vi } from 'vitest';
++import { readFileSync } from 'node:fs';
++import { Query } from '../../src/query/Query.js';
++import { Stream } from '../../src/utils/Stream.js';
++import { parseJsonLinesStream } from '../../src/utils/jsonLines.js';
++import { RuntimeContractAdmission } from '@qwen-code/qwen-code-core';
++import type { Transport } from '../../src/transport/Transport.js';
++import type { SDKUserMessage } from '../../src/types/protocol.js';
++import { query as createQuery } from '../../src/query/createQuery.js';
++const factory = vi.hoisted(() => ({ transport: vi.fn() }));
++vi.mock('../../src/transport/ProcessTransport.js', () => ({
++  ProcessTransport: factory.transport,
++}));
++vi.mock('../../src/utils/cliPath.js', () => ({
++  prepareSpawnInfo: () => undefined,
++}));
++type RecordData = Record<string, unknown>;
++const vectors = JSON.parse(
++  readFileSync(
++    new URL('../fixtures/record-evidence.json', import.meta.url),
++    'utf8',
++  ),
++) as Record<string, RecordData[]>;
++function vector(name: string): [RecordData, ...RecordData[]] {
++  const records = vectors[name];
++  if (!records?.length) throw new Error(`Missing fixture ${name}`);
++  return records as [RecordData, ...RecordData[]];
++}
++const runtime = vector('runtime_partial_no_generation');
++const sessionId = runtime[0]['session_id'] as string;
++const cleanups: Array<() => Promise<void>> = [];
++afterEach(async () => {
++  for (const close of cleanups.splice(0).reverse()) await rejection(close());
++});
++function admit(records: RecordData[]) {
++  const admission = new RuntimeContractAdmission();
++  for (const record of records) admission.admit(record);
++}
++class LocalTransport implements Transport {
++  readonly isReady = true;
++  readonly exitError = null;
++  readonly bytes = new Stream<Uint8Array>();
++  readonly writes: RecordData[] = [];
++  ended = false;
++  endCalls = 0;
++  closed = false;
++  holdControls = false;
++  initializeResponse: RecordData = {};
++  closeError: Error | undefined;
++  writeError: Error | undefined;
++  write(text: string) {
++    if (this.ended) throw new Error('fixture stdin is closed');
++    const record = JSON.parse(text) as RecordData;
++    if (record['type'] === 'user' && this.writeError) throw this.writeError;
++    this.writes.push(record);
++    if (
++      record['type'] === 'control_request' &&
++      (!this.holdControls ||
++        (record['request'] as RecordData)['subtype'] === 'initialize')
++    ) {
++      this.push({
++        type: 'control_response',
++        response: {
++          subtype: 'success',
++          request_id: record['request_id'],
++          response:
++            (record['request'] as RecordData)['subtype'] === 'initialize'
++              ? this.initializeResponse
++              : {},
++        },
++      });
++    }
++  }
++  async *readMessages() {
++    yield* parseJsonLinesStream(this.bytes, 'local EOF fixture');
++  }
++  push(...records: RecordData[]) {
++    this.bytes.enqueue(
++      Buffer.from(records.map((r) => JSON.stringify(r) + '\n').join('')),
++    );
++  }
++  eof() {
++    this.bytes.done();
++  }
++  endInput() {
++    this.endCalls++;
++    this.ended = true;
++  }
++  async close() {
++    this.closed = true;
++    this.bytes.done();
++    if (this.closeError) throw this.closeError;
++  }
++  async waitForExit() {}
++}
++async function make(singleTurn = false, id = sessionId) {
++  const transport = new LocalTransport();
++  const query = new Query(transport, { sessionId: id }, singleTurn);
++  cleanups.push(() => query.close());
++  await query.initialized;
++  return { transport, query };
++}
++async function observe(query: Query) {
++  const records: unknown[] = [];
++  try {
++    for await (const r of query) records.push(r);
++    return { records, error: undefined };
++  } catch (error) {
++    return { records, error };
++  }
++}
++async function rejection(promise: Promise<unknown>) {
++  try {
++    await promise;
++    return undefined;
++  } catch (error) {
++    return error;
++  }
++}
++const prompt: SDKUserMessage = {
++  type: 'user',
++  session_id: sessionId,
++  parent_tool_use_id: null,
++  message: { role: 'user', content: 'ordinary prompt' },
++};
++it('all shared ordinary, resumed and live evidence windows finish', () => {
++  for (const records of Object.values(vectors)) {
++    const admission = new RuntimeContractAdmission();
++    for (const record of records) admission.admit(record);
++    admission.finish();
++  }
++});
++it.each([
++  ['init_only', [runtime[0]]],
++  [
++    'init_and_assistant',
++    [runtime[0], runtime.find((r) => r['type'] === 'assistant')!],
++  ],
++  ['unfinished_root_partial', runtime.slice(0, 3)],
++])('natural EOF refuses missing root result: %s', async (_label, records) => {
++  admit(records as RecordData[]);
++  const { transport, query } = await make();
++  const output = observe(query);
++  transport.push(...(records as RecordData[]));
++  transport.eof();
++  const got = await output;
++  expect(got.records).toEqual(records);
++  expect(got.error).toBeInstanceOf(Error);
++});
++it('natural EOF refuses responses declared open by a root result', async () => {
++  const records = vector('declared_open_response_then_completion').slice(0, 3);
++  admit(records);
++  const { transport, query } = await make();
++  const output = observe(query);
++  transport.push(...records);
++  transport.eof();
++  const got = await output;
++  expect(got.records).toEqual(records);
++  expect(got.error).toBeInstanceOf(Error);
++});
++it('natural EOF refuses an unanswered submitted input even with zero stream records', async () => {
++  const { transport, query } = await make();
++  const output = observe(query);
++  const input = rejection(
++    query.streamInput(
++      (async function* () {
++        yield prompt;
++      })(),
++    ),
++  );
++  await vi.waitFor(() =>
++    expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++      1,
++    ),
++  );
++  transport.eof();
++  const got = await output;
++  const inputError = await input;
++  expect(got.error).toBeInstanceOf(Error);
++  expect(inputError).toBe(got.error);
++});
++it('a valid record from another session is refused before delivery', async () => {
++  const { transport, query } = await make(false, 'expected-session');
++  admit(runtime);
++  const output = observe(query);
++  transport.push(...runtime);
++  transport.eof();
++  const got = await output;
++  expect(got.records).toEqual([]);
++  expect(got.error).toBeInstanceOf(Error);
++});
++it('child result leaves single-turn stdin open until the root result', async () => {
++  const records = structuredClone(vector('child_provenance_partial'));
++  const root = records.pop()!;
++  const child: RecordData = {
++    ...structuredClone(root),
++    uuid: 'distinct-child-terminal',
++    parent_tool_use_id: 'child-call',
++  };
++  delete child['request_evidence'];
++  admit([...records, child, root]);
++  const { transport, query } = await make(true);
++  transport.push(...records, child);
++  const iterator = query[Symbol.asyncIterator]();
++  for (let i = 0; i < records.length + 1; i++)
++    expect((await iterator.next()).done).toBe(false);
++  expect(transport.endCalls).toBe(0);
++  transport.push(root);
++  transport.eof();
++  expect((await iterator.next()).value).toEqual(root);
++  expect((await iterator.next()).done).toBe(true);
++  expect(transport.endCalls).toBe(1);
++});
++it('positive: complete ordinary and resumed windows deliver exactly and end successfully', async () => {
++  for (const name of [
++    'runtime_partial_no_generation',
++    'resumed_window_from_seven',
++    'declared_open_response_then_completion',
++  ]) {
++    const records = vector(name);
++    const { transport, query } = await make(
++      false,
++      records[0]['session_id'] as string,
++    );
++    const output = observe(query);
++    transport.push(...records);
++    transport.eof();
++    const got = await output;
++    expect(got.records).toEqual(records);
++    expect(got.error).toBeUndefined();
++  }
++});
++
++it('natural EOF rejects pending controls and the output with the same failure', async () => {
++  const { transport, query } = await make();
++  transport.holdControls = true;
++  const output = observe(query);
++  transport.push(...runtime);
++  const control = rejection(query.continueLastTurn());
++  await vi.waitFor(() =>
++    expect(
++      transport.writes.some(
++        (r) =>
++          (r['request'] as RecordData | undefined)?.['subtype'] ===
++          'continue_last_turn',
++      ),
++    ).toBe(true),
++  );
++  transport.eof();
++  const got = await output;
++  const controlError = await control;
++  expect(controlError).toBeInstanceOf(Error);
++  expect(got.error).toBe(controlError);
++});
++it('natural EOF surfaces cleanup failure when no earlier failure exists', async () => {
++  const { transport, query } = await make();
++  const cleanup = new Error('fixture cleanup failed');
++  transport.closeError = cleanup;
++  const output = observe(query);
++  transport.push(...runtime);
++  transport.eof();
++  const got = await output;
++  await vi.waitFor(() => expect(transport.closed).toBe(true));
++  expect(got.records).toEqual(runtime);
++  expect(got.error).toBe(cleanup);
++});
++it('positive: earlier read failure survives cleanup failure and later controls', async () => {
++  const { transport, query } = await make();
++  const primary = new Error('first fixture read failure');
++  transport.closeError = new Error('later fixture cleanup failure');
++  const output = observe(query);
++  transport.push(runtime[0]);
++  transport.bytes.error(primary);
++  const got = await output;
++  expect(got.records).toEqual([runtime[0]]);
++  expect(got.error).toBe(primary);
++  expect(await rejection(query.continueLastTurn())).toBe(primary);
++});
++it('explicit close marks unfinished output as cancellation', async () => {
++  const { transport, query } = await make();
++  const output = observe(query);
++  transport.push(runtime[0]);
++  await query.close();
++  const got = await output;
++  expect(got.error).toBeInstanceOf(AbortError);
++});
++
++it('EOF refuses a later assistant after an earlier completed root turn', async () => {
++  const assistant = structuredClone(
++    runtime.find((r) => r['type'] === 'assistant')!,
++  );
++  assistant['uuid'] = 'later-assistant';
++  const records = [...runtime, assistant];
++  admit(records);
++  const { transport, query } = await make();
++  const output = observe(query);
++  transport.push(...records);
++  transport.eof();
++  const got = await output;
++  expect(got.records).toEqual(records);
++  expect(got.error).toBeInstanceOf(Error);
++});
++
++it.each([false, true])(
++  'both factory prompt forms account for submitted input (%s)',
++  async (streaming) => {
++    const transport = new LocalTransport();
++    factory.transport.mockImplementation(() => transport);
++    const query = createQuery({
++      prompt: streaming
++        ? (async function* () {
++            yield prompt;
++          })()
++        : 'ordinary prompt',
++      options: { sessionId },
++    });
++    cleanups.push(() => query.close());
++    const output = observe(query);
++    await vi.waitFor(() =>
++      expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++        1,
++      ),
++    );
++    transport.eof();
++    const got = await output;
++    expect(got.error).toEqual(
++      expect.objectContaining({
++        message: expect.stringContaining('submitted input'),
++      }),
++    );
++  },
++);
++
++it('one root result cannot finish two submitted inputs', async () => {
++  const { transport, query } = await make();
++  const output = observe(query);
++  const input = rejection(
++    query.streamInput(
++      (async function* () {
++        yield prompt;
++        yield prompt;
++      })(),
++    ),
++  );
++  await vi.waitFor(() =>
++    expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++      2,
++    ),
++  );
++  transport.push(...runtime);
++  transport.eof();
++  const got = await output;
++  expect(got.records).toEqual(runtime);
++  expect(got.error).toEqual(
++    expect.objectContaining({
++      message: expect.stringContaining('submitted input'),
++    }),
++  );
++  await input;
++});
++
++it('input iterator failure terminates output with its original cause', async () => {
++  const { transport, query } = await make();
++  const primary = new Error('input source failed');
++  const output = observe(query);
++  const input = rejection(
++    query.streamInput(
++      (async function* () {
++        await Promise.reject(primary);
++        yield prompt;
++      })(),
++    ),
++  );
++  expect((await output).error).toBe(primary);
++  expect(await input).toBe(primary);
++  expect(await rejection(query.continueLastTurn())).toBe(primary);
++  expect(transport.closed).toBe(true);
++});
++
++it('input iterator cleanup cannot replace an earlier write failure', async () => {
++  const { transport, query } = await make();
++  const primary = new Error('input write failed');
++  transport.writeError = primary;
++  const output = observe(query);
++  const input = rejection(
++    query.streamInput(
++      (async function* () {
++        try {
++          yield prompt;
++        } finally {
++          await Promise.reject(new Error('input iterator cleanup failed'));
++        }
++      })(),
++    ),
++  );
++  expect((await output).error).toBe(primary);
++  expect(await input).toBe(primary);
++});
++
++it('successful complete EOF waits for cleanup and concurrent close joins it', async () => {
++  const { transport, query } = await make();
++  let release!: () => void;
++  const gate = new Promise<void>((resolve) => {
++    release = resolve;
++  });
++  const close = transport.close.bind(transport);
++  const cleanup = vi.spyOn(transport, 'close').mockImplementation(async () => {
++    await gate;
++    await close();
++  });
++  let done = false;
++  const output = observe(query).then((value) => {
++    done = true;
++    return value;
++  });
++  transport.push(...runtime);
++  transport.eof();
++  try {
++    await vi.waitFor(() => expect(cleanup).toHaveBeenCalledTimes(1));
++    const closed = query.close();
++    expect(done).toBe(false);
++    release();
++    await closed;
++    expect((await output).error).toBeUndefined();
++    expect(cleanup).toHaveBeenCalledTimes(1);
++  } finally {
++    release();
++  }
++});
++
++it.each(['', [], [{ type: 'text' as const, text: '' }]])(
++  'preserves no-op input %j without inventing a turn',
++  async (content) => {
++    const { transport, query } = await make();
++    const output = observe(query);
++    await query.streamInput(
++      (async function* () {
++        yield { ...prompt, message: { ...prompt.message, content } };
++      })(),
++    );
++    expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++      1,
++    );
++    transport.eof();
++    expect((await output).error).toBeUndefined();
++  },
++);
++it('keeps stdin open through every queued turn', async () => {
++  const records = vector('runtime_two_turns');
++  const { transport, query } = await make(
++    false,
++    records[0]['session_id'] as string,
++  );
++  const iterator = query[Symbol.asyncIterator]();
++  const input = query.streamInput(
++    (async function* () {
++      yield prompt;
++      yield prompt;
++    })(),
++  );
++  await vi.waitFor(() =>
++    expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++      2,
++    ),
++  );
++  const first = records.findIndex((r) => r['type'] === 'result');
++  transport.push(...records.slice(0, first + 1));
++  for (let i = 0; i <= first; i++)
++    expect((await iterator.next()).done).toBe(false);
++  expect(transport.endCalls).toBe(0);
++  transport.push(...records.slice(first + 1));
++  await input;
++  expect(transport.endCalls).toBe(1);
++  transport.eof();
++  for (let i = first + 1; i < records.length; i++)
++    expect((await iterator.next()).done).toBe(false);
++  expect((await iterator.next()).done).toBe(true);
++});
++it('refuses EOF while the submitted input source is unfinished', async () => {
++  const { transport, query } = await make();
++  const output = observe(query);
++  let release!: () => void;
++  const gate = new Promise<void>((resolve) => {
++    release = resolve;
++  });
++  const input = rejection(
++    query.streamInput(
++      (async function* () {
++        yield prompt;
++        await gate;
++        throw new Error('late source failure');
++      })(),
++    ),
++  );
++  await vi.waitFor(() =>
++    expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++      1,
++    ),
++  );
++  transport.push(...runtime);
++  transport.eof();
++  const got = await output;
++  expect(got.error).toBeInstanceOf(Error);
++  release();
++  expect(await input).toBe(got.error);
++});
++it.each([false, true])(
++  'requires a result for continuation accepted=%s',
++  async (accepted) => {
++    const { transport, query } = await make();
++    const output = observe(query);
++    transport.holdControls = true;
++    const continuation = query.continueLastTurn();
++    await vi.waitFor(() => expect(transport.writes).toHaveLength(2));
++    transport.push({
++      type: 'control_response',
++      response: {
++        subtype: 'success',
++        request_id: transport.writes[1]!['request_id'],
++        response: {
++          accepted,
++          interruption: accepted ? 'interrupted_turn' : 'none',
++        },
++      },
++    });
++    expect(await continuation).toHaveProperty('accepted', accepted);
++    transport.eof();
++    const got = await output;
++    if (accepted) expect(got.error).toBeInstanceOf(Error);
++    else expect(got.error).toBeUndefined();
++  },
++);
++
++it('keeps a slow factory prompt control channel open until its result', async () => {
++  vi.useFakeTimers();
++  const transport = new LocalTransport();
++  factory.transport.mockImplementation(() => transport);
++  const query = createQuery({
++    prompt: 'ordinary slow turn',
++    options: { sessionId },
++  });
++  cleanups.push(() => query.close());
++  const output = observe(query);
++  try {
++    await query.initialized;
++    await vi.advanceTimersByTimeAsync(60_001);
++    expect(transport.writes.filter((r) => r['type'] === 'user')).toHaveLength(
++      1,
++    );
++    expect(transport.endCalls).toBe(0);
++    transport.push(...runtime);
++    await vi.advanceTimersByTimeAsync(0);
++    transport.eof();
++    expect((await output).error).toBeUndefined();
++  } finally {
++    vi.useRealTimers();
++  }
++});
++
++it.each(['fork', 'continue'])(
++  'binds a %s query to the CLI-selected session before sending input',
++  async (mode) => {
++    const transport = new LocalTransport();
++    transport.initializeResponse = {
++      subtype: 'initialize',
++      session_id: sessionId,
++      capabilities: {},
++    };
++    factory.transport.mockImplementation(() => transport);
++    const sourceId = '10000000-0000-4000-8000-000000000001';
++    const query = createQuery({
++      prompt: 'resume work',
++      options:
++        mode === 'fork'
++          ? { resume: sourceId, forkSession: true }
++          : { continue: true },
++    });
++    cleanups.push(() => query.close());
++    const output = observe(query);
++    await query.initialized;
++    expect(query.getSessionId()).toBe(sessionId);
++    expect(factory.transport.mock.calls.at(-1)![0]).toMatchObject(
++      mode === 'fork'
++        ? { resume: sourceId, forkSession: true }
++        : { continue: true },
++    );
++    await vi.waitFor(() =>
++      expect(
++        transport.writes.find((r) => r['type'] === 'user')?.['session_id'],
++      ).toBe(sessionId),
++    );
++    transport.push(...runtime);
++    transport.eof();
++    expect((await output).error).toBeUndefined();
++  },
++);
++it('refuses an initialize reply for a different selected session', async () => {
++  const transport = new LocalTransport();
++  transport.initializeResponse = {
++    subtype: 'initialize',
++    session_id: 'foreign',
++    capabilities: {},
++  };
++  const query = new Query(transport, { sessionId });
++  cleanups.push(() => query.close());
++  const output = observe(query);
++  const failure = await rejection(query.initialized);
++  expect(failure).toBeInstanceOf(Error);
++  expect((await output).error).toBe(failure);
++});
+diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packages/sdk-typescript/test/fixtures/record-evidence.json
+--- /dev/null
++++ b/packages/sdk-typescript/test/fixtures/record-evidence.json
+@@ -0,0 +1,2526 @@
++{
++  "chat_request_response_history": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "sequence": 1,
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-8",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "delta_requests": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "sequence": 1,
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "sequence": 2,
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-1"
++        },
++        "body_sha256": "382e90db0aae4186d139ec886165aa4dbd57a84bd5ac289cfcd1c5b1e8ae5c53",
++        "body_bytes": 294,
++        "body": {
++          "kind": "delta",
++          "base_request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++          "retain_messages": 2,
++          "added_messages": [
++            "{\"role\":\"assistant\",\"content\":\"next\",\"tool_calls\":[{\"function\":{\"name\":\"inspect\",\"arguments\":\" { \\\"k\\\" : \\\"value\\\" } \"}}]}"
++          ],
++          "prefix": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[",
++          "suffix": "]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-1",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-15",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 2,
++      "result": "done",
++      "usage": {
++        "requests": 2,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 2,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "first_sequence": 1,
++        "request_count": 2,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "root_partial_sequence": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "sequence": 1,
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "event": {
++        "type": "message_start",
++        "message": {
++          "id": "assistant",
++          "role": "assistant",
++          "model": "fixture",
++          "content": []
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "event": {
++        "type": "content_block_start",
++        "index": 0,
++        "content_block": {
++          "type": "text",
++          "text": ""
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "event": {
++        "type": "content_block_delta",
++        "index": 0,
++        "delta": {
++          "type": "text_delta",
++          "text": " exact שלום 😀\\n "
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "event": {
++        "type": "content_block_stop",
++        "index": 0
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "event": {
++        "type": "message_stop"
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-13",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "child_provenance_partial": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "sequence": 1,
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "kv_scope": "child-call",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "287b4baa414991929563d3db3ed2a9b9d4a1a54a56cd05d526a9d66a07e25e6b",
++        "body_bytes": 145,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"child-call\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": "child-call",
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "child-call"
++      },
++      "event": {
++        "type": "content_block_start",
++        "index": 0,
++        "content_block": {
++          "type": "text",
++          "text": ""
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": "child-call",
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "child-call"
++      },
++      "event": {
++        "type": "content_block_delta",
++        "index": 0,
++        "delta": {
++          "type": "text_delta",
++          "text": " exact שלום 😀\\n "
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": "child-call",
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "child-call"
++      },
++      "event": {
++        "type": "content_block_stop",
++        "index": 0
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": "child-call",
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "child-call"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-11",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "resumed_window_from_seven": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "first_sequence": 7
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "sequence": 7,
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "sequence": 8,
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-1"
++        },
++        "body_sha256": "382e90db0aae4186d139ec886165aa4dbd57a84bd5ac289cfcd1c5b1e8ae5c53",
++        "body_bytes": 294,
++        "body": {
++          "kind": "delta",
++          "base_request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++          "retain_messages": 2,
++          "added_messages": [
++            "{\"role\":\"assistant\",\"content\":\"next\",\"tool_calls\":[{\"function\":{\"name\":\"inspect\",\"arguments\":\" { \\\"k\\\" : \\\"value\\\" } \"}}]}"
++          ],
++          "prefix": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[",
++          "suffix": "]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-1",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-15",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 2,
++      "result": "done",
++      "usage": {
++        "requests": 2,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 2,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "first_sequence": 7,
++        "request_count": 2,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "abandoned_history": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "sequence": 1,
++        "request_id": "010accce-29ed-4f5b-b589-8e3afedfeee8",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "request_id": "010accce-29ed-4f5b-b589-8e3afedfeee8",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "request_id": "010accce-29ed-4f5b-b589-8e3afedfeee8",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "request_id": "010accce-29ed-4f5b-b589-8e3afedfeee8",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "request_id": "010accce-29ed-4f5b-b589-8e3afedfeee8",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "request_id": "010accce-29ed-4f5b-b589-8e3afedfeee8",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "abandoned"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-8",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "runtime_partial_no_generation": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "message_start",
++        "message": {
++          "id": "assistant",
++          "role": "assistant",
++          "model": "fixture",
++          "content": []
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_start",
++        "index": 0,
++        "content_block": {
++          "type": "text",
++          "text": ""
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_delta",
++        "index": 0,
++        "delta": {
++          "type": "text_delta",
++          "text": " exact שלום 😀\\n "
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_stop",
++        "index": 0
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "message_stop"
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-7",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1,
++        "request_count": 0,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "runtime_two_turns": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "message_start",
++        "message": {
++          "id": "assistant",
++          "role": "assistant",
++          "model": "fixture",
++          "content": []
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_start",
++        "index": 0,
++        "content_block": {
++          "type": "text",
++          "text": ""
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_delta",
++        "index": 0,
++        "delta": {
++          "type": "text_delta",
++          "text": " exact שלום 😀\\n "
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_stop",
++        "index": 0
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "message_stop"
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-7",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1,
++        "request_count": 0,
++        "open_response_ids": []
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "message_start",
++        "message": {
++          "id": "assistant",
++          "role": "assistant",
++          "model": "fixture",
++          "content": []
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_start",
++        "index": 0,
++        "content_block": {
++          "type": "text",
++          "text": ""
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_delta",
++        "index": 0,
++        "delta": {
++          "type": "text_delta",
++          "text": " exact שלום 😀\\n "
++        }
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "content_block_stop",
++        "index": 0
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "stream_event",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "runtime"
++      },
++      "event": {
++        "type": "message_stop"
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-14",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "first_sequence": 1,
++        "request_count": 0,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "live_two_turns_with_delta_evidence": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "sequence": 1,
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-8",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 2,
++      "result": "done",
++      "usage": {
++        "requests": 2,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 2,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": []
++      }
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "sequence": 2,
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-1"
++        },
++        "body_sha256": "382e90db0aae4186d139ec886165aa4dbd57a84bd5ac289cfcd1c5b1e8ae5c53",
++        "body_bytes": 294,
++        "body": {
++          "kind": "delta",
++          "base_request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++          "retain_messages": 2,
++          "added_messages": [
++            "{\"role\":\"assistant\",\"content\":\"next\",\"tool_calls\":[{\"function\":{\"name\":\"inspect\",\"arguments\":\" { \\\"k\\\" : \\\"value\\\" } \"}}]}"
++          ],
++          "prefix": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[",
++          "suffix": "]}"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-1",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-16",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 2,
++      "result": "done",
++      "usage": {
++        "requests": 2,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 2,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "first_sequence": 1,
++        "request_count": 2,
++        "open_response_ids": []
++      }
++    }
++  ],
++  "declared_open_response_then_completion": [
++    {
++      "type": "system",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "init",
++      "stream_contract_sha256": "d2e10e600ff03c3da22cb844e0c5cceada06aec9360c945f05b36ae932d03423",
++      "request_evidence_origin": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "first_sequence": 1
++      },
++      "cwd": "/tmp",
++      "tools": [],
++      "model": "fixture"
++    },
++    {
++      "type": "model_request",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "request": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "sequence": 1,
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000",
++        "segment_id": "segment",
++        "prompt_id": "prompt",
++        "owner": {
++          "kind": "chat",
++          "attempt_id": "attempt-0"
++        },
++        "body_sha256": "6953b976dbfb59488416e1dcb4ab65a5a75e6be90d4c88766dce33cc502169b6",
++        "body_bytes": 171,
++        "body": {
++          "kind": "full",
++          "json": "{\"model\":\"fixture\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\",\"messages\":[{\"role\":\"system\",\"content\":\"keep exact שלום 😀\"},{\"role\":\"user\",\"content\":\"first\"}]}"
++        }
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-2",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": [
++          "406a8ae3-8ac4-4886-9950-8d7960adc163"
++        ]
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 1,
++        "event": {
++          "kind": "http",
++          "status": 200,
++          "content_type": "application/json"
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 2,
++        "event": {
++          "kind": "body",
++          "offset": 0,
++          "base64": "IHsiY2hvaWNlcyI6W3sibWVzc2FnZSI6eyJjb250ZW50IjoiZXhhY3Qg16nXnNeV150ifX1dfQo="
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 3,
++        "event": {
++          "kind": "end",
++          "termination": "eof",
++          "body_bytes": 56,
++          "body_sha256": "ca185a72566ee2279cb61f9fa4e12f2520762a58030ed50bc662cdf4e987edb0",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 4,
++        "event": {
++          "kind": "outcome",
++          "status": "completed",
++          "error": null
++        }
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
++      }
++    },
++    {
++      "type": "assistant",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "origin": {
++        "kind": "model",
++        "attempt_id": "attempt-0",
++        "kv_scope": "123e4567-e89b-12d3-a456-426614174000"
++      },
++      "message": {
++        "id": "assistant",
++        "type": "message",
++        "role": "assistant",
++        "model": "fixture",
++        "content": [
++          {
++            "type": "text",
++            "text": " exact שלום 😀\\n "
++          },
++          {
++            "type": "tool_use",
++            "id": "call",
++            "name": "inspect",
++            "input": {
++              "k": "value"
++            },
++            "raw_arguments": " { \"k\" : \"value\" } "
++          }
++        ],
++        "stop_reason": "tool_use",
++        "usage": null
++      }
++    },
++    {
++      "type": "result",
++      "uuid": "terminal-9",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "subtype": "success",
++      "is_error": false,
++      "duration_ms": 0,
++      "duration_api_ms": 0,
++      "num_turns": 1,
++      "result": "done",
++      "usage": {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": null
++      },
++      "permission_denials": [],
++      "request_evidence": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "first_sequence": 1,
++        "request_count": 1,
++        "open_response_ids": []
++      }
++    }
++  ]
++}
+diff --git a/packages/sdk-typescript/README.md b/packages/sdk-typescript/README.md
+--- a/packages/sdk-typescript/README.md
++++ b/packages/sdk-typescript/README.md
+@@ -83,23 +83,21 @@
+ 
+ | Timeout          | Default  | Description                                                                                                                                       |
+ | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+ | `canUseTool`     | 1 minute | Maximum time for `canUseTool` callback to respond. If exceeded, the tool request is auto-denied.                                                  |
+ | `mcpRequest`     | 1 minute | Maximum time for SDK MCP tool calls to complete.                                                                                                  |
+ | `controlRequest` | 1 minute | Maximum time for control operations like `initialize()`, `setModel()`, `setPermissionMode()`, `getContextUsage()`, and `interrupt()` to complete. |
+-| `streamClose`    | 1 minute | Maximum time to wait for initialization to complete before closing CLI stdin in multi-turn mode with SDK MCP servers.                             |
+ 
+ You can customize these timeouts via the `timeout` option:
+ 
+ ```typescript
+ const query = qwen.query('Your prompt', {
+   timeout: {
+     canUseTool: 60000, // 60 seconds for permission callback
+     mcpRequest: 600000, // 10 minutes for MCP tool calls
+     controlRequest: 60000, // 60 seconds for control requests
+-    streamClose: 15000, // 15 seconds for stream close wait
+   },
+ });
+ ```
+ 
+ ### Experimental Daemon Session Client
+ 
+@@ -567,9 +565,36 @@
+ # Install Qwen Code globally
+ npm install -g @qwen-code/qwen-code@latest
+ ```
+ 
+ **Note**: From version **0.1.1** onwards, the CLI is bundled with the SDK, so no separate Qwen Code installation is needed.
+ 
++### Stream completion
++
++Consume the query iterator through natural EOF to verify complete stdout evidence.
++The SDK refuses missing initialization or terminal results, unfinished partial
++messages or provider responses, foreign session records, and submitted turns
++without results. Both string and iterable prompts use this check. Blank inputs
++follow the CLI's no-op semantics; queued turns keep stdin available for permission
++and MCP replies until their root results arrive. Input closure has no automatic
++deadline; callers can cancel with their abort controller or `close()`. An accepted
++continuation also requires a root result. Input/result counts detect missing results but do not
++provide exact queued-input causal correlation.
++
++End the input iterable, or call `endInput()`, when no more input is needed, then
++consume the output iterator to EOF. An input iterable must finish before stdout
++ends. Pending control requests and cleanup failures prevent successful completion.
++The first failure remains the error observed by iteration and later operations.
++
++`close()` terminates the query and waits for cleanup. Calling it before natural
++EOF cancels unfinished output: the iterator rejects with `AbortError`. Repeated
++calls join the same cleanup. A root result alone is not an EOF check; live queries
++can produce later turns and declared background response evidence.
++
++Resume reads the canonical runtime chat recording. Stdout evidence is validated
++against the selected resumed session and its journal origin. Fork and continue
++queries bind the session identity returned by CLI initialization; it is never inserted
++into conversation history.
++
+ ## License
+ 
+ Apache-2.0 - see [LICENSE](../../LICENSE) for details.

@@ -1188,6 +1188,7 @@ class SourceVectorTransactionTests(unittest.TestCase):
             "packages/sdk-java/qwencode/src/main/resources/stream-contract-v5.json",
             "packages/sdk-java/qwencode/src/test/resources/record-evidence.json",
             "packages/sdk-python/tests/fixtures/record-evidence.json",
+            "packages/sdk-typescript/test/fixtures/record-evidence.json",
         ))
         cls.generated_outputs = {}
         for stage in cls.binding_owner.GENERATED_STAGES:
@@ -1336,14 +1337,15 @@ class SourceVectorTransactionTests(unittest.TestCase):
             {path: self.generated_outputs[path] + "\n"},
         )
 
-    def test_java_python_evidence_fixture_drift_refuses_before_writes(self) -> None:
+    def test_sdk_evidence_fixture_drift_refuses_before_writes(self) -> None:
         for path in (
             "packages/sdk-java/qwencode/src/test/resources/record-evidence.json",
             "packages/sdk-python/tests/fixtures/record-evidence.json",
+            "packages/sdk-typescript/test/fixtures/record-evidence.json",
         ):
             with self.subTest(path=path):
                 self._assert_refused(
-                    "Java and Python SDK evidence fixtures differ",
+                    "SDK evidence fixtures differ",
                     {path: self.generated_outputs[path] + "\n"},
                 )
 
