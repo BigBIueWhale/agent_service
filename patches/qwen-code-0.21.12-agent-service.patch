@@ -73945,11 +73945,15 @@ diff --git a/packages/cli/src/ui/commands/statsCommand.ts b/packages/cli/src/ui/
 diff --git a/packages/cli/src/ui/commands/types.ts b/packages/cli/src/ui/commands/types.ts
 --- a/packages/cli/src/ui/commands/types.ts
 +++ b/packages/cli/src/ui/commands/types.ts
-@@ -5,12 +5,13 @@
+@@ -2,19 +2,21 @@
+  * @license
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
   */
  
  import type { MutableRefObject, ReactNode } from 'react';
- import type { Content, PartListUnion } from '@google/genai';
+-import type { Content, PartListUnion } from '@google/genai';
++import type { PartListUnion } from '@google/genai';
  import type {
    Config,
 +  ChatCompressionInfo,
@@ -73957,9 +73961,14 @@ diff --git a/packages/cli/src/ui/commands/types.ts b/packages/cli/src/ui/command
    GoalStateCause,
    Logger,
    SessionListItem,
++  RuntimeHistoryState,
  } from '@qwen-code/qwen-code-core';
  import type {
-@@ -208,7 +209,6 @@
+   HistoryItemWithoutId,
+   HistoryItem,
+   HistoryItemBtw,
+   ConfirmationRequest,
+@@ -208,7 +210,6 @@
      | 'fast-model'
      | 'voice-model'
      | 'vision-model'
@@ -73967,7 +73976,22 @@ diff --git a/packages/cli/src/ui/commands/types.ts b/packages/cli/src/ui/command
      | 'image-model'
      | 'subagent_create'
      | 'subagent_list'
-@@ -279,13 +279,20 @@
+@@ -232,13 +233,13 @@
+  * The return type for a command action that results in replacing
+  * the entire conversation history.
+  */
+ export interface LoadHistoryActionReturn {
+   type: 'load_history';
+   history: HistoryItemWithoutId[];
+-  clientHistory: Content[]; // The history for the generative client
++  runtimeHistory: RuntimeHistoryState;
+ }
+ 
+ /**
+  * The return type for a command action that should immediately submit
+  * content as a prompt to the Gemini model.
+  */
+@@ -279,13 +280,20 @@
    /** The original invocation context to be re-run after confirmation. */
    originalInvocation: {
      raw: string;
@@ -85200,7 +85224,234 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.test.ts b/packages/
        });
      });
  
-@@ -1625,12 +1612,118 @@
+@@ -1400,41 +1387,68 @@
+         '',
+       );
+     });
+ 
+     it('should handle "load_history" action', async () => {
+       const mockClient = {
+-        setHistory: vi.fn(),
++        isInitialized: vi.fn().mockReturnValue(true),
++        setRuntimeHistory: vi.fn().mockResolvedValue(undefined),
+       } as unknown as GeminiClient;
+       vi.spyOn(mockConfig, 'getGeminiClient').mockReturnValue(mockClient);
++      const runtimeHistory = {
++        history: [
++          {
++            role: 'user',
++            parts: [
++              { text: 'old prompt' },
++              {
++                text: '[Image #0ca88f23519a: image/png, 5 bytes]',
++                imageReferenceId: '0ca88f23519a',
++              },
++            ],
++          },
++        ],
++        imagePayloads: [
++          {
++            id: '0ca88f23519a',
++            mimeType: 'image/png',
++            data: 'aGVsbG8=',
++            bytes: 5,
++          },
++        ],
++      };
+ 
+       const command = createTestCommand({
+         name: 'load',
+         action: vi.fn().mockResolvedValue({
+           type: 'load_history',
+           history: [{ type: MessageType.USER, text: 'old prompt' }],
+-          clientHistory: [{ role: 'user', parts: [{ text: 'old prompt' }] }],
++          runtimeHistory,
+         }),
+       });
+       const result = setupProcessorHook([command]);
+       await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+ 
+       await act(async () => {
+         await result.current.handleSlashCommand('/load');
+       });
+ 
+       expect(mockClearItems).toHaveBeenCalledTimes(1);
++      expect(mockClient.setRuntimeHistory).toHaveBeenCalledExactlyOnceWith(
++        runtimeHistory,
++      );
+       expect(mockAddItem).toHaveBeenCalledWith(
+         { type: 'user', text: 'old prompt' },
+         expect.any(Number),
+       );
+     });
+ 
+     it('should preserve thoughts when handling "load_history" action', async () => {
+       const mockClient = {
+-        setHistory: vi.fn(),
++        isInitialized: vi.fn().mockReturnValue(true),
++        setRuntimeHistory: vi.fn().mockResolvedValue(undefined),
+       } as unknown as GeminiClient;
+       vi.spyOn(mockConfig, 'getGeminiClient').mockReturnValue(mockClient);
+ 
+       const historyWithThoughts = [
+         {
+           role: 'model',
+@@ -1443,25 +1457,151 @@
+       ];
+       const command = createTestCommand({
+         name: 'loadwiththoughts',
+         action: vi.fn().mockResolvedValue({
+           type: 'load_history',
+           history: [{ type: MessageType.GEMINI, text: 'response' }],
+-          clientHistory: historyWithThoughts,
++          runtimeHistory: { history: historyWithThoughts, imagePayloads: [] },
+         }),
+       });
+ 
+       const result = setupProcessorHook([command]);
+       await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
+ 
+       await act(async () => {
+         await result.current.handleSlashCommand('/loadwiththoughts');
+       });
+ 
+-      expect(mockClient.setHistory).toHaveBeenCalledTimes(1);
+-      expect(mockClient.setHistory).toHaveBeenCalledWith(historyWithThoughts);
++      expect(mockClient.setRuntimeHistory).toHaveBeenCalledTimes(1);
++      expect(mockClient.setRuntimeHistory).toHaveBeenCalledWith({
++        history: historyWithThoughts,
++        imagePayloads: [],
++      });
++    });
++
++    it.each(['success', 'failure'])(
++      'should await Client persistence before replacing the display for load_history: %s',
++      async (outcome) => {
++        let resolve!: () => void;
++        let reject!: (error: Error) => void;
++        const setRuntimeHistory = vi.fn().mockReturnValue(
++          new Promise<void>((accept, refuse) => {
++            resolve = accept;
++            reject = refuse;
++          }),
++        );
++        const mockClient = {
++          isInitialized: vi.fn().mockReturnValue(true),
++          setRuntimeHistory,
++        } as unknown as GeminiClient;
++        vi.spyOn(mockConfig, 'getGeminiClient').mockReturnValue(mockClient);
++        const runtimeHistory = {
++          history: [{ role: 'user', parts: [{ text: 'saved prompt' }] }],
++          imagePayloads: [],
++        };
++        const displayItem = { type: MessageType.USER, text: 'saved prompt' };
++        const command = createTestCommand({
++          name: 'load',
++          action: vi.fn().mockResolvedValue({
++            type: 'load_history',
++            history: [displayItem],
++            runtimeHistory,
++          }),
++        });
++        const result = setupProcessorHook([command]);
++        await waitFor(() =>
++          expect(result.current.slashCommands).toHaveLength(1),
++        );
++
++        await act(async () => {
++          let settled = false;
++          const completion = result.current
++            .handleSlashCommand('/load')
++            .then((value) => {
++              settled = true;
++              return value;
++            });
++          await waitFor(() =>
++            expect(setRuntimeHistory).toHaveBeenCalledWith(runtimeHistory),
++          );
++          expect(settled).toBe(false);
++          expect(mockClearItems).not.toHaveBeenCalled();
++          expect(mockLoadHistory).not.toHaveBeenCalled();
++          expect(mockAddItem).not.toHaveBeenCalledWith(
++            displayItem,
++            expect.any(Number),
++          );
++
++          if (outcome === 'failure')
++            reject(new Error('Runtime checkpoint flush failed'));
++          else resolve();
++          expect(await completion).toEqual({ type: 'handled' });
++        });
++
++        if (outcome === 'failure') {
++          expect(mockClearItems).not.toHaveBeenCalled();
++          expect(mockLoadHistory).not.toHaveBeenCalled();
++          expect(mockAddItem).not.toHaveBeenCalledWith(
++            displayItem,
++            expect.any(Number),
++          );
++          expect(mockAddItem).toHaveBeenLastCalledWith(
++            {
++              type: MessageType.ERROR,
++              text: 'Runtime checkpoint flush failed',
++            },
++            expect.any(Number),
++          );
++        } else {
++          expect(mockClearItems).toHaveBeenCalledTimes(1);
++          expect(mockAddItem).toHaveBeenCalledWith(displayItem, 0);
++        }
++      },
++    );
++
++    it('should refuse load_history for an uninitialized Client without replacing the display', async () => {
++      const setRuntimeHistory = vi.fn().mockResolvedValue(undefined);
++      vi.spyOn(mockConfig, 'getGeminiClient').mockReturnValue({
++        isInitialized: vi.fn().mockReturnValue(false),
++        setRuntimeHistory,
++      } as unknown as GeminiClient);
++      const displayItem = { type: MessageType.USER, text: 'saved prompt' };
++      const command = createTestCommand({
++        name: 'load',
++        action: vi.fn().mockResolvedValue({
++          type: 'load_history',
++          history: [displayItem],
++          runtimeHistory: {
++            history: [{ role: 'user', parts: [{ text: 'saved prompt' }] }],
++            imagePayloads: [],
++          },
++        }),
++      });
++      const result = setupProcessorHook([command]);
++      await waitFor(() => expect(result.current.slashCommands).toHaveLength(1));
++
++      await act(async () => {
++        expect(await result.current.handleSlashCommand('/load')).toEqual({
++          type: 'handled',
++        });
++      });
++
++      expect(setRuntimeHistory).not.toHaveBeenCalled();
++      expect(mockClearItems).not.toHaveBeenCalled();
++      expect(mockLoadHistory).not.toHaveBeenCalled();
++      expect(mockAddItem).not.toHaveBeenCalledWith(
++        displayItem,
++        expect.any(Number),
++      );
++      expect(mockAddItem).toHaveBeenLastCalledWith(
++        {
++          type: MessageType.ERROR,
++          text: expect.stringContaining('The chat is not initialized'),
++        },
++        expect.any(Number),
++      );
+     });
+ 
+     it('should handle a "quit" action', async () => {
+       const quitAction = vi
+         .fn()
+         .mockResolvedValue({ type: 'quit', messages: ['bye'] });
+@@ -1625,12 +1765,118 @@
            { text: 'The actual prompt from the TOML file.' },
            { text: '\n\nHook context' },
          ],
@@ -85606,7 +85857,28 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                      case 'image-model':
                        actions.openModelDialog({
                          imageModelMode: true,
-@@ -1398,12 +1413,16 @@
+@@ -1322,13 +1337,19 @@
+                       throw new Error(
+                         `Unhandled slash command result: ${unhandled}`,
+                       );
+                     }
+                   }
+                 case 'load_history': {
+-                  config?.getGeminiClient()?.setHistory(result.clientHistory);
++                  const client = config?.getGeminiClient();
++                  if (!client?.isInitialized()) {
++                    throw new Error(
++                      'The chat is not initialized. Initialize the session before restoring its history.',
++                    );
++                  }
++                  await client.setRuntimeHistory(result.runtimeHistory);
+                   fullCommandContext.ui.clear();
+                   result.history.forEach((item, index) => {
+                     fullCommandContext.ui.addItem(item, index);
+                   });
+                   return { type: 'handled' };
+                 }
+@@ -1398,12 +1419,16 @@
                  }
                  case 'confirm_shell_commands': {
                    const { outcome, approvedCommands } = await new Promise<{
@@ -85623,7 +85895,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                          resolvedOutcome,
                          resolvedApprovedCommands,
                        ) => {
-@@ -1413,13 +1432,15 @@
+@@ -1413,13 +1438,15 @@
                            approvedCommands: resolvedApprovedCommands,
                          });
                        },
@@ -85639,7 +85911,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                    ) {
                      return { type: 'handled' };
                    }
-@@ -1434,28 +1455,34 @@
+@@ -1434,28 +1461,34 @@
                    return await handleSlashCommand(
                      result.originalInvocation.raw,
                      // Pass the approved commands as a one-time grant for this execution.
@@ -85675,7 +85947,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                          text: 'Operation cancelled.',
                        },
                        Date.now(),
-@@ -1466,12 +1493,13 @@
+@@ -1466,12 +1499,13 @@
                    delegatedToRecursiveInvocation = true;
                    return await handleSlashCommand(
                      result.originalInvocation.raw,
@@ -85689,7 +85961,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
                    // stream_messages is only used in ACP/Zed integration mode
                    // and should not be returned in interactive UI mode
                    throw new Error(
-@@ -1506,16 +1534,12 @@
+@@ -1506,16 +1540,12 @@
            content: `Unknown command: ${trimmed}`,
            timestamp: new Date(),
          });
@@ -85706,7 +85978,7 @@ diff --git a/packages/cli/src/ui/hooks/slashCommandProcessor.ts b/packages/cli/s
            const event = makeSlashCommandEvent({
              command: resolvedCommandPath[0],
              subcommand,
-@@ -1529,59 +1553,74 @@
+@@ -1529,59 +1559,74 @@
              text: e instanceof Error ? e.message : String(e),
            },
            Date.now(),
@@ -89180,15 +89452,19 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/hooks/useGeminiStream.ts
 --- a/packages/cli/src/ui/hooks/useGeminiStream.ts
 +++ b/packages/cli/src/ui/hooks/useGeminiStream.ts
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,11 @@
 +import { retainUserInput } from '@qwen-code/qwen-code-core';
++import {
++  TOOL_CALL_CHECKPOINT_VERSION,
++  type ToolCallCheckpoint,
++} from '../utils/tool-call-checkpoint.js';
  /**
   * @license
   * Copyright 2025 Google LLC
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -66,13 +67,12 @@
+@@ -66,13 +71,12 @@
    markDuplicateProviderToolCallResponseSent,
    findRepeatedDuplicateProviderToolCall,
    AutonomousLoopTickResolver,
@@ -89202,7 +89478,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
  import { type Part, type PartListUnion, FinishReason } from '@google/genai';
  import type {
    HistoryItem,
-@@ -117,13 +117,12 @@
+@@ -117,13 +121,12 @@
  import path from 'node:path';
  import { useSessionStats } from '../contexts/SessionContext.js';
  import type { LoadedSettings } from '../../config/settings.js';
@@ -89216,7 +89492,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
    type DirectUserAdmission,
    type QueuedGoalTurn,
  } from './useMessageQueue.js';
-@@ -177,13 +176,13 @@
+@@ -177,13 +180,13 @@
      response: ToolCallResponseInfo;
    }>;
  }
@@ -89231,7 +89507,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
  interface GoalTurnBinding {
    permit: GoalTurnPermit;
    turnKey: string;
-@@ -590,13 +589,13 @@
+@@ -590,13 +593,13 @@
            } catch (error) {
              debugLogger.warn('Failed to pause invalid Goal tool batch', error);
            }
@@ -89246,7 +89522,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
  
          const currentPermit = runtime.permitForTurn(binding.turnKey);
          if (currentPermit && sameGoalPermit(currentPermit, binding.permit)) {
-@@ -804,18 +803,12 @@
+@@ -804,18 +807,12 @@
      promptId: string | undefined;
      responses: Array<{
        request: ToolCallRequestInfo;
@@ -89265,7 +89541,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
      stats: sessionStates,
    } = useSessionStats();
    const storage = config.storage;
-@@ -1505,15 +1498,12 @@
+@@ -1505,15 +1502,12 @@
        startAsContinuation = false,
      ): string => {
        if (turnCancelledRef.current) {
@@ -89281,7 +89557,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
        // React history by the time AppContainer's guard runs).
        turnSawContentEventRef.current = true;
        let newGeminiMessageBuffer = currentGeminiMessageBuffer + eventValue;
-@@ -1787,13 +1777,12 @@
+@@ -1787,13 +1781,12 @@
  
        let newThoughtBuffer = currentThoughtBuffer + thoughtText;
        if (newThoughtBuffer.trim().length === 0) {
@@ -89295,7 +89571,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
          : thoughtText;
  
        if (startingNewThought) {
-@@ -2027,19 +2016,18 @@
+@@ -2027,19 +2020,18 @@
        settings,
      ],
    );
@@ -89319,7 +89595,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
          [FinishReason.RECITATION]: 'Response stopped due to recitation policy.',
          [FinishReason.LANGUAGE]:
            'Response stopped due to unsupported language.',
-@@ -2096,10 +2084,7 @@
+@@ -2096,10 +2088,7 @@
          setPendingHistoryItem(null);
        }
        const activeModel = modelOverrideRef.current ?? config.getModel();
@@ -89331,7 +89607,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
        const warningSuffix = eventValue?.warning
          ? `\n⚠️ ${eventValue.warning}`
          : '';
-@@ -2136,29 +2121,12 @@
+@@ -2136,29 +2125,12 @@
          },
          Date.now(),
        ),
@@ -89361,7 +89637,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
  
        if (result.userSelection === 'disable') {
          config.getGeminiClient().getLoopDetectionService().disableForSession();
-@@ -2311,13 +2279,13 @@
+@@ -2311,13 +2283,13 @@
            }
  
            if (nextEvent.kind === 'image') {
@@ -89376,7 +89652,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                (pendingItem?.type === 'gemini' ||
                  pendingItem?.type === 'gemini_content') &&
                pendingItem.text.length === 0 &&
-@@ -2411,12 +2379,14 @@
+@@ -2411,12 +2383,14 @@
            if (trackInteractionOwner && promptId) {
              activeInteractionOwnerRef.current ??=
                getActiveInteractionSpan(promptId);
@@ -89391,7 +89667,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                // streamed text (with or without a subject) goes through the
                // throttled buffer so it batches with adjacent reasoning
                // chunks; the flush merger preserves the subject.
-@@ -2475,19 +2445,12 @@
+@@ -2475,19 +2449,12 @@
                    turnAdmission.turnKey,
                    turnAdmission.origin,
                    turnAdmission.controller,
@@ -89411,7 +89687,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                toolCallRequests.length = 0;
                handleUserCancelledEvent(userMessageTimestamp);
                return {
-@@ -2501,12 +2464,31 @@
+@@ -2501,12 +2468,31 @@
              case ServerGeminiEventType.ChatCompressed:
                flushBufferedStreamEvents();
                handleChatCompressionEvent(event.value, userMessageTimestamp);
@@ -89443,7 +89719,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                break;
              case ServerGeminiEventType.MaxSessionTurns:
                flushBufferedStreamEvents();
-@@ -2515,25 +2497,12 @@
+@@ -2515,25 +2501,12 @@
                    pendingHistoryItemRef.current,
                    userMessageTimestamp,
                  );
@@ -89469,7 +89745,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              case ServerGeminiEventType.Finished:
                flushBufferedStreamEvents();
                // A thinking-only turn (no content/tool) still commits its
-@@ -2540,9 +2509,9 @@
+@@ -2540,9 +2513,9 @@
                // reasoning so it persists collapsed in history.
                commitPendingThought(userMessageTimestamp);
                // Seal off this turn's UI state before the parent re-enters
@@ -89482,7 +89758,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                // so without this seal the next turn's first content/thought
                // chunk appends to this turn's pending item — visible in the UI
                // as "t" → "te" → "tes" cumulative rendering even though each
-@@ -2576,78 +2545,30 @@
+@@ -2576,78 +2549,30 @@
                flushBufferedStreamEvents();
                // handle later because we want to move pending history to history
                // before we add loop detected message to history
@@ -89570,7 +89846,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                // First commit any pending AI response to ensure correct ordering
                if (pendingHistoryItemRef.current) {
                  commitItemInOrder(
-@@ -2682,6 +2603,12 @@
+@@ -2682,6 +2607,12 @@
                assistantOutputStarted = false;
                break;
              case ServerGeminiEventType.ActiveGoal:
@@ -89583,7 +89859,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                break;
              case ServerGeminiEventType.GoalState:
                if (event.cause && shouldDisplayGoalStateCause(event.cause)) {
-@@ -2840,13 +2767,12 @@
+@@ -2840,13 +2771,12 @@
        handleErrorEvent,
        scheduleToolCalls,
        geminiClient,
@@ -89597,7 +89873,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
        clearRetryCountdown,
        setThought,
        commitPendingThought,
-@@ -2931,13 +2857,13 @@
+@@ -2931,13 +2861,13 @@
                  );
                if (shouldSkipMessage) showToolDisplays();
                else sideEffects.push(showToolDisplays);
@@ -89612,7 +89888,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                      ? { message: atCommandResult.recording!.message }
                      : {}),
                    userText: message,
-@@ -2980,15 +2906,19 @@
+@@ -2980,15 +2910,19 @@
              restoreMessages.push(...messages.slice(index + 1));
              break;
            }
@@ -89633,7 +89909,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              addItem(
                {
                  type: MessageType.INFO,
-@@ -3016,21 +2946,25 @@
+@@ -3016,21 +2950,25 @@
          resolvedMessages.push(...segment);
        }
  
@@ -89663,7 +89939,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                  type: MessageType.USER,
                  text: message,
                  // Intentionally false: preserves isRealUserTurn/rewind semantics (steer is not a standalone user turn).
-@@ -3065,16 +2999,16 @@
+@@ -3065,16 +3003,16 @@
            return undefined;
          }
          if (resolved.parts.length === 0) return undefined;
@@ -89682,7 +89958,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              settled = true;
              if (resolved.restoreMessages.length > 0) {
                midTurnRestoreRef?.current?.(resolved.restoreMessages);
-@@ -3512,20 +3446,12 @@
+@@ -3512,20 +3450,12 @@
            logUserRetry(config, new UserRetryEvent(prompt_id));
          }
  
@@ -89703,7 +89979,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
            // Emit user message to dual output sidecar (if enabled).
            // Skip for tool-result submissions — those are emitted separately
            // when the tool completes.
-@@ -3622,31 +3548,21 @@
+@@ -3622,31 +3552,21 @@
            }
  
            const immediateDuplicateToolResponses =
@@ -89742,7 +90018,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                      resultDisplay: response.resultDisplay,
                      error: response.error,
                      errorType: response.errorType,
-@@ -4382,28 +4298,19 @@
+@@ -4382,28 +4302,19 @@
          orderedResponses.push(...queue);
        }
        for (const queue of duplicateQueues.values()) {
@@ -89776,7 +90052,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              resultDisplay: response.resultDisplay,
              error: response.error,
              errorType: response.errorType,
-@@ -4519,13 +4426,13 @@
+@@ -4519,13 +4430,13 @@
          (toolCall) => toolCall.response.terminateTurn === true,
        );
        if (terminatesGoalTurn && toolGoalBinding) {
@@ -89791,7 +90067,134 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              currentPermit &&
              sameGoalPermit(currentPermit, toolGoalBinding.permit)
            ) {
-@@ -5387,10 +5294,8 @@
+@@ -4841,70 +4752,90 @@
+         const checkpointDir = storage.getProjectTempCheckpointsDir();
+ 
+         if (!checkpointDir) {
+           return;
+         }
+ 
++        let sharedState: Pick<
++          ToolCallCheckpoint,
++          'checkpointVersion' | 'history' | 'runtimeHistory'
++        >;
+         try {
+-          await fs.mkdir(checkpointDir, { recursive: true });
++          if (!geminiClient?.isInitialized()) {
++            throw new Error('The chat is not initialized');
++          }
++          sharedState = {
++            checkpointVersion: TOOL_CALL_CHECKPOINT_VERSION,
++            history: JSON.parse(JSON.stringify(history)) as HistoryItem[],
++            runtimeHistory: geminiClient.getChat().getRuntimeHistory(),
++          };
+         } catch (error) {
+-          if (!isNodeError(error) || error.code !== 'EEXIST') {
+-            onDebugMessage(
+-              `Failed to create checkpoint directory: ${getErrorMessage(error)}`,
+-            );
+-            return;
+-          }
++          onDebugMessage(
++            `Failed to capture checkpoint state: ${getErrorMessage(error)}`,
++          );
++          return;
+         }
+-
++        const snapshots: Array<{
++          destination: string;
++          toolCall: ToolCallCheckpoint['toolCall'];
++          promptId: string;
++          filePath: string;
++        }> = [];
+         for (const toolCall of restorableToolCalls) {
+           const filePath = (toolCall.request.args['file_path'] ??
+             toolCall.request.args['notebook_path']) as string;
+           if (!filePath) {
+             onDebugMessage(
+               `Skipping restorable tool call due to missing file_path: ${toolCall.request.name}`,
+             );
+             continue;
+           }
+-
+           try {
+-            const promptId = toolCall.request.prompt_id;
+             const timestamp = new Date()
+               .toISOString()
+               .replace(/:/g, '-')
+               .replace(/\./g, '_');
+-            const toolName = toolCall.request.name;
+-            const fileName = path.basename(filePath);
+-            const toolCallWithSnapshotFileName = `${timestamp}-${fileName}-${toolName}.json`;
+-            const clientHistory = geminiClient?.getHistoryShallow();
+-            const toolCallWithSnapshotFilePath = path.join(
+-              checkpointDir,
+-              toolCallWithSnapshotFileName,
++            snapshots.push({
++              destination: path.join(
++                checkpointDir,
++                `${timestamp}-${path.basename(filePath)}-${toolCall.request.name}.json`,
++              ),
++              toolCall: {
++                name: toolCall.request.name,
++                args: structuredClone(toolCall.request.args),
++              },
++              promptId: toolCall.request.prompt_id,
++              filePath,
++            });
++          } catch (error) {
++            onDebugMessage(
++              `Failed to capture checkpoint for ${filePath}: ${getErrorMessage(error)}`,
+             );
+-
++          }
++        }
++        if (snapshots.length === 0) return;
++        try {
++          await fs.mkdir(checkpointDir, { recursive: true });
++        } catch (error) {
++          onDebugMessage(
++            `Failed to create checkpoint directory: ${getErrorMessage(error)}`,
++          );
++          return;
++        }
++        for (const snapshot of snapshots) {
++          try {
++            const { destination, ...toolState } = snapshot;
++            // Freeze shared history once; retain only one serialized full
++            // checkpoint at a time when several edits await approval.
+             await fs.writeFile(
+-              toolCallWithSnapshotFilePath,
+-              JSON.stringify(
+-                {
+-                  history,
+-                  clientHistory,
+-                  toolCall: {
+-                    name: toolCall.request.name,
+-                    args: toolCall.request.args,
+-                  },
+-                  promptId,
+-                  filePath,
+-                },
+-                null,
+-                2,
+-              ),
++              destination,
++              JSON.stringify({ ...sharedState, ...toolState }, null, 2),
+             );
+           } catch (error) {
+             onDebugMessage(
+-              `Failed to create checkpoint for ${filePath}: ${getErrorMessage(
+-                error,
+-              )}. This may indicate a problem with file system permissions.`,
++              `Failed to write checkpoint ${snapshot.destination}: ${getErrorMessage(error)}`,
+             );
+           }
+         }
+       }
+     };
+     saveRestorableToolCalls();
+@@ -5387,10 +5318,8 @@
      preemptGoalTurn,
      retryLastPrompt,
      pendingToolCalls: toolCalls,
@@ -146696,8 +147099,9 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 --- a/packages/core/src/core/client.ts
 +++ b/packages/core/src/core/client.ts
-@@ -1,6 +1,14 @@
+@@ -1,6 +1,15 @@
 +import type { StoredImagePayload } from '../services/image-payload-references.js';
++import type { RuntimeHistoryState } from '../services/runtime-history.js';
 +import { buildRuntimeHistoryFromConversation } from '../services/session-api-history.js';
 +import { CompactionFinalizationError } from './turn.js';
 +import {
@@ -146711,7 +147115,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -15,15 +23,9 @@
+@@ -15,15 +24,9 @@
  } from '@google/genai';
  import { createUserContent } from './genai-compat.js';
  import process from 'node:process';
@@ -146728,7 +147132,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -  type MicrocompactMeta,
 -  type MicrocompactOptions,
 -} from '../services/microcompaction/microcompact.js';
-@@ -47,13 +49,12 @@
+@@ -47,13 +50,12 @@
    abortGoalForStopHookCap,
    getStopHookContinuationReason,
    GOAL_HOOK_ID_OUTPUT_KEY,
@@ -146742,7 +147146,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
  // Core modules
  import { GeminiChat } from './geminiChat.js';
-@@ -60,4 +61,8 @@
+@@ -60,4 +62,8 @@
 -import { getRecentGitStatus } from '../utils/gitUtils.js';
 +import {
 +  GIT_SNAPSHOT_REPOSITORY_BYTES,
@@ -146752,7 +147156,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  import {
    assembleSystemPrompt,
    getArenaSystemReminder,
-@@ -65,7 +70,14 @@
+@@ -65,7 +71,14 @@
    getCustomSystemPrompt,
    getPlanModeSystemReminder,
    resolveInteractionMode,
@@ -146768,14 +147172,14 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  import {
    CompressionStatus,
    GeminiEventType,
-@@ -82,6 +94,5 @@
+@@ -82,6 +95,5 @@
  // Tools
  import type { RelevantAutoMemoryPromptResult } from '../memory/manager.js';
  import { AUTO_SKILL_THRESHOLD } from '../memory/manager.js';
 -import { isManagedMemoryPath } from '../memory/paths.js';
  import { isProjectSkillPath } from '../skills/skill-paths.js';
  import { ToolNames } from '../tools/tool-names.js';
-@@ -88,8 +99,6 @@
+@@ -88,8 +100,6 @@
  
  // Telemetry
  import {
@@ -146784,7 +147188,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    logMemoryRecallDelivery,
    startInteractionSpan,
    endInteractionSpan,
-@@ -118,24 +127,21 @@
+@@ -118,24 +128,21 @@
    buildChangedAgentsReminder,
    buildChangedMcpToolsReminder,
    buildChangedSkillsReminder,
@@ -146811,7 +147215,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    flatMapTextParts,
    prependToFirstTextPart,
  } from '../utils/partUtils.js';
-@@ -158,6 +164,6 @@
+@@ -158,6 +165,6 @@
  import { createHookOutput, SessionStartSource } from '../hooks/types.js';
 -import fsPromises from 'node:fs/promises';
  import { MessageDisplayDispatcher } from './message-display-dispatcher.js';
@@ -146819,7 +147223,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
  // IDE integration
  import { ideContextStore } from '../ide/ideContext.js';
-@@ -187,6 +193,14 @@
+@@ -187,6 +194,14 @@
    Teammate = 'teammate',
    /** Runtime-owned continuation for an active Goal. */
    Goal = 'goal',
@@ -146834,7 +147238,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  }
  
  export interface SendMessageOptions {
-@@ -220,13 +234,13 @@
+@@ -220,13 +235,13 @@
    getQueuedGoalTurnKey?: () => string | undefined;
  }
  
@@ -146849,7 +147253,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
  const EMPTY_RELEVANT_AUTO_MEMORY_RESULT: RelevantAutoMemoryPromptResult = {
    prompt: '',
-@@ -317,12 +331,13 @@
+@@ -317,12 +332,13 @@
    ToolNames.WRITE_FILE,
    ToolNames.EDIT,
  ]);
@@ -146863,7 +147267,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    private skillsModifiedInSession = false;
    private cachedGitStatus: string | null | undefined;
    private readonly surfacedRelevantAutoMemoryPaths = new Set<string>();
-@@ -396,26 +411,17 @@
+@@ -396,26 +412,17 @@
     * Tracks the most recently injected date string to prevent injecting
     * duplicate or conflicting dates when a session spans midnight.
     * Only UserQuery turns inject dates; Cron/ToolResult turns reuse the
@@ -146891,7 +147295,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
    constructor(private readonly config: Config) {
      this.loopDetector = new LoopDetectionService(config);
-@@ -430,61 +436,50 @@
+@@ -430,61 +437,50 @@
      }
  
      // Check if we're resuming from a previous session
@@ -146970,7 +147374,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        this.restoreAttributionFromSession(resumedSessionData.conversation);
      } else {
        if (sessionStartSource !== undefined) {
-@@ -492,15 +487,12 @@
+@@ -492,15 +488,12 @@
        } else {
          await this.startChat();
        }
@@ -146986,7 +147390,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
     * Restore attribution state from the last snapshot in a resumed session.
     */
    private restoreAttributionFromSession(conversation: {
-@@ -531,13 +523,38 @@
+@@ -531,13 +524,38 @@
    }
  
    async addHistory(content: Content) {
@@ -147025,7 +147429,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      return this.chat;
    }
  
-@@ -559,24 +576,12 @@
+@@ -559,24 +577,12 @@
    }
  
    getHistoryTail(count: number, curated: boolean = false): Content[] {
@@ -147050,7 +147454,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    }
  
    private getHistoryLength(): number {
-@@ -663,11 +668,14 @@
+@@ -663,11 +669,14 @@
      // functionResponses from a failed-then-retried request. The
      // FileReadCache would still record those reads, so the retry's
      // re-issued Read could hit the file_unchanged placeholder while
@@ -147068,9 +147472,23 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      // The stripped user turn may have carried the IDE context (open files,
      // workspace state) that `lastSentIdeContext` advanced past. Without
      // forcing a resend, the next request would either skip IDE context
-@@ -736,12 +744,17 @@
+@@ -732,18 +741,33 @@
+     }
+     return result;
+   }
+ 
    setHistory(history: Content[]) {
      this.getChat().setHistory(history);
++    this.invalidateReplacedHistory();
++  }
++
++  async setRuntimeHistory(state: RuntimeHistoryState): Promise<void> {
++    this.getChat().setRuntimeHistory(state);
++    this.invalidateReplacedHistory();
++    await this.config.getChatRecordingService().flush();
++  }
++
++  private invalidateReplacedHistory(): void {
      // Replacing history wholesale drops any prior read_file tool
 -    // results the FileReadCache still believes the model has seen.
 -    // Without clearing, a follow-up Read of an unchanged file would
@@ -147087,12 +147505,14 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +      .getFileReadCache()
 +      .markAllReadsEvictedFromHistory();
 +    debugLogger.debug(
-+      `[FILE_READ_CACHE] disarmed ${disarmed} resident read(s) after setHistory`,
++      `[FILE_READ_CACHE] disarmed ${disarmed} resident read(s) after history replacement`,
 +    );
      this.forceFullIdeContext = true;
    }
  
-@@ -758,10 +771,12 @@
+   truncateHistory(keepCount: number) {
+     // Use the O(1) length getter rather than getHistory() — the latter
+@@ -758,10 +782,12 @@
      // the clear, reintroducing the file_unchanged placeholder bug).
      const newLen = this.getChat().getHistoryLength();
      if (newLen < prevLen) {
@@ -147107,7 +147527,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      }
      this.forceFullIdeContext = true;
    }
-@@ -891,48 +906,60 @@
+@@ -891,48 +917,60 @@
          'no_relevant_results',
        );
      }
@@ -147183,7 +147603,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const memAfter = process.memoryUsage();
      const newHistoryLength = this.chat?.getHistoryLength() ?? 0;
      if (debugLogger.isEnabled()) {
-@@ -995,4 +1022,31 @@
+@@ -995,4 +1033,31 @@
      return this.cachedGitStatus;
    }
  
@@ -147216,7 +147636,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +    systemInstruction: string;
 +    declaration: Parameters<GeminiChat['declarePreamble']>[0];
 +  } {
-@@ -999,12 +1053,20 @@
+@@ -999,12 +1064,20 @@
      const overrideSystemPrompt = this.config.getSystemPrompt();
 -    const base = overrideSystemPrompt
 -      ? getCustomSystemPrompt(overrideSystemPrompt)
@@ -147245,7 +147665,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const stableLayers = {
        base,
        contextFiles: this.config.getUserMemory(),
-@@ -1019,11 +1081,24 @@
+@@ -1019,11 +1092,24 @@
      // memory/model/mode changes; consumers match via `startsWith` and fail
      // open when it goes stale.
      this.config.setStaticSystemPrefix(assembleSystemPrompt(stableLayers));
@@ -147275,7 +147695,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    }
  
    async refreshStartupContextReminder(): Promise<void> {
-@@ -1047,44 +1122,11 @@
+@@ -1047,44 +1133,11 @@
      );
      this.seedSkillReminderDedupFromSnapshot(snapshotEntries);
      await this.seedAgentReminderDedupFromCurrent();
@@ -147325,7 +147745,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    }
  
    /**
-@@ -1101,7 +1143,9 @@
+@@ -1101,7 +1154,9 @@
        return;
      }
      await this.config.getToolRegistry().warmAll();
@@ -147336,7 +147756,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      if (this.lastSessionStartContext && this.lastSessionStartSource) {
        this.chat.applySessionStartContext(
          this.lastSessionStartContext,
-@@ -1141,14 +1185,13 @@
+@@ -1141,14 +1196,13 @@
      // misreading of the "(%)" label) would make the budget exceed the whole
      // window and preload every deferred tool unconditionally. Cap it at 100%
      // — the schema also bounds it, but clamp here so a hand-edited settings
@@ -147352,7 +147772,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      toolRegistry.preloadDeferredToolsWithinBudget(
        Math.floor((contextWindow * boundedPercent) / 100),
      );
-@@ -1543,17 +1586,18 @@
+@@ -1543,17 +1597,18 @@
  
    async startChat(
      extraHistory?: Content[],
@@ -147372,7 +147792,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      });
      let history: Content[] = [];
      let snapshotEntries: AvailableSkillEntry[] = [];
-@@ -1599,36 +1643,53 @@
+@@ -1599,36 +1654,53 @@
        const deferredTools = profiler.timeSync('deferred_reminder_setup', () => {
          const resolved = this.resolveDeferredToolsForReminder(deferredSummary);
          this.rememberAnnouncedDeferredTools(resolved);
@@ -147431,7 +147851,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 +      chat.declareStartupContext(declareStartupContext(history));
        this.chat = chat;
  
-@@ -1905,12 +1966,13 @@
+@@ -1905,12 +1977,13 @@
  
        if (autoSkillEnabled) {
          const skillReviewResult = mgr.scheduleSkillReview({
@@ -147445,7 +147865,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            enabled: autoSkillEnabled,
            threshold: AUTO_SKILL_THRESHOLD,
            confirmBeforePersist: this.config.getAutoSkillConfirmEnabled(),
-@@ -2081,70 +2143,6 @@
+@@ -2081,70 +2154,6 @@
      }
    }
  
@@ -147516,7 +147936,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
    async *sendMessageStream(
      request: PartListUnion,
      callerSignal: AbortSignal,
-@@ -2316,13 +2314,13 @@
+@@ -2316,13 +2325,13 @@
            } catch (error) {
              debugLogger.warn('Failed to pause interrupted Goal turn', error);
            }
@@ -147531,7 +147951,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
          if (sameGoalPermit(runtime.permitForTurn(goalTurnKey), goalPermit)) {
            await runtime.finishTurn(goalPermit);
-@@ -2342,27 +2340,20 @@
+@@ -2342,27 +2351,20 @@
      // strip. The Retry's re-submitted content is the first thing the send
      // pushes, so if the counter advances at all that content landed.
      let pushCountAfterStrip = 0;
@@ -147563,7 +147983,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
      const attachedSteerPushCount = currentPushCount();
  
      const restoreStrippedRetryEntries = () => {
-@@ -2396,22 +2387,38 @@
+@@ -2396,22 +2398,38 @@
        }
        strippedRetryEntries = [];
      };
@@ -147602,7 +148022,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          ? partToString(request)
          : undefined;
      if (startsInteraction) {
-@@ -2452,6 +2459,7 @@
+@@ -2452,6 +2470,7 @@
          // coordination traffic.
          messageType !== SendMessageType.Teammate &&
          messageType !== SendMessageType.Goal &&
@@ -147610,7 +148030,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          hooksEnabled &&
          messageBus &&
          this.config.hasHooksForEvent('UserPromptSubmit')
-@@ -2494,13 +2502,13 @@
+@@ -2494,13 +2513,13 @@
              }
              bindGoalStateEvents(runtime);
              const admitted = runtime.permitForTurn(goalTurnKey);
@@ -147625,7 +148045,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction('cancelled');
              for (const goalEvent of takePendingGoalEvents()) {
                yield goalEvent;
-@@ -2512,13 +2520,13 @@
+@@ -2512,13 +2531,13 @@
              type: GeminiEventType.UserPromptSubmitBlocked,
              value: {
                reason: hookOutput.getEffectiveReason(),
@@ -147640,7 +148060,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          // Add additional context from hooks to the request. The context is
          // appended as its own part, wrapped in a reserved tag so it stays
          // distinguishable from user-authored text in model history, resume,
-@@ -2630,13 +2638,13 @@
+@@ -2630,13 +2649,13 @@
        // them as a compact `●` line (the displayText) and the envelope
        // is the model-bound payload, so a resumed session restores the
        // same info item. Without this they were the one top-level
@@ -147655,7 +148075,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            goalPermit,
          );
      }
-@@ -2700,13 +2708,13 @@
+@@ -2700,13 +2719,13 @@
      // right before the turn's streaming loop below.
      let messageDisplay: MessageDisplayDispatcher | null = null;
      try {
@@ -147670,7 +148090,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        ) {
          if (
            this.config.isManagedMemoryAvailable() &&
-@@ -2802,61 +2810,57 @@
+@@ -2802,61 +2821,57 @@
          }
  
          // record user/cron message for session management
@@ -147756,7 +148176,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          this.sessionTurnCount++;
  
          if (messageType === SendMessageType.UserQuery) {
-@@ -2867,35 +2871,21 @@
+@@ -2867,35 +2882,21 @@
                  .getFileHistoryService()
                  .getSnapshots()
                  .at(-1);
@@ -147793,7 +148213,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        const boundedTurns =
          messageType === SendMessageType.Goal
            ? MAX_TURNS
-@@ -2914,17 +2904,17 @@
+@@ -2914,17 +2915,17 @@
            !signal ||
            signal.aborted ||
            !options?.getSteerInput
@@ -147815,7 +148235,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          const steerInput = await options.getSteerInput(signal);
          if (!steerInput || steerInput.parts.length === 0) {
            return undefined;
-@@ -2937,37 +2927,12 @@
+@@ -2937,37 +2938,12 @@
        };
  
        // Auto-compaction happens inside GeminiChat.sendMessageStream and surfaces
@@ -147853,7 +148273,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        // in the conversation history. The IDE context is not discarded; it will
        // be included in the next regular message sent to the model.
        const historyLength = this.getHistoryLength();
-@@ -2980,7 +2945,11 @@
+@@ -2980,7 +2956,11 @@
        let nextIdeContext: IdeContext | undefined;
        let shouldUpdateIdeContextState = false;
  
@@ -147866,7 +148286,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          const { contextParts, newIdeContext } = this.getIdeContextParts(
            this.forceFullIdeContext || historyLength === 0,
          );
-@@ -3008,12 +2977,16 @@
+@@ -3008,12 +2988,16 @@
            this.cancelPendingMemoryPrefetch('abort');
            endCurrentInteraction('cancelled');
            return new Turn(this.getChat(), prompt_id);
@@ -147883,7 +148303,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            messageType === SendMessageType.Cron)
        ) {
          try {
-@@ -3168,23 +3141,19 @@
+@@ -3168,23 +3152,19 @@
            // intact under native Gemini; the OpenAI converter then emits the
            // text as a separate user message after the tool messages.
            requestToSend = [...requestToSend, toolResultMemory.prompt];
@@ -147922,7 +148342,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -          sizeOnly: true,
 -          pendingContent: createUserContent(requestToSend),
 -        });
-@@ -3244,7 +3213,10 @@
+@@ -3244,7 +3224,10 @@
            : null;
  
        agentOutput.beginResponse();
@@ -147934,7 +148354,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        let didUpdateIdeContextState = false;
        let steerInputSettled = false;
        try {
-@@ -3253,26 +3225,20 @@
+@@ -3253,26 +3236,20 @@
              // Settle the attached steer input as soon as the first stream
              // event arrives — the user-content push has landed by now.
              // Settling here (before model-response events are committed to
@@ -147964,12 +148384,12 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            } else if (event.type === GeminiEventType.Finished) {
              agentOutput.observeFinishReason(event.value?.reason);
            }
-@@ -3309,4 +3275,3 @@
+@@ -3309,4 +3286,3 @@
              if (arenaAgentClient) {
                await arenaAgentClient.reportError('Loop detected');
              }
 -            this.lastApiCompletionTimestamp = Date.now();
-@@ -3313,13 +3278,26 @@
+@@ -3313,13 +3289,26 @@
              endCurrentInteraction('error', 'loop detected', 'loop_detected');
              this.cancelPendingMemoryPrefetch('no_safe_delivery_point');
              this.fireLoopDetectedStopFailure(loopType);
@@ -147998,7 +148418,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
 -          // stagnation guard, and per-turn cap run unconditionally in
 +          // flag. The precise consecutive-identical guard and the shell
 +          // inspection stagnation guard run unconditionally in
-@@ -3341,7 +3319,6 @@
+@@ -3341,7 +3330,6 @@
              if (arenaAgentClient) {
                await arenaAgentClient.reportError('Loop detected');
              }
@@ -148006,7 +148426,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction('error', 'loop detected', 'loop_detected');
              // finally cleanup catches this, but cancel explicitly to match
              // the cleanup pattern at other early-return sites.
-@@ -3360,18 +3337,8 @@
+@@ -3360,18 +3348,8 @@
            // the previous merged IDE context.
            if (event.type === GeminiEventType.ChatCompressed) {
              this.forceFullIdeContext = true;
@@ -148027,7 +148447,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              void this.fireSessionStartHook(SessionStartSource.Compact)
                .then((compactAdditionalContext) => {
                  if (!compactAdditionalContext || !this.chat) {
-@@ -3412,7 +3379,6 @@
+@@ -3412,7 +3390,6 @@
                    : 'Unknown error';
                await arenaAgentClient.reportError(errorMsg);
              }
@@ -148035,7 +148455,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              // Sanitize: do not pass raw API error messages to span status.
              const errMsg =
                event.value instanceof Error ? '[API error]' : 'unknown error';
-@@ -3450,7 +3416,6 @@
+@@ -3450,7 +3427,6 @@
        }
  
        // Track API completion time for thinking block idle cleanup
@@ -148043,7 +148463,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
  
        if (!turn.pendingToolCalls.length) {
          const steerTurnBudget = boundedTurns - 1;
-@@ -3469,13 +3434,13 @@
+@@ -3469,13 +3445,13 @@
                  submittedPrompt: undefined,
                  steerInput,
                },
@@ -148058,7 +148478,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            normalCompletion = true;
-@@ -3494,15 +3459,14 @@
+@@ -3494,15 +3470,14 @@
          this.config.hasHooksForEvent('Stop')
        ) {
          const responseText =
@@ -148076,7 +148496,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            HookExecutionRequest,
            HookExecutionResponse
          >(
-@@ -3633,13 +3597,13 @@
+@@ -3633,13 +3608,13 @@
                      reasons: currentReasons,
                    },
                  },
@@ -148091,7 +148511,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
                endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
              }
              normalCompletion = true;
-@@ -3725,14 +3689,10 @@
+@@ -3725,14 +3700,10 @@
  
            // A blocking Stop hook (e.g. /goal) feeds a fresh user-role prompt
            // back to the model, starting a new logical turn — reset per-turn
@@ -148110,7 +148530,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            this.loopDetector.reset(prompt_id);
  
            const activeGoal = getActiveGoal(this.config.getSessionId());
-@@ -3804,13 +3764,13 @@
+@@ -3804,13 +3775,13 @@
                            : currentReasons,
                      },
                },
@@ -148125,7 +148545,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
              endCurrentInteraction(signal.aborted ? 'cancelled' : 'ok');
            }
            // Preserve the pending prefetch: the inner Hook turn we just
-@@ -3834,13 +3794,13 @@
+@@ -3834,13 +3805,13 @@
        if (
          goalPermit &&
          goalRuntime &&
@@ -148140,7 +148560,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
          }
          await goalRuntime.finishTurn(goalPermit);
          goalPermitReleased = true;
-@@ -3850,96 +3810,19 @@
+@@ -3850,96 +3821,19 @@
          endCurrentInteraction('ok');
          normalCompletion = true;
          return turn;
@@ -148245,7 +148665,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
            this.runManagedAutoMemoryBackgroundTasks(messageType);
          }
  
-@@ -3984,13 +3867,13 @@
+@@ -3984,13 +3878,13 @@
          this.config.endAutomaticActiveTodoWorkChain(prompt_id);
        }
        if (!goalPermitReleased && (callerSignal.aborted || !normalCompletion)) {
@@ -148260,7 +148680,7 @@ diff --git a/packages/core/src/core/client.ts b/packages/core/src/core/client.ts
        // exception thrown out of the streaming loop still ends the message,
        // and buffering hook consumers need the is_final signal). finish() is
        // idempotent, so on the normal paths this resolves immediately.
-@@ -4117,137 +4000,83 @@
+@@ -4117,137 +4011,83 @@
        throw new Error(
          `Failed to generate content with model ${currentAttemptModel}: ${getErrorMessage(error)}`,
        );
@@ -172069,8 +172489,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
-@@ -1,113 +1,110 @@
-+import type { RuntimeHistoryState } from '../services/runtime-history.js';
+@@ -1,113 +1,114 @@
++import {
++  requireRuntimeHistoryState,
++  type RuntimeHistoryState,
++} from '../services/runtime-history.js';
 +import {
 +  ChatAttempt,
 +  type ChatHistoryDisposition,
@@ -172221,13 +172644,14 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  toCompactionRecord,
 +} from './turn.js';
  import {
++  declareStartupContext,
    getStartupContextLength,
    isSystemReminderContent,
 +  type StartupContextDeclaration,
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -123,38 +120,30 @@
+@@ -123,38 +124,30 @@
  import {
    getToolCallPreparations,
    setToolCallPreparations,
@@ -172278,7 +172702,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -191,849 +180,78 @@
+@@ -191,849 +184,78 @@
        value,
        writable: true,
        configurable: true,
@@ -173153,7 +173577,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1245,199 +463,58 @@
+@@ -1245,199 +467,58 @@
    return {
      ...content,
      parts,
@@ -173387,7 +173811,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1591,13 +668,17 @@
+@@ -1591,13 +672,17 @@
    const removals = [...plan.removalTargets].sort((a, b) => {
      if (a.turnIdx !== b.turnIdx) return b.turnIdx - a.turnIdx;
      return b.partIdx - a.partIdx;
@@ -173406,7 +173830,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    // Preserve the adjacent turn even if empty — we'll rewrite it
    // below.
    const adjacentIdx = plan.modelIdx + 1;
-@@ -1612,17 +693,20 @@
+@@ -1612,17 +697,20 @@
    // follows.
    const next = history[adjacentIdx];
    if (next?.role === 'user') {
@@ -173432,7 +173856,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    return { insertedBefore: 1 };
  }
  
-@@ -1680,6 +764,15 @@
+@@ -1680,6 +768,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -173448,7 +173872,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1712,74 +805,41 @@
+@@ -1712,74 +809,41 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -173542,7 +173966,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  private startupContext: StartupContextDeclaration | undefined;
  
 -  private readonly imagePayloadStore = new InMemoryImagePayloadStore();
-+  private readonly imagePayloadStore: InMemoryImagePayloadStore;
++  private imagePayloadStore: InMemoryImagePayloadStore;
 +  private pendingAssistant: Content | undefined;
 +  private pendingCheckpoint: Content[] | undefined;
  
@@ -173551,7 +173975,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Incremented when `sendMessageStream` pushes the user content and decremented
     * only if that same push is rolled back on a setup-time failure. Auto-
     * compression mutates history length but never touches this counter, so a
-@@ -1787,351 +847,630 @@
+@@ -1787,351 +851,630 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -174428,7 +174852,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  /** The startup context every history of this chat opens with, compacted or not. */
 +  getStartupContext(): Content | undefined {
 +    return this.startupContext?.content;
-@@ -2153,6 +1492,16 @@
+@@ -2153,6 +1496,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -174445,7 +174869,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2192,1724 +1541,606 @@
+@@ -2192,1724 +1545,606 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -176703,7 +177127,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +2164,14 @@
+@@ -3933,23 +2168,14 @@
          }
  
          return false;
@@ -176728,7 +177152,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +2185,19 @@
+@@ -3963,41 +2189,19 @@
        },
      });
  
@@ -176773,7 +177197,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4015,58 +2215,67 @@
+@@ -4015,58 +2219,67 @@
     *
     * @param curated - whether to return the curated history or the comprehensive
     * history.
@@ -176850,7 +177274,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Returns a defensive copy of the last raw history entry without cloning the
     * full conversation. This avoids O(history) cloning, though cloning the last
-@@ -4078,23 +2287,23 @@
+@@ -4078,23 +2291,23 @@
  
    /**
     * Returns the last raw history entry for read-only checks. Callers must not
@@ -176877,7 +177301,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            ?.filter(
              (part): part is { text: string } =>
                typeof part.text === 'string' && !part.thought,
-@@ -4109,13 +2318,13 @@
+@@ -4109,13 +2322,13 @@
    /**
     * Returns the number of entries in the raw chat history. O(1) and
     * does not clone — use this when you only need the count and would
@@ -176892,7 +177316,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Monotonic count of user-content pushes that survived into history (see the
     * field doc). Snapshot it before a send and compare after to tell whether the
     * send actually pushed the user content — robust to auto-compression, which
-@@ -4130,13 +2339,13 @@
+@@ -4130,13 +2343,13 @@
     * no clone — `useGeminiStream.handleCompletedTools` calls this per
     * tool-completion batch, so {@link getHistory}'s `structuredClone`
     * would stall the UI on long sessions.
@@ -176907,7 +177331,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
          if (id) ids.add(id);
        }
      }
-@@ -4144,207 +2353,66 @@
+@@ -4144,207 +2357,90 @@
    }
  
    /**
@@ -177096,6 +177520,30 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    this.installHistory(structuredClone(history));
    }
  
++  assertHistoryReplacementReady(): void {
++    if (this.pendingAssistant || this.pendingCheckpoint) {
++      throw new Error(
++        'A history commit is still being recorded. Wait for the current generation or compaction to finish before restoring this chat.',
++      );
++    }
++  }
++
++  setRuntimeHistory(state: RuntimeHistoryState): void {
++    this.assertHistoryReplacementReady();
++    requireRuntimeHistoryState(state);
++    const history = structuredClone(state.history);
++    const images = new InMemoryImagePayloadStore(state.imagePayloads);
++    const startup = declareStartupContext(history);
++    this.chatRecordingService.recordRuntimeHistory({
++      kind: 'checkpoint',
++      state: { history, imagePayloads: images.snapshot() },
++    });
++    images.takeAdditions();
++    this.history = history;
++    this.imagePayloadStore = images;
++    this.startupContext = startup;
++  }
++
    truncateHistory(keepCount: number): void {
 -    this.history = this.history.slice(0, keepCount);
 -    // Truncation can drop the entry the partial-push marker points at,
@@ -177144,7 +177592,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      ) {
        // Never pop a *pure* system-reminder user entry. These are structural,
        // not orphaned turns: the startup-context prelude (history[0]) and
-@@ -4362,44 +2430,38 @@
+@@ -4362,44 +2458,38 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -177197,7 +177645,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2489,296 @@
+@@ -4427,693 +2517,296 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -203540,7 +203988,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +719,59 @@
+@@ -704,6 +719,63 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -203592,6 +204040,10 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
 +} from './utils/runtime-contract-admission.js';
 +
 +export * from './services/chat-recording-io.js';
++export {
++  requireRuntimeHistoryState,
++  type RuntimeHistoryState,
++} from './services/runtime-history.js';
 +
 +export type {
 +  ModelOutputOrigin,
@@ -359876,7 +360328,7 @@ diff --git a/docs/design/background-resume-history.md b/docs/design/background-r
 diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-history-recording.md
 --- /dev/null
 +++ b/docs/design/runtime-history-recording.md
-@@ -0,0 +1,124 @@
+@@ -0,0 +1,140 @@
 +# Runtime history recording
 +
 +This document describes the shared source implementation and its verification
@@ -359969,6 +360421,24 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +both from scheduling through delayed execution. Independently valid image pools
 +may overlap; duplicate identities inside one recorded pool still refuse.
 +
++Tool-restore snapshot format 1 contains UI history, the complete runtime state,
++the tool's arguments, and its prompt and file identities. The hook freezes
++shared state and each tool's arguments before filesystem waits. It serializes
++one full snapshot at a time, so several pending edits do not retain several
++serialized copies of the image pool. Restore uses fatal UTF-8 decoding and
++validates the snapshot version and runtime state before rewinding files;
++unsupported, malformed or incomplete snapshots refuse by filename.
++There is no history-only restore mode.
++
++The shared Chat setter prepares a replacement image store, owned history and
++the matching startup declaration, then admits one canonical checkpoint before
++installing them. Client invalidates displaced read/IDE caches and waits for the
++writer. Both tool restore and slash-command history replacement await that
++barrier before changing the UI or permitting tool replay. Failure after
++admission does not imply a rollback of memory or of files already rewound; it
++propagates the recording failure and suppresses successful replay. The pending
++commit guard does not serialize every history mutation with active generation.
++
 +## Scope and verification
 +
 +The frozen baseline at agent_service 60e08e2 reproduces reminder omissions,
@@ -359990,11 +360460,9 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +executed. The two image-gate fake providers are amended with the new recording
 +contract; those gates were not run.
 +
-+Two independently identified completeness issues remain separate follow-ups.
-+An existing compaction race can replace input admitted while the summary is
-+generated; the journal records that installed state accurately but does not
-+repair the lost-input decision. Tool-restore snapshots also need to transfer
-+their image pool across a new session. Neither is claimed fixed here.
++An independently reproduced compaction race remains a separate follow-up: it
++can replace input admitted while the summary is generated. The journal records
++that installed state accurately but does not repair the lost-input decision.
 +
 +This contract belongs to the shared Qwen runtime and applies independently of
 +provider, session length, UI, or benchmark configuration. Direct vLLM callers do
@@ -360029,7 +360497,7 @@ diff --git a/packages/core/src/agents/backends/types.ts b/packages/core/src/agen
 diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages/core/src/core/runtime-history-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/runtime-history-recording.test.ts
-@@ -0,0 +1,409 @@
+@@ -0,0 +1,489 @@
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
 +import { tmpdir } from 'node:os';
@@ -360046,6 +360514,8 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +import { ChatCompressionService } from '../services/chatCompressionService.js';
 +import { CompressionStatus } from '../core/turn.js';
 +import { activeTodoReminder } from '../tools/todo-reminder.js';
++import { InMemoryImagePayloadStore } from '../services/image-payload-references.js';
++import { buildRuntimeHistoryFromConversation } from '../services/session-api-history.js';
 +import { ChatRecordingService } from '../services/chatRecordingService.js';
 +import {
 +  SessionService,
@@ -360228,6 +360698,8 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +      live,
 +      resumed,
 +      indexed: indexed!.runtime.apiHistory,
++      indexedImages: indexed!.runtime.imagePayloads,
++      runtime: buildRuntimeHistoryFromConversation(loaded!.conversation),
 +      repairedResume,
 +      repair,
 +      records: loaded!.conversation.messages,
@@ -360438,6 +360910,82 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  expect(o.live[0].parts?.[0].text).toContain('The current date is:');
 +  expect.soft(JSON.stringify(o.resumed)).toBe(JSON.stringify(o.live));
 +  expect.soft(JSON.stringify(o.indexed)).toBe(JSON.stringify(o.live));
++});
++
++it('installs an owned complete runtime state through Client and both resume readers', async () => {
++  const f = await setup('paired-restore');
++  f.properties['getFileReadCache'] = () => ({
++    markAllReadsEvictedFromHistory: () => 0,
++  });
++  const oldPool = new InMemoryImagePayloadStore();
++  oldPool.put({ inlineData: { mimeType: 'image/png', data: 'b2xk' } });
++  await f.client.setRuntimeHistory({
++    history: [],
++    imagePayloads: oldPool.snapshot(),
++  });
++  const pool = new InMemoryImagePayloadStore();
++  const image = pool.put({
++    inlineData: { mimeType: 'image/png', data: 'bmV3' },
++  });
++  const state = {
++    history: [
++      { role: 'user', parts: [{ text: `Retain Image #${image.id} exactly` }] },
++      { role: 'model', parts: [{ text: '  \n', thought: true }] },
++    ],
++    imagePayloads: pool.snapshot(),
++  };
++  const expected = structuredClone(state);
++  const installed = f.client.setRuntimeHistory(state);
++  state.history[0].parts[0].text = 'caller mutation';
++  state.imagePayloads[0].data = 'changed';
++  await installed;
++  expect(f.chat.getRuntimeHistory()).toEqual(expected);
++  const restored = await f.observe();
++  expect(restored.runtime).toEqual(expected);
++  expect(restored.indexed).toEqual(expected.history);
++  expect(restored.indexedImages).toEqual(expected.imagePayloads);
++});
++
++it('refuses an incomplete runtime replacement before recording or changing live state', async () => {
++  const f = await setup('invalid-paired-restore');
++  f.chat.addHistory({ role: 'user', parts: [{ text: 'retain original' }] });
++  await f.recorder.flush();
++  const original = f.chat.getRuntimeHistory();
++  const pool = new InMemoryImagePayloadStore();
++  const image = pool.put({
++    inlineData: { mimeType: 'image/png', data: 'aW1hZ2U=' },
++  });
++  const record = vi.spyOn(f.recorder, 'recordRuntimeHistory');
++  expect(() =>
++    f.chat.setRuntimeHistory({
++      history: [
++        {
++          role: 'user',
++          parts: [
++            { text: `Image #${image.id}`, imageReferenceId: image.id } as Part,
++          ],
++        },
++      ],
++      imagePayloads: [],
++    }),
++  ).toThrow('no payload');
++  expect(record).not.toHaveBeenCalled();
++  expect(f.chat.getRuntimeHistory()).toEqual(original);
++  expect((await f.observe()).runtime).toEqual(original);
++});
++
++it('keeps live state unchanged when a closed writer refuses runtime replacement', async () => {
++  const f = await setup('closed-paired-restore');
++  f.chat.addHistory({ role: 'user', parts: [{ text: 'retain original' }] });
++  const original = f.chat.getRuntimeHistory();
++  await f.recorder.close();
++  expect(() =>
++    f.chat.setRuntimeHistory({
++      history: [{ role: 'user', parts: [{ text: 'replacement' }] }],
++      imagePayloads: [],
++    }),
++  ).toThrow();
++  expect(f.chat.getRuntimeHistory()).toEqual(original);
 +});
 diff --git a/packages/core/src/memory/extractionAgentPlanner.test.ts b/packages/core/src/memory/extractionAgentPlanner.test.ts
 --- a/packages/core/src/memory/extractionAgentPlanner.test.ts
@@ -362136,3 +362684,794 @@ diff --git a/packages/core/src/utils/btwUtils.ts b/packages/core/src/utils/btwUt
    } catch (err) {
      logger.debug(
        `buildBtwCacheSafeParams failed: ${err instanceof Error ? err.message : String(err)}`,
+diff --git a/packages/cli/src/ui/commands/restoreCommand.test.ts b/packages/cli/src/ui/commands/restoreCommand.test.ts
+--- a/packages/cli/src/ui/commands/restoreCommand.test.ts
++++ b/packages/cli/src/ui/commands/restoreCommand.test.ts
+@@ -9,17 +9,50 @@
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import { restoreCommand } from './restoreCommand.js';
+ import { type CommandContext } from './types.js';
+ import { createMockCommandContext } from '../../test-utils/mockCommandContext.js';
+ import type { Config } from '@qwen-code/qwen-code-core';
++import {
++  TOOL_CALL_CHECKPOINT_VERSION,
++  type ToolCallCheckpoint,
++} from '../utils/tool-call-checkpoint.js';
++
++function checkpoint(): ToolCallCheckpoint {
++  const imageReference = {
++    text: '[Image #0ca88f23519a: image/png, 5 bytes]',
++    imageReferenceId: '0ca88f23519a',
++  };
++  return {
++    checkpointVersion: TOOL_CALL_CHECKPOINT_VERSION,
++    history: [{ id: 1, type: 'user', text: 'do a thing' }],
++    runtimeHistory: {
++      history: [
++        { role: 'user', parts: [{ text: 'do a thing' }, imageReference] },
++      ],
++      imagePayloads: [
++        {
++          id: '0ca88f23519a',
++          mimeType: 'image/png',
++          data: 'aGVsbG8=',
++          bytes: 5,
++        },
++      ],
++    },
++    promptId: 'prompt-abc123',
++    filePath: '/workspace/a.ts',
++    toolCall: { name: 'run_shell_command', args: { command: 'ls' } },
++  };
++}
+ 
+ describe('restoreCommand', () => {
+   let mockContext: CommandContext;
+   let mockConfig: Config;
+-  let mockSetHistory: ReturnType<typeof vi.fn>;
++  let mockSetRuntimeHistory: ReturnType<typeof vi.fn>;
++  let mockIsInitialized: ReturnType<typeof vi.fn>;
++  let mockAssertHistoryReplacementReady: ReturnType<typeof vi.fn>;
+   let mockRewind: ReturnType<typeof vi.fn>;
+   let testRootDir: string;
+   let geminiTempDir: string;
+   let checkpointsDir: string;
+ 
+   beforeEach(async () => {
+@@ -29,26 +62,32 @@
+     geminiTempDir = path.join(testRootDir, '.gemini');
+     checkpointsDir = path.join(geminiTempDir, 'checkpoints');
+     // The command itself creates this, but for tests it's easier to have it ready.
+     // Some tests might remove it to test error paths.
+     await fs.mkdir(checkpointsDir, { recursive: true });
+ 
+-    mockSetHistory = vi.fn().mockResolvedValue(undefined);
++    mockSetRuntimeHistory = vi.fn().mockResolvedValue(undefined);
++    mockIsInitialized = vi.fn().mockReturnValue(true);
++    mockAssertHistoryReplacementReady = vi.fn();
+     mockRewind = vi
+       .fn()
+       .mockResolvedValue({ filesChanged: [], filesFailed: [] });
+ 
+     mockConfig = {
+       getFileCheckpointingEnabled: vi.fn().mockReturnValue(true),
+       getFileHistoryService: vi.fn().mockReturnValue({ rewind: mockRewind }),
+       storage: {
+         getProjectTempCheckpointsDir: vi.fn().mockReturnValue(checkpointsDir),
+         getProjectTempDir: vi.fn().mockReturnValue(geminiTempDir),
+       },
+       getGeminiClient: vi.fn().mockReturnValue({
+-        setHistory: mockSetHistory,
++        isInitialized: mockIsInitialized,
++        getChat: vi.fn().mockReturnValue({
++          assertHistoryReplacementReady: mockAssertHistoryReplacementReady,
++        }),
++        setRuntimeHistory: mockSetRuntimeHistory,
+       }),
+     } as unknown as Config;
+ 
+     mockContext = createMockCommandContext({
+       services: {
+         config: mockConfig,
+@@ -142,70 +181,73 @@
+       const command = restoreCommand(mockConfig);
+ 
+       expect(await command?.action?.(mockContext, checkpointName)).toEqual({
+         type: 'message',
+         messageType: 'error',
+         content: expect.stringContaining(
+-          'Could not read restorable tool calls.',
++          'Could not restore tool checkpoint test1:',
+         ),
+       });
+     });
+ 
+     it('should restore a tool call and project state', async () => {
+-      const toolCallData = {
+-        history: [{ type: 'user', text: 'do a thing' }],
+-        clientHistory: [{ role: 'user', parts: [{ text: 'do a thing' }] }],
+-        promptId: 'prompt-abc123',
+-        toolCall: { name: 'run_shell_command', args: 'ls' },
+-      };
++      const toolCallData = checkpoint();
++      toolCallData.history = [
++        { id: 1, type: 'user', text: 'do a thing \uFFFD' },
++      ];
+       await fs.writeFile(
+         path.join(checkpointsDir, 'my-checkpoint.json'),
+         JSON.stringify(toolCallData),
+       );
+       const command = restoreCommand(mockConfig);
+ 
+       expect(await command?.action?.(mockContext, 'my-checkpoint')).toEqual({
+         type: 'tool',
+         toolName: 'run_shell_command',
+-        toolArgs: 'ls',
++        toolArgs: { command: 'ls' },
+       });
+       expect(mockContext.ui.loadHistory).toHaveBeenCalledWith(
+         toolCallData.history,
+       );
+       expect(mockContext.ui.clearPendingState).toHaveBeenCalledTimes(1);
+-      expect(mockSetHistory).toHaveBeenCalledWith(toolCallData.clientHistory);
++      expect(mockSetRuntimeHistory).toHaveBeenCalledWith(
++        toolCallData.runtimeHistory,
++      );
++      expect(mockAssertHistoryReplacementReady).toHaveBeenCalledTimes(1);
+       expect(mockRewind).toHaveBeenCalledWith(toolCallData.promptId, true);
+       expect(mockContext.ui.addItem).toHaveBeenCalledWith(
+         {
+           type: 'info',
+-          text: 'Restored project to the state at the start of this turn.',
++          text: 'Restored project and conversation to the saved tool checkpoint.',
+         },
+         expect.any(Number),
+       );
+     });
+ 
+-    it('should restore even if only toolCall is present', async () => {
++    it('should refuse an incomplete snapshot containing only toolCall', async () => {
+       const toolCallData = {
+         toolCall: { name: 'run_shell_command', args: 'ls' },
+       };
+       await fs.writeFile(
+         path.join(checkpointsDir, 'my-checkpoint.json'),
+         JSON.stringify(toolCallData),
+       );
+ 
+       const command = restoreCommand(mockConfig);
+ 
+       expect(await command?.action?.(mockContext, 'my-checkpoint')).toEqual({
+-        type: 'tool',
+-        toolName: 'run_shell_command',
+-        toolArgs: 'ls',
++        type: 'message',
++        messageType: 'error',
++        content: expect.stringContaining('Unsupported tool checkpoint version'),
+       });
+ 
+       expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
+-      expect(mockSetHistory).not.toHaveBeenCalled();
++      expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
+       expect(mockRewind).not.toHaveBeenCalled();
++      expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++      expect(mockContext.ui.addItem).not.toHaveBeenCalled();
+     });
+   });
+ 
+   it('should reject legacy checkpoint format with commitHash', async () => {
+     const toolCallData = {
+       commitHash: 'abc123',
+@@ -217,24 +259,27 @@
+     );
+     const command = restoreCommand(mockConfig);
+ 
+     expect(await command?.action?.(mockContext, 'legacy')).toEqual({
+       type: 'message',
+       messageType: 'error',
+-      content: expect.stringContaining('legacy format'),
++      content: expect.stringContaining('Unsupported tool checkpoint version'),
+     });
+     expect(mockRewind).not.toHaveBeenCalled();
+     expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++    expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
+   });
+ 
+   it('should abort tool replay when rewind has partial failures', async () => {
+     mockRewind.mockResolvedValue({
+       filesChanged: ['a.ts'],
+       filesFailed: ['b.ts'],
+     });
+     const toolCallData = {
++      ...checkpoint(),
+       promptId: 'prompt-abc',
+       toolCall: { name: 'edit', args: { file_path: 'a.ts' } },
+     };
+     await fs.writeFile(
+       path.join(checkpointsDir, 'partial.json'),
+       JSON.stringify(toolCallData),
+@@ -248,19 +293,23 @@
+         type: 'warning',
+         text: expect.stringContaining('Partially restored'),
+       }),
+       expect.any(Number),
+     );
+     expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++    expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++    expect(mockRewind).toHaveBeenCalledWith('prompt-abc', true);
+   });
+ 
+   it('should abort tool replay when rewind throws', async () => {
+     mockRewind.mockRejectedValue(
+       new Error('The selected snapshot was not found'),
+     );
+     const toolCallData = {
++      ...checkpoint(),
+       promptId: 'prompt-missing',
+       toolCall: { name: 'edit', args: { file_path: 'a.ts' } },
+     };
+     await fs.writeFile(
+       path.join(checkpointsDir, 'missing-snapshot.json'),
+       JSON.stringify(toolCallData),
+@@ -274,42 +323,321 @@
+         type: 'warning',
+         text: expect.stringContaining('Could not restore files'),
+       }),
+       expect.any(Number),
+     );
+     expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++    expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++    expect(mockRewind).toHaveBeenCalledWith('prompt-missing', true);
+   });
+ 
+   it('should not mutate state for a checkpoint file missing the toolCall property', async () => {
+     const checkpointName = 'missing-toolcall';
+     const toolCallData = {
+-      history: [{ type: 'user', text: 'do a thing' }],
+-      clientHistory: [{ role: 'user', parts: [{ text: 'do a thing' }] }],
+-      promptId: 'prompt-abc123',
++      ...checkpoint(),
++      toolCall: undefined,
+     };
+     await fs.writeFile(
+       path.join(checkpointsDir, `${checkpointName}.json`),
+       JSON.stringify(toolCallData),
+     );
+     const command = restoreCommand(mockConfig);
+ 
+     expect(await command?.action?.(mockContext, checkpointName)).toEqual({
+       type: 'message',
+       messageType: 'error',
+       content: expect.stringContaining(
+-        'Checkpoint is missing a valid toolCall.',
++        'Checkpoint is missing a valid toolCall',
+       ),
+     });
+     expect(mockRewind).not.toHaveBeenCalled();
+     expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
+-    expect(mockSetHistory).not.toHaveBeenCalled();
++    expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
+   });
++
++  it.each([
++    {
++      name: 'unknown version',
++      patch: { checkpointVersion: 2 },
++      error: 'Unsupported tool checkpoint version',
++    },
++    {
++      name: 'missing display history',
++      patch: { history: undefined },
++      error: 'missing valid display history',
++    },
++    {
++      name: 'fractional display id',
++      patch: { history: [{ id: 1.5, type: 'user', text: 'prompt' }] },
++      error: 'missing valid display history',
++    },
++    {
++      name: 'non-string display type',
++      patch: { history: [{ id: 1, type: 2 }] },
++      error: 'missing valid display history',
++    },
++    {
++      name: 'missing runtime state',
++      patch: { runtimeHistory: undefined },
++      error: 'missing checkpoint',
++    },
++    {
++      name: 'missing image pool',
++      patch: {
++        runtimeHistory: { history: checkpoint().runtimeHistory.history },
++      },
++      error: 'missing image payloads',
++    },
++    {
++      name: 'missing referenced image',
++      patch: {
++        runtimeHistory: { ...checkpoint().runtimeHistory, imagePayloads: [] },
++      },
++      error: 'Recorded image reference has no payload',
++    },
++    {
++      name: 'invalid image identity',
++      patch: {
++        runtimeHistory: {
++          ...checkpoint().runtimeHistory,
++          imagePayloads: [
++            {
++              ...checkpoint().runtimeHistory.imagePayloads[0],
++              data: 'b3RoZXI=',
++            },
++          ],
++        },
++      },
++      error: 'Recorded image identity does not match its bytes',
++    },
++    {
++      name: 'invalid runtime Content',
++      patch: {
++        runtimeHistory: {
++          history: [{ role: 'invalid', parts: [] }],
++          imagePayloads: [],
++        },
++      },
++      error: 'invalid Content entries',
++    },
++    {
++      name: 'string tool arguments',
++      patch: { toolCall: { name: 'run_shell_command', args: 'ls' } },
++      error: 'missing a valid toolCall',
++    },
++    {
++      name: 'array tool arguments',
++      patch: { toolCall: { name: 'run_shell_command', args: [] } },
++      error: 'missing a valid toolCall',
++    },
++    {
++      name: 'empty prompt identity',
++      patch: { promptId: ' ' },
++      error: 'missing its prompt or file identity',
++    },
++    {
++      name: 'empty file identity',
++      patch: { filePath: '' },
++      error: 'missing its prompt or file identity',
++    },
++  ])(
++    'should refuse $name before rewinding or changing the conversation',
++    async ({ patch, error }) => {
++      await fs.writeFile(
++        path.join(checkpointsDir, 'invalid.json'),
++        JSON.stringify({ ...checkpoint(), ...patch }),
++      );
++
++      expect(
++        await restoreCommand(mockConfig)?.action?.(mockContext, 'invalid'),
++      ).toEqual({
++        type: 'message',
++        messageType: 'error',
++        content: expect.stringContaining(error),
++      });
++      expect(mockAssertHistoryReplacementReady).not.toHaveBeenCalled();
++      expect(mockRewind).not.toHaveBeenCalled();
++      expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++      expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++      expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++      expect(mockContext.ui.addItem).not.toHaveBeenCalled();
++    },
++  );
++
++  it('should refuse malformed JSON before changing files or the conversation', async () => {
++    await fs.writeFile(
++      path.join(checkpointsDir, 'malformed.json'),
++      '{"checkpointVersion":1,',
++    );
++
++    expect(
++      await restoreCommand(mockConfig)?.action?.(mockContext, 'malformed'),
++    ).toEqual({
++      type: 'message',
++      messageType: 'error',
++      content: expect.stringContaining('Cannot restore tool checkpoint'),
++    });
++    expect(mockRewind).not.toHaveBeenCalled();
++    expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++    expect(mockContext.ui.addItem).not.toHaveBeenCalled();
++  });
++
++  it('should refuse invalid UTF-8 inside checkpoint text before any restore side effects', async () => {
++    const checkpointPath = path.join(checkpointsDir, 'invalid-utf8.json');
++    const data = Buffer.from(JSON.stringify(checkpoint()), 'utf8');
++    const textOffset = data.indexOf('do a thing');
++    expect(textOffset).toBeGreaterThan(0);
++    data[textOffset] = 0xff;
++    await fs.writeFile(checkpointPath, data);
++
++    const result = await restoreCommand(mockConfig)?.action?.(
++      mockContext,
++      'invalid-utf8',
++    );
++
++    expect.soft(result).toEqual({
++      type: 'message',
++      messageType: 'error',
++      content: expect.stringContaining(checkpointPath),
++    });
++    expect.soft(mockAssertHistoryReplacementReady).not.toHaveBeenCalled();
++    expect.soft(mockRewind).not.toHaveBeenCalled();
++    expect.soft(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect.soft(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++    expect.soft(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++    expect.soft(mockContext.ui.addItem).not.toHaveBeenCalled();
++  });
++
++  it.each(['chat', 'history view'])(
++    'should refuse an uninitialized %s before file rewind',
++    async (uninitialized) => {
++      const loadHistory = mockContext.ui.loadHistory;
++      await fs.writeFile(
++        path.join(checkpointsDir, 'ready.json'),
++        JSON.stringify(checkpoint()),
++      );
++      if (uninitialized === 'chat') mockIsInitialized.mockReturnValue(false);
++      else Reflect.deleteProperty(mockContext.ui, 'loadHistory');
++
++      expect(
++        await restoreCommand(mockConfig)?.action?.(mockContext, 'ready'),
++      ).toEqual({
++        type: 'message',
++        messageType: 'error',
++        content: expect.stringContaining(
++          'The chat or history view is not initialized',
++        ),
++      });
++      expect(mockAssertHistoryReplacementReady).not.toHaveBeenCalled();
++      expect(mockRewind).not.toHaveBeenCalled();
++      expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++      expect(loadHistory).not.toHaveBeenCalled();
++      expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++      expect(mockContext.ui.addItem).not.toHaveBeenCalled();
++    },
++  );
++
++  it('should refuse a pending history commit before file rewind', async () => {
++    await fs.writeFile(
++      path.join(checkpointsDir, 'busy.json'),
++      JSON.stringify(checkpoint()),
++    );
++    mockAssertHistoryReplacementReady.mockImplementation(() => {
++      throw new Error('A history commit is still being recorded');
++    });
++
++    expect(
++      await restoreCommand(mockConfig)?.action?.(mockContext, 'busy'),
++    ).toEqual({
++      type: 'message',
++      messageType: 'error',
++      content: expect.stringContaining(
++        'A history commit is still being recorded',
++      ),
++    });
++    expect(mockRewind).not.toHaveBeenCalled();
++    expect(mockSetRuntimeHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++    expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++    expect(mockContext.ui.addItem).not.toHaveBeenCalled();
++  });
++
++  it.each(['success', 'failure'])(
++    'should wait for Client history persistence before UI restore and replay: %s',
++    async (outcome) => {
++      const saved = checkpoint();
++      await fs.writeFile(
++        path.join(checkpointsDir, 'pending.json'),
++        JSON.stringify(saved),
++      );
++      let resolve!: () => void;
++      let reject!: (error: Error) => void;
++      mockSetRuntimeHistory.mockReturnValue(
++        new Promise<void>((accept, refuse) => {
++          resolve = accept;
++          reject = refuse;
++        }),
++      );
++      let settled = false;
++      const restore = Promise.resolve(
++        restoreCommand(mockConfig)?.action?.(mockContext, 'pending'),
++      ).then((result) => {
++        settled = true;
++        return result;
++      });
++
++      await vi.waitFor(() =>
++        expect(mockSetRuntimeHistory).toHaveBeenCalledWith(
++          saved.runtimeHistory,
++        ),
++      );
++      expect(mockRewind).toHaveBeenCalledWith(saved.promptId, true);
++      expect(
++        mockAssertHistoryReplacementReady.mock.invocationCallOrder[0],
++      ).toBeLessThan(mockRewind.mock.invocationCallOrder[0]);
++      expect(mockRewind.mock.invocationCallOrder[0]).toBeLessThan(
++        mockSetRuntimeHistory.mock.invocationCallOrder[0],
++      );
++      expect(settled).toBe(false);
++      expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++      expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++      expect(mockContext.ui.addItem).not.toHaveBeenCalled();
++
++      if (outcome === 'failure') {
++        reject(new Error('Checkpoint persistence failed'));
++        expect(await restore).toEqual({
++          type: 'message',
++          messageType: 'error',
++          content: expect.stringContaining('Checkpoint persistence failed'),
++        });
++        expect(mockContext.ui.loadHistory).not.toHaveBeenCalled();
++        expect(mockContext.ui.clearPendingState).not.toHaveBeenCalled();
++        expect(mockContext.ui.addItem).not.toHaveBeenCalled();
++      } else {
++        resolve();
++        expect(await restore).toEqual({
++          type: 'tool',
++          toolName: saved.toolCall.name,
++          toolArgs: saved.toolCall.args,
++        });
++        expect(mockContext.ui.loadHistory).toHaveBeenCalledWith(saved.history);
++        expect(mockContext.ui.clearPendingState).toHaveBeenCalledTimes(1);
++        expect(mockContext.ui.addItem).toHaveBeenCalledTimes(1);
++      }
++    },
++  );
+ 
+   describe('completion', () => {
+     it('should return an empty array if temp dir is not found', async () => {
+-      vi.mocked(mockConfig.storage.getProjectTempDir).mockReturnValue('');
++      vi.mocked(
++        mockConfig.storage.getProjectTempCheckpointsDir,
++      ).mockReturnValue('');
+       const command = restoreCommand(mockConfig);
+ 
+       expect(await command?.completion?.(mockContext, '')).toEqual([]);
+     });
+ 
+     it('should return an empty array on readdir error', async () => {
+diff --git a/packages/cli/src/ui/commands/restoreCommand.ts b/packages/cli/src/ui/commands/restoreCommand.ts
+--- a/packages/cli/src/ui/commands/restoreCommand.ts
++++ b/packages/cli/src/ui/commands/restoreCommand.ts
+@@ -11,12 +11,13 @@
+   type SlashCommand,
+   type SlashCommandActionReturn,
+   CommandKind,
+ } from './types.js';
+ import type { Config } from '@qwen-code/qwen-code-core';
+ import { t } from '../../i18n/index.js';
++import { parseToolCallCheckpoint } from '../utils/tool-call-checkpoint.js';
+ 
+ async function restoreAction(
+   context: CommandContext,
+   args: string,
+ ): Promise<void | SlashCommandActionReturn> {
+   const { services, ui } = context;
+@@ -71,100 +72,72 @@
+         messageType: 'error',
+         content: `File not found: ${selectedFile}`,
+       };
+     }
+ 
+     const filePath = path.join(checkpointDir, selectedFile);
+-    const data = await fs.readFile(filePath, 'utf-8');
+-    const toolCallData = JSON.parse(data);
+-
+-    if (toolCallData.commitHash && !toolCallData.promptId) {
++    const data = await fs.readFile(filePath);
++    const toolCallData = parseToolCallCheckpoint(data, filePath);
++    const client = config?.getGeminiClient();
++    if (!config || !client?.isInitialized() || !loadHistory) {
+       return {
+         type: 'message',
+         messageType: 'error',
+         content:
+-          'This checkpoint uses a legacy format that is no longer supported. Please create a new checkpoint.',
++          'The chat or history view is not initialized. Initialize the session before restoring this checkpoint.',
+       };
+     }
++    client.getChat().assertHistoryReplacementReady();
++    const toolCall = toolCallData.toolCall;
+ 
+-    const toolCall = toolCallData.toolCall;
+-    if (
+-      !toolCall ||
+-      typeof toolCall !== 'object' ||
+-      typeof toolCall.name !== 'string'
+-    ) {
+-      throw new Error('Checkpoint is missing a valid toolCall.');
+-    }
+-
+-    if (toolCallData.promptId) {
+-      if (!config) {
+-        return {
+-          type: 'message',
+-          messageType: 'error',
+-          content: 'Configuration is not available.',
+-        };
+-      }
+-      try {
+-        const result = await config
+-          .getFileHistoryService()
+-          .rewind(toolCallData.promptId, true);
+-        if (result.filesFailed.length > 0) {
+-          addItem(
+-            {
+-              type: 'warning',
+-              text: `Partially restored: ${result.filesChanged.length} file(s) reverted, ${result.filesFailed.length} file(s) failed. Aborting tool replay.`,
+-            },
+-            Date.now(),
+-          );
+-          return;
+-        }
+-        addItem(
+-          {
+-            type: 'info',
+-            text: 'Restored project to the state at the start of this turn.',
+-          },
+-          Date.now(),
+-        );
+-      } catch (error) {
++    try {
++      const result = await config
++        .getFileHistoryService()
++        .rewind(toolCallData.promptId, true);
++      if (result.filesFailed.length > 0) {
+         addItem(
+           {
+             type: 'warning',
+-            text: `Could not restore files: ${error instanceof Error ? error.message : String(error)}`,
++            text: `Partially restored: ${result.filesChanged.length} file(s) reverted, ${result.filesFailed.length} file(s) failed. Aborting tool replay.`,
+           },
+           Date.now(),
+         );
+         return;
+       }
++    } catch (error) {
++      addItem(
++        {
++          type: 'warning',
++          text: `Could not restore files: ${error instanceof Error ? error.message : String(error)}`,
++        },
++        Date.now(),
++      );
++      return;
+     }
+ 
+-    if (toolCallData.history) {
+-      if (!loadHistory) {
+-        return {
+-          type: 'message',
+-          messageType: 'error',
+-          content: 'loadHistory function is not available.',
+-        };
+-      }
+-      context.ui.clearPendingState?.();
+-      loadHistory(toolCallData.history);
+-    }
+-
+-    if (toolCallData.clientHistory) {
+-      await config?.getGeminiClient()?.setHistory(toolCallData.clientHistory);
+-    }
++    await client.setRuntimeHistory(toolCallData.runtimeHistory);
++    context.ui.clearPendingState?.();
++    loadHistory(toolCallData.history);
++    addItem(
++      {
++        type: 'info',
++        text: 'Restored project and conversation to the saved tool checkpoint.',
++      },
++      Date.now(),
++    );
+ 
+     return {
+       type: 'tool',
+       toolName: toolCall.name,
+       toolArgs: toolCall.args,
+     };
+   } catch (error) {
+     return {
+       type: 'message',
+       messageType: 'error',
+-      content: `Could not read restorable tool calls. This is the error: ${error}`,
++      content: `Could not restore tool checkpoint ${args || 'listing'}: ${error}. No tool was replayed. Inspect the checkpoint and session recording, or start a new session before retrying.`,
+     };
+   }
+ }
+ 
+ async function completion(
+   context: CommandContext,
+diff --git a/packages/cli/src/ui/utils/tool-call-checkpoint.ts b/packages/cli/src/ui/utils/tool-call-checkpoint.ts
+--- /dev/null
++++ b/packages/cli/src/ui/utils/tool-call-checkpoint.ts
+@@ -0,0 +1,76 @@
++import {
++  declareStartupContext,
++  requireRuntimeHistoryState,
++  type RuntimeHistoryState,
++} from '@qwen-code/qwen-code-core';
++import type { HistoryItem } from '../types.js';
++
++// This is the complete tool-restore snapshot format, independently of JSONL.
++export const TOOL_CALL_CHECKPOINT_VERSION = 1;
++
++export interface ToolCallCheckpoint {
++  checkpointVersion: typeof TOOL_CALL_CHECKPOINT_VERSION;
++  history: HistoryItem[];
++  runtimeHistory: RuntimeHistoryState;
++  toolCall: { name: string; args: Record<string, unknown> };
++  promptId: string;
++  filePath: string;
++}
++
++function object(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value);
++}
++
++export function parseToolCallCheckpoint(
++  data: Uint8Array,
++  filePath: string,
++): ToolCallCheckpoint {
++  try {
++    const value: unknown = JSON.parse(
++      new TextDecoder('utf-8', { fatal: true }).decode(data),
++    );
++    if (
++      !object(value) ||
++      value['checkpointVersion'] !== TOOL_CALL_CHECKPOINT_VERSION
++    ) {
++      throw new Error('Unsupported tool checkpoint version');
++    }
++    if (
++      !Array.isArray(value['history']) ||
++      value['history'].some(
++        (item: unknown) =>
++          !object(item) ||
++          typeof item['type'] !== 'string' ||
++          item['type'].length === 0 ||
++          !Number.isSafeInteger(item['id']),
++      )
++    ) {
++      throw new Error('Checkpoint is missing valid display history');
++    }
++    const tool = value['toolCall'];
++    if (
++      !object(tool) ||
++      typeof tool['name'] !== 'string' ||
++      !tool['name'].trim() ||
++      !object(tool['args'])
++    ) {
++      throw new Error('Checkpoint is missing a valid toolCall');
++    }
++    if (
++      typeof value['promptId'] !== 'string' ||
++      !value['promptId'].trim() ||
++      typeof value['filePath'] !== 'string' ||
++      !value['filePath'].trim()
++    ) {
++      throw new Error('Checkpoint is missing its prompt or file identity');
++    }
++    const state = requireRuntimeHistoryState(value['runtimeHistory']);
++    declareStartupContext(state.history);
++    return value as unknown as ToolCallCheckpoint;
++  } catch (cause) {
++    throw new Error(
++      `Cannot restore tool checkpoint ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}. Inspect it with its matching client or create a new checkpoint.`,
++      { cause },
++    );
++  }
++}

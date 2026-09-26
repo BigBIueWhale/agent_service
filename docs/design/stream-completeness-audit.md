@@ -212,10 +212,43 @@ history is preserved.
 
 The runtime-history splice is complete and committed; the wider goal is not.
 An independent source test reproduced a summary overwriting input admitted
-while compaction was running, on both the baseline and candidate. Source
-reading also found that tool restore snapshots omit their image pool across
-a new session; an execution reproducer is separate work. Neither defect is
-claimed repaired by version 7. They remain explicit work alongside the open
-items above. Each correction belongs to the shared owner and must preserve
-ordinary sessions, with source proof, executed tests and unrun owner gates
-reported separately.
+while compaction was running, on both the baseline and candidate. That race
+remains open alongside the items above.
+
+The separate tool-restore defect was reproduced against `023769e`: after a
+new chat, restoring an image-bearing checkpoint lost its image payload pool.
+An owned reference failed rendering and both canonical readers; a literal
+image ID silently stopped resolving. The correction stores complete runtime
+state in a versioned tool checkpoint and replaces history, image payloads and
+the startup declaration through the shared Chat/Client owner. Capture freezes
+state before filesystem waits and serializes one checkpoint at a time. Restore
+validates the version and complete runtime state before file rewind, then
+awaits canonical persistence before UI success or tool replay. Invalid UTF-8
+also refuses before rewind; valid literal replacement characters remain valid.
+
+Executed source tests against the final candidate passed 20 independent cases
+using the real checkpoint hook, Chat/Client, canonical writer, and ordinary
+and indexed readers. These include reset/restore, payload ownership, storage
+delay/failure, capture during filesystem waits, malformed state and invalid
+UTF-8. The full restore suite passed 36 cases; Client, Chat and runtime-history
+suites passed 653. The unchanged slash-command and streaming-session suites
+passed 126 and 222 cases before the final two-file decoding correction. The
+transformer framework passed 38 tests. These are source-path results: file
+rewind, scheduling and UI use controlled test boundaries; no provider or tool
+was executed. CLI source aliases read actual HTML and refuse if the unrelated
+insight renderer is invoked; packaged/generated assets were not qualified.
+
+The tool snapshot's display-history check validates its envelope, not every
+UI item's payload schema. Pending recording commits block replacement, but
+the guard does not serialize every active generation with history mutation.
+A persistence failure after admission may leave memory installed or files
+already rewound; it prevents successful replay rather than promising rollback.
+Older tool snapshots without complete state are refused by filename, with
+instructions to use their matching client or create a new checkpoint.
+
+This correction serves Qwen history replacement regardless of provider or
+session length. Direct vLLM callers have no Qwen checkpoint or image store;
+there is no corresponding backend state to change. Compilation, native
+refusals, images and deployment remain unverified pending owner gates. Each
+remaining correction belongs to its shared owner and must preserve ordinary
+sessions, with source proof, executed tests and unrun gates reported separately.

@@ -8526,7 +8526,46 @@ def _validate_served_accounting_after(state: State) -> None:
         "historyLength: this.history.length", "await this.chatRecordingService.flush()",
         "this.pendingAssistant = accepted", "this.pendingCheckpoint = previousHistory",
         "replaceHistoryImageParts", "withoutImageReferenceMetadata", "getRuntimeHistory(): RuntimeHistoryState",
+        "setRuntimeHistory(state: RuntimeHistoryState)", "assertHistoryReplacementReady()",
+        "const startup = declareStartupContext(history)", "this.imagePayloadStore = images",
+        "this.startupContext = startup",
     ), label=label)
+    _require_ordered(_source(state, core + "core/geminiChat.ts", label=label), (
+        "setRuntimeHistory(state: RuntimeHistoryState)",
+        "requireRuntimeHistoryState(state)",
+        "const images = new InMemoryImagePayloadStore(state.imagePayloads)",
+        "this.chatRecordingService.recordRuntimeHistory({",
+        "this.history = history", "this.imagePayloadStore = images",
+    ), label=label, location=core + "core/geminiChat.ts")
+    _require_ordered(_source(state, core + "core/client.ts", label=label), (
+        "async setRuntimeHistory(state: RuntimeHistoryState)",
+        "this.getChat().setRuntimeHistory(state)",
+        "this.invalidateReplacedHistory()",
+        "await this.config.getChatRecordingService().flush()",
+    ), label=label, location=core + "core/client.ts")
+    restore = "packages/cli/src/ui/commands/restoreCommand.ts"
+    _require_ordered(_source(state, restore, label=label), (
+        "parseToolCallCheckpoint(data, filePath)",
+        "client.getChat().assertHistoryReplacementReady()",
+        ".rewind(toolCallData.promptId, true)",
+        "await client.setRuntimeHistory(toolCallData.runtimeHistory)",
+        "loadHistory(toolCallData.history)", "type: 'tool'",
+    ), label=label, location=restore)
+    for path in (restore, "packages/cli/src/ui/hooks/useGeminiStream.ts", "packages/cli/src/ui/commands/types.ts"):
+        forbid_text(state, path, "clientHistory", label=label)
+    _require_all(state, "packages/cli/src/ui/utils/tool-call-checkpoint.ts", (
+        "TOOL_CALL_CHECKPOINT_VERSION = 1", "Unsupported tool checkpoint version",
+        "new TextDecoder('utf-8', { fatal: true }).decode(data)",
+        "requireRuntimeHistoryState(value['runtimeHistory'])", "declareStartupContext(state.history)",
+        "value['promptId']", "Number.isSafeInteger(item['id'])",
+    ), label=label)
+    _require_ordered(_source(state, "packages/cli/src/ui/hooks/useGeminiStream.ts", label=label), (
+        "history: JSON.parse(JSON.stringify(history)) as HistoryItem[]",
+        "runtimeHistory: geminiClient.getChat().getRuntimeHistory()", "const snapshots:",
+        "args: structuredClone(toolCall.request.args)",
+        "await fs.mkdir(checkpointDir", "await fs.writeFile(",
+        "JSON.stringify({ ...sharedState, ...toolState }, null, 2)",
+    ), label=label, location="packages/cli/src/ui/hooks/useGeminiStream.ts")
     _require_all(state, core + "services/chatRecordingService.ts", (
         "record = structuredClone(record)", "recordRuntimeHistory(change: RuntimeHistoryChange)",
         "subtype: 'runtime_history'", "runtimeHistory: RuntimeHistoryState",
@@ -10460,7 +10499,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Canonical version 7 binds every atomic accepted or abandoned generation to its real "
             "chat attempt; abandoned output cannot become resume history. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
-            "including image payload state, without inferring admission from display records. It "
+            "including image payload state, without inferring admission from display records. Tool "
+            "restore snapshots carry the same complete state, validate before file rewind, and "
+            "publish UI success and tool replay only after the replacement is durable. Recovery "
             "preserves accepted empty/whitespace output, pending calls and Content boundaries, "
             "continues from the actual active leaf, and refuses duplicate, missing-parent or cyclic "
             "history at discovery and launch without losing the retained task. Live child version 2 "

@@ -747,7 +747,8 @@ print(json.dumps(found))
         responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require(all(response["event"]["status"] == "completed" for response in responses if response["event"]["kind"] == "outcome"),
                 "ordinary provider responses did not complete decoding; inspect processing outcomes")
-        require(all("recordingVersion" not in record and record.get("subtype") != "runtime_history"
+        require(all("recordingVersion" not in record and "checkpointVersion" not in record
+                    and record.get("subtype") != "runtime_history"
                     and "historyLength" not in record for record in records),
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
