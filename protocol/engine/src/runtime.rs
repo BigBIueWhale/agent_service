@@ -259,7 +259,15 @@ fn validate_compaction_event(
         return Err(refuse("without a boolean succeeded"));
     }
     count(record, "originalTokenCount")?;
-    count(record, "newTokenCount")?;
+    if field(record, "newTokenCount", line)?.is_null() {
+        if record.get("succeeded").and_then(Value::as_bool) != Some(false) {
+            return Err(refuse(
+                "whose successful replacement has no measured token count; inspect the compaction producer",
+            ));
+        }
+    } else {
+        count(record, "newTokenCount")?;
+    }
     string_or_null(record, "triggerReason")?;
 
     // What one drawn candidate spent. `budget` is the transition's frozen

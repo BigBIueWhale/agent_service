@@ -234,7 +234,8 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     records = [json.loads(line) for line in raw.splitlines()]
     require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 7 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
-    require(all("recordingVersion" not in event and "checkpointVersion" not in event
+    require(all(all(field not in event for field in
+                    ("recordingVersion", "checkpointVersion", "historyRevision", "afterCommit"))
                 and event.get("subtype") != "runtime_history" for event in events),
             "canonical history entered stdout evidence; inspect the two recording paths")
     require(all(r["sessionId"] == session for r in records), "transcript ownership drifted")

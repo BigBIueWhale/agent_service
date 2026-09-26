@@ -1408,6 +1408,51 @@ mod tests {
     }
 
     #[test]
+    fn unknown_retained_compaction_counts_require_unsuccessful_outcomes() {
+        for child in [false, true] {
+            let mut record: serde_json::Value =
+                serde_json::from_str(&compaction_record(serde_json::Value::Null)).unwrap();
+            if child {
+                record["parent_tool_use_id"] = serde_json::json!("chatcmpl-tool-9d45d85b");
+            }
+            record["data"]["status"] = serde_json::json!("COMPRESSION_FAILED_HISTORY_CHANGED");
+            record["data"]["newTokenCount"] = serde_json::Value::Null;
+            parse_text(&request_fixture(&format!(
+                "{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}"
+            )))
+            .expect("changed current history can have an explicitly unmeasured retained count");
+
+            record["data"]["status"] = serde_json::json!("COMPRESSION_FAILED_PROTOCOL_ERROR");
+            parse_text(&request_fixture(&format!(
+                "{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}"
+            )))
+            .expect("an earlier failure reason survives concurrent history changes");
+
+            record["data"]["succeeded"] = serde_json::json!(true);
+            record["data"]["status"] = serde_json::json!("COMPRESSED");
+            record["data"]["output"] = observed_compaction_output();
+            record["data"]["postCompactionHistory"] = serde_json::json!([
+                {"role":"user", "parts":[{"text":"accepted snapshot"}]}
+            ]);
+            let error = parse_text(&request_fixture(&format!(
+                "{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}"
+            )))
+            .expect_err("accepted replacement must have a measured count");
+            assert!(error.to_string().contains("measured token count"), "{error}");
+
+            record["data"]["succeeded"] = serde_json::json!(false);
+            record["data"]["status"] = serde_json::json!("COMPRESSION_FAILED_HISTORY_CHANGED");
+            record["data"]["postCompactionHistory"] = serde_json::Value::Null;
+            record["data"].as_object_mut().unwrap().remove("newTokenCount");
+            let error = parse_text(&request_fixture(&format!(
+                "{INIT}{MAIN_TURN}{record}\n{MAIN_RESULT}"
+            )))
+            .expect_err("missing count does not mean explicitly unmeasured");
+            assert!(error.to_string().contains("newTokenCount"), "{error}");
+        }
+    }
+
+    #[test]
     fn refuses_missing_compaction_content_and_measurement_evidence() {
         for field in ["rawResponses", "text", "newTokenCount", "snapshotBytes"] {
             let mut output = observed_compaction_output();

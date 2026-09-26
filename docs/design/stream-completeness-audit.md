@@ -149,7 +149,8 @@ backend that owns them supports the backend change.
 
 ## Remaining mechanisms and limits (§7)
 
-These questions identify real source facts and unfinished work:
+These questions identify real source facts. Corrections are marked below;
+the other items remain open:
 
 - `ProviderOutput.observe` uses `JSON.stringify` on decoded provider objects.
   The resulting `rawResponses` fields are not response-byte evidence. They
@@ -161,9 +162,10 @@ These questions identify real source facts and unfinished work:
   represent that state; the additional full-body mode is unnecessary.
 - ACP's tool-result projection still uses a 65,536-byte JSON budget and a
   truncation marker. Removing the stdout cap did not remove the ACP cap.
-- PostCompact receives `outcome.renderedSnapshot`, made from the unfilled
-  snapshot rendering. It does not receive the composed history's populated
-  user-message section. The hook projection needs the same truthful inputs.
+- The PostCompact empty-slot projection was real at `023769e`. The compaction
+  ownership correction below takes the text from the actual composed snapshot
+  message, including retained input and trailer text. The complete Content,
+  including media, remains in the canonical checkpoint; the hook field is text.
 - Tokenizer and embedding dispatches bypass the chat request journal.
   Tokenization is a sizing operation rather than a generation, and embeddings
   have a different request/response shape. Their evidence must describe their
@@ -211,9 +213,32 @@ history is preserved.
 ## Continuing work
 
 The runtime-history splice is complete and committed; the wider goal is not.
-An independent source test reproduced a summary overwriting input admitted
-while compaction was running, on both the baseline and candidate. That race
-remains open alongside the items above.
+The compaction race was reproduced again on `20ee5e7`, through the actual
+compression service. Input admitted during generation, service preflight,
+candidate counting or PostCompact disappeared when the old candidate was
+installed. Three failure controls retained input but reported an obsolete
+retained count. Both canonical readers reproduced whatever state was installed;
+reader equality alone did not establish that the admission decision was right.
+
+The correction binds count and acceptance to a semantic history revision,
+while exempting lossless image representation changes. Stale success becomes
+a history-changed refusal with an unknown retained count; an earlier failure
+keeps its own reason. All generated draws remain recorded. Success telemetry
+and PostCompact run after durable acceptance. Input admitted during that hook
+follows the accepted checkpoint, and hook failure retains the committed result
+through the existing finalization-error path. Native source admission now
+requires a present retained-count field and permits null only on failure.
+
+Executed candidate evidence comprises 14 independent source cases with actual
+Chat, compression service, writer and both readers; 454 core tests across Chat,
+service, turn and runtime recording; 245 CLI tests; and two targeted ACP cases
+(617 unrelated ACP cases filtered). The 38 transformer framework tests passed.
+Independent cases include the ordinary send's precomputed count, lossless
+image conversion, real append failure, held recording and flush completion,
+and deferred hook mutation/failure. Generation and token-service boundaries
+are deterministic local fixtures. Native tests are authored but unexecuted;
+their schema prerequisites and guard order were reviewed in source. These
+results do not establish compiler, native runtime, provider or image behavior.
 
 The separate tool-restore defect was reproduced against `023769e`: after a
 new chat, restoring an image-bearing checkpoint lost its image payload pool.

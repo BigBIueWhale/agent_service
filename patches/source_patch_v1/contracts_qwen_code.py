@@ -1848,7 +1848,7 @@ def _validate_compaction_event_after(state: State) -> None:
     require_text(
         state,
         turn,
-        "? info.newTokenCount\n        : info.originalTokenCount",
+        "info.newTokenCount === null\n        ? null\n        : info.compressionStatus === CompressionStatus.COMPRESSED\n          ? info.newTokenCount\n          : info.originalTokenCount",
         label=label,
     )
     service = "packages/core/src/services/chatCompressionService.ts"
@@ -1858,17 +1858,37 @@ def _validate_compaction_event_after(state: State) -> None:
         "rawResponses: partial.rawResponses,",
         "accounting.newTokenCount = newTokenCount;",
         "snapshotBytes: acceptance.snapshot",
+        "afterCommit: async () =>",
+        "renderedSnapshot = composed[0]!",
     ), label=label)
     forbid_text(state, service, "summary: attempt.summary", label=label)
+    forbid_text(state, service, "renderedSnapshot: stateSnapshotText(acceptance.snapshot)", label=label)
+    _require_ordered(_source(state, service, label=label), (
+        "afterCommit: async () =>", "logChatCompression(", "?.firePostCompactEvent(",
+    ), label=label, location=service)
+    _require_all(state, chat, (
+        "private historyRevision = Symbol()",
+        "this.installHistory(replacedHistory, true)",
+        "historyRevision !== this.historyRevision",
+        "COMPRESSION_FAILED_HISTORY_CHANGED", "delete info.postCompactionHistory",
+        "options?.precomputedEffectiveTokens?.historyRevision",
+    ), label=label)
     _require_ordered(_source(state, chat, label=label), (
+        "const historyRevision =",
+        "`${promptId}:compaction-input`",
+        "historyRevision !== this.historyRevision",
+        "service.compress(this, {",
+        "const historyChanged = historyRevision !== this.historyRevision",
         "info.postCompactionHistory = structuredClone(committedHistory);",
         "const commit = this.chatRecordingService.recordChatCompression({",
         "this.pendingCheckpoint = previousHistory;",
         "this.history = committedHistory;",
         "await commit;",
         "await this.chatRecordingService.flush();",
-        "if (installsHistory) this.history = previousHistory;",
-        "this.pendingCheckpoint = undefined;",
+        "this.history = previousHistory;",
+        "if (installsHistory) this.pendingCheckpoint = undefined;",
+        "this.generationContext.startRequestSegment();",
+        "await candidate.afterCommit()",
     ), label=label, location=chat)
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
     _require_ordered(_source(state, pipeline, label=label), (
@@ -1885,7 +1905,7 @@ def _validate_compaction_event_after(state: State) -> None:
         (
             "case ServerGeminiEventType.ChatCompaction:",
             "!event.value.succeeded && event.value.status !== 'NOOP'",
-            "the original context was preserved.",
+            "the current context was retained.",
         ),
         label=label,
     )
@@ -4577,8 +4597,9 @@ def _validate_compaction_budget_after(state: State) -> None:
         _source(state, "packages/core/src/services/chatCompressionService.ts", label=label),
         (
             "const startupContext = chat.getStartupContext();",
+            "const composed = composePostCompactHistory(",
             "...(startupContext ? [startupContext] : []),",
-            "...composePostCompactHistory(\n            historyBeforeCompaction,\n            acceptance.snapshot,",
+            "...composed,",
             "const candidateCount = await chat.countRequestTokensForCandidateHistory(",
         ),
         label=label,
@@ -5052,7 +5073,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const requestContents = (maxOutputTokens: number): Content[] => [\n"
             "      ...issuedPrompt,\n",
             "      promptCacheSharing: true,",
-            "              turn,\n            },\n          ),",
+            "            turn,\n          },\n        );",
         ),
         label=label,
     )
@@ -5465,7 +5486,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         (service_test, "records a snapshot refused for its length as over the bound, with what the model wrote"),
         (service_test, "'a snapshot past one inline block'"),
         ("packages/core/src/services/state-snapshot.test.ts", "refuses %s as declaring no complete snapshot"),
-        ("packages/cli/src/utils/compression-result.test.ts", "COMPRESSION_FAILED_SUMMARY_OVER_BOUND, 'error', 'longer than its bound'"),
+        ("packages/cli/src/utils/compression-result.test.ts", "COMPRESSION_FAILED_SUMMARY_OVER_BOUND,\n      'error',\n      'longer than its bound'"),
     ):
         require_text(state, path, case, label=label)
 
@@ -5529,16 +5550,19 @@ def _validate_compaction_accounting_after(state: State) -> None:
         label=label,
     )
     # One builder assembles the accounting, and every outcome reached after a
-    # draw carries what that draw spent: the terminal one carries it exactly
-    # when a request was issued, and each post-acceptance outcome carries the
-    # accepted draw's. None of them may report an attempt without its cost.
+    # draw carries what that draw spent. The candidate owns its output once;
+    # accepted-state finalization errors carry that same committed info.
     _require(
         source.count("const accountingFor = (") == 1
         and source.count("const outputAccounting = accountingFor(outcome.accounting);") == 1
         and source.count("? { output: accountingFor(outcome.accounting) }") == 1
-        and source.count("output: outputAccounting,") == 3,
+        and source.count("output: outputAccounting,") == 1,
         f"{label}: all post-generation outcomes must retain the same served evidence",
     )
+    _require_ordered(_source(state, "packages/core/src/core/geminiChat.ts", label=label), (
+        "await candidate.afterCommit()",
+        "throw new CompactionFinalizationError(info, error)",
+    ), label=label, location="packages/core/src/core/geminiChat.ts")
     _require_all(
         state,
         "packages/core/src/services/chatCompressionService.test.ts",
@@ -8522,7 +8546,8 @@ def _validate_served_accounting_after(state: State) -> None:
     forbid_text(state, core + "services/session-api-history.ts", "initialHistory", label=label)
     _require_all(state, core + "core/geminiChat.ts", (
         "this.history = structuredClone(history)", "this.recordHistoryCheckpoint()",
-        "private installHistory(history: Content[])", "private admitHistoryContent(content: Content)",
+        "private installHistory(history: Content[], representationOnly = false)",
+        "private admitHistoryContent(content: Content)",
         "historyLength: this.history.length", "await this.chatRecordingService.flush()",
         "this.pendingAssistant = accepted", "this.pendingCheckpoint = previousHistory",
         "replaceHistoryImageParts", "withoutImageReferenceMetadata", "getRuntimeHistory(): RuntimeHistoryState",
@@ -10227,7 +10252,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         rationale=(
             "Every attempted compaction is recorded and flushed at the shared chat seam. Success, "
             "refusal, cancellation, and failure preserve the attempt’s original history and output "
-            "facts; only a successful replacement publishes a compressed-history event."
+            "facts. Semantic history revisions bind preflight and acceptance; stale candidates "
+            "retain current history and report an unmeasured retained count explicitly. Only a "
+            "durable successful replacement publishes success telemetry, PostCompact or a "
+            "compressed-history event."
         ),
         removal_condition=(
             "Upstream records all attempted compactions through one shared root/child recorder and "

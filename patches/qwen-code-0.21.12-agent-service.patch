@@ -22609,7 +22609,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +            text:
 +              compressionStatus === core.CompressionStatus.COMPRESSED
 +                ? 'IMPORTANT: This conversation approached the input token limit for qwen3-code-plus. A compressed context will be sent for future messages (compressed from: 1200 to 450 tokens).'
-+                : 'Compaction failed (COMPRESSION_FAILED_EMPTY_SUMMARY); the original context was preserved. No summary generation was recorded.',
++                : 'Compaction failed (COMPRESSION_FAILED_EMPTY_SUMMARY); the current context was retained. No summary generation was recorded.',
 +          },
 +        ]);
 +      },
@@ -26960,7 +26960,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.ts b/packages/cli/
 +              const record = event.record;
 +              if (!record.succeeded && record.status !== 'NOOP') {
 +                await this.#emitAgentDiagnosticMessage(
-+                  `Compaction failed (${record.status}); the original context was preserved.` +
++                  `Compaction failed (${record.status}); the current context was retained.` +
 +                    (record.output
 +                      ? record.output.usage
 +                        ? ` Output: ${record.output.usage.candidatesTokenCount} tokens, including ${record.output.usage.thoughtsTokenCount} reasoning tokens, from a ${record.output.maxOutputTokens}-token budget.`
@@ -88925,7 +88925,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 +        expect(notices).toEqual([
 +          expect.objectContaining({
 +            text: expect.stringContaining(
-+              'Compaction failed (COMPRESSION_FAILED_OUTPUT_TRUNCATED); the original context was preserved.',
++              'Compaction failed (COMPRESSION_FAILED_OUTPUT_TRUNCATED); the current context was retained.',
 +            ),
 +          }),
 +        ]);
@@ -89702,7 +89702,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
 +                  {
 +                    type: 'info',
 +                    text:
-+                      `Compaction failed (${event.value.status}); the original context was preserved.` +
++                      `Compaction failed (${event.value.status}); the current context was retained.` +
 +                      (event.value.output
 +                        ? event.value.output.usage
 +                          ? ` Output: ${event.value.output.usage.candidatesTokenCount} tokens, including ${event.value.output.usage.thoughtsTokenCount} reasoning tokens, from a ${event.value.output.maxOutputTokens}-token budget.`
@@ -99316,7 +99316,7 @@ diff --git a/packages/cli/src/utils/cleanup.ts b/packages/cli/src/utils/cleanup.
 diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/src/utils/compression-result.test.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/compression-result.test.ts
-@@ -0,0 +1,80 @@
+@@ -0,0 +1,168 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -99339,26 +99339,63 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 +
 +describe('compaction presentation', () => {
 +  it.each([
-+    [CompressionStatus.COMPRESSED, 'info', 'checkpoint reduced from 200 to 100'],
++    [
++      CompressionStatus.COMPRESSED,
++      'info',
++      'checkpoint reduced from 200 to 100',
++    ],
 +    [CompressionStatus.NOOP, 'info', 'No compression needed'],
-+    [CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT, 'error', 'did not reduce'],
-+    [CompressionStatus.COMPRESSION_FAILED_INSUFFICIENT_ROOM, 'error', 'insufficient room'],
-+    [CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR, 'error', 'exact token counting failed'],
-+    [CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY, 'error', 'empty summary'],
-+    [CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED, 'error', 'output was truncated'],
-+    [CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND, 'error', 'longer than its bound'],
-+    [CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR, 'error', 'protocol step failed'],
++    [
++      CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++      'error',
++      'did not reduce',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_INSUFFICIENT_ROOM,
++      'error',
++      'insufficient room',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
++      'error',
++      'exact token counting failed',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++      'error',
++      'empty summary',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++      'error',
++      'output was truncated',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
++      'error',
++      'longer than its bound',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++      'error',
++      'protocol step failed',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++      'error',
++      'conversation changed',
++    ],
 +  ] as const)('names status %s', (compressionStatus, messageType, reason) => {
 +    const output = formatCompressionResult({ ...completed, compressionStatus });
 +    expect(output.messageType).toBe(messageType);
 +    expect(output.content).toContain(reason);
 +    if (messageType === 'error') {
-+      expect(output.content).toContain('Original history retained (200 tokens)');
++      expect(output.content).toContain('Current history retained (200 tokens)');
 +      expect(output.content).not.toContain('checkpoint reduced');
 +    }
 +  });
 +
-+  it.each([null, undefined, NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
++  it.each([undefined, NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
 +    'refuses malformed completed counts %s without inventing zero',
 +    (count) => {
 +      for (const field of ['originalTokenCount', 'newTokenCount']) {
@@ -99369,13 +99406,64 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 +    },
 +  );
 +
++  it.each([CompressionStatus.COMPRESSED, CompressionStatus.NOOP])(
++    'refuses unknown counts for successful status %s',
++    (compressionStatus) => {
++      for (const field of ['originalTokenCount', 'newTokenCount']) {
++        expect(() =>
++          formatCompressionResult({
++            ...completed,
++            compressionStatus,
++            [field]: null,
++          }),
++        ).toThrow('Successful compaction requires exact token counts');
++      }
++    },
++  );
++
++  it.each([
++    CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++    CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++  ])(
++    'preserves an unmeasured current count for failed status %s',
++    (compressionStatus) => {
++      const outcome = { ...completed, compressionStatus, newTokenCount: null };
++      const output = formatCompressionResult(outcome);
++      expect(output.messageType).toBe('error');
++      expect(output.content).toContain(
++        'Current history retained; its token count has not been measured.',
++      );
++      expect(output.content).not.toContain('200 tokens');
++      expect(output.content).not.toContain('0 tokens');
++      expect(output.content).not.toContain('checkpoint reduced');
++      expect(createCompressionHistoryItem(outcome)).toEqual({
++        type: 'compression',
++        compression: outcome,
++        text: output.content,
++      });
++    },
++  );
++
++  it('refuses an unknown original count even when a failed current count is unknown', () => {
++    expect(() =>
++      formatCompressionResult({
++        originalTokenCount: null,
++        newTokenCount: null,
++        compressionStatus: CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++      } as unknown as CompressionOutcome),
++    ).toThrow('requires exact token counts');
++  });
++
 +  it('accepts a real zero and refuses an unknown status', () => {
-+    expect(formatCompressionResult({ ...completed, newTokenCount: 0 }).content)
-+      .toContain('to 0 tokens');
-+    expect(() => formatCompressionResult({
-+      ...completed,
-+      compressionStatus: -1 as CompressionStatus,
-+    })).toThrow('Unknown compaction status');
++    expect(
++      formatCompressionResult({ ...completed, newTokenCount: 0 }).content,
++    ).toContain('to 0 tokens');
++    expect(() =>
++      formatCompressionResult({
++        ...completed,
++        compressionStatus: -1 as CompressionStatus,
++      }),
++    ).toThrow('Unknown compaction status');
 +  });
 +
 +  it('preserves committed counts alongside independent finalization failure', () => {
@@ -99389,7 +99477,7 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 +    expect(output.content).toContain('checkpoint reduced from 200 to 100');
 +    expect(output.content).toContain(outcome.warning);
 +    expect(output.content).toContain(outcome.finalizationFailure);
-+    expect(output.content).not.toContain('Original history retained');
++    expect(output.content).not.toContain('Current history retained');
 +    expect(createCompressionHistoryItem(outcome)).toEqual({
 +      type: 'compression',
 +      compression: outcome,
@@ -99400,7 +99488,7 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/utils/compression-result.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/compression-result.ts
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,137 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -99425,11 +99513,19 @@ diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/uti
 +  content: string;
 +} {
 +  for (const count of [info.originalTokenCount, info.newTokenCount]) {
-+    if (!Number.isSafeInteger(count) || count < 0) {
++    if (count !== null && (!Number.isSafeInteger(count) || count < 0)) {
 +      throw new Error(
 +        'Completed compaction requires exact non-negative token counts.',
 +      );
 +    }
++  }
++  if (
++    info.originalTokenCount === null ||
++    (info.newTokenCount === null &&
++      (info.compressionStatus === CompressionStatus.COMPRESSED ||
++        info.compressionStatus === CompressionStatus.NOOP))
++  ) {
++    throw new Error('Successful compaction requires exact token counts.');
 +  }
 +  for (const detail of [info.warning, info.finalizationFailure]) {
 +    if (detail !== undefined && typeof detail !== 'string') {
@@ -99472,13 +99568,20 @@ diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/uti
 +    case CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR:
 +      content = 'Compaction failed because a required protocol step failed.';
 +      break;
++    case CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED:
++      content =
++        'Compaction was refused because the conversation changed while it was being prepared. Retry compaction after the current turn finishes.';
++      break;
 +    default: {
 +      const unhandled: never = status;
 +      throw new Error(`Unknown compaction status: ${unhandled}`);
 +    }
 +  }
 +  if (messageType === 'error') {
-+    content = `${content} Original history retained (${info.originalTokenCount} tokens).`;
++    content +=
++      info.newTokenCount === null
++        ? ' Current history retained; its token count has not been measured.'
++        : ` Current history retained (${info.originalTokenCount} tokens).`;
 +  }
 +  if (info.warning) content += `\n${info.warning}`;
 +  if (info.finalizationFailure !== undefined) {
@@ -118022,7 +118125,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.ts b/packages/core/src/
 -                  `tokens ${streamEvent.info.originalTokenCount} -> ${streamEvent.info.newTokenCount}`,
 +                `[AGENT-COMPACT] subagent=${this.subagentId} round=${this.reasoningTurnsUsed} ` +
 +                  `status=${streamEvent.record.status} tokens ` +
-+                  `${streamEvent.record.originalTokenCount} -> ${streamEvent.record.newTokenCount}`,
++                  `${streamEvent.record.originalTokenCount} -> ${streamEvent.record.newTokenCount ?? 'unknown'}`,
                );
              continue;
            }
@@ -155352,7 +155455,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
  import { classifyRetryError } from '../utils/retryErrorClassification.js';
  import { StreamContentError } from './openaiContentGenerator/pipeline.js';
-@@ -30,30 +73,187 @@
+@@ -30,30 +73,188 @@
  import { EnhancedErrorHandler } from './openaiContentGenerator/errorHandler.js';
  import { APIConnectionTimeoutError } from 'openai';
  import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider/index.js';
@@ -155369,6 +155472,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -  estimatePromptTokens,
 -} from '../services/tokenEstimation.js';
 +  CompressionStatus,
++  CompactionFinalizationError,
 +  type ChatCompressionInfo,
 +  type CompactionRecord,
 +} from './turn.js';
@@ -155549,7 +155653,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  vi.mock('node:fs', () => {
    const fsModule = {
      mkdirSync: vi.fn(),
-@@ -88,35 +288,29 @@
+@@ -88,35 +289,29 @@
    return {
      ...actual,
      retryWithBackoff: mockRetryWithBackoff,
@@ -155587,7 +155691,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  const { mockAcquireSleepInhibitor, mockSleepInhibitorRelease } = vi.hoisted(
    () => ({
      mockAcquireSleepInhibitor: vi.fn(),
-@@ -154,72 +348,107 @@
+@@ -154,72 +349,107 @@
  
    beforeEach(() => {
      vi.clearAllMocks();
@@ -155710,7 +155814,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    afterEach(() => {
      vi.restoreAllMocks();
-@@ -271,12 +500,13 @@
+@@ -271,12 +501,13 @@
        yield* responses;
      })();
    }
@@ -155724,7 +155828,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -284,15 +514,16 @@
+@@ -284,15 +515,16 @@
    }
  
    describe('system instruction helpers', () => {
@@ -155742,7 +155846,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
-@@ -302,15 +533,16 @@
+@@ -302,15 +534,16 @@
        );
      });
  
@@ -155760,7 +155864,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nUser memory\n\n---\n\nAppended rule',
        );
  
-@@ -322,20 +554,21 @@
+@@ -322,20 +555,21 @@
        );
      });
  
@@ -155783,7 +155887,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
  
-@@ -344,15 +577,16 @@
+@@ -344,15 +578,16 @@
        );
      });
  
@@ -155801,7 +155905,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.applySessionStartContext(
          '  Sync ctx  ',
-@@ -364,15 +598,16 @@
+@@ -364,15 +599,16 @@
        );
      });
  
@@ -155819,7 +155923,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nSessionStart additional context:\nLegitimate content',
        );
  
-@@ -383,18 +618,270 @@
+@@ -383,18 +619,270 @@
        );
        expect(isolatedChat['generationConfig'].systemInstruction).toContain(
          '<qwen:session-start-context hidden="true">\nSessionStart additional context:\nCtx1\n</qwen:session-start-context>',
@@ -156090,7 +156194,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -415,12 +902,93 @@
+@@ -415,12 +903,93 @@
          mockConfig,
          'Qwen Code is streaming a model response',
        );
@@ -156184,7 +156288,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
            streamResponse(stopResponse([{ text: 'ok' }])),
-@@ -536,18 +1104,23 @@
+@@ -536,18 +1105,23 @@
            chat as unknown as { getRequestHistory: () => Content[] },
            'getRequestHistory',
          ).mockImplementationOnce(() => {
@@ -156213,7 +156317,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockConfig.restorePendingManualPlanExitNotice,
          ).toHaveBeenCalledWith(11);
  
-@@ -630,78 +1203,87 @@
+@@ -630,78 +1204,88 @@
            mockConfig.restorePendingManualPlanExitNotice,
          ).not.toHaveBeenCalled();
        });
@@ -156263,6 +156367,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +            .spyOn(ChatCompressionService.prototype, 'compress')
              .mockResolvedValueOnce({
                newHistory: compressedHistory,
++              afterCommit: vi.fn().mockResolvedValue(undefined),
                info: {
                  originalTokenCount: 135_000,
                  newTokenCount: 40_000,
@@ -156323,7 +156428,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    'changed outside the approved exit_plan_mode flow',
                  ),
                ),
-@@ -725,15 +1307,16 @@
+@@ -725,15 +1309,16 @@
              ),
            );
            expect(noticeTurn?.parts?.at(-1)?.text).toContain(
@@ -156342,7 +156447,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              mockConfig.takePendingManualPlanExitNotice,
            ).toHaveBeenCalledTimes(1);
            expect(
-@@ -764,13 +1347,19 @@
+@@ -764,13 +1349,19 @@
            'prompt-id-plan-exit-before-rebuild',
          );
          for await (const _ of firstStream) {
@@ -156363,7 +156468,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'replacement chat' },
            'prompt-id-plan-exit-after-rebuild',
          );
-@@ -795,12 +1384,13 @@
+@@ -795,12 +1386,13 @@
      });
  
      it('increments the user-content push counter once per surviving send', async () => {
@@ -156377,7 +156482,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -824,12 +1414,13 @@
+@@ -824,12 +1416,13 @@
      });
  
      it('releases the sleep inhibitor when the stream errors', async () => {
@@ -156391,7 +156496,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                },
              ],
            } as unknown as GenerateContentResponse;
-@@ -852,43 +1443,46 @@
+@@ -852,43 +1445,46 @@
        ).rejects.toThrow('stream aborted');
  
        expect(mockSleepInhibitorRelease).toHaveBeenCalledTimes(1);
@@ -156441,7 +156546,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'prompt-id-tool-call-empty-end',
        );
        await expect(
-@@ -907,38 +1501,40 @@
+@@ -907,38 +1503,40 @@
        expect(modelTurn?.parts![0]!.functionCall).toBeDefined();
      });
  
@@ -156487,7 +156592,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test message' },
            'prompt-id-no-finish-empty-end',
          );
-@@ -949,23 +1545,25 @@
+@@ -949,23 +1547,25 @@
      });
  
      it('should succeed if the stream ends with an invalid part but has a finishReason and contained a valid part', async () => {
@@ -156513,7 +156618,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '' }], // Invalid part
                },
-@@ -1002,20 +1600,22 @@
+@@ -1002,20 +1602,22 @@
      });
  
      it('should consolidate subsequent text chunks after receiving an empty text chunk', async () => {
@@ -156536,7 +156641,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1045,39 +1645,44 @@
+@@ -1045,39 +1647,44 @@
      });
  
      it('should consolidate adjacent text parts that arrive in separate stream chunks', async () => {
@@ -156581,7 +156686,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        })();
  
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
-@@ -1110,12 +1715,13 @@
+@@ -1110,12 +1717,13 @@
        expect(modelTurn.parts![2]!.text).toBe('This is the second part.');
      });
      it('should preserve text parts that stream in the same chunk as a thought', async () => {
@@ -156595,7 +156700,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    { thought: 'This is a thought.' },
-@@ -1160,14 +1766,13 @@
+@@ -1160,14 +1768,13 @@
        );
      });
  
@@ -156611,7 +156716,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'first message' }] },
          {
            role: 'model',
-@@ -1182,12 +1787,13 @@
+@@ -1182,12 +1789,13 @@
            ],
          },
        ]);
@@ -156625,7 +156730,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1256,12 +1862,13 @@
+@@ -1256,12 +1864,13 @@
            ],
          },
        ]);
@@ -156639,7 +156744,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1295,114 +1902,77 @@
+@@ -1295,114 +1904,77 @@
        expect(frParts[0]!.functionResponse?.id).toBe('call_retry_real_fr');
        expect(
          (frParts[0]!.functionResponse?.response as { output?: string })?.output,
@@ -156809,7 +156914,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            role: 'model',
            parts: [
-@@ -1426,21 +1996,23 @@
+@@ -1426,21 +1998,23 @@
                },
              },
            ],
@@ -156833,7 +156938,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    role: 'model',
                    parts: [
                      {
-@@ -1452,12 +2024,13 @@
+@@ -1452,12 +2026,13 @@
                      },
                    ],
                  },
@@ -156847,7 +156952,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const stream = await chat.sendMessageStream(
          'test-model',
          { message: 'second request' },
-@@ -1479,157 +2052,18 @@
+@@ -1479,157 +2054,18 @@
          functionCall?.type === StreamEventType.CHUNK
            ? functionCall.value.functionCalls?.[0]?.id
            : undefined,
@@ -157007,7 +157112,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: 'partial reply that will be lost' }],
                },
-@@ -1663,62 +2097,30 @@
+@@ -1663,62 +2099,30 @@
      });
  
      it('should throw InvalidStreamError when no tool call and no finish reason', async () => {
@@ -157076,7 +157181,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test' },
            'prompt-id-1',
          );
-@@ -1730,12 +2132,13 @@
+@@ -1730,12 +2134,13 @@
  
      it('should succeed when there is finish reason and only thought content (reasoning models)', async () => {
        // This test verifies that responses containing only thought/reasoning content
@@ -157090,7 +157195,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -1777,215 +2180,13 @@
+@@ -1777,215 +2182,13 @@
        expect(modelTurn.parts![0]).toEqual({
          thought: true,
          text: 'Let me think through this problem step by step...',
@@ -157307,7 +157412,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -2045,172 +2246,16 @@
+@@ -2045,172 +2248,16 @@
                (part) => part.functionCall?.id === 'call_list_files',
              ),
          ),
@@ -157482,7 +157587,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '(empty content)' }],
                },
-@@ -2259,12 +2304,14 @@
+@@ -2259,12 +2306,14 @@
          } as unknown as GenerateContentResponse;
  
          // Some providers emit a trailing usage-only chunk after finishReason.
@@ -157497,7 +157602,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2289,24 +2336,26 @@
+@@ -2289,24 +2338,26 @@
      });
  
      it('should succeed for thought-only content when finish reason arrives in a later chunk', async () => {
@@ -157524,7 +157629,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [],
                },
-@@ -2356,12 +2405,14 @@
+@@ -2356,12 +2407,14 @@
          } as unknown as GenerateContentResponse;
  
          // Provider can emit trailing usage-only chunk after finish.
@@ -157539,7 +157644,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2404,12 +2455,14 @@
+@@ -2404,12 +2457,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -157554,7 +157659,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2425,87 +2478,43 @@
+@@ -2425,87 +2480,43 @@
        for await (const _ of stream) {
          // consume stream
        }
@@ -157658,7 +157763,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        vi.mocked(mockConfig.getChatCompression).mockReturnValue({
          maxRecentImagesToRetain: 1,
          imagePayloadThreshold: 1,
-@@ -2527,12 +2536,13 @@
+@@ -2527,12 +2538,13 @@
            role: 'model',
            parts: [{ text: 'I see the second image' }],
          },
@@ -157672,7 +157777,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2594,12 +2604,13 @@
+@@ -2594,12 +2606,13 @@
              },
            ],
          },
@@ -157686,7 +157791,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2664,12 +2675,13 @@
+@@ -2664,12 +2677,13 @@
        chat.setHistory([
          { role: 'user', parts: [{ text: 'prior question' }] },
          { role: 'model', parts: [{ text: 'prior answer' }] },
@@ -157700,7 +157805,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2681,16 +2693,22 @@
+@@ -2681,16 +2695,22 @@
            text: () => 'response',
          } as unknown as GenerateContentResponse;
        })();
@@ -157725,7 +157830,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'hello' },
-@@ -2714,13 +2732,19 @@
+@@ -2714,13 +2734,19 @@
          'prompt-id-no-request-clone',
        );
      });
@@ -157746,7 +157851,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: {
-@@ -2731,12 +2755,14 @@
+@@ -2731,12 +2757,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -157761,7 +157866,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2751,25 +2777,27 @@
+@@ -2751,25 +2779,27 @@
        );
        for await (const _ of stream) {
          // consume stream
@@ -157791,7 +157896,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              candidates: [
                {
                  content: {
-@@ -2779,173 +2807,190 @@
+@@ -2779,173 +2809,190 @@
                  finishReason: 'STOP',
                  index: 0,
                  safetyRatings: [],
@@ -158120,7 +158225,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              {
                content: {
                  parts: [{ text: 'response' }],
-@@ -2953,12 +2998,13 @@
+@@ -2953,12 +3000,13 @@
                },
                finishReason: 'STOP',
              },
@@ -158134,7 +158239,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2966,27 +3012,35 @@
+@@ -2966,27 +3014,35 @@
          response,
        );
  
@@ -158177,7 +158282,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -3015,13 +3069,13 @@
+@@ -3015,13 +3071,13 @@
      });
    });
  
@@ -158192,7 +158297,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: { parts: [{ text }], role: 'model' },
-@@ -3038,31 +3092,35 @@
+@@ -3038,31 +3094,35 @@
  
      it('releases the send-lock when auto-compression throws (no deadlock)', async () => {
        const compressSpy = vi
@@ -158236,7 +158341,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
  
-@@ -3084,31 +3142,37 @@
+@@ -3084,31 +3144,37 @@
          .mockResolvedValue({
            newHistory: null,
            info: {
@@ -158283,7 +158388,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
        const stream = await chat.sendMessageStream(
-@@ -3127,35 +3191,43 @@
+@@ -3127,35 +3193,43 @@
            .some((content) =>
              content.parts?.some((part) => part.text === 'first'),
            ),
@@ -158339,7 +158444,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse(),
        );
  
-@@ -3166,16 +3238,16 @@
+@@ -3166,29 +3240,31 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -158358,9 +158463,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        ];
        vi.spyOn(
          ChatCompressionService.prototype,
-@@ -3183,12 +3255,13 @@
+         'compress',
        ).mockResolvedValueOnce({
          newHistory: compressedHistory,
++        afterCommit: vi.fn().mockResolvedValue(undefined),
          info: {
            originalTokenCount: 1000,
            newTokenCount: 200,
@@ -158372,7 +158478,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +3272,1602 @@
+@@ -3199,2262 +3275,1612 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -158826,6 +158932,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        })
          .mockResolvedValueOnce({
            newHistory: compressedHistory,
++          afterCommit: vi.fn().mockResolvedValue(undefined),
            info: {
 -            originalTokenCount: 128_000,
 +            originalTokenCount: 150_000,
@@ -159721,6 +159828,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +            ChatCompressionService.prototype.compress,
 +          ).mockResolvedValue({
 +            newHistory: structuredClone(compactedHistory),
++            afterCommit: vi.fn().mockResolvedValue(undefined),
 +            info: {
 +              originalTokenCount: originalTokens,
 +              newTokenCount: compactedTokens,
@@ -160197,7 +160305,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        vi.mocked(ChatCompressionService.prototype.compress).mockImplementation(
 +          async () => {
 +            abort.abort(reason);
-+            return { newHistory: history, info };
++            return {
++              newHistory: history,
++              info,
++              afterCommit: vi.fn().mockResolvedValue(undefined),
++            };
            },
 -        })
 -        .mockResolvedValueOnce({
@@ -160378,7 +160490,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      vi.mocked(ChatCompressionService.prototype.compress).mockImplementation(
 +        async () => {
 +          abort.abort(new Error('cancelled after compaction generation'));
-+          return { newHistory: history, info };
++          return {
++            newHistory: history,
++            info,
++            afterCommit: vi.fn().mockResolvedValue(undefined),
++          };
 +        },
        );
 +      await expect(
@@ -162031,7 +162147,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5699,12 +5112,13 @@
+@@ -5699,12 +5125,13 @@
                response: payload,
              },
            },
@@ -162045,7 +162161,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            throw new Error('unexpected deep clone');
          });
  
-@@ -5714,13 +5128,16 @@
+@@ -5714,13 +5141,16 @@
        expect(history).toEqual([content]);
        expect(history[0]).not.toBe(content);
        expect(history[0]!.parts).not.toBe(content.parts);
@@ -162063,7 +162179,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('getHistoryForForkWindow', () => {
      it('removes startup context before curating adjacent user turns', () => {
        const startup: Content = {
-@@ -5797,19 +5214,21 @@
+@@ -5797,19 +5227,21 @@
    describe('peekLastHistoryEntry', () => {
      it('returns the last entry without structured-cloning the full history', () => {
        const first: Content = { role: 'user', parts: [{ text: 'a' }] };
@@ -162086,7 +162202,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    describe('getLastModelMessageText', () => {
      it('returns text from the latest model message without cloning history', () => {
-@@ -5858,20 +5277,22 @@
+@@ -5858,20 +5290,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -162110,7 +162226,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +5336,299 @@
+@@ -5915,33 +5349,299 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -162414,7 +162530,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +5638,22 @@
+@@ -5951,22 +5651,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -162441,7 +162557,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +5665,13 @@
+@@ -5978,99 +5678,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -162541,7 +162657,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +5680,23 @@
+@@ -6079,23 +5693,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -162567,7 +162683,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6104,25 +5705,37 @@
+@@ -6104,25 +5718,37 @@
                  ],
                } as unknown as OpenAI.Chat.ChatCompletionChunk;
              })(),
@@ -162608,7 +162724,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,134 +5759,86 @@
+@@ -6146,134 +5772,86 @@
          } finally {
            vi.useRealTimers();
          }
@@ -162758,7 +162874,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6308,29 +5873,21 @@
+@@ -6308,29 +5886,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -162790,7 +162906,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +5902,13 @@
+@@ -6345,12 +5915,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -162804,7 +162920,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +5918,29 @@
+@@ -6360,21 +5931,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -162836,7 +162952,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +5955,18 @@
+@@ -6389,24 +5968,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -162863,7 +162979,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +5986,13 @@
+@@ -6426,12 +5999,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -162877,7 +162993,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +6002,29 @@
+@@ -6441,21 +6015,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -162909,7 +163025,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +6038,12 @@
+@@ -6469,56 +6051,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -162966,7 +163082,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +6051,13 @@
+@@ -6526,12 +6064,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -162980,7 +163096,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +6069,17 @@
+@@ -6543,14 +6082,17 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -162999,7 +163115,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +6090,13 @@
+@@ -6561,12 +6103,13 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -163013,7 +163129,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +6107,13 @@
+@@ -6577,13 +6120,13 @@
                  },
                },
              ],
@@ -163028,7 +163144,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +6140,13 @@
+@@ -6610,15 +6153,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -163045,7 +163161,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +6157,13 @@
+@@ -6629,12 +6170,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -163059,7 +163175,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +6200,12 @@
+@@ -6671,752 +6213,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -163812,7 +163928,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +6220,13 @@
+@@ -7431,12 +6233,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -163826,7 +163942,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +6287,13 @@
+@@ -7497,13 +6300,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -163841,7 +163957,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +6310,37 @@
+@@ -7520,116 +6323,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -163963,7 +164079,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +6351,13 @@
+@@ -7640,12 +6364,13 @@
                throw transportError;
              })(),
            )
@@ -163977,7 +164093,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +6390,22 @@
+@@ -7678,103 +6403,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -164082,7 +164198,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +6416,13 @@
+@@ -7785,12 +6429,13 @@
                throw transportError;
              })(),
            )
@@ -164096,7 +164212,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +6447,213 @@
+@@ -7815,1231 +6460,213 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -165492,7 +165608,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +6684,13 @@
+@@ -9070,12 +6697,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -165506,7 +165622,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +6740,18 @@
+@@ -9125,13 +6753,18 @@
              timeoutError,
              {
                model: 'test-model',
@@ -165526,7 +165642,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +6762,13 @@
+@@ -9142,12 +6775,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -165540,7 +165656,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +6821,13 @@
+@@ -9200,12 +6834,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -165554,7 +165670,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +6877,13 @@
+@@ -9255,12 +6890,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -165568,7 +165684,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,59 +7014,57 @@
+@@ -9391,59 +7027,57 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -165640,7 +165756,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +7079,13 @@
+@@ -9458,12 +7092,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -165654,7 +165770,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +7095,42 @@
+@@ -9473,130 +7108,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -165795,7 +165911,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +7140,13 @@
+@@ -9606,12 +7153,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -165809,7 +165925,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,39 +7161,43 @@
+@@ -9626,39 +7174,43 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -165858,7 +165974,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,16 +7235,21 @@
+@@ -9696,16 +7248,21 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -165882,7 +165998,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          vi.useRealTimers();
        }
-@@ -9733,12 +7277,13 @@
+@@ -9733,12 +7290,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -165896,7 +166012,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,23 +7297,27 @@
+@@ -9752,23 +7310,27 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -165929,7 +166045,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9792,12 +7341,13 @@
+@@ -9792,12 +7354,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -165943,7 +166059,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,31 +7368,35 @@
+@@ -9818,31 +7381,35 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -165984,7 +166100,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9884,18 +7438,22 @@
+@@ -9884,18 +7451,22 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -166010,7 +166126,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          await expect(nextPromise).rejects.toThrow();
  
          // Only one API call should have been made (no retry after abort)
-@@ -9905,12 +7463,13 @@
+@@ -9905,12 +7476,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -166024,7 +166140,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +7513,13 @@
+@@ -9954,12 +7526,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -166038,7 +166154,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,48 +7534,52 @@
+@@ -9974,48 +7547,52 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -166101,7 +166217,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +7592,14 @@
+@@ -10028,12 +7605,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -166116,7 +166232,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +7624,13 @@
+@@ -10058,12 +7637,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -166130,7 +166246,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,37 +7642,39 @@
+@@ -10075,37 +7655,39 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -166179,7 +166295,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(retryInfos.map((info) => info.delayMs)).toEqual([3_000, 5_000]);
          expect(
-@@ -10123,12 +7692,14 @@
+@@ -10123,12 +7705,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -166194,7 +166310,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +7725,13 @@
+@@ -10154,12 +7738,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -166208,7 +166324,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,32 +7742,33 @@
+@@ -10170,32 +7755,33 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -166251,7 +166367,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            events.some(
-@@ -10261,12 +7834,13 @@
+@@ -10261,12 +7847,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -166265,7 +166381,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +7913,13 @@
+@@ -10339,12 +7926,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -166279,7 +166395,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +7947,13 @@
+@@ -10372,12 +7960,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -166293,7 +166409,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +7961,22 @@
+@@ -10385,20 +7974,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -166317,7 +166433,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +8028,182 @@
+@@ -10450,103 +8041,182 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -166560,7 +166676,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +8218,58 @@
+@@ -10561,41 +8231,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -166632,7 +166748,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +8280,13 @@
+@@ -10606,12 +8293,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -166646,7 +166762,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +8316,296 @@
+@@ -10641,275 +8329,296 @@
          }),
          'prompt-id-res3',
        );
@@ -167176,7 +167292,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +8650,31 @@
+@@ -10954,28 +8663,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -167209,7 +167325,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +8695,55 @@
+@@ -10996,138 +8708,55 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -167359,7 +167475,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +8754,33 @@
+@@ -11138,33 +8767,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -167404,7 +167520,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +8790,30 @@
+@@ -11174,22 +8803,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -167436,7 +167552,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +8867,34 @@
+@@ -11243,31 +8880,34 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -167474,7 +167590,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +8905,64 @@
+@@ -11278,59 +8918,64 @@
                      },
                    ],
                  },
@@ -167543,7 +167659,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +9003,12 @@
+@@ -11371,252 +9016,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -167796,7 +167912,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +9182,649 @@
+@@ -11790,179 +9195,649 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -168580,7 +168696,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +9937,12 @@
+@@ -12075,17 +9950,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -168598,7 +168714,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,2978 +10425,984 @@
+@@ -12568,2978 +10438,1152 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -171157,6 +171273,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +    function compressResult() {
 +      return {
 +        newHistory: [userMsg('summary'), modelMsg('ok')],
++        afterCommit: vi.fn().mockResolvedValue(undefined),
 +        info: {
 +          originalTokenCount: 1000,
 +          newTokenCount: 200,
@@ -171210,7 +171327,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        .spyOn(ChatCompressionService.prototype, 'compress')
 +        .mockResolvedValue(compressResult());
 +      await chat.tryCompress('p-preflight', false, undefined, {
-+        precomputedEffectiveTokens: 1234,
++        precomputedEffectiveTokens: {
++          totalTokens: 1234,
++          historyRevision: (chat as unknown as { historyRevision: symbol })
++            .historyRevision,
++        },
 +      });
 +      expect(count).not.toHaveBeenCalled();
 +      expect(compress.mock.calls[0][1].originalTokenCount).toBe(1234);
@@ -171428,13 +171549,176 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        expect.objectContaining({
 -          info: expect.objectContaining({ newTokenCountIsEstimated: false }),
 -        }),
++      const candidate = compressResult();
 +      vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValue(
-+        compressResult(),
++        candidate,
 +      );
 +      await expect(owned.tryCompress('p-write-fail', true)).rejects.toThrow(
 +        'ENOSPC',
        );
 +      expect(owned.getHistory()).toEqual(original);
++      expect(candidate.afterCommit).not.toHaveBeenCalled();
++    });
++
++    it.each(['count', 'generation'] as const)(
++      'refuses a candidate if admitted history changes during %s',
++      async (phase) => {
++        const recorder = createCommitRecorder();
++        const original = [userMsg('original'), modelMsg('answer')];
++        const owned = new GeminiChat(
++          mockConfig,
++          new GenerationContext('stale-candidate'),
++          config,
++          original,
++          recorder,
++        );
++        const candidate = compressResult();
++        let resume!: () => void;
++        const pending = new Promise<void>((resolve) => {
++          resume = resolve;
++        });
++        const count = vi
++          .spyOn(owned, 'countRequestTokensForCandidateHistory')
++          .mockImplementation(async () => {
++            if (phase === 'count') await pending;
++            return { totalTokens: 1000, maxModelLen: DEFAULT_TEST_WINDOW };
++          });
++        const compress = vi
++          .spyOn(ChatCompressionService.prototype, 'compress')
++          .mockImplementation(async () => {
++            if (phase === 'generation') await pending;
++            return candidate;
++          });
++        const completion = owned.tryCompress('stale', true);
++        await vi.waitFor(() =>
++          expect(phase === 'count' ? count : compress).toHaveBeenCalledTimes(1),
++        );
++        const latest = userMsg('input admitted while compaction was pending');
++        owned.addHistory(latest);
++        resume();
++        const info = await completion;
++
++        expect(info).toMatchObject({
++          originalTokenCount: 1000,
++          newTokenCount: null,
++          compressionStatus:
++            CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++        });
++        expect(info).not.toHaveProperty('postCompactionHistory');
++        expect(owned.getHistory()).toEqual([...original, latest]);
++        expect(candidate.afterCommit).not.toHaveBeenCalled();
++        expect(recorder.recordChatCompression).toHaveBeenCalledWith({
++          info,
++          compressedHistory: [...original, latest],
++          imagePayloads: [],
++        });
++        if (phase === 'count') expect(compress).not.toHaveBeenCalled();
++      },
++    );
++
++    it('refuses a precomputed count whose history revision no longer belongs to the chat', async () => {
++      const historyRevision = (chat as unknown as { historyRevision: symbol })
++        .historyRevision;
++      const latest = userMsg('new input');
++      chat.addHistory(latest);
++      const current = chat.getHistory();
++      const count = vi.spyOn(chat, 'countRequestTokensForCandidateHistory');
++      const compress = vi
++        .spyOn(ChatCompressionService.prototype, 'compress')
++        .mockResolvedValue(compressResult());
++
++      const info = await chat.tryCompress('old-preflight', true, undefined, {
++        precomputedEffectiveTokens: { totalTokens: 1234, historyRevision },
++      });
++
++      expect(info).toMatchObject({
++        originalTokenCount: 1234,
++        newTokenCount: null,
++        compressionStatus: CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++      });
++      expect(chat.getHistory()).toEqual(current);
++      expect(count).not.toHaveBeenCalled();
++      expect(compress).not.toHaveBeenCalled();
++    });
++
++    it('runs candidate finalization only after the checkpoint and flush are durable', async () => {
++      let acceptCheckpoint!: () => void;
++      let flushCheckpoint!: () => void;
++      const checkpoint = new Promise<void>((resolve) => {
++        acceptCheckpoint = resolve;
++      });
++      const flush = new Promise<void>((resolve) => {
++        flushCheckpoint = resolve;
++      });
++      const recorder = {
++        ...createCommitRecorder(),
++        recordChatCompression: vi.fn().mockReturnValue(checkpoint),
++        flush: vi
++          .fn()
++          .mockResolvedValueOnce(undefined)
++          .mockReturnValueOnce(flush),
++      };
++      const owned = new GeminiChat(
++        mockConfig,
++        new GenerationContext('durable-before-finalize'),
++        config,
++        [userMsg('original'), modelMsg('answer')],
++        recorder,
++      );
++      const candidate = compressResult();
++      candidate.afterCommit.mockImplementation(async () => {
++        expect(owned.getHistory()).toEqual(candidate.newHistory);
++      });
++      vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValue(
++        candidate,
++      );
++      const completion = owned.tryCompress('durable', true);
++
++      await vi.waitFor(() =>
++        expect(recorder.recordChatCompression).toHaveBeenCalledTimes(1),
++      );
++      expect(candidate.afterCommit).not.toHaveBeenCalled();
++      acceptCheckpoint();
++      await vi.waitFor(() => expect(recorder.flush).toHaveBeenCalledTimes(2));
++      expect(candidate.afterCommit).not.toHaveBeenCalled();
++      flushCheckpoint();
++      expect((await completion).compressionStatus).toBe(
++        CompressionStatus.COMPRESSED,
++      );
++      expect(candidate.afterCommit).toHaveBeenCalledTimes(1);
++    });
++
++    it('retains the durably accepted history when candidate finalization fails', async () => {
++      const recorder = createCommitRecorder();
++      const owned = new GeminiChat(
++        mockConfig,
++        new GenerationContext('finalization-failure'),
++        config,
++        [userMsg('original'), modelMsg('answer')],
++        recorder,
++      );
++      const candidate = compressResult();
++      const cause = new Error('PostCompact failed');
++      candidate.afterCommit.mockRejectedValue(cause);
++      vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValue(
++        candidate,
++      );
++
++      const error = await owned
++        .tryCompress('accepted', true)
++        .catch((failure: unknown) => failure);
++      expect(error).toBeInstanceOf(CompactionFinalizationError);
++      expect(error).toMatchObject({
++        cause,
++        info: {
++          compressionStatus: CompressionStatus.COMPRESSED,
++          newTokenCount: 200,
++          postCompactionHistory: candidate.newHistory,
++        },
++      });
++      expect(owned.getHistory()).toEqual(candidate.newHistory);
++      expect(recorder.recordChatCompression).toHaveBeenCalledTimes(1);
++      expect(candidate.afterCommit).toHaveBeenCalledTimes(1);
      });
 -
 -    it('marks and records the locally adjusted fast-compression count as estimated', () => {
@@ -172489,7 +172773,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
-@@ -1,113 +1,114 @@
+@@ -1,113 +1,115 @@
 +import {
 +  requireRuntimeHistoryState,
 +  type RuntimeHistoryState,
@@ -172600,6 +172884,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -  computeThresholds,
 -  MAX_CONSECUTIVE_FAILURES,
    type CompactTrigger,
++  type CompressionResult,
  } from '../services/chatCompressionService.js';
  import { acquireSleepInhibitor } from '../services/sleepInhibitor.js';
 +import { compactionFrame } from '../services/postCompactAttachments.js';
@@ -172651,7 +172936,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -123,38 +124,30 @@
+@@ -123,38 +125,30 @@
  import {
    getToolCallPreparations,
    setToolCallPreparations,
@@ -172702,7 +172987,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -191,849 +184,78 @@
+@@ -191,849 +185,81 @@
        value,
        writable: true,
        configurable: true,
@@ -172996,7 +173281,11 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +   * Exact rendered request count already computed by the caller. Reusing it
 +   * avoids another tokenization of the same request before compaction.
     */
-   precomputedEffectiveTokens?: number;
+-  precomputedEffectiveTokens?: number;
++  precomputedEffectiveTokens?: {
++    totalTokens: number;
++    historyRevision: symbol;
++  };
    /** Per-request overrides needed to preserve the main request cache prefix. */
    requestGenerationConfig?: GenerateContentConfig;
 -  /**
@@ -173577,7 +173866,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1245,199 +467,58 @@
+@@ -1245,199 +471,58 @@
    return {
      ...content,
      parts,
@@ -173811,7 +174100,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1591,13 +672,17 @@
+@@ -1591,13 +676,17 @@
    const removals = [...plan.removalTargets].sort((a, b) => {
      if (a.turnIdx !== b.turnIdx) return b.turnIdx - a.turnIdx;
      return b.partIdx - a.partIdx;
@@ -173830,7 +174119,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    // Preserve the adjacent turn even if empty — we'll rewrite it
    // below.
    const adjacentIdx = plan.modelIdx + 1;
-@@ -1612,17 +697,20 @@
+@@ -1612,17 +701,20 @@
    // follows.
    const next = history[adjacentIdx];
    if (next?.role === 'user') {
@@ -173856,7 +174145,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    return { insertedBefore: 1 };
  }
  
-@@ -1680,6 +768,15 @@
+@@ -1680,6 +772,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -173872,7 +174161,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1712,74 +809,41 @@
+@@ -1712,74 +813,42 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -173969,13 +174258,14 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  private imagePayloadStore: InMemoryImagePayloadStore;
 +  private pendingAssistant: Content | undefined;
 +  private pendingCheckpoint: Content[] | undefined;
++  private historyRevision = Symbol();
  
    /**
     * Monotonically counts user-content pushes that survived into history.
     * Incremented when `sendMessageStream` pushes the user content and decremented
     * only if that same push is rolled back on a setup-time failure. Auto-
     * compression mutates history length but never touches this counter, so a
-@@ -1787,351 +851,630 @@
+@@ -1787,351 +856,665 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -174067,7 +174357,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    this.imagePayloadStore.takeAdditions();
 +  }
 +
-+  private installHistory(history: Content[]): void {
++  private installHistory(history: Content[], representationOnly = false): void {
 +    let index = 0;
 +    while (
 +      index < this.history.length &&
@@ -174095,6 +174385,9 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        insert: history.slice(index, afterEnd),
 +        imagePayloads,
 +      });
++    }
++    if (!representationOnly && (index !== beforeEnd || index !== afterEnd)) {
++      this.historyRevision = Symbol();
 +    }
 +    this.history = history;
    }
@@ -174173,7 +174466,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      const pendingIndex = this.pendingAssistant
 +        ? this.history.indexOf(this.pendingAssistant)
 +        : -1;
-+      this.installHistory(replacedHistory);
++      this.installHistory(replacedHistory, true);
 +      if (pendingIndex >= 0)
 +        this.pendingAssistant = replacedHistory[pendingIndex];
        const requestHistory = curatedHistory.map(copyContentContainer);
@@ -174593,8 +174886,11 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        'A history commit is still being recorded. Wait for the current generation or compaction to finish before compacting this chat.',
 +      );
 +    }
++    const historyRevision =
++      options?.precomputedEffectiveTokens?.historyRevision ??
++      this.historyRevision;
 +    const originalTokenCount =
-+      options?.precomputedEffectiveTokens ??
++      options?.precomputedEffectiveTokens?.totalTokens ??
 +      (
 +        await this.countRequestTokensForCandidateHistory(
 +          this.getHistoryShallow(true),
@@ -174618,22 +174914,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -      customInstructions: options?.customInstructions,
 -      signal,
 -    });
-+    const { newHistory, info } = await runWithGenerationContext(
-+      this.generationContext,
-+      () =>
-+        service.compress(this, {
-+          promptId,
-+          force,
-+          config: this.config,
-+          originalTokenCount,
-+          pendingUserMessage: options?.pendingUserMessage,
-+          requestGenerationConfig: options?.requestGenerationConfig,
-+          trigger: options?.trigger,
-+          customInstructions: options?.customInstructions,
-+          signal,
-+        }),
-+    );
- 
+-
 -    if (info.compressionStatus === CompressionStatus.COMPRESSED && newHistory) {
 -      // ChatCompressionService owns provenance. Keep a conservative fallback
 -      // for older/custom implementations that omit the field, but preserve an
@@ -174669,13 +174950,53 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -            `[compaction] circuit breaker tripped after ${this.consecutiveFailures} consecutive failures (cheap-gate path); auto-compaction will NOOP until a successful force compaction resets the counter.`,
 -          );
 -        }
-+    const committedHistory = newHistory
-+      ? structuredClone(
-+          options?.pendingUserMessage
-+            ? [...newHistory, options.pendingUserMessage]
-+            : newHistory,
-+        )
-+      : newHistory;
++    const candidate: CompressionResult =
++      historyRevision !== this.historyRevision
++        ? {
++            newHistory: null,
++            info: {
++              originalTokenCount,
++              newTokenCount: null,
++              compressionStatus:
++                CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++              rejectedAttempts: [],
++            },
++          }
++        : await runWithGenerationContext(this.generationContext, () =>
++            service.compress(this, {
++              promptId,
++              force,
++              config: this.config,
++              originalTokenCount,
++              pendingUserMessage: options?.pendingUserMessage,
++              requestGenerationConfig: options?.requestGenerationConfig,
++              trigger: options?.trigger,
++              customInstructions: options?.customInstructions,
++              signal,
++            }),
++          );
++    let info = candidate.info;
++    const historyChanged = historyRevision !== this.historyRevision;
++    if (historyChanged) {
++      info = {
++        ...info,
++        newTokenCount: null,
++        compressionStatus:
++          info.compressionStatus === CompressionStatus.COMPRESSED ||
++          info.compressionStatus === CompressionStatus.NOOP
++            ? CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED
++            : info.compressionStatus,
++      };
++      delete info.postCompactionHistory;
++    }
++    const committedHistory =
++      !historyChanged && candidate.newHistory
++        ? structuredClone(
++            options?.pendingUserMessage
++              ? [...candidate.newHistory, options.pendingUserMessage]
++              : candidate.newHistory,
++          )
++        : null;
 +    if (
 +      info.compressionStatus === CompressionStatus.COMPRESSED &&
 +      committedHistory
@@ -174696,15 +175017,19 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      if (installsHistory) {
 +        this.pendingCheckpoint = previousHistory;
 +        this.history = committedHistory;
++        this.historyRevision = Symbol();
 +      }
 +      try {
 +        await commit;
 +        await this.chatRecordingService.flush();
 +      } catch (error) {
-+        if (installsHistory) this.history = previousHistory;
++        if (installsHistory) {
++          this.history = previousHistory;
++          this.historyRevision = Symbol();
++        }
 +        throw error;
 +      } finally {
-+        this.pendingCheckpoint = undefined;
++        if (installsHistory) this.pendingCheckpoint = undefined;
 +      }
 +    }
 +    try {
@@ -174725,6 +175050,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        debugLogger.debug(
 +          `[FILE_READ_CACHE] disarmed ${disarmed} resident read(s) after auto tryCompress`,
 +        );
++        if (candidate.newHistory !== null) await candidate.afterCommit();
        }
 +    } catch (error) {
 +      throw new CompactionFinalizationError(info, error);
@@ -174852,7 +175178,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  /** The startup context every history of this chat opens with, compacted or not. */
 +  getStartupContext(): Content | undefined {
 +    return this.startupContext?.content;
-@@ -2153,6 +1496,16 @@
+@@ -2153,6 +1536,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -174869,7 +175195,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2192,1724 +1545,606 @@
+@@ -2192,1724 +1585,610 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -175360,6 +175686,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +
 +          // The size of the request this turn would send, counted once and
 +          // passed through to the compaction gate so it is not counted twice.
++          const historyRevision = this.historyRevision;
 +          const effectiveTokens = await countExactRequestTokens(
 +            this.getRequestHistoryWithPendingForRoute(
 +              userContent,
@@ -175381,7 +175708,10 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +              params.config?.abortSignal,
 +              {
 +                pendingUserMessage: userContent,
-+                precomputedEffectiveTokens: effectiveTokens,
++                precomputedEffectiveTokens: {
++                  totalTokens: effectiveTokens,
++                  historyRevision,
++                },
 +                requestGenerationConfig: params.config,
 +              },
 +            );
@@ -177127,7 +177457,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +2168,14 @@
+@@ -3933,23 +2212,14 @@
          }
  
          return false;
@@ -177152,7 +177482,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3963,41 +2189,19 @@
+@@ -3963,41 +2233,19 @@
        },
      });
  
@@ -177197,7 +177527,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4015,58 +2219,67 @@
+@@ -4015,58 +2263,67 @@
     *
     * @param curated - whether to return the curated history or the comprehensive
     * history.
@@ -177274,7 +177604,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Returns a defensive copy of the last raw history entry without cloning the
     * full conversation. This avoids O(history) cloning, though cloning the last
-@@ -4078,23 +2291,23 @@
+@@ -4078,23 +2335,23 @@
  
    /**
     * Returns the last raw history entry for read-only checks. Callers must not
@@ -177301,7 +177631,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            ?.filter(
              (part): part is { text: string } =>
                typeof part.text === 'string' && !part.thought,
-@@ -4109,13 +2322,13 @@
+@@ -4109,13 +2366,13 @@
    /**
     * Returns the number of entries in the raw chat history. O(1) and
     * does not clone — use this when you only need the count and would
@@ -177316,7 +177646,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Monotonic count of user-content pushes that survived into history (see the
     * field doc). Snapshot it before a send and compare after to tell whether the
     * send actually pushed the user content — robust to auto-compression, which
-@@ -4130,13 +2343,13 @@
+@@ -4130,13 +2387,13 @@
     * no clone — `useGeminiStream.handleCompletedTools` calls this per
     * tool-completion batch, so {@link getHistory}'s `structuredClone`
     * would stall the UI on long sessions.
@@ -177331,7 +177661,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
          if (id) ids.add(id);
        }
      }
-@@ -4144,207 +2357,90 @@
+@@ -4144,207 +2401,92 @@
    }
  
    /**
@@ -177385,6 +177715,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      imagePayloads: this.imagePayloadStore.takeAdditions(),
 +    });
 +    this.history.push(admitted);
++    this.historyRevision = Symbol();
 +    return admitted;
    }
  
@@ -177542,6 +177873,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    this.history = history;
 +    this.imagePayloadStore = images;
 +    this.startupContext = startup;
++    this.historyRevision = Symbol();
 +  }
 +
    truncateHistory(keepCount: number): void {
@@ -177592,7 +177924,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      ) {
        // Never pop a *pure* system-reminder user entry. These are structural,
        // not orphaned turns: the startup-context prelude (history[0]) and
-@@ -4362,44 +2458,38 @@
+@@ -4362,44 +2504,38 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -177645,7 +177977,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2517,296 @@
+@@ -4427,693 +2563,298 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -178433,6 +178765,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        };
 +        this.pendingAssistant = accepted;
 +        this.history.push(accepted);
++        this.historyRevision = Symbol();
 +        try {
 +          await committed;
 +        } catch (error) {
@@ -178440,6 +178773,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +            (content) =>
 +              content !== accepted && content !== this.pendingAssistant,
 +          );
++          this.historyRevision = Symbol();
 +          throw error;
 +        } finally {
 +          this.pendingAssistant = undefined;
@@ -197583,7 +197917,7 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
      it('should set wasOutputTruncated=true on pending tool calls when finishReason is MAX_TOKENS', async () => {
        const mockResponseStream = (async function* () {
          // Yield a tool call request
-@@ -1638,6 +2035,39 @@
+@@ -1638,6 +2035,61 @@
        expect(turn.pendingToolCalls).toHaveLength(2);
        expect(turn.pendingToolCalls[0].wasOutputTruncated).toBe(true);
        expect(turn.pendingToolCalls[1].wasOutputTruncated).toBe(true);
@@ -197592,6 +197926,28 @@ diff --git a/packages/core/src/core/turn.test.ts b/packages/core/src/core/turn.t
  });
 +
 +describe('toCompactionRecord', () => {
++  it.each([
++    CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
++    CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++  ])(
++    'keeps an unmeasured retained history count explicit for %s',
++    (compressionStatus) => {
++      expect(
++        toCompactionRecord({
++          originalTokenCount: 100,
++          newTokenCount: null,
++          compressionStatus,
++          rejectedAttempts: [],
++        }),
++      ).toMatchObject({
++        succeeded: false,
++        originalTokenCount: 100,
++        newTokenCount: null,
++        postCompactionHistory: null,
++      });
++    },
++  );
++
 +  it('reports preserved history when an inflated candidate was refused', () => {
 +    expect(
 +      toCompactionRecord({
@@ -198075,7 +198431,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    const providerCallId = request.providerCallId ?? request.callId;
    const message = duplicateProviderToolCallMessage(providerCallId);
    return {
-@@ -345,62 +649,252 @@
+@@ -345,62 +649,263 @@
    COMPRESSION_FAILED_EMPTY_SUMMARY,
  
    /** The compression was not necessary and no action was taken */
@@ -198115,6 +198471,9 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +   * draw that declared no complete snapshot at all.
 +   */
 +  COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
++
++  /** Admitted history changed while this compaction was being prepared. */
++  COMPRESSION_FAILED_HISTORY_CHANGED,
  }
  
  /**
@@ -198203,9 +198562,15 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  /** Exact committed composition, including retained inputs and pending parts. */
 +  postCompactionHistory?: Content[];
    originalTokenCount: number;
-   newTokenCount: number;
+-  newTokenCount: number;
 -  /** Whether newTokenCount ultimately came from a local estimate. */
 -  newTokenCountIsEstimated?: boolean;
++  /**
++   * Measured candidate size, or the original count when no candidate was
++   * measured. Null when changed retained history is unmeasured. The public
++   * record projection separates rejected-candidate and retained-history size.
++   */
++  newTokenCount: number | null;
    compressionStatus: CompressionStatus;
    triggerReason?: CompactionTriggerReason;
 -  /** Set when the compaction model was swapped for the main model at runtime. */
@@ -198264,8 +198629,9 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 + * `CompressionStatus` member rather than its ordinal, and `succeeded`
 + * answers "was the history actually replaced?" without a lookup table.
 + * A refused or failed attempt carries `succeeded: false` and keeps
-+ * `newTokenCount` equal to the preserved history's count, so a silent
-+ * failure cannot be read as a compaction that never happened.
++ * `newTokenCount` equal to the preserved history's count, or null when changed
++ * history has not been counted. Generated output remains distinct from
++ * acceptance of that output as a replacement.
 + */
 +export interface CompactionRecord {
 +  /** Runtime composition, separate from the model's verbatim output. */
@@ -198276,8 +198642,8 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  succeeded: boolean;
 +  /** Rendered prompt tokens before the attempt. */
 +  originalTokenCount: number;
-+  /** Rendered prompt tokens after it; equal to the original on failure. */
-+  newTokenCount: number;
++  /** Retained prompt tokens, or null when current history is unmeasured. */
++  newTokenCount: number | null;
 +  /** Why the attempt fired, or null when the caller did not classify it. */
 +  triggerReason: CompactionTriggerReason | null;
 +  /**
@@ -198310,9 +198676,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +    succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,
 +    originalTokenCount: info.originalTokenCount,
 +    newTokenCount:
-+      info.compressionStatus === CompressionStatus.COMPRESSED
-+        ? info.newTokenCount
-+        : info.originalTokenCount,
++      info.newTokenCount === null
++        ? null
++        : info.compressionStatus === CompressionStatus.COMPRESSED
++          ? info.newTokenCount
++          : info.originalTokenCount,
 +    triggerReason: info.triggerReason ?? null,
 +    output: info.output ?? null,
 +    rejectedAttempts: info.rejectedAttempts.map((attempt) => ({
@@ -198347,7 +198715,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  export type ServerGeminiLoopDetectedEvent = {
    type: GeminiEventType.LoopDetected;
    // The loop type is optional so historical call sites that don't produce one
-@@ -448,31 +942,32 @@
+@@ -448,31 +953,32 @@
    value: GoalSnapshotV2;
    cause?: GoalStateCause;
  };
@@ -198382,7 +198750,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    response: GenerateContentResponse,
  ): ServerGeminiContentPart[] {
    const parts = response.candidates?.[0]?.content?.parts ?? [];
-@@ -525,61 +1020,94 @@
+@@ -525,61 +1031,94 @@
    async *run(
      model: string,
      req: PartListUnion,
@@ -198506,7 +198874,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  
          // Surface auto-compaction that fired inside chat.sendMessageStream
          // as the top-level ChatCompressed event so existing UI handlers stay
-@@ -656,18 +1184,31 @@
+@@ -656,18 +1195,31 @@
              this.pendingCitations.clear();
            }
  
@@ -208392,7 +208760,7 @@ diff --git a/packages/core/src/qwen/qwenContentGenerator.ts b/packages/core/src/
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,1877 @@
+@@ -1,4405 +1,1915 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -212218,8 +212586,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +
 +      expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 +      if ('newTokenCount' in refusal) {
-+        expect(result.info.rejectedAttempts[0].newTokenCount)
-+          .toBe(refusal.newTokenCount);
++        expect(result.info.rejectedAttempts[0].newTokenCount).toBe(
++          refusal.newTokenCount,
++        );
 +      }
 +      const [first, redraw] = harness.generateText.mock.calls.map(
 +        ([options]) => options as GenerateTextOptions,
@@ -212314,7 +212683,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -          totalTokenCount: 170_500,
 -        },
 -      } as never);
-+  it('reports one accepted transition once, however many draws it took', async () => {
++  it('defers reporting until explicit afterCommit finalization, however many draws it took', async () => {
 +    const harness = makeHarness();
 +    harness.setHookSystem(true);
 +    const logger = vi.spyOn(loggers, 'logChatCompression');
@@ -212346,6 +212715,12 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 +    expect(harness.generateText).toHaveBeenCalledTimes(3);
 +    expect(result.info.rejectedAttempts).toHaveLength(2);
++    expect(logger).not.toHaveBeenCalled();
++    expect(harness.firePostCompactEvent).not.toHaveBeenCalled();
++    expect(result.newHistory).not.toBeNull();
++    if (result.newHistory === null)
++      throw new Error('Expected an admitted candidate');
++    await result.afterCommit();
 +    // A refused draw replaced nothing, so it is not a compression. Emitting
 +    // per draw would bill three transitions where one happened, and would run
 +    // the post-compaction hook's effects for candidates that were discarded.
@@ -212367,23 +212742,21 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    [
 +      'a transport fault',
 +      (harness: Harness) => {
-+        harness.generateText
-+          .mockReset()
-+          .mockRejectedValue(
-+            new GenerationTextFailure(
-+              'stream died',
-+              {
-+                rawResponses: [],
-+                text: '',
-+                thoughtText: '',
-+                usage: undefined,
-+                functionCalls: [],
-+                incompleteToolCalls: [],
-+                requestAttempts: 1,
-+              },
-+              new Error('connection reset'),
-+            ),
-+          );
++        harness.generateText.mockReset().mockRejectedValue(
++          new GenerationTextFailure(
++            'stream died',
++            {
++              rawResponses: [],
++              text: '',
++              thoughtText: '',
++              usage: undefined,
++              functionCalls: [],
++              incompleteToolCalls: [],
++              requestAttempts: 1,
++            },
++            new Error('connection reset'),
++          ),
++        );
 +      },
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +    ],
@@ -213422,7 +213795,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    const harness = makeHarness();
 +    const startup: Content = {
 +      role: 'user',
-+      parts: [{ text: '<system-reminder>\nstartup context\n</system-reminder>' }],
++      parts: [
++        { text: '<system-reminder>\nstartup context\n</system-reminder>' },
++      ],
 +    };
 +    harness.setStartupContext(startup);
 +    const result = await compress(harness);
@@ -213439,6 +213814,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    // sends, in the order upstream's composer gives it.
 +    vi.mocked(attachments.composePostCompactHistory).mockRestore();
 +    const harness = makeHarness();
++    harness.setHookSystem(true);
 +    const startup: Content = {
 +      role: 'user',
 +      parts: [
@@ -213495,6 +213871,15 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    ).toBe(true);
 +    expect(history[2]).toEqual(turn);
 +    expect(JSON.stringify(history[2])).toBe(JSON.stringify(turn));
++    expect(harness.firePostCompactEvent).not.toHaveBeenCalled();
++    if (result.newHistory === null)
++      throw new Error('Expected an admitted candidate');
++    await result.afterCommit();
++    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
++      'auto',
++      history[1].parts!.map((part) => part.text ?? '').join(''),
++      undefined,
++    );
 +  });
 +
 -  it('200K window NOOPs at 160K (auto = min(0.85 × 200K, ew − 13K) = 167K)', async () => {
@@ -213710,7 +214095,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -          p as { inlineData?: { mimeType?: string } }
 -        ).inlineData?.mimeType?.startsWith('image/'),
 -      ),
-+  it('fails closed on pre- and post-compaction hook errors', async () => {
++  it('refuses pre-hook errors and exposes post-hook errors only at explicit afterCommit finalization', async () => {
 +    const pre = makeHarness();
 +    pre.setHookSystem(true);
 +    pre.firePreCompactEvent.mockRejectedValueOnce(new Error('pre hook failed'));
@@ -213739,10 +214124,14 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      new Error('post hook failed'),
 +    );
 +    const result = await compress(post);
-+    expect(result.newHistory).toBeNull();
-+    expect(result.info.compressionStatus).toBe(
-+      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+    );
++    expect(result.newHistory).not.toBeNull();
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    expect(post.firePostCompactEvent).not.toHaveBeenCalled();
++    if (result.newHistory === null)
++      throw new Error('Expected an admitted candidate');
++    await expect(result.afterCommit()).rejects.toThrow('post hook failed');
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    expect(result.newHistory).not.toBeNull();
    });
  
 -  // The HookSystem wrapper returns DefaultHookOutput | undefined to consumers
@@ -213822,7 +214211,8 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      getAdditionalContext: () => hook,
 +    });
 +    await compress(harness, { customInstructions: user });
-+    const generated = harness.generateText.mock.calls[0][0] as GenerateTextOptions;
++    const generated = harness.generateText.mock
++      .calls[0][0] as GenerateTextOptions;
 +    const directive = generated.contents.at(-1)?.parts?.[0]?.text;
 +    expect(directive).toContain(user);
 +    expect(directive).toContain(hook);
@@ -213884,7 +214274,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -    expect(result.info.compressionStatus).toBe(CompressionStatus.NOOP);
 -    expect(firePreCompactEvent).not.toHaveBeenCalled();
 -    expect(firePostCompactEvent).not.toHaveBeenCalled();
-+  it('retains the generated attempt if pre-admission telemetry fails', async () => {
++  it('retains the admitted candidate when telemetry fails during explicit afterCommit finalization', async () => {
 +    const harness = makeHarness();
 +    const logger = vi
 +      .spyOn(loggers, 'logChatCompression')
@@ -213893,12 +214283,17 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      });
 +    try {
 +      const result = await compress(harness);
-+      expect(result.newHistory).toBeNull();
-+      expect(result.info.compressionStatus).toBe(
-+        CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+      );
++      expect(result.newHistory).not.toBeNull();
++      expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 +      expect(result.info.output?.text).toBe('');
-+      expect(result.info.warning).toContain('Telemetry unavailable');
++      expect(logger).not.toHaveBeenCalled();
++      if (result.newHistory === null)
++        throw new Error('Expected an admitted candidate');
++      await expect(result.afterCommit()).rejects.toThrow(
++        'Telemetry unavailable',
++      );
++      expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++      expect(result.newHistory).not.toBeNull();
 +    } finally {
 +      logger.mockRestore();
 +    }
@@ -213919,7 +214314,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -        firePreCompactEvent,
 -        firePostCompactEvent: vi.fn().mockResolvedValue(undefined),
 -      },
-+  it('fires hooks in order and gives PostCompact the committed summary body', async () => {
++  it('fires PostCompact only during explicit finalization and preserves the composed text without trimming', async () => {
 +    const harness = makeHarness();
 +    harness.setHookSystem(true);
 +    const order: string[] = [];
@@ -213944,11 +214339,22 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -    expect(firePreCompactEvent).toHaveBeenCalledWith(
 -      PreCompactTrigger.Manual,
 -      'focus auth',
-+    await compress(harness, { customInstructions: 'Retain user intent.' });
++    const composedText = ` \n${snapshot('replacement')}\n retained input \n`;
++    vi.mocked(attachments.composePostCompactHistory).mockReturnValueOnce([
++      { role: 'user', parts: [{ text: composedText }] },
++      baseHistory()[1],
++    ]);
++    const result = await compress(harness, {
++      customInstructions: 'Retain user intent.',
++    });
++    expect(order).toEqual(['pre']);
++    if (result.newHistory === null)
++      throw new Error('Expected an admitted candidate');
++    await result.afterCommit();
 +    expect(order).toEqual(['pre', 'post']);
 +    expect(harness.firePostCompactEvent).toHaveBeenCalledWith(
 +      'manual',
-+      snapshot(),
++      composedText,
        undefined,
      );
 +    const generated = harness.generateText.mock
@@ -215000,7 +215406,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    if (
      provider.authType === AuthType.USE_GEMINI ||
      provider.authType === AuthType.USE_VERTEX_AI
-@@ -333,161 +337,94 @@
+@@ -333,161 +337,102 @@
    }
    if (provider.enableCacheControl === false) return false;
    if (provider.authType === AuthType.USE_ANTHROPIC) return true;
@@ -215019,11 +215425,19 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -  );
 -}
 -
++export type CompressionResult =
++  | { newHistory: null; info: ChatCompressionInfo }
++  | {
++      newHistory: Content[];
++      info: ChatCompressionInfo;
++      afterCommit: () => Promise<void>;
++    };
++
  export class ChatCompressionService {
    async compress(
      chat: GeminiChat,
      opts: CompressOptions,
-   ): Promise<{ newHistory: Content[] | null; info: ChatCompressionInfo }> {
+-  ): Promise<{ newHistory: Content[] | null; info: ChatCompressionInfo }> {
 -    const {
 -      promptId,
 -      force,
@@ -215033,6 +215447,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      trigger,
 -      signal,
 -    } = opts;
++  ): Promise<CompressionResult> {
 +    const { promptId, force, config, originalTokenCount, trigger, signal } =
 +      opts;
      const compactTrigger = trigger ?? (force ? 'manual' : 'auto');
@@ -215210,7 +215625,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Fire PreCompact hook before compression begins. Pass any user-supplied
      // `/compress` instructions so hook scripts can read / log / amend them
-@@ -509,619 +446,754 @@
+@@ -509,619 +454,722 @@
          // `getAdditionalContext()` sanitises (`<`/`>` → `&lt;`/`&gt;`) so a
          // hook can't inject XML structure into the summary prompt. Mirrors
          // every other call-site in this repo (toolHookTriggers, agent.ts,
@@ -215334,7 +215749,8 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        info: {
 +          originalTokenCount,
 +          newTokenCount: originalTokenCount,
-+          compressionStatus: CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          compressionStatus:
++            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +          rejectedAttempts,
 +        },
 +      };
@@ -215866,7 +216282,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    // is carried in the shape rather than recovered from the status later.
 +    type AttemptOutcome =
 +      | {
-+          /** Satisfied every rule; this candidate replaces the history. */
++          /** Satisfied the draw rules; Chat still owns history acceptance. */
 +          kind: 'accepted';
 +          accounting: AttemptAccounting;
 +          extraHistory: Content[];
@@ -215973,7 +216389,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        }
 +        config
 +          .getDebugLogger()
-+          .warn(`[chat-compression] compaction failed closed: ${String(error)}`);
++          .warn(
++            `[chat-compression] compaction failed closed: ${String(error)}`,
++          );
 +        return {
 +          kind: 'terminal',
 +          status: CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
@@ -216069,6 +216487,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      // Use the new composer — assembles summary + ack + file restores +
 -      // image restore. No tail preservation, no continuation bridge.
 +      let extraHistory: Content[];
++      let renderedSnapshot: string;
        try {
 -        extraHistory = await composePostCompactHistory(
 -          historyForCompose,
@@ -216086,17 +216505,18 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -            runningSubagents: collectActiveSubagents(config),
 -          },
 -        );
++        const composed = composePostCompactHistory(
++          historyBeforeCompaction,
++          acceptance.snapshot,
++          {
++            planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
++            runningSubagents: collectActiveSubagents(config),
++            turn,
++          },
++        );
 +        extraHistory = [
 +          ...(startupContext ? [startupContext] : []),
-+          ...composePostCompactHistory(
-+            historyBeforeCompaction,
-+            acceptance.snapshot,
-+            {
-+              planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
-+              runningSubagents: collectActiveSubagents(config),
-+              turn,
-+            },
-+          ),
++          ...composed,
 +        ];
 -      } catch (err) {
 -        // The summary side-query already succeeded; only restoration
@@ -216106,6 +216526,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -        // turn AND bypasses the COMPRESSION_FAILED breaker. The summary
 -        // still reduces context, so this is a degraded success, not a
 -        // compression failure.
++        renderedSnapshot = composed[0]!
++          .parts!.map((part) => part.text ?? '')
++          .join('');
 +      } catch (error) {
 +        // Assembly reads only the frozen history, which a conflicting
 +        // authored instruction in it can refuse; it does not depend on which
@@ -216332,7 +216755,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        kind: 'accepted',
 +        accounting,
 +        extraHistory,
-+        renderedSnapshot: stateSnapshotText(acceptance.snapshot),
++        renderedSnapshot,
 +        newTokenCount,
        };
 -    } else if (!canCalculateNewTokenCount) {
@@ -216393,42 +216816,19 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -    } else if (newTokenCount > originalTokenCount) {
 +    }
 +
-+    const { extraHistory, newTokenCount } = outcome;
++    const { extraHistory, newTokenCount, renderedSnapshot } = outcome;
 +    const outputAccounting = accountingFor(outcome.accounting);
 +    const compressionOutputTokenCount =
 +      outcome.accounting.usage?.candidatesTokenCount ?? 0;
-+
-+    // One accepted transition emits one compaction telemetry event. Emitting
-+    // per draw would report a compression for candidates that never replaced
-+    // anything.
-+    try {
-+      logChatCompression(
-+        config,
-+        makeChatCompressionEvent({
-+          tokens_before: exactOriginalTokenCount,
-+          tokens_after: newTokenCount,
-+          compression_input_token_count: summaryRequestTokenCount,
-+          compression_output_token_count: compressionOutputTokenCount,
-+          cache_sharing_attempted: true,
-+          cache_sharing_used: true,
-+        }),
-+      );
-+    } catch (error) {
-       return {
-         newHistory: null,
-         info: {
+-      return {
+-        newHistory: null,
+-        info: {
 -          originalTokenCount,
 -          newTokenCount,
-+          originalTokenCount: exactOriginalTokenCount,
-+          newTokenCount: exactOriginalTokenCount,
-           compressionStatus:
+-          compressionStatus:
 -            CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
-+            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+          warning: `Compaction telemetry failed: ${String(error)}`,
-+          output: outputAccounting,
-+          rejectedAttempts,
-         },
-       };
+-        },
+-      };
 -    } else {
 -      // Fire PostCompact event after successful compression
 -      try {
@@ -216451,46 +216851,19 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      } catch (err) {
 -        config.getDebugLogger().warn(`PostCompact hook failed: ${err}`);
 -      }
-+    }
- 
-+    // The hook observes an accepted transition, so it runs once, after one is
-+    // accepted. Running it per draw would repeat its effects for candidates
-+    // that were then refused.
-+    try {
-+      const postCompactTrigger =
-+        compactTrigger === 'manual'
-+          ? PostCompactTrigger.Manual
-+          : PostCompactTrigger.Auto;
-+      await config
-+        .getHookSystem()
-+        ?.firePostCompactEvent(
-+          postCompactTrigger,
-+          outcome.renderedSnapshot.trim(),
-+          signal,
-+        );
-+    } catch (error) {
-+      config
-+        .getDebugLogger()
-+        .warn(`PostCompact hook failed; preserving original history: ${error}`);
-       return {
+-
+-      return {
 -        newHistory: extraHistory,
-+        newHistory: null,
-         info: {
+-        info: {
 -          originalTokenCount,
 -          newTokenCount,
 -          newTokenCountIsEstimated: true,
 -          compressionStatus: CompressionStatus.COMPRESSED,
 -          triggerReason,
 -          ...(compactionWarning && { warning: compactionWarning }),
-+          originalTokenCount: exactOriginalTokenCount,
-+          newTokenCount: exactOriginalTokenCount,
-+          compressionStatus:
-+            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+          output: outputAccounting,
-+          rejectedAttempts,
-         },
-       };
-     }
+-        },
+-      };
+-    }
 +
 +    return {
 +      newHistory: extraHistory,
@@ -216501,6 +216874,28 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        triggerReason,
 +        output: outputAccounting,
 +        rejectedAttempts,
++      },
++      afterCommit: async () => {
++        logChatCompression(
++          config,
++          makeChatCompressionEvent({
++            tokens_before: exactOriginalTokenCount,
++            tokens_after: newTokenCount,
++            compression_input_token_count: summaryRequestTokenCount,
++            compression_output_token_count: compressionOutputTokenCount,
++            cache_sharing_attempted: true,
++            cache_sharing_used: true,
++          }),
++        );
++        await config
++          .getHookSystem()
++          ?.firePostCompactEvent(
++            compactTrigger === 'manual'
++              ? PostCompactTrigger.Manual
++              : PostCompactTrigger.Auto,
++            renderedSnapshot,
++            signal,
++          );
 +      },
 +    };
    }
@@ -360328,7 +360723,7 @@ diff --git a/docs/design/background-resume-history.md b/docs/design/background-r
 diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-history-recording.md
 --- /dev/null
 +++ b/docs/design/runtime-history-recording.md
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,142 @@
 +# Runtime history recording
 +
 +This document describes the shared source implementation and its verification
@@ -360460,9 +360855,11 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +executed. The two image-gate fake providers are amended with the new recording
 +contract; those gates were not run.
 +
-+An independently reproduced compaction race remains a separate follow-up: it
-+can replace input admitted while the summary is generated. The journal records
-+that installed state accurately but does not repair the lost-input decision.
++Compaction acceptance is bound to the semantic history revision captured
++before asynchronous preparation. A stale summary retains current history and
++its output evidence without claiming an accepted replacement; the ownership,
++deferred hooks and nullable count semantics are described in
++[the compaction design](compaction-history-ownership.md).
 +
 +This contract belongs to the shared Qwen runtime and applies independently of
 +provider, session length, UI, or benchmark configuration. Direct vLLM callers do
@@ -360497,7 +360894,7 @@ diff --git a/packages/core/src/agents/backends/types.ts b/packages/core/src/agen
 diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages/core/src/core/runtime-history-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/runtime-history-recording.test.ts
-@@ -0,0 +1,489 @@
+@@ -0,0 +1,572 @@
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
 +import { tmpdir } from 'node:os';
@@ -360862,6 +361259,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  });
 +  vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValueOnce({
 +    newHistory: structuredClone(compressed),
++    afterCommit: async () => {},
 +    info: {
 +      originalTokenCount: 1000,
 +      newTokenCount: 200,
@@ -360886,6 +361284,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +      { role: 'user', parts: [{ text: 'accepted summary' }] },
 +      { role: 'model', parts: [{ text: 'acknowledged' }] },
 +    ],
++    afterCommit: async () => {},
 +    info: {
 +      originalTokenCount: 1000,
 +      newTokenCount: 200,
@@ -360987,6 +361386,87 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  ).toThrow();
 +  expect(f.chat.getRuntimeHistory()).toEqual(original);
 +});
++
++it.each([
++  CompressionStatus.COMPRESSED,
++  CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++])(
++  'preserves input admitted during compaction and records its real disposition: %s',
++  async (status) => {
++    const f = await setup(`stale-compaction-${status}`);
++    await f.chatSend([{ text: 'original input' }]);
++    f.properties['getFileReadCache'] = () => ({
++      markAllReadsEvictedFromHistory: () => 0,
++    });
++    let release!: () => void;
++    let entered!: () => void;
++    const hold = new Promise<void>((resolve) => {
++      release = resolve;
++    });
++    const entry = new Promise<void>((resolve) => {
++      entered = resolve;
++    });
++    const afterCommit = vi.fn(async () => {});
++    const output = {
++      maxOutputTokens: 100,
++      usage: null,
++      text: '  literal generated draw\n',
++      reasoning: 'literal reasoning',
++      rawResponses: ['{"text":"  literal generated draw\\n"}'],
++      newTokenCount: 200,
++      snapshotBytes: 30,
++      incompleteToolCalls: [],
++      finishReason: 'STOP',
++      requestAttempts: 1,
++    };
++    vi.spyOn(
++      ChatCompressionService.prototype,
++      'compress',
++    ).mockImplementationOnce(async () => {
++      entered();
++      await hold;
++      const info = {
++        originalTokenCount: 1000,
++        newTokenCount: 200,
++        compressionStatus: status,
++        output,
++        rejectedAttempts: [],
++      };
++      return status === CompressionStatus.COMPRESSED
++        ? {
++            newHistory: [{ role: 'user', parts: [{ text: 'stale summary' }] }],
++            info,
++            afterCommit,
++          }
++        : { newHistory: null, info };
++    });
++    const pending = f.chat.tryCompress('held-compaction', true);
++    await entry;
++    const accepted: Content = {
++      role: 'user',
++      parts: [{ text: 'New accepted input 雪' }],
++    };
++    f.chat.addHistory(accepted);
++    await f.recorder.flush();
++    const expected = f.chat.getRuntimeHistory();
++    release();
++    const info = await pending;
++    expect(info.compressionStatus).toBe(
++      status === CompressionStatus.COMPRESSED
++        ? CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED
++        : status,
++    );
++    expect(info.newTokenCount).toBeNull();
++    expect(info.output).toEqual(output);
++    expect(info.postCompactionHistory).toBeUndefined();
++    expect(afterCommit).not.toHaveBeenCalled();
++    const observed = await f.observe();
++    expect(f.chat.getRuntimeHistory()).toEqual(expected);
++    expect(observed.runtime).toEqual(expected);
++    expect(observed.indexed).toEqual(expected.history);
++    expect(observed.indexedImages).toEqual(expected.imagePayloads);
++  },
++);
 diff --git a/packages/core/src/memory/extractionAgentPlanner.test.ts b/packages/core/src/memory/extractionAgentPlanner.test.ts
 --- a/packages/core/src/memory/extractionAgentPlanner.test.ts
 +++ b/packages/core/src/memory/extractionAgentPlanner.test.ts
@@ -363475,3 +363955,66 @@ diff --git a/packages/cli/src/ui/utils/tool-call-checkpoint.ts b/packages/cli/sr
 +    );
 +  }
 +}
+diff --git a/docs/design/compaction-history-ownership.md b/docs/design/compaction-history-ownership.md
+--- /dev/null
++++ b/docs/design/compaction-history-ownership.md
+@@ -0,0 +1,59 @@
++# Compaction history ownership
++
++Compaction prepares a candidate while token counting, hooks and generation
++await other work. Input admitted during those waits remains part of the
++conversation. A candidate derived from an earlier state cannot replace it.
++
++Chat owns a semantic history revision. Admission, replacement, repair,
++assistant commits and compaction commits advance it, including rollback.
++The lossless inline-image-to-reference rendering path preserves the revision;
++the physical journal still records that representation change. Paired runtime
++replacement advances the revision because its image pool affects rendering.
++
++The revision is captured before the first asynchronous count or flush. An
++ordinary send carries its already measured count together with the revision
++of that request. Chat checks it before candidate generation and again before
++checkpoint admission, with no await between final comparison and installation.
++A stale candidate is refused with HISTORY_CHANGED. A candidate that already
++failed retains its specific failure reason. Both retain every generated draw
++and report an unknown current count as null, without installing or publishing
++a post-compaction history. The current history and image pool are recorded.
++
++The compression service returns a candidate and a deferred success callback.
++Only Chat invokes that callback, after checkpoint persistence and shared chat
++finalization. Telemetry and PostCompact therefore observe an accepted
++transition. PostCompact receives the text projection of the actual composed
++snapshot message, including retained input text and the resume trailer. Media
++remains in the complete Content recorded alongside the transition; the hook's
++summary field is text. Input admitted during the deferred hook follows the
++accepted checkpoint and is not a reason to revoke that transition.
++
++A failure in accepted-state finalization uses CompactionFinalizationError and
++keeps the committed outcome. It cannot be reported as a refusal that preserved
++the source history. Refused candidates neither run the callback nor start a
++new request segment. Automatic generation still counts the resulting current
++request before dispatch; this mechanism does not automatically retry a stale
++compaction or lock ordinary history admission.
++
++The record projection preserves a null retained count. Numeric failed-candidate
++measurements remain separate from the retained-history count. Native admission
++must require the field and allow null only on unsuccessful outcomes; success
++requires an exact count. CLI, ACP and agent notices must not substitute the
++old count or claim unchanged original history when current history changed.
++
++The reproduced source baseline is agent_service 20ee5e7. Tests held real
++compression generation and pre/post candidate counts while admitting input;
++the summary erased that input and both canonical readers reproduced the loss.
++Failure controls retained the new input but reported a stale retained count.
++Independent candidate source tests cover actual service generation and count
++waits, ordinary send's precomputed count, failed draws, deferred hooks,
++recording delay/failure and lossless image conversion. Live state agrees with
++both canonical readers, and stale outcomes retain admitted input. Permanent
++tests also exercise these owner boundaries and downstream presentation.
++Generation and tokenizer responses are local fixtures, not provider calls;
++their numeric counts are test data. No compilation, native execution, image or
++deployment verification is claimed here; those require the owner gates.
++
++This is shared Qwen history ownership for every provider and session length.
++vLLM does not own client conversation admission or compaction installation;
++there is no backend state corresponding to this correction.
