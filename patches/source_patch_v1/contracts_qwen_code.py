@@ -726,7 +726,7 @@ def _validate_stream_commit_after(state: State) -> None:
     require_text(
         state,
         "packages/core/src/agents/agent-transcript.ts",
-        "incompleteToolCalls: structuredClone([\n              ...record.incompleteToolCalls,",
+        "incompleteToolCalls: structuredClone([\n                ...record.incompleteToolCalls,",
         label=label,
     )
     # The strict-mode length case once asserted the prefix was suppressed; it
@@ -3118,7 +3118,7 @@ def _validate_literal_response_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "await this.chatRecordingService.recordAssistantTurn({\n          model,\n          message,",
+            "await this.chatRecordingService.recordAssistantTurn({\n          origin,\n          model,\n          message,",
             "this.history.push({\n          role: 'model',\n          parts: message,",
         ),
         label="one model-part sequence for recording and live history",
@@ -8129,7 +8129,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 5;",
+            "export const CHAT_RECORDING_VERSION = 6;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8497,7 +8497,7 @@ def _validate_served_accounting_after(state: State) -> None:
         ("const replay = await replayTranscriptRecordPage({",
          "if (replay.partial || replay.replayError !== undefined)",
          "Cannot replay canonical recording", "this.replayState = nextReplayState;",
-         "const inputs = replay.updates.map"),
+         "const inputs = replay.updates.flatMap"),
         label=label,
         location=cli + "serve/virtual-subagent-sessions.ts",
     )
@@ -8505,6 +8505,89 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses an incomplete canonical replay for %s (reload: %s)",
         "latches a canonical replay failure before publishing its partial page or live suffix",
     ), label=label)
+    _require_all(state, core + "core/model-output-origin.ts", (
+        "export function requireModelGenerationOrigin(", "Object.keys(value).length !== 3",
+        "value.kind !== 'model'", "export function canonicalGenerationOrigin(",
+    ), label=label)
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "canonicalGenerationOrigin(record)", "this.generations.has(key)",
+        "this.generationRecords.has(record.uuid)", "multiple canonical commits",
+    ), label=label)
+    _require_all(state, core + "utils/transcript-records.ts", (
+        "requireModelGenerationOrigin(value['origin'])", "subtype !== 'adopted_message'",
+        "subtype !== 'realtime_message'", "An abandoned generation cannot contain a conversation message",
+    ), label=label)
+    _require_all(state, core + "agents/agent-stream-records.ts", (
+        "v: 2;", "requireAgentStreamRecord(", "requireGenerationAttemptMeta(",
+        "export class AgentAttemptTextReplay", "output or a second disposition followed a committed attempt",
+        "!final.text.startsWith(state.text)", "!final.thoughtText.startsWith(state.thoughtText)",
+        "requireDispositions(committing: ReadonlySet<string>)", "readGenerationAttemptCommit(",
+    ), label=label)
+    writer_path = core + "agents/agent-transcript.ts"
+    writer = _require_all(state, writer_path, (
+        "fs.constants.O_NOFOLLOW", "fs.constants.O_EXCL", "createAgentStreamRecord(event)",
+        "fs.fsyncSync(streamFd)", "writeFailure ??= { error }", "streamAttempts.finish()",
+        "stat.dev !== streamIdentity.dev", "stat.ino !== streamIdentity.ino",
+    ), label=label)
+    _require_ordered(writer.split("const commitAttempt =", 1)[1], (
+        "flushStreamText();", "streamAttempts.settle(origin,", "write();",
+    ), label=label, location=writer_path)
+    reader_path = cli + "serve/virtual-subagent-sessions.ts"
+    reader = _require_all(state, reader_path, (
+        "withReadBounds", "this.retainedStream.handle.stat()", "before?.identity === transcript?.identity",
+        "before?.size === transcript?.size", "terminal === (this.task.status !== 'running')",
+        "await target.refreshAt(bounds)", "await this.refreshAt(bounds)",
+        "requireAgentStreamRecord(", "decodeJsonlRecord(", "this.attempts.settle(commit.origin, commit)",
+        "this.requestReplay.finish()", "this.attempts.finish()", "this.retentionTimer !== timer",
+    ), label=label)
+    _require_ordered(reader.split("if (stream.retired)", 1)[1], (
+        "if (this.streamTailPending)", "this.attempts.requireDispositions(committing)",
+        "this.streamIdentity = undefined", "this.streamOffset = 0",
+    ), label=label, location=reader_path)
+    for symbol in ("canonicalThroughTimestamp", "completedStreamRounds", "legacyStreamedSinceCanonical", "parseLineTolerant"):
+        forbid_text(state, reader_path, symbol, label=label)
+    _require_all(state, cli + "acp-integration/session/SubAgentTracker.ts", (
+        "export class SubagentPublicationError", "private pending: Promise<void>",
+        "this.publicationFailure ??= new SubagentPublicationError", "AgentEventType.ROUND_TEXT",
+        "await this.pending", "this.attempts.finish()", "qwenGenerationAttempt: update.attempt",
+    ), label=label)
+    require_text(state, cli + "acp-integration/session/Session.ts",
+                 "if (e instanceof SubagentPublicationError) throw e;", count=2, label=label)
+    _require_all(state, core + "agents/runtime/agent-core.ts", (
+        "origin: requireModelGenerationOrigin(attemptOrigin)", "attemptStartedAt = Date.now()",
+        "historyDisposition,", "this.recordTokenUsage(",
+    ), label=label)
+    _require_all(state, "packages/acp-bridge/src/transcript-replay.ts", (
+        "readGenerationAttemptCommit(record)", "qwenGenerationAttempt:", "commit.parts",
+        "Abandoned transcript generation", "status: abandoned ? 'failed' : 'in_progress'",
+    ), label=label)
+    _require_all(state, "packages/acp-bridge/src/compactionEngine.ts", (
+        "function sameAttemptUpdate(", "generationAttemptMeta(left)?.historyDisposition",
+        "this.textSlotIndex.text.delete(parent)", "this.textSlotIndex.thought.delete(parent)",
+    ), label=label)
+    require_text(state, "packages/sdk-typescript/src/daemon/index.ts", "  DaemonTerminalRenderer,", label=label)
+    _require_all(state, "packages/sdk-typescript/src/daemon/ui/transcript.ts", (
+        "function observeGenerationAttempt(", "previous?.complete && phase === 'content'",
+        "observeGenerationAttempt(state, attempt, 'usage', event)", "function pruneGenerationAttemptStates(",
+    ), label=label)
+    _require_all(state, cli + "ui/utils/export/collect.ts", (
+        "generationAttemptMeta(update._meta)", "uuid: this.currentMessage.uuid",
+        "timestamp: this.currentMessage.timestamp", "content.text.length === 0 && !usageMetadata",
+    ), label=label)
+    forbid_text(state, cli + "ui/utils/export/normalize.ts", "assistantMessageIndexByUuid", label=label)
+    _require_all(state, "packages/web-shell/client/components/messages/tools/SubAgentPanel.tsx", (
+        "tool.subAttempts?.map", "Abandoned attempt — excluded from conversation history",
+    ), label=label)
+    _require_all(state, core + "utils/transcript-attempt-origin.test.ts", (
+        "retains distinct attempt identities while only accepted parts enter resume history",
+        "refuses multiple generation commits", "does not invent a chat attempt",
+    ), label=label)
+    _require_all(state, cli + "serve/virtual-subagent-attempt-boundary.test.ts", (
+        "reads every byte after settled absence", "refuses a retired partial line",
+        "keeps a newly committed input before its concurrently appended live output",
+    ), label=label)
+    require_text(state, cli + "ui/utils/export/collect.test.ts",
+                 "preserves served usage once through collection and normalization", label=label)
     require_text(state, cli + "commands/review/cost-ledger.ts", "readCanonicalChatRecordsSync(file)", label=label)
     require_text(state, cli + "commands/review/lib/transcripts.ts", "readCanonicalChatRecordsSync(file)", label=label)
     forbid_text(state, cli + "commands/review/lib/transcripts.ts", "JSON.parse(line)", label=label)
@@ -10300,6 +10383,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
+            "Canonical version 6 binds every atomic accepted or abandoned generation to its real "
+            "chat attempt; abandoned output cannot become resume history. Live child version 2 "
+            "carries the same origin, and exact-prefix reconciliation preserves ordinary streaming, "
+            "canonical order, served usage and final dispositions across retained-file snapshots. "
+            "Unsettled disappearance, replacement, partial retirement and publication failures refuse. "
+            "Direct ACP, SDK reduction and compaction, deployed browser views and shared exports "
+            "retain attempt boundaries and label abandoned output outside the model's text. "
+            "Export usage has one owner at collection, including empty and reasoning-only output. "
             "TypeScript and Python SDK byte framing preserves whole records independent of I/O "
             "buffer size and refuses malformed or uncommitted records before admission. A "
             "finalized query cannot accept more work or hide refusal behind abort or cleanup; "

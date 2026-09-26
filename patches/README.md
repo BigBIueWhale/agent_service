@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `63b2d65291a8666aeb968fc1137b22b81df85a261da31f3554d558ec3cbcba21`
+- Review-diff SHA-256: `2e829a79a1e0855982b7d0ab03d6a4b2bbc59a5300e458bd6c501a61376d453e`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `bad0442604dbcddcdbc32a0199acec238562e01a8c73c838ec49a6891b6c5bdf`
+- Transformer-manifest SHA-256: `901cffb233405015e3668a33b44e7c26228071148435fffce834f8d662db0c56`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -339,7 +339,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 5`, independently
+Every physical canonical chat record carries `recordingVersion: 6`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -350,6 +350,14 @@ holding the current physical record and the request replay state; title writes
 are not duplicated to keep them within a tail window. This format governs the runtime chat JSONL that resume
 reads. `output/events.jsonl` retains stdout bytes under the separate stream
 contract and cannot serve as canonical history.
+
+Fresh canonical generations carry the producing chat attempt's exact origin.
+Accepted output is one complete assistant commit; abandoned output is system
+evidence and cannot enter resume history. Child live fragments use version 2
+and settle against the same origin with literal prefix checks. Shared ACP replay,
+SDK reduction, compaction, browser presentation and exports retain dispositions
+and served usage without merging retries or changing model text. A retired
+sidecar must be complete and settled before its cursor can be discarded.
 
 Every supported generation request is admitted by `pipeline.ts` immediately after
 `buildRequest`, before optional diagnostics and the SDK transport. The canonical

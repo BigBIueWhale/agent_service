@@ -735,8 +735,15 @@ print(json.dumps(found))
         records = [json.loads(line) for line in events.splitlines()]
         require(not any(record.get("type", "").startswith("control_") for record in records),
                 "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
-        require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        request_evidence = require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require_output_ownership(records)
+        expected_attempts = {(evidence["kv_scope"], evidence["owner"]["attempt_id"])
+                             for evidence in request_evidence if evidence["owner"]["kind"] == "chat"}
+        observed_attempts = {(record["origin"]["kv_scope"], record["origin"]["attempt_id"])
+                             for record in records if record["type"] == "assistant"
+                             and record["origin"]["kind"] == "model"}
+        require(observed_attempts == expected_attempts,
+                "a generation disappeared or changed attempt identity in the published record; inspect shared output publication")
         responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require(all(response["event"]["status"] == "completed" for response in responses if response["event"]["kind"] == "outcome"),
                 "ordinary provider responses did not complete decoding; inspect processing outcomes")
@@ -1281,8 +1288,15 @@ print(json.dumps(found))
         require(events.endswith(b"\n") and b"PROVIDER_FAILURE_PREFIX" in events,
                 "the refused generation's observed prefix was lost")
         records = [json.loads(line) for line in events.splitlines()]
-        require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        request_evidence = require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require_output_ownership(records)
+        expected_attempts = {(evidence["kv_scope"], evidence["owner"]["attempt_id"])
+                             for evidence in request_evidence if evidence["owner"]["kind"] == "chat"}
+        observed_attempts = {(record["origin"]["kv_scope"], record["origin"]["attempt_id"])
+                             for record in records if record["type"] == "assistant"
+                             and record["origin"]["kind"] == "model"}
+        require(observed_attempts == expected_attempts,
+                "a generation disappeared or changed attempt identity in the published record; inspect shared output publication")
         responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require([response["event"]["status"] for response in responses if response["event"]["kind"] == "outcome"] == ["failed"],
                 "provider refusal lost its processing failure; inspect the pipeline outcome")

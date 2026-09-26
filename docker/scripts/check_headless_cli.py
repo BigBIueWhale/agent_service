@@ -232,11 +232,20 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 5 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 6 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all("recordingVersion" not in event for event in events),
             "canonical history entered stdout evidence; inspect the two recording paths")
     require(all(r["sessionId"] == session for r in records), "transcript ownership drifted")
+    expected_origins = [{"kind": "model", "attempt_id": evidence["owner"]["attempt_id"],
+                         "kv_scope": evidence["kv_scope"]}
+                        for evidence in request_evidence if evidence["owner"]["kind"] == "chat"]
+    fresh_assistants = [record for record in records
+                        if record["type"] == "assistant" and record.get("subtype") is None]
+    require([record.get("origin") for record in fresh_assistants] == expected_origins,
+            "canonical assistant commits lost their exact producing attempts; inspect GeminiChat and the shared recorder")
+    require(not any(record.get("subtype") == "generation_failure" for record in records),
+            "the successful two-generation fixture recorded an abandoned attempt; inspect canonical disposition")
     require([r["modelRequest"] for r in records if r["type"] == "model_request"] == request_evidence,
             "canonical and stdout request evidence differ")
     require([r["modelResponse"] for r in records if r["type"] == "model_response"] == response_evidence,
