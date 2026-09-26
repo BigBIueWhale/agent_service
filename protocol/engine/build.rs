@@ -22,6 +22,10 @@ fn main() {
     println!("cargo:rustc-env=STREAM_CONTRACT_SHA256={hash}");
     let mut generated = format!("pub const STREAM_CONTRACT_SHA256: &str = {hash:?};\n");
     generated.push_str(&format!(
+        "pub const STREAM_CONTRACT_ID: &str = {:?};\n",
+        compiled.schema_id
+    ));
+    generated.push_str(&format!(
         "pub const SUCCESS_SUBTYPE: &str = {:?};\npub const ERROR_SUBTYPES: [&str; {}] = {:?};\n",
         compiled.success_subtype,
         compiled.error_subtypes.len(),

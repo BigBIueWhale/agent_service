@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::json::{Document, Kind, Limits, Value};
 
 pub struct Compilation {
+    pub schema_id: String,
     pub rust: String,
     pub inventory: String,
     pub discriminators: BTreeMap<String, Vec<String>>,
@@ -80,8 +81,21 @@ pub fn compile(bytes: &[u8]) -> Result<Compilation, String> {
     {
         return Err(error("/$schema", "expected the owned Draft-07 dialect"));
     }
-    if root.get("$id").and_then(Value::as_str) != Some("urn:agent-service:stream-contract:3") {
-        return Err(error("/$id", "unexpected owned schema identity"));
+    let schema_id = root
+        .get("$id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| error("/$id", "missing owned schema identity"))?;
+    let revision = schema_id
+        .strip_prefix("urn:agent-service:stream-contract:")
+        .ok_or_else(|| error("/$id", "unexpected owned schema namespace"))?;
+    if revision.is_empty()
+        || revision.starts_with('0')
+        || !revision.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return Err(error(
+            "/$id",
+            "expected a positive decimal schema revision without leading zeros",
+        ));
     }
     let mut compiler = Compiler::default();
     compiler.node(root, "")?;
@@ -189,6 +203,7 @@ pub fn compile(bytes: &[u8]) -> Result<Compilation, String> {
         ));
     }
     let inventory = serde_json::to_string_pretty(&serde_json::json!({
+        "schema_id": schema_id,
         "dialect": "http://json-schema.org/draft-07/schema#",
         "object_schemas": compiler.object_schemas,
         "false_schemas": compiler.false_schemas,
@@ -199,6 +214,7 @@ pub fn compile(bytes: &[u8]) -> Result<Compilation, String> {
         "entries": entries,
     })).map_err(|cause| cause.to_string())?;
     Ok(Compilation {
+        schema_id: schema_id.to_string(),
         rust,
         inventory,
         discriminators,
@@ -396,11 +412,8 @@ impl Compiler {
                 return Err(error(path, "unsupported schema dialect"));
             }
         }
-        if let Some(identity) = value.get("$id") {
-            if !path.is_empty() || string(identity, path)? != "urn:agent-service:stream-contract:3"
-            {
-                return Err(error(path, "unsupported nested schema resource identity"));
-            }
+        if value.get("$id").is_some() && !path.is_empty() {
+            return Err(error(path, "unsupported nested schema resource identity"));
         }
         if let Some(definitions) = value.get("definitions") {
             if !path.is_empty() {
@@ -694,6 +707,57 @@ impl Compiler {
 mod tests {
     use super::*;
     const SOURCE: &[u8] = include_bytes!("../stream-contract-v5.json");
+
+    #[test]
+    fn schema_identity_is_derived_from_the_owned_definition() {
+        let mut source: serde_json::Value = serde_json::from_slice(SOURCE).unwrap();
+        let compiled = compile(SOURCE).unwrap();
+        assert_eq!(compiled.schema_id, source["$id"].as_str().unwrap());
+        assert_eq!(compiled.schema_id, crate::STREAM_CONTRACT_ID);
+        // Changing only the revision must not require a compiler edit.
+        for revision in ["1", "12", "100000000000000000000000000000000000000"] {
+            let identity = format!("urn:agent-service:stream-contract:{revision}");
+            source["$id"] = serde_json::json!(identity);
+            let compiled = compile(&serde_json::to_vec(&source).unwrap()).unwrap();
+            assert_eq!(compiled.schema_id, identity);
+            let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
+            assert_eq!(inventory["schema_id"], identity);
+        }
+    }
+
+    #[test]
+    fn schema_identity_refuses_missing_foreign_malformed_and_nested_resources() {
+        let source: serde_json::Value = serde_json::from_slice(SOURCE).unwrap();
+        for identity in [
+            serde_json::Value::Null,
+            serde_json::json!(3),
+            serde_json::json!("urn:other:stream-contract:5"),
+            serde_json::json!("urn:agent-service:stream-contract:"),
+            serde_json::json!("urn:agent-service:stream-contract:0"),
+            serde_json::json!("urn:agent-service:stream-contract:05"),
+            serde_json::json!("urn:agent-service:stream-contract:-1"),
+            serde_json::json!("urn:agent-service:stream-contract:5#nested"),
+        ] {
+            let mut changed = source.clone();
+            changed["$id"] = identity;
+            assert!(compile(&serde_json::to_vec(&changed).unwrap())
+                .err()
+                .unwrap()
+                .contains("/$id"));
+        }
+        let mut missing = source.clone();
+        missing.as_object_mut().unwrap().remove("$id");
+        assert!(compile(&serde_json::to_vec(&missing).unwrap())
+            .err()
+            .unwrap()
+            .contains("/$id"));
+        let mut nested = source.clone();
+        nested["definitions"]["streamEvent"]["$id"] = source["$id"].clone();
+        assert!(compile(&serde_json::to_vec(&nested).unwrap())
+            .err()
+            .unwrap()
+            .contains("unsupported nested schema resource identity"));
+    }
 
     #[test]
     fn owned_vocabulary_inventory_is_complete() {
