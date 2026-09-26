@@ -8385,6 +8385,47 @@ def _validate_served_accounting_after(state: State) -> None:
         "Thread.currentThread() == caller", "SDK executor cannot admit asynchronous work",
     ), label=label)
     java_tests = "packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/"
+    _require_all(state, java_cli + "protocol/RecordAdmission.java", (
+        "StrictJson.parseObject", "StreamSchema.validate(record)", "observe(record)",
+        "new StreamRecord(json, record)", "public synchronized void finish()",
+        "session.requests.finish()", "partial.finish()", "terminal record identity is repeated",
+    ), label=label)
+    _require_all(state, java_cli + "protocol/RequestEvidence.java", (
+        "StreamSchema.sha256(bytes)", "slices.messages.equals(expected)",
+        "new ArrayList<>(responses.keySet())", "state.digest.update(bytes)",
+        "processingStatus", "EOF omits a response completion",
+    ), label=label)
+    _require_all(state, java_cli + "protocol/StreamSchema.java", (
+        'getResourceAsStream("/stream-contract-v5.json")', "unsupported packaged schema keyword",
+        "Deque<Task>", "checkReferenceCycle", "longValueExact()",
+    ), label=label)
+    _require_all(state, java_cli + "session/Session.java", (
+        "implements AutoCloseable", "admission.admit(line, expectedSession)",
+        "getResumeSessionId()", "controls.remove(id)", "record.isRootResult()",
+        "target.onRecord(this, record)", "response.attachStreamRecord(record)",
+        "transport.finish(this::receive)", "admission.finish()", "cancelled.cancel()",
+        "RecordViews.project", "failure.compareAndSet(null, primary)",
+    ), label=label)
+    forbid_text(state, java_cli + "session/Session.java", "onOtherMessage", label=label)
+    _require_all(state, java_cli + "transport/process/ProcessTransport.java", (
+        "public void finish(Consumer<String> records)", "inputEnded.set(true)",
+        "records.accept(line)", "process.waitFor()", "if (exit != 0)",
+    ), label=label)
+    _require_all(state, java_cli + "QwenCodeCli.java", (
+        "try (Session session = newSession(transportOptions))",
+        "Query did not complete; inspect the original cause",
+    ), label=label)
+    _require_all(state, java_tests + "protocol/RecordAdmissionTest.java", (
+        "replaysAllSharedEvidenceIncludingResumedAndLiveWindows", "refusesEveryIncompletePrefixAtEof",
+        "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
+    ), label=label)
+    _require_all(state, java_tests + "session/SessionRecordTest.java", (
+        "initializationAndOrdinaryTurnsDeliverCompleteEvidenceInOrder", "childTerminalDoesNotFinishRootPrompt",
+        "shutdownDrainsOpenEvidenceAndRefusesItsTruncatedPrefix", "resumeRejectsAnotherSessionBeforeDeliveringItsInitialization",
+        "cancellationKeepsReadingAndSuppressesALatePermissionReply", "typedToolValuesPreserveNullMembersAndDeepJson",
+        "admittedStatusEventsAndLargeIntegersKeepTheirTypedValues",
+        "concurrentCloseCannotSucceedWhileCompletenessIsStillPending",
+    ), label=label)
     _require_all(state, java_tests + "transport/process/JsonLineReaderTest.java", (
         "preservesLargeUnicodeRecordsAcrossEveryFragmentSize", "preservesPrefixThenLatchesMalformedUtf8",
         "refusesEveryNonemptyEofSuffix", "bareCarriageReturnDoesNotCommitARecord",
@@ -10232,8 +10273,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Java CLI stdout uses strict UTF-8 and LF commitment with no record-size cap. "
             "Its shared task helper propagates failures; transport reads latch the first "
             "failure before cancellation and refuse later work. Executor dispatch must be "
-            "asynchronous, and startup rejection closes the owned process. Java versioned "
-            "schema and evidence admission remain separate required interpretation work."
+            "asynchronous, and startup rejection closes the owned process. Java admission uses "
+            "the exact bound schema, replays original request spellings and response lifetimes, "
+            "and preserves complete immutable records before typed views and callbacks. "
+            "Initialization and controls match owned identities; child results cannot finish "
+            "root prompts. Closing ends input, drains evidence and checks complete EOF before "
+            "success; convenience queries propagate that refusal. Resume restarts only after "
+            "the prior process ends and binds the requested session identity. Shared Java JSON "
+            "parsing rejects ambiguous or non-scalar records without parser buffer caps."
         ),
         removal_condition=(
             "Upstream supplies durable owned observations, required canonical writers, strict replay, "

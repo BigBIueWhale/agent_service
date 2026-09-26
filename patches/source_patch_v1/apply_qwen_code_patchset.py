@@ -46,6 +46,11 @@ def build_patchset(artifact_root: Path) -> PatchSet:
         try:
             if state["packages/sdk-python/src/qwen_code_sdk/stream-contract-v5.json"].encode("utf-8") != schema:
                 raise PatchRefusedError("Python SDK stream schema differs from its authoritative source")
+            if state["packages/sdk-java/qwencode/src/main/resources/stream-contract-v5.json"].encode("utf-8") != schema:
+                raise PatchRefusedError("Java SDK stream schema differs from its authoritative source")
+            if state["packages/sdk-java/qwencode/src/test/resources/record-evidence.json"] != state[
+                    "packages/sdk-python/tests/fixtures/record-evidence.json"]:
+                raise PatchRefusedError("Java and Python SDK evidence fixtures differ")
             for name, contents in vectors.items():
                 if state[f"packages/core/src/utils/__fixtures__/{name}.json"].encode("utf-8") != contents:
                     raise PatchRefusedError(f"shared stream test vectors drifted: {name}")
