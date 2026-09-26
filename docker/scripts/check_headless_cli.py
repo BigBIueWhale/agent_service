@@ -232,9 +232,9 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 6 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 7 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
-    require(all("recordingVersion" not in event for event in events),
+    require(all("recordingVersion" not in event and event.get("subtype") != "runtime_history" for event in events),
             "canonical history entered stdout evidence; inspect the two recording paths")
     require(all(r["sessionId"] == session for r in records), "transcript ownership drifted")
     expected_origins = [{"kind": "model", "attempt_id": evidence["owner"]["attempt_id"],
@@ -244,6 +244,38 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
                         if record["type"] == "assistant" and record.get("subtype") is None]
     require([record.get("origin") for record in fresh_assistants] == expected_origins,
             "canonical assistant commits lost their exact producing attempts; inspect GeminiChat and the shared recorder")
+    history = None
+    edits = 0
+    for record in records:
+        if record.get("subtype") == "runtime_history":
+            require("message" not in record, "history edits also claim display-message ownership")
+            change = record["systemPayload"]
+            if change["kind"] == "checkpoint":
+                require(change["state"]["imagePayloads"] == [], "text fixture unexpectedly acquired images")
+                history = list(change["state"]["history"])
+            else:
+                require(change["kind"] == "splice" and history is not None,
+                        "runtime history omits initialization or contains an unknown edit")
+                index, count = change["index"], change["deleteCount"]
+                require(change["beforeLength"] == len(history) and 0 <= index <= len(history)
+                        and 0 <= count <= len(history) - index and change["imagePayloads"] == [],
+                        "runtime history edit does not address its recorded state")
+                history[index:index + count] = change["insert"]
+                edits += 1
+        elif record["type"] == "assistant" and record.get("subtype") is None:
+            require(history is not None and record.get("historyLength") == len(history),
+                    "assistant commit does not address its recorded history position")
+            history.append(record["message"])
+    require(history is not None and edits >= 2, "both user and tool input need explicit history admission")
+    require(history[-1] == fresh_assistants[-1]["message"], "restored history lost the final assistant")
+    restored_calls = [part["functionCall"] for content in history for part in content.get("parts", [])
+                      if "functionCall" in part]
+    restored_results = [part["functionResponse"] for content in history for part in content.get("parts", [])
+                        if "functionResponse" in part]
+    require(len(restored_calls) == len(restored_results) == 1
+            and restored_calls[0]["id"] == restored_results[0]["id"] == uses[0]["id"]
+            and nonce in json.dumps(restored_results[0], ensure_ascii=False),
+            "explicit runtime history lost or duplicated the actual tool cycle")
     require(not any(record.get("subtype") == "generation_failure" for record in records),
             "the successful two-generation fixture recorded an abandoned attempt; inspect canonical disposition")
     require([r["modelRequest"] for r in records if r["type"] == "model_request"] == request_evidence,

@@ -578,8 +578,9 @@ def _validate_stream_commit_after(state: State) -> None:
             "recorded = true;",
             "this.refusal = { answered, draws: refusedBefore + 1 };",
             "} else {",
-            "await this.chatRecordingService.recordAssistantTurn({",
-            "this.history.push({",
+            "const committed = this.chatRecordingService.recordAssistantTurn({",
+            "this.history.push(accepted);",
+            "await committed;",
             "recorded = true;",
             "syncFunctionCallsField(terminal, committedCalls)",
             "historyDisposition: refused ? 'abandoned' : 'accepted',",
@@ -701,9 +702,10 @@ def _validate_stream_commit_after(state: State) -> None:
             "yield { value: chunk, historyDisposition: null };",
             "await this.chatRecordingService.recordGenerationFailure(",
             "incompleteToolCalls,",
-            "await this.chatRecordingService.recordAssistantTurn({",
+            "const committed = this.chatRecordingService.recordAssistantTurn({",
             "incompleteToolCalls,",
-            "this.history.push({",
+            "this.history.push(accepted);",
+            "await committed;",
             "setIncompleteToolCalls(terminal, incompleteToolCalls);",
             "historyDisposition: refused ? 'abandoned' : 'accepted',",
             "this.chatRecordingService.recordGenerationFailure(",
@@ -1860,8 +1862,13 @@ def _validate_compaction_event_after(state: State) -> None:
     forbid_text(state, service, "summary: attempt.summary", label=label)
     _require_ordered(_source(state, chat, label=label), (
         "info.postCompactionHistory = structuredClone(committedHistory);",
-        "await this.chatRecordingService.recordChatCompression({",
+        "const commit = this.chatRecordingService.recordChatCompression({",
+        "this.pendingCheckpoint = previousHistory;",
         "this.history = committedHistory;",
+        "await commit;",
+        "await this.chatRecordingService.flush();",
+        "if (installsHistory) this.history = previousHistory;",
+        "this.pendingCheckpoint = undefined;",
     ), label=label, location=chat)
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
     _require_ordered(_source(state, pipeline, label=label), (
@@ -1921,7 +1928,8 @@ def _validate_compaction_event_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "await this.chatRecordingService.recordChatCompression({",
+            "const commit = this.chatRecordingService.recordChatCompression({",
+            "await commit;",
             "await this.chatRecordingService.flush()",
         ),
         label=label,
@@ -3095,7 +3103,7 @@ def _validate_literal_response_after(state: State) -> None:
         chat,
         (
             "const consolidatedHistoryParts: Part[] = [];",
-            "await this.chatRecordingService.recordAssistantTurn({",
+            "const committed = this.chatRecordingService.recordAssistantTurn({",
             "          message,",
             "...consolidatedHistoryParts",
         ),
@@ -3118,8 +3126,11 @@ def _validate_literal_response_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "await this.chatRecordingService.recordAssistantTurn({\n          origin,\n          model,\n          message,",
-            "this.history.push({\n          role: 'model',\n          parts: message,",
+            "const committed = this.chatRecordingService.recordAssistantTurn({\n          historyLength: this.history.length,\n          origin,\n          model,\n          message,",
+            "const accepted: Content = {\n          role: 'model',\n          parts: structuredClone(message),",
+            "this.pendingAssistant = accepted;",
+            "this.history.push(accepted);",
+            "await committed;",
         ),
         label="one model-part sequence for recording and live history",
         location=chat_path,
@@ -4370,7 +4381,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "'A redraw carries the refusal notice of the turn it redraws and nothing else.',",
             "refusedBefore = refusal.draws;",
             "if (draw === 'redraw') {",
-            "this.history.push(notice);",
+            "currentUserContent = this.admitHistoryContent(notice);",
             "requestContents = this.getRequestHistoryForRoute(",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "            refusedBefore *\n            (partition.messageFraming + TURN_REFUSAL_NOTICE_MAX_BYTES);",
@@ -4578,12 +4589,14 @@ def _validate_compaction_budget_after(state: State) -> None:
         "Failed to restore startup context after compaction",
     ):
         forbid_text(state, "packages/core/src/core/client.ts", rebuilt, label=label)
-    require_text(
-        state,
-        "packages/core/src/core/client.ts",
-        "extraHistory && stripStartupContext(extraHistory),",
-        label=label,
-    )
+    _require_all(state, "packages/core/src/core/client.ts", (
+        "history = extraHistory ?? currentStartup;",
+        "JSON.stringify(savedStartup) !== JSON.stringify(currentStartup)",
+        "for (const context of this.pendingStartupContext)",
+        "this.getChat().addHistory(context)",
+        "this.pendingStartupContext = [];",
+    ), label=label)
+    forbid_text(state, "packages/core/src/core/client.ts", "stripStartupContext(extraHistory)", label=label)
     for test_path, name in (
         ("packages/core/src/utils/environmentContext.test.ts", "renders the context as upstream does when its workspace data fits"),
         ("packages/core/src/utils/environmentContext.test.ts", "cuts a listing past its cap to whole lines, ending in the upstream indicator"),
@@ -7610,8 +7623,9 @@ def _validate_tool_result_bound_after(state: State) -> None:
         (
             "if (streamError) throw streamError.error;",
             "assertOneToolCallPerTurn(consolidatedHistoryParts);",
-            "await this.chatRecordingService.recordAssistantTurn({",
-            "      this.history.push({",
+            "const committed = this.chatRecordingService.recordAssistantTurn({",
+            "this.history.push(accepted);",
+            "await committed;",
             "const committedCalls = consolidatedHistoryParts.filter(",
         ),
         label=label,
@@ -8129,7 +8143,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 6;",
+            "export const CHAT_RECORDING_VERSION = 7;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8480,13 +8494,54 @@ def _validate_served_accounting_after(state: State) -> None:
         forbid_text(state, path, "readStrict<ChatRecord>", label=label)
         forbid_text(state, path, "read<ChatRecord>", label=label)
     for path in (core + "services/session-transcript-reader.ts", core + "services/session-api-history.ts"):
-        _require_all(state, path, ("requireTranscriptRecord",), label=label)
+        _require_all(state, path, ("requireTranscriptRecord", "projectRuntimeHistoryCommit"), label=label)
+    _require_all(state, core + "services/runtime-history.ts", (
+        "export interface RuntimeHistoryState", "imagePayloads: StoredImagePayload[]",
+        "export class RuntimeHistoryReplay", "beforeLength !== this.length",
+        "historyLength !== this.length", "no initial history checkpoint",
+        "export type RuntimeHistoryCommit", "export class RuntimeHistoryCursor",
+        "ownedImageReferenceIds", "runtimeHistoryPosition",
+    ), label=label)
+    _require_all(state, core + "services/session-api-history.ts", (
+        "add(commit: RuntimeHistoryCommit)",
+        "record.subtype === 'runtime_history'", "record.historyLength!",
+        "buildRuntimeHistoryFromConversation", "finishState(): RuntimeHistoryState",
+    ), label=label)
+    _require_all(state, core + "services/session-transcript-reader.ts", (
+        "runtimeHistoryPosition: runtimeHistoryPosition(historyCommit)",
+        "historyCursor.apply(entry.runtimeHistoryPosition)",
+    ), label=label)
+    require_text(state, core + "utils/transcript-records.ts", "requireRuntimeAssistantContent(value['message'])", label=label)
+    _require_all(state, core + "utils/forkedAgent.ts", (
+        "extraHistory?: RuntimeHistoryState", "initialImagePayloads: params.extraHistory?.imagePayloads",
+        "params.imagePayloads", "imagePayloads: StoredImagePayload[]",
+    ), label=label)
+    for path in (core + "memory/manager.ts", core + "memory/skillReviewAgentPlanner.ts"):
+        _require_all(state, path, ("imagePayloads: StoredImagePayload[]", "imagePayloads: params.imagePayloads"), label=label)
+    require_text(state, core + "memory/extractionAgentPlanner.ts", "imagePayloads: cacheSafe.imagePayloads", label=label)
+    forbid_text(state, core + "services/session-api-history.ts", "initialHistory", label=label)
+    _require_all(state, core + "core/geminiChat.ts", (
+        "this.history = structuredClone(history)", "this.recordHistoryCheckpoint()",
+        "private installHistory(history: Content[])", "private admitHistoryContent(content: Content)",
+        "historyLength: this.history.length", "await this.chatRecordingService.flush()",
+        "this.pendingAssistant = accepted", "this.pendingCheckpoint = previousHistory",
+        "replaceHistoryImageParts", "withoutImageReferenceMetadata", "getRuntimeHistory(): RuntimeHistoryState",
+    ), label=label)
+    _require_all(state, core + "services/chatRecordingService.ts", (
+        "record = structuredClone(record)", "recordRuntimeHistory(change: RuntimeHistoryChange)",
+        "subtype: 'runtime_history'", "runtimeHistory: RuntimeHistoryState",
+    ), label=label)
+    _require_all(state, core + "services/image-payload-references.ts", (
+        "restore(payloads: readonly StoredImagePayload[])", "snapshot(): StoredImagePayload[]",
+        "payload.id !== expected.id || payload.bytes !== expected.bytes",
+        "imageReferenceId: stored.id", "IMAGE_REFERENCE_PATTERN", "withoutImageReferenceMetadata",
+    ), label=label)
     child_resume = core + "agents/background-agent-resume.ts"
     _require_all(state, child_resume, (
         "isTranscriptConversationRecord(record)", "selectTranscriptLeaf(records)",
         "walkTranscriptUuidChain(leaf, (uuid) => byUuid.get(uuid))",
         "byUuid.has(record.uuid)", "chain.gaps.length > 0 || chain.cycleUuid !== undefined",
-        "history: buildApiHistoryFromConversation(", "{ messages: chain }",
+        "buildRuntimeHistoryFromConversation({ messages: chain })",
         "lastRecordUuid: chain.at(-1)?.uuid ?? null",
         "initialParentUuid: recovery.lastRecordUuid", "recovery = recoverTranscript(records)",
         "prompt: recovery?.initialPrompt", "!recovery?.forkBootstrap",
@@ -10402,8 +10457,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
-            "Canonical version 6 binds every atomic accepted or abandoned generation to its real "
+            "Canonical version 7 binds every atomic accepted or abandoned generation to its real "
             "chat attempt; abandoned output cannot become resume history. Background recovery "
+            "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
+            "including image payload state, without inferring admission from display records. It "
             "preserves accepted empty/whitespace output, pending calls and Content boundaries, "
             "continues from the actual active leaf, and refuses duplicate, missing-parent or cyclic "
             "history at discovery and launch without losing the retained task. Live child version 2 "

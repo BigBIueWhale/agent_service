@@ -20,7 +20,7 @@ Evidence records cannot create conversation turns or child scopes. A full reques
 starts each invocation and committed compaction segment; subsequent records retain
 an unchanged message prefix and carry the replacement suffix and exact envelope.
 The native reader and SDK validate physical order and reconstructed UTF-8 hashes.
-Canonical history uses `recordingVersion: 6` and its own structurally disjoint
+Canonical history uses `recordingVersion: 7` and its own structurally disjoint
 request record. Full and indexed restoration validate evidence before projecting
 history; `output/events.jsonl` remains byte-exact stdout evidence.
 

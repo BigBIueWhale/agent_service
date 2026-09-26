@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `cec91eade3942c1def57d494f336d31119b4e2865b0ad1060b19a86c80065534`
+- Review-diff SHA-256: `fc97398b090161633dead1408bd189a10838d5724b5133528127cfc2ef72ccd3`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `37eae3a825e569d8864086eb7ce9a1bc3daea9f0f4ea360291b6d68e1fe0a695`
+- Transformer-manifest SHA-256: `133361fbed4b2e1cf11535ee63a71899be1879f6851e6fb7922c0d6e091e18fe`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -339,7 +339,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 6`, independently
+Every physical canonical chat record carries `recordingVersion: 7`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -350,6 +350,15 @@ holding the current physical record and the request replay state; title writes
 are not duplicated to keep them within a tail window. This format governs the runtime chat JSONL that resume
 reads. `output/events.jsonl` retains stdout bytes under the separate stream
 contract and cannot serve as canonical history.
+
+Canonical resume replays explicit runtime history checkpoints and splices with
+positioned assistant commits. Display inputs and request/response evidence cannot
+be supplied to the typed history accumulator. Checkpoints include the image
+payload store, and both ordinary and indexed readers preserve exact Content
+boundaries and saved startup context. Current startup guidance is admitted as
+new input when continuation begins. Older canonical formats cannot establish
+this state and are refused; inspect them with their matching client or begin a
+new session. They are not promoted into complete version 7 histories.
 
 Fresh canonical generations carry the producing chat attempt's exact origin.
 Accepted output is one complete assistant commit; abandoned output is system
