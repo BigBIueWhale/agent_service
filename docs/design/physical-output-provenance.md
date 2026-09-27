@@ -49,7 +49,14 @@ removes that fallback.
 `RequestContext` supplies strict-call behavior, a forced tool name, exact usage
 requirements and provider parsing options. The request body contains some but
 not all of those facts. Source inspection therefore cannot justify a verifier
-that reparses response bytes using only `model_request.body`.
+that reparses response bytes using only `model_request.body`. The frozen probe
+also found a non-strict streamed tool call without a provider ID received a
+clock-and-random ID. The converter now derives that client ID from the served
+terminal response ID and remapped parser slot, resolving collisions with IDs
+the provider supplied in the same response. Its 252 source converter tests
+passed, including repeated decoding and an ID collision. This removes local
+randomness from that conversion; a verifier must still distinguish the derived
+client ID from a provider-supplied ID.
 
 A frozen-source probe at `/tmp/codex-physical-decoded-review/baseline/REPORT.md`
 ran the actual OpenAI SDK, selected provider, converter, chat generation owner

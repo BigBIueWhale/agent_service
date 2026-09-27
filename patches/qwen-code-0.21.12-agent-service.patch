@@ -188779,7 +188779,58 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        toolArguments = '{}',
      ) =>
        converter.convertOpenAIChunkToGemini(
-@@ -447,13 +482,17 @@
+@@ -140,12 +175,50 @@
+       finishReason = 'tool_calls',
+     ) =>
+       converter.convertOpenAIChunkToGemini(
+         streamChunk('finish', {}, finishReason),
+         stream,
+       );
++
++    it('derives missing tool call IDs from the served response and parser slot', () => {
++      const decode = (providerId: string) => {
++        const stream = withStreamParser();
++        converter.convertOpenAIChunkToGemini(
++          streamChunk('start', {
++            tool_calls: [
++              {
++                index: 0,
++                function: { name: 'read_file', arguments: '{}' },
++              },
++              {
++                index: 1,
++                id: providerId,
++                function: { name: 'write_file', arguments: '{}' },
++              },
++            ],
++          }),
++          stream,
++        );
++        const response = converter.convertOpenAIChunkToGemini(
++          streamChunk('finish', {}, 'tool_calls'),
++          stream,
++        );
++        return response.candidates?.[0]?.content?.parts?.map(
++          (part) => part.functionCall?.id,
++        );
++      };
++
++      const first = decode('provider');
++      expect(first).toEqual(decode('provider'));
++      expect(first?.[0]).toMatch(/^call_[a-f0-9]{32}$/);
++      expect(first?.[1]).toBe('provider');
++      expect(new Set(first).size).toBe(2);
++
++      const collision = decode(first![0]!);
++      expect(collision).toEqual([`${first![0]}_2`, first![0]]);
++    });
+ 
+     it('creates fresh parser instances', () => {
+       const ctx1 = new StreamingToolCallParser();
+       const ctx2 = new StreamingToolCallParser();
+ 
+       expect(ctx1).toBeInstanceOf(StreamingToolCallParser);
+@@ -447,13 +520,17 @@
  
        expect(() =>
          converter.convertOpenAIChunkToGemini(
@@ -188798,7 +188849,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const stream = withStreamParser();
        const partial = converter.convertOpenAIChunkToGemini(
          streamChunk('open', {
-@@ -472,825 +511,327 @@
+@@ -472,825 +549,327 @@
        expect(partial.candidates?.[0]?.content?.parts).toEqual([]);
        expect(() =>
          converter.convertOpenAIChunkToGemini(
@@ -189877,7 +189928,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
    describe('convertGeminiRequestToOpenAI', () => {
      const createRequestWithFunctionResponse = (
        response: Record<string, unknown>,
-@@ -1991,13 +1532,96 @@
+@@ -1991,13 +1570,96 @@
        );
        expect(
          toolContent.find((p) => p.type === 'image_url')?.image_url?.url,
@@ -189975,7 +190026,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [
-@@ -2030,35 +1654,15 @@
+@@ -2030,35 +1692,15 @@
                },
              ],
            },
@@ -190014,7 +190065,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -2190,13 +1794,13 @@
+@@ -2190,13 +1832,13 @@
  
        // No separate user message should be created
        const userMessage = messages.find((message) => message.role === 'user');
@@ -190029,7 +190080,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [
-@@ -2231,32 +1835,15 @@
+@@ -2231,32 +1873,15 @@
                },
              ],
            },
@@ -190065,7 +190116,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -3729,12 +3316,366 @@
+@@ -3729,12 +3354,366 @@
        );
  
        expect(response.candidates).toEqual([]);
@@ -190432,7 +190483,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            object: 'chat.completion',
            id: 'chatcmpl-usage',
            created: 123,
-@@ -3744,13 +3685,13 @@
+@@ -3744,13 +3723,13 @@
                index: 0,
                message: { role: 'assistant', content: 'hi' },
                finish_reason: 'stop',
@@ -190447,7 +190498,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
        const usage = response.usageMetadata;
        expect(usage?.totalTokenCount).toBe(5);
-@@ -3766,13 +3707,13 @@
+@@ -3766,13 +3745,13 @@
          {
            object: 'chat.completion.chunk',
            id: 'chunk-usage',
@@ -190462,7 +190513,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
        const usage = response.usageMetadata;
        expect(usage?.totalTokenCount).toBe(5);
-@@ -3818,13 +3759,13 @@
+@@ -3818,13 +3797,13 @@
        ).toBe(false);
        expect(
          getGenAiUsageProvenance(zero.usageMetadata)?.cachedInputTokensReported,
@@ -190477,7 +190528,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            id: 'chatcmpl-reasoning-usage',
            created: 123,
            model: 'test-model',
-@@ -3842,68 +3783,116 @@
+@@ -3842,68 +3821,116 @@
            ],
            usage: { prompt_tokens: 1, completion_tokens: 10, total_tokens: 11 },
          } as unknown as OpenAI.Chat.ChatCompletion,
@@ -190631,7 +190682,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        (reasoningTokens) => {
          const response = converter.convertOpenAIResponseToGemini(
            {
-@@ -3938,13 +3927,13 @@
+@@ -3938,13 +3965,13 @@
          expect(response.usageMetadata?.thoughtsTokenCount).toBe(
            reasoningTokens,
          );
@@ -190646,7 +190697,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            object: 'chat.completion.chunk',
            id,
            created: 123,
-@@ -3956,12 +3945,13 @@
+@@ -3956,12 +3983,13 @@
                finish_reason: null,
                logprobs: null,
              },
@@ -190660,7 +190711,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        );
        converter.convertOpenAIChunkToGemini(
          reasoningChunk('chunk-reasoning-2', '想'),
-@@ -3980,125 +3970,100 @@
+@@ -3980,125 +4008,100 @@
              total_tokens: 1201,
            },
          } as unknown as OpenAI.Chat.ChatCompletionChunk,
@@ -190851,7 +190902,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        (reasoningTokens) => {
          const context = withStreamParser();
          converter.convertOpenAIChunkToGemini(
-@@ -5178,13 +5143,12 @@
+@@ -5178,13 +5181,12 @@
            ?.join('') ?? '';
        expect(finalText).toBe('');
      });
@@ -190865,7 +190916,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              object: 'chat.completion.chunk',
              id: 'chunk-dual-1',
              created: 456,
-@@ -5317,13 +5281,13 @@
+@@ -5317,13 +5319,13 @@
                logprobs: null,
              },
            ],
@@ -190880,7 +190931,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        expect(response.candidates?.[0]?.content?.parts).toEqual([
          { text: '<think>visible xml example</think>' },
        ]);
-@@ -6800,17 +6764,21 @@
+@@ -6800,17 +6802,21 @@
    let converter: typeof OpenAIContentConverter;
  
    beforeEach(() => {
@@ -190903,7 +190954,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
    /**
     * Helper: feed streaming chunks then a final chunk with finish_reason,
-@@ -6822,15 +6790,20 @@
+@@ -6822,15 +6828,20 @@
        index: number;
        id?: string;
        name?: string;
@@ -190925,7 +190976,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7325,12 +7298,190 @@
+@@ -7325,12 +7336,190 @@
      expect(fnCall?.functionCall?.name).toBe('write_file');
      expect(fnCall?.functionCall?.args).toEqual({
        file_path: '/tmp/test.cpp',
@@ -191116,7 +191167,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      const ctx = createStreamingRequestContext();
  
      // Chunk 1: start of JSON with tool metadata
-@@ -7420,14 +7571,14 @@
+@@ -7420,14 +7609,14 @@
      [FinishReason.PROHIBITED_CONTENT, 'content_filter'],
      [FinishReason.SPII, 'content_filter'],
      [FinishReason.IMAGE_SAFETY, 'content_filter'],
@@ -191133,7 +191184,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          candidates: [{ finishReason: geminiReason, content: { parts: [] } }],
        } as unknown as GenerateContentResponse,
        {
-@@ -7494,30 +7645,25 @@
+@@ -7494,30 +7683,25 @@
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -191174,7 +191225,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packages/core/src/core/openaiContentGenerator/converter.ts
 --- a/packages/core/src/core/openaiContentGenerator/converter.ts
 +++ b/packages/core/src/core/openaiContentGenerator/converter.ts
-@@ -1,6 +1,11 @@
+@@ -1,6 +1,12 @@
++import { createHash } from 'node:crypto';
 +import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 +import {
 +  requireServedUsage,
@@ -191186,7 +191238,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -19,17 +24,12 @@
+@@ -19,17 +25,12 @@
  } from '@google/genai';
  import { GenerateContentResponse, FinishReason } from '@google/genai';
  import type OpenAI from 'openai';
@@ -191204,7 +191256,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    convertSchema,
    relaxSchemaForFunctionCalling,
    type SchemaComplianceMode,
-@@ -38,22 +38,52 @@
+@@ -38,22 +39,52 @@
    setToolCallPreparations,
    type ToolCallPreparation,
  } from '../tool-call-preparation.js';
@@ -191263,7 +191315,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    extends OpenAI.Chat.ChatCompletionAssistantMessageParam {
    reasoning_content?: string | null;
  }
-@@ -424,13 +454,20 @@
+@@ -424,13 +455,20 @@
  /**
   * Convert Gemini response to OpenAI completion format (for logging).
   */
@@ -191285,7 +191337,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    // Parse parts inline
    const thoughtParts: string[] = [];
    const contentParts: string[] = [];
-@@ -474,27 +511,25 @@
+@@ -474,27 +512,25 @@
      message.tool_calls = toolCalls;
    }
  
@@ -191326,7 +191378,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      : Date.now();
    const createdSeconds = Number.isFinite(createdMs)
      ? Math.floor(createdMs / 1000)
-@@ -879,12 +914,17 @@
+@@ -879,12 +915,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -191344,7 +191396,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1000,15 @@
+@@ -960,16 +1001,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -191364,7 +191416,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,108 +1147,29 @@
+@@ -1108,108 +1148,29 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -191490,7 +191542,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  export function convertOpenAIResponseToGemini(
    openaiResponse: OpenAI.Chat.ChatCompletion,
    requestContext: RequestContext,
-@@ -1233,19 +1193,151 @@
+@@ -1233,19 +1194,151 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -191646,7 +191698,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
              functionCall: {
                id: toolCall.id,
                name: toolCall.function.name,
-@@ -1259,81 +1351,42 @@
+@@ -1259,81 +1352,42 @@
      response.candidates = [
        {
          content: {
@@ -191744,7 +191796,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1417,21 +1470,12 @@
+@@ -1417,21 +1471,12 @@
          cumulativeMode: false,
        });
        const normalizedReasoningText = normalizeStreamingTextDelta(
@@ -191766,7 +191818,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        ) {
          parts.push(createOpenAIReasoningThoughtPart(normalizedReasoningText));
        } else if (
-@@ -1482,12 +1526,25 @@
+@@ -1482,12 +1527,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -191792,7 +191844,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,215 +1572,85 @@
+@@ -1515,226 +1573,109 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -192064,9 +192116,36 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      // Only emit function calls when streaming is complete (finish_reason is present)
      if (choice.finish_reason) {
++      const occupiedIds = new Set(
++        completedToolCalls.map((toolCall) => toolCall.id).filter(Boolean),
++      );
        for (const toolCall of completedToolCalls) {
          if (toolCall.name) {
-@@ -1746,6 +1673,17 @@
++          let id = toolCall.id;
++          if (!id) {
++            const seed = `call_${createHash('sha256')
++              .update(JSON.stringify([chunk.id, toolCall.index]))
++              .digest('hex')
++              .slice(0, 32)}`;
++            id = seed;
++            for (let suffix = 2; occupiedIds.has(id); suffix++) {
++              id = `${seed}_${suffix}`;
++            }
++            occupiedIds.add(id);
++          }
+           parts.push({
+             functionCall: {
+-              id:
+-                toolCall.id ||
+-                `call_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
++              id,
+               name: toolCall.name,
+               args: toolCall.args,
+             },
+           });
+         }
+       }
+@@ -1746,6 +1687,17 @@
        toolCallsTruncated && choice.finish_reason !== 'length'
          ? 'length'
          : choice.finish_reason;
@@ -192084,7 +192163,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      // Only include finishReason key if finish_reason is present
      const candidate: Candidate = {
-@@ -1764,70 +1702,26 @@
+@@ -1764,70 +1716,26 @@
      response.candidates = [candidate];
    } else {
      response.candidates = [];
@@ -192163,7 +192242,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1741,19 @@
+@@ -1847,17 +1755,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -192188,7 +192267,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,16 +1763,14 @@
+@@ -1867,16 +1777,14 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:

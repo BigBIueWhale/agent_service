@@ -623,7 +623,16 @@ def _validate_stream_commit_after(state: State) -> None:
             "toolCallParser.hasConflictingToolCallIdentity()",
             "toolCallParser.hasInvalidToolCallArguments()",
             "            Boolean(toolCall.id) &&\n            (named === undefined || toolCall.name === named),",
+            "JSON.stringify([chunk.id, toolCall.index])",
+            "occupiedIds.add(id);",
         ),
+        label=label,
+    )
+    forbid_text(state, converter, "Math.random()", label=label)
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.test.ts",
+        "derives missing tool call IDs from the served response and parser slot",
         label=label,
     )
     _require_all(
@@ -10363,6 +10372,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "committed: the call it stopped is never made, nothing of it enters the history a request "
             "is rendered from, and what the provider served of it is carried, as the text it was "
             "served as, to every record of the generation."
+            " Provider-omitted non-strict tool-call IDs derive from the served terminal "
+            "and parser slot, without local clock or random state."
         ),
         removal_condition=(
             "Upstream provides equivalent batch/stream call grammar, terminal and durable commit "
