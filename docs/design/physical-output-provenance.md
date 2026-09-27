@@ -276,9 +276,14 @@ The policy binding is therefore a necessary input to physical-to-decoded proof,
 not that proof itself.
 
 The completion's physical request membership and each observation's
-`source_request_id` identify the declared retry and bind its count to that
-response's delivered output count. They do not prove that its bytes produced
-the observation. Replay must still derive each observation from the processed
+`source_request_id` identify the declared retry. The live Chat path only retries
+before a stream is returned; later stream failure ends that attempt. Admission
+therefore requires every observation to name the final physical request and
+requires earlier requests to have delivered no decoded output. This was checked
+against the actual SDK retry test and the TypeScript and Python source readers;
+Java and native implementations remain unexecuted. The rule still does not prove
+that the final request's bytes produced an observation. Replay must derive each
+observation from the processed
 prefix of that response. The accepted Chat history and displayed stream
 projections then need to be checked against
 that replayed generation and their declared disposition. Utility generations

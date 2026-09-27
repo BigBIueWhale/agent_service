@@ -667,33 +667,34 @@ impl ModelRequests {
             "consumer observations",
             SAFE_INTEGER,
         )?;
-        let mut source_counts = BTreeMap::<&str, u64>::new();
-        let mut source_index = 0usize;
-        for source in &generation.source_requests {
-            let index = attempt
-                .requests
-                .iter()
-                .position(|request| request == source)
-                .ok_or_else(|| refusal("generation observation has no physical source"))?;
-            if index < source_index {
-                return Err(refusal("generation observations reorder physical responses"));
-            }
-            source_index = index;
-            *source_counts.entry(source.as_str()).or_default() += 1;
-        }
-        let delivered = attempt.outcomes.values().try_fold(0u64, |total, outcome| {
-            total
-                .checked_add(outcome.pipeline_outputs_delivered)
-                .filter(|value| *value <= SAFE_INTEGER)
-                .ok_or_else(|| refusal("pipeline output count exceeds exact integer range"))
-        })?;
-        if consumer_observations != generation.observation_count
-            || consumer_observations > delivered
-            || source_counts.iter().any(|(source, count)| {
-                attempt.outcomes.get(*source).is_none_or(|outcome| {
-                    *count > outcome.pipeline_outputs_delivered
-                })
+        let final_request = attempt
+            .requests
+            .last()
+            .ok_or_else(|| refusal("generation has no physical request"))?;
+        if attempt.requests[..attempt.requests.len() - 1]
+            .iter()
+            .any(|request| {
+                attempt
+                    .outcomes
+                    .get(request)
+                    .is_none_or(|outcome| outcome.pipeline_outputs_delivered != 0)
             })
+            || generation
+                .source_requests
+                .iter()
+                .any(|source| source != final_request)
+            || (accepted && selected[0].0 != final_request)
+        {
+            return Err(refusal(
+                "a Chat attempt received decoded output before its final physical request",
+            ));
+        }
+        let final_outcome = attempt
+            .outcomes
+            .get(final_request)
+            .ok_or_else(|| refusal("final physical request has no processing outcome"))?;
+        if consumer_observations != generation.observation_count
+            || consumer_observations > final_outcome.pipeline_outputs_delivered
         {
             return Err(refusal(
                 "consumer receipt contradicts decoded output or generation observations",
@@ -701,11 +702,7 @@ impl ModelRequests {
         }
         if accepted {
             generation.require_accepted()?;
-            let outcome = attempt
-                .outcomes
-                .get(selected[0].0)
-                .ok_or_else(|| refusal("accepted response has no processing outcome"))?;
-            if !outcome.completed || outcome.usage != generation.usage {
+            if !final_outcome.completed || final_outcome.usage != generation.usage {
                 return Err(refusal(
                     "accepted generation usage contradicts its physical response",
                 ));
@@ -804,6 +801,98 @@ mod tests {
             Err(ContractError::InvalidRecord(message))
                 if message.contains("selected decoder contradicts")
         ));
+    }
+    #[test]
+    fn only_the_final_physical_retry_can_deliver_chat_output() {
+        let rows: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+        let original_generation = rows
+            .iter()
+            .find(|row| row["type"] == "model_generation")
+            .unwrap()["generation"]
+            .clone();
+        let original_completion = rows
+            .iter()
+            .find(|row| row["type"] == "model_attempt_completion")
+            .unwrap()["completion"]
+            .clone();
+        for (name, first_source, earlier_outputs, accepted) in [
+            ("final response", false, 0, true),
+            ("earlier response", true, 3, false),
+            ("unclaimed earlier output", false, 1, false),
+        ] {
+            let mut evidence = original_generation.clone();
+            let mut envelope: serde_json::Value =
+                serde_json::from_str(evidence["generation_json"].as_str().unwrap()).unwrap();
+            for observation in envelope["observations"].as_array_mut().unwrap() {
+                observation["source_request_id"] =
+                    serde_json::json!(if first_source { "r1" } else { "r2" });
+            }
+            let bytes = envelope.to_string();
+            let byte_len = bytes.len();
+            let hash = crate::generation::sha256(bytes.as_bytes());
+            evidence["generation_json"] = serde_json::json!(bytes);
+            evidence["generation_bytes"] = serde_json::json!(byte_len);
+            evidence["generation_sha256"] = serde_json::json!(hash);
+            let generation_record = serde_json::json!({"generation": evidence.clone()}).to_string();
+            let document = Document::decode(generation_record.as_bytes(), LIMITS).unwrap();
+            let generation = Generation::read(
+                field(document.root(), "generation", 1).unwrap(),
+                1,
+                LIMITS,
+                ValidationLimits {
+                    operations: 1_000_000,
+                },
+            )
+            .unwrap();
+            let mut completion = original_completion.clone();
+            completion["request_ids"] = serde_json::json!(["r1", "r2"]);
+            completion["generation_sha256"] = evidence["generation_sha256"].clone();
+            let completion_record = serde_json::json!({"completion": completion}).to_string();
+            let document = Document::decode(completion_record.as_bytes(), LIMITS).unwrap();
+            let mut state = ModelRequests::default();
+            state.journal_id = Some(generation.journal.clone());
+            state.attempts.insert(
+                generation.origin.attempt.clone(),
+                AttemptState {
+                    scope: generation.origin.scope.clone(),
+                    requests: vec!["r1".into(), "r2".into()],
+                    settled: BTreeMap::from([("r1".into(), false), ("r2".into(), true)]),
+                    outcomes: BTreeMap::from([
+                        (
+                            "r1".into(),
+                            ResponseOutcome {
+                                scope: generation.origin.scope.clone(),
+                                usage: None,
+                                completed: false,
+                                pipeline_outputs_delivered: earlier_outputs,
+                            },
+                        ),
+                        (
+                            "r2".into(),
+                            ResponseOutcome {
+                                scope: generation.origin.scope.clone(),
+                                usage: generation.usage,
+                                completed: true,
+                                pipeline_outputs_delivered: generation.observation_count,
+                            },
+                        ),
+                    ]),
+                    generation: Some(Arc::new(generation)),
+                    completed: false,
+                },
+            );
+            let result = state.plan_completion(document.root(), 1);
+            if accepted {
+                assert!(result.is_ok(), "{name}");
+            } else {
+                let error = result.err().expect("forged retry was admitted");
+                assert!(
+                    error.to_string().contains("final physical request"),
+                    "{name}"
+                );
+            }
+        }
     }
     #[test]
     fn processing_completion_requires_successful_http_and_compatible_transport() {

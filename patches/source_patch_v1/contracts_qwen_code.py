@@ -8391,13 +8391,13 @@ def _validate_served_accounting_after(state: State) -> None:
         "async flush(): Promise<void>", "if (this.failure) throw this.failure.cause;",
         "let cancelledBeforeAdmission = false;", "signal.throwIfAborted();",
         "if (!cancelledBeforeAdmission) this.failure = { cause: error };",
-        "attempt: ChatAttempt | null", "attempt?.assertOpen();",
+        "attempt: ChatAttempt | null", "attempt?.assertCanIssueRequest();",
         "if (admitted)", "await response.finish({",
     ), label=label)
     request_capture = _source(state, core + "core/model-request-evidence.ts", label=label).split(
         "async capture(", 1)[1].split("private async publish(", 1)[0]
     _require_ordered(request_capture, (
-        "attempt?.assertOpen();", "await this.persist(evidence);",
+        "attempt?.assertCanIssueRequest();", "await this.persist(evidence);",
         "admitted = true;", "attempt?.attach(response);",
         "await this.publish({ type: 'model_request', request: evidence });",
         "await write;", "catch (cause)", "await response.finish({",
@@ -8408,8 +8408,10 @@ def _validate_served_accounting_after(state: State) -> None:
         "export class ChatAttempt", "readonly id = randomUUID()", "kind: 'chat'",
         "response.finishHistory(disposition)", "Promise.allSettled",
         "get hasRequests(): boolean", "return this.responses.length > 0;", "assertOpen(): void",
+        "assertCanIssueRequest(): void", "this.assertCanIssueRequest();",
         "observeConsumerOutput(sourceRequestId: string)",
-        "this.responses.some((response) => response.requestId === sourceRequestId)",
+        "this.responses.at(-1)?.requestId !== sourceRequestId",
+        "observation.source_request_id !== this.responses.at(-1)?.requestId",
     ), label=label)
     attempt_source = _source(state, core + "core/chat-attempt.ts", label=label)
     _require_ordered(attempt_source.split("async finish(disposition:", 1)[1], (
@@ -8429,10 +8431,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "attempt.settled.size !== attempt.requests.length",
         "accepted !== (completion.disposition === 'accepted' ? 1 : 0)",
         "requireAcceptedGeneration(envelope)",
-        "outcome.served_usage![field] !== envelope.usage![field]",
+        "finalOutcome.served_usage![field] !== envelope.usage![field]",
         "completion.consumer_observations !== envelope.observations.length",
-        "generation observation has no ordered physical source",
-        "count > (attempt.outcomes.get(id)?.pipeline_outputs_delivered ?? -1)",
+        "observation.source_request_id !== finalRequest",
+        "attempt.outcomes.get(id)?.pipeline_outputs_delivered !== 0",
+        "a Chat attempt received decoded output before its final physical request",
         "source_request_id: sourceRequestId",
         "the stream ends with an incomplete logical attempt",
     ), label=label)
@@ -8645,7 +8648,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'event["sdk_values_seen"]', 'event["pipeline_outputs_delivered"]',
         'completion["consumer_observations"]',
         'observation["source_request_id"]',
-        'generation observation exceeds its physical response delivery',
+        'a Chat attempt received decoded output before its final physical request',
         "completed processing has no successful HTTP transport completion",
         "not self.responses", "not self.group_open and not self.blocks",
     ), label=label)
@@ -8735,7 +8738,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'event.get("sdk_values_seen")', 'event.get("pipeline_outputs_delivered")',
         'completion.get("consumer_observations")',
         'object(item).get("source_request_id")',
-        'generation observation exceeds its physical response delivery',
+        'a Chat attempt received decoded output before its final physical request',
         "completed processing has no successful HTTP transport completion",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (

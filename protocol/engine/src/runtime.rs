@@ -1317,8 +1317,10 @@ mod tests {
         let evidence = &mut generation["generation"];
         let mut envelope: serde_json::Value =
             serde_json::from_str(evidence["generation_json"].as_str().unwrap()).unwrap();
+        let source_request_id = envelope["observations"][0]["source_request_id"].clone();
         envelope["finish_reason"] = serde_json::json!("MAX_TOKENS");
         envelope["observations"] = serde_json::json!([{
+            "source_request_id":source_request_id,
             "response":{"candidates":[{"content":{"parts":[],"role":"model"},"finishReason":"MAX_TOKENS"}],"usageMetadata":envelope["usage"]},
             "incomplete_tool_calls":[{"name":name,"arguments":arguments}],
             "tool_call_preparations":[], "call_ids":[]
