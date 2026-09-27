@@ -635,16 +635,16 @@ def _validate_stream_commit_after(state: State) -> None:
         "derives missing tool call IDs from the served response and parser slot",
         label=label,
     )
-    _require_all(
-        state,
-        pipeline,
-        (
-            "let terminal: GenerateContentResponse | undefined;",
-            "INVALID_RESPONSE_SEQUENCE",
-            "ResponseObservationError",
-        ),
-        label=label,
-    )
+    _require_all(state, pipeline, (
+        "const decoder = new OpenAIStreamDecoder(context)",
+        "for (const response of decoder.finish()) yield response",
+        "ResponseObservationError",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/streamDecoder.ts", (
+        "private terminal: GenerateContentResponse | undefined;",
+        "INVALID_RESPONSE_SEQUENCE",
+        "ResponseObservationError",
+    ), label=label)
 
     # A call a length terminal stopped is never made, and what the provider
     # served of it is the model's output: it is carried, as served, to every
@@ -1971,8 +1971,10 @@ def _validate_compaction_event_after(state: State) -> None:
         "providerOutputContext.getStore()?.observe(openaiResponse);",
         "OpenAIContentConverter.convertOpenAIResponseToGemini(",
         "providerOutput?.observe(chunk);",
-        "OpenAIContentConverter.convertOpenAIChunkToGemini(",
+        "decoder.accept(chunk, usage)",
     ), label=label, location=pipeline)
+    require_text(state, "packages/core/src/core/openaiContentGenerator/streamDecoder.ts",
+                 "OpenAIContentConverter.convertOpenAIChunkToGemini(", label=label)
     require_text(state, "packages/core/src/core/baseLlmClient.ts",
                  "rawResponses: providerOutput.responses,", count=5, label=label)
     _require_all(
@@ -8312,9 +8314,20 @@ def _validate_served_accounting_after(state: State) -> None:
         "convertOpenAIResponseToGemini(", "if (usage.kind === 'invalid')",
     ), label=label, location="nonstream physical usage before conversion")
     _require_ordered(pipeline_usage.split("const usage = observeOpenAIUsage(chunk.usage", 1)[1], (
-        "lastUsage = usage.usage", "providerOutput?.observe(chunk)",
-        "convertOpenAIChunkToGemini(", "if (usage.kind === 'invalid')",
+        "decoder.observeUsage(usage)", "providerOutput?.observe(chunk)",
+        "decoder.accept(chunk, usage)",
     ), label=label, location="stream physical usage before conversion")
+    stream_decoder = core + "core/openaiContentGenerator/streamDecoder.ts"
+    _require_all(state, stream_decoder, (
+        "export class OpenAIStreamDecoder", "convertOpenAIChunkToGemini(",
+        "if (usage.kind === 'invalid')", "this.terminal.usageMetadata = this.lastUsage",
+        "preserveGenerationObservation(diagnostic, response)",
+    ), label=label)
+    _require_all(state, pipeline, (
+        "const decoder = new OpenAIStreamDecoder(context)",
+        "for (const response of decoder.finish()) yield response",
+        "for (const diagnostic of decoder.diagnostics()) yield diagnostic",
+    ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/pipeline.ts", (
         "usage === null || usage === undefined", "response.observeUsage(counts)",
         "requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage')",

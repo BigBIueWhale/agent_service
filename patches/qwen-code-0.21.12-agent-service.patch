@@ -198207,7 +198207,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.tes
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-@@ -1,64 +1,110 @@
+@@ -1,64 +1,109 @@
 +import { AsyncLocalStorage } from 'node:async_hooks';
 +import {
 +  describeResponseFailure,
@@ -198290,11 +198290,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  resolveRequestTimeout,
  } from './constants.js';
  import { createDebugLogger } from '../../utils/debugLogger.js';
- import { getToolCallPreparations } from '../tool-call-preparation.js';
-+import { preserveGenerationObservation } from '../model-generation.js';
+-import { getToolCallPreparations } from '../tool-call-preparation.js';
  import { InvalidStreamError } from '../invalid-stream-error.js';
 -import { logProtocolTagSanitized } from '../../telemetry/loggers.js';
 -import { ProtocolTagSanitizedEvent } from '../../telemetry/types.js';
++import {
++  OpenAIStreamDecoder,
++  type OpenAIUsageObservation,
++} from './streamDecoder.js';
  import { getErrorMessage, getErrorStatus } from '../../utils/errors.js';
  import { getRateLimitErrorDetails } from '../../utils/rateLimit.js';
  import {
@@ -198311,10 +198314,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +function observeOpenAIUsage(
 +  usage: OpenAI.CompletionUsage | null | undefined,
 +  response: ModelResponseRecorder,
-+):
-+  | { kind: 'absent' }
-+  | { kind: 'invalid'; cause: unknown }
-+  | { kind: 'observed'; usage: ServedUsage } {
++): OpenAIUsageObservation {
 +  if (usage === null || usage === undefined) return { kind: 'absent' };
 +  let counts: ServedUsage;
 +  try {
@@ -198331,7 +198331,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const providerMessage = getRateLimitErrorDetails(error).providerMessage;
    const message = `${getErrorMessage(error)} ${providerMessage ?? ''}`;
    return (
-@@ -81,7 +127,31 @@
+@@ -81,7 +126,31 @@
  }
  
  /**
@@ -198364,7 +198364,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   * `code: 'ETIMEDOUT'` makes `classifyRetryError` treat it as a retryable
   * transport error, identical to a real socket read timeout.
   */
-@@ -95,25 +165,23 @@
+@@ -95,25 +164,23 @@
    ) {
      super(
        `No stream activity for ${idleMs}ms after ${chunksReceived} chunks ` +
@@ -198401,7 +198401,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   */
  export class StreamLifetimeExceededError extends Error {
    readonly code = 'ETIMEDOUT' as const;
-@@ -124,11 +192,11 @@
+@@ -124,11 +191,11 @@
      readonly streamLifetimeMs: number,
    ) {
      super(
@@ -198418,7 +198418,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      );
      this.name = 'StreamLifetimeExceededError';
    }
-@@ -180,20 +248,17 @@
+@@ -180,20 +247,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -198443,7 +198443,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,75 +285,41 @@
+@@ -220,75 +284,41 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -198552,7 +198552,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  readonly requestTimeoutMs: number;
 +  /** The upstream wait the generation may take from its first chunk. */
 +  readonly generationMs: number;
-@@ -298,32 +329,29 @@
+@@ -298,32 +328,29 @@
 - * Wraps a streaming chunk source with two guards. The inactivity watchdog: if
 - * no chunk arrives for `idleMs`, `abortRequest()` is invoked (to abort the
 - * underlying request and free the socket) and the iterator throws — a user
@@ -198605,7 +198605,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const it = source[Symbol.asyncIterator]();
    // Monotonic, never `Date.now()`: an NTP step must not kill a healthy
    // generation on the next iteration (a forward jump) nor silently disable
-@@ -331,97 +359,109 @@
+@@ -331,97 +358,109 @@
    // guard exists to bound. The setTimeout this races is a monotonic clock
    // too, so the two agree.
    const streamStartedAt = performance.now();
@@ -198772,7 +198772,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    } finally {
      abortRequest();
      try {
-@@ -435,196 +475,375 @@
+@@ -435,196 +474,375 @@
  export type { PipelineConfig } from './types.js';
  
 +/** Every request this pipeline sends names the model it is for. */
@@ -199248,7 +199248,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
    /**
     * Stage 2: Process OpenAI stream with conversion and logging
-@@ -635,192 +854,101 @@
+@@ -635,192 +853,40 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -199296,9 +199296,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -      logProtocolTagSanitized(this.config.cliConfig, event);
 -    };
 -
-+    let terminal: GenerateContentResponse | undefined;
-+    let lastUsage: GenerateContentResponse['usageMetadata'];
-+    const unpublished: GenerateContentResponse[] = [];
++    const decoder = new OpenAIStreamDecoder(context);
      try {
 -      // Stage 2a: Convert and yield each chunk while preserving original
        for await (const chunk of stream) {
@@ -199308,7 +199306,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -        // with finish_reason="error_finish" and the error in delta.content,
 -        // instead of returning a proper HTTP error status.
 +        const usage = observeOpenAIUsage(chunk.usage, responseEvidence);
-+        if (usage.kind === 'observed') lastUsage = usage.usage;
++        decoder.observeUsage(usage);
 +        providerOutput?.observe(chunk);
          if ((chunk.choices?.[0]?.finish_reason as string) === 'error_finish') {
 -          const errorContent =
@@ -199375,37 +199373,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -              pending.usageMetadata = response.usageMetadata;
 -            }
 +        reportOpenAiChunk(telemetryAttempt, chunk);
-+        let response: GenerateContentResponse;
-+        try {
-+          response = OpenAIContentConverter.convertOpenAIChunkToGemini(
-+            chunk,
-+            context,
-+          );
-+          if (usage.kind === 'invalid')
-+            throw new ResponseObservationError(response, usage.cause);
-+        } catch (error) {
-+          if (error instanceof ResponseObservationError) {
-+            unpublished.push(error.response);
-+          }
-+          throw error;
-+        }
-+        const hasTerminal = response.candidates?.some(
-+          (candidate) => candidate.finishReason,
-+        );
-+        const hasParts = response.candidates?.some(
-+          (candidate) => (candidate.content?.parts?.length ?? 0) > 0,
-+        );
-+        const hasPreparation = getToolCallPreparations(response).length > 0;
-+        if (terminal) {
-+          if (hasTerminal || hasParts || hasPreparation) {
-+            unpublished.push(response);
-+            throw new InvalidStreamError(
-+              'Model response continued after a terminal.',
-+              'INVALID_RESPONSE_SEQUENCE',
-+            );
-           }
-           continue;
-         }
+-          }
+-          continue;
+-        }
 -
 -        if (
 -          !pendingFinishResponse &&
@@ -199457,37 +199427,19 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -              index: 0,
 -            },
 -          ];
-+        if (hasTerminal) {
-+          terminal = response;
-+          unpublished.push(response);
-+        } else if (hasParts || hasPreparation || response.usageMetadata) {
-           yield response;
-         }
+-          yield response;
+-        }
 -      } else if (context.pendingThinkingTagCandidate) {
 -        throw new InvalidStreamError(
 -          'Model response leaked thinking tags.',
 -          'PROTOCOL_TAG_LEAK',
++        for (const response of decoder.accept(chunk, usage)) yield response;
 +      }
-+      if (terminal) {
-+        terminal.usageMetadata = lastUsage;
-+        unpublished.length = 0;
-+        yield terminal;
-+      }
++      for (const response of decoder.finish()) yield response;
 +    } catch (error) {
 +      // A refused stream can report observed text and usage, but cannot publish
 +      // a terminal or structured call held pending complete stream validation.
-+      for (const response of unpublished) {
-+        const diagnostic = new GenerateContentResponse();
-+        diagnostic.candidates = (response.candidates ?? []).map(
-+          (candidate) => ({
-+            content: {
-+              role: 'model',
-+              parts: (candidate.content?.parts ?? []).filter(
-+                (part) => typeof part.text === 'string',
-+              ),
-+            },
-+          }),
-         );
+-        );
 -      }
 -
 -      // Stage 2d: If there's still a pending finish response at the end
@@ -199500,14 +199452,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -        yield pendingFinishResponse;
 -      }
 -    } catch (error) {
-+        preserveGenerationObservation(diagnostic, response);
-+        yield diagnostic;
-+      }
-+      if (lastUsage) {
-+        const diagnostic = new GenerateContentResponse();
-+        diagnostic.usageMetadata = lastUsage;
-+        yield diagnostic;
-+      }
++      for (const diagnostic of decoder.diagnostics()) yield diagnostic;
 +      if (error instanceof ResponseObservationError) {
 +        throw error.cause instanceof InvalidStreamError ? error.cause : error;
 +      }
@@ -199517,7 +199462,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +957,18 @@
+@@ -829,16 +895,18 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -199543,7 +199488,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -845,9 +975,9 @@
+@@ -845,9 +913,9 @@
            isLifetime
 -            ? 'OpenAI stream lifetime cap exceeded'
 +            ? 'OpenAI stream generation bound exceeded'
@@ -199555,7 +199500,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              // the log reconcile the same way the error message does.
              wallClockMs: error.streamLifetimeMs,
              ...(isLifetime
-@@ -858,100 +988,19 @@
+@@ -858,100 +926,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -199657,7 +199602,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -991,13 +1040,12 @@
+@@ -991,13 +978,12 @@
        // classifier's respond_in_schema) can force the model to emit a tool
        // call instead of free-texting. Without this, thinking-heavy models
        // may consume the tiny output budget on reasoning and skip the tool.
@@ -199676,7 +199621,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        }
      }
  
-@@ -1029,13 +1077,13 @@
+@@ -1029,13 +1015,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -199691,7 +199636,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +1095,14 @@
+@@ -1047,15 +1033,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -199709,7 +199654,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1220,20 @@
+@@ -1173,12 +1158,20 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -199730,7 +199675,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,39 +1373,83 @@
+@@ -1318,39 +1311,83 @@
    }
  
    /**
@@ -199822,7 +199767,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        return await executeAttempt();
      } catch (error) {
        const model = context.model.toLowerCase();
-@@ -1400,13 +1499,16 @@
+@@ -1400,13 +1437,16 @@
     * Create request context with common properties
     */
    private createRequestContext(
@@ -199840,7 +199785,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1516,21 @@
+@@ -1414,15 +1454,21 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -412388,3 +412333,110 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.ts b/pac
        `Analyzing ${eligibleSessions.length} eligible recent sessions with LLM...`,
      );
  
+diff --git a/packages/core/src/core/openaiContentGenerator/streamDecoder.ts b/packages/core/src/core/openaiContentGenerator/streamDecoder.ts
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/streamDecoder.ts
+@@ -0,0 +1,103 @@
++/** One response-scoped conversion path for streamed provider values. */
++import { GenerateContentResponse } from '@google/genai';
++import type OpenAI from 'openai';
++import { InvalidStreamError } from '../invalid-stream-error.js';
++import { preserveGenerationObservation } from '../model-generation.js';
++import { ResponseObservationError, type ServedUsage } from '../served-usage.js';
++import { getToolCallPreparations } from '../tool-call-preparation.js';
++import { OpenAIContentConverter } from './converter.js';
++import type { RequestContext } from './types.js';
++
++export type OpenAIUsageObservation =
++  | { kind: 'absent' }
++  | { kind: 'invalid'; cause: unknown }
++  | { kind: 'observed'; usage: ServedUsage };
++
++/**
++ * The selected RequestContext is private to one response. A terminal remains
++ * unpublished until EOF, while failure exposes only its text diagnostic.
++ */
++export class OpenAIStreamDecoder {
++  private terminal: GenerateContentResponse | undefined;
++  private lastUsage: GenerateContentResponse['usageMetadata'];
++  private readonly unpublished: GenerateContentResponse[] = [];
++
++  constructor(private readonly context: RequestContext) {}
++
++  observeUsage(usage: OpenAIUsageObservation): void {
++    if (usage.kind === 'observed') this.lastUsage = usage.usage;
++  }
++
++  accept(
++    chunk: OpenAI.Chat.ChatCompletionChunk,
++    usage: OpenAIUsageObservation,
++  ): GenerateContentResponse[] {
++    let response: GenerateContentResponse;
++    try {
++      response = OpenAIContentConverter.convertOpenAIChunkToGemini(
++        chunk,
++        this.context,
++      );
++      if (usage.kind === 'invalid')
++        throw new ResponseObservationError(response, usage.cause);
++    } catch (error) {
++      if (error instanceof ResponseObservationError)
++        this.unpublished.push(error.response);
++      throw error;
++    }
++    const hasTerminal = response.candidates?.some(
++      (candidate) => candidate.finishReason,
++    );
++    const hasParts = response.candidates?.some(
++      (candidate) => (candidate.content?.parts?.length ?? 0) > 0,
++    );
++    const hasPreparation = getToolCallPreparations(response).length > 0;
++    if (this.terminal) {
++      if (hasTerminal || hasParts || hasPreparation) {
++        this.unpublished.push(response);
++        throw new InvalidStreamError(
++          'Model response continued after a terminal.',
++          'INVALID_RESPONSE_SEQUENCE',
++        );
++      }
++      return [];
++    }
++    if (hasTerminal) {
++      this.terminal = response;
++      this.unpublished.push(response);
++      return [];
++    }
++    return hasParts || hasPreparation || response.usageMetadata
++      ? [response]
++      : [];
++  }
++
++  finish(): GenerateContentResponse[] {
++    if (!this.terminal) return [];
++    this.terminal.usageMetadata = this.lastUsage;
++    this.unpublished.length = 0;
++    return [this.terminal];
++  }
++
++  diagnostics(): GenerateContentResponse[] {
++    const diagnostics = this.unpublished.map((response) => {
++      const diagnostic = new GenerateContentResponse();
++      diagnostic.candidates = (response.candidates ?? []).map((candidate) => ({
++        content: {
++          role: 'model',
++          parts: (candidate.content?.parts ?? []).filter(
++            (part) => typeof part.text === 'string',
++          ),
++        },
++      }));
++      preserveGenerationObservation(diagnostic, response);
++      return diagnostic;
++    });
++    if (this.lastUsage) {
++      const diagnostic = new GenerateContentResponse();
++      diagnostic.usageMetadata = this.lastUsage;
++      diagnostics.push(diagnostic);
++    }
++    return diagnostics;
++  }
++}

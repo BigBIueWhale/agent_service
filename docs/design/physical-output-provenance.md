@@ -188,6 +188,16 @@ delivering them to the SDK, so its chunk boundary alone cannot prove a consumed
 event prefix. For nonstreaming responses the SDK also has a distinct JSON/text
 path; treating every body as SSE would be unsound.
 
+The streaming converter, terminal hold and failure-diagnostic expansion now
+have one response-scoped `OpenAIStreamDecoder`, used by the live pipeline. This
+keeps the stateful rule in one production owner for a future physical replay.
+Source tests passed 441 existing converter and pipeline cases, and four local
+actual-SDK attribution and cancellation cases passed against the refactored
+authoring source. Those runs establish preservation at their tested boundaries;
+no admitting reader yet invokes the decoder on retained response bytes, and the
+nonstreaming conversion path has not been extracted. This refactor does not
+establish physical-to-decoded proof or change the wire contract.
+
 The completion's physical request membership gives the candidate requests but
 does not by itself identify which retry supplied an observation. Replay needs
 the request order and processing termination for each candidate. The accepted
