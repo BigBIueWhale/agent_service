@@ -186,6 +186,28 @@ from one failed source value. This is established by the executed local case;
 native and Python admission, terminal-holding cancellation, the outer CLI and
 deployed provider were not exercised by it.
 
+## Consumer closure follows response processing
+
+Source inspection establishes another constraint on where that boundary can be
+recorded. `ContentGenerationPipeline.executeWithErrorHandling` calls
+`responseEvidence.finish({ status: 'completed', error: null })` before it returns
+a nonstreaming result. `BaseLlmClient.generateText` receives that result later
+and only then projects its text, thought, calls, usage and terminal reason. In
+the streaming path it incorporates each yielded chunk into a partial result and
+preserves that partial on failure. `GeminiChat.processStreamResponse` separately
+incorporates yielded chunks into its generation observations and normalizes tool
+identities there. Utility calls and Chat therefore have distinct consumer sites;
+neither a Chat-only marker nor a downstream-consumption count frozen into the
+response `outcome` covers both correctly.
+
+The physical response owner can bind SDK values and decoded outputs as they pass
+through the pipeline. Consumer membership must then be recorded at the Chat or
+utility consumption site, with a response request identity carried to that site
+and a closure later than the transport outcome where necessary. The admitting
+reader must require this closure before treating a generation or utility output
+as complete. This placement follows from the current source lifecycle; no wire
+field, consumer receipt or cross-reader verifier has been implemented here.
+
 ## Decoder proof required at admission
 
 The dispatch owner must bind the selected provider and every effective option
