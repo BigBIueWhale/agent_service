@@ -385,6 +385,18 @@ impl ModelRequests {
                         "completed processing has no successful HTTP transport completion",
                     ));
                 }
+                let usage = field(event, "served_usage", line)?;
+                if !usage.is_null() {
+                    let count = |key| unsigned(field(usage, key, line)?, key, SAFE_INTEGER);
+                    let prompt = count("promptTokenCount")?;
+                    let output = count("candidatesTokenCount")?;
+                    if prompt.checked_add(output) != Some(count("totalTokenCount")?)
+                        || count("thoughtsTokenCount")? > output
+                        || count("cachedContentTokenCount")? > prompt
+                    {
+                        return Err(refusal("has inconsistent served token counts"));
+                    }
+                }
                 state.processing = Some(completed);
                 ended = state.attempt.is_none();
             }
@@ -546,7 +558,7 @@ mod tests {
                     "error": if termination == "failed" { json!("read failed") } else { json!(null) }
                 }));
                 events.push(json!({
-                    "kind": "outcome", "status": status,
+                    "kind": "outcome", "served_usage": null, "status": status,
                     "error": if status == "failed" { json!("processing failed") } else { json!(null) }
                 }));
                 for (index, event) in events.iter().enumerate() {
@@ -569,6 +581,48 @@ mod tests {
                     status != "completed" || can_complete,
                     "{http_status:?}/{termination}/{status}"
                 );
+            }
+        }
+    }
+    #[test]
+    fn response_usage_requires_complete_consistent_counts() {
+        for status in ["completed", "failed", "cancelled"] {
+            for defect in ["valid", "null", "zero", "missing", "total", "cached", "thoughts", "negative"] {
+                let mut state = ModelRequests::default();
+                let body = r#"{"kv_scope":"owner","messages":[]}"#;
+                admit(&mut state, &request(1, "r", json!({"kind":"full","json":body}), body)).unwrap();
+                for (index, event) in [
+                    json!({"kind":"http","status":200,"content_type":null}),
+                    json!({"kind":"end","termination":"eof","body_bytes":0,"body_sha256":sha256(""),"error":null}),
+                ].into_iter().enumerate() {
+                    let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
+                    let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                    let plan = state.plan_response(doc.root(), 1).unwrap();
+                    state.commit_response(plan);
+                }
+                let mut event = json!({"kind":"outcome","status":status,
+                    "error":if status == "failed" {json!("processing failed")} else {json!(null)},
+                    "served_usage":{"promptTokenCount":5,"candidatesTokenCount":3,"totalTokenCount":8,
+                        "cachedContentTokenCount":1,"thoughtsTokenCount":2}});
+                match defect {
+                    "null" => event["served_usage"] = json!(null),
+                    "zero" => {
+                        for value in event["served_usage"].as_object_mut().unwrap().values_mut() {
+                            *value = json!(0);
+                        }
+                    }
+                    "missing" => { event.as_object_mut().unwrap().remove("served_usage"); }
+                    "total" => event["served_usage"]["totalTokenCount"] = json!(9),
+                    "cached" => event["served_usage"]["cachedContentTokenCount"] = json!(6),
+                    "thoughts" => event["served_usage"]["thoughtsTokenCount"] = json!(4),
+                    "negative" => event["served_usage"]["thoughtsTokenCount"] = json!(-1),
+                    _ => {}
+                }
+                let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":3,"event":event}}).to_string();
+                let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                let plan = state.plan_response(doc.root(), 1);
+                assert_eq!(plan.is_ok(), matches!(defect, "valid" | "null" | "zero"), "{status}/{defect}");
+                assert_eq!(state.responses.len(), 1, "planning must not mutate admission state");
             }
         }
     }
@@ -599,7 +653,7 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","status":"completed","error":null}),
+                json!({"kind":"outcome","served_usage":null,"status":"completed","error":null}),
             ].into_iter().enumerate() {
                 if id == "b" && event["kind"] == "outcome" {
                     assert!(state.validate_summary(terminal.root(), 3, 2).is_err());
@@ -633,7 +687,7 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","status":status,"error":if status == "failed" {json!("failure")} else {json!(null)}}),
+                json!({"kind":"outcome","served_usage":null,"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)}}),
             ].into_iter().enumerate() {
                 let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();

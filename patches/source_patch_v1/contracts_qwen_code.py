@@ -8167,7 +8167,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 7;",
+            "export const CHAT_RECORDING_VERSION = 8;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8214,11 +8214,32 @@ def _validate_served_accounting_after(state: State) -> None:
         "requireCompatibleProcessing(state.httpStatus, state.termination, event)",
         "completed processing has no successful HTTP transport completion",
     ), label=label)
+    _require_all(state, core + "core/model-response-evidence.ts", (
+        "readonly served_usage: ServedUsage | null", "observeUsage(usage: ServedUsage)",
+        "served usage follows response processing completion",
+        "SERVED_USAGE_FIELDS.map((field) => [field, counts[field]])",
+        "['kind', 'status', 'error', 'served_usage']",
+        "requireServedUsage(event['served_usage'], 'recorded response usage')",
+    ), label=label)
+    pipeline_usage = _source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label)
+    _require_ordered(pipeline_usage.split("const openaiResponse =", 1)[1], (
+        "observeOpenAIUsage(", "providerOutputContext.getStore()?.observe(openaiResponse)",
+        "convertOpenAIResponseToGemini(", "if (usage.kind === 'invalid')",
+    ), label=label, location="nonstream physical usage before conversion")
+    _require_ordered(pipeline_usage.split("const usage = observeOpenAIUsage(chunk.usage", 1)[1], (
+        "lastUsage = usage.usage", "providerOutput?.observe(chunk)",
+        "convertOpenAIChunkToGemini(", "if (usage.kind === 'invalid')",
+    ), label=label, location="stream physical usage before conversion")
+    _require_all(state, core + "core/openaiContentGenerator/pipeline.ts", (
+        "usage === null || usage === undefined", "response.observeUsage(counts)",
+        "requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage')",
+    ), label=label)
     response_recorder = _source(state, core + "core/model-response-evidence.ts", label=label)
     outcome_write = response_recorder.split("const processing: ModelResponseOutcome = cleanup", 1)[1]
     _require_ordered(outcome_write, (
         "await this.enqueue(async () => {", "requireCompatibleProcessing(",
-        "await this.write({ kind: 'outcome', ...processing });", "this.processing = processing;",
+        "await this.write({", "kind: 'outcome'", "...processing",
+        "served_usage: this.servedUsage", "this.processing = processing;",
     ), label=label, location=core + "core/model-response-evidence.ts")
     _require_all(state, core + "core/model-request-evidence.ts", (
         "export class ModelEvidenceReplay", "open_response_ids", "await this.persistResponse(evidence)",
@@ -8383,7 +8404,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
-        'joinpath("stream-contract-v5.json").read_bytes()', "Draft7Validator(_SCHEMA)",
+        'joinpath("stream-contract-v6.json").read_bytes()', "Draft7Validator(_SCHEMA)",
         "require_json_values(record)", "raise self._failure", "expected_session",
         'identity["stream_contract_sha256"] == STREAM_CONTRACT_SHA256',
         'session.requests.observe_request(record["request"])',
@@ -8403,6 +8424,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'state.processing_status = event["status"]', "not attempt.accepted",
         "200 <= state.http_status < 300", 'state.termination in ("eof", "cancelled")',
         'state.termination = event["termination"]',
+        'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
         "completed processing has no successful HTTP transport completion",
         "not self.responses", "not self.root_open and not self.blocks",
     ), label=label)
@@ -8487,10 +8509,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "state.httpStatus >= 200 && state.httpStatus < 300",
         '"eof".equals(state.termination) || "cancelled".equals(state.termination)',
         'state.termination = (String) event.get("termination")',
+        'RecordAdmission.servedUsage(object(event.get("served_usage")))',
         "completed processing has no successful HTTP transport completion",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v5.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v6.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (
@@ -10607,7 +10630,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Required diagnostics survive cached daemon/ACP pages, SDKs and visible client selectors; "
             "array conveniences refuse discarded diagnostics and Desktop reconciles absence only "
             "after a complete scan without refusals. Catalog admission is not full resume certification. "
-            "Canonical version 7 binds every atomic accepted or abandoned generation to its real "
+            "Canonical version 8 binds every atomic accepted or abandoned generation to its real "
             "chat attempt; abandoned output cannot become resume history. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
             "including image payload state, without inferring admission from display records. Tool "

@@ -122,10 +122,20 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             state["ended"] = True
             state["termination"] = termination
         elif event["kind"] == "outcome":
-            if set(event) != {"kind", "status", "error"} or event["status"] not in ("completed", "failed", "cancelled") or not (event["error"] is None or isinstance(event["error"], str)) or (event["status"] == "completed" and event["error"] is not None) or (event["status"] == "failed" and not isinstance(event["error"], str)):
+            if set(event) != {"kind", "status", "error", "served_usage"} or event["status"] not in ("completed", "failed", "cancelled") or not (event["error"] is None or isinstance(event["error"], str)) or (event["status"] == "completed" and event["error"] is not None) or (event["status"] == "failed" and not isinstance(event["error"], str)):
                 raise ValueError("invalid response processing outcome; inspect the original stream")
             if event["status"] == "completed" and (not state["http"] or not 200 <= actual["response_status"] < 300 or state["termination"] not in ("eof", "cancelled")):
                 raise ValueError("completed processing has no successful HTTP transport completion; inspect the original stream")
+            usage = event["served_usage"]
+            fields = {"promptTokenCount", "candidatesTokenCount", "totalTokenCount", "thoughtsTokenCount", "cachedContentTokenCount"}
+            if usage is not None and (not isinstance(usage, dict) or set(usage) != fields
+                    or any(type(value) is not int or not 0 <= value <= 2**53 - 1 for value in usage.values())
+                    or usage["totalTokenCount"] != usage["promptTokenCount"] + usage["candidatesTokenCount"]
+                    or usage["thoughtsTokenCount"] > usage["candidatesTokenCount"]
+                    or usage["cachedContentTokenCount"] > usage["promptTokenCount"]):
+                raise ValueError("invalid response served usage; inspect the original stream")
+            if event["status"] == "completed" and "served_usage" in actual and usage != actual["served_usage"]:
+                raise ValueError("completed response usage differs from provider; inspect the original stream")
             state["outcome"] = event["status"]
             state["closed"] = state["owner"]["kind"] == "utility"
         elif event["kind"] == "history":

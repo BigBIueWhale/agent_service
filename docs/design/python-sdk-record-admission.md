@@ -2,7 +2,7 @@
 
 Every CLI stdout record enters one Query-owned admission state before it changes
 session identity, routes a control callback or reaches an SDK consumer. The Python
-package carries the exact authoritative stream-contract-v5.json bytes; the source
+package carries the exact authoritative stream-contract-v6.json bytes; the source
 transformer binds this resource to the repository contract and refuses drift.
 Draft 7 validation handles structural constraints. The resource digest identifies
 the accepted protocol, including init and session-start declarations. There is no

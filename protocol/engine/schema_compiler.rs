@@ -706,7 +706,7 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const SOURCE: &[u8] = include_bytes!("../stream-contract-v5.json");
+    const SOURCE: &[u8] = include_bytes!("../stream-contract-v6.json");
 
     #[test]
     fn schema_identity_is_derived_from_the_owned_definition() {

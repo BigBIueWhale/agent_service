@@ -452,3 +452,35 @@ source identities, with only the two intended client paths changed. Framework
 tests pass 38 cases and the semantic concern count remains 35. These results
 establish the bounded source change and patch identity, not native or release
 qualification or completion of the standing goal.
+
+## Physical usage ownership after 9e22115
+
+The physical response outcome now records the last complete valid cumulative
+served-usage report observed by SDK processing, or explicit null. Observation
+precedes conversion and error handling so a later failure cannot erase the
+physical association. This closes the typed physical-usage omission reproduced
+by 21 baseline source cases. It does not close the logical completion, output
+projection or billing reconciliation gaps. See [the physical usage note](physical-response-usage.md)
+for ownership, malformed-report handling, evidence and verification limits.
+
+This shape requires stdout contract 6 and canonical recording version 8. Resume
+continues to read structurally separate runtime history and evidence; history
+content and replay order are unchanged by source reading. Older canonical files,
+including version 7, are refused with their existing file-local diagnostics and
+possible next actions. Full new-version canonical restoration remains unverified
+pending the owner's binding generation and gates.
+
+Executed candidate source checks comprise 37 independent actual-SDK cases,
+517 affected permanent core tests, 1,135 independent Python/schema cases,
+310 permanent SDK admission cases and eight fake-provider helper methods.
+Five full-wire ChatAttempt cases encountered the intentionally unchanged version
+5 generated validator. No substitute validator was installed and those cases
+are unqualified. Native and Java cases are authored, not run. No build,
+generator, typecheck, release, deployment or push was run.
+
+The final fresh archive matched all 1,062 source identities and 26 saved test
+source identities, with exactly 24 intended client paths changed. All 6,925
+review hunks matched both coordinate systems; unrelated authoritative edits and
+protected release inputs are unchanged. Framework tests passed 38 cases and
+identifiers retain 35 semantic concerns. These checks qualify the source splice,
+not compilation, owner gates or the standing goal's remaining implementation.

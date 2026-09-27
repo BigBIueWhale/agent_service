@@ -1175,7 +1175,7 @@ class SourceVectorTransactionTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         artifact_paths = tuple(
             f"protocol/test-vectors/{name}.json" for name in cls.vector_names
-        ) + ("protocol/stream-contract-v5.json",)
+        ) + ("protocol/stream-contract-v6.json",)
         cls.artifact_bytes = {
             path: (root / path).read_bytes() for path in artifact_paths
         }
@@ -1183,9 +1183,9 @@ class SourceVectorTransactionTests(unittest.TestCase):
             f"packages/core/src/utils/__fixtures__/{name}.json"
             for name in cls.vector_names
         }
-        expected.add("packages/sdk-python/src/qwen_code_sdk/stream-contract-v5.json")
+        expected.add("packages/sdk-python/src/qwen_code_sdk/stream-contract-v6.json")
         expected.update((
-            "packages/sdk-java/qwencode/src/main/resources/stream-contract-v5.json",
+            "packages/sdk-java/qwencode/src/main/resources/stream-contract-v6.json",
             "packages/sdk-java/qwencode/src/test/resources/record-evidence.json",
             "packages/sdk-python/tests/fixtures/record-evidence.json",
             "packages/sdk-typescript/test/fixtures/record-evidence.json",
@@ -1321,17 +1321,17 @@ class SourceVectorTransactionTests(unittest.TestCase):
                 )
 
     def test_python_schema_drift_refuses_before_writes(self) -> None:
-        path = "packages/sdk-python/src/qwen_code_sdk/stream-contract-v5.json"
+        path = "packages/sdk-python/src/qwen_code_sdk/stream-contract-v6.json"
         self._assert_refused(
             "Python SDK stream schema differs",
             {path: self.generated_outputs[path] + "\n"},
         )
-        schema = self.artifact / "protocol/stream-contract-v5.json"
+        schema = self.artifact / "protocol/stream-contract-v6.json"
         schema.write_bytes(schema.read_bytes().replace(b"\n", b"\r\n"))
         self._assert_refused("Python SDK stream schema differs")
 
     def test_java_schema_drift_refuses_before_writes(self) -> None:
-        path = "packages/sdk-java/qwencode/src/main/resources/stream-contract-v5.json"
+        path = "packages/sdk-java/qwencode/src/main/resources/stream-contract-v6.json"
         self._assert_refused(
             "Java SDK stream schema differs",
             {path: self.generated_outputs[path] + "\n"},

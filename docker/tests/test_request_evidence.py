@@ -72,7 +72,7 @@ class ResponseEvidenceTests(unittest.TestCase):
             envelope(1, {"kind": "http", "status": 200, "content_type": "text/event-stream"}),
             envelope(2, {"kind": "body", "offset": 0, "base64": base64.b64encode(body).decode()}),
             envelope(3, {"kind": "end", "termination": termination, "body_bytes": len(body), "body_sha256": hashlib.sha256(body).hexdigest(), "error": None}),
-            envelope(4, {"kind": "outcome", "status": "failed", "error": "malformed JSON"}),
+            envelope(4, {"kind": "outcome", "served_usage": None, "status": "failed", "error": "malformed JSON"}),
             {"type": "result", "request_evidence": {"open_response_ids": []}},
         ]
         served = [{"response_status": 200, "response_content_type": "text/event-stream", "response_chunks": [base64.b64encode(body + (b"unobserved" if termination == "cancelled" else b"")).decode()]}]
@@ -100,6 +100,34 @@ class ResponseEvidenceTests(unittest.TestCase):
                                 require_response_evidence(events, served)
                         else:
                             self.assertEqual(len(require_response_evidence(events, served)), 4)
+
+    def test_physical_usage_is_explicit_and_valid(self):
+        from request_evidence import require_response_evidence
+        for status in ("completed", "failed", "cancelled"):
+            for defect in ("valid", "null", "zero", "missing", "extra", "fraction", "negative", "unsafe", "boolean", "total", "cached", "thoughts", "provider"):
+                with self.subTest(status=status, defect=defect):
+                    events, served = self.fixture()
+                    usage = dict(promptTokenCount=5, candidatesTokenCount=3, totalTokenCount=8,
+                                 cachedContentTokenCount=1, thoughtsTokenCount=2)
+                    event = events[-2]["response"]["event"]
+                    event.update(status=status, error="processing failed" if status == "failed" else None, served_usage=usage)
+                    if defect == "null": event["served_usage"] = None
+                    if defect == "zero": event["served_usage"] = dict.fromkeys(usage, 0)
+                    if defect == "missing": del event["served_usage"]
+                    if defect == "extra": usage["estimated"] = True
+                    if defect == "fraction": usage["thoughtsTokenCount"] = 0.5
+                    if defect == "negative": usage["thoughtsTokenCount"] = -1
+                    if defect == "unsafe": usage["totalTokenCount"] = 2**53
+                    if defect == "boolean": usage["thoughtsTokenCount"] = False
+                    if defect == "total": usage["totalTokenCount"] = 9
+                    if defect == "cached": usage["cachedContentTokenCount"] = 6
+                    if defect == "thoughts": usage["thoughtsTokenCount"] = 4
+                    if defect == "provider": served[0]["served_usage"] = dict.fromkeys(usage, 0)
+                    valid = defect in ("valid", "null", "zero") or (defect == "provider" and status != "completed")
+                    if valid:
+                        self.assertEqual(len(require_response_evidence(events, served)), 4)
+                    else:
+                        with self.assertRaises(ValueError): require_response_evidence(events, served)
 
     def test_missing_or_changed_wire_is_refused(self):
         from request_evidence import require_response_evidence
@@ -130,7 +158,7 @@ class ResponseEvidenceTests(unittest.TestCase):
         self.assertEqual(len(require_response_evidence(events, served)), 5)
         history["response"]["event"]["disposition"] = "accepted"
         with self.assertRaises(ValueError): require_response_evidence(events, served)
-        events[-3]["response"]["event"] = {"kind": "outcome", "status": "completed", "error": None}
+        events[-3]["response"]["event"] = {"kind": "outcome", "served_usage": None, "status": "completed", "error": None}
         self.assertEqual(len(require_response_evidence(events, served)), 5)
 
     def test_output_cannot_claim_an_unissued_or_foreign_attempt(self):

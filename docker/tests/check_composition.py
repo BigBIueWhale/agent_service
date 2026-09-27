@@ -252,6 +252,13 @@ class StubHandler(BaseHTTPRequestHandler):
                      "usage": {"prompt_tokens": 32, "completion_tokens": 8, "total_tokens": 40,
                                "prompt_tokens_details": {"cached_tokens": 0},
                                "completion_tokens_details": {"reasoning_tokens": 0}}}
+            self.response_record["served_usage"] = {
+                "promptTokenCount": chunk["usage"]["prompt_tokens"],
+                "candidatesTokenCount": chunk["usage"]["completion_tokens"],
+                "totalTokenCount": chunk["usage"]["total_tokens"],
+                "thoughtsTokenCount": chunk["usage"]["completion_tokens_details"]["reasoning_tokens"],
+                "cachedContentTokenCount": chunk["usage"]["prompt_tokens_details"]["cached_tokens"],
+            }
             self.reply(200, ("data: " + json.dumps(chunk) + "\n\ndata: [DONE]\n\n").encode(), "text/event-stream")
         except Exception as error:
             self.refuse(error)
@@ -754,7 +761,7 @@ print(json.dumps(found))
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v5.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v6.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")

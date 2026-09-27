@@ -232,7 +232,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 7 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 8 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all(all(field not in event for field in
                     ("recordingVersion", "checkpointVersion", "historyRevision", "afterCommit"))
@@ -439,6 +439,13 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                         "usage": {"prompt_tokens": 32, "completion_tokens": 8, "total_tokens": 40,
                                   "prompt_tokens_details": {"cached_tokens": 0},
                                   "completion_tokens_details": {"reasoning_tokens": 0}}}
+                    self.response_record["served_usage"] = {
+                        "promptTokenCount": chunk["usage"]["prompt_tokens"],
+                        "candidatesTokenCount": chunk["usage"]["completion_tokens"],
+                        "totalTokenCount": chunk["usage"]["total_tokens"],
+                        "thoughtsTokenCount": chunk["usage"]["completion_tokens_details"]["reasoning_tokens"],
+                        "cachedContentTokenCount": chunk["usage"]["prompt_tokens_details"]["cached_tokens"],
+                    }
                     self.reply(200, ("data: " + json.dumps(chunk) + "\n\ndata: [DONE]\n\n").encode(), "text/event-stream")
                 except Exception as error:
                     failures.append(str(error))

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `41fb9fdc44591bd9d0008bc4de5984747ff4f81142ba188fd2f6b40649bac7f1`
+- Review-diff SHA-256: `aaffac1d0c1e65d4e07f63a6da030bed6ea26525bbfb775fc01dcbea4db4a918`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `ab3b9fe72cc66730fee5dc347e1f619849540a5ecae254919ff165cd785b983b`
+- Transformer-manifest SHA-256: `f41f61636fdd4efef8c9b6c1c8f4c53d09aa3b5ab1525a70eba609bfef341a76`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 7`, independently
+Every physical canonical chat record carries `recordingVersion: 8`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -365,7 +365,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 7 histories.
+new session. They are not promoted into complete version 8 histories.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory

@@ -2,7 +2,7 @@
 
 Addendum 2 authorizes one first bank for items 1 and 2, followed by an implementation/lock commit pair. The first bank establishes the emitted-wire contract and the actual service gate. Configuration authorization, provider-operation settlement and transactional continuation remain later obligations; the first certificate must not claim them.
 
-The sole versioned JSON definition in `protocol/stream-contract-v5.json` owns the accepted top-level and nested event variants and their structural constraints. Build-time generators derive the Rust discriminators and TypeScript validators from that exact definition. The existing real CLI envelope remains the one production format. Initial `stream_event/goal_state` is retained. Unknown or malformed variants are refused with their bytes/evidence retained.
+The sole versioned JSON definition in `protocol/stream-contract-v6.json` owns the accepted top-level and nested event variants and their structural constraints. Build-time generators derive the Rust discriminators and TypeScript validators from that exact definition. The existing real CLI envelope remains the one production format. Initial `stream_event/goal_state` is retained. Unknown or malformed variants are refused with their bytes/evidence retained.
 
 The production Rust captured-stream owner is shared by the service and `event_certifier`. It owns initialization, identity, scope/tool ancestry, partial ordering, served accounting and terminal interpretation. The descriptor reader supplies exact LF-framed bytes and independently established capture facts. Native parsing retains exact JSON numbers and refuses duplicate keys and invalid Unicode before host conversion; reverting to the older lossy serde/jsonschema bridge is not part of the correction. A certificate describes conforming captured output, not provider reclamation, configuration authorization or semantic fidelity of a model result.
 
@@ -20,7 +20,7 @@ Evidence records cannot create conversation turns or child scopes. A full reques
 starts each invocation and committed compaction segment; subsequent records retain
 an unchanged message prefix and carry the replacement suffix and exact envelope.
 The native reader and SDK validate physical order and reconstructed UTF-8 hashes.
-Canonical history uses `recordingVersion: 7` and its own structurally disjoint
+Canonical history uses `recordingVersion: 8` and its own structurally disjoint
 request record. Full and indexed restoration validate evidence before projecting
 history; `output/events.jsonl` remains byte-exact stdout evidence.
 

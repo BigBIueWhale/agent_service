@@ -371,7 +371,7 @@ mod tests {
                         serde_json::json!({"kind":"http","status":200,"content_type":"application/json"}),
                         serde_json::json!({"kind":"body","offset":0,"base64":"e30="}),
                         serde_json::json!({"kind":"end","termination":"eof","body_bytes":raw_response.len(),"body_sha256":response_hash,"error":null}),
-                        serde_json::json!({"kind":"outcome","status":"completed","error":null}),
+                        serde_json::json!({"kind":"outcome","status":"completed","error":null,"served_usage":null}),
                         serde_json::json!({"kind":"history","disposition":"accepted"}),
                     ].into_iter().enumerate() {
                         let response = serde_json::json!({"type":"model_response","uuid":format!("response-evidence-{sequence}-{index}"),"session_id":record["session_id"],"parent_tool_use_id":null,
