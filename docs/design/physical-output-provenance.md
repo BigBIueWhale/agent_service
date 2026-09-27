@@ -299,7 +299,7 @@ provider or deployed application execution establishes the repair yet.
 
 ## Provider coverage at the request boundary
 
-`createContentGenerator` can select OpenAI-compatible, Qwen OAuth, Anthropic,
+The patched Qwen client can select OpenAI-compatible, Qwen OAuth, Anthropic,
 Gemini and Vertex generators. Qwen OAuth inherits the OpenAI generator. In the
 current source, the only production call to `modelRequests.capture` is in the
 OpenAI pipeline. `AnthropicContentGenerator` and `GeminiContentGenerator` build
@@ -321,8 +321,15 @@ must admit the actual dispatched body and response at each provider's
 transport boundary, select a provider-specific decoder policy before dispatch,
 and attach every chat retry to the common attempt journal. The journal and
 admitting readers must retain one shared completeness rule while interpreting
-each provider's distinct wire format. An OpenAI-only receipt or verifier cannot
-close this gap for all configured agent_service users.
+each provider's distinct wire format.
+
+The sealed `agent_service` deployment is narrower than the patched client's
+provider menu. `docker/config/settings.json` enforces `openai` authentication
+and names only its local vLLM provider; `docker/scripts/verify_runtime_contract.py`
+refuses a settings file with any other provider set. An OpenAI response proof
+therefore covers every model session admitted by this deployment, including
+ordinary and long sessions. The other generators remain a separate client
+coverage defect if the patched Qwen package is used outside the sealed service.
 
 This finding also limits the existing physical-output proof plan. A verifier
 for OpenAI SSE is necessary for the vLLM deployment but cannot be described as
