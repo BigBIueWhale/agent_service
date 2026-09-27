@@ -198207,7 +198207,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.tokenize.tes
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/packages/core/src/core/openaiContentGenerator/pipeline.ts
 --- a/packages/core/src/core/openaiContentGenerator/pipeline.ts
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline.ts
-@@ -1,64 +1,109 @@
+@@ -1,64 +1,101 @@
 +import { AsyncLocalStorage } from 'node:async_hooks';
 +import {
 +  describeResponseFailure,
@@ -198215,11 +198215,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  type ModelResponseRecorder,
 +} from '../model-response-evidence.js';
 +import type { RecordingClock } from '../recording-clock.js';
-+import {
-+  requireServedUsage,
-+  ResponseObservationError,
-+  type ServedUsage,
-+} from '../served-usage.js';
++import { ResponseObservationError } from '../served-usage.js';
  /**
   * @license
   * Copyright 2025 Qwen
@@ -198248,7 +198244,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  TextTokenCountRequest,
  } from '../contentGenerator.js';
 -import { OpenAIContentConverter } from './converter.js';
-+import { mapOpenAIUsage, OpenAIContentConverter } from './converter.js';
++import { OpenAIContentConverter } from './converter.js';
  import { DashScopeOpenAICompatibleProvider } from './provider/dashscope.js';
  import {
    applyOfficialOpenAIPromptCaching,
@@ -198295,9 +198291,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -import { logProtocolTagSanitized } from '../../telemetry/loggers.js';
 -import { ProtocolTagSanitizedEvent } from '../../telemetry/types.js';
 +import {
++  decodeOpenAIResponse,
 +  OpenAIStreamDecoder,
++  readOpenAIUsage,
 +  type OpenAIUsageObservation,
-+} from './streamDecoder.js';
++} from './responseDecoder.js';
  import { getErrorMessage, getErrorStatus } from '../../utils/errors.js';
  import { getRateLimitErrorDetails } from '../../utils/rateLimit.js';
  import {
@@ -198315,15 +198313,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  usage: OpenAI.CompletionUsage | null | undefined,
 +  response: ModelResponseRecorder,
 +): OpenAIUsageObservation {
-+  if (usage === null || usage === undefined) return { kind: 'absent' };
-+  let counts: ServedUsage;
-+  try {
-+    counts = requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage');
-+  } catch (cause) {
-+    return { kind: 'invalid', cause };
-+  }
-+  response.observeUsage(counts);
-+  return { kind: 'observed', usage: counts };
++  const observation = readOpenAIUsage(usage);
++  if (observation.kind === 'observed') response.observeUsage(observation.usage);
++  return observation;
 +}
  
  function isRequiredThinkingError(error: unknown): boolean {
@@ -198331,7 +198323,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const providerMessage = getRateLimitErrorDetails(error).providerMessage;
    const message = `${getErrorMessage(error)} ${providerMessage ?? ''}`;
    return (
-@@ -81,7 +126,31 @@
+@@ -81,7 +118,31 @@
  }
  
  /**
@@ -198364,7 +198356,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   * `code: 'ETIMEDOUT'` makes `classifyRetryError` treat it as a retryable
   * transport error, identical to a real socket read timeout.
   */
-@@ -95,25 +164,23 @@
+@@ -95,25 +156,23 @@
    ) {
      super(
        `No stream activity for ${idleMs}ms after ${chunksReceived} chunks ` +
@@ -198401,7 +198393,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
   */
  export class StreamLifetimeExceededError extends Error {
    readonly code = 'ETIMEDOUT' as const;
-@@ -124,11 +191,11 @@
+@@ -124,11 +183,11 @@
      readonly streamLifetimeMs: number,
    ) {
      super(
@@ -198418,7 +198410,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      );
      this.name = 'StreamLifetimeExceededError';
    }
-@@ -180,20 +247,17 @@
+@@ -180,20 +239,17 @@
      this.status = httpStatus;
      this.request_id = requestId;
    }
@@ -198443,7 +198435,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -220,75 +284,41 @@
+@@ -220,75 +276,41 @@
        samplingParams[key] = requestMaxTokens;
      }
    }
@@ -198552,7 +198544,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  readonly requestTimeoutMs: number;
 +  /** The upstream wait the generation may take from its first chunk. */
 +  readonly generationMs: number;
-@@ -298,32 +328,29 @@
+@@ -298,32 +320,29 @@
 - * Wraps a streaming chunk source with two guards. The inactivity watchdog: if
 - * no chunk arrives for `idleMs`, `abortRequest()` is invoked (to abort the
 - * underlying request and free the socket) and the iterator throws — a user
@@ -198605,7 +198597,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    const it = source[Symbol.asyncIterator]();
    // Monotonic, never `Date.now()`: an NTP step must not kill a healthy
    // generation on the next iteration (a forward jump) nor silently disable
-@@ -331,97 +358,109 @@
+@@ -331,97 +350,109 @@
    // guard exists to bound. The setTimeout this races is a monotonic clock
    // too, so the two agree.
    const streamStartedAt = performance.now();
@@ -198772,7 +198764,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    } finally {
      abortRequest();
      try {
-@@ -435,196 +474,375 @@
+@@ -435,196 +466,366 @@
  export type { PipelineConfig } from './types.js';
  
 +/** Every request this pipeline sends names the model it is for. */
@@ -198967,16 +198959,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +          providerOutputContext.getStore()?.observe(openaiResponse);
            reportOpenAiResponse(telemetryAttempt, openaiResponse);
  
-           const geminiResponse =
-             OpenAIContentConverter.convertOpenAIResponseToGemini(
-               openaiResponse,
-               context,
-             );
-+
-+          if (usage.kind === 'invalid')
-+            throw new ResponseObservationError(geminiResponse, usage.cause);
- 
-           return geminiResponse;
+-          const geminiResponse =
+-            OpenAIContentConverter.convertOpenAIResponseToGemini(
+-              openaiResponse,
+-              context,
+-            );
+-
+-          return geminiResponse;
++          return decodeOpenAIResponse(openaiResponse, context, usage);
          } finally {
 -          perRequestAc?.abort();
 +          perRequestAc.abort();
@@ -199248,7 +199238,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
    /**
     * Stage 2: Process OpenAI stream with conversion and logging
-@@ -635,192 +853,40 @@
+@@ -635,192 +836,40 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -199462,7 +199452,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
-@@ -829,16 +895,18 @@
+@@ -829,16 +878,18 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -199488,7 +199478,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ) {
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
-@@ -845,9 +913,9 @@
+@@ -845,9 +896,9 @@
            isLifetime
 -            ? 'OpenAI stream lifetime cap exceeded'
 +            ? 'OpenAI stream generation bound exceeded'
@@ -199500,7 +199490,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              // the log reconcile the same way the error message does.
              wallClockMs: error.streamLifetimeMs,
              ...(isLifetime
-@@ -858,100 +926,19 @@
+@@ -858,100 +909,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -199602,7 +199592,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -991,13 +978,12 @@
+@@ -991,13 +961,12 @@
        // classifier's respond_in_schema) can force the model to emit a tool
        // call instead of free-texting. Without this, thinking-heavy models
        // may consume the tiny output budget on reasoning and skip the tool.
@@ -199621,7 +199611,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        }
      }
  
-@@ -1029,13 +1015,13 @@
+@@ -1029,13 +998,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -199636,7 +199626,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +1033,14 @@
+@@ -1047,15 +1016,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -199654,7 +199644,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1158,20 @@
+@@ -1173,12 +1141,20 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -199675,7 +199665,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,39 +1311,83 @@
+@@ -1318,39 +1294,83 @@
    }
  
    /**
@@ -199767,7 +199757,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        return await executeAttempt();
      } catch (error) {
        const model = context.model.toLowerCase();
-@@ -1400,13 +1437,16 @@
+@@ -1400,13 +1420,16 @@
     * Create request context with common properties
     */
    private createRequestContext(
@@ -199785,7 +199775,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        ? new StreamingToolCallParser()
        : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1454,21 @@
+@@ -1414,15 +1437,21 @@
      const taggedThinkingParser =
        isStreaming && responseParsingOptions?.taggedThinkingTags
          ? new TaggedThinkingParser()
@@ -412333,24 +412323,58 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.ts b/pac
        `Analyzing ${eligibleSessions.length} eligible recent sessions with LLM...`,
      );
  
-diff --git a/packages/core/src/core/openaiContentGenerator/streamDecoder.ts b/packages/core/src/core/openaiContentGenerator/streamDecoder.ts
+diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/packages/core/src/core/openaiContentGenerator/responseDecoder.ts
 --- /dev/null
-+++ b/packages/core/src/core/openaiContentGenerator/streamDecoder.ts
-@@ -0,0 +1,103 @@
++++ b/packages/core/src/core/openaiContentGenerator/responseDecoder.ts
+@@ -0,0 +1,137 @@
 +/** One response-scoped conversion path for streamed provider values. */
 +import { GenerateContentResponse } from '@google/genai';
 +import type OpenAI from 'openai';
 +import { InvalidStreamError } from '../invalid-stream-error.js';
 +import { preserveGenerationObservation } from '../model-generation.js';
-+import { ResponseObservationError, type ServedUsage } from '../served-usage.js';
++import {
++  requireServedUsage,
++  ResponseObservationError,
++  type ServedUsage,
++} from '../served-usage.js';
 +import { getToolCallPreparations } from '../tool-call-preparation.js';
-+import { OpenAIContentConverter } from './converter.js';
++import { mapOpenAIUsage, OpenAIContentConverter } from './converter.js';
 +import type { RequestContext } from './types.js';
 +
 +export type OpenAIUsageObservation =
 +  | { kind: 'absent' }
 +  | { kind: 'invalid'; cause: unknown }
 +  | { kind: 'observed'; usage: ServedUsage };
++
++/** Apply the same served-usage validation during live processing and replay. */
++export function readOpenAIUsage(
++  usage: OpenAI.CompletionUsage | null | undefined,
++): OpenAIUsageObservation {
++  if (usage === null || usage === undefined) return { kind: 'absent' };
++  try {
++    return {
++      kind: 'observed',
++      usage: requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage'),
++    };
++  } catch (cause) {
++    return { kind: 'invalid', cause };
++  }
++}
++
++/** Decode one nonstreaming SDK value with its preceding usage observation. */
++export function decodeOpenAIResponse(
++  completion: OpenAI.Chat.ChatCompletion,
++  context: RequestContext,
++  usage: OpenAIUsageObservation,
++): GenerateContentResponse {
++  const response = OpenAIContentConverter.convertOpenAIResponseToGemini(
++    completion,
++    context,
++  );
++  if (usage.kind === 'invalid')
++    throw new ResponseObservationError(response, usage.cause);
++  return response;
++}
 +
 +/**
 + * The selected RequestContext is private to one response. A terminal remains

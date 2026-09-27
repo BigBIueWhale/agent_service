@@ -640,7 +640,7 @@ def _validate_stream_commit_after(state: State) -> None:
         "for (const response of decoder.finish()) yield response",
         "ResponseObservationError",
     ), label=label)
-    _require_all(state, "packages/core/src/core/openaiContentGenerator/streamDecoder.ts", (
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/responseDecoder.ts", (
         "private terminal: GenerateContentResponse | undefined;",
         "INVALID_RESPONSE_SEQUENCE",
         "ResponseObservationError",
@@ -1969,12 +1969,14 @@ def _validate_compaction_event_after(state: State) -> None:
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
     _require_ordered(_source(state, pipeline, label=label), (
         "providerOutputContext.getStore()?.observe(openaiResponse);",
-        "OpenAIContentConverter.convertOpenAIResponseToGemini(",
+        "decodeOpenAIResponse(openaiResponse, context, usage)",
         "providerOutput?.observe(chunk);",
         "decoder.accept(chunk, usage)",
     ), label=label, location=pipeline)
-    require_text(state, "packages/core/src/core/openaiContentGenerator/streamDecoder.ts",
-                 "OpenAIContentConverter.convertOpenAIChunkToGemini(", label=label)
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/responseDecoder.ts", (
+        "OpenAIContentConverter.convertOpenAIResponseToGemini(",
+        "OpenAIContentConverter.convertOpenAIChunkToGemini(",
+    ), label=label)
     require_text(state, "packages/core/src/core/baseLlmClient.ts",
                  "rawResponses: providerOutput.responses,", count=5, label=label)
     _require_all(
@@ -8311,14 +8313,18 @@ def _validate_served_accounting_after(state: State) -> None:
     pipeline_usage = _source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label)
     _require_ordered(pipeline_usage.split("const openaiResponse =", 1)[1], (
         "observeOpenAIUsage(", "providerOutputContext.getStore()?.observe(openaiResponse)",
-        "convertOpenAIResponseToGemini(", "if (usage.kind === 'invalid')",
+        "decodeOpenAIResponse(openaiResponse, context, usage)",
     ), label=label, location="nonstream physical usage before conversion")
     _require_ordered(pipeline_usage.split("const usage = observeOpenAIUsage(chunk.usage", 1)[1], (
         "decoder.observeUsage(usage)", "providerOutput?.observe(chunk)",
         "decoder.accept(chunk, usage)",
     ), label=label, location="stream physical usage before conversion")
-    stream_decoder = core + "core/openaiContentGenerator/streamDecoder.ts"
-    _require_all(state, stream_decoder, (
+    response_decoder = core + "core/openaiContentGenerator/responseDecoder.ts"
+    _require_all(state, response_decoder, (
+        "export function readOpenAIUsage(",
+        "requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage')",
+        "export function decodeOpenAIResponse(",
+        "OpenAIContentConverter.convertOpenAIResponseToGemini(",
         "export class OpenAIStreamDecoder", "convertOpenAIChunkToGemini(",
         "if (usage.kind === 'invalid')", "this.terminal.usageMetadata = this.lastUsage",
         "preserveGenerationObservation(diagnostic, response)",
@@ -8329,8 +8335,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "for (const diagnostic of decoder.diagnostics()) yield diagnostic",
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/pipeline.ts", (
-        "usage === null || usage === undefined", "response.observeUsage(counts)",
-        "requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage')",
+        "const observation = readOpenAIUsage(usage)",
+        "response.observeUsage(observation.usage)",
     ), label=label)
     response_recorder = _source(state, core + "core/model-response-evidence.ts", label=label)
     outcome_write = response_recorder.split("const processing: ModelResponseOutcome = cleanup", 1)[1]
