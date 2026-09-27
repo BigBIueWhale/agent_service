@@ -89,6 +89,7 @@ pub(crate) struct Generation {
     pub usage: Option<ServedUsage>,
     pub finish: Option<String>,
     pub observation_count: u64,
+    pub source_requests: Vec<String>,
     pub text: String,
     pub thinking: String,
     pub calls: Vec<Call>,
@@ -236,6 +237,7 @@ impl Generation {
                 .as_str()
                 .map(str::to_string),
             observation_count,
+            source_requests: Vec::with_capacity(observations.len()),
             text: String::new(),
             thinking: String::new(),
             calls: Vec::new(),
@@ -260,6 +262,9 @@ impl Generation {
         let mut observed_finish = None;
         let mut previous_plain_nonempty = false;
         for observation in observations {
+            generation
+                .source_requests
+                .push(text(observation, "source_request_id", line)?.into());
             let response = field(observation, "response", line)?;
             if let Some(usage) = response
                 .get("usageMetadata")

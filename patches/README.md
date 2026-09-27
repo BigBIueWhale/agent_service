@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 11`, independently
+Every physical canonical chat record carries `recordingVersion: 12`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -365,7 +365,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 11 histories.
+new session. They are not promoted into complete version 12 histories.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
@@ -482,7 +482,7 @@ from the request's start, idle and generation clocks. A hung storage write can
 still defeat session deadlines; the shared write/cancellation correction remains
 open in the [audit disposition](../docs/design/stream-completeness-audit.md).
 
-Canonical format 11 structurally excludes response evidence from messages,
+Canonical format 12 structurally excludes response evidence from messages,
 conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix
@@ -494,9 +494,10 @@ entire restored model history byte for byte while preserving raw evidence.
 
 Each response outcome also records how many SDK values reached conversion and
 how many decoded outputs crossed the shared pipeline. A chat attempt completion
-records how many of those outputs Chat incorporated into its generation. Readers
-require that receipt to equal the generation observation count and to fit within
-the physical requests' delivered output count. These boundaries distinguish
+records the producing physical request on each observation and how many outputs
+Chat incorporated into its generation. Readers require that receipt to equal the
+generation observation count and require each request's observations to fit
+within that request's delivered output count. These boundaries distinguish
 early cancellation from a complete response body and a diagnostic expansion
 from one SDK value. They do not yet prove that an observation's contents were
 derived from the captured bytes; a raw-response replay verifier is still needed.

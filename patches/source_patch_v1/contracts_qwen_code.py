@@ -8261,7 +8261,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 11;",
+            "export const CHAT_RECORDING_VERSION = 12;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8334,7 +8334,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "SERVED_USAGE_FIELDS.map((field) => [field, counts[field]])",
         "!keys(event, [",
         "'sdk_values_seen'", "'pipeline_outputs_delivered'",
-        "observeSdkValue(): void", "observePipelineOutput(): void",
+        "observeSdkValue(): void", "observePipelineOutput(response: GenerateContentResponse): void",
+        "recordGenerationSource(response, this.requestId)",
         "requireServedUsage(event['served_usage'], 'recorded response usage')",
     ), label=label)
     pipeline_usage = _source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label)
@@ -8371,7 +8372,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "for (const response of decoder.finish()) {",
         "for (const diagnostic of decoder.diagnostics()) {",
         "responseEvidence.observeSdkValue();",
-        "responseEvidence.observePipelineOutput();",
+        "responseEvidence.observePipelineOutput(response);",
+        "responseEvidence.observePipelineOutput(diagnostic);",
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/pipeline.ts", (
         "const observation = readOpenAIUsage(usage)",
@@ -8406,6 +8408,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "export class ChatAttempt", "readonly id = randomUUID()", "kind: 'chat'",
         "response.finishHistory(disposition)", "Promise.allSettled",
         "get hasRequests(): boolean", "return this.responses.length > 0;", "assertOpen(): void",
+        "observeConsumerOutput(sourceRequestId: string)",
+        "this.responses.some((response) => response.requestId === sourceRequestId)",
     ), label=label)
     attempt_source = _source(state, core + "core/chat-attempt.ts", label=label)
     _require_ordered(attempt_source.split("async finish(disposition:", 1)[1], (
@@ -8419,6 +8423,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label, location="generation publication and complete physical population before logical completion")
     _require_all(state, core + "core/model-generation.ts", (
         "export class ModelGenerationReplay", "readModelGeneration(value)",
+        "recordGenerationSource(", "takeGenerationSource(chunk)",
         "attempt.generation.evidence.generation_sha256 !==",
         "JSON.stringify(completion.request_ids)",
         "attempt.settled.size !== attempt.requests.length",
@@ -8426,6 +8431,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "requireAcceptedGeneration(envelope)",
         "outcome.served_usage![field] !== envelope.usage![field]",
         "completion.consumer_observations !== envelope.observations.length",
+        "generation observation has no ordered physical source",
+        "count > (attempt.outcomes.get(id)?.pipeline_outputs_delivered ?? -1)",
+        "source_request_id: sourceRequestId",
         "the stream ends with an incomplete logical attempt",
     ), label=label)
     _require_ordered(
@@ -8444,6 +8452,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "settlement ??= attempt.finish(disposition ?? 'abandoned')",
         "if (deliveredContent || disposition !== null) throw error;",
         "generator.generateChatContentStream(",
+        "attempt.observeConsumerOutput(observed.source_request_id)",
     ), label=label)
     chat_stream = _source(state, core + "core/geminiChat.ts", label=label).split(
         "const attempt = new ChatAttempt(", 1)[1]
@@ -8607,7 +8616,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v9.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v10.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -8635,6 +8644,8 @@ def _validate_served_accounting_after(state: State) -> None:
         'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
         'event["sdk_values_seen"]', 'event["pipeline_outputs_delivered"]',
         'completion["consumer_observations"]',
+        'observation["source_request_id"]',
+        'generation observation exceeds its physical response delivery',
         "completed processing has no successful HTTP transport completion",
         "not self.responses", "not self.group_open and not self.blocks",
     ), label=label)
@@ -8723,10 +8734,12 @@ def _validate_served_accounting_after(state: State) -> None:
         'RequestUsage.served(event.get("served_usage"))',
         'event.get("sdk_values_seen")', 'event.get("pipeline_outputs_delivered")',
         'completion.get("consumer_observations")',
+        'object(item).get("source_request_id")',
+        'generation observation exceeds its physical response delivery',
         "completed processing has no successful HTTP transport completion",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v9.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v10.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (

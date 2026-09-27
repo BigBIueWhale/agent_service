@@ -667,6 +667,20 @@ impl ModelRequests {
             "consumer observations",
             SAFE_INTEGER,
         )?;
+        let mut source_counts = BTreeMap::<&str, u64>::new();
+        let mut source_index = 0usize;
+        for source in &generation.source_requests {
+            let index = attempt
+                .requests
+                .iter()
+                .position(|request| request == source)
+                .ok_or_else(|| refusal("generation observation has no physical source"))?;
+            if index < source_index {
+                return Err(refusal("generation observations reorder physical responses"));
+            }
+            source_index = index;
+            *source_counts.entry(source.as_str()).or_default() += 1;
+        }
         let delivered = attempt.outcomes.values().try_fold(0u64, |total, outcome| {
             total
                 .checked_add(outcome.pipeline_outputs_delivered)
@@ -675,6 +689,11 @@ impl ModelRequests {
         })?;
         if consumer_observations != generation.observation_count
             || consumer_observations > delivered
+            || source_counts.iter().any(|(source, count)| {
+                attempt.outcomes.get(*source).is_none_or(|outcome| {
+                    *count > outcome.pipeline_outputs_delivered
+                })
+            })
         {
             return Err(refusal(
                 "consumer receipt contradicts decoded output or generation observations",

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:9",
+  "$id": "urn:agent-service:stream-contract:10",
   "type": "object",
   "required": [
     "type",
@@ -3067,6 +3067,10 @@
     "generationObservation": {
       "type": "object",
       "properties": {
+        "source_request_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "response": {
           "$ref": "#/definitions/generationResponse"
         },
@@ -3149,6 +3153,7 @@
         }
       },
       "required": [
+        "source_request_id",
         "response",
         "incomplete_tool_calls",
         "tool_call_preparations",

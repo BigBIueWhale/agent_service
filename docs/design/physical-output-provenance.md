@@ -6,7 +6,7 @@ authorities. Request IDs, response history decisions, generation hashes and
 served-usage equality currently bind their declared ownership, but do not
 establish that a decoded observation came from the retained response bytes.
 
-The current v7 source reproducer at
+The v7 source reproducer at
 `/tmp/codex-output-disposition-review/baseline/REPORT.md` keeps every physical
 request, response byte, processing outcome, history decision and usage total
 unchanged. It changes only `generation_json`, its own hash and the completion
@@ -204,9 +204,10 @@ The physical response owner records the count of SDK values admitted to
 conversion and decoded outputs delivered by the pipeline in each response
 outcome. Chat records a separate receipt count after incorporating each output
 into its generation; the attempt completion binds that count to the generation's
-observation count and the outcomes of its physical requests. This is stream
-contract v9 and canonical recording version 11. The TypeScript and Python source
-tests exercised the new counts, including early cancellation and a conversion
+observation count and the outcomes of its physical requests. Stream contract v10
+and canonical recording version 12 also require each generation observation to
+name its physical request. The TypeScript and Python source tests exercised the
+counts and per-request attribution, including early cancellation and a conversion
 failure that emits several diagnostics. Native and Java source includes the same
 admission checks but has not been compiled or executed here. A utility consumer
 still has no corresponding receipt, and these counts do not themselves prove
@@ -222,8 +223,8 @@ above has identical request and response bytes but different correct thought
 and text parts. A generation envelope cannot choose its own decoding profile
 after the fact. A changed required wire field needs a new stream-contract and
 canonical-recording identity, with all producers and admitting readers changed
-together. The policy and progress fields use stream contract v9 and canonical
-recording version 11. A source-only migration cannot claim that generated
+together. The policy and progress fields use stream contract v10 and canonical
+recording version 12. A source-only migration cannot claim that generated
 bindings or native gates have run.
 
 For each physical response, a verifier must parse the exact stored bytes with
@@ -259,27 +260,27 @@ The selected policy is now required on every durable model request. The producer
 checks that provider decoration preserved the selected stream mode before
 recording. Request replay requires an explicit boolean `stream` in the exact
 body and the matching policy mode, and evidence rejects an absent, malformed or
-unknown policy. The v9 schema requires the same closed policy shape in stdout,
-Python and Java resources; the canonical runtime file uses version 11.
-Canonical files from before that identity lack required evidence; the version 11
+unknown policy. The v10 schema requires the same closed policy shape in stdout,
+Python and Java resources; the canonical runtime file uses version 12.
+Canonical files from before that identity lack required evidence; the version 12
 reader refuses them with a matching-client or new-session action. Source reading
 shows that this change adds evidence beside runtime history and does not change
-the conversation parts or their order; complete version 11 resume remains
-unverified pending the owner's gates. The current six focused TypeScript
-suites passed 394 cases and skipped two; the Python SDK unit and integration
-suites passed 746 cases, including policy and progress refusals. The Rust and
-Java refusal cases were authored but not executed. The installed TypeScript
+the conversation parts or their order; complete version 12 resume remains
+unverified pending the owner's gates. The Rust and Java refusal cases were
+authored but not executed. The installed TypeScript
 wire validator is still generated from v5 and rejects `stream_start` before
-these new records; its full-wire tests cannot qualify v9 until the owner's
+these new records; its full-wire tests cannot qualify v10 until the owner's
 generation and build gates run. No admitting reader yet replays retained response
 bytes through the selected decoder or compares them with a canonical generation.
 The policy binding is therefore a necessary input to physical-to-decoded proof,
 not that proof itself.
 
-The completion's physical request membership gives the candidate requests but
-does not by itself identify which retry supplied an observation. Replay needs
-the request order and processing termination for each candidate. The accepted
-Chat history and displayed stream projections then need to be checked against
+The completion's physical request membership and each observation's
+`source_request_id` identify the declared retry and bind its count to that
+response's delivered output count. They do not prove that its bytes produced
+the observation. Replay must still derive each observation from the processed
+prefix of that response. The accepted Chat history and displayed stream
+projections then need to be checked against
 that replayed generation and their declared disposition. Utility generations
 and standalone child evidence also need a physical owner or an explicit root
 verification dependency; a self-hash of their decoded SDK objects is not a
