@@ -1,6 +1,8 @@
 //! Exact captured-stream admission and native validation of the shared schema.
 
 mod model_requests;
+mod generation;
+mod partial_stream;
 
 mod stream;
 pub use stream::*;
@@ -9,6 +11,7 @@ pub mod json;
 pub mod number;
 pub mod runtime;
 pub mod schema;
+pub mod usage;
 
 #[cfg(test)]
 #[path = "../schema_compiler.rs"]

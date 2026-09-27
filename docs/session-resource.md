@@ -7,9 +7,7 @@ exists, `ended` once its execution ended with no cancellation requested, and
 the run turned out. An ended session may have succeeded or ended in any error:
 `terminal.agent_result.agent_result_subtype` names how the run ended, `success` or
 an `error_*` state, and `terminal.is_process_error` whether the process and its
-evidence handling held. Releases before schema 5 wrote an ended session as
-`completed`, which read as a success whatever the run did; that spelling is
-refused. A reader uses the explicitly present
+evidence handling held. A reader uses the explicitly present
 `terminal` value to inspect ending evidence; it never interprets zero, false, an
 empty string, or an empty array as “pending.” Nullable fields must be present and
 spelled `null` when absent. Unknown fields and inconsistent evidence are refused
@@ -38,19 +36,37 @@ the record and the refusal. The collection response is `{"sessions": [...]}`.
 | Resource | `session_id`, `status`, `started_at_unix`, `model`, `context_window`, `max_session_turns`, `archive_bytes`, `archive_sha256`, `prompt_preview` | Identity and accepted request facts |
 | Resource | `release` | The release that accepted the session: `implementation_commit`, `images` (`agent`, `relay`, `capture`, `broker`, `service`) and `backend` (`image_id`, `launch_profile`) |
 | Resource | `progress_revision`, `progress_at_unix_ms`, `progress_phase`, `progress_message`, `progress_events` | Durable lifecycle observations, including the complete ordered history |
-| Resource | `staged_bytes`, `staged_entries`, `staged_regular_files`, `output_event_bytes`, `num_turns` | Observed work counters, retained at terminal; zero means no such work observed |
+| Resource | `staged_bytes`, `staged_entries`, `staged_regular_files`, `output_event_bytes` | Observed work counters, retained at terminal; zero means no such work observed |
+| Resource | `num_turns` | Root terminal's reported started turns; `null` until a readable terminal supplies the assertion |
 | Resource | `last_event_at_unix` | Event-file modification time in Unix seconds; `null` if no trustworthy event-file timestamp was observed |
-| Resource | `observed_output_tokens`, `observed_reasoning_tokens`, `observed_subagent_scope_count`, `observed_unaccounted_records` | Snapshot observations retained at terminal; all `null` only when terminal storage could not be read |
+| Resource | `observed_usage`, `observed_subagent_scope_count`, `observed_unaccounted_records` | Snapshot observations retained at terminal; all `null` only when terminal storage could not be read |
 | Resource | `terminal` | `null` while running; the complete ending object once terminal |
 
-`num_turns` counts completed billed main turns while running. At terminal it also
-honors the agent's reported started-turn count, which can include a final failed
-invocation without billed output. These work counters do not substitute for the
-strict token accounting. `observed_output_tokens` and `observed_reasoning_tokens`
-include completed billed turns across the main and subagent scopes. An unaccounted
-record means unknown evidence is absent from those observations. Zero unaccounted
-records does not prove a complete stream; only `terminal.agent_result` certifies
-the whole pinned protocol.
+`num_turns` preserves the root terminal's reported started-turn count. It is
+not inferred from assistant rows, usage reports, logical attempts or physical
+requests. A session can have several requests for one started turn, including
+retries and internal work. No terminal means an unknown reported count, even if
+physical requests are already known. Lifecycle `progress_events[].counters`
+contains `physical_requests` and the byte/staging counters. Those counters keep
+their largest durable observations; they never replace the selected snapshot's
+usage or reported turns.
+
+`observed_usage` has four integer counters: `requests`, `usageReports`,
+`unfinalizedRequests`, and `unreportedUsageRequests`. The last three partition the
+request population. Its required nullable `usage` contains `promptTokenCount`,
+`candidatesTokenCount`, `thoughtsTokenCount`, `cachedContentTokenCount`, and
+`totalTokenCount` when at least one usable served report was observed. Explicit
+zero counts remain a report. With no usable report, nested `usage` is null; a
+zero-request snapshot has four zero counters and null served usage. An entirely
+null `observed_usage` instead means the snapshot could not be read.
+
+The population includes every observed physical request in the selected journal,
+including retries, utility work and internal generations. Each usable processing
+outcome contributes once; history acceptance or abandonment does not bill again.
+An unaccounted record means unknown evidence is absent from those observations.
+Zero unaccounted records does not prove a complete stream; only
+`terminal.agent_result` certifies the whole pinned protocol. Internal KV identities
+do not create displayed subagent scopes.
 
 Captured event JSONL uses **LF-committed records with an incomplete tail**. Each
 newline commits the preceding JSON object to the captured stream. A nonempty
@@ -69,7 +85,7 @@ incomplete tail. This rule applies to captured wire output. Canonical session
 journals used to restore or mutate history retain their own strict durability
 and framing requirements.
 
-`release` is recorded in the acceptance record (schema version 5) when the
+`release` is recorded in the acceptance record (schema version 6) when the
 session is accepted and carried unchanged into every state of the resource,
 the terminal record included; a terminal read refuses a terminal that names
 another release than its acceptance. Its values are read at startup from the
@@ -83,13 +99,10 @@ it deliberately lags the backend image, whose own profile label no lock the
 service validates records, so the record names the image by its ID and the
 profile it carries as the launch profile. A service whose release lock does
 not describe it refuses to start. A session recovered after a restart keeps
-the release that accepted it. Version 5's acceptance record is version 4's;
-what moved is the terminal record beside it, whose `status` names an ended
-session `ended` where version 4 wrote `completed`. Version 3 records called the
-launch profile `profile`. A release reads only its own version, in its own
-subtree, so records an earlier release wrote stay where they are, readable by
-that release; a record of another version found inside that subtree is refused
-at startup, which names its result directory.
+the release that accepted it. A release reads only its own version, in its own subtree. Records of another
+version remain readable by their matching release; finding one inside the
+current subtree is a startup refusal naming its result directory. Progress
+snapshots use format version 2 and carry physical request counters.
 
 The `terminal` object has these required fields:
 
@@ -106,14 +119,22 @@ The `terminal` object has these required fields:
 | `raw_session_tree_retained` | boolean | Final raw-tree retention decision; retained raw state can coexist with an accepted bundle |
 | `teardown_diagnostics` | array of strings | Finalization diagnostics; an empty array means no diagnostics were recorded |
 
-An `agent_result` object always contains integer `agent_duration_ms`,
-`agent_api_duration_ms`, `main_output_tokens`, `main_reasoning_tokens`,
-`subagent_scope_count`, and `subagent_error_count`; string `agent_result_subtype`;
-and array `subagent_scopes`. A failed/unproved parse supplies no object, so it
-cannot assert zero tokens or zero subagents. The subtype is the verbatim closed
-terminal vocabulary documented in the README. Scope rows retain the parser's
-per-scope identity, billed-turn usage, and terminal evidence; a scope's own missing
-terminal report is not synthesized into an error.
+An `agent_result` object contains integer `agent_duration_ms`,
+`agent_api_duration_ms`, `num_turns`, `subagent_scope_count`, and
+`subagent_error_count`; strings `agent_result_subtype` and `main_kv_scope`; physical
+`usage`; and arrays `request_scopes` and `subagent_scopes`. The root subtype is
+verbatim from the closed terminal vocabulary. `main_kv_scope` is the validated
+CLI initialization identity, which is distinct from the service's session handle.
+
+`request_scopes` contains one `{kv_scope, usage}` row for each request owner. Its
+summaries have the same shape as `observed_usage` and sum exactly to the certified
+whole-journal `usage`. Completed certification requires no unfinished requests.
+`subagent_scopes` contains each displayed child's issued `tool_use_id`,
+`tool_name`, and required nullable `reported_num_turns`, `is_error`, `subtype`, and
+`error_message`. Its missing terminal is not synthesized into an error. An
+internal or utility request can appear in `request_scopes` without creating a
+subagent row. A failed or unproved parse supplies no `agent_result` object, so it
+cannot assert zero tokens or zero subagents.
 
 A `bundle` object always contains string `sha256` and integer `compressed_bytes`,
 `uncompressed_bytes`, `file_count`, and `artifacts_file_count`. Counts describe the

@@ -397,6 +397,7 @@ impl Compiler {
             "allOf",
             "if",
             "then",
+            "else",
         ];
         for (keyword, _) in &members {
             if !KNOWN.contains(keyword) {
@@ -623,16 +624,20 @@ impl Compiler {
                     .push(format!("Rule::{rule}(&{children:?})"));
             }
         }
-        match (value.get("if"), value.get("then")) {
-            (None, None) => {}
-            (Some(condition), Some(consequence)) => {
+        match (value.get("if"), value.get("then"), value.get("else")) {
+            (None, None, None) => {}
+            (Some(condition), Some(consequence), alternative) => {
                 let condition = self.node(condition, &child_path(path, "if"))?;
                 let consequence = self.node(consequence, &child_path(path, "then"))?;
+                let alternative = alternative
+                    .map(|branch| self.node(branch, &child_path(path, "else")))
+                    .transpose()?;
                 self.nodes[id]
                     .same_instance
                     .extend([condition, consequence]);
+                self.nodes[id].same_instance.extend(alternative);
                 self.nodes[id].rules.push(format!(
-                    "Rule::IfThen {{ condition: {condition}, consequence: {consequence} }}"
+                    "Rule::Conditional {{ condition: {condition}, consequence: {consequence}, alternative: {alternative:?} }}"
                 ));
             }
             _ => return Err(error(path, "owned conditional requires both if and then")),
@@ -706,7 +711,7 @@ impl Compiler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    const SOURCE: &[u8] = include_bytes!("../stream-contract-v6.json");
+    const SOURCE: &[u8] = include_bytes!(env!("STREAM_CONTRACT_PATH"));
 
     #[test]
     fn schema_identity_is_derived_from_the_owned_definition() {
@@ -763,12 +768,25 @@ mod tests {
     fn owned_vocabulary_inventory_is_complete() {
         let compiled = compile(SOURCE).unwrap();
         let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
-        assert_eq!(inventory["object_schemas"], 509);
-        assert_eq!(inventory["false_schemas"], 70);
-        assert_eq!(inventory["keywords"].as_object().unwrap().len(), 24);
-        assert_eq!(inventory["references"].as_array().unwrap().len(), 27);
+        assert_eq!(inventory["object_schemas"], 675);
+        assert_eq!(inventory["false_schemas"], 97);
+        assert_eq!(inventory["keywords"].as_object().unwrap().len(), 25);
+        assert_eq!(inventory["references"].as_array().unwrap().len(), 46);
         assert!(!compiled.rust.is_empty());
-        assert_eq!(compiled.discriminators["EventKind"].len(), 7);
+        assert_eq!(
+            compiled.discriminators["EventKind"],
+            [
+                "system",
+                "user",
+                "assistant",
+                "result",
+                "stream_event",
+                "model_request",
+                "model_response",
+                "model_generation",
+                "model_attempt_completion",
+            ]
+        );
         assert_eq!(compiled.success_subtype, crate::SUCCESS_SUBTYPE);
         assert_eq!(compiled.error_subtypes, crate::ERROR_SUBTYPES);
         assert_eq!(
@@ -895,13 +913,29 @@ mod tests {
                 "does not descend",
             ),
         ] {
+            for definition in [
+                serde_json::json!({"$ref": reference}),
+                serde_json::json!({"if": false, "then": true, "else": {"$ref": reference}}),
+            ] {
+                let mut changed = source.clone();
+                changed["definitions"]["goalCheckpointEvidenceBytes"] = definition;
+                assert!(compile(&serde_json::to_vec(&changed).unwrap())
+                    .err()
+                    .unwrap()
+                    .contains(expected));
+            }
+        }
+        for definition in [
+            serde_json::json!({"else": false}),
+            serde_json::json!({"then": true, "else": false}),
+            serde_json::json!({"if": true, "else": false}),
+        ] {
             let mut changed = source.clone();
-            changed["definitions"]["goalCheckpointEvidenceBytes"] =
-                serde_json::json!({"$ref": reference});
+            changed["definitions"]["goalCheckpointEvidenceBytes"] = definition;
             assert!(compile(&serde_json::to_vec(&changed).unwrap())
                 .err()
                 .unwrap()
-                .contains(expected));
+                .contains("owned conditional requires both if and then"));
         }
     }
 
@@ -944,6 +978,6 @@ mod tests {
         let mut reordered = source;
         reordered["oneOf"].as_array_mut().unwrap().reverse();
         let compiled = compile(&serde_json::to_vec(&reordered).unwrap()).unwrap();
-        assert_eq!(compiled.discriminators["SystemKind"].len(), 13);
+        assert_eq!(compiled.discriminators["SystemKind"].len(), 14);
     }
 }

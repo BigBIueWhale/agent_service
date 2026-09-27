@@ -25,7 +25,7 @@ use crate::error::{io_msg, ServiceError, ServiceResult};
 
 pub const MAX_PROGRESS_EVENTS: usize = 4096;
 const MAX_PROGRESS_MESSAGE_BYTES: usize = 4096;
-const PROGRESS_SCHEMA_VERSION: u32 = 1;
+const PROGRESS_SCHEMA_VERSION: u32 = 2;
 // One event contains at most a 4 KiB message plus fixed numeric/structural
 // JSON. This bound is intentionally derived from the semantic event limit,
 // not from available RAM, so a corrupted service-owned path cannot turn GET
@@ -58,7 +58,7 @@ pub struct ProgressCounters {
     pub staged_entries: u64,
     pub staged_regular_files: u64,
     pub output_event_bytes: u64,
-    pub num_turns: u64,
+    pub physical_requests: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -267,7 +267,11 @@ fn require_monotonic_counters(
             previous.output_event_bytes,
             next.output_event_bytes,
         ),
-        ("num_turns", previous.num_turns, next.num_turns),
+        (
+            "physical_requests",
+            previous.physical_requests,
+            next.physical_requests,
+        ),
     ] {
         if new < old {
             return Err(ServiceError::Internal(format!(

@@ -586,7 +586,7 @@ print(json.dumps(found))
             save(self.root / "control/release-create-response", b"cancelled terminal observed while create response remained held\n")
         end = body["terminal"]
         require(body["status"] == "cancelled" and end["agent_result"] is None and
-                body["num_turns"] == 0 and self.stub.generations == 0 and not self.stub.requests,
+                body["num_turns"] is None and body["observed_usage"]["requests"] == 0 and self.stub.generations == 0 and not self.stub.requests,
                 "cancelled locked topology advanced model work or invented certification")
         require("cancellation" in end["response"].lower(), "cancellation cause was not retained")
         require(end["is_process_error"] is False and end["teardown_diagnostics"] == [
@@ -714,8 +714,8 @@ print(json.dumps(found))
         require(end["is_process_error"] is False and end["teardown_diagnostics"] == [], "process/teardown failed")
         require(end["response"] == "COMPOSITION_OK " + self.nonce and end["agent_result"] is not None,
                 "actual output lacks production certification or fresh proof")
-        require(body["observed_unaccounted_records"] == 0 and body["observed_output_tokens"] == 16 and
-                body["observed_reasoning_tokens"] == 0 and body["num_turns"] == 2, "served observation mismatch")
+        require(body["observed_unaccounted_records"] == 0 and body["observed_usage"]["requests"] == 2 and body["observed_usage"]["usageReports"] == 2 and body["observed_usage"]["usage"]["candidatesTokenCount"] == 16 and
+                body["observed_usage"]["usage"]["thoughtsTokenCount"] == 0 and body["num_turns"] == 2, "served observation mismatch")
         require(end["raw_session_tree_retained"] is False and not (self.root / "state/sessions" / self.session).exists(),
                 "successful terminal did not dispose raw state through its transaction")
         persisted = self.records / self.session / "finished.json"
@@ -761,7 +761,7 @@ print(json.dumps(found))
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v6.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v7.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")
@@ -870,7 +870,7 @@ print(json.dumps(found))
                 end["raw_session_tree_retained"] is True, "teardown failure lost independent result or retained-state obligation")
         require(end["response"] == "COMPOSITION_OK " + self.nonce,
                 "teardown failure lost the independently certified fresh tool proof")
-        require(body["observed_output_tokens"] == 16 and body["observed_reasoning_tokens"] == 0 and
+        require(body["observed_usage"]["requests"] == 2 and body["observed_usage"]["usageReports"] == 2 and body["observed_usage"]["usage"]["candidatesTokenCount"] == 16 and body["observed_usage"]["usage"]["thoughtsTokenCount"] == 0 and
                 body["observed_unaccounted_records"] == 0 and body["num_turns"] == 2,
                 "teardown failure lost served accounting")
         expected_cause = f"composition injected EIO before removing proved-stopped capture {capture_name}: Input/output error (os error 5)"
@@ -1209,8 +1209,8 @@ print(json.dumps(found))
                 end["container_exit_code"] == end["agent_exit_code"] == (None if lost_wait else 0),
                 "observation fault invented or lost the actual lifecycle facts")
         require(end["is_process_error"] is (not cancelled), "observation fault has wrong process outcome")
-        require(body["observed_unaccounted_records"] == 0 and body["observed_output_tokens"] == 16 and
-                body["observed_reasoning_tokens"] == 0 and body["num_turns"] == 2,
+        require(body["observed_unaccounted_records"] == 0 and body["observed_usage"]["requests"] == 2 and body["observed_usage"]["usageReports"] == 2 and body["observed_usage"]["usage"]["candidatesTokenCount"] == 16 and
+                body["observed_usage"]["usage"]["thoughtsTokenCount"] == 0 and body["num_turns"] == 2,
                 "refused certification lost independent served observations")
         if cancelled or lost_wait:
             require(end["agent_result"] is not None and end["agent_result"]["agent_result_subtype"] == "success",

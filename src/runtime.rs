@@ -145,27 +145,20 @@ pub struct SessionBody {
     /// not subscribe, acknowledge, consume, or otherwise mutate the session.
     pub progress_events: Vec<ProgressEvent>,
 
-    /// Number of distinct LLM invocations the agent has made so far.
-    /// Live for running sessions, frozen at run-end for terminal ones.
-    /// Counted from completed main-thread `"type":"assistant"` messages in
-    /// `events.jsonl`; Qwen Code emits one complete assistant message per
-    /// model invocation when partial-message output is disabled. On a session
-    /// an error ended mid-turn the terminal result's own count is one higher,
-    /// because it counts the turn that started and never billed, and that
-    /// count is the one reported.
-    pub num_turns: u64,
+    /// Started turns reported by the root terminal, absent until observed.
+    /// Physical requests include retries and internal work and are separate.
+    #[serde(deserialize_with = "required_nullable")]
+    pub num_turns: Option<u64>,
     /// Event file modification time, when a trustworthy timestamp was observed.
     #[serde(deserialize_with = "required_nullable")]
     pub last_event_at_unix: Option<u64>,
 
-    /// Served usage and scope observations from complete records in an immutable
-    /// event-file snapshot, retained when the run ends. All four fields are
-    /// present together; absence at terminal means storage could not be read.
-    /// Observations never certify a complete stream, including when all are zero.
+    /// Physical request usage and scope observations from the selected event
+    /// snapshot. The three observation fields are present together; absence
+    /// at terminal means storage could not be read. Nested usage:null means no
+    /// usable served report was observed, including a zero-request snapshot.
     #[serde(deserialize_with = "required_nullable")]
-    pub observed_output_tokens: Option<u64>,
-    #[serde(deserialize_with = "required_nullable")]
-    pub observed_reasoning_tokens: Option<u64>,
+    pub observed_usage: Option<crate::result_parse::GenerationUsageSummary>,
     #[serde(deserialize_with = "required_nullable")]
     pub observed_subagent_scope_count: Option<u64>,
     /// Records that could not be accounted, including a nonempty trailing prefix
@@ -218,9 +211,11 @@ pub struct AgentResult {
     pub agent_api_duration_ms: u64,
     /// The agent's verbatim terminal subtype from the closed parser vocabulary.
     pub agent_result_subtype: String,
-    /// Served output and reasoning tokens billed to main-scope turns.
-    pub main_output_tokens: u64,
-    pub main_reasoning_tokens: u64,
+    pub num_turns: u64,
+    /// The CLI init identity; distinct from the service's session handle.
+    pub main_kv_scope: String,
+    pub usage: crate::result_parse::GenerationUsageSummary,
+    pub request_scopes: Vec<crate::result_parse::RequestScope>,
     /// Strictly parsed scopes in order of first appearance. An empty table
     /// certifies that the stream contained no subagents.
     pub subagent_scopes: Vec<crate::result_parse::AgentScope>,
@@ -242,14 +237,7 @@ impl SessionBody {
             )));
         }
         for (field, present) in [
-            (
-                "observed_output_tokens",
-                self.observed_output_tokens.is_some(),
-            ),
-            (
-                "observed_reasoning_tokens",
-                self.observed_reasoning_tokens.is_some(),
-            ),
+            ("observed_usage", self.observed_usage.is_some()),
             (
                 "observed_subagent_scope_count",
                 self.observed_subagent_scope_count.is_some(),
@@ -259,21 +247,26 @@ impl SessionBody {
                 self.observed_unaccounted_records.is_some(),
             ),
         ] {
-            if present != self.observed_output_tokens.is_some() || (running && !present) {
+            if present != self.observed_usage.is_some() || (running && !present) {
                 return Err(ServiceError::Internal(format!(
                     "session {} has inconsistent output-observation {field} presence for {:?}",
                     self.session_id, self.status
                 )));
             }
         }
-        if let (Some(output), Some(reasoning)) =
-            (self.observed_output_tokens, self.observed_reasoning_tokens)
+        if let Some(usage) = self.observed_usage {
+            usage
+                .validate()
+                .map_err(|cause| ServiceError::Internal(cause.to_string()))?;
+        }
+        if self
+            .num_turns
+            .is_some_and(|turns| turns > runtime_contract::SAFE_INTEGER)
+            || (self.observed_usage.is_none() && self.num_turns.is_some())
         {
-            if reasoning > output {
-                return Err(ServiceError::Internal(
-                    "observed reasoning tokens exceed observed output tokens".into(),
-                ));
-            }
+            return Err(ServiceError::Internal(
+                "reported turns lack a readable terminal observation; inspect the captured root result".into(),
+            ));
         }
         if let Some(terminal) = &self.terminal {
             if terminal.finished_at_unix < self.started_at_unix {
@@ -292,31 +285,69 @@ impl SessionBody {
                 }
             }
             if let Some(result) = &terminal.agent_result {
-                let output = result
-                    .subagent_scopes
-                    .iter()
-                    .try_fold(result.main_output_tokens, |sum, scope| {
-                        sum.checked_add(scope.output_tokens)
-                    });
-                let reasoning = result
-                    .subagent_scopes
-                    .iter()
-                    .try_fold(result.main_reasoning_tokens, |sum, scope| {
-                        sum.checked_add(scope.reasoning_tokens)
-                    });
-                if self.observed_unaccounted_records != Some(0)
-                    || output.is_none()
-                    || reasoning.is_none()
-                    || self.observed_output_tokens != output
-                    || self.observed_reasoning_tokens != reasoning
+                result
+                    .usage
+                    .validate()
+                    .map_err(|cause| ServiceError::Internal(cause.to_string()))?;
+                let mut owners = std::collections::BTreeSet::new();
+                let mut total = crate::result_parse::GenerationUsageSummary::default();
+                for scope in &result.request_scopes {
+                    if scope.kv_scope.is_empty()
+                        || !owners.insert(&scope.kv_scope)
+                        || scope.usage.requests == 0
+                    {
+                        return Err(ServiceError::Internal(
+                            "certified request scopes lack unique nonempty ownership; inspect the original request records".into(),
+                        ));
+                    }
+                    total = total
+                        .checked_add(scope.usage)
+                        .map_err(|cause| ServiceError::Internal(cause.to_string()))?;
+                }
+                if result.main_kv_scope.is_empty()
+                    || total != result.usage
+                    || result.usage.unfinalized_requests != 0
+                    || self.progress_events.last().is_some_and(|event| {
+                        event.counters.physical_requests > result.usage.requests
+                    })
+                    || self.observed_unaccounted_records != Some(0)
+                    || self.observed_usage != Some(result.usage)
+                    || self.num_turns != Some(result.num_turns)
                     || self.observed_subagent_scope_count != Some(result.subagent_scope_count)
                 {
                     return Err(ServiceError::Internal(
-                        "certified agent result disagrees with complete output observations".into(),
+                        "certified agent result disagrees with physical usage, reported turns or complete output observations; inspect the original capture and progress records".into(),
                     ));
                 }
-                if result.main_reasoning_tokens > result.main_output_tokens
-                    || result.subagent_scope_count != result.subagent_scopes.len() as u64
+                let mut children = std::collections::BTreeSet::new();
+                for scope in &result.subagent_scopes {
+                    let reported = scope.reported_num_turns.is_some();
+                    if scope.tool_use_id.is_empty()
+                        || scope.tool_name.is_empty()
+                        || !children.insert(&scope.tool_use_id)
+                        || reported != scope.is_error.is_some()
+                        || reported != scope.subtype.is_some()
+                        || scope
+                            .reported_num_turns
+                            .is_some_and(|turns| turns > runtime_contract::SAFE_INTEGER)
+                        || (!reported && scope.error_message.is_some())
+                        || scope.error_message.as_ref().is_some_and(String::is_empty)
+                        || (scope.is_error == Some(true)
+                            && scope.error_message.is_none())
+                        || scope.subtype.as_ref().is_some_and(|subtype| {
+                            if scope.is_error == Some(true) {
+                                !crate::result_parse::ERROR_SUBTYPES.contains(&subtype.as_str())
+                            } else {
+                                subtype != crate::result_parse::SUCCESS_SUBTYPE
+                            }
+                        })
+                    {
+                        return Err(ServiceError::Internal(
+                            "certified subagent scope has inconsistent identity or terminal claims; inspect its issued call and terminal record".into(),
+                        ));
+                    }
+                }
+                if result.subagent_scope_count != result.subagent_scopes.len() as u64
                     || result.subagent_error_count
                         != result
                             .subagent_scopes
@@ -328,7 +359,7 @@ impl SessionBody {
                             .contains(&result.agent_result_subtype.as_str()))
                 {
                     return Err(ServiceError::Internal(
-                        "terminal agent result has inconsistent certified evidence".into(),
+                        "terminal agent result has inconsistent certified evidence; inspect the original terminal and scope records".into(),
                     ));
                 }
             }
@@ -379,14 +410,8 @@ pub struct RunningSnapshot {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AcceptanceRecord {
-    /// Version 5 records the streamed-archive commitment and the release
-    /// that accepted the session, the backend's launch profile named as the
-    /// launch profile, and is the only version this service writes; it is
-    /// `RESULT_RECORD_SCHEMA`, which also names the subtree these records live
-    /// in. Its acceptance record is version 4's; what moved is the terminal
-    /// record beside it, whose status names a session that ended on its own
-    /// `ended` where version 4 wrote `completed`. Terminal reads cross-check
-    /// the record against the published terminal body.
+    /// Exact persisted record identity, also naming the storage subtree.
+    /// Acceptance and terminal records share `RESULT_RECORD_SCHEMA`.
     pub schema_version: u32,
     pub session_id: String,
     pub accepted_at_unix: u64,
@@ -755,7 +780,7 @@ pub async fn recover_interrupted_acceptances(cfg: &Config) -> ServiceResult<()> 
                 staged_entries: body.staged_entries,
                 staged_regular_files: body.staged_regular_files,
                 output_event_bytes: body.output_event_bytes,
-                num_turns: body.num_turns,
+                physical_requests: body.observed_usage.map_or(0, |usage| usage.requests),
             },
         );
         progress.publish(
@@ -1525,7 +1550,7 @@ impl Manager {
                 staged_entries: body.staged_entries,
                 staged_regular_files: body.staged_regular_files,
                 output_event_bytes: body.output_event_bytes,
-                num_turns: body.num_turns,
+                physical_requests: body.observed_usage.map_or(0, |usage| usage.requests),
             };
             let counters = entry_for_task
                 .progress
@@ -2035,9 +2060,9 @@ fn unix_now() -> u64 {
 
 /// Build the wire body for a running snapshot: what the run has established
 /// so far, including the live reader's tally, and no terminal verdict,
-/// because none exists yet. `progress` carries
-/// the live `(num_turns, last_event_at_unix)` reading the caller has
-/// just taken from disk.
+/// because none exists yet. `output` carries the immutable snapshot the
+/// caller just read. Lifecycle progress cannot replace its terminal assertion
+/// or physical usage with a maximum taken from another snapshot.
 fn running_body(
     s: &RunningSnapshot,
     progress: &ProgressEvent,
@@ -2066,11 +2091,10 @@ fn running_body(
             .output_event_bytes
             .max(progress.counters.output_event_bytes),
         progress_events,
-        num_turns: output.num_turns.max(progress.counters.num_turns),
+        num_turns: output.num_turns,
         last_event_at_unix: output.last_event_at_unix,
         terminal: None,
-        observed_output_tokens: Some(output.observed_output_tokens),
-        observed_reasoning_tokens: Some(output.observed_reasoning_tokens),
+        observed_usage: Some(output.observed_usage),
         observed_subagent_scope_count: Some(output.observed_subagent_scope_count),
         observed_unaccounted_records: Some(output.observed_unaccounted_records),
     }
@@ -2107,7 +2131,6 @@ pub(crate) fn apply_progress(body: &mut SessionBody, progress: &ProgressEvent) {
     body.output_event_bytes = body
         .output_event_bytes
         .max(progress.counters.output_event_bytes);
-    body.num_turns = body.num_turns.max(progress.counters.num_turns);
 }
 
 pub(crate) fn merge_progress_counters(
@@ -2119,7 +2142,7 @@ pub(crate) fn merge_progress_counters(
         staged_entries: left.staged_entries.max(right.staged_entries),
         staged_regular_files: left.staged_regular_files.max(right.staged_regular_files),
         output_event_bytes: left.output_event_bytes.max(right.output_event_bytes),
-        num_turns: left.num_turns.max(right.num_turns),
+        physical_requests: left.physical_requests.max(right.physical_requests),
     }
 }
 
@@ -4234,7 +4257,6 @@ fn validate_terminal_resource(
         || body.staged_entries < latest.counters.staged_entries
         || body.staged_regular_files < latest.counters.staged_regular_files
         || body.output_event_bytes < latest.counters.output_event_bytes
-        || body.num_turns < latest.counters.num_turns
     {
         return Err(ServiceError::Internal(format!(
             "read_terminal({session_id}): terminal progress summary contradicts its latest durable event"
@@ -4266,13 +4288,12 @@ mod tests {
         apply_progress, await_connection_independent, cancel_intent_next_path, cancel_intent_path,
         commit_prepared_terminal, delete_intent_next_path, delete_intent_path,
         finish_delete_intent, grant_owner_write_recursively, is_safe_session_id,
-        persist_cancel_intent, persist_delete_intent,
-        persist_terminal_transaction, prepare_durable_acceptance, prepare_terminal,
-        read_cancel_intent, read_delete_intent, read_output_progress, read_terminal,
-        reconcile_unpublished_cancel_intent, reconcile_unpublished_delete_intent,
-        remove_terminalized_state, resume_prepared_terminal_transaction, rewrite_prepared_terminal,
-        AcceptanceRecord, AgentResult, CancelIntent, LifecycleTracker, SessionBody, SessionStatus,
-        SessionTerminal,
+        persist_cancel_intent, persist_delete_intent, persist_terminal_transaction,
+        prepare_durable_acceptance, prepare_terminal, read_cancel_intent, read_delete_intent,
+        read_output_progress, read_terminal, reconcile_unpublished_cancel_intent,
+        reconcile_unpublished_delete_intent, remove_terminalized_state,
+        resume_prepared_terminal_transaction, rewrite_prepared_terminal, AcceptanceRecord,
+        AgentResult, CancelIntent, LifecycleTracker, SessionBody, SessionStatus, SessionTerminal,
     };
     use crate::config::{Config, StackLock, STACK_LOCK_JSON};
     use crate::error::ServiceError;
@@ -4327,7 +4348,10 @@ mod tests {
             (SessionStatus::Ended, "ended"),
             (SessionStatus::Cancelled, "cancelled"),
         ] {
-            assert_eq!(serde_json::to_value(status).unwrap(), serde_json::json!(wire));
+            assert_eq!(
+                serde_json::to_value(status).unwrap(),
+                serde_json::json!(wire)
+            );
             assert_eq!(
                 serde_json::from_value::<SessionStatus>(serde_json::json!(wire)).unwrap(),
                 status
@@ -4503,12 +4527,34 @@ mod tests {
     }
 
     fn event_init() -> String {
-        serde_json::json!({
-            "type": "system", "subtype": "init", "request_evidence_origin": {"journal_id":"fixture","first_sequence":1}, "uuid": "init", "session_id": "a",
+        let start = serde_json::json!({
+            "type":"system", "subtype":"stream_start", "uuid":"stream-start", "session_id":"a", "parent_tool_use_id":null,
+            "stream_contract_sha256": agent_service::stream_contract::STREAM_CONTRACT_SHA256,
+            "request_evidence_origin":{"journal_id":"fixture","first_sequence":1}
+        });
+        let init = serde_json::json!({
+            "type": "system", "subtype": "init", "uuid": "init", "session_id": "a", "parent_tool_use_id":null,
             "stream_contract_sha256": agent_service::stream_contract::STREAM_CONTRACT_SHA256,
             "cwd": "/workspace", "tools": ["agent", "edit", "glob", "grep_search", "list_directory", "notebook_edit", "read_file", "run_shell_command", "todo_write", "write_file"],
             "mcp_servers": [], "model": "qwen3.8-27b-nvfp4-k8v4", "permission_mode": "yolo", "slash_commands": [], "qwen_code_version": "0.21.12", "agents": ["Explore", "general-purpose"]
-        }).to_string() + "\n"
+        });
+        format!("{start}\n{init}\n")
+    }
+
+    fn usage(output: u64, thoughts: u64) -> crate::result_parse::GenerationUsageSummary {
+        crate::result_parse::GenerationUsageSummary {
+            requests: 1,
+            usage_reports: 1,
+            unfinalized_requests: 0,
+            unreported_usage_requests: 0,
+            usage: Some(runtime_contract::usage::ServedUsage {
+                prompt: 0,
+                output,
+                thoughts,
+                cached: 0,
+                total: output,
+            }),
+        }
     }
 
     fn body(session_id: &str) -> SessionBody {
@@ -4532,7 +4578,7 @@ mod tests {
             staged_regular_files: 0,
             output_event_bytes: 0,
             progress_events: Vec::new(),
-            num_turns: 1,
+            num_turns: Some(1),
             last_event_at_unix: Some(1),
             terminal: Some(SessionTerminal {
                 finished_at_unix: 2,
@@ -4547,16 +4593,20 @@ mod tests {
                     agent_duration_ms: 1,
                     agent_api_duration_ms: 1,
                     agent_result_subtype: "success".to_string(),
-                    main_output_tokens: 0,
-                    main_reasoning_tokens: 0,
+                    num_turns: 1,
+                    main_kv_scope: "cli".into(),
+                    usage: usage(0, 0),
+                    request_scopes: vec![crate::result_parse::RequestScope {
+                        kv_scope: "cli".into(),
+                        usage: usage(0, 0),
+                    }],
                     subagent_scopes: Vec::new(),
                     subagent_scope_count: 0,
                     subagent_error_count: 0,
                 }),
                 bundle: None,
             }),
-            observed_output_tokens: Some(0),
-            observed_reasoning_tokens: Some(0),
+            observed_usage: Some(usage(0, 0)),
             observed_subagent_scope_count: Some(0),
             observed_unaccounted_records: Some(0),
         }
@@ -4579,11 +4629,10 @@ mod tests {
         let object = flattened.as_object_mut().unwrap();
         let ending = object.remove("terminal").unwrap();
         object.extend(ending.as_object().unwrap().clone());
-        let duplicate = serde_json::to_string(&original).unwrap().replacen(
-            '{',
-            "{\"status\":\"ended\",",
-            1,
-        );
+        let duplicate =
+            serde_json::to_string(&original)
+                .unwrap()
+                .replacen('{', "{\"status\":\"ended\",", 1);
         // What the previous schema wrote for a session that ended on its own,
         // whatever its run did: a status that read as a success.
         let mut completed = original.clone();
@@ -4600,12 +4649,13 @@ mod tests {
         // What the previous release wrote: the backend's launch profile
         // under the bare name `profile`.
         let mut unnamed_profile = original.clone();
-        let backend = unnamed_profile["release"]["backend"].as_object_mut().unwrap();
+        let backend = unnamed_profile["release"]["backend"]
+            .as_object_mut()
+            .unwrap();
         let launch_profile = backend.remove("launch_profile").unwrap();
         backend.insert("profile".into(), launch_profile);
         let mut contradictory = original;
-        contradictory["observed_output_tokens"] = serde_json::json!(0);
-        contradictory["observed_reasoning_tokens"] = serde_json::json!(1);
+        contradictory["observed_usage"]["usage"]["thoughtsTokenCount"] = serde_json::json!(1);
         for (case, bytes, expected) in [
             (
                 "unknown field",
@@ -4646,7 +4696,7 @@ mod tests {
             (
                 "semantic contradiction",
                 serde_json::to_vec(&contradictory).unwrap(),
-                "reasoning tokens exceed",
+                "served token counts are inconsistent",
             ),
             (
                 "a status that read as a success",
@@ -4655,7 +4705,10 @@ mod tests {
             ),
         ] {
             let error = super::parse_terminal_record(&bytes, id, path).expect_err(case);
-            assert!(matches!(error, ServiceError::Internal(_)), "{case}: {error}");
+            assert!(
+                matches!(error, ServiceError::Internal(_)),
+                "{case}: {error}"
+            );
             assert_eq!(
                 error.http_status(),
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
@@ -4749,7 +4802,9 @@ mod tests {
         // launch profile under the bare name `profile`.
         let mut unnamed_profile = encoded.clone();
         unnamed_profile["schema_version"] = serde_json::json!(3);
-        let backend = unnamed_profile["release"]["backend"].as_object_mut().unwrap();
+        let backend = unnamed_profile["release"]["backend"]
+            .as_object_mut()
+            .unwrap();
         let launch_profile = backend.remove("launch_profile").unwrap();
         backend.insert("profile".into(), launch_profile);
         // The current shape under the previous version number is a record no
@@ -4799,7 +4854,10 @@ mod tests {
                 None => assert_eq!(outcome.expect(case), current),
                 Some(expected) => {
                     let error = outcome.expect_err(case);
-                    assert!(matches!(error, ServiceError::Internal(_)), "{case}: {error}");
+                    assert!(
+                        matches!(error, ServiceError::Internal(_)),
+                        "{case}: {error}"
+                    );
                     let message = error.to_string();
                     assert!(message.contains(expected), "{case}: {message}");
                     assert!(
@@ -4823,8 +4881,7 @@ mod tests {
         assert_eq!(records.parent(), Some(cfg.results_dir.as_path()));
         let accepted = AcceptanceRecord {
             schema_version: crate::config::RESULT_RECORD_SCHEMA,
-            session_id: "s-6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b"
-                .into(),
+            session_id: "s-6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b6b".into(),
             accepted_at_unix: 1,
             archive_bytes: 1,
             archive_sha256: "a".repeat(64),
@@ -4957,7 +5014,9 @@ mod tests {
         let object = legacy_terminal.as_object_mut().unwrap();
         let ending = object.remove("terminal").unwrap();
         object.extend(ending.as_object().unwrap().clone());
-        object.remove("release").expect("the fixture body records a release");
+        object
+            .remove("release")
+            .expect("the fixture body records a release");
         let mut legacy_acceptance = serde_json::to_value(AcceptanceRecord {
             session_id: legacy_id.to_string(),
             ..acceptance.clone()
@@ -5092,13 +5151,20 @@ mod tests {
                 "3 result directories cannot be read".to_string(),
                 "remove these paths".to_string(),
             ] {
-                assert!(message.contains(&expected), "missing {expected:?}: {message}");
+                assert!(
+                    message.contains(&expected),
+                    "missing {expected:?}: {message}"
+                );
             }
             assert!(
                 !message.contains(&current_dir.display().to_string()),
                 "{message}"
             );
-            assert_eq!(snapshot(), before, "a refused startup changed persisted state");
+            assert_eq!(
+                snapshot(),
+                before,
+                "a refused startup changed persisted state"
+            );
         }
 
         // The operator's cleanup moves the named paths out of the runtime
@@ -5218,8 +5284,7 @@ mod tests {
             &progress,
             vec![progress.clone()],
             super::OutputProgress {
-                observed_output_tokens: 123,
-                observed_reasoning_tokens: 100,
+                observed_usage: usage(123, 100),
                 observed_subagent_scope_count: 2,
                 observed_unaccounted_records: 1,
                 ..super::OutputProgress::default()
@@ -5228,21 +5293,22 @@ mod tests {
         running.validate_shape().expect("valid running snapshot");
         let json = serde_json::to_value(&running).expect("serialize");
         assert!(json["terminal"].is_null());
-        assert_eq!(json["observed_output_tokens"], 123);
-        assert_eq!(json["observed_reasoning_tokens"], 100);
+        assert_eq!(json["observed_usage"]["usage"]["candidatesTokenCount"], 123);
+        assert_eq!(json["observed_usage"]["usage"]["thoughtsTokenCount"], 100);
         assert_eq!(json["observed_subagent_scope_count"], 2);
         assert_eq!(json["observed_unaccounted_records"], 1);
         let mut invalid = running.clone();
         invalid.terminal = body(&snapshot.session_id).terminal;
         assert!(invalid.validate_shape().is_err());
         let mut invalid = running;
-        invalid.observed_output_tokens = None;
+        invalid.observed_usage = None;
         assert!(invalid.validate_shape().is_err());
     }
 
     #[test]
     fn terminal_evidence_distinguishes_unavailable_from_measured_empty() {
-        let mut terminal = body("s-2222222222222222222222222222222222222222222222222222222222222222");
+        let mut terminal =
+            body("s-2222222222222222222222222222222222222222222222222222222222222222");
         let result = terminal
             .terminal_mut()
             .agent_result
@@ -5267,7 +5333,10 @@ mod tests {
         assert_eq!(ending["agent_exit_code"], 0);
         assert_eq!(ending["response"], "");
         assert_eq!(ending["agent_result"]["agent_duration_ms"], 0);
-        assert_eq!(ending["agent_result"]["main_output_tokens"], 0);
+        assert_eq!(
+            ending["agent_result"]["usage"]["usage"]["candidatesTokenCount"],
+            0
+        );
         assert_eq!(
             ending["agent_result"]["subagent_scopes"],
             serde_json::json!([])
@@ -5300,7 +5369,8 @@ mod tests {
         for subtype in std::iter::once(crate::result_parse::SUCCESS_SUBTYPE)
             .chain(crate::result_parse::ERROR_SUBTYPES)
         {
-            let mut terminal = body("s-3333333333333333333333333333333333333333333333333333333333333333");
+            let mut terminal =
+                body("s-3333333333333333333333333333333333333333333333333333333333333333");
             terminal
                 .terminal_mut()
                 .agent_result
@@ -5318,14 +5388,15 @@ mod tests {
             incomplete["terminal"]["agent_result"]
                 .as_object_mut()
                 .expect("result")
-                .remove("main_output_tokens");
+                .remove("usage");
             assert!(serde_json::from_value::<SessionBody>(incomplete).is_err());
         }
     }
 
     #[test]
     fn nullable_evidence_keys_are_required_even_when_their_value_is_absent() {
-        let mut terminal = body("s-3333333333333333333333333333333333333333333333333333333333333333");
+        let mut terminal =
+            body("s-3333333333333333333333333333333333333333333333333333333333333333");
         terminal.last_event_at_unix = None;
         let ending = terminal.terminal_mut();
         ending.agent_result = None;
@@ -5336,8 +5407,8 @@ mod tests {
         for field in [
             "terminal",
             "last_event_at_unix",
-            "observed_output_tokens",
-            "observed_reasoning_tokens",
+            "num_turns",
+            "observed_usage",
             "observed_subagent_scope_count",
             "observed_unaccounted_records",
         ] {
@@ -5369,15 +5440,15 @@ mod tests {
 
     #[test]
     fn terminal_retains_partial_observations_without_certifying_a_result() {
-        let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
+        let mut terminal =
+            body("s-4444444444444444444444444444444444444444444444444444444444444444");
         terminal.terminal_mut().agent_result = None;
-        terminal.observed_output_tokens = Some(123);
-        terminal.observed_reasoning_tokens = Some(90);
+        terminal.observed_usage = Some(usage(123, 90));
         terminal.observed_subagent_scope_count = Some(0);
         terminal.observed_unaccounted_records = Some(1);
         terminal.validate_shape().unwrap();
         let json = serde_json::to_value(&terminal).unwrap();
-        assert_eq!(json["observed_output_tokens"], 123);
+        assert_eq!(json["observed_usage"]["usage"]["candidatesTokenCount"], 123);
         assert!(json["terminal"]["agent_result"].is_null());
         let decoded: SessionBody = serde_json::from_value(json).unwrap();
         decoded.validate_shape().unwrap();
@@ -5386,16 +5457,16 @@ mod tests {
     #[tokio::test]
     async fn terminal_prepare_rejects_incomplete_observation_groups_before_creating_files() {
         let directory = std::env::temp_dir().join(format!("qwen38-shape-{}", uuid::Uuid::new_v4()));
-        for index in 0..4 {
-            let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
-            terminal.observed_output_tokens = None;
-            terminal.observed_reasoning_tokens = None;
+        for index in 0..3 {
+            let mut terminal =
+                body("s-4444444444444444444444444444444444444444444444444444444444444444");
+            terminal.num_turns = None;
+            terminal.observed_usage = None;
             terminal.observed_subagent_scope_count = None;
             terminal.observed_unaccounted_records = None;
             match index {
-                0 => terminal.observed_output_tokens = Some(0),
-                1 => terminal.observed_reasoning_tokens = Some(0),
-                2 => terminal.observed_subagent_scope_count = Some(0),
+                0 => terminal.observed_usage = Some(usage(0, 0)),
+                1 => terminal.observed_subagent_scope_count = Some(0),
                 _ => terminal.observed_unaccounted_records = Some(0),
             }
             let error = super::prepare_terminal(&directory, &terminal)
@@ -5404,7 +5475,8 @@ mod tests {
             assert!(error.to_string().contains("output-observation"));
             assert!(!directory.exists());
         }
-        let mut terminal = body("s-5555555555555555555555555555555555555555555555555555555555555555");
+        let mut terminal =
+            body("s-5555555555555555555555555555555555555555555555555555555555555555");
         terminal.terminal = None;
         assert!(super::prepare_terminal(&directory, &terminal)
             .await
@@ -5599,7 +5671,8 @@ mod tests {
                 .contains("terminal fields contradict the durable acceptance record"),
             "unexpected rejection: {error}"
         );
-        std::fs::remove_file(result_dir.join("finished.json")).expect("remove other-release fixture");
+        std::fs::remove_file(result_dir.join("finished.json"))
+            .expect("remove other-release fixture");
         private_write(
             &result_dir.join("finished.json"),
             &serde_json::to_vec_pretty(&terminal).expect("serialize terminal fixture"),
@@ -5624,7 +5697,8 @@ mod tests {
                 "identity/schema drift",
             ),
         ] {
-            std::fs::remove_file(result_dir.join("accepted.json")).expect("remove acceptance fixture");
+            std::fs::remove_file(result_dir.join("accepted.json"))
+                .expect("remove acceptance fixture");
             private_write(
                 &result_dir.join("accepted.json"),
                 &serde_json::to_vec_pretty(&record).expect("serialize older fixture"),
@@ -6345,7 +6419,7 @@ mod tests {
         make_service_owned(&events);
 
         let observed = read_output_progress(&events).expect("read exact event snapshot");
-        assert_eq!(observed.num_turns, 0);
+        assert_eq!(observed.num_turns, None);
         assert_eq!(observed.observed_unaccounted_records, 2);
         assert_eq!(observed.output_event_bytes, bytes.len() as u64);
         assert!(observed
@@ -6374,7 +6448,10 @@ mod tests {
         let observed =
             read_output_progress(&events).expect("malformed record is explicitly unaccounted");
         assert_eq!(observed.observed_unaccounted_records, 1);
-        assert_eq!(observed.observed_output_tokens, 0);
+        assert_eq!(
+            observed.observed_usage,
+            crate::result_parse::GenerationUsageSummary::default()
+        );
     }
 
     #[test]
@@ -6406,9 +6483,9 @@ mod tests {
     }
     #[test]
     fn terminal_cannot_publish_a_certified_result_with_unaccounted_records() {
-        let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
-        terminal.observed_output_tokens = Some(0);
-        terminal.observed_reasoning_tokens = Some(0);
+        let mut terminal =
+            body("s-4444444444444444444444444444444444444444444444444444444444444444");
+        terminal.observed_usage = Some(usage(0, 0));
         terminal.observed_subagent_scope_count = Some(0);
         terminal.observed_unaccounted_records = Some(1);
         assert!(
@@ -6418,15 +6495,43 @@ mod tests {
     }
 
     #[test]
-    fn output_progress_preserves_known_usage_and_explicit_tail_without_a_result() {
+    fn output_progress_preserves_internal_physical_usage_and_explicit_tail_without_a_result() {
+        use sha2::{Digest, Sha256};
+        let hash = |bytes: &[u8]| {
+            Sha256::digest(bytes)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        };
         let tree = TestTree::new("partial-known-usage");
         let events = tree.0.join("events.jsonl");
-        let bytes = concat!(
-            "{\"type\":\"assistant\",\"origin\":{\"kind\":\"runtime\"},\"uuid\":\"main\",\"session_id\":\"a\",\"parent_tool_use_id\":null,\"message\":{\"usage\":{\"input_tokens\":7,\"output_tokens\":9,\"reasoning_output_tokens\":6,\"cache_read_input_tokens\":0,\"total_tokens\":16}}}\n",
-            "{\"type\":\"assistant\",\"origin\":{\"kind\":\"runtime\"},\"uuid\":\"child\",\"session_id\":\"a\",\"parent_tool_use_id\":\"child-scope\",\"message\":{\"usage\":{\"input_tokens\":5,\"output_tokens\":8,\"reasoning_output_tokens\":4,\"cache_read_input_tokens\":0,\"total_tokens\":13}}}\n",
-            "{\"type\":\"result\"}"
-        );
-        let bytes = event_init() + bytes;
+        let mut bytes = event_init();
+        for (sequence, id, scope, output, thoughts) in
+            [(1, "main", "a", 9, 6), (2, "utility", "internal", 8, 4)]
+        {
+            let body = serde_json::json!({"kv_scope":scope,"messages":[]}).to_string();
+            let request = serde_json::json!({"type":"model_request","uuid":format!("request-{id}"),
+            "session_id":"a","parent_tool_use_id":null,"request":{
+                "journal_id":"fixture","request_id":id,"sequence":sequence,"kv_scope":scope,
+                "segment_id":format!("segment-{id}"),"prompt_id":"test","owner":{"kind":"utility"},
+                "body_bytes":body.len(),"body_sha256":hash(body.as_bytes()),"body":{"kind":"full","json":body}
+            }});
+            bytes.push_str(&request.to_string());
+            bytes.push('\n');
+            for (index, event) in [
+                serde_json::json!({"kind":"http","status":200,"content_type":null}),
+                serde_json::json!({"kind":"end","termination":"eof","body_bytes":0,"body_sha256":hash(b""),"error":null}),
+                serde_json::json!({"kind":"outcome","status":"completed","error":null,"served_usage":{
+                    "promptTokenCount":0,"candidatesTokenCount":output,"thoughtsTokenCount":thoughts,
+                    "cachedContentTokenCount":0,"totalTokenCount":output}}),
+            ].into_iter().enumerate() {
+                let response = serde_json::json!({"type":"model_response","uuid":format!("response-{id}-{index}"),
+                    "session_id":"a","parent_tool_use_id":null,"response":{
+                        "journal_id":"fixture","request_id":id,"sequence":index+1,"event":event}});
+                bytes.push_str(&response.to_string()); bytes.push('\n');
+            }
+        }
+        bytes.push_str(r#"{"type":"result"}"#);
         private_write(&events, bytes.as_bytes());
         make_service_owned(&events);
         let observed = read_output_progress(&events).unwrap();
@@ -6435,23 +6540,26 @@ mod tests {
             .unwrap();
         assert_eq!(observed, snapshot.observed);
         assert!(snapshot.certified.is_err());
-        assert_eq!(observed.num_turns, 1);
-        assert_eq!(observed.observed_output_tokens, 17);
-        assert_eq!(observed.observed_reasoning_tokens, 10);
-        assert_eq!(observed.observed_subagent_scope_count, 1);
+        assert_eq!(observed.num_turns, None);
+        assert_eq!(observed.observed_usage.requests, 2);
+        assert_eq!(observed.observed_usage.usage_reports, 2);
+        assert_eq!(observed.observed_usage.usage.unwrap().output, 17);
+        assert_eq!(observed.observed_usage.usage.unwrap().thoughts, 10);
+        assert_eq!(observed.observed_subagent_scope_count, 0);
         assert_eq!(observed.observed_unaccounted_records, 1);
     }
     #[test]
     fn certified_terminal_requires_matching_complete_observations() {
         for field in ["output", "reasoning", "scopes", "absent"] {
-            let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
+            let mut terminal =
+                body("s-4444444444444444444444444444444444444444444444444444444444444444");
             match field {
-                "output" => terminal.observed_output_tokens = Some(1),
-                "reasoning" => terminal.observed_reasoning_tokens = Some(1),
+                "output" => terminal.observed_usage = Some(usage(1, 0)),
+                "reasoning" => terminal.observed_usage = Some(usage(0, 1)),
                 "scopes" => terminal.observed_subagent_scope_count = Some(1),
                 _ => {
-                    terminal.observed_output_tokens = None;
-                    terminal.observed_reasoning_tokens = None;
+                    terminal.num_turns = None;
+                    terminal.observed_usage = None;
                     terminal.observed_subagent_scope_count = None;
                     terminal.observed_unaccounted_records = None;
                 }
@@ -6462,10 +6570,10 @@ mod tests {
 
     #[test]
     fn partial_terminal_observation_counts_must_preserve_reasoning_nesting() {
-        let mut terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
+        let mut terminal =
+            body("s-4444444444444444444444444444444444444444444444444444444444444444");
         terminal.terminal_mut().agent_result = None;
-        terminal.observed_output_tokens = Some(1);
-        terminal.observed_reasoning_tokens = Some(2);
+        terminal.observed_usage = Some(usage(1, 2));
         terminal.observed_unaccounted_records = Some(1);
         assert!(
             terminal.validate_shape().is_err(),
@@ -6474,20 +6582,60 @@ mod tests {
     }
 
     #[test]
-    fn persisted_child_usage_cannot_default_missing_counts_to_certified_zero() {
+    fn persisted_request_usage_cannot_default_missing_counts_to_certified_zero() {
         let terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
-        let mut encoded = serde_json::to_value(&terminal).unwrap();
-        encoded["observed_subagent_scope_count"] = serde_json::json!(1);
-        encoded["terminal"]["agent_result"]["subagent_scope_count"] = serde_json::json!(1);
-        encoded["terminal"]["agent_result"]["subagent_scopes"] = serde_json::json!([{
-            "tool_use_id": "child", "tool_name": "agent", "billed_turns": 1,
-            "reported_num_turns": null, "is_error": null, "subtype": null, "error_message": null
-        }]);
-        assert!(
-            serde_json::from_value::<SessionBody>(encoded).is_err(),
-            "missing child served counts are unknown, never certified zero"
-        );
+        for field in [
+            "requests",
+            "usageReports",
+            "unfinalizedRequests",
+            "unreportedUsageRequests",
+            "usage",
+        ] {
+            let mut encoded = serde_json::to_value(&terminal).unwrap();
+            encoded["terminal"]["agent_result"]["request_scopes"][0]["usage"]
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
+            assert!(
+                serde_json::from_value::<SessionBody>(encoded).is_err(),
+                "{field}"
+            );
+        }
     }
+    #[test]
+    fn persisted_child_error_text_matches_the_stream_contract() {
+        for is_error in [false, true] {
+            for message in [None, Some(""), Some("Observed diagnostic")] {
+                let mut terminal =
+                    body("s-4444444444444444444444444444444444444444444444444444444444444444");
+                terminal.observed_subagent_scope_count = Some(1);
+                let result = terminal.terminal_mut().agent_result.as_mut().unwrap();
+                result.subagent_scope_count = 1;
+                result.subagent_error_count = u64::from(is_error);
+                result.subagent_scopes.push(crate::result_parse::AgentScope {
+                    tool_use_id: "child".into(),
+                    tool_name: "agent".into(),
+                    reported_num_turns: Some(1),
+                    is_error: Some(is_error),
+                    subtype: Some(String::from(if is_error {
+                        "error_during_execution"
+                    } else {
+                        "success"
+                    })),
+                    error_message: message.map(str::to_string),
+                });
+                let bytes = serde_json::to_vec(&terminal).unwrap();
+                let restored: SessionBody = serde_json::from_slice(&bytes).unwrap();
+                let accepted = message != Some("") && (!is_error || message.is_some());
+                assert_eq!(
+                    restored.validate_shape().is_ok(),
+                    accepted,
+                    "{is_error}, {message:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn persisted_child_terminal_absence_requires_explicit_nullable_fields() {
         let terminal = body("s-4444444444444444444444444444444444444444444444444444444444444444");
@@ -6495,8 +6643,7 @@ mod tests {
         encoded["observed_subagent_scope_count"] = serde_json::json!(1);
         encoded["terminal"]["agent_result"]["subagent_scope_count"] = serde_json::json!(1);
         encoded["terminal"]["agent_result"]["subagent_scopes"] = serde_json::json!([{
-            "tool_use_id": "child", "tool_name": "agent", "billed_turns": 1,
-            "output_tokens": 0, "reasoning_tokens": 0,
+            "tool_use_id": "child", "tool_name": "agent",
             "reported_num_turns": null, "is_error": null, "subtype": null, "error_message": null
         }]);
         let complete: SessionBody = serde_json::from_value(encoded.clone()).unwrap();

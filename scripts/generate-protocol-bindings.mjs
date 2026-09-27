@@ -23,7 +23,7 @@ const require = createRequire(resolve(source, "packages/core/package.json"));
 const Ajv = require("ajv/dist/ajv.js").default;
 const standalone = require("ajv/dist/standalone/index.js").default;
 const esbuild = require("esbuild");
-const schemaPath = resolve(root, "protocol/stream-contract-v6.json");
+const schemaPath = resolve(root, "protocol/stream-contract-v7.json");
 const generatorPath = fileURLToPath(import.meta.url);
 const lockPath = resolve(source, "package-lock.json");
 function readRegular(path) {
@@ -98,7 +98,7 @@ const names = schema.oneOf.map((variant) => variant.properties.type.const);
 if (new Set(names).size !== names.length)
   throw new Error("duplicate event discriminator");
 const header =
-  "// Generated from agent_service/protocol/stream-contract-v6.json.\n" +
+  "// Generated from agent_service/protocol/stream-contract-v7.json.\n" +
   "// Run scripts/generate-protocol-bindings.mjs; do not edit derived bindings.\n";
 const outputs = new Map();
 outputs.set(
@@ -183,7 +183,7 @@ outputs.set(
   ) + "\n",
 );
 
-for (const name of ["goal-state-v1", "partial-stream-v1"]) {
+for (const name of ["goal-state-v1", "partial-stream-v2"]) {
   const expected = readRegular(
     resolve(root, `protocol/test-vectors/${name}.json`),
   );

@@ -1,10 +1,11 @@
 //! One pure owner for stream identity, semantic admission and independent
 //! observations. Physical capture, storage and process receipts remain external.
 use crate::{
-    decode_event, decode_event_kind,
+    generation::{Generation, OutputScope},
     json::{Document, Limits, Value},
     schema::ValidationLimits,
     stream::{field, text, unsigned},
+    usage::{GenerationUsageSummary, ServedUsage},
     ContractError, ContractResult, DecodedRecord, EventKind, PartialStreamState, SystemKind,
     SAFE_INTEGER, STREAM_CONTRACT_SHA256,
 };
@@ -34,11 +35,9 @@ pub struct AgentResult {
     /// churned in local tool execution, which `duration_ms` alone cannot.
     pub api_duration_ms: u64,
     pub num_turns: u64,
-    /// Generated tokens the backend billed to those turns, summed, and the
-    /// part of them it counted as reasoning. Both are read from the served
-    /// usage every billed turn must carry; nothing here is estimated.
-    pub main_output_tokens: u64,
-    pub main_reasoning_tokens: u64,
+    pub main_kv_scope: String,
+    pub usage: GenerationUsageSummary,
+    pub request_scopes: Vec<RequestScope>,
     /// Every subagent scope the stream resolved, in order of first
     /// appearance. Empty exactly when the run delegated nothing.
     pub scopes: Vec<AgentScope>,
@@ -52,6 +51,7 @@ pub use crate::{terminal_exit_code, ERROR_SUBTYPES, SUCCESS_SUBTYPE};
 /// it, so consumers never need to know which tool performs delegation — and
 /// this parser never assumes one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentScope {
     /// Id of the spawning `tool_use` block; the exact value every event in
     /// the scope carried in `parent_tool_use_id`.
@@ -59,21 +59,11 @@ pub struct AgentScope {
     /// Name of that spawning tool call. Recorded as evidence for the reader,
     /// never used as a correlation key: resolution is by id alone.
     pub tool_name: String,
-    /// Assistant events in this scope carrying billed usage, counted by this
-    /// parser: one per model round the subagent completed, since the client
-    /// publishes every round's text, reasoning and served usage under the
-    /// scope's tool-call id. The count a subagent reports for itself is
-    /// `reported_num_turns`.
-    pub billed_turns: u64,
-    /// Generated tokens the backend billed to those rounds, summed, and the
-    /// part of them it counted as reasoning, exactly as for the main scope.
-    pub output_tokens: u64,
-    pub reasoning_tokens: u64,
     /// What the scope's own terminal record reported, verbatim. All four are
     /// `None` exactly when the scope never emitted a terminal record (the
     /// subagent was still running, or was torn down, when the session ended);
     /// `error_message` is additionally `None` when the record carried no
-    /// error. Reported started turns and independently observed billed turns
+    /// error. Reported started turns and physical requests
     /// are separate populations; neither replaces the other.
     #[serde(deserialize_with = "required_nullable")]
     pub reported_num_turns: Option<u64>,
@@ -85,128 +75,11 @@ pub struct AgentScope {
     pub error_message: Option<String>,
 }
 
-/// The usage a billed assistant event carries: what the backend served for
-/// the generation and the client copied onto the wire, field for field.
-#[derive(Debug, Clone, Copy)]
-struct BilledUsage {
-    output_tokens: u64,
-    reasoning_output_tokens: u64,
-}
-
-/// Read a billed assistant event's usage, or `None` for an unbilled fragment.
-///
-/// A non-null billed usage must carry every count the backend
-/// serves — the generated tokens, the part of them counted as reasoning, and
-/// the prompt tokens read back from the prefix cache — as non-negative
-/// integers, with reasoning no larger than the output it is part of. A count
-/// the stream omitted is not read as zero: the client fails a request whose
-/// usage arrived without these, so an event without them is a stream this
-/// parser does not recognise, and it is refused rather than tallied.
-fn billed_usage(
-    object: Value<'_>,
-    line: usize,
-    scope: Option<&str>,
-) -> ContractResult<Option<BilledUsage>> {
-    let usage_value = object
-        .get("message")
-        .and_then(Value::as_object)
-        .and_then(|message| message.get("usage"))
-        .ok_or_else(|| {
-            ContractError::InvalidRecord(format!(
-                "events.jsonl line {line} assistant message lacks usage (object or null) in {}",
-                scope_display(scope)
-            ))
-        })?;
-    if usage_value.is_null() {
-        return Ok(None);
-    }
-    let usage = usage_value.as_object().ok_or_else(|| {
-        ContractError::InvalidRecord(format!(
-            "events.jsonl line {line} assistant usage is neither an object nor null in {}",
-            scope_display(scope)
-        ))
-    })?;
-    let count = |key: &str| -> ContractResult<u64> {
-        field(usage, key, line).and_then(|value| unsigned(value, key, SAFE_INTEGER)).map_err(|cause| ContractError::InvalidRecord(format!("events.jsonl line {line} bills a turn in {} whose usage lacks non-negative integer {key}: {cause}", scope_display(scope))))
-    };
-    let input_tokens = count("input_tokens")?;
-    let output_tokens = count("output_tokens")?;
-    let reasoning_output_tokens = count("reasoning_output_tokens")?;
-    let cache_read_input_tokens = count("cache_read_input_tokens")?;
-    if reasoning_output_tokens > output_tokens {
-        return Err(ContractError::InvalidRecord(format!(
-            "events.jsonl line {line} bills {reasoning_output_tokens} reasoning tokens against only {output_tokens} output tokens in {}",
-            scope_display(scope)
-        )));
-    }
-    if cache_read_input_tokens > input_tokens {
-        return Err(ContractError::InvalidRecord(format!(
-            "events.jsonl line {line} reads {cache_read_input_tokens} cached prompt tokens against only {input_tokens} input tokens in {}",
-            scope_display(scope)
-        )));
-    }
-    let total_tokens = count("total_tokens")?;
-    if input_tokens.checked_add(output_tokens) != Some(total_tokens) {
-        return Err(ContractError::InvalidRecord(format!(
-            "events.jsonl line {line} total_tokens disagrees with input_tokens plus output_tokens in {}",
-            scope_display(scope)
-        )));
-    }
-    Ok(Some(BilledUsage {
-        output_tokens,
-        reasoning_output_tokens,
-    }))
-}
-
-/// The session summary accounts for admitted requests, including requests with
-/// no served record. It does not replace the independently billed event totals.
-fn validate_generation_summary(value: Option<Value<'_>>) -> ContractResult<()> {
-    let refuse = |what: &str| {
-        ContractError::InvalidRecord(format!("terminal result generation usage {what}"))
-    };
-    let summary = value
-        .and_then(Value::as_object)
-        .ok_or_else(|| refuse("must be an object"))?;
-    let count = |holder: Value<'_>, key: &str| {
-        unsigned(field(holder, key, 0)?, key, SAFE_INTEGER).map_err(|cause| {
-            refuse(&format!(
-                "requires non-negative safe integer {key}: {cause}"
-            ))
-        })
-    };
-    let requests = count(summary, "requests")?;
-    let reports = count(summary, "usageReports")?;
-    let unfinalized = count(summary, "unfinalizedRequests")?;
-    let unreported = count(summary, "unreportedUsageRequests")?;
-    if Some(requests)
-        != reports
-            .checked_add(unfinalized)
-            .and_then(|n| n.checked_add(unreported))
-    {
-        return Err(refuse("has an inconsistent request partition"));
-    }
-    let usage = summary
-        .get("usage")
-        .ok_or_else(|| refuse("requires nullable usage"))?;
-    if reports == 0 {
-        return if usage.is_null() {
-            Ok(())
-        } else {
-            Err(refuse("has served usage without reports"))
-        };
-    }
-    let usage = usage
-        .as_object()
-        .ok_or_else(|| refuse("requires served usage for reported requests"))?;
-    let prompt = count(usage, "promptTokenCount")?;
-    let output = count(usage, "candidatesTokenCount")?;
-    let reasoning = count(usage, "thoughtsTokenCount")?;
-    let cached = count(usage, "cachedContentTokenCount")?;
-    let total = count(usage, "totalTokenCount")?;
-    if prompt.checked_add(output) != Some(total) || reasoning > output || cached > prompt {
-        return Err(refuse("has inconsistent served counts"));
-    }
-    Ok(())
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RequestScope {
+    pub kv_scope: String,
+    pub usage: GenerationUsageSummary,
 }
 
 /// A compaction record distinguishes preflight refusal (output: null) from
@@ -421,15 +294,6 @@ fn validate_compaction_event(
 /// the main session, any other value is the owning `agent` tool-call id. Only
 /// null-or-absent is read as the main session, so a value of any other shape
 /// can only ever exclude an event from the main thread, never admit one to it.
-fn is_main_session_event(object: Value<'_>) -> bool {
-    object.get("parent_tool_use_id").is_none_or(Value::is_null)
-}
-
-/// Read an event's scope: `None` is the main session, `Some(id)` the
-/// spawning tool-call id. Which record terminates the stream and which row
-/// absorbs the billing are both decided from this field, so a value of an
-/// unexpected shape is contradictory evidence and is rejected here rather
-/// than silently read as "some subagent".
 fn required_scope<'a>(object: Value<'a>, line: usize) -> ContractResult<Option<&'a str>> {
     match object.get("parent_tool_use_id") {
         None => Ok(None),
@@ -448,61 +312,6 @@ fn scope_display(scope: Option<&str>) -> String {
         None => "the main session".into(),
         Some(id) => format!("subagent scope {id:?}"),
     }
-}
-
-/// Independently readable evidence in one complete record. The same observations
-/// survive at terminal when a missing or damaged record prevents certification.
-pub struct ObservedRecord {
-    /// A completed main-thread model invocation, counted as a turn.
-    pub main_turn: bool,
-    /// The subagent scope this record belongs to, if it is not the main
-    /// session. Read only for its identity; a shape this reader does not
-    /// recognise names no scope rather than inventing one.
-    pub subagent_scope: Option<String>,
-    /// Served output and reasoning tokens, when the record bills a turn and
-    /// every count it must carry is present and consistent.
-    pub usage: Option<(u64, u64)>,
-    /// The record is not fully interpretable, including unreadable billed usage.
-    pub usage_unreadable: bool,
-}
-
-/// Read a completed record for live progress. Never fails: an unreadable
-/// usage is reported as unreadable, not raised and not ignored.
-pub fn observe_record(object: Value<'_>, limits: ValidationLimits) -> ObservedRecord {
-    observe_record_admission(object, decode_event(object, limits, 0).is_err())
-}
-fn observe_record_admission(object: Value<'_>, record_invalid: bool) -> ObservedRecord {
-    let kind = decode_event_kind(object, 0);
-    if kind.is_err() || required_scope(object, 0).is_err() {
-        return ObservedRecord {
-            main_turn: false,
-            subagent_scope: None,
-            usage: None,
-            usage_unreadable: true,
-        };
-    }
-    let subagent_scope = required_scope(object, 0).ok().flatten().map(str::to_string);
-    let observed_usage = if matches!(kind, Ok(EventKind::Assistant)) {
-        billed_usage(object, 0, subagent_scope.as_deref())
-    } else {
-        Ok(None)
-    };
-    let usage_unreadable = observed_usage.is_err() || record_invalid;
-    let usage = observed_usage
-        .ok()
-        .flatten()
-        .map(|usage| (usage.output_tokens, usage.reasoning_output_tokens));
-
-    ObservedRecord {
-        main_turn: usage.is_some() && is_main_session_event(object),
-        subagent_scope,
-        usage,
-        usage_unreadable,
-    }
-}
-
-fn required_u64(object: Value<'_>, key: &str) -> ContractResult<u64> {
-    unsigned(field(object, key, 0)?, key, u64::MAX)
 }
 
 /// The trusted caller supplies the manifest fixed before any model dispatch.
@@ -537,13 +346,25 @@ impl RuntimeBindings {
         }
         Ok(Self { manifest })
     }
+    fn validate_stream_start(&self, object: Value<'_>, line: usize) -> ContractResult<()> {
+        if text(object, "type", line)? != "system"
+            || text(object, "subtype", line)? != "stream_start"
+            || required_scope(object, line)?.is_some()
+            || text(object, "stream_contract_sha256", line)? != STREAM_CONTRACT_SHA256
+        {
+            return Err(ContractError::InvalidRecord(format!(
+                "events.jsonl line {line} is not the root stream_start for this contract; retain the complete output from the matching client"
+            )));
+        }
+        Ok(())
+    }
     fn validate_init(&self, object: Value<'_>, line: usize) -> ContractResult<()> {
         if text(object, "type", line)? != "system"
             || text(object, "subtype", line)? != "init"
             || required_scope(object, line)?.is_some()
         {
             return Err(ContractError::InvalidRecord(format!(
-                "events.jsonl line {line} is not the root initial system event"
+                "events.jsonl line {line} is not root runtime metadata; retain the initialized root invocation"
             )));
         }
         for key in [
@@ -597,9 +418,8 @@ pub struct RuntimeLimits {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 pub struct RuntimeObservations {
-    pub num_turns: u64,
-    pub observed_output_tokens: u64,
-    pub observed_reasoning_tokens: u64,
+    pub num_turns: Option<u64>,
+    pub observed_usage: GenerationUsageSummary,
     pub observed_subagent_scope_count: u64,
     pub observed_unaccounted_records: u64,
 }
@@ -627,9 +447,6 @@ struct Terminal {
 struct ScopeState {
     attempts: BTreeSet<String>,
     id: Option<String>,
-    billed_turns: u64,
-    output_tokens: u64,
-    reasoning_tokens: u64,
     terminal: Option<Terminal>,
     partial: PartialStreamState,
 }
@@ -640,9 +457,12 @@ struct ToolUse {
     returned: bool,
 }
 struct AdmissionPlan {
+    runtime_initialized: bool,
     request_origin: Option<crate::model_requests::RequestOrigin>,
     request: Option<crate::model_requests::RequestAdmission>,
     response: Option<crate::model_requests::ResponseAdmission>,
+    generation: Option<crate::model_requests::GenerationAdmission>,
+    completion: Option<crate::model_requests::CompletionAdmission>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -667,8 +487,11 @@ pub struct RuntimeContract {
     bindings: RuntimeBindings,
     limits: RuntimeLimits,
     session_id: Option<String>,
+    runtime_initialized: bool,
     seen_uuids: BTreeSet<String>,
     observed_scopes: BTreeSet<String>,
+    observed_journal: Option<String>,
+    observed_requests: BTreeMap<String, bool>,
     records_seen: u64,
     prefix: u64,
     first_refusal: Option<ContractError>,
@@ -686,8 +509,11 @@ impl RuntimeContract {
             bindings,
             limits,
             session_id: None,
+            runtime_initialized: false,
             seen_uuids: BTreeSet::new(),
             observed_scopes: BTreeSet::new(),
+            observed_journal: None,
+            observed_requests: BTreeMap::new(),
             records_seen: 0,
             prefix: 0,
             first_refusal: None,
@@ -706,6 +532,101 @@ impl RuntimeContract {
             pending_admission: self.pending.is_some(),
             observations: self.observations,
         }
+    }
+    fn observe(&mut self, object: Value<'_>, line: usize) -> ContractResult<()> {
+        let mut observations = self.observations;
+        let scope = required_scope(object, line)?;
+        let mut journal = None;
+        let mut request = None;
+        let mut outcome = None;
+        let refuse = |detail: &str| {
+            ContractError::InvalidRecord(format!(
+            "events.jsonl line {line} has unaccounted physical evidence: {detail}; inspect the original request and outcome records"
+        ))
+        };
+        match text(object, "type", line)? {
+            "system" if object.get("subtype").and_then(Value::as_str) == Some("stream_start") => {
+                if self.observed_journal.is_some() {
+                    return Err(refuse("repeated journal origin"));
+                }
+                journal = Some(
+                    text(
+                        field(object, "request_evidence_origin", line)?,
+                        "journal_id",
+                        line,
+                    )?
+                    .to_string(),
+                );
+            }
+            "model_request" => {
+                let evidence = field(object, "request", line)?;
+                let id = text(evidence, "request_id", line)?;
+                if self.observed_journal.as_deref() != Some(text(evidence, "journal_id", line)?)
+                    || self.observed_requests.contains_key(id)
+                {
+                    return Err(refuse("request has a foreign journal or repeated identity"));
+                }
+                observations.observed_usage = observations.observed_usage.admit_request()?;
+                request = Some(id.to_string());
+            }
+            "model_response" => {
+                let evidence = field(object, "response", line)?;
+                let id = text(evidence, "request_id", line)?;
+                if self.observed_journal.as_deref() != Some(text(evidence, "journal_id", line)?)
+                    || !self.observed_requests.contains_key(id)
+                {
+                    return Err(refuse("response has no observed request owner"));
+                }
+                let event = field(evidence, "event", line)?;
+                if text(event, "kind", line)? == "outcome" {
+                    if self.observed_requests.get(id) == Some(&true) {
+                        return Err(refuse("request has a repeated processing outcome"));
+                    }
+                    let usage = field(event, "served_usage", line)?;
+                    observations.observed_usage =
+                        observations.observed_usage.finalize(if usage.is_null() {
+                            None
+                        } else {
+                            Some(ServedUsage::read(usage, line)?)
+                        })?;
+                    outcome = Some(id.to_string());
+                }
+            }
+            "result" if scope.is_none() => {
+                if observations.num_turns.is_some() {
+                    return Err(refuse("repeated root terminal"));
+                }
+                observations.num_turns = Some(unsigned(
+                    field(object, "num_turns", line)?,
+                    "reported turns",
+                    SAFE_INTEGER,
+                )?);
+            }
+            _ => {}
+        }
+        if scope.is_some_and(|scope| !self.observed_scopes.contains(scope)) {
+            observations.observed_subagent_scope_count = add(
+                observations.observed_subagent_scope_count,
+                1,
+                "observed scope count",
+            )?;
+        }
+        // Observation remains independent of certification after its first
+        // refusal. Keep identities, not response bodies or decoded generations.
+        self.observations = observations;
+        if let Some(journal) = journal {
+            self.observed_journal = Some(journal);
+        }
+        if let Some(id) = request {
+            self.observed_requests.insert(id, false);
+        }
+        if let Some(id) = outcome {
+            self.observed_requests.insert(id, true);
+        }
+        if let Some(scope) = scope {
+            self.observed_scopes.insert(scope.to_string());
+        }
+        Ok(())
     }
     fn latch(&mut self, error: ContractError) -> ContractError {
         self.first_refusal.get_or_insert(error).clone()
@@ -763,7 +684,7 @@ impl RuntimeContract {
             let uuid = text(object, "uuid", line)?;
             let session = text(object, "session_id", line)?;
             if self.records_seen == 1 {
-                self.bindings.validate_init(object, line)?;
+                self.bindings.validate_stream_start(object, line)?;
                 self.session_id = Some(session.to_string());
             }
             match self.session_id.as_deref() {
@@ -788,39 +709,13 @@ impl RuntimeContract {
             return Err(error);
         }
         let decoded = DecodedRecord::decode(object, self.limits.schema, line);
-        let item = observe_record_admission(object, decoded.is_err());
-        // Compute the complete numerical update before installing any partner.
-        let mut observed = self.observations;
-        if item.main_turn {
-            observed.num_turns = add(observed.num_turns, 1, "observed main turns")?;
-        }
-        if let Some((output, reasoning)) = item.usage {
-            observed.observed_output_tokens = add(
-                observed.observed_output_tokens,
-                output,
-                "observed output tokens",
-            )?;
-            observed.observed_reasoning_tokens = add(
-                observed.observed_reasoning_tokens,
-                reasoning,
-                "observed reasoning tokens",
-            )?;
-        }
-        if item.usage_unreadable {
-            observed.observed_unaccounted_records = add(
-                observed.observed_unaccounted_records,
+        if decoded.is_err() || self.observe(object, line).is_err() {
+            self.observations.observed_unaccounted_records = add(
+                self.observations.observed_unaccounted_records,
                 1,
                 "unaccounted record count",
             )?;
         }
-        if let Some(scope) = item.subagent_scope {
-            self.observed_scopes.insert(scope);
-        }
-        observed.observed_subagent_scope_count = u64::try_from(self.observed_scopes.len())
-            .map_err(|_| {
-                ContractError::ValidationUnavailable("observed scope count overflow".into())
-            })?;
-        self.observations = observed;
         if let Some(error) = &self.first_refusal {
             return Err(error.clone());
         }
@@ -873,11 +768,18 @@ impl RuntimeContract {
             return Err(error.clone());
         }
         let PendingAdmission { plan, .. } = self.pending.take().expect("checked pending admission");
+        self.runtime_initialized = plan.runtime_initialized;
         if let Some(origin) = plan.request_origin {
             self.requests.commit_origin(origin);
         }
         if let Some(response) = plan.response {
             self.requests.commit_response(response);
+        }
+        if let Some(generation) = plan.generation {
+            self.requests.commit_generation(generation);
+        }
+        if let Some(completion) = plan.completion {
+            self.requests.commit_completion(completion);
         }
         if plan.row == self.scope_states.len() {
             let id = plan
@@ -919,7 +821,7 @@ impl RuntimeContract {
     fn ensure_ancestry(&self, scope: Option<&str>, line: usize) -> ContractResult<()> {
         let mut cursor = scope;
         while let Some(id) = cursor {
-            let tool = self.tool_uses.get(id).ok_or_else(|| ContractError::InvalidRecord(format!("events.jsonl line {line} names parent_tool_use_id {id:?}, which no earlier assistant message issued as a tool_use id")))?;
+            let tool = self.tool_uses.get(id).ok_or_else(|| ContractError::InvalidRecord(format!("events.jsonl line {line} names parent_tool_use_id {id:?}, which no accepted generation issued as a tool_use id")))?;
             if tool.returned {
                 return Err(ContractError::InvalidRecord(format!(
                     "events.jsonl line {line} continues child of returned tool {id:?}"
@@ -933,6 +835,21 @@ impl RuntimeContract {
             cursor = tool.scope.as_deref();
         }
         Ok(())
+    }
+    fn conversation_generation(
+        &self,
+        generation: &Generation,
+        scope: Option<&str>,
+    ) -> ContractResult<bool> {
+        match &generation.output_scope {
+            OutputScope::Internal if scope.is_none() => Ok(false),
+            OutputScope::Conversation { parent }
+                if parent.as_deref() == scope
+                    && Some(generation.origin.scope.as_str()) == scope.or(self.session_id.as_deref()) => Ok(true),
+            _ => Err(ContractError::InvalidRecord(
+                "generation output scope contradicts its envelope or request owner; inspect the hash-bound generation and its producing scope".into()
+            )),
+        }
     }
     fn plan(&self, record: DecodedRecord<'_>, line: usize) -> ContractResult<AdmissionPlan> {
         let object = record.value();
@@ -979,58 +896,68 @@ impl RuntimeContract {
         }
         let mut request = None;
         let mut response = None;
+        let mut generation = None;
+        let mut completion = None;
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
+        let mut runtime_initialized = self.runtime_initialized;
         match record.kind() {
             EventKind::ModelRequest => {
+                if !runtime_initialized {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} dispatches model work without the pinned runtime init; retain the complete initialized invocation"
+                    )));
+                }
                 request = Some(self.requests.plan(object, line, self.limits.json)?);
             }
             EventKind::ModelResponse => {
                 response = Some(self.requests.plan_response(object, line)?);
             }
-            EventKind::Assistant => {
-                state.partial.complete_message(line)?;
-                if let Some(content) = field(object, "message", line)?.get("content") {
-                    let blocks = content.elements().ok_or_else(|| {
-                        ContractError::InvalidRecord(format!(
-                            "events.jsonl line {line} assistant content must be an array"
-                        ))
-                    })?;
-                    for block in blocks {
-                        let kind = text(block, "type", line)?;
-                        if kind != "tool_use" {
-                            continue;
+            EventKind::ModelGeneration => {
+                let admission = self.requests.plan_generation(
+                    object,
+                    line,
+                    self.limits.json,
+                    self.limits.schema,
+                )?;
+                if self.conversation_generation(&admission.generation, scope)? {
+                    state
+                        .partial
+                        .observe_generation(admission.generation.clone(), line)?;
+                }
+                generation = Some(admission);
+            }
+            EventKind::ModelAttemptCompletion => {
+                let admission = self.requests.plan_completion(object, line)?;
+                if self.conversation_generation(&admission.generation, scope)? {
+                    state
+                        .partial
+                        .observe_completion(&admission.generation.origin, admission.accepted)?;
+                    if admission.accepted {
+                        for call in &admission.generation.calls {
+                            if let Some(previous) = self
+                                .tool_uses
+                                .get(&call.id)
+                                .or_else(|| additions.get(&call.id))
+                            {
+                                return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} re-issues tool_use id {:?}, first issued at line {} in {}; inspect the accepted generations", call.id, previous.line, scope_display(previous.scope.as_deref()))));
+                            }
+                            additions.insert(
+                                call.id.clone(),
+                                ToolUse {
+                                    name: call.name.clone().expect("accepted generation call name"),
+                                    line,
+                                    scope: scope.map(str::to_string),
+                                    returned: false,
+                                },
+                            );
                         }
-                        let id = text(block, "id", line)?;
-                        let name = text(block, "name", line)?;
-                        if let Some(previous) = self.tool_uses.get(id).or_else(|| additions.get(id))
-                        {
-                            return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} re-issues tool_use id {id:?}, first issued at line {} in {}", previous.line, scope_display(previous.scope.as_deref()))));
-                        }
-                        additions.insert(
-                            id.to_string(),
-                            ToolUse {
-                                name: name.to_string(),
-                                line,
-                                scope: scope.map(str::to_string),
-                                returned: false,
-                            },
-                        );
                     }
                 }
-                if let Some(usage) = billed_usage(object, line, scope)? {
-                    state.billed_turns = add(state.billed_turns, 1, "billed turns")?;
-                    state.output_tokens = add(
-                        state.output_tokens,
-                        usage.output_tokens,
-                        "billed output tokens",
-                    )?;
-                    state.reasoning_tokens = add(
-                        state.reasoning_tokens,
-                        usage.reasoning_output_tokens,
-                        "billed reasoning tokens",
-                    )?;
-                }
+                completion = Some(admission);
+            }
+            EventKind::Assistant => {
+                state.partial.complete_message(line)?;
             }
             EventKind::User => {
                 if let Some(blocks) = field(object, "message", line)?
@@ -1066,12 +993,16 @@ impl RuntimeContract {
                 let subtype = SystemKind::from_wire(text(object, "subtype", line)?)
                     .expect("decoded system subtype");
                 match subtype {
-                    SystemKind::Init if self.prefix == 0 => {},
-                    SystemKind::Init => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} starts another invocation before this invocation has closed"))),
+                    SystemKind::StreamStart if self.prefix == 0 => {},
+                    SystemKind::StreamStart => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} starts another invocation before this invocation has closed; retain one complete invocation"))),
+                    SystemKind::Init => {
+                        self.bindings.validate_init(object, line)?;
+                        runtime_initialized = true;
+                    },
                     SystemKind::Compaction => validate_compaction_event(object, line, scope, self.limits.json)?,
                     SystemKind::SessionRecordingDegraded | SystemKind::TurnCleanupFailed | SystemKind::VisionBridgeFailed => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} reports operational failure {}: {}", subtype.wire(), field(object, "data", line)?.raw()))),
                     SystemKind::SessionStart | SystemKind::SessionEnd => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} declares transport ownership inside an already owned invocation"))),
-                    SystemKind::TaskNotification => { if let Some(usage) = field(object, "data", line)?.get("usage") { validate_generation_summary(usage.get("ownerUsage"))?; } },
+                    SystemKind::TaskNotification => { if let Some(usage) = field(object, "data", line)?.get("usage") { GenerationUsageSummary::read(field(usage, "ownerUsage", line)?, line)?; } },
                     SystemKind::TaskStarted | SystemKind::WorktreeStarted | SystemKind::WorktreeRestored | SystemKind::VisionRouting | SystemKind::VisionBridge => {},
                 }
             }
@@ -1079,15 +1010,22 @@ impl RuntimeContract {
                 state.partial.finish(line)?;
                 state.terminal = Some(terminal(object, line, scope.is_none())?);
                 if scope.is_none() {
-                    validate_main_counts(&state)?;
-                    let billed = self.scope_states.iter().try_fold(0u64, |total, state| {
-                        add(total, state.billed_turns, "all billed turns")
-                    })?;
-                    self.requests.validate_summary(object, line, billed)?;
+                    if !runtime_initialized
+                        && !state.terminal.as_ref().expect("parsed terminal").is_error
+                    {
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} reports success without the pinned runtime init; retain the complete initialized invocation"
+                        )));
+                    }
+                    for child in self.scope_states.iter().skip(1) {
+                        child.partial.finish(line)?;
+                    }
+                    self.requests.validate_summary(object, line)?;
                 }
             }
         }
         Ok(AdmissionPlan {
+            runtime_initialized,
             request_origin: if self.prefix == 0 {
                 Some(
                     self.requests
@@ -1098,6 +1036,8 @@ impl RuntimeContract {
             },
             request,
             response,
+            generation,
+            completion,
             row,
             state,
             additions,
@@ -1141,7 +1081,6 @@ impl RuntimeContract {
                 self.prefix
             ))
         })?;
-        validate_main_counts(main)?;
         let scopes = self
             .scope_states
             .iter()
@@ -1152,9 +1091,6 @@ impl RuntimeContract {
                 AgentScope {
                     tool_use_id: id.clone(),
                     tool_name: tool.name.clone(),
-                    billed_turns: state.billed_turns,
-                    output_tokens: state.output_tokens,
-                    reasoning_tokens: state.reasoning_tokens,
                     reported_num_turns: state.terminal.as_ref().map(|terminal| terminal.num_turns),
                     is_error: state.terminal.as_ref().map(|terminal| terminal.is_error),
                     subtype: state
@@ -1175,8 +1111,19 @@ impl RuntimeContract {
             duration_ms: terminal.duration_ms.expect("root duration admitted"),
             api_duration_ms: terminal.api_duration_ms.expect("root duration admitted"),
             num_turns: terminal.num_turns,
-            main_output_tokens: main.output_tokens,
-            main_reasoning_tokens: main.reasoning_tokens,
+            main_kv_scope: self
+                .session_id
+                .clone()
+                .expect("validated initial session owner"),
+            usage: self.requests.all_usage(),
+            request_scopes: self
+                .requests
+                .usage_scopes()
+                .map(|(scope, usage)| RequestScope {
+                    kv_scope: scope.to_string(),
+                    usage: *usage,
+                })
+                .collect(),
             scopes,
         })
     }
@@ -1210,10 +1157,12 @@ fn terminal(object: Value<'_>, line: usize, root: bool) -> ContractResult<Termin
     };
     let duration_ms = duration("duration_ms")?;
     let api_duration_ms = duration("duration_api_ms")?;
-    let num_turns = required_u64(object, "num_turns")?;
+    let num_turns = unsigned(field(object, "num_turns", line)?, "num_turns", SAFE_INTEGER)?;
     match object.get("usage") {
         Some(usage) if !root && usage.is_null() => {}
-        usage => validate_generation_summary(usage)?,
+        _ => {
+            GenerationUsageSummary::read(field(object, "usage", line)?, line)?;
+        }
     }
     if !object
         .get("permission_denials")
@@ -1261,22 +1210,6 @@ fn terminal(object: Value<'_>, line: usize, root: bool) -> ContractResult<Termin
         error_message,
     })
 }
-fn validate_main_counts(state: &ScopeState) -> ContractResult<()> {
-    let terminal = state
-        .terminal
-        .as_ref()
-        .expect("terminal before count reconciliation");
-    if !matches!(terminal.num_turns.checked_sub(state.billed_turns), Some(0))
-        && !(terminal.is_error && terminal.num_turns.checked_sub(state.billed_turns) == Some(1))
-    {
-        return Err(ContractError::InvalidRecord(format!(
-            "terminal num_turns={} is not consistent with {} main assistant event(s)",
-            terminal.num_turns, state.billed_turns
-        )));
-    }
-    Ok(())
-}
-
 fn decode_failure(cause: crate::json::DecodeError, line: usize) -> ContractError {
     match cause {
         crate::json::DecodeError::ResourceLimit { resource, limit } => {
@@ -1312,7 +1245,12 @@ mod tests {
     }
     fn init() -> String {
         format!(
-            r#"{{"type":"system","subtype":"init","request_evidence_origin":{{"journal_id":"fixture","first_sequence":1}},"uuid":"init","session_id":"session","stream_contract_sha256":"{STREAM_CONTRACT_SHA256}","cwd":"/owned","model":"model","permission_mode":"default","qwen_code_version":"version","tools":["tool"],"agents":[],"slash_commands":[],"mcp_servers":[]}}"#
+            r#"{{"type":"system","subtype":"init","uuid":"init","session_id":"session","parent_tool_use_id":null,"stream_contract_sha256":"{STREAM_CONTRACT_SHA256}","cwd":"/owned","model":"model","permission_mode":"default","qwen_code_version":"version","tools":["tool"],"agents":[],"slash_commands":[],"mcp_servers":[]}}"#
+        )
+    }
+    fn stream_start() -> String {
+        format!(
+            r#"{{"type":"system","subtype":"stream_start","request_evidence_origin":{{"journal_id":"fixture","first_sequence":1}},"uuid":"stream-start","session_id":"session","parent_tool_use_id":null,"stream_contract_sha256":"{STREAM_CONTRACT_SHA256}"}}"#
         )
     }
     fn admit(owner: &mut RuntimeContract, raw: &str) -> ContractResult<()> {
@@ -1321,6 +1259,7 @@ mod tests {
     }
     fn initialized() -> RuntimeContract {
         let mut owner = owner();
+        admit(&mut owner, &stream_start()).unwrap();
         admit(&mut owner, &init()).unwrap();
         owner
     }
@@ -1338,31 +1277,199 @@ mod tests {
             r#"{{"type":"stream_event",{origin}"uuid":"{id}","session_id":"session","parent_tool_use_id":null,"event":{event}}}"#
         )
     }
-    fn assistant(id: &str, scope: &str, content: &str, output: &str) -> String {
+    fn assistant(id: &str, scope: &str, content: &str) -> String {
         format!(
-            r#"{{"type":"assistant","origin":{{"kind":"runtime"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"content":{content},"usage":{{"input_tokens":0,"output_tokens":{output},"reasoning_output_tokens":0,"cache_read_input_tokens":0,"total_tokens":{output}}}}}}}"#
+            r#"{{"type":"assistant","origin":{{"kind":"runtime"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"id":"presentation-{id}","type":"message","role":"assistant","content":{content},"stop_reason":null,"usage":null}}}}"#
         )
     }
+    fn fixture() -> Vec<serde_json::Value> {
+        let mut rows: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+        // Runtime metadata is authored from this test's manifest. The physical
+        // and generation evidence retain their captured producer bytes.
+        let mut metadata: serde_json::Value = serde_json::from_str(&init()).unwrap();
+        metadata["session_id"] = rows[0]["session_id"].clone();
+        rows.insert(1, metadata);
+        rows.last_mut().unwrap()["result"] = serde_json::json!("done");
+        rows
+    }
     fn issued_owner() -> RuntimeContract {
-        let mut owner = initialized();
+        let mut owner = owner();
+        for record in fixture() {
+            let completed = record["type"] == "model_attempt_completion";
+            admit(&mut owner, &record.to_string()).unwrap();
+            if completed {
+                break;
+            }
+        }
+        assert!(owner.tool_uses.contains_key("provider__qwen_dup_2"));
+        owner
+    }
+    fn incomplete_owner(
+        name: serde_json::Value,
+        arguments: &str,
+    ) -> (RuntimeContract, serde_json::Value) {
+        let mut records = fixture();
+        let generation = records
+            .iter_mut()
+            .find(|row| row["type"] == "model_generation")
+            .unwrap();
+        let evidence = &mut generation["generation"];
+        let mut envelope: serde_json::Value =
+            serde_json::from_str(evidence["generation_json"].as_str().unwrap()).unwrap();
+        envelope["finish_reason"] = serde_json::json!("MAX_TOKENS");
+        envelope["observations"] = serde_json::json!([{
+            "response":{"candidates":[{"content":{"parts":[],"role":"model"},"finishReason":"MAX_TOKENS"}],"usageMetadata":envelope["usage"]},
+            "incomplete_tool_calls":[{"name":name,"arguments":arguments}],
+            "tool_call_preparations":[], "call_ids":[]
+        }]);
+        let bytes = envelope.to_string();
+        let hash = crate::generation::sha256(bytes.as_bytes());
+        evidence["generation_bytes"] = serde_json::json!(bytes.len());
+        evidence["generation_sha256"] = serde_json::json!(hash);
+        evidence["generation_json"] = serde_json::json!(bytes);
+        let mut owner = owner();
+        for mut record in records {
+            if matches!(record["type"].as_str(), Some("stream_event" | "result")) {
+                continue;
+            }
+            if record["type"] == "model_response"
+                && record["response"]["event"]["kind"] == "history"
+            {
+                record["response"]["event"]["disposition"] = serde_json::json!("abandoned");
+            }
+            if record["type"] == "model_attempt_completion" {
+                record["completion"]["generation_sha256"] = serde_json::json!(hash);
+                record["completion"]["disposition"] = serde_json::json!("abandoned");
+            }
+            admit(&mut owner, &record.to_string()).unwrap();
+        }
+        (owner, envelope["origin"].clone())
+    }
+    fn model_partial(
+        owner: &RuntimeContract,
+        origin: &serde_json::Value,
+        id: &str,
+        event: serde_json::Value,
+    ) -> String {
+        serde_json::json!({"type":"stream_event","uuid":id,"session_id":owner.session_id,
+            "parent_tool_use_id":null,"origin":origin,"event":event})
+        .to_string()
+    }
+    fn utility_request(id: &str, sequence: u64) -> String {
+        let body = r#"{"kv_scope":"internal-utility","messages":[]}"#;
+        serde_json::json!({
+            "type":"model_request", "uuid":format!("request-{id}"), "session_id":"session", "parent_tool_use_id":null,
+            "request":{
+                "journal_id":"fixture", "request_id":id, "sequence":sequence,
+                "kv_scope":"internal-utility", "segment_id":"utility-segment", "prompt_id":"utility-prompt",
+                "owner":{"kind":"utility"}, "body":{"kind":"full","json":body},
+                "body_bytes":body.len(), "body_sha256":crate::generation::sha256(body.as_bytes())
+            }
+        }).to_string()
+    }
+    fn response(id: &str, sequence: u64, event: &str) -> String {
+        format!(
+            r#"{{"type":"model_response","uuid":"response-{id}-{sequence}","session_id":"session","parent_tool_use_id":null,"response":{{"journal_id":"fixture","request_id":"{id}","sequence":{sequence},"event":{event}}}}}"#
+        )
+    }
+    fn utility_transport(owner: &mut RuntimeContract, id: &str, sequence: u64) {
+        admit(owner, &utility_request(id, sequence)).unwrap();
         admit(
-            &mut owner,
-            &assistant(
-                "issued",
-                "null",
-                r#"[{"type":"tool_use","id":"tool-1","name":"tool","input":{}}]"#,
-                "0",
-            ),
+            owner,
+            &response(id, 1, r#"{"kind":"http","status":200,"content_type":null}"#),
         )
         .unwrap();
-        owner
+        let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":0,
+            "body_sha256":crate::generation::sha256(b""),"error":null});
+        admit(owner, &response(id, 2, &end.to_string())).unwrap();
+    }
+    fn outcome(id: &str, output: &str) -> String {
+        response(
+            id,
+            3,
+            &format!(
+                r#"{{"kind":"outcome","status":"completed","error":null,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
+            ),
+        )
+    }
+    #[test]
+    fn a_startup_error_requires_stream_identity_but_no_fabricated_runtime() {
+        let mut startup = owner();
+        admit(&mut startup, &stream_start()).unwrap();
+        let result = serde_json::json!({
+            "type":"result", "subtype":"error_during_execution", "uuid":"failed", "session_id":"session",
+            "parent_tool_use_id":null, "is_error":true, "duration_ms":0, "duration_api_ms":0, "num_turns":0,
+            "usage":{"requests":0,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":0,"usage":null},
+            "permission_denials":[], "error":{"message":"Authentication failed before initialization"},
+            "request_evidence":{"journal_id":"fixture","first_sequence":1,"request_count":0,"open_response_ids":[],"open_attempt_ids":[]}
+        });
+        admit(&mut startup, &result.to_string()).unwrap();
+        let certified = startup.finish().unwrap();
+        assert_eq!(certified.usage.requests, 0);
+        assert!(certified.is_error);
+        assert_eq!(certified.subtype, "error_during_execution");
+        assert_eq!(
+            certified.response,
+            "Authentication failed before initialization"
+        );
+        assert!(!startup.runtime_initialized);
+        for success in [false, true] {
+            let mut rejected = owner();
+            if success {
+                admit(&mut rejected, &stream_start()).unwrap();
+            }
+            let mut candidate = result.clone();
+            if success {
+                candidate["subtype"] = serde_json::json!("success");
+                candidate["is_error"] = serde_json::json!(false);
+                candidate["result"] = serde_json::json!("claimed success");
+                candidate.as_object_mut().unwrap().remove("error");
+            }
+            let failure = admit(&mut rejected, &candidate.to_string())
+                .unwrap_err()
+                .to_string();
+            assert!(
+                failure.contains(if success {
+                    "without the pinned runtime init"
+                } else {
+                    "stream_start"
+                }),
+                "{failure}"
+            );
+        }
+    }
+    #[test]
+    fn model_work_requires_committed_manifest_metadata_after_stream_start() {
+        let mut missing = owner();
+        admit(&mut missing, &stream_start()).unwrap();
+        assert!(admit(&mut missing, &utility_request("early", 1))
+            .unwrap_err()
+            .to_string()
+            .contains("without the pinned runtime init"));
+
+        let mut ready = owner();
+        admit(&mut ready, &stream_start()).unwrap();
+        let mut token = ready.prepare_utf8(init().as_bytes(), 2).unwrap();
+        assert!(!ready.runtime_initialized);
+        ready.commit(&mut token).unwrap();
+        assert!(ready.runtime_initialized);
+        utility_transport(&mut ready, "ordinary", 1);
+
+        let mut mismatch = owner();
+        admit(&mut mismatch, &stream_start()).unwrap();
+        assert!(admit(&mut mismatch, &init().replace("/owned", "/foreign"))
+            .unwrap_err()
+            .to_string()
+            .contains("cwd differs from the pinned contract"));
+        assert!(!mismatch.runtime_initialized);
     }
     #[test]
     fn admission_waits_for_commit_and_tokens_belong_to_one_actual_owner() {
         let mut a = owner();
         let mut b = owner();
-        let mut token = a.prepare_utf8(init().as_bytes(), 1).unwrap();
-        assert_eq!(a.pending_bytes(&token).unwrap(), init());
+        let mut token = a.prepare_utf8(stream_start().as_bytes(), 1).unwrap();
+        assert_eq!(a.pending_bytes(&token).unwrap(), stream_start());
         assert_eq!(a.snapshot().certified_prefix_records, 0);
         assert!(a.snapshot().pending_admission);
         assert!(b
@@ -1380,7 +1487,7 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("stale"));
-        let mut token = b.prepare_utf8(init().as_bytes(), 1).unwrap();
+        let mut token = b.prepare_utf8(stream_start().as_bytes(), 1).unwrap();
         b.commit(&mut token).unwrap();
         assert_eq!(b.snapshot().certified_prefix_records, 1);
         assert!(!b.snapshot().pending_admission);
@@ -1388,7 +1495,7 @@ mod tests {
     #[test]
     fn rejected_prepared_record_keeps_semantics_and_names_the_failed_barrier() {
         let mut owner = owner();
-        let mut token = owner.prepare_utf8(init().as_bytes(), 1).unwrap();
+        let mut token = owner.prepare_utf8(stream_start().as_bytes(), 1).unwrap();
         owner
             .reject_pending(
                 &mut token,
@@ -1404,101 +1511,105 @@ mod tests {
             .contains("journal sync uncertain"));
     }
     #[test]
-    fn a_call_the_output_limit_stopped_is_recorded_whole_and_issues_no_tool() {
-        let block = r#"{"type":"incomplete_tool_use","name":"write_file","arguments":"{\"file_path\": \"a.md\", \"content\": \"cut"}"#;
-        let mut owner = initialized();
-        for (id, event) in [
-            (
-                "start",
-                r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#.to_string(),
-            ),
-            (
-                "block",
-                format!(r#"{{"type":"content_block_start","index":0,"content_block":{block}}}"#),
-            ),
-            ("stop", r#"{"type":"content_block_stop","index":0}"#.to_string()),
-        ] {
-            admit(&mut owner, &partial(id, &event)).unwrap();
+    fn captured_generation_owns_tools_and_physical_usage() {
+        let mut owner = owner();
+        for record in fixture() {
+            let completion = record["type"] == "model_attempt_completion";
+            if completion {
+                assert!(owner.tool_uses.is_empty());
+            }
+            admit(&mut owner, &record.to_string()).unwrap();
+            if completion {
+                assert_eq!(owner.tool_uses["provider__qwen_dup_2"].name, "audit_probe");
+            }
         }
-        admit(
-            &mut owner,
-            &assistant("cut", "null", &format!("[{block}]"), "7"),
-        )
-        .unwrap();
-        // The model's output, and never a call: nothing is issued, so no
-        // result can answer it and no scope can claim it, while the turn that
-        // wrote it is billed.
+        let result = owner.finish().unwrap();
+        assert_eq!(result.usage.requests, 1);
+        assert_eq!(result.usage.usage_reports, 1);
+        assert_eq!(result.usage.usage.unwrap().output, 7);
+        assert_eq!(result.num_turns, 1);
+        assert_eq!(result.request_scopes.len(), 1);
+        assert_eq!(result.request_scopes[0].kv_scope, result.main_kv_scope);
+        assert_eq!(owner.observations.observed_usage, result.usage);
+    }
+    #[test]
+    fn physical_history_cannot_replace_logical_completion() {
+        let mut owner = owner();
+        for record in fixture() {
+            if record["type"] == "model_attempt_completion" || record["type"] == "stream_event" {
+                continue;
+            }
+            let terminal = record["type"] == "result";
+            let admitted = admit(&mut owner, &record.to_string());
+            assert_eq!(admitted.is_err(), terminal);
+        }
         assert!(owner.tool_uses.is_empty());
-        assert_eq!(owner.scope_states[0].billed_turns, 1);
-        assert_eq!(owner.scope_states[0].output_tokens, 7);
-
-        // It starts whole, so no delta can extend it.
-        let mut owner = initialized();
-        for (id, event) in [
+        assert!(owner.finish().is_err());
+        assert_eq!(owner.observations.observed_usage.usage_reports, 1);
+    }
+    #[test]
+    fn an_incomplete_model_call_preserves_arguments_and_never_issues_a_tool() {
+        for (name, arguments) in [
             (
-                "start",
-                r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#.to_string(),
+                serde_json::json!("write_file"),
+                "{\"file_path\":\"a.md\",\"content\":\"cut",
             ),
-            (
-                "block",
-                format!(r#"{{"type":"content_block_start","index":0,"content_block":{block}}}"#),
-            ),
+            (serde_json::Value::Null, ""),
         ] {
-            admit(&mut owner, &partial(id, &event)).unwrap();
-        }
-        let delta = partial(
-            "delta",
-            r#"{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"more"}}"#,
-        );
-        assert!(admit(&mut owner, &delta)
-            .unwrap_err()
-            .to_string()
-            .contains("no delta representation"));
-
-        // Its declared shape: a name or null, and the served text.
-        for shape in [
-            r#"{"type":"incomplete_tool_use","name":null,"arguments":""}"#,
-            r#"{"type":"incomplete_tool_use","name":"write_file","arguments":"{}"}"#,
-        ] {
-            let mut owner = initialized();
-            admit(
-                &mut owner,
-                &partial(
+            let (mut owner, origin) = incomplete_owner(name.clone(), arguments);
+            for (id, event) in [
+                (
                     "start",
-                    r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#,
+                    serde_json::json!({"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}),
                 ),
-            )
-            .unwrap();
-            let start =
-                format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
-            admit(&mut owner, &partial("block", &start)).unwrap();
-        }
-        for shape in [
-            r#"{"type":"incomplete_tool_use","name":"","arguments":""}"#,
-            r#"{"type":"incomplete_tool_use","name":"write_file"}"#,
-            r#"{"type":"incomplete_tool_use","arguments":""}"#,
-            r#"{"type":"incomplete_tool_use","name":"write_file","arguments":{}}"#,
-            r#"{"type":"incomplete_tool_use","name":"write_file","arguments":"","input":{}}"#,
-        ] {
-            let mut owner = initialized();
-            admit(
-                &mut owner,
-                &partial(
-                    "start",
-                    r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#,
+                (
+                    "block",
+                    serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"incomplete_tool_use","name":name,"arguments":arguments}}),
                 ),
-            )
-            .unwrap();
-            let start =
-                format!(r#"{{"type":"content_block_start","index":0,"content_block":{shape}}}"#);
-            assert!(
-                admit(&mut owner, &partial("block", &start)).is_err(),
-                "admitted {shape}"
+            ] {
+                let raw = model_partial(&owner, &origin, id, event);
+                admit(&mut owner, &raw).unwrap();
+            }
+            assert!(owner.tool_uses.is_empty());
+            assert_eq!(owner.observations.observed_usage.usage_reports, 1);
+            assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 7);
+            let delta = model_partial(
+                &owner,
+                &origin,
+                "delta",
+                serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"more"}}),
             );
+            assert!(admit(&mut owner, &delta)
+                .unwrap_err()
+                .to_string()
+                .contains("delta type contradicts"));
+        }
+        for block in [
+            serde_json::json!({"type":"incomplete_tool_use","name":"","arguments":""}),
+            serde_json::json!({"type":"incomplete_tool_use","name":"write_file"}),
+            serde_json::json!({"type":"incomplete_tool_use","arguments":""}),
+            serde_json::json!({"type":"incomplete_tool_use","name":"write_file","arguments":{}}),
+            serde_json::json!({"type":"incomplete_tool_use","name":"write_file","arguments":"","input":{}}),
+        ] {
+            let (mut owner, origin) = incomplete_owner(serde_json::json!("write_file"), "");
+            let start = model_partial(
+                &owner,
+                &origin,
+                "start",
+                serde_json::json!({"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}),
+            );
+            admit(&mut owner, &start).unwrap();
+            let raw = model_partial(
+                &owner,
+                &origin,
+                "block",
+                serde_json::json!({"type":"content_block_start","index":0,"content_block":block}),
+            );
+            assert!(admit(&mut owner, &raw).is_err());
         }
     }
     #[test]
-    fn failing_last_tool_does_not_insert_earlier_tools_or_clear_partial_state() {
+    fn runtime_presentation_cannot_issue_tools_or_clear_partial_state() {
         let mut owner = initialized();
         for (id, event) in [
             (
@@ -1518,25 +1629,15 @@ mod tests {
             "bad",
             "null",
             r#"[{"type":"tool_use","id":"earlier","name":"tool","input":{}},{"type":"tool_use","id":"later","input":{}}]"#,
-            "1",
         );
         assert!(admit(&mut owner, &raw).is_err());
         assert!(owner.tool_uses.is_empty());
         assert_eq!(owner.prefix, prefix);
         assert!(owner.scope_states[0].partial.finish(1).is_err());
-        // The closed block still exists: message_stop cannot complete until the
-        // corresponding assistant message was actually admitted.
-        let document = Document::decode(
-            partial("end", r#"{"type":"message_stop"}"#).as_bytes(),
-            owner.limits.json,
-        )
-        .unwrap();
-        let record = DecodedRecord::decode(document.root(), owner.limits.schema, 1).unwrap();
-        let mut original = owner.scope_states[0].partial.clone();
-        assert!(original
-            .observe(record.partial().unwrap(), true, 1)
-            .is_err());
-        assert_eq!(owner.snapshot().observations.observed_output_tokens, 1);
+        assert_eq!(
+            owner.snapshot().observations.observed_usage,
+            GenerationUsageSummary::default()
+        );
     }
     #[test]
     fn raw_fractions_cannot_enter_the_integer_partial_domain() {
@@ -1568,9 +1669,11 @@ mod tests {
     fn mathematical_served_counts_preserve_zero_and_exact_large_domains() {
         for token in ["0", "0.0", "0e999999999999999999999999999999999999"] {
             let mut owner = initialized();
-            admit(&mut owner, &assistant("served", "null", "[]", token)).unwrap();
-            assert_eq!(owner.observations.num_turns, 1);
-            assert_eq!(owner.observations.observed_output_tokens, 0);
+            utility_transport(&mut owner, "served", 1);
+            admit(&mut owner, &outcome("served", token)).unwrap();
+            assert_eq!(owner.observations.num_turns, None);
+            assert_eq!(owner.observations.observed_usage.usage_reports, 1);
+            assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 0);
         }
         for token in [
             "1e-400",
@@ -1580,61 +1683,88 @@ mod tests {
             "1e1000001",
         ] {
             let mut owner = initialized();
+            utility_transport(&mut owner, "bad", 1);
             assert!(
-                admit(&mut owner, &assistant("bad", "null", "[]", token)).is_err(),
+                admit(&mut owner, &outcome("bad", token)).is_err(),
                 "{token}"
             );
-            assert_eq!(owner.observations.num_turns, 0);
+            assert_eq!(owner.observations.num_turns, None);
+            assert_eq!(owner.observations.observed_usage.usage, None);
+            assert_eq!(owner.observations.observed_usage.unfinalized_requests, 1);
             assert_eq!(owner.observations.observed_unaccounted_records, 1);
         }
     }
     #[test]
     fn observations_after_refusal_cannot_restore_a_certificate_or_double_bill_identity() {
         let mut owner = initialized();
+        utility_transport(&mut owner, "served", 1);
+        let prefix = owner.prefix;
         assert!(admit(&mut owner, "{broken").is_err());
-        let raw = assistant("served", "null", "[]", "1.0");
+        let raw = outcome("served", "1.0");
         assert!(admit(&mut owner, &raw).is_err());
-        assert_eq!(owner.observations.observed_output_tokens, 1);
+        assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 1);
         assert!(admit(&mut owner, &raw)
             .unwrap_err()
             .to_string()
             .contains("repeats event uuid"));
-        assert_eq!(owner.observations.observed_output_tokens, 1);
-        assert_eq!(owner.prefix, 1);
+        let repeated = raw.replace("response-served-3", "another-outcome");
+        assert!(admit(&mut owner, &repeated).is_err());
+        assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 1);
+        assert_eq!(owner.observations.observed_unaccounted_records, 3);
+        assert_eq!(owner.prefix, prefix);
         assert!(owner.finish().is_err());
     }
     #[test]
+    fn an_outcome_without_its_request_does_not_invent_ownership() {
+        let mut owner = initialized();
+        assert!(admit(&mut owner, &outcome("missing", "4")).is_err());
+        assert_eq!(
+            owner.observations.observed_usage,
+            GenerationUsageSummary::default()
+        );
+        assert_eq!(owner.observations.observed_unaccounted_records, 1);
+    }
+    #[test]
     fn wrong_owner_and_returned_tools_cannot_receive_results_or_progress() {
+        let event = |owner: &RuntimeContract, scope: Option<&str>, id: &str| {
+            serde_json::json!({
+            "type":"user", "uuid":id, "session_id":owner.session_id,
+            "parent_tool_use_id":scope,
+            "message":{"content":[{"type":"tool_result","tool_use_id":"provider__qwen_dup_2","content":"done"}]}
+        }).to_string()
+        };
         let mut owner = issued_owner();
-        let wrong = r#"{"type":"user","uuid":"wrong","session_id":"session","parent_tool_use_id":"tool-1","message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"done"}]}}"#;
-        assert!(admit(&mut owner, wrong)
+        let wrong = event(&owner, Some("provider__qwen_dup_2"), "wrong");
+        assert!(admit(&mut owner, &wrong)
             .unwrap_err()
             .to_string()
             .contains("wrong-owner"));
-        assert!(!owner.tool_uses["tool-1"].returned);
+        assert!(!owner.tool_uses["provider__qwen_dup_2"].returned);
         let mut owner = issued_owner();
-        let result = r#"{"type":"user","uuid":"result","session_id":"session","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"tool-1","content":"done"}]}}"#;
-        admit(&mut owner, result).unwrap();
-        assert!(owner.tool_uses["tool-1"].returned);
-        let child = assistant("late-child", "\"tool-1\"", "[]", "0");
-        assert!(admit(&mut owner, &child)
+        let result = event(&owner, None, "result");
+        admit(&mut owner, &result).unwrap();
+        assert!(owner.tool_uses["provider__qwen_dup_2"].returned);
+        let late = event(&owner, Some("provider__qwen_dup_2"), "late");
+        assert!(admit(&mut owner, &late)
             .unwrap_err()
             .to_string()
             .contains("returned tool"));
     }
     #[test]
-    fn overflow_latches_and_does_not_publish_a_partially_updated_observation() {
+    fn overflow_does_not_publish_a_partially_updated_usage_population() {
         let mut owner = initialized();
-        owner.observations.observed_output_tokens = u64::MAX;
-        let before = owner.observations;
-        assert!(admit(&mut owner, &assistant("overflow", "null", "[]", "1")).is_err());
-        assert_eq!(owner.observations, before);
-        assert_eq!(owner.prefix, 1);
+        utility_transport(&mut owner, "largest", 1);
+        admit(&mut owner, &outcome("largest", &SAFE_INTEGER.to_string())).unwrap();
+        utility_transport(&mut owner, "overflow", 2);
+        let before = owner.observations.observed_usage;
+        assert!(admit(&mut owner, &outcome("overflow", "1")).is_err());
+        assert_eq!(owner.observations.observed_usage, before);
+        assert_eq!(owner.observations.observed_unaccounted_records, 1);
         assert!(owner
             .first_refusal
             .as_ref()
             .unwrap()
             .to_string()
-            .contains("overflow"));
+            .contains("exact integer range"));
     }
 }

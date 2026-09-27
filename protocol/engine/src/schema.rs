@@ -38,9 +38,10 @@ pub(crate) enum Rule {
     AllOf(&'static [usize]),
     AnyOf(&'static [usize]),
     OneOf(&'static [usize]),
-    IfThen {
+    Conditional {
         condition: usize,
         consequence: usize,
+        alternative: Option<usize>,
     },
 }
 
@@ -101,7 +102,7 @@ enum Task<'a> {
     Node(usize, Value<'a>, usize),
     Rule(&'static Rule, Value<'a>, usize, &'static str),
     Collect(Combination, usize, Failure),
-    Conditional(usize, Value<'a>, usize),
+    Conditional(usize, Option<usize>, Value<'a>, usize),
     Failed(Failure),
 }
 
@@ -148,9 +149,11 @@ pub(crate) fn validate(
                 );
             }
             Task::Failed(failure) => results.push(Err(failure)),
-            Task::Conditional(consequence, value, path) => {
+            Task::Conditional(consequence, alternative, value, path) => {
                 if results.pop().expect("condition result").is_ok() {
                     tasks.push(Task::Node(consequence, value, path));
+                } else if let Some(alternative) = alternative {
+                    tasks.push(Task::Node(alternative, value, path));
                 } else {
                     results.push(Ok(()));
                 }
@@ -247,11 +250,12 @@ pub(crate) fn validate(
                         tasks.extend(children.iter().rev().map(|&id| Task::Node(id, value, path)));
                         continue;
                     }
-                    Rule::IfThen {
+                    Rule::Conditional {
                         condition,
                         consequence,
+                        alternative,
                     } => {
-                        tasks.push(Task::Conditional(*consequence, value, path));
+                        tasks.push(Task::Conditional(*consequence, *alternative, value, path));
                         tasks.push(Task::Node(*condition, value, path));
                         continue;
                     }
@@ -414,7 +418,7 @@ impl Rule {
             Self::AllOf(_) => "allOf",
             Self::AnyOf(_) => "anyOf",
             Self::OneOf(_) => "oneOf",
-            Self::IfThen { .. } => "if",
+            Self::Conditional { .. } => "if",
         }
     }
 }
@@ -455,6 +459,37 @@ mod tests {
     const LIMITS: ValidationLimits = ValidationLimits {
         operations: 1_000_000,
     };
+
+    #[test]
+    fn partial_event_condition_selects_runtime_or_model_origin_obligations() {
+        let entry = NODES
+            .iter()
+            .position(|node| node.path == "/oneOf/4/allOf/0")
+            .expect("the owned partial-event origin conditional");
+        for event in ["goal_state", "active_goal", "tool_progress", "message_start"] {
+            for parent in [serde_json::Value::Null, serde_json::json!("child")] {
+                for has_origin in [false, true] {
+                    let mut value = serde_json::json!({
+                        "event": {"type": event}, "parent_tool_use_id": parent,
+                    });
+                    if has_origin {
+                        value["origin"] = serde_json::json!({"kind":"runtime"});
+                    }
+                    let input = document(&value.to_string());
+                    let expected = if event == "message_start" {
+                        has_origin
+                    } else {
+                        !has_origin && parent.is_null()
+                    };
+                    assert_eq!(
+                        validate(NODES, entry, input.root(), LIMITS).is_ok(),
+                        expected,
+                        "{value}"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn terminal_definition_checks_vocabulary_flags_and_required_error_evidence() {
@@ -532,7 +567,7 @@ mod tests {
     #[test]
     fn every_compiled_schema_node_agrees_with_the_pinned_oracle_on_representable_values() {
         let schema: serde_json::Value =
-            serde_json::from_str(include_str!("../../stream-contract-v6.json")).unwrap();
+            serde_json::from_str(include_str!(env!("STREAM_CONTRACT_PATH"))).unwrap();
         let mut corpus = vec![
             "null".to_string(),
             "true".into(),

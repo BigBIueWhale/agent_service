@@ -39,17 +39,41 @@ to end. The image's CLI/webui build does not establish Java or Python SDK
 adoption. Source implementation and any separately reported SDK tests must not
 be described as image qualification. Sound reader work is retained.
 
-Two narrower defects are real by source reading and remain open:
+Two narrower defects are real by source reading:
 
 - `BaseJsonOutputAdapter.messagesWithRequestEvidence` synthesizes a minimal
   `init` when evidence precedes normal initialization. It omits the metadata
   that native `RuntimeContract.validate_init` requires. Schema acceptance does
   not reconcile these two shapes. Initialization needs one complete owner.
+  The current authoring candidate separates `system/stream_start` (session,
+  contract and journal identity) from complete `system/init` runtime metadata.
+  Authentication can fail before Config initializes, so inventing a ready
+  snapshot there would misstate capabilities. Native source still requires
+  manifest-matching init before model requests and successful terminal output;
+  zero-request startup errors can be represented without that claim. Reader
+  replacement-window guards also retain each preceding terminal's accounting.
+  Seven Python source suites passed 575 cases for the migrated candidate,
+  including complete dual-channel accounting and refusal of unfinished
+  root/child partial groups. Seventeen CLI source tests cover the producer's
+  retained-prefix and journal-replacement boundaries and recording diagnostics;
+  those producer tests stop before generated wire admission.
+  The authoritative client splice contains this change. Native, Java and
+  generated TypeScript admission remain unexecuted. The design and qualification
+  limits are recorded in [generation authority](generation-authority.md).
 - `TimeoutConfigSchema` omits the removed `timeout.streamClose` option and is
-  not strict. `createQuery.validateOptions` checks `safeParse` success but
+  not strict at the audited checkpoint. `createQuery.validateOptions` checks `safeParse` success but
   continues with the original options object. The precise defect is silent
   acceptance and non-use, not necessarily stripping the caller's object.
-  The option must have a defined purpose or an actionable refusal by name.
+  The authoring candidate now makes timeout validation strict and adds an
+  actionable removal instruction to unknown-key diagnostics. Four source tests
+  reproduced silent acceptance before that change; all 84 tests in the affected
+  schema/query suites passed afterward. Review identified the exported `Query`
+  constructor as a second public entry point; two more cases reproduced that
+  bypass. Both factory and constructor now use one validator, and the three
+  affected suites passed 86 tests, including constructor refusal before transport
+  or abort-listener access. The developer guide names only the three supported
+  controls. The authoritative client splice contains this change;
+  this does not establish built SDK or CLI behavior.
 
 ## Native certification and output disposition (§3)
 
@@ -72,7 +96,17 @@ one of them. No native adversarial test was run:
 - There is no comparison tying displayed user/tool-result content to its
   admission and rendering in the next provider request. Such a comparison
   must account for reminders, media rendering and rejected inputs; simple
-  string equality would reject valid ordinary sessions.
+  string equality would reject valid ordinary sessions. The request body
+  captured after `buildRequest` is the authority for what was dispatched.
+  A stream `user` or `tool_result` body is a display projection, not a copy
+  of that provider body. Source tracing found that a partial tool response
+  could lose its output from this projection when an error was present.
+  The current authoring splice retains the response-part display text and
+  distinct top-level or embedded errors; four source assertions reproduced
+  loss and the Base adapter's 146 cases passed afterward. This presentation repair
+  does not bind input provenance or prove that the display text is identical
+  to model input. An immutable input receipt and explicit rendered-request
+  binding remain to be designed and admitted across producer and readers.
 
 Charging served output from an abandoned draw is correct. Served work and
 history acceptance are distinct facts. The defect is missing disposition
@@ -124,7 +158,58 @@ this audit, and no latency measurement is claimed.
 The remedy belongs in shared recording/cancellation ownership. It must bound
 failure without reporting incomplete bytes as durable evidence, discarding
 failures, or simply reinstating a transport timer that misattributes local
-storage delay to the provider. This remains open.
+storage delay to the provider.
+
+The current authoritative splice adds an inactivity refusal to the shared
+asynchronous canonical lease's append and verification operations. Public
+waiters fail while the raw filesystem queue and active lock remain owned;
+late continuations cannot start queued writes or commit a new proof. Bounded
+append chunks and hash reads refresh progress rather than imposing a total
+deadline on a large transcript. Sixteen source tests passed, including late
+I/O, exact lock retention, progressing large operations and recorder flush/close
+propagation. The broader source run passed 170 tests, skipped two, and failed
+two generation-format resume fixtures. Those fixtures have since been migrated
+to complete request, response, generation, history and completion records. The
+full writer-lease source file passed 103 cases with two existing skips, and the
+two affected handoff cases passed again after their physical event order was
+aligned with the producer. These runs do not qualify an application resume or
+native admission.
+The bounded read-only review at
+`/tmp/codex-writer-stall-review/revision-1/REPORT.md` found no introduced defect
+and matched all ten frozen source/document identities. It inspected the supplied
+logs without rerunning tests. The complete change audit remains unfinished.
+The sealed patch then applied to a fresh pinned archive and matched all 1,129
+declared paths, including 40 deletions, to the authoring source. Semantic source
+contracts passed; the manifest and protected release inputs stayed unchanged
+throughout that transaction. The report is
+`/tmp/codex-writer-progress-final-state.json`, at review patch
+`133dfe8824f60cfa68feadc3b7329764cc48c982bdade648e90662e363900630`.
+This proves source application and identities, not compilation or deployment.
+
+This closes only the asynchronous canonical append/verification wait. Shared
+response cleanup can independently wait on a stalled transport cancellation,
+and child-transcript writers use synchronous I/O that an event-loop timer cannot
+interrupt. Those obligations remain open. Healthy acquisition and terminal lock
+transitions have separate ownership semantics and are not bounded by this
+policy. See [the recording progress design](session-recording-progress.md) for
+the availability tradeoff, executed evidence and unverified gates.
+
+The shared response-cancellation question was reproduced separately with the
+actual source recorder. A second cancellation could falsely publish a clean
+outcome while the first remained pending or later failed. The authoritative
+splice gives raw cancellation one shared promise, a one-minute cleanup
+deadline, and a settled exposed read on normal recorder cancellation. Its 60
+response-recorder and 21 adjacent pipeline source cases passed; an independent
+source review reran the 60-case file and found no remaining defect in this
+bounded change. The first candidate had dropped bytes already returned by a
+raw read as cancellation began; the final version records those bytes before
+suppressing consumer delivery. The final splice applied to a fresh pinned
+archive with all 1,133 declared path identities, 44 deletions and semantic
+contracts matching the authoring source
+(`/tmp/codex-response-cancel-admitted-state.json`). See the
+[recording progress design](session-recording-progress.md) for the exact
+boundary and remaining iterator/publication waits. This source application
+does not qualify a native, application or deployed gate.
 
 ## Model-visible changes and backend scope (§6)
 
@@ -163,10 +248,48 @@ the other items remain open:
   necessary decoded projection a distinct, truthful meaning; do not call
   reserialization raw wire bytes.
 - `ModelRequestJournal.capture` emits a full body when two requests in one
-  segment share no message prefix. A delta with zero retained messages can
-  represent that state; the additional full-body mode is unnecessary.
-- ACP's tool-result projection still uses a 65,536-byte JSON budget and a
-  truncation marker. Removing the stdout cap did not remove the ACP cap.
+  segment share no message prefix at the audited checkpoint. This question was
+  confirmed and the producer fallback is removed in the current authoritative
+  splice. A same-scope, same-segment base selects a delta even when it retains
+  zero messages, including removal of the whole list. Scope/segment starts,
+  explicit checkpoints and replacement output windows still establish full
+  bases. The strengthened source test failed before the change; all 24 request
+  and canonical-recording cases passed afterward. It checks exact reconstructed
+  bytes and refuses a detached zero-retained delta independently of sequence
+  checks. All five examined readers already support zero-retained deltas by
+  source reading; native and Java were not executed. The shared harness test
+  also exposed a missing-base `KeyError`, now an explicit refusal with a recovery
+  action. Its nine tests passed, including replacement/removal and wrong base,
+  segment and scope. Logs: `/tmp/codex-zero-overlap-before.log`,
+  `/tmp/codex-zero-overlap-after.log`,
+  `/tmp/codex-zero-overlap-harness-after.log`.
+  This changes the shared evidence representation, not the bytes sent to the
+  provider. It applies to ordinary sessions and side queries alike; vLLM receives
+  the same request and needs no corresponding backend change. No size or latency
+  improvement is claimed: a zero-retained delta includes reference metadata.
+- ACP's separate 65,536-byte projection was real. The shared live and replay
+  boundaries now preserve complete content blocks and raw output, and the
+  projector, byte-slicing utility and their algorithm-specific tests are
+  removed. Complete-payload accounting still refuses an aggregate replay
+  above its byte limit. Separate transport/frame limits remain explicit
+  refusals, so this is not a promise of unlimited delivery capacity.
+  The executed source baseline reproduced nine failures with four controls
+  passing. Final runs passed 11 selected live/plan cases (616 unrelated cases
+  filtered), all 39 replay-page cases, and 33 NDJSON transport cases. The replay
+  fixture migration is checked against stored-record admission; the intermediate
+  null-usage change was removed after review showed its fixture was invalid.
+  Malformed nonnull counts still refuse. See
+  [the ACP design and evidence note](acp-tool-result-completeness.md).
+  These results qualify the tested publication/replay boundaries, not complete
+  physical evidence admission, model-history restoration or owner build gates.
+  The final read-only review is
+  `/tmp/codex-acp-completeness-review/revision-2/REPORT.md`; its seven reviewed
+  identities match authoring/root. The fresh pinned-source application at
+  `/tmp/codex-acp-completeness-admitted-8qltb8z3` completed with zero identity
+  mismatches across 1,133 declared paths, including 44 deletions. Semantic
+  contracts, manifest checks and the 35-concern identifier check passed.
+  `/tmp/codex-acp-completeness-admitted-state.json` records the exact seals and
+  execution scope. Protected build-input and release-lock bytes remain unchanged.
 - The PostCompact empty-slot projection was real at `023769e`. The compaction
   ownership correction below takes the text from the actual composed snapshot
   message, including retained input and trailer text. The complete Content,
@@ -518,3 +641,60 @@ unqualified at the unchanged generated v5 validator. A fresh archive matches all
 1,062 final identities, twelve intended changed paths and 6,925 both-sided review
 hunks; unrelated authoritative edits and protected release inputs are unchanged.
 Compilation, typechecking, full version8 resume and native gates were not run.
+
+## Current v7 output and tool ownership investigation
+
+The source checkpoint above predates the uncommitted v7 generation/completion
+candidate. A frozen reproduction of that candidate is recorded in
+`/tmp/codex-output-disposition-review/baseline/REPORT.md`, with exact fixture
+bytes and source identities. Thirty Python full-schema admission scenarios and
+25 TypeScript replay/partial-owner scenarios executed. Several deliberately
+demonstrate unsafe admission; they are not 55 passing correctness tests. The
+installed TypeScript wire validator is still generated from v5, so full v7
+TypeScript admission was not executed. Native, Java, provider and deployment
+behavior remain unverified.
+
+The earlier blanket claim that v7 omits whole abandoned generations or bills a
+duplicated outcome is contradicted by these exact scenarios: both executed
+readers refuse omitted or duplicate generation/completion records, wrong
+same-scope partial attribution, and duplicate physical outcomes. Served usage
+for abandoned work is accounted once without making that work accepted history.
+This supersedes the projection observations in the older source checkpoint;
+those observations are not evidence of the present v7 mechanism.
+
+One narrower output defect is reproduced. Rehashing only `generation_json` and
+its completion reference changes accepted text, including erasure, duplication
+or swapping with an abandoned draw, while preserving every physical response
+byte, transport outcome, history decision and usage count. Python admission
+and the TypeScript replay owners accept the contradictory record. Native source
+also lacks the physical-to-decoded comparison, but native behavior was not run.
+The complete remedy remains open in
+[physical output provenance](physical-output-provenance.md): a typed output must
+be derived from or verified against the retained response body and its selected
+physical retry. A self-declared hash or mandatory nonempty text cannot prove
+that relationship.
+
+The same full-schema Python investigation admitted a user/tool_result for an
+abandoned call or a never-issued id. Native source already issues calls only
+from accepted conversation generations. The current authoring splice adds that
+accepted issuance, exact scope and once-only return invariant to Python,
+TypeScript and Java generic admission. An independent follow-up reproduced
+five analogous `tool_progress` ownership failures through Python full-schema
+admission; native already checks that event. The same invariant now guards
+progress without marking the call returned. The Python unit suite passed 727
+cases, including the new ownership cases. The TypeScript wire suite stopped at the
+unchanged generated v5 validator; Java and native tests were not run. This is
+source implementation and Python test evidence, not qualification of those
+other readers or the full record-completeness goal.
+
+The read-only follow-up at
+`/tmp/codex-output-disposition-review/tool-results-final/REPORT.md` matched 76
+frozen source identities and found no remaining concrete ownership defect in
+its bounded review. Its 19 result and seven progress controls overlap permanent
+tests and are not additional distinct coverage. After the final TypeScript
+event-type correction, a fresh pinned archive applied the sealed source patch
+and matched all 1,133 declared identities, including 44 deletions, with no
+semantic-contract or input mismatch. The exact report is
+`/tmp/codex-tool-ownership-final-state.json` at review SHA-256
+`d0f82e4498d46c5b6ed410c4e9da4ab9336de46355fea5c9b9b21dc4d3b9d3f4`.
+This proves the source splice, not compilation or deployed admission.

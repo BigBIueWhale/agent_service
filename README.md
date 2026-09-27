@@ -734,38 +734,45 @@ for future Codex compatibility, but this service has only the reviewed Qwen Code
 mode today.
 
 The client itself emits stream-JSON. The service requires every completed line to
-be a JSON object, a first `system/init` event whose Qwen version/model/workspace/tool
-metadata exactly matches the deployed contract, a stable session ID, a scope on
+be a JSON object, a first `system/stream_start` event binding the session and
+request journal to the stream contract, and complete `system/init` runtime
+metadata matching the deployed contract before any model request or successful
+root result. A startup error with no model work does not claim initialized
+capabilities. The reader also requires a stable session ID, a scope on
 every event (`parent_tool_use_id`: null for the main session, the owning `agent`
 tool-call id for a subagent), exactly one main-session terminal result as the final
-event, an internally consistent main-turn count, and the complete success/error
+event, exact physical-request accounting, and the complete success/error
 envelope. A subagent that stops without a report emits its own terminal record under
 its tool-call id; that record belongs to the subagent, and it neither ends the
-session nor counts toward the session's turns. Zero-usage streaming fragments are
-not mistaken for additional turns. Duplicate results, post-result output, a scope
+session nor changes the root terminal's reported started turns. Presentation
+fragments do not contribute physical usage. Duplicate results, post-result output, a scope
 that is neither null nor an agent tool-call id, malformed lines, missing fields, an
 empty successful result, and a missing main-session result are hard errors. It never
 chooses a convenient-looking “last result.”
 
-Every billed turn carries the usage the backend served for it, copied field for
-field: the prompt tokens, the generated tokens, the part of them the backend's
-reasoning parser counted as reasoning (`reasoning_output_tokens`), and the prompt
-tokens it read back from its prefix cache. The client computes none of these — a
-generation that arrives without them fails that request — so a billed event
-lacking one, or one whose reasoning exceeds its output, is a stream this service
-does not recognise and is refused rather than tallied. The parser sums the served
-output and reasoning per scope (`main_output_tokens`, `main_reasoning_tokens` in
-`terminal.agent_result`,
-and `output_tokens`/`reasoning_tokens` on every subagent scope). A subagent's own
-generations reach the stream too: each completed round is written under the
-scope's tool-call id as its reasoning, its text and its served usage, so a
-subagent's turns are billed to the subagent rather than absent, and a compaction
-record (`system`/`compaction`) carries the reasoning the attempt emitted beside
-its counts, and, for every draw, the calls its ceiling stopped as served
-(`incompleteToolCalls`) -- a snapshot call cut before it was complete made no
-snapshot, and what the draw had written of it is kept here -- validated in
-full. All of it is evidence for the reader; nothing in it is ever handed back
-to a model.
+Every physical provider request has its own byte evidence and processing
+outcome. Usable served counts contribute once whether processing completed,
+failed or was cancelled; accepting or abandoning chat history does not add them
+again. The whole-journal `terminal.agent_result.usage` and its `request_scopes`
+table retain requests, usable usage reports, unfinished requests and outcomes
+without served usage. Counts include the prompt tokens, generated tokens,
+reasoning within the generated tokens, cached prompt tokens and their total.
+Absent served usage remains null; an explicit zero report remains a report.
+
+Accepted generation completion grants executable tool authority. Every
+attempt's decoded generation remains evidence, including abandoned retries and
+incomplete calls. Displayed child generations have the issued call's conversation
+scope; internal work has an explicit internal output scope and does not invent a
+subagent. A compaction record retains each draw's reasoning, text, decoded provider
+response objects, incomplete calls and measured counts. The HTTP byte journal
+owns the exact response bytes. These records are evidence; canonical
+history decides what resume restores.
+
+The generation/completion migration in the current source remains unverified by
+native compilation or runtime execution. The [audit disposition](docs/design/stream-completeness-audit.md)
+and [generation design](docs/design/generation-authority.md) distinguish executed
+source tests, source inspection, remaining implementation work and pending owner
+gates. The described record rules do not establish whole-goal completion.
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's
@@ -781,7 +788,7 @@ consecutive turns with a message that was not a final answer after being told
 twice, and `error_cancelled` for an abort from outside. The names, whether each
 is an error, and the exit code a process that ended with each leaves are one
 table in the stream contract, `terminalOutcome` in
-`protocol/stream-contract-v6.json`, which validates a record's pairing and from
+`protocol/stream-contract-v7.json`, which validates a record's pairing and from
 which both the client's and the service's bindings are generated: `success`
 exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
 The table also names `error_timeout`, which no session ends in: only a subagent
@@ -819,17 +826,23 @@ terminal delivery; a missing record does not certify an ordinary ending. The tur
 budget is asked before the turn it decides is counted, so a run it stops reports
 exactly the budget it was given as `num_turns` and has interrupted no turn.
 
-Every status read reports the event snapshot it could observe through
-`observed_output_tokens`, `observed_reasoning_tokens`, and
-`observed_subagent_scope_count`. `observed_unaccounted_records` counts unreadable
-records, including incomplete served usage and a nonempty trailing prefix without
-a newline. The same observations survive terminal finalization. All four are null
-only when terminal storage could not be read; no missing observation becomes zero.
+Every status read reports its selected snapshot through `observed_usage`,
+`observed_subagent_scope_count` and `observed_unaccounted_records`. Physical usage
+includes retry and internal requests. `num_turns` is the root terminal's reported
+started-turn assertion and remains null until observed. Lifecycle request counters
+never replace it through a maximum or estimate. `observed_unaccounted_records`
+counts unreadable records, unusable outcomes, missing request ownership, repeated
+outcomes and a nonempty trailing prefix without a newline. Independently readable
+physical evidence remains observable after certification refuses the stream.
+
+The three observation fields are all null only when terminal storage could not
+be read. Nested `observed_usage.usage` is null when no usable served report was
+observed; that is distinct from unreadable storage and from a reported zero.
 `terminal` is null until an ending exists, and its `agent_result` is null unless
-the whole captured stream certifies a complete result. A partial observation is
-never that result, even when its unaccounted count is zero. An empty scope table
-inside a certified result proves no subagents; an observed scope count of zero
-only says none were observed. Reads never cancel or change execution.
+the whole captured stream certifies a complete result. An empty certified
+subagent table proves no displayed child scopes; internal request owners remain
+visible in the separate physical usage table. Reads never cancel or change
+execution.
 
 Captured JSONL uses LF-committed records with an explicit incomplete tail. A final
 prefix cannot certify a result, even if it happens to parse as JSON. Earlier
@@ -919,7 +932,7 @@ ends this way is reported to its parent as unfinished, with the shape of the sli
 and its turn count, in the same form as an exhausted budget or a cut-off
 generation, and its scoped terminal record carries the same name. The name is a
 row of the terminal table, `terminalOutcome` in
-`protocol/stream-contract-v6.json`, which is the one place the vocabulary is
+`protocol/stream-contract-v7.json`, which is the one place the vocabulary is
 written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.

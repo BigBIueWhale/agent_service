@@ -10,8 +10,14 @@ mod number;
 mod schema_compiler;
 
 fn main() {
-    let path = "../stream-contract-v6.json";
+    let path = "../stream-contract-v7.json";
     println!("cargo:rerun-if-changed={path}");
+    println!(
+        "cargo:rustc-env=STREAM_CONTRACT_PATH={}",
+        fs::canonicalize(path)
+            .expect("resolve the shared stream contract")
+            .display()
+    );
     let bytes = fs::read(path).expect("read the shared stream contract");
     let compiled =
         schema_compiler::compile(&bytes).expect("compile the exact owned stream contract");

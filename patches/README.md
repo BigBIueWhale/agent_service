@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `b40d377ea5a4831a6eb985b98f5310e9a67b3a9f64ae31407132a72349778ce4`
+- Review-diff SHA-256: `248589c3952981144b36da0b904b03d9ec4ebd1c968f002ec0ed86805a98036a`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `f4d05b395a1159b0b3cc6e25e5b3f37caf8432bf768836db98c98d9333d3d389`
+- Transformer-manifest SHA-256: `4f413ed423e368b922ae8f3928c1183a8112634224b449060fab243b80477d90`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 8`, independently
+Every physical canonical chat record carries `recordingVersion: 9`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -365,7 +365,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 8 histories.
+new session. They are not promoted into complete version 9 histories.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
@@ -388,7 +388,7 @@ native and application qualification remain pending owner gates. The
 executed evidence and outstanding work.
 
 Fresh canonical generations carry the producing chat attempt's exact origin.
-Accepted output is one complete assistant commit; abandoned output is system
+Accepted output is one complete assistant commit; abandoned output is generation
 evidence and cannot enter resume history. Child live fragments use version 2
 and settle against the same origin with literal prefix checks. Shared ACP replay,
 SDK reduction, compaction, browser presentation and exports retain dispositions
@@ -409,8 +409,8 @@ Every request declares chat-attempt or utility ownership outside the model body.
 Chat responses retain separate transport completion, processing outcome, and
 history disposition. Only the chat consumer can accept history, after its durable
 commit. A failed physical retry remains abandoned when a subsequent physical
-request succeeds. Root and child assistant fragments, including partial blocks,
-name their producing attempt and generation scope. The shared readers resolve
+request succeeds. Root and child generation records and partial blocks name
+their producing attempt and generation scope. The shared readers resolve
 those references and refuse unknown attempts, foreign scopes, repeated acceptance,
 or a complete certificate with an unsettled response. Runtime-authored assistant
 replies declare runtime origin. Main retries close the prior partial turn and
@@ -424,20 +424,24 @@ abandoned physical attempts interleaved.
 
 Each invocation starts with a full body, and the first request after its committed
 compaction also carries a full body. Deltas retain the unchanged message prefix
-and replace the rest, including changed reminders. They retain the exact serialized
+and replace the rest, including changed reminders. A same-segment replacement
+or removal retains zero messages in that same delta representation. They retain the exact serialized
 non-message envelope, including tool declarations. The journal keeps the most
 recent message slices per invocation, with no output queue when no renderer needs
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream format 4 exposes these same request records, declares the journal origin
-in `system/init`, and accounts for the output window at every root result. Each
-checkpoint lists its open response identities so an ordinary turn can finish
-while a background child remains active. The native complete-recording certifier
-requires that list to be empty and verifies that every request's response has both a transport end and a processing outcome. Native
+Stream format 7 exposes these same request records, declares the journal origin
+in `system/stream_start`, and accounts for the output window at every root result.
+Complete `system/init` runtime metadata has its own owner and does not reset that
+journal. Each checkpoint lists open response and logical attempt identities.
+An ordinary turn may finish while a background child remains active; complete
+EOF admission requires both populations to close. Native certifier source
+requires every request's response to have a transport end and a processing outcome. Native
 certification and SDK admission replay message deltas, verify byte lengths and
 hashes, and refuse missing, repeated, reordered, foreign, or unknown evidence.
-The native terminal check also refuses fewer requests than billed model turns.
+Physical requests, logical attempts and reported turns are separate populations;
+generation completion binds every physical member and its history disposition.
 The composition and headless harnesses compare reconstructed bodies with the
 actual bytes received by their fake providers. Canonical readers validate request
 evidence in physical order before selecting conversation branches. Evidence has
@@ -469,15 +473,16 @@ one pull-through stream; it durably writes each bounded record before parser
 delivery. The record quantum never truncates a response. Active stdout renderers
 drain each admitted record before generation proceeds. Detached renderers release
 their window without poisoning the canonical writer. Recorder waits are excluded
-from the request's start, idle and generation clocks; configured network limits
-and normal-session behavior remain in force.
+from the request's start, idle and generation clocks. A hung storage write can
+still defeat session deadlines; the shared write/cancellation correction remains
+open in the [audit disposition](../docs/design/stream-completeness-audit.md).
 
-Canonical format 4 structurally excludes response evidence from messages,
+Canonical format 9 structurally excludes response evidence from messages,
 conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix
-as a complete record set. The stdout native certifier rejects missing response
-completion, including an otherwise valid successful assistant message. Both fake
+as a complete record set. Native certifier source refuses missing response and
+logical completion. Native behavior remains unverified pending owner gates. Both fake
 providers compare recorded bytes with their actual response body, including
 malformed SSE and cancelled prefixes. Full/indexed/fork resume tests compare the
 entire restored model history byte for byte while preserving raw evidence.

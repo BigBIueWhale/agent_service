@@ -1,12 +1,18 @@
 //! Replay provider request evidence without reserializing its JSON body.
 use crate::{
+    generation::Generation,
     json::{Document, Limits, Value},
+    schema::ValidationLimits,
     stream::{field, text, unsigned},
+    usage::{GenerationUsageSummary, ServedUsage},
     ContractError, ContractResult, SAFE_INTEGER,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 fn sha256(json: &str) -> String {
     Sha256::digest(json.as_bytes())
@@ -25,12 +31,39 @@ fn refusal(detail: &str) -> ContractError {
 pub(crate) struct ModelRequests {
     journal_id: Option<String>,
     first_sequence: Option<u64>,
-    count: u64,
-    observed_responses: u64,
     ids: BTreeSet<String>,
     scopes: BTreeMap<String, RequestBody>,
     responses: BTreeMap<String, ResponseState>,
-    attempts: BTreeMap<String, (String, bool)>,
+    attempts: BTreeMap<String, AttemptState>,
+    generation_ids: BTreeSet<String>,
+    usage: BTreeMap<String, GenerationUsageSummary>,
+    all_usage: GenerationUsageSummary,
+}
+
+#[derive(Default)]
+struct AttemptState {
+    scope: String,
+    requests: Vec<String>,
+    settled: BTreeMap<String, bool>,
+    outcomes: BTreeMap<String, ResponseOutcome>,
+    generation: Option<Arc<Generation>>,
+    completed: bool,
+}
+
+pub(crate) struct GenerationAdmission {
+    pub generation: Arc<Generation>,
+}
+
+pub(crate) struct CompletionAdmission {
+    pub generation: Arc<Generation>,
+    pub accepted: bool,
+}
+
+#[derive(Clone)]
+pub(crate) struct ResponseOutcome {
+    pub scope: String,
+    pub usage: Option<ServedUsage>,
+    pub completed: bool,
 }
 
 pub(crate) struct RequestBody {
@@ -50,10 +83,13 @@ pub(crate) struct RequestAdmission {
     scope: String,
     body: RequestBody,
     attempt: Option<String>,
+    usage: GenerationUsageSummary,
+    all_usage: GenerationUsageSummary,
 }
 
 #[derive(Clone, Default)]
 struct ResponseState {
+    scope: String,
     attempt: Option<String>,
     processing: Option<bool>,
     sequence: u64,
@@ -64,9 +100,11 @@ struct ResponseState {
 }
 pub(crate) struct ResponseAdmission {
     request_id: String,
-    observed: bool,
     state: Option<ResponseState>,
-    accepted_attempt: Option<String>,
+    attempt: Option<String>,
+    settlement: Option<bool>,
+    pub outcome: Option<ResponseOutcome>,
+    usage: Option<(GenerationUsageSummary, GenerationUsageSummary)>,
 }
 
 impl ModelRequests {
@@ -110,7 +148,7 @@ impl ModelRequests {
             if id != journal_id
                 || self
                     .first_sequence
-                    .and_then(|first| first.checked_add(self.count))
+                    .and_then(|first| first.checked_add(self.all_usage.requests))
                     != Some(sequence)
             {
                 return Err(refusal(
@@ -127,11 +165,12 @@ impl ModelRequests {
         let attempt = match text(owner, "kind", line)? {
             "chat" => {
                 let id = text(owner, "attempt_id", line)?;
-                if self
-                    .attempts
-                    .get(id)
-                    .is_some_and(|(previous, accepted)| previous != scope || *accepted)
-                {
+                if self.attempts.get(id).is_some_and(|attempt| {
+                    attempt.scope != scope
+                        || attempt.generation.is_some()
+                        || attempt.completed
+                        || attempt.settled.values().any(|accepted| *accepted)
+                }) {
                     return Err(refusal(
                         "chat attempt changes scope or issues a request after acceptance",
                     ));
@@ -244,6 +283,8 @@ impl ModelRequests {
             journal_id: journal_id.to_string(),
             sequence,
             scope: scope.to_string(),
+            usage: self.scope_usage(scope).admit_request()?,
+            all_usage: self.all_usage.admit_request()?,
             attempt,
             body: RequestBody {
                 id: id.to_string(),
@@ -256,21 +297,28 @@ impl ModelRequests {
     pub(crate) fn commit(&mut self, admission: RequestAdmission) {
         self.journal_id.get_or_insert(admission.journal_id);
         self.first_sequence.get_or_insert(admission.sequence);
-        self.count += 1;
         if let Some(id) = &admission.attempt {
             self.attempts
                 .entry(id.clone())
-                .or_insert((admission.scope.clone(), false));
+                .or_insert_with(|| AttemptState {
+                    scope: admission.scope.clone(),
+                    ..AttemptState::default()
+                })
+                .requests
+                .push(admission.body.id.clone());
         }
         self.ids.insert(admission.body.id.clone());
         self.responses.insert(
             admission.body.id.clone(),
             ResponseState {
+                scope: admission.scope.clone(),
                 digest: Some(Sha256::default()),
                 attempt: admission.attempt,
                 ..ResponseState::default()
             },
         );
+        self.usage.insert(admission.scope.clone(), admission.usage);
+        self.all_usage = admission.all_usage;
         self.scopes.insert(admission.scope, admission.body);
     }
 
@@ -300,7 +348,8 @@ impl ModelRequests {
         }
         let event = field(response, "event", line)?;
         let mut ended = false;
-        let mut accepted_attempt = None;
+        let mut settlement = None;
+        let mut outcome = None;
         let kind = text(event, "kind", line)?;
         if (kind == "history") != state.processing.is_some()
             || (kind != "history" && (kind == "outcome") != state.digest.is_none())
@@ -386,17 +435,15 @@ impl ModelRequests {
                     ));
                 }
                 let usage = field(event, "served_usage", line)?;
-                if !usage.is_null() {
-                    let count = |key| unsigned(field(usage, key, line)?, key, SAFE_INTEGER);
-                    let prompt = count("promptTokenCount")?;
-                    let output = count("candidatesTokenCount")?;
-                    if prompt.checked_add(output) != Some(count("totalTokenCount")?)
-                        || count("thoughtsTokenCount")? > output
-                        || count("cachedContentTokenCount")? > prompt
-                    {
-                        return Err(refusal("has inconsistent served token counts"));
-                    }
-                }
+                outcome = Some(ResponseOutcome {
+                    scope: state.scope.clone(),
+                    usage: if usage.is_null() {
+                        None
+                    } else {
+                        Some(ServedUsage::read(usage, line)?)
+                    },
+                    completed,
+                });
                 state.processing = Some(completed);
                 ended = state.attempt.is_none();
             }
@@ -405,19 +452,19 @@ impl ModelRequests {
                     .attempt
                     .as_ref()
                     .ok_or_else(|| refusal("utility response has a chat history decision"))?;
-                if text(event, "disposition", line)? == "accepted" {
+                let accepted = text(event, "disposition", line)? == "accepted";
+                if accepted {
                     if state.processing != Some(true)
-                        || self
-                            .attempts
-                            .get(attempt)
-                            .is_none_or(|(_, accepted)| *accepted)
+                        || self.attempts.get(attempt).is_none_or(|attempt| {
+                            attempt.settled.values().any(|accepted| *accepted)
+                        })
                     {
                         return Err(refusal(
                             "chat history acceptance is repeated or has no completed response",
                         ));
                     }
-                    accepted_attempt = Some(attempt.clone());
                 }
+                settlement = Some(accepted);
                 ended = true;
             }
             _ => return Err(refusal("response uses an unknown event")),
@@ -425,21 +472,47 @@ impl ModelRequests {
         state.sequence = sequence;
         Ok(ResponseAdmission {
             request_id: id.to_string(),
-            accepted_attempt,
-            observed: ended && state.http_status.is_some() && state.bytes > 0,
+            attempt: state.attempt.clone(),
+            settlement,
+            usage: outcome
+                .as_ref()
+                .map(|outcome| -> ContractResult<_> {
+                    Ok((
+                        self.scope_usage(&outcome.scope).finalize(outcome.usage)?,
+                        self.all_usage.finalize(outcome.usage)?,
+                    ))
+                })
+                .transpose()?,
+            outcome,
             state: if ended { None } else { Some(state) },
         })
     }
 
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
-        if let Some(attempt) = admission.accepted_attempt {
-            self.attempts
-                .get_mut(&attempt)
-                .expect("planned chat attempt")
-                .1 = true;
+        if let Some((usage, all_usage)) = admission.usage {
+            self.usage.insert(
+                admission
+                    .outcome
+                    .as_ref()
+                    .expect("planned usage outcome")
+                    .scope
+                    .clone(),
+                usage,
+            );
+            self.all_usage = all_usage;
         }
-        if admission.observed {
-            self.observed_responses += 1;
+        if let Some(id) = &admission.attempt {
+            let attempt = self.attempts.get_mut(id).expect("planned chat attempt");
+            if let Some(outcome) = admission.outcome {
+                attempt
+                    .outcomes
+                    .insert(admission.request_id.clone(), outcome);
+            }
+            if let Some(accepted) = admission.settlement {
+                attempt
+                    .settled
+                    .insert(admission.request_id.clone(), accepted);
+            }
         }
         if let Some(state) = admission.state {
             self.responses.insert(admission.request_id, state);
@@ -457,20 +530,143 @@ impl ModelRequests {
             return Ok(None);
         }
         let id = text(origin, "attempt_id", line)?;
-        if self.attempts.get(id).is_none_or(|(scope, _)| {
-            Some(scope.as_str()) != origin.get("kv_scope").and_then(Value::as_str)
+        if self.attempts.get(id).is_none_or(|attempt| {
+            Some(attempt.scope.as_str()) != origin.get("kv_scope").and_then(Value::as_str)
         }) {
             return Err(refusal("assistant output has no matching chat request"));
         }
         Ok(Some(id.to_string()))
     }
 
-    pub(crate) fn validate_summary(
+    pub(crate) fn scope_usage(&self, scope: &str) -> GenerationUsageSummary {
+        self.usage.get(scope).copied().unwrap_or_default()
+    }
+
+    pub(crate) fn all_usage(&self) -> GenerationUsageSummary {
+        self.all_usage
+    }
+
+    pub(crate) fn usage_scopes(&self) -> impl Iterator<Item = (&str, &GenerationUsageSummary)> {
+        self.usage
+            .iter()
+            .map(|(scope, usage)| (scope.as_str(), usage))
+    }
+
+    pub(crate) fn plan_generation(
         &self,
         record: Value<'_>,
         line: usize,
-        billed_turns: u64,
-    ) -> ContractResult<()> {
+        json: Limits,
+        schema: ValidationLimits,
+    ) -> ContractResult<GenerationAdmission> {
+        let generation = Generation::read(field(record, "generation", line)?, line, json, schema)?;
+        let attempt = self
+            .attempts
+            .get(&generation.origin.attempt)
+            .ok_or_else(|| refusal("generation has no logical request owner"))?;
+        if self.journal_id.as_deref() != Some(generation.journal.as_str())
+            || attempt.scope != generation.origin.scope
+            || attempt.completed
+            || attempt.generation.is_some()
+            || self.generation_ids.contains(&generation.id)
+        {
+            return Err(refusal(
+                "generation has no unique open logical request owner",
+            ));
+        }
+        Ok(GenerationAdmission {
+            generation: Arc::new(generation),
+        })
+    }
+
+    pub(crate) fn commit_generation(&mut self, admission: GenerationAdmission) {
+        self.generation_ids.insert(admission.generation.id.clone());
+        let attempt = admission.generation.origin.attempt.clone();
+        self.attempts
+            .get_mut(&attempt)
+            .expect("planned generation owner")
+            .generation = Some(admission.generation);
+    }
+
+    pub(crate) fn plan_completion(
+        &self,
+        record: Value<'_>,
+        line: usize,
+    ) -> ContractResult<CompletionAdmission> {
+        let completion = field(record, "completion", line)?;
+        let origin = crate::generation::Origin::read(field(completion, "origin", line)?, line)?;
+        let attempt = self
+            .attempts
+            .get(&origin.attempt)
+            .ok_or_else(|| refusal("completion has no logical request owner"))?;
+        let generation = attempt
+            .generation
+            .as_ref()
+            .ok_or_else(|| refusal("completion has no generation"))?;
+        let requests = field(completion, "request_ids", line)?
+            .elements()
+            .ok_or_else(|| refusal("completion lacks request membership"))?
+            .map(|id| {
+                id.as_str()
+                    .ok_or_else(|| refusal("completion request identity is not a string"))
+            })
+            .collect::<ContractResult<Vec<_>>>()?;
+        if attempt.completed
+            || generation.origin != origin
+            || generation.journal != text(completion, "journal_id", line)?
+            || generation.id != text(completion, "generation_id", line)?
+            || generation.hash != text(completion, "generation_sha256", line)?
+            || requests.len() != attempt.requests.len()
+            || requests
+                .iter()
+                .zip(&attempt.requests)
+                .any(|(actual, expected)| *actual != expected.as_str())
+            || attempt.settled.len() != attempt.requests.len()
+        {
+            return Err(refusal(
+                "completion omits, repeats or misattributes attempt evidence",
+            ));
+        }
+        let accepted = text(completion, "disposition", line)? == "accepted";
+        let selected: Vec<_> = attempt
+            .settled
+            .iter()
+            .filter(|(_, accepted)| **accepted)
+            .collect();
+        if selected.len() != if accepted { 1 } else { 0 } {
+            return Err(refusal(
+                "logical disposition contradicts physical history decisions",
+            ));
+        }
+        if accepted {
+            generation.require_accepted()?;
+            let outcome = attempt
+                .outcomes
+                .get(selected[0].0)
+                .ok_or_else(|| refusal("accepted response has no processing outcome"))?;
+            if !outcome.completed || outcome.usage != generation.usage {
+                return Err(refusal(
+                    "accepted generation usage contradicts its physical response",
+                ));
+            }
+        }
+        Ok(CompletionAdmission {
+            generation: Arc::clone(generation),
+            accepted,
+        })
+    }
+
+    pub(crate) fn commit_completion(&mut self, admission: CompletionAdmission) {
+        let attempt = self
+            .attempts
+            .get_mut(&admission.generation.origin.attempt)
+            .expect("planned completion owner");
+        attempt.generation = None;
+        attempt.outcomes.clear();
+        attempt.completed = true;
+    }
+
+    pub(crate) fn validate_summary(&self, record: Value<'_>, line: usize) -> ContractResult<()> {
         let summary = field(record, "request_evidence", line)?;
         let count = unsigned(
             field(summary, "request_count", line)?,
@@ -488,9 +684,13 @@ impl ModelRequests {
             .next()
             .is_some()
             || !self.responses.is_empty()
-            || count != self.count
-            || self.count < billed_turns
-            || self.observed_responses < billed_turns
+            || field(summary, "open_attempt_ids", line)?
+                .elements()
+                .ok_or_else(|| refusal("terminal lacks open-attempt accounting"))?
+                .next()
+                .is_some()
+            || self.attempts.values().any(|attempt| !attempt.completed)
+            || count != self.all_usage.requests
             || self
                 .first_sequence
                 .is_some_and(|sequence| sequence != first)
@@ -500,10 +700,11 @@ impl ModelRequests {
                 .is_some_and(|id| summary.get("journal_id").and_then(Value::as_str) != Some(id))
         {
             return Err(refusal(
-                "terminal does not account for every request and billed turn",
+                "terminal does not account for every physical request and logical attempt",
             ));
         }
-        Ok(())
+        self.all_usage
+            .require_summary(field(record, "usage", line)?, line)
     }
 }
 
@@ -565,11 +766,14 @@ mod tests {
                     let raw = json!({"response": {
                         "journal_id": "j", "request_id": "r",
                         "sequence": index + 1, "event": event
-                    }}).to_string();
+                    }})
+                    .to_string();
                     let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                     let admission = state.plan_response(doc.root(), 1);
                     if event["kind"] == "outcome" && status == "completed" && !can_complete {
-                        let error = admission.err().expect("contradictory completion was admitted");
+                        let error = admission
+                            .err()
+                            .expect("contradictory completion was admitted");
                         assert!(error.to_string().contains("successful HTTP transport"));
                         assert_eq!(state.responses.len(), 1);
                     } else {
@@ -587,10 +791,16 @@ mod tests {
     #[test]
     fn response_usage_requires_complete_consistent_counts() {
         for status in ["completed", "failed", "cancelled"] {
-            for defect in ["valid", "null", "zero", "missing", "total", "cached", "thoughts", "negative"] {
+            for defect in [
+                "valid", "null", "zero", "missing", "total", "cached", "thoughts", "negative",
+            ] {
                 let mut state = ModelRequests::default();
                 let body = r#"{"kv_scope":"owner","messages":[]}"#;
-                admit(&mut state, &request(1, "r", json!({"kind":"full","json":body}), body)).unwrap();
+                admit(
+                    &mut state,
+                    &request(1, "r", json!({"kind":"full","json":body}), body),
+                )
+                .unwrap();
                 for (index, event) in [
                     json!({"kind":"http","status":200,"content_type":null}),
                     json!({"kind":"end","termination":"eof","body_bytes":0,"body_sha256":sha256(""),"error":null}),
@@ -611,7 +821,9 @@ mod tests {
                             *value = json!(0);
                         }
                     }
-                    "missing" => { event.as_object_mut().unwrap().remove("served_usage"); }
+                    "missing" => {
+                        event.as_object_mut().unwrap().remove("served_usage");
+                    }
                     "total" => event["served_usage"]["totalTokenCount"] = json!(9),
                     "cached" => event["served_usage"]["cachedContentTokenCount"] = json!(6),
                     "thoughts" => event["served_usage"]["thoughtsTokenCount"] = json!(4),
@@ -621,8 +833,16 @@ mod tests {
                 let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":3,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                 let plan = state.plan_response(doc.root(), 1);
-                assert_eq!(plan.is_ok(), matches!(defect, "valid" | "null" | "zero"), "{status}/{defect}");
-                assert_eq!(state.responses.len(), 1, "planning must not mutate admission state");
+                assert_eq!(
+                    plan.is_ok(),
+                    matches!(defect, "valid" | "null" | "zero"),
+                    "{status}/{defect}"
+                );
+                assert_eq!(
+                    state.responses.len(),
+                    1,
+                    "planning must not mutate admission state"
+                );
             }
         }
     }
@@ -643,11 +863,11 @@ mod tests {
         admit(&mut state, &b).unwrap();
         assert!(admit(&mut state, &b).is_err());
         let terminal = Document::decode(
-            br#"{"request_evidence":{"journal_id":"j","first_sequence":3,"request_count":2,"open_response_ids":[]}}"#,
+            br#"{"request_evidence":{"journal_id":"j","first_sequence":3,"request_count":2,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":2,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":2,"usage":null}}"#,
             LIMITS,
         )
         .unwrap();
-        assert!(state.validate_summary(terminal.root(), 3, 2).is_err());
+        assert!(state.validate_summary(terminal.root(), 3).is_err());
         for id in ["a", "b"] {
             for (sequence,event) in [
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
@@ -656,7 +876,7 @@ mod tests {
                 json!({"kind":"outcome","served_usage":null,"status":"completed","error":null}),
             ].into_iter().enumerate() {
                 if id == "b" && event["kind"] == "outcome" {
-                    assert!(state.validate_summary(terminal.root(), 3, 2).is_err());
+                    assert!(state.validate_summary(terminal.root(), 3).is_err());
                     let late_body = json!({"response":{"journal_id":"j","request_id":id,"sequence":sequence+1,"event":{"kind":"body","offset":2,"base64":"e30="}}}).to_string();
                     let doc = Document::decode(late_body.as_bytes(), LIMITS).unwrap();
                     assert!(state.plan_response(doc.root(), 1).is_err());
@@ -667,11 +887,81 @@ mod tests {
                 state.commit_response(admission);
             }
         }
-        state.validate_summary(terminal.root(), 3, 2).unwrap();
-        assert!(state.validate_summary(terminal.root(), 3, 3).is_err());
+        state.validate_summary(terminal.root(), 3).unwrap();
+        let wrong = terminal
+            .source()
+            .replace("\"requests\":2", "\"requests\":3");
+        let wrong = Document::decode(wrong.as_bytes(), LIMITS).unwrap();
+        assert!(state.validate_summary(wrong.root(), 3).is_err());
         let mut changed: serde_json::Value = serde_json::from_str(&a).unwrap();
         changed["request"]["body_bytes"] = json!(1);
         assert!(admit(&mut ModelRequests::default(), &changed.to_string()).is_err());
+    }
+    #[test]
+    fn captured_physical_and_logical_closure_requires_exact_terminal_usage() {
+        let rows: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+        let mut state = ModelRequests::default();
+        for row in rows {
+            let raw = row.to_string();
+            let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+            match row["type"].as_str().unwrap() {
+                "system" => {
+                    let origin = state
+                        .plan_origin(
+                            field(document.root(), "request_evidence_origin", 1).unwrap(),
+                            1,
+                        )
+                        .unwrap();
+                    state.commit_origin(origin);
+                }
+                "model_request" => {
+                    let plan = state.plan(document.root(), 1, LIMITS).unwrap();
+                    state.commit(plan);
+                }
+                "model_response" => {
+                    let plan = state.plan_response(document.root(), 1).unwrap();
+                    state.commit_response(plan);
+                }
+                "model_generation" => {
+                    let plan = state
+                        .plan_generation(
+                            document.root(),
+                            1,
+                            LIMITS,
+                            ValidationLimits {
+                                operations: 1_000_000,
+                            },
+                        )
+                        .unwrap();
+                    state.commit_generation(plan);
+                }
+                "model_attempt_completion" => {
+                    let before = state.all_usage();
+                    let plan = state.plan_completion(document.root(), 1).unwrap();
+                    state.commit_completion(plan);
+                    assert_eq!(
+                        state.all_usage(),
+                        before,
+                        "history acceptance cannot bill again"
+                    );
+                }
+                "result" => {
+                    state.validate_summary(document.root(), 1).unwrap();
+                    let mut wrong = row.clone();
+                    wrong["usage"]["usage"]["candidatesTokenCount"] = json!(8);
+                    wrong["usage"]["usage"]["totalTokenCount"] = json!(20);
+                    let raw = wrong.to_string();
+                    let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                    assert!(state.validate_summary(document.root(), 1).is_err());
+                }
+                "stream_event" => {}
+                kind => panic!("unhandled fixture record {kind}"),
+            }
+        }
+        assert_eq!(state.all_usage().requests, 1);
+        assert_eq!(state.all_usage().usage_reports, 1);
+        assert_eq!(state.all_usage().usage.unwrap().output, 7);
     }
     #[test]
     fn chat_processing_requires_one_history_decision_and_a_matching_origin() {
@@ -694,8 +984,8 @@ mod tests {
                 let plan = state.plan_response(doc.root(), 1).unwrap();
                 state.commit_response(plan);
             }
-            let terminal = Document::decode(br#"{"request_evidence":{"journal_id":"j","first_sequence":1,"request_count":1,"open_response_ids":[]}}"#, LIMITS).unwrap();
-            assert!(state.validate_summary(terminal.root(), 1, 1).is_err());
+            let terminal = Document::decode(br#"{"request_evidence":{"journal_id":"j","first_sequence":1,"request_count":1,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":1,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":1,"usage":null}}"#, LIMITS).unwrap();
+            assert!(state.validate_summary(terminal.root(), 1).is_err());
             let accepted = json!({"response":{"journal_id":"j","request_id":"r","sequence":5,"event":{"kind":"history","disposition":"accepted"}}}).to_string();
             let doc = Document::decode(accepted.as_bytes(), LIMITS).unwrap();
             if status == "failed" {
@@ -713,7 +1003,10 @@ mod tests {
             let plan = state.plan_response(doc.root(), 1).unwrap();
             state.commit_response(plan);
             assert!(state.plan_response(doc.root(), 1).is_err());
-            state.validate_summary(terminal.root(), 1, 1).unwrap();
+            assert!(
+                state.validate_summary(terminal.root(), 1).is_err(),
+                "physical settlement cannot replace generation completion"
+            );
             for (id, scope, valid) in [
                 ("attempt", "owner", true),
                 ("unknown", "owner", false),

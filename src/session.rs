@@ -689,7 +689,7 @@ pub async fn run_one(
         });
     let observed_counters = ProgressCounters {
         output_event_bytes: pre_teardown_observed.output_event_bytes,
-        num_turns: pre_teardown_observed.num_turns,
+        physical_requests: pre_teardown_observed.observed_usage.requests,
         ..staged_counters
     };
     if let Err(error) = progress.publish(
@@ -745,14 +745,16 @@ pub async fn run_one(
             "trusted stream capture was not proved complete; refusing complete-result certification".into(),
         ))
     };
-    let (mut response, agent_result, num_turns) = match parsed {
+    let (mut response, agent_result) = match parsed {
         Ok(result) => {
             let agent_result = AgentResult {
                 agent_duration_ms: result.duration_ms,
                 agent_api_duration_ms: result.api_duration_ms,
                 agent_result_subtype: result.subtype,
-                main_output_tokens: result.main_output_tokens,
-                main_reasoning_tokens: result.main_reasoning_tokens,
+                num_turns: result.num_turns,
+                main_kv_scope: result.main_kv_scope,
+                usage: result.usage,
+                request_scopes: result.request_scopes,
                 subagent_scope_count: result.scopes.len() as u64,
                 subagent_error_count: result
                     .scopes
@@ -761,14 +763,13 @@ pub async fn run_one(
                     .count() as u64,
                 subagent_scopes: result.scopes,
             };
-            (result.response, Some(agent_result), result.num_turns)
+            (result.response, Some(agent_result))
         }
         Err(error) => {
             diagnostics.push(format!("strict event parse failed: {error}"));
             (
                 format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
                 None,
-                0,
             )
         }
     };
@@ -776,7 +777,7 @@ pub async fn run_one(
     // The explicit optional output observations below remain absent in that case.
     let final_observed = final_output_observations.unwrap_or(pre_teardown_observed);
     let last_event_at_unix = final_observed.last_event_at_unix;
-    let final_num_turns = num_turns.max(final_observed.num_turns);
+    let final_num_turns = final_output_observations.and_then(|observed| observed.num_turns);
     let (mut is_process_error, disagreement) = process_outcome(
         status,
         agent_result
@@ -800,11 +801,14 @@ pub async fn run_one(
         is_process_error = true;
     }
 
-    let final_counters = ProgressCounters {
-        output_event_bytes: final_observed.output_event_bytes,
-        num_turns: final_num_turns,
-        ..staged_counters
-    };
+    let final_counters = merge_progress_counters(
+        observed_counters,
+        ProgressCounters {
+            output_event_bytes: final_observed.output_event_bytes,
+            physical_requests: final_observed.observed_usage.requests,
+            ..staged_counters
+        },
+    );
     if let Err(error) = progress.publish(
         ProgressPhase::Bundling,
         "creating the deterministic no-clobber result bundle from quiescent session state",
@@ -875,10 +879,7 @@ pub async fn run_one(
             agent_result,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: final_output_observations
-            .map(|observed| observed.observed_output_tokens),
-        observed_reasoning_tokens: final_output_observations
-            .map(|observed| observed.observed_reasoning_tokens),
+        observed_usage: final_output_observations.map(|observed| observed.observed_usage),
         observed_subagent_scope_count: final_output_observations
             .map(|observed| observed.observed_subagent_scope_count),
         observed_unaccounted_records: final_output_observations
@@ -1232,9 +1233,7 @@ pub async fn recover_after_execution_panic(
             agent_result: None,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: output_observations.map(|observed| observed.observed_output_tokens),
-        observed_reasoning_tokens: output_observations
-            .map(|observed| observed.observed_reasoning_tokens),
+        observed_usage: output_observations.map(|observed| observed.observed_usage),
         observed_subagent_scope_count: output_observations
             .map(|observed| observed.observed_subagent_scope_count),
         observed_unaccounted_records: output_observations
@@ -1405,9 +1404,7 @@ pub async fn recover_after_service_restart(
             agent_result: None,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: output_observations.map(|observed| observed.observed_output_tokens),
-        observed_reasoning_tokens: output_observations
-            .map(|observed| observed.observed_reasoning_tokens),
+        observed_usage: output_observations.map(|observed| observed.observed_usage),
         observed_subagent_scope_count: output_observations
             .map(|observed| observed.observed_subagent_scope_count),
         observed_unaccounted_records: output_observations
@@ -1860,7 +1857,7 @@ async fn finalize_setup_failure(
         counters,
         ProgressCounters {
             output_event_bytes: observed.output_event_bytes,
-            num_turns: observed.num_turns,
+            physical_requests: observed.observed_usage.requests,
             ..ProgressCounters::default()
         },
     );
@@ -1936,9 +1933,7 @@ async fn finalize_setup_failure(
             agent_result: None,
             bundle: accepted_bundle,
         }),
-        observed_output_tokens: output_observations.map(|observed| observed.observed_output_tokens),
-        observed_reasoning_tokens: output_observations
-            .map(|observed| observed.observed_reasoning_tokens),
+        observed_usage: output_observations.map(|observed| observed.observed_usage),
         observed_subagent_scope_count: output_observations
             .map(|observed| observed.observed_subagent_scope_count),
         observed_unaccounted_records: output_observations
@@ -2211,10 +2206,7 @@ mod tests {
             Some("agent exit disagrees with its terminal record (container=Some(1), qwen=Some(1); success exits 0)")
         );
         // Nothing certified leaves nothing to agree with.
-        assert_eq!(
-            process_outcome(Ended, None, Some(0), Some(0)),
-            (true, None)
-        );
+        assert_eq!(process_outcome(Ended, None, Some(0), Some(0)), (true, None));
         assert_eq!(
             process_outcome(Cancelled, None, Some(130), Some(130)),
             (true, None)

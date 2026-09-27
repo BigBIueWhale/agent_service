@@ -1,0 +1,1389 @@
+{
+  "v": 2,
+  "cases": [
+    {
+      "name": "root message groups reset indices only after explicit closure",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "second",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "child message groups reset indices only after explicit closure",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "first",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "second",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "root runtime output without partials has no open group",
+      "root": true,
+      "actions": [
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "child runtime output without partials has no open group",
+      "root": false,
+      "actions": [
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "root block requires its message group",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group"
+      }
+    },
+    {
+      "name": "child block requires its message group",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group"
+      }
+    },
+    {
+      "name": "root cannot open a second message group",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "second",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "already open"
+      }
+    },
+    {
+      "name": "child cannot open a second message group",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "second",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "already open"
+      }
+    },
+    {
+      "name": "root cannot stop an unstarted group",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group stops"
+      }
+    },
+    {
+      "name": "child cannot stop an unstarted group",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group stops"
+      }
+    },
+    {
+      "name": "root indices must start at zero",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "index"
+      }
+    },
+    {
+      "name": "child indices must start at zero",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "index"
+      }
+    },
+    {
+      "name": "root indices cannot reset inside an open group",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "index"
+      }
+    },
+    {
+      "name": "child indices cannot reset inside an open group",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "index"
+      }
+    },
+    {
+      "name": "root delta requires an issued block",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child delta requires an issued block",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "root block stop requires an issued block",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child block stop requires an issued block",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "root delta kind must match the issued block",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "thinking_delta",
+              "thinking": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "contradicts"
+      }
+    },
+    {
+      "name": "child delta kind must match the issued block",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "thinking_delta",
+              "thinking": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "contradicts"
+      }
+    },
+    {
+      "name": "root closed blocks cannot receive more deltas",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child closed blocks cannot receive more deltas",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "root closed blocks cannot stop twice",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child closed blocks cannot stop twice",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "root full runtime message requires all blocks to close",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "message_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unclosed"
+      }
+    },
+    {
+      "name": "child full runtime message requires all blocks to close",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "message_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unclosed"
+      }
+    },
+    {
+      "name": "root scope completion requires a group stop",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unfinished partial groups"
+      }
+    },
+    {
+      "name": "child scope completion requires a group stop",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete"
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "unfinished partial groups"
+      }
+    },
+    {
+      "name": "root group stop requires all blocks to close",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group stops"
+      }
+    },
+    {
+      "name": "child group stop requires all blocks to close",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group stops"
+      }
+    },
+    {
+      "name": "root runtime output cannot claim model thought",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "thinking",
+              "thinking": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "model thought"
+      }
+    },
+    {
+      "name": "child runtime output cannot claim model thought",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "thinking",
+              "thinking": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "model thought"
+      }
+    },
+    {
+      "name": "root runtime output cannot issue model calls",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "tool_use",
+              "id": "call",
+              "name": "tool",
+              "input": {}
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "accepted generation completion"
+      }
+    },
+    {
+      "name": "child runtime output cannot issue model calls",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "tool_use",
+              "id": "call",
+              "name": "tool",
+              "input": {}
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "accepted generation completion"
+      }
+    },
+    {
+      "name": "root runtime output cannot claim incomplete model calls",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "incomplete_tool_use",
+              "name": null,
+              "arguments": "{unfinished"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "model calls"
+      }
+    },
+    {
+      "name": "child runtime output cannot claim incomplete model calls",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "incomplete_tool_use",
+              "name": null,
+              "arguments": "{unfinished"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "model calls"
+      }
+    }
+  ]
+}

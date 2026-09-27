@@ -3113,7 +3113,7 @@ mod tests {
             staged_regular_files: 0,
             output_event_bytes: 0,
             progress_events: Vec::new(),
-            num_turns: 0,
+            num_turns: None,
             last_event_at_unix: None,
             terminal: Some(crate::runtime::SessionTerminal {
                 finished_at_unix: 2,
@@ -3127,8 +3127,7 @@ mod tests {
                 agent_result: None,
                 bundle: None,
             }),
-            observed_output_tokens: None,
-            observed_reasoning_tokens: None,
+            observed_usage: None,
             observed_subagent_scope_count: None,
             observed_unaccounted_records: None,
         }
@@ -3646,9 +3645,9 @@ mod tests {
         let tree = TestTree::new("terminal-evidence");
         let (uid, gid) = owner();
         let mut body = terminal("s-7777777777777777777777777777777777777777777777777777777777777777", false);
-        body.observed_output_tokens = Some(0);
+        body.observed_usage = Some(crate::result_parse::GenerationUsageSummary::default());
         assert!(validate_terminal_storage(&tree.0, &body, uid, gid).is_err());
-        body.observed_output_tokens = None;
+        body.observed_usage = None;
         body.terminal = None;
         assert!(validate_terminal_storage(&tree.0, &body, uid, gid).is_err());
     }

@@ -19,7 +19,7 @@ class RequestEvidenceTests(unittest.TestCase):
         second = serialize({"messages": messages + [added], "kv_scope": "root"})
         bodies = [first, second]
         origin = {"journal_id": "journal", "first_sequence": 3}
-        events = [{"type": "system", "subtype": "init", "request_evidence_origin": origin}]
+        events = [{"type": "system", "subtype": "stream_start", "request_evidence_origin": origin}]
         for sequence, body in enumerate(bodies, 3):
             representation = {"kind": "full", "json": body} if sequence == 3 else {
                 "kind": "delta", "base_request_id": "r3", "retain_messages": 1,
@@ -39,13 +39,33 @@ class RequestEvidenceTests(unittest.TestCase):
         events, bodies = self.fixture()
         self.assertEqual(len(require_request_evidence(events, bodies)), 2)
 
+    def test_zero_retained_messages_replace_or_remove_the_whole_message_list(self):
+        for messages in ([], [{"role": "user", "content": "replacement שלום 🧪\n"}]):
+            with self.subTest(messages=messages):
+                events, bodies = self.fixture()
+                serialize = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+                bodies[1] = serialize({"messages": messages, "kv_scope": "root"})
+                request = events[2]["request"]
+                request["body"].update(retain_messages=0, added_messages=[serialize(message) for message in messages])
+                request.update(body_bytes=len(bodies[1].encode()), body_sha256=hashlib.sha256(bodies[1].encode()).hexdigest())
+                self.assertEqual(len(require_request_evidence(events, bodies)), 2)
+                for defect in ("base", "segment", "scope"):
+                    broken = copy.deepcopy(events)
+                    if defect == "base": broken[2]["request"]["body"]["base_request_id"] = "unissued"
+                    if defect == "segment": broken[2]["request"]["segment_id"] = "other"
+                    if defect == "scope": broken[2]["request"]["kv_scope"] = "child"
+                    with self.assertRaisesRegex(ValueError, "delta"):
+                        require_request_evidence(broken, bodies)
+
     def test_refuses_missing_changed_or_foreign_evidence(self):
-        for defect in ["omission", "hash", "bytes", "origin", "segment", "kind"]:
+        for defect in ["omission", "hash", "bytes", "origin", "segment", "kind", "header"]:
             with self.subTest(defect=defect):
                 events, bodies = self.fixture()
                 events = copy.deepcopy(events)
                 if defect == "omission":
                     del events[1]
+                elif defect == "header":
+                    events[0]["subtype"] = "init"
                 elif defect == "hash":
                     events[1]["request"]["body_sha256"] = "0" * 64
                 elif defect == "bytes":

@@ -34,6 +34,8 @@ def message_bytes(body: str) -> list[str]:
 
 
 def require_request_evidence(events: list[dict], received: list[str]) -> list[dict]:
+    if not events or events[0].get("type") != "system" or events[0].get("subtype") != "stream_start":
+        raise ValueError("request evidence has no stream_start header; retain the complete stdout")
     requests = [event["request"] for event in events if event.get("type") == "model_request"]
     terminal = events[-1]["request_evidence"]
     origin = events[0]["request_evidence_origin"]
@@ -54,7 +56,10 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
         if representation["kind"] == "full":
             body = representation["json"]
         elif representation["kind"] == "delta":
-            previous_id, previous_segment, previous_messages = scopes[request["kv_scope"]]
+            previous = scopes.get(request["kv_scope"])
+            if previous is None:
+                raise ValueError("request delta has no invocation base; retain the complete request evidence from its stream_start header")
+            previous_id, previous_segment, previous_messages = previous
             retained = representation["retain_messages"]
             if previous_id != representation["base_request_id"] or previous_segment != request["segment_id"] or type(retained) is not int or not 0 <= retained <= len(previous_messages):
                 raise ValueError("request delta references unavailable messages")
