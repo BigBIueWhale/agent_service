@@ -198256,8 +198256,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  providerOutputContext,
 +  type ProviderOutput,
 +} from '../provider-output.js';
- import { StreamingToolCallParser } from './streamingToolCallParser.js';
- import { TaggedThinkingParser } from './taggedThinkingParser.js';
+-import { StreamingToolCallParser } from './streamingToolCallParser.js';
+-import { TaggedThinkingParser } from './taggedThinkingParser.js';
  import type { PipelineConfig, RequestContext } from './types.js';
 -import { redactProxyError } from '../../utils/runtimeFetchOptions.js';
 +import {
@@ -198291,9 +198291,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 -import { logProtocolTagSanitized } from '../../telemetry/loggers.js';
 -import { ProtocolTagSanitizedEvent } from '../../telemetry/types.js';
 +import {
++  createOpenAIResponseDecodeContext,
 +  decodeOpenAIResponse,
 +  OpenAIStreamDecoder,
 +  readOpenAIUsage,
++  selectOpenAIResponseDecodePolicy,
 +  type OpenAIUsageObservation,
 +} from './responseDecoder.js';
  import { getErrorMessage, getErrorStatus } from '../../utils/errors.js';
@@ -198857,7 +198859,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +      );
 +    }
 +
-+    const context = this.createRequestContext(request, true);
++    const context = this.createRequestContext(request);
 +    const wireRequest = await this.buildRequest(
 +      request,
 +      userPromptId,
@@ -199665,7 +199667,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,39 +1294,83 @@
+@@ -1318,39 +1294,96 @@
    }
  
    /**
@@ -199683,7 +199685,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +      responseEvidence: ModelResponseRecorder,
      ) => Promise<T>,
    ): Promise<T> {
-     const context = this.createRequestContext(request, isStreaming);
+-    const context = this.createRequestContext(request, isStreaming);
++    const context = this.createRequestContext(request);
      let openaiRequest: OpenAI.Chat.ChatCompletionCreateParams | undefined;
      const executeAttempt = async () => {
        openaiRequest = await this.buildRequest(
@@ -199697,6 +199700,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +      // transport. Rehydrate the captured serialization so getters/toJSON can
 +      // never make the SDK send another value on its second serialization.
 +      const body = JSON.stringify(openaiRequest);
++      const decodePolicy = selectOpenAIResponseDecodePolicy(
++        context,
++        isStreaming ? 'stream' : 'nonstream',
++      );
++      const decodeContext = createOpenAIResponseDecodeContext(
++        decodePolicy,
++        context.startTime,
++      );
 +      const responseEvidence = await this.config.cliConfig
 +        .getChatRecordingService()
 +        .modelRequests.capture(
@@ -199729,7 +199740,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
 -      return executor(openaiRequest, context, telemetryAttempt);
 +        const result = await responseAttemptContext.run(responseEvidence, () =>
-+          executor(openaiRequest!, context, telemetryAttempt, responseEvidence),
++          executor(
++            openaiRequest!,
++            decodeContext,
++            telemetryAttempt,
++            responseEvidence,
++          ),
 +        );
 +        if (!isStreaming)
 +          await responseEvidence.finish({ status: 'completed', error: null });
@@ -199757,12 +199773,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        return await executeAttempt();
      } catch (error) {
        const model = context.model.toLowerCase();
-@@ -1400,13 +1420,16 @@
+@@ -1398,31 +1431,32 @@
+ 
+   /**
     * Create request context with common properties
     */
    private createRequestContext(
      request: GenerateContentParameters,
-     isStreaming: boolean,
+-    isStreaming: boolean,
    ): RequestContext {
 +    const toolChoice = openAIToolChoice(
 +      request.config?.toolConfig?.functionCallingConfig,
@@ -199771,15 +199789,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +    requireRequestModel(request.model);
      const providerOverrides =
        this.config.provider.getRequestContextOverrides?.() ?? {};
-     const toolCallParser = isStreaming
-       ? new StreamingToolCallParser()
-       : undefined;
+-    const toolCallParser = isStreaming
+-      ? new StreamingToolCallParser()
+-      : undefined;
      const responseParsingOptions =
-@@ -1414,15 +1437,21 @@
-     const taggedThinkingParser =
-       isStreaming && responseParsingOptions?.taggedThinkingTags
-         ? new TaggedThinkingParser()
-         : undefined;
+       this.config.provider.getResponseParsingOptions?.();
+-    const taggedThinkingParser =
+-      isStreaming && responseParsingOptions?.taggedThinkingTags
+-        ? new TaggedThinkingParser()
+-        : undefined;
  
      return {
 -      model: effectiveModel,
@@ -199798,6 +199816,19 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
          // Default true: the OpenAI Chat Completions spec only permits text on
          // `role: "tool"` messages, so tool-returned media (e.g. an image read
          // by read_file) embedded there is silently dropped or rejected by
+@@ -1432,12 +1466,10 @@
+         // Opt out via generationConfig.splitToolMedia = false.
+         true,
+       toolResultContentFormat:
+         providerOverrides.toolResultContentFormat ??
+         this.contentGeneratorConfig.toolResultContentFormat ??
+         'parts',
+-      ...(toolCallParser ? { toolCallParser } : {}),
+       ...(responseParsingOptions ? { responseParsingOptions } : {}),
+-      ...(taggedThinkingParser ? { taggedThinkingParser } : {}),
+     };
+   }
+ }
 diff --git a/packages/core/src/core/openaiContentGenerator/provider/dashscope.test.ts b/packages/core/src/core/openaiContentGenerator/provider/dashscope.test.ts
 --- a/packages/core/src/core/openaiContentGenerator/provider/dashscope.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/provider/dashscope.test.ts
@@ -412326,7 +412357,7 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.ts b/pac
 diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/packages/core/src/core/openaiContentGenerator/responseDecoder.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/responseDecoder.ts
-@@ -0,0 +1,137 @@
+@@ -0,0 +1,239 @@
 +/** One response-scoped conversion path for streamed provider values. */
 +import { GenerateContentResponse } from '@google/genai';
 +import type OpenAI from 'openai';
@@ -412339,7 +412370,109 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/
 +} from '../served-usage.js';
 +import { getToolCallPreparations } from '../tool-call-preparation.js';
 +import { mapOpenAIUsage, OpenAIContentConverter } from './converter.js';
++import { StreamingToolCallParser } from './streamingToolCallParser.js';
++import { TaggedThinkingParser } from './taggedThinkingParser.js';
 +import type { RequestContext } from './types.js';
++
++/** The immutable choices that determine how one OpenAI response is decoded. */
++export interface OpenAIResponseDecodePolicy {
++  readonly mode: 'stream' | 'nonstream';
++  readonly model: string;
++  readonly strict_tool_calling: boolean;
++  readonly named_tool_choice: string | null;
++  readonly exact_token_counting: boolean;
++  readonly tagged_thinking_tags: boolean;
++}
++
++const POLICY_KEYS = [
++  'mode',
++  'model',
++  'strict_tool_calling',
++  'named_tool_choice',
++  'exact_token_counting',
++  'tagged_thinking_tags',
++] as const;
++
++/** Reject an unknown policy rather than silently decoding it another way. */
++export function requireOpenAIResponseDecodePolicy(
++  value: unknown,
++): OpenAIResponseDecodePolicy {
++  if (value === null || typeof value !== 'object' || Array.isArray(value))
++    throw new Error(
++      'Invalid OpenAI response decode policy. Inspect the selected provider configuration and retry with a matching client.',
++    );
++  const policy = value as Record<string, unknown>;
++  if (
++    Object.keys(policy).sort().join() !== [...POLICY_KEYS].sort().join() ||
++    (policy['mode'] !== 'stream' && policy['mode'] !== 'nonstream') ||
++    typeof policy['model'] !== 'string' ||
++    policy['model'].length === 0 ||
++    typeof policy['strict_tool_calling'] !== 'boolean' ||
++    !(
++      policy['named_tool_choice'] === null ||
++      (typeof policy['named_tool_choice'] === 'string' &&
++        policy['named_tool_choice'].length > 0)
++    ) ||
++    typeof policy['exact_token_counting'] !== 'boolean' ||
++    typeof policy['tagged_thinking_tags'] !== 'boolean'
++  )
++    throw new Error(
++      'Invalid OpenAI response decode policy. Inspect the selected provider configuration and retry with a matching client.',
++    );
++  return Object.freeze(policy) as unknown as OpenAIResponseDecodePolicy;
++}
++
++/** Freeze the selected provider and request choices before a response starts. */
++export function selectOpenAIResponseDecodePolicy(
++  context: RequestContext,
++  mode: OpenAIResponseDecodePolicy['mode'],
++): OpenAIResponseDecodePolicy {
++  const options = context.responseParsingOptions;
++  if (
++    options &&
++    (Object.keys(options).some((key) => key !== 'taggedThinkingTags') ||
++      (options.taggedThinkingTags !== undefined &&
++        typeof options.taggedThinkingTags !== 'boolean'))
++  )
++    throw new Error(
++      'Unknown OpenAI response parsing option. Inspect the selected provider configuration and retry with a matching client.',
++    );
++  return requireOpenAIResponseDecodePolicy({
++    mode,
++    model: context.model,
++    strict_tool_calling: context.strictToolCalling === true,
++    named_tool_choice: context.namedToolChoice ?? null,
++    exact_token_counting: context.exactTokenCounting === true,
++    tagged_thinking_tags: options?.taggedThinkingTags === true,
++  });
++}
++
++/** Each response gets fresh parser state from its selected policy. */
++export function createOpenAIResponseDecodeContext(
++  policy: OpenAIResponseDecodePolicy,
++  startTime: number,
++): RequestContext {
++  const selected = requireOpenAIResponseDecodePolicy(policy);
++  return {
++    model: selected.model,
++    modalities: {},
++    startTime,
++    strictToolCalling: selected.strict_tool_calling,
++    ...(selected.named_tool_choice === null
++      ? {}
++      : { namedToolChoice: selected.named_tool_choice }),
++    exactTokenCounting: selected.exact_token_counting,
++    ...(selected.tagged_thinking_tags
++      ? { responseParsingOptions: { taggedThinkingTags: true } }
++      : {}),
++    ...(selected.mode === 'stream'
++      ? { toolCallParser: new StreamingToolCallParser() }
++      : {}),
++    ...(selected.mode === 'stream' && selected.tagged_thinking_tags
++      ? { taggedThinkingParser: new TaggedThinkingParser() }
++      : {}),
++  };
++}
 +
 +export type OpenAIUsageObservation =
 +  | { kind: 'absent' }
@@ -412464,3 +412597,102 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/
 +    return diagnostics;
 +  }
 +}
+diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.ts b/packages/core/src/core/openaiContentGenerator/responseDecoder.test.ts
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/responseDecoder.test.ts
+@@ -0,0 +1,95 @@
++import { describe, expect, it } from 'vitest';
++import type OpenAI from 'openai';
++import {
++  createOpenAIResponseDecodeContext,
++  decodeOpenAIResponse,
++  selectOpenAIResponseDecodePolicy,
++} from './responseDecoder.js';
++import type { RequestContext } from './types.js';
++
++const completion = {
++  object: 'chat.completion',
++  id: 'same-provider-response',
++  created: 1,
++  model: 'test-model',
++  choices: [
++    {
++      index: 0,
++      message: { role: 'assistant', content: '<think>private</think> public' },
++      finish_reason: 'stop',
++      logprobs: null,
++    },
++  ],
++} as OpenAI.Chat.ChatCompletion;
++
++function selectedContext(taggedThinkingTags: boolean): RequestContext {
++  return {
++    model: 'test-model',
++    modalities: {},
++    startTime: 1,
++    responseParsingOptions: { taggedThinkingTags },
++  };
++}
++
++describe('OpenAI response decode policy', () => {
++  it('replays identical response bytes according to the dispatched parsing choice', () => {
++    const decode = (taggedThinkingTags: boolean) => {
++      const selected = selectOpenAIResponseDecodePolicy(
++        selectedContext(taggedThinkingTags),
++        'nonstream',
++      );
++      const retained = JSON.parse(JSON.stringify(selected));
++      return decodeOpenAIResponse(
++        completion,
++        createOpenAIResponseDecodeContext(retained, 1),
++        { kind: 'absent' },
++      ).candidates?.[0]?.content?.parts;
++    };
++
++    expect(decode(false)).toEqual([{ text: '<think>private</think> public' }]);
++    expect(decode(true)).toEqual([
++      { text: 'private', thought: true },
++      { text: ' public' },
++    ]);
++  });
++
++  it('gives each streamed response fresh parser state and refuses unknown choices', () => {
++    const selected = selectOpenAIResponseDecodePolicy(
++      selectedContext(true),
++      'stream',
++    );
++    const first = createOpenAIResponseDecodeContext(selected, 1);
++    const second = createOpenAIResponseDecodeContext(selected, 1);
++    expect(first.toolCallParser).not.toBe(second.toolCallParser);
++    expect(first.taggedThinkingParser).not.toBe(second.taggedThinkingParser);
++    expect(() =>
++      createOpenAIResponseDecodeContext(
++        { ...selected, unknown: true } as typeof selected,
++        1,
++      ),
++    ).toThrow('retry with a matching client');
++    expect(() =>
++      selectOpenAIResponseDecodePolicy(
++        {
++          ...selectedContext(true),
++          responseParsingOptions: {
++            taggedThinkingTags: true,
++            unknown: true,
++          },
++        } as RequestContext,
++        'stream',
++      ),
++    ).toThrow('retry with a matching client');
++    expect(() =>
++      selectOpenAIResponseDecodePolicy(
++        {
++          ...selectedContext(true),
++          responseParsingOptions: {
++            taggedThinkingTags: 'yes' as unknown as boolean,
++          },
++        },
++        'stream',
++      ),
++    ).toThrow('Unknown OpenAI response parsing option');
++  });
++});

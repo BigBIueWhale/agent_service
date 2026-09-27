@@ -191,13 +191,16 @@ path; treating every body as SSE would be unsound.
 The live pipeline now uses the response decoder module for both nonstreaming
 conversion and streamed conversion with terminal holding and failure-diagnostic
 expansion. The module also exposes the pure served-usage observation applied
-before either conversion path, so a future physical replay need not duplicate
-that validation rule. The existing converter and pipeline source suites passed
-441 cases after this extraction; four local actual-SDK attribution and
-cancellation cases also passed against the current authoring source. Those
-runs establish preservation at their tested boundaries. No admitting reader
-yet invokes the decoder on retained response bytes. This extraction does not
-establish physical-to-decoded proof or change the wire contract.
+before either conversion path. Before each response attempt the pipeline selects
+a validated JSON-shaped decode policy and creates fresh parser state from it.
+An executed source test decoded identical provider content with tagged-thinking
+parsing off and on and obtained the two corresponding part sequences after a
+policy JSON round trip. The converter, pipeline and policy source suites passed
+443 cases; four local actual-SDK attribution and cancellation cases also passed
+against the current authoring source. These runs establish preservation at their
+tested boundaries. The policy is not yet included in request evidence, and no
+admitting reader yet invokes the decoder on retained response bytes. This work
+does not establish physical-to-decoded proof or change the wire contract.
 
 The completion's physical request membership gives the candidate requests but
 does not by itself identify which retry supplied an observation. Replay needs

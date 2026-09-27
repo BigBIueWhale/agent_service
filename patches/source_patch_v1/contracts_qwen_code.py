@@ -8276,11 +8276,13 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_ordered(capture, (
         "openaiRequest = await this.buildRequest(",
         "const body = JSON.stringify(openaiRequest)",
+        "const decodePolicy = selectOpenAIResponseDecodePolicy(",
+        "const decodeContext = createOpenAIResponseDecodeContext(",
         "getChatRecordingService()",
         ".modelRequests.capture(",
         "openaiRequest = JSON.parse(",
         "responseAttemptContext.run(responseEvidence",
-        "executor(openaiRequest!, context, telemetryAttempt, responseEvidence)",
+        "executor(", "decodeContext,",
     ), label=label, location=pipeline)
     require_text(state, pipeline, "maxRetries: 0", count=2, label=label)
     _require_all(state, pipeline, (
@@ -8321,6 +8323,13 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label, location="stream physical usage before conversion")
     response_decoder = core + "core/openaiContentGenerator/responseDecoder.ts"
     _require_all(state, response_decoder, (
+        "export interface OpenAIResponseDecodePolicy",
+        "export function requireOpenAIResponseDecodePolicy(",
+        "Inspect the selected provider configuration and retry with a matching client.",
+        "export function selectOpenAIResponseDecodePolicy(",
+        "typeof options.taggedThinkingTags !== 'boolean'",
+        "export function createOpenAIResponseDecodeContext(",
+        "new StreamingToolCallParser()", "new TaggedThinkingParser()",
         "export function readOpenAIUsage(",
         "requireServedUsage(mapOpenAIUsage(usage), 'OpenAI usage')",
         "export function decodeOpenAIResponse(",
@@ -8329,6 +8338,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "if (usage.kind === 'invalid')", "this.terminal.usageMetadata = this.lastUsage",
         "preserveGenerationObservation(diagnostic, response)",
     ), label=label)
+    require_text(state, core + "core/openaiContentGenerator/responseDecoder.test.ts",
+                 "replays identical response bytes according to the dispatched parsing choice",
+                 label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
         "for (const response of decoder.finish()) yield response",
