@@ -695,6 +695,8 @@ impl ModelRequests {
             .ok_or_else(|| refusal("final physical request has no processing outcome"))?;
         if consumer_observations != generation.observation_count
             || consumer_observations > final_outcome.pipeline_outputs_delivered
+            || (accepted
+                && consumer_observations != final_outcome.pipeline_outputs_delivered)
         {
             return Err(refusal(
                 "consumer receipt contradicts decoded output or generation observations",
@@ -816,10 +818,11 @@ mod tests {
             .find(|row| row["type"] == "model_attempt_completion")
             .unwrap()["completion"]
             .clone();
-        for (name, first_source, earlier_outputs, accepted) in [
-            ("final response", false, 0, true),
-            ("earlier response", true, 3, false),
-            ("unclaimed earlier output", false, 1, false),
+        for (name, first_source, earlier_outputs, extra_final_output, accepted) in [
+            ("final response", false, 0, false, true),
+            ("earlier response", true, 3, false, false),
+            ("unclaimed earlier output", false, 1, false, false),
+            ("unclaimed final output", false, 0, true, false),
         ] {
             let mut evidence = original_generation.clone();
             let mut envelope: serde_json::Value =
@@ -874,7 +877,8 @@ mod tests {
                                 scope: generation.origin.scope.clone(),
                                 usage: generation.usage,
                                 completed: true,
-                                pipeline_outputs_delivered: generation.observation_count,
+                                pipeline_outputs_delivered: generation.observation_count
+                                    + u64::from(extra_final_output),
                             },
                         ),
                     ]),

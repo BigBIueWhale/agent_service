@@ -350572,7 +350572,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,653 @@
+@@ -0,0 +1,657 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -350859,7 +350859,11 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            and 0 <= consumed <= 2**53 - 1
 +            and final_outcome is not None
 +            and consumed == len(generation.envelope["observations"])
-+            and consumed <= final_outcome["pipeline_outputs_delivered"],
++            and consumed <= final_outcome["pipeline_outputs_delivered"]
++            and (
++                completion["disposition"] != "accepted"
++                or consumed == final_outcome["pipeline_outputs_delivered"]
++            ),
 +            "consumer receipt contradicts decoded output or generation observations",
 +        )
 +        if completion["disposition"] == "accepted":
@@ -356291,7 +356295,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,422 @@
+@@ -0,0 +1,423 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -356442,7 +356446,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        require(consumed >= 0 && consumed <= SAFE_INTEGER
 +                && finalOutcome != null
 +                && consumed == array(generation.envelope.get("observations")).size()
-+                && consumed <= finalOutcome.pipelineOutputs,
++                && consumed <= finalOutcome.pipelineOutputs
++                && (!isAccepted || consumed == finalOutcome.pipelineOutputs),
 +                "consumer receipt contradicts decoded output or generation observations");
 +        if (isAccepted) {
 +            generation.requireAccepted();
@@ -382220,7 +382225,7 @@ diff --git a/packages/cli/src/serve/server/session-export-generation.test.ts b/p
 diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packages/core/src/core/model-generation-completion.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-completion.test.ts
-@@ -0,0 +1,445 @@
+@@ -0,0 +1,469 @@
 +import { describe, expect, it } from 'vitest';
 +import {
 +  FinishReason,
@@ -382288,6 +382293,24 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 +      ),
 +    ).toThrow('consumer receipt contradicts');
 +  });
++  it.each([
++    ['accepted', true],
++    ['abandoned', false],
++  ] as const)(
++    '%s completion accounts for every output delivered before settlement',
++    (disposition, refused) => {
++      const replay = new ModelGenerationReplay();
++      replay.observeRequest(request('r1'));
++      const evidence = generation([observation()]);
++      replay.observeGeneration(evidence);
++      replay.observeResponse(processingOutcome('r1', 'completed', 2));
++      replay.observeResponse(settledResponse('r1', disposition));
++      const complete = () =>
++        replay.observeCompletion(completion(evidence, ['r1'], disposition));
++      if (refused) expect(complete).toThrow('consumer receipt contradicts');
++      else expect(complete).not.toThrow();
++    },
++  );
 +  it('refuses a claimed observation from a retry that delivered none', () => {
 +    const replay = new ModelGenerationReplay();
 +    replay.observeRequest(request('r1'));
@@ -382310,8 +382333,9 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 +    replay.observeResponse(settledResponse('r1', 'abandoned'));
 +    replay.observeResponse(processingOutcome('r2', 'completed', 0));
 +    replay.observeResponse(settledResponse('r2', 'accepted'));
-+    expect(() => replay.observeCompletion(completion(evidence, ['r1', 'r2'])))
-+      .toThrow('consumer receipt contradicts');
++    expect(() =>
++      replay.observeCompletion(completion(evidence, ['r1', 'r2'])),
++    ).toThrow('consumer receipt contradicts');
 +  });
 +  it.each([
 +    ['earlier source with no delivery', ['r1'], 0],
@@ -382337,12 +382361,17 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 +        })),
 +      );
 +      replay.observeGeneration(evidence);
-+      replay.observeResponse(processingOutcome('r1', 'failed', earlierDelivered));
++      replay.observeResponse(
++        processingOutcome('r1', 'failed', earlierDelivered),
++      );
 +      replay.observeResponse(settledResponse('r1', 'abandoned'));
-+      replay.observeResponse(processingOutcome('r2', 'completed', sources.length));
++      replay.observeResponse(
++        processingOutcome('r2', 'completed', sources.length),
++      );
 +      replay.observeResponse(settledResponse('r2', 'accepted'));
-+      expect(() => replay.observeCompletion(completion(evidence, ['r1', 'r2'])))
-+        .toThrow('final physical request');
++      expect(() =>
++        replay.observeCompletion(completion(evidence, ['r1', 'r2'])),
++      ).toThrow('final physical request');
 +    },
 +  );
 +  it('distinguishes zero served counts from unreported usage', () => {
@@ -383221,7 +383250,7 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core/model-generation.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation.ts
-@@ -0,0 +1,942 @@
+@@ -0,0 +1,950 @@
 +import {
 +  restoreProviderToolCallId,
 +  collectToolCallIdsFromHistory,
@@ -383268,9 +383297,11 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +  readonly source_request_id: string;
 +  readonly response: GenerateContentResponse;
 +  readonly incomplete_tool_calls: readonly IncompleteToolCall[];
-+  readonly tool_call_preparations: readonly (ToolCallPreparation & {
-+    readonly provider_call_id: string;
-+  })[];
++  readonly tool_call_preparations: ReadonlyArray<
++    ToolCallPreparation & {
++      readonly provider_call_id: string;
++    }
++  >;
 +  readonly call_ids: readonly NormalizedToolCallId[];
 +}
 +
@@ -383324,7 +383355,9 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +  generationSources.set(response, requestId);
 +}
 +
-+export function takeGenerationSource(response: GenerateContentResponse): string {
++export function takeGenerationSource(
++  response: GenerateContentResponse,
++): string {
 +  const requestId = generationSources.get(response);
 +  generationSources.delete(response);
 +  if (!requestId) refuse('Chat observation has no physical request');
@@ -383844,11 +383877,11 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +  readonly origin: ModelGenerationOrigin;
 +  readonly text: string;
 +  readonly thinking: string;
-+  readonly calls: readonly {
++  readonly calls: ReadonlyArray<{
 +    id: string;
 +    name: string | undefined;
 +    argumentsJson: string | undefined;
-+  }[];
++  }>;
 +  readonly incompleteCalls: readonly IncompleteToolCall[];
 +}
 +
@@ -384128,7 +384161,10 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +      !finalOutcome ||
 +      completion.consumer_observations !== envelope.observations.length ||
 +      completion.consumer_observations >
-+        finalOutcome.pipeline_outputs_delivered
++        finalOutcome.pipeline_outputs_delivered ||
++      (completion.disposition === 'accepted' &&
++        completion.consumer_observations !==
++          finalOutcome.pipeline_outputs_delivered)
 +    )
 +      return refuse(
 +        'consumer receipt contradicts decoded output or generation observations',
@@ -384139,7 +384175,8 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +        finalOutcome.status !== 'completed' ||
 +        finalOutcome.served_usage === null ||
 +        SERVED_USAGE_FIELDS.some(
-+          (field) => finalOutcome.served_usage![field] !== envelope.usage![field],
++          (field) =>
++            finalOutcome.served_usage![field] !== envelope.usage![field],
 +        )
 +      )
 +        return refuse(
@@ -388880,7 +388917,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidenceTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidenceTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidenceTest.java
-@@ -0,0 +1,324 @@
+@@ -0,0 +1,338 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -389112,6 +389149,20 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +            }
 +            assertTrue(refused(rows).getMessage().contains("final physical request"));
 +        }
++    }
++
++    @Test
++    void acceptedCompletionCannotLeaveDeliveredOutputUnobserved() throws Exception {
++        List<JSONObject> rows = records();
++        for (JSONObject candidate : rows) {
++            if ("model_response".equals(candidate.getString("type"))) {
++                JSONObject event = candidate.getJSONObject("response").getJSONObject("event");
++                if ("outcome".equals(event.getString("kind"))) {
++                    event.put("pipeline_outputs_delivered", event.getIntValue("pipeline_outputs_delivered") + 1);
++                }
++            }
++        }
++        assertTrue(refused(rows).getMessage().contains("consumer receipt contradicts"));
 +    }
 +
 +    @Test
@@ -414215,7 +414266,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v10.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/packages/sdk-python/tests/unit/test_generation_completion_v10.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v10.py
-@@ -0,0 +1,699 @@
+@@ -0,0 +1,711 @@
 +from __future__ import annotations
 +
 +import base64
@@ -414422,6 +414473,18 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +        )
 +        outcome[field] = value
 +    assert_refused(wire, pattern)
++
++
++def test_accepted_completion_cannot_leave_a_delivered_output_unobserved():
++    wire = records()
++    outcome = next(
++        row["response"]["event"]
++        for row in wire
++        if row["type"] == "model_response"
++        and row["response"]["event"]["kind"] == "outcome"
++    )
++    outcome["pipeline_outputs_delivered"] += 1
++    assert_refused(wire, "consumer receipt contradicts")
 +
 +
 +def test_ordered_failed_then_accepted_physical_retry_membership():

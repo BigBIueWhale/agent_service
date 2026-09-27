@@ -204,7 +204,9 @@ The physical response owner records the count of SDK values admitted to
 conversion and decoded outputs delivered by the pipeline in each response
 outcome. Chat records a separate receipt count after incorporating each output
 into its generation; the attempt completion binds that count to the generation's
-observation count and the outcomes of its physical requests. Stream contract v10
+observation count and the outcomes of its physical requests. An accepted
+completion must consume every pipeline output; an abandoned completion can
+retain a shorter prefix when cancellation interrupts delivery. Stream contract v10
 and canonical recording version 12 also require each generation observation to
 name its physical request. The TypeScript and Python source tests exercised the
 counts and per-request attribution, including early cancellation and a conversion

@@ -496,9 +496,10 @@ Each response outcome also records how many SDK values reached conversion and
 how many decoded outputs crossed the shared pipeline. A chat attempt completion
 records the producing physical request on each observation and how many outputs
 Chat incorporated into its generation. Readers require that receipt to equal the
-generation observation count, require earlier retry requests to deliver no
-decoded output, and bind every observation to the final physical request and
-its delivered output count. These boundaries distinguish
+generation observation count and, for an accepted attempt, the count delivered
+by the final physical response. An abandoned attempt may retain a shorter
+consumer prefix. Readers require earlier retry requests to deliver no decoded
+output and bind every observation to the final physical request. These boundaries distinguish
 early cancellation from a complete response body and a diagnostic expansion
 from one SDK value. They do not yet prove that an observation's contents were
 derived from the captured bytes; a raw-response replay verifier is still needed.
