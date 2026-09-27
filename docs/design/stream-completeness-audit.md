@@ -267,6 +267,18 @@ the other items remain open:
   provider. It applies to ordinary sessions and side queries alike; vLLM receives
   the same request and needs no corresponding backend change. No size or latency
   improvement is claimed: a zero-retained delta includes reference metadata.
+  A later reader audit found that a second full body with the same scope and
+  segment was accepted as a fresh base despite the producer's delta rule. The
+  client now records a segment identity composed from its output-window epoch
+  and the history context's segment, so window replacement cannot reuse the
+  old identity. The TypeScript, Python, Java, native and fake-provider readers
+  refuse a full body while that scope's segment is active; they still admit a
+  full base when either component changes. The TypeScript request/capture suites
+  passed 29 tests, Python admission passed 344, and the shared fake-provider
+  verifier passed 11. Java and native tests, compilation, and owner gates remain
+  unverified. This rule authenticates request-chain representation; it does not
+  by itself prove that a claimed new segment corresponds to a particular
+  compaction or that request messages match every prior user/tool record.
 - ACP's separate 65,536-byte projection was real. The shared live and replay
   boundaries now preserve complete content blocks and raw output, and the
   projector, byte-slicing utility and their algorithm-specific tests are

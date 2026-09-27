@@ -184,7 +184,16 @@ impl ModelRequests {
         let segment_id = text(request, "segment_id", line)?;
         let body = field(request, "body", line)?;
         let json = match text(body, "kind", line)? {
-            "full" => text(body, "json", line)?.to_string(),
+            "full" => {
+                if self
+                    .scopes
+                    .get(scope)
+                    .is_some_and(|previous| previous.segment_id == segment_id)
+                {
+                    return Err(refusal("full body repeats an active invocation segment"));
+                }
+                text(body, "json", line)?.to_string()
+            }
             "delta" => {
                 let previous = self
                     .scopes
@@ -803,6 +812,29 @@ mod tests {
             Err(ContractError::InvalidRecord(message))
                 if message.contains("selected decoder contradicts")
         ));
+    }
+    #[test]
+    fn full_body_requires_a_new_segment_for_its_scope() {
+        let body = r#"{"kv_scope":"owner","stream":false,"messages":[]}"#;
+        let mut state = ModelRequests::default();
+        admit(
+            &mut state,
+            &request(1, "first", json!({"kind":"full","json":body}), body),
+        )
+        .unwrap();
+        let mut second: serde_json::Value = serde_json::from_str(&request(
+            2,
+            "second",
+            json!({"kind":"full","json":body}),
+            body,
+        ))
+        .unwrap();
+        let error = admit(&mut state, &second.to_string()).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("full body repeats an active invocation segment"));
+        second["request"]["segment_id"] = json!("next-segment");
+        admit(&mut state, &second.to_string()).unwrap();
     }
     #[test]
     fn only_the_final_physical_retry_can_deliver_chat_output() {

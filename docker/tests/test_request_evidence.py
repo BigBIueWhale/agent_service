@@ -39,6 +39,15 @@ class RequestEvidenceTests(unittest.TestCase):
         events, bodies = self.fixture()
         self.assertEqual(len(require_request_evidence(events, bodies)), 2)
 
+    def test_full_body_requires_a_new_segment_for_its_scope(self):
+        events, bodies = self.fixture()
+        second = events[2]["request"]
+        second["body"] = {"kind": "full", "json": bodies[1]}
+        with self.assertRaisesRegex(ValueError, "full request body repeats an active invocation segment"):
+            require_request_evidence(events, bodies)
+        second["segment_id"] = "next-segment"
+        self.assertEqual(len(require_request_evidence(events, bodies)), 2)
+
     def test_zero_retained_messages_replace_or_remove_the_whole_message_list(self):
         for messages in ([], [{"role": "user", "content": "replacement שלום 🧪\n"}]):
             with self.subTest(messages=messages):

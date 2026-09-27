@@ -53,10 +53,12 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
         if owner != {"kind": "utility"} and not (set(owner) == {"kind", "attempt_id"} and owner["kind"] == "chat" and isinstance(owner["attempt_id"], str) and owner["attempt_id"]):
             raise ValueError("request ownership is unknown; inspect the matching client")
         representation = request["body"]
+        previous = scopes.get(request["kv_scope"])
         if representation["kind"] == "full":
+            if previous is not None and previous[1] == request["segment_id"]:
+                raise ValueError("full request body repeats an active invocation segment; inspect the original request evidence with the matching client")
             body = representation["json"]
         elif representation["kind"] == "delta":
-            previous = scopes.get(request["kv_scope"])
             if previous is None:
                 raise ValueError("request delta has no invocation base; retain the complete request evidence from its stream_start header")
             previous_id, previous_segment, previous_messages = previous

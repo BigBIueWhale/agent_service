@@ -8275,7 +8275,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "export class ModelRequestStreamReplay", "await this.persist(evidence)",
         "body_sha256", "retain_messages", "segment_id", "openOutputWindow",
         "previous.segmentId !== evidence.segment_id", "this.outputs.delete(output)",
-        "candidate?.segmentId === segmentId ? candidate : undefined;",
+        "candidate?.segmentId === evidenceSegmentId ? candidate : undefined;",
         "body: previous", "base_request_id: previous.id",
         "added_messages: body.messages.slice(retained)",
         "readonly decode_policy: OpenAIResponseDecodePolicy;",
@@ -8485,6 +8485,16 @@ def _validate_served_accounting_after(state: State) -> None:
         "await this.publish({ type: 'model_request', request: evidence });",
         "await write;", "catch (cause)", "await response.finish({",
     ), label=label, location="durable request ownership before publication")
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "const evidenceSegmentId = `${segment}/${segmentId}`;",
+        "candidate?.segmentId === evidenceSegmentId",
+        "segment_id: evidenceSegmentId",
+        "previous?.segmentId === evidence.segment_id",
+        "a full body repeats an active invocation segment",
+    ), label=label)
+    require_text(state, core + "core/model-request-evidence.test.ts",
+                 "refuses a full-body reset inside a segment and admits a new output-window segment",
+                 label=label)
     forbid_text(state, pipeline, "request.chatAttempt?.attach(responseEvidence)", label=label)
     require_text(state, core + "core/geminiChat.ts", "this.generationContext.startRequestSegment()", label=label)
     _require_all(state, core + "core/chat-attempt.ts", (
@@ -8722,6 +8732,8 @@ def _validate_served_accounting_after(state: State) -> None:
         'stream == (request["decode_policy"]["mode"] == "stream")',
         'previous.request_id == representation["base_request_id"]',
         'previous.segment_id == request["segment_id"]',
+        'previous.segment_id != request["segment_id"]',
+        "full body repeats an active invocation segment",
         'record["sequence"] == state.sequence + 1',
         'base64.b64decode(event["base64"], validate=True)',
         'event["body_sha256"] == state.digest.hexdigest()',
@@ -8741,6 +8753,7 @@ def _validate_served_accounting_after(state: State) -> None:
                  "object_pairs_hook=_object", label=label)
     _require_all(state, python_sdk + "tests/unit/test_record_admission.py", (
         "test_authoritative_request_response_streams", "test_shared_goal_vectors",
+        "test_full_body_requires_a_new_segment_for_its_scope",
         "test_shared_partial_vectors", "test_request_replay_preserves_raw_json_spelling",
         "test_delivered_record_mutation_cannot_change_response_owner",
         "test_duplicate_terminal_cannot_settle_queued_input",
@@ -8813,6 +8826,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, java_cli + "protocol/RequestEvidence.java", (
         "StreamSchema.sha256(bytes)", "slices.messages.equals(expected)",
+        "full body repeats an active invocation segment",
         "slices.stream == \"stream\".equals(policy.get(\"mode\"))",
         "new ArrayList<>(responses.keySet())", "state.digest.update(bytes)",
         "processingStatus", "EOF omits a response completion",
@@ -8849,6 +8863,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, java_tests + "protocol/RecordAdmissionTest.java", (
         "replaysAuthoredEvidenceIncludingResumedAndLiveWindows", "refusesEveryIncompletePrefixAtEof",
+        "fullBodyRequiresANewSegmentForItsScope",
         "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
     ), label=label)
     _require_all(state, java_tests + "session/SessionRecordTest.java", (

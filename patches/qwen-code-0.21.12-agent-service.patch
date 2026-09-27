@@ -342062,7 +342062,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,683 @@
+@@ -0,0 +1,703 @@
 +import { afterEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -342422,6 +342422,26 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +    const replay = new ModelRequestReplay();
 +    expect(f.records.map((record) => replay.observe(record))).toEqual(bodies);
 +  });
++  it('refuses a full-body reset inside a segment and admits a new output-window segment', async () => {
++    const f = fixture();
++    const first = serialize([{ role: 'user', content: 'first' }]);
++    const second = serialize([{ role: 'user', content: 'second' }]);
++    await f.journal.capture(first, 'root', 'p', 'history', null, TEST_POLICY);
++    await f.journal.capture(second, 'root', 'p', 'history', null, TEST_POLICY);
++    const replay = new ModelRequestReplay();
++    expect(replay.observe(f.records[0])).toBe(first);
++    expect(() =>
++      replay.observe({ ...f.records[1], body: { kind: 'full', json: second } }),
++    ).toThrow('a full body repeats an active invocation segment');
++    expect(replay.observe(f.records[1])).toBe(second);
++
++    const window = f.journal.openOutputWindow();
++    await f.journal.capture(second, 'root', 'p', 'history', null, TEST_POLICY);
++    expect(f.records[2].body.kind).toBe('full');
++    expect(f.records[2].segment_id).not.toBe(f.records[1].segment_id);
++    expect(replay.observe(f.records[2])).toBe(second);
++    window.close();
++  });
 +  it('refuses omissions, duplicates, changed bodies, wrong owners, hashes and unknown shapes', async () => {
 +    const f = fixture();
 +    await f.journal.capture(
@@ -342749,7 +342769,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,946 @@
+@@ -0,0 +1,952 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -343052,8 +343072,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    const previous = journal.scopes.get(evidence.kv_scope);
 +    const representation = evidence.body;
 +    let json: string;
-+    if (representation.kind === 'full') json = representation.json;
-+    else {
++    if (representation.kind === 'full') {
++      if (previous?.segmentId === evidence.segment_id)
++        return refusal('a full body repeats an active invocation segment');
++      json = representation.json;
++    } else {
 +      if (
 +        !previous ||
 +        previous.id !== representation.base_request_id ||
@@ -343152,6 +343175,9 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        'the selected decoder contradicts the request stream mode',
 +      );
 +    const segment = this.segment;
++    // A replacement output window starts a new evidence segment even if the
++    // caller's history context has not changed its own segment identity.
++    const evidenceSegmentId = `${segment}/${segmentId}`;
 +    const response = new ModelResponseRecorder(
 +      this.id,
 +      requestId,
@@ -343170,7 +343196,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      const candidate =
 +        segment === this.segment ? this.scopes.get(scope) : undefined;
 +      const previous =
-+        candidate?.segmentId === segmentId ? candidate : undefined;
++        candidate?.segmentId === evidenceSegmentId ? candidate : undefined;
 +      let retained = 0;
 +      while (
 +        previous &&
@@ -343184,7 +343210,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        sequence: this.sequence + 1,
 +        request_id: requestId,
 +        kv_scope: scope,
-+        segment_id: segmentId,
++        segment_id: evidenceSegmentId,
 +        prompt_id: promptId,
 +        owner,
 +        decode_policy: selectedPolicy,
@@ -343210,7 +343236,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      if (segment === this.segment)
 +        this.scopes.set(scope, {
 +          id: evidence.request_id,
-+          segmentId,
++          segmentId: evidenceSegmentId,
 +          body: { messages: body.messages },
 +        });
 +      await this.publish({ type: 'model_request', request: evidence });
@@ -351175,7 +351201,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,657 @@
+@@ -0,0 +1,661 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -351323,10 +351349,14 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        scope = request["kv_scope"]
 +        representation = request["body"]
 +        expected_messages: list[str] | None = None
++        previous = self.scopes.get(scope)
 +        if representation["kind"] == "full":
++            _require(
++                previous is None or previous.segment_id != request["segment_id"],
++                "full body repeats an active invocation segment",
++            )
 +            body = representation["json"]
 +        else:
-+            previous = self.scopes.get(scope)
 +            _require(
 +                previous is not None
 +                and previous.request_id == representation["base_request_id"]
@@ -351836,7 +351866,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,513 @@
+@@ -0,0 +1,530 @@
 +from __future__ import annotations
 +
 +import copy
@@ -352082,6 +352112,23 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    )
 +    with pytest.raises(RecordContractError):
 +        admit_all(wire)
++
++
++def test_full_body_requires_a_new_segment_for_its_scope() -> None:
++    wire = records("delta_requests")
++    first = request(wire)
++    second = request(wire, 1)
++    second["body"] = copy.deepcopy(first["body"])
++    second["body_bytes"] = first["body_bytes"]
++    second["body_sha256"] = first["body_sha256"]
++    second_index = next(i for i, row in enumerate(wire) if row.get("request") is second)
++    prefix = wire[: second_index + 1]
++    with pytest.raises(
++        RecordContractError, match="full body repeats an active invocation segment"
++    ):
++        admit_all(prefix)
++    second["segment_id"] = "next-segment"
++    admit_all(prefix)
 +
 +
 +@pytest.mark.parametrize(
@@ -356898,7 +356945,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,423 @@
+@@ -0,0 +1,425 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -356952,12 +356999,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                "missing, repeated, reordered or foreign request");
 +        String scope = (String) request.get("kv_scope");
 +        Map<String, Object> representation = object(request.get("body"));
++        RequestBody previous = scopes.get(scope);
 +        String body;
 +        List<String> expected = null;
 +        if ("full".equals(representation.get("kind"))) {
++            require(previous == null || !previous.segmentId.equals(request.get("segment_id")),
++                    "full body repeats an active invocation segment");
 +            body = (String) representation.get("json");
 +        } else {
-+            RequestBody previous = scopes.get(scope);
 +            long retain = integer(representation.get("retain_messages"));
 +            require(previous != null && previous.requestId.equals(representation.get("base_request_id"))
 +                    && previous.segmentId.equals(request.get("segment_id")) && retain <= previous.messages.size(),
@@ -359925,7 +359974,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,444 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -359937,6 +359986,45 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +import static org.junit.jupiter.api.Assertions.*;
 +
 +class RecordAdmissionTest {
++    @Test
++    void fullBodyRequiresANewSegmentForItsScope() throws Exception {
++        List<String> records = EvidenceFixtures.records("delta_requests");
++        JSONObject origin = null;
++        JSONObject first = null;
++        JSONObject second = null;
++        for (String line : records) {
++            JSONObject record = JSON.parseObject(line);
++            if ("stream_start".equals(record.getString("subtype"))) {
++                origin = record.getJSONObject("request_evidence_origin");
++            } else if ("model_request".equals(record.getString("type"))) {
++                if (first == null) first = record.getJSONObject("request");
++                else {
++                    second = record.getJSONObject("request");
++                    break;
++                }
++            }
++        }
++        assertNotNull(origin);
++        assertNotNull(first);
++        assertNotNull(second);
++        second.put("body", first.getJSONObject("body"));
++        second.put("body_bytes", first.get("body_bytes"));
++        second.put("body_sha256", first.get("body_sha256"));
++        RequestEvidence sameSegment = new RequestEvidence();
++        sameSegment.begin(origin);
++        sameSegment.request(first);
++        JSONObject repeated = second;
++        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
++                () -> sameSegment.request(repeated));
++        assertTrue(failure.getMessage().contains("full body repeats an active invocation segment"));
++
++        second.put("segment_id", "next-segment");
++        RequestEvidence nextSegment = new RequestEvidence();
++        nextSegment.begin(origin);
++        nextSegment.request(first);
++        nextSegment.request(second);
++    }
++
 +    @Test
 +    void everyRequestRequiresTheSelectedResponseDecoder() throws Exception {
 +        List<String> records = EvidenceFixtures.records("chat_request_response_history");
