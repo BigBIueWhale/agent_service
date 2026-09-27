@@ -8583,6 +8583,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "origin.kv_scope !== (scope ?? wire.session_id)", "requests.observeOrigin(origin, scope)",
         "partial.observeOrigin(origin)", "partial.completeMessage(text)",
         "partial.verifyTerminalResult(", "session.clear();",
+        "completion.lastAssistantText = generationParts(",
+        "Successful result contradicts accepted model text",
     ), label=label)
     _require_all(state, core + "utils/runtime-partial-stream.ts", (
         "runtime partial group has no full assistant message",
@@ -8733,6 +8735,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "session.requests.finish()", "partial.finish()", "self._pending_inputs == 0",
         "session.partials.clear()", "partial.complete_message(",
         "partial.verify_terminal_result(",
+        "session.last_assistant_text = generation.display_text()",
+        "successful result contradicts accepted model text",
+    ), label=label)
+    _require_all(state, python_sdk + "src/qwen_code_sdk/model_generation.py", (
+        "def display_text(self) -> str:",
+        'if not truthy(part.get("thought"))',
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
@@ -8836,6 +8844,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "session.requests.finish()", "partial.finish()", "terminal record identity is repeated",
         "session.partials.clear()", "partial.completeMessage(rendered.toString())",
         "partial.verifyTerminalResult(",
+        "session.lastAssistantText = generation.displayText;",
+        "successful result contradicts accepted model text",
+    ), label=label)
+    _require_all(state, java_cli + "protocol/GenerationEvidence.java", (
+        "final String displayText;", "displayText = display.toString();",
     ), label=label)
     _require_all(state, java_cli + "protocol/PartialOutput.java", (
         "runtime partial group has no full assistant message",

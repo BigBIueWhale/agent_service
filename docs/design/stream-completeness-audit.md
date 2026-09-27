@@ -756,3 +756,45 @@ output replay in the native/Python/Java readers, and input-rendering provenance
 remain open. Canonical resume reads its separate runtime chat JSONL; this
 change only tightens stdout admission and does not rewrite or reorder that
 history by source reading. An end-to-end resumed run remains unverified.
+
+## Successful model result coherence
+
+Source reading of `BaseJsonOutputAdapter.observeAdmittedMessage` and
+`buildResultMessage` shows that an ordinary successful root result uses the
+last accepted conversation generation's non-thought Part text. A runtime
+assistant row replaces that display text; an error carries its own diagnostic,
+and a structured result serializes its explicit value. The admitting readers
+previously allowed a successful result to disagree with the accepted
+generation. A Python full-schema source probe admitted both the fixture's
+unrelated `done` result and an arbitrary replacement while the generation and
+physical evidence stayed fixed.
+
+Native, TypeScript, Python and Java admission now retain the last accepted
+root conversation display text for the current turn and compare it with an
+ordinary successful result. Runtime assistant text takes precedence, while
+error and structured results keep their separate producer-defined sources.
+The readers derive this display text from every non-thought Part, including a
+Part that also contains a function call, matching the producer's
+`generationParts` projection. The SDK fixtures now give seven ordinary
+successful results the exact accepted-generation text instead of `done`.
+This applies to every normal headless session, regardless of model or context
+length. vLLM does not construct the client's terminal result, so the backend
+has no corresponding edit at this boundary.
+
+The Python admission suite passed 350 source cases after the change, including
+a changed-result refusal and valid runtime and structured overrides. The wider
+Python unit suite passed 746 cases. Its first run exposed synthetic positive
+records that repeated a full body within one request segment or paired runtime
+assistant text with an unrelated result; those fixtures now express the
+already-required delta and text bindings across their SDK copies. TypeScript
+formatting and lint passed for the changed files. The targeted TypeScript wire
+test was run and stopped at the installed generated-v5 validator's refusal of
+`stream_start`, before v10 admission. Native and Java cases were authored but
+not executed. This establishes a relation between
+two declared record views; it does not independently establish that the model
+generation came from the retained physical response bytes. Error diagnostics
+and structured-result serialization still need their own admission proof. A
+fresh pinned archive applied the sealed patch and matched all 1,141 final
+identities and the authoring source byte for byte. Native compilation, owner
+gates and end-to-end resume remain unverified. The canonical runtime chat JSONL
+and its replay order are unchanged by source reading.

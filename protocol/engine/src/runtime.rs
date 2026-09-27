@@ -451,6 +451,7 @@ struct ScopeState {
     terminal: Option<Terminal>,
     partial: PartialStreamState,
     runtime_text: Option<Arc<str>>,
+    model_text: Option<Arc<str>>,
 }
 struct ToolUse {
     name: String,
@@ -936,6 +937,11 @@ impl RuntimeContract {
                         .partial
                         .observe_completion(&admission.generation.origin, admission.accepted)?;
                     if admission.accepted {
+                        if scope.is_none() {
+                            state.model_text =
+                                Some(Arc::from(admission.generation.display_text.as_str()));
+                            state.runtime_text = None;
+                        }
                         for call in &admission.generation.calls {
                             if let Some(previous) = self
                                 .tool_uses
@@ -975,6 +981,9 @@ impl RuntimeContract {
                 }
                 state.partial.complete_message(&rendered, line)?;
                 state.runtime_text = Some(Arc::from(rendered));
+                if scope.is_none() {
+                    state.model_text = None;
+                }
             }
             EventKind::User => {
                 if let Some(blocks) = field(object, "message", line)?
@@ -1027,11 +1036,29 @@ impl RuntimeContract {
                 state.partial.finish(line)?;
                 state.terminal = Some(terminal(object, line, scope.is_none())?);
                 if state.runtime_text.as_deref().is_some_and(|rendered| {
-                    state.terminal.as_ref().and_then(|terminal| terminal.response.as_deref())
+                    state
+                        .terminal
+                        .as_ref()
+                        .and_then(|terminal| terminal.response.as_deref())
                         != Some(rendered)
                 }) {
                     return Err(ContractError::InvalidRecord(format!(
                         "events.jsonl line {line} terminal result contradicts runtime assistant text; inspect the complete original recording"
+                    )));
+                }
+                if scope.is_none()
+                    && !state.terminal.as_ref().expect("parsed terminal").is_error
+                    && object.get("structured_result").is_none()
+                    && state.model_text.as_deref().is_some_and(|rendered| {
+                        state
+                            .terminal
+                            .as_ref()
+                            .and_then(|terminal| terminal.response.as_deref())
+                            != Some(rendered)
+                    })
+                {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} successful result contradicts accepted model text; inspect the complete original recording"
                     )));
                 }
                 if scope.is_none() {
@@ -1326,7 +1353,7 @@ mod tests {
         let mut metadata: serde_json::Value = serde_json::from_str(&init()).unwrap();
         metadata["session_id"] = rows[0]["session_id"].clone();
         rows.insert(1, metadata);
-        rows.last_mut().unwrap()["result"] = serde_json::json!("done");
+        rows.last_mut().unwrap()["result"] = serde_json::json!("before  after");
         rows
     }
     fn issued_owner() -> RuntimeContract {
@@ -1652,17 +1679,31 @@ mod tests {
     #[test]
     fn runtime_text_requires_matching_partial_full_and_terminal_records() {
         let parts = [
-            ("start", r#"{"type":"message_start","message":{"id":"runtime","role":"assistant","content":[]}}"#),
-            ("block", r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"answer"}}"#),
+            (
+                "start",
+                r#"{"type":"message_start","message":{"id":"runtime","role":"assistant","content":[]}}"#,
+            ),
+            (
+                "block",
+                r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"answer"}}"#,
+            ),
             ("close", r#"{"type":"content_block_stop","index":0}"#),
         ];
-        let full = assistant("runtime-full", "null", r#"[{"type":"text","text":"answer"}]"#);
+        let full = assistant(
+            "runtime-full",
+            "null",
+            r#"[{"type":"text","text":"answer"}]"#,
+        );
         let mut accepted = initialized();
         for (id, event) in parts {
             admit(&mut accepted, &partial(id, event)).unwrap();
         }
         admit(&mut accepted, &full).unwrap();
-        admit(&mut accepted, &partial("stop", r#"{"type":"message_stop"}"#)).unwrap();
+        admit(
+            &mut accepted,
+            &partial("stop", r#"{"type":"message_stop"}"#),
+        )
+        .unwrap();
         admit(&mut accepted, &runtime_result("answer")).unwrap();
         assert_eq!(accepted.finish().unwrap().response, "answer");
 
@@ -1670,21 +1711,54 @@ mod tests {
         for (id, event) in parts {
             admit(&mut changed_full, &partial(id, event)).unwrap();
         }
-        let forged = assistant("runtime-full", "null", r#"[{"type":"text","text":"other"}]"#);
-        assert!(admit(&mut changed_full, &forged).unwrap_err().to_string()
+        let forged = assistant(
+            "runtime-full",
+            "null",
+            r#"[{"type":"text","text":"other"}]"#,
+        );
+        assert!(admit(&mut changed_full, &forged)
+            .unwrap_err()
+            .to_string()
             .contains("runtime partial text"));
 
         let mut missing_full = initialized();
         for (id, event) in parts {
             admit(&mut missing_full, &partial(id, event)).unwrap();
         }
-        assert!(admit(&mut missing_full, &partial("stop", r#"{"type":"message_stop"}"#))
-            .unwrap_err().to_string().contains("no full assistant message"));
+        assert!(admit(
+            &mut missing_full,
+            &partial("stop", r#"{"type":"message_stop"}"#)
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("no full assistant message"));
 
         let mut changed_result = initialized();
         admit(&mut changed_result, &full).unwrap();
         assert!(admit(&mut changed_result, &runtime_result("other"))
-            .unwrap_err().to_string().contains("terminal result contradicts"));
+            .unwrap_err()
+            .to_string()
+            .contains("terminal result contradicts"));
+    }
+
+    #[test]
+    fn successful_model_result_requires_the_last_accepted_conversation_text() {
+        let mut accepted = owner();
+        for row in fixture() {
+            admit(&mut accepted, &row.to_string()).unwrap();
+        }
+        assert_eq!(accepted.finish().unwrap().response, "before  after");
+
+        let mut changed = fixture();
+        changed.last_mut().unwrap()["result"] = serde_json::json!("forged terminal");
+        let mut owner = owner();
+        for row in changed.iter().take(changed.len() - 1) {
+            admit(&mut owner, &row.to_string()).unwrap();
+        }
+        assert!(admit(&mut owner, &changed.last().unwrap().to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("successful result contradicts accepted model text"));
     }
 
     #[test]

@@ -308904,9 +308904,12 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/core/src/utils/runtime-contract-admission.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.ts
-@@ -0,0 +1,443 @@
+@@ -0,0 +1,467 @@
 +import { ModelRequestStreamReplay } from '../core/model-request-evidence.js';
-+import { generationHistory } from '../core/model-generation.js';
++import {
++  generationHistory,
++  generationParts,
++} from '../core/model-generation.js';
 +import {
 +  STREAM_CONTRACT_SHA256,
 +  validateGoalSnapshot,
@@ -308978,6 +308981,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +      needsResult: boolean;
 +      channel: 'undecided' | 'query' | 'dual' | 'ended';
 +      issuedTools: Map<string, { scope: string | null; returned: boolean }>;
++      lastAssistantText?: string;
 +    }
 +  >();
 +  private pendingInputs = 0;
@@ -309103,6 +309107,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +            completion.started = true;
 +            completion.needsResult = true;
 +            completion.channel = 'undecided';
++            completion.lastAssistantText = undefined;
 +          } else if (!completion.started) {
 +            throw new Error(
 +              'Record precedes stream_start; retain the complete original stdout',
@@ -309170,6 +309175,14 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +            ) {
 +              partial.observeCompletion(admitted.completion);
 +              if (admitted.completion.disposition === 'accepted') {
++                if (scope === null) {
++                  completion.lastAssistantText = generationParts(
++                    admitted.envelope,
++                  )
++                    .filter((part) => !part.thought)
++                    .map((part) => part.text ?? '')
++                    .join('');
++                }
 +                for (const part of generationHistory(admitted.envelope).parts ??
 +                  []) {
 +                  const id = part.functionCall?.id;
@@ -309185,9 +309198,19 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +            completedGeneration = admitted;
 +          }
 +          if (wire.type === 'result' && scope === null) {
++            if (
++              envelope['is_error'] === false &&
++              !('structured_result' in envelope) &&
++              completion.lastAssistantText !== undefined &&
++              envelope['result'] !== completion.lastAssistantText
++            )
++              throw new Error(
++                'Successful result contradicts accepted model text; inspect the complete original recording',
++              );
 +            requests.finish(envelope['request_evidence']);
 +            requests.requireUsage(envelope['usage']);
 +            completion.needsResult = false;
++            completion.lastAssistantText = undefined;
 +            if (this.pendingInputs !== 0) this.pendingInputs--;
 +          }
 +          if (
@@ -309262,6 +309285,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +              .map((block) => block.text)
 +              .join('');
 +            partial.completeMessage(text);
++            if (scope === null) completion.lastAssistantText = undefined;
 +          }
 +          if (wire.type === 'result') {
 +            partial.finish();
@@ -320759,7 +320783,7 @@ diff --git a/packages/sdk-python/tests/unit/test_query_core.py b/packages/sdk-py
 -            "num_turns": 1,
 -        }
 -    )
-+    transport.push(_runtime_result())
++    transport.push({**_runtime_result(), "result": "hi"})
      # Signal end of transport stream so the router finishes naturally.
      await transport.close()
  
@@ -350960,7 +350984,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/__init__.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
-@@ -0,0 +1,331 @@
+@@ -0,0 +1,345 @@
 +"""Admission of the shared versioned CLI stream before SDK interpretation."""
 +
 +from __future__ import annotations
@@ -351001,6 +351025,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +    channel: Literal["undecided", "query", "dual", "ended"] = "undecided"
 +    terminal_ids: set[str] = field(default_factory=set)
 +    issued_tools: dict[str, _IssuedTool] = field(default_factory=dict)
++    last_assistant_text: str | None = None
 +
 +
 +@dataclass
@@ -351122,6 +351147,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +            session.started = True
 +            session.needs_result = True
 +            session.channel = "undecided"
++            session.last_assistant_text = None
 +        else:
 +            _require(session.started, "record precedes stream_start")
 +            _require(session.channel != "ended", "data follows session_end")
@@ -351165,6 +351191,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +            if _conversation_generation(generation, scope, record["session_id"]):
 +                partial.observe_completion(record["completion"])
 +                if record["completion"]["disposition"] == "accepted":
++                    if scope is None:
++                        session.last_assistant_text = generation.display_text()
 +                    for call in generation.executable_calls():
 +                        identity = call["id"]
 +                        _require(
@@ -351181,9 +351209,17 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +            )
 +            session.terminal_ids.add(record["uuid"])
 +            if scope is None:
++                _require(
++                    record["is_error"]
++                    or "structured_result" in record
++                    or session.last_assistant_text is None
++                    or record.get("result") == session.last_assistant_text,
++                    "successful result contradicts accepted model text",
++                )
 +                session.requests.summary(record["request_evidence"])
 +                session.requests.require_usage(record["usage"])
 +                session.needs_result = False
++                session.last_assistant_text = None
 +                if self._pending_inputs:
 +                    self._pending_inputs -= 1
 +            partial.finish()
@@ -351261,6 +351297,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +            partial.complete_message(
 +                "".join(block["text"] for block in record["message"]["content"])
 +            )
++            if scope is None:
++                session.last_assistant_text = None
 +        elif (
 +            kind == "system"
 +            and subtype == "task_notification"
@@ -351992,7 +352030,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,563 @@
+@@ -0,0 +1,586 @@
 +from __future__ import annotations
 +
 +import copy
@@ -352076,6 +352114,29 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    owner.complete_message("first turn")
 +    owner.verify_terminal_result("first turn")
 +    owner.verify_terminal_result("a later turn has its own result")
++
++
++def test_successful_model_result_matches_last_accepted_conversation_text() -> None:
++    wire = records("chat_request_response_history")
++    next(row for row in wire if row["type"] == "result")["result"] = "forged terminal"
++    with pytest.raises(RecordContractError, match="successful result contradicts accepted model text"):
++        admit_all(wire).finish()
++
++
++def test_explicit_structured_or_runtime_result_can_follow_model_text() -> None:
++    structured = records("chat_request_response_history")
++    terminal = next(row for row in structured if row["type"] == "result")
++    terminal["structured_result"] = {"ok": True}
++    terminal["result"] = '{"ok":true}'
++    admit_all(structured).finish()
++
++    runtime = records("chat_request_response_history")
++    local = next(row for row in records("runtime_partial_no_generation") if row["type"] == "assistant")
++    local["uuid"] = "runtime-after-model"
++    local["session_id"] = runtime[0]["session_id"]
++    runtime.insert(-1, local)
++    runtime[-1]["result"] = local["message"]["content"][0]["text"]
++    admit_all(runtime).finish()
 +
 +
 +@pytest.mark.parametrize(
@@ -352740,7 +352801,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -353105,7 +353166,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -353394,7 +353455,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -354048,7 +354109,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -354857,7 +354918,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -355052,7 +355113,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -355286,7 +355347,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -356787,7 +356848,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
-@@ -0,0 +1,265 @@
+@@ -0,0 +1,276 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -356884,6 +356945,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            session.started = true;
 +            session.needsResult = true;
 +            session.channel = "undecided";
++            session.lastAssistantText = null;
 +        } else {
 +            require(session.started, "record precedes stream_start");
 +            require(!"ended".equals(session.channel), "data follows session_end");
@@ -356927,6 +356989,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                if (generation.conversation(scope, sessionId)) {
 +                    partial.completion(completion);
 +                    if ("accepted".equals(completion.get("disposition"))) {
++                        if (scope == null) {
++                            session.lastAssistantText = generation.displayText;
++                        }
 +                        for (GenerationEvidence.Call call : generation.calls) {
 +                            require(!session.issuedTools.containsKey(call.id),
 +                                    "accepted generation repeats a tool use identity");
@@ -356939,9 +357004,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            case "result":
 +                require(session.terminals.add((String) record.get("uuid")), "terminal record identity is repeated");
 +                if (scope == null) {
++                    require(Boolean.TRUE.equals(record.get("is_error")) || record.containsKey("structured_result")
++                            || session.lastAssistantText == null
++                            || session.lastAssistantText.equals(record.get("result")),
++                            "successful result contradicts accepted model text");
 +                    session.requests.summary(object(record.get("request_evidence")));
 +                    session.requests.requireUsage(object(record.get("usage")));
 +                    session.needsResult = false;
++                    session.lastAssistantText = null;
 +                    if (pendingInputs != 0) {
 +                        pendingInputs--;
 +                    }
@@ -357004,6 +357074,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                rendered.append((String) object(item).get("text"));
 +            }
 +            partial.completeMessage(rendered.toString());
++            if (scope == null) session.lastAssistantText = null;
 +        } else if ("system".equals(kind) && "task_notification".equals(subtype)) {
 +            Map<String, Object> data = object(record.get("data"));
 +            if (data.containsKey("usage")) {
@@ -357042,6 +357113,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        private boolean started;
 +        private boolean needsResult;
 +        private String channel = "undecided";
++        private String lastAssistantText;
 +    }
 +
 +    private static final class IssuedTool {
@@ -360168,7 +360240,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,482 @@
+@@ -0,0 +1,496 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -360216,6 +360288,20 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        owner.completeMessage("first turn");
 +        owner.verifyTerminalResult("first turn");
 +        owner.verifyTerminalResult("a later turn has its own result");
++    }
++
++    @Test
++    void successfulModelResultMatchesLastAcceptedConversationText() throws Exception {
++        List<String> records = EvidenceFixtures.records("chat_request_response_history");
++        RecordAdmission admission = new RecordAdmission();
++        for (String line : records.subList(0, records.size() - 1)) {
++            admission.admit(line, null);
++        }
++        JSONObject terminal = JSON.parseObject(records.get(records.size() - 1));
++        terminal.put("result", "forged terminal");
++        RecordContractException failure = assertThrows(RecordContractException.class,
++                () -> admission.admit(terminal.toJSONString(JSONWriter.Feature.WriteNulls), null));
++        assertTrue(failure.getMessage().contains("successful result contradicts accepted model text"));
 +    }
 +
 +    @Test
@@ -361596,7 +361682,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -361961,7 +362047,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -362250,7 +362336,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -362904,7 +362990,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -363713,7 +363799,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -363908,7 +363994,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -364142,7 +364228,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -364228,7 +364314,7 @@ diff --git a/packages/core/src/utils/runtime-user-input.test.ts b/packages/core/
 diff --git a/packages/sdk-typescript/test/unit/recordCompleteness.test.ts b/packages/sdk-typescript/test/unit/recordCompleteness.test.ts
 --- /dev/null
 +++ b/packages/sdk-typescript/test/unit/recordCompleteness.test.ts
-@@ -0,0 +1,611 @@
+@@ -0,0 +1,621 @@
 +import { AbortError } from '../../src/types/errors.js';
 +import { afterEach, expect, it, vi } from 'vitest';
 +import { readFileSync } from 'node:fs';
@@ -364461,6 +364547,16 @@ diff --git a/packages/sdk-typescript/test/unit/recordCompleteness.test.ts b/pack
 +    expect(got.records).toEqual(records);
 +    expect(got.error).toBeUndefined();
 +  }
++});
++
++it('refuses a successful result that changes the last accepted model text', () => {
++  const records = structuredClone(vector('chat_request_response_history'));
++  const terminal = records.find((record) => record['type'] === 'result');
++  if (!terminal) throw new Error('fixture has no terminal result');
++  terminal['result'] = 'forged terminal';
++  expect(() => admit(records)).toThrow(
++    'Successful result contradicts accepted model text',
++  );
 +});
 +
 +it('natural EOF rejects pending controls and the output with the same failure', async () => {
@@ -365024,7 +365120,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -365389,7 +365485,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -365678,7 +365774,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -366332,7 +366428,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -367141,7 +367237,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -367336,7 +367432,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 2,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 2,
 +        "usageReports": 2,
@@ -367570,7 +367666,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 1,
 +        "usageReports": 1,
@@ -389410,7 +389506,7 @@ diff --git a/packages/core/src/utils/strict-json.ts b/packages/core/src/utils/st
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidence.java
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,346 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -389438,6 +389534,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    final Map<String, Object> origin;
 +    final Map<String, Long> usage;
 +    final String text;
++    final String displayText;
 +    final String thinking;
 +    final List<Map<String, Object>> incomplete;
 +    final List<Call> calls;
@@ -389469,6 +389566,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        List<Map<String, Object>> normalized = new ArrayList<>();
 +        List<Map<String, Object>> stopped = new ArrayList<>();
 +        StringBuilder visible = new StringBuilder();
++        StringBuilder display = new StringBuilder();
 +        StringBuilder thought = new StringBuilder();
 +        Map<String, Long> observedUsage = null;
 +        String finish = null;
@@ -389504,6 +389602,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            for (int index = 0; index < parts.size(); index++) {
 +                Map<String, Object> part = object(parts.get(index));
 +                Object rawCall = part.get("functionCall");
++                if (!truthy(part.get("thought"))) {
++                    display.append((String) part.getOrDefault("text", ""));
++                }
 +                if (!truthy(rawCall)) {
 +                    (truthy(part.get("thought")) ? thought : visible).append(part.getOrDefault("text", ""));
 +                }
@@ -389552,6 +389653,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        require(Objects.equals(usage, observedUsage) && Objects.equals(envelope.get("finish_reason"), finish),
 +                "generation summary contradicts complete observations");
 +        text = visible.toString();
++        displayText = display.toString();
 +        thinking = thought.toString();
 +        incomplete = Collections.unmodifiableList(stopped);
 +        history = history(normalized);
@@ -390192,7 +390294,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-view.json b/packages/sdk-java/qwencode/src/test/resources/accepted-generation-view.json
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/resources/accepted-generation-view.json
-@@ -0,0 +1,2683 @@
+@@ -0,0 +1,2687 @@
 +{
 +  "rich": {
 +    "requests": [
@@ -390512,7 +390614,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -390866,7 +390968,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -391220,7 +391322,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -391574,7 +391676,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -392323,8 +392425,12 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "body_sha256": "316336fbd3f1055a94810632b3fac2e6a7400c03842554dc9350cc3d6050d3b3",
 +          "body_bytes": 110,
 +          "body": {
-+            "kind": "full",
-+            "json": "{\"model\":\"configured-model\",\"stream\":false,\"kv_scope\":\"session-a\",\"messages\":[{\"role\":\"user\",\"content\":\"go\"}]}"
++            "kind": "delta",
++            "base_request_id": "request-1",
++            "retain_messages": 1,
++            "added_messages": [],
++            "prefix": "{\"model\":\"configured-model\",\"stream\":false,\"kv_scope\":\"session-a\",\"messages\":[",
++            "suffix": "]}"
 +          },
 +          "decode_policy": {
 +            "mode": "nonstream",
@@ -392485,7 +392591,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -394064,7 +394170,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/generation_view.py b/packages
 diff --git a/packages/sdk-python/src/qwen_code_sdk/model_generation.py b/packages/sdk-python/src/qwen_code_sdk/model_generation.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/model_generation.py
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,405 @@
 +"""Immutable decoded generation evidence, distinct from physical response bytes."""
 +
 +from __future__ import annotations
@@ -394353,6 +394459,19 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/model_generation.py b/package
 +            incomplete,
 +        )
 +
++    def display_text(self) -> str:
++        visible = [
++            part
++            for observation in self.envelope["observations"]
++            for part in parts(observation["response"])
++            if not truthy(part.get("thought"))
++        ]
++        require(
++            all("text" not in part or isinstance(part["text"], str) for part in visible),
++            "result display text is not a string",
++        )
++        return "".join(part.get("text", "") for part in visible)
++
 +    def history_parts(self) -> list[dict[str, Any]]:
 +        normalized: list[dict[str, Any]] = []
 +        for observation in self.envelope["observations"]:
@@ -394492,7 +394611,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream_schema.py b/packages/s
 diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/packages/sdk-python/tests/fixtures/accepted-generation-view.json
 --- /dev/null
 +++ b/packages/sdk-python/tests/fixtures/accepted-generation-view.json
-@@ -0,0 +1,2683 @@
+@@ -0,0 +1,2687 @@
 +{
 +  "rich": {
 +    "requests": [
@@ -394812,7 +394931,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -395166,7 +395285,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -395520,7 +395639,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -395874,7 +395993,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -396623,8 +396742,12 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "body_sha256": "316336fbd3f1055a94810632b3fac2e6a7400c03842554dc9350cc3d6050d3b3",
 +          "body_bytes": 110,
 +          "body": {
-+            "kind": "full",
-+            "json": "{\"model\":\"configured-model\",\"stream\":false,\"kv_scope\":\"session-a\",\"messages\":[{\"role\":\"user\",\"content\":\"go\"}]}"
++            "kind": "delta",
++            "base_request_id": "request-1",
++            "retain_messages": 1,
++            "added_messages": [],
++            "prefix": "{\"model\":\"configured-model\",\"stream\":false,\"kv_scope\":\"session-a\",\"messages\":[",
++            "suffix": "]}"
 +          },
 +          "decode_policy": {
 +            "mode": "nonstream",
@@ -396785,7 +396908,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -398256,7 +398379,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-output-scope.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/packages/sdk-python/tests/unit/test_accepted_generation_view.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_accepted_generation_view.py
-@@ -0,0 +1,804 @@
+@@ -0,0 +1,805 @@
 +from __future__ import annotations
 +
 +import copy
@@ -398544,6 +398667,7 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +            },
 +        }
 +        result = copy.deepcopy(f["records"][-1])
++        result["result"] = "Runtime notice"
 +        result["request_evidence"]["request_count"] = 0
 +        result["usage"] = {
 +            "requests": 0,
@@ -400081,7 +400205,7 @@ diff --git a/packages/sdk-typescript/src/query/generation-view.ts b/packages/sdk
 diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json b/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 --- /dev/null
 +++ b/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
-@@ -0,0 +1,2683 @@
+@@ -0,0 +1,2687 @@
 +{
 +  "rich": {
 +    "requests": [
@@ -400401,7 +400525,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -400755,7 +400879,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -401109,7 +401233,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -401463,7 +401587,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -402212,8 +402336,12 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "body_sha256": "316336fbd3f1055a94810632b3fac2e6a7400c03842554dc9350cc3d6050d3b3",
 +          "body_bytes": 110,
 +          "body": {
-+            "kind": "full",
-+            "json": "{\"model\":\"configured-model\",\"stream\":false,\"kv_scope\":\"session-a\",\"messages\":[{\"role\":\"user\",\"content\":\"go\"}]}"
++            "kind": "delta",
++            "base_request_id": "request-1",
++            "retain_messages": 1,
++            "added_messages": [],
++            "prefix": "{\"model\":\"configured-model\",\"stream\":false,\"kv_scope\":\"session-a\",\"messages\":[",
++            "suffix": "]}"
 +          },
 +          "decode_policy": {
 +            "mode": "nonstream",
@@ -402374,7 +402502,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          }
 +        },
 +        "permission_denials": [],
-+        "result": "done",
++        "result": "Hello Ω\n",
 +        "request_evidence": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1,
@@ -410199,7 +410327,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/resources/stream-contract-v10.j
 diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v10.json b/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v10.json
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v10.json
-@@ -0,0 +1,836 @@
+@@ -0,0 +1,837 @@
 +{
 +  "root_accepted": [
 +    {
@@ -410400,7 +410528,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v
 +        "request_count": 1,
 +        "open_response_ids": [],
 +        "open_attempt_ids": []
-+      }
++      },
++      "result": "before  after"
 +    }
 +  ],
 +  "root_abandoned": [
@@ -414359,7 +414488,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v10.json b/pa
 diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v10.json b/packages/sdk-python/tests/fixtures/generation-evidence-v10.json
 --- /dev/null
 +++ b/packages/sdk-python/tests/fixtures/generation-evidence-v10.json
-@@ -0,0 +1,836 @@
+@@ -0,0 +1,837 @@
 +{
 +  "root_accepted": [
 +    {
@@ -414560,7 +414689,8 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v10.json b/p
 +        "request_count": 1,
 +        "open_response_ids": [],
 +        "open_attempt_ids": []
-+      }
++      },
++      "result": "before  after"
 +    }
 +  ],
 +  "root_abandoned": [
@@ -415199,7 +415329,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v10.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/packages/sdk-python/tests/unit/test_generation_completion_v10.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v10.py
-@@ -0,0 +1,711 @@
+@@ -0,0 +1,725 @@
 +from __future__ import annotations
 +
 +import base64
@@ -415211,6 +415341,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +import pytest
 +
 +from qwen_code_sdk.record_admission import RecordAdmission, RecordContractError
++from qwen_code_sdk.record_evidence import _split_request
 +from qwen_code_sdk.model_generation import Generation
 +from qwen_code_sdk.stream_schema import STREAM_CONTRACT_SHA256, STREAM
 +
@@ -415338,7 +415469,19 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +            )
 +        if value["kind"] == "history":
 +            value["disposition"] = "abandoned"
-+    item(wire, "model_request")["request"]["sequence"] = 2
++    next_request = item(wire, "model_request")["request"]
++    next_request["sequence"] = 2
++    prefix, messages, suffix, _ = _split_request(
++        next_request["body"]["json"], next_request["kv_scope"]
++    )
++    next_request["body"] = {
++        "kind": "delta",
++        "base_request_id": first_id,
++        "retain_messages": len(messages),
++        "added_messages": [],
++        "prefix": prefix,
++        "suffix": suffix,
++    }
 +    wire[1:1] = [first_request, *responses]
 +    item(wire, "model_attempt_completion")["completion"]["request_ids"] = [
 +        first_id,
@@ -415571,6 +415714,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +def test_runtime_full_message_is_independent_of_completed_model_output():
 +    wire = records()
 +    insert_before(wire, "result", [runtime_message(wire)])
++    item(wire, "result")["result"] = "runtime observation"
 +    admit(wire)
 +
 +

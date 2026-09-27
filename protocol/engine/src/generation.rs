@@ -91,6 +91,7 @@ pub(crate) struct Generation {
     pub observation_count: u64,
     pub source_requests: Vec<String>,
     pub text: String,
+    pub display_text: String,
     pub thinking: String,
     pub calls: Vec<Call>,
     pub incomplete: Vec<IncompleteCall>,
@@ -239,6 +240,7 @@ impl Generation {
             observation_count,
             source_requests: Vec::with_capacity(observations.len()),
             text: String::new(),
+            display_text: String::new(),
             thinking: String::new(),
             calls: Vec::new(),
             incomplete: Vec::new(),
@@ -302,6 +304,14 @@ impl Generation {
             }
             let parts = primary_parts(response);
             for part in &parts {
+                if part.get("text").is_some_and(|value| !value.is_string()) {
+                    return Err(refusal("observed Part text is not a string"));
+                }
+                if !truthy(part.get("thought")) {
+                    generation
+                        .display_text
+                        .push_str(part.get("text").and_then(Value::as_str).unwrap_or(""));
+                }
                 if !truthy(part.get("functionCall")) {
                     let target = if truthy(part.get("thought")) {
                         &mut generation.thinking
