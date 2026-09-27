@@ -41337,7 +41337,7 @@ diff --git a/packages/cli/src/nonInteractive/control/controllers/systemControlle
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-@@ -1,83 +1,124 @@
+@@ -1,83 +1,127 @@
 +import { ModelRequestJournal } from '@qwen-code/qwen-code-core';
  /**
   * @license
@@ -41400,6 +41400,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
   */
  class TestJsonOutputAdapter extends BaseJsonOutputAdapter {
 +  async flush(): Promise<void> {}
++  protected subscribeOutputProgress(): () => void {
++    return () => {};
++  }
    readonly emittedMessages: CLIMessage[] = [];
 +  readonly finalizedGroups: Array<{
 +    origin: ModelOutputOrigin | null;
@@ -41480,7 +41483,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      return this.buildMessage(parentToolUseId);
    }
  
-@@ -108,31 +149,30 @@
+@@ -108,31 +152,30 @@
      this.startAssistantMessageInternal(state);
    }
  
@@ -41516,7 +41519,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      state: MessageState,
      request: { callId: string; name: string; args: unknown },
      parentToolUseId: string | null,
-@@ -153,22 +193,48 @@
+@@ -153,22 +196,48 @@
      parentToolUseId: string,
    ) {
      return this.createSubagentToolUseBlock(state, toolCall, parentToolUseId);
@@ -41568,7 +41571,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  }
  
  describe('BaseJsonOutputAdapter', () => {
-@@ -185,16 +251,13 @@
+@@ -185,16 +254,13 @@
        const state = adapter.exposeCreateMessageState();
  
        expect(state.messageId).toBeNull();
@@ -41586,7 +41589,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      });
    });
  
-@@ -219,67 +282,267 @@
+@@ -219,67 +285,267 @@
        const state2 = adapter.exposeGetMessageState('parent-2');
  
        expect(state1).not.toBe(state2);
@@ -41898,7 +41901,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        // Manipulate the actual main agent state used by buildMessage
        const state = adapter['mainAgentMessageState'];
        state.messageId = null; // Explicitly set to null to test error case
-@@ -288,63 +551,92 @@
+@@ -288,63 +554,92 @@
        expect(() => adapter.exposeBuildMessage(null)).toThrow(
          'Message not started',
        );
@@ -42000,7 +42003,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  
    describe('finalizePendingBlocks', () => {
      it('should finalize text blocks', () => {
-@@ -437,13 +729,13 @@
+@@ -437,13 +732,13 @@
  
        expect(state.currentBlockType).toBe('text');
        expect(state.blocks).toHaveLength(1);
@@ -42015,7 +42018,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          value: 'text',
        });
  
-@@ -457,33 +749,41 @@
+@@ -457,33 +752,41 @@
    describe('startAssistantMessageInternal', () => {
      it('should reset message state', () => {
        const state = adapter.exposeCreateMessageState();
@@ -42060,7 +42063,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          value: 'test',
        });
  
-@@ -498,13 +798,13 @@
+@@ -498,13 +801,13 @@
  
        expect(message1).toEqual(message2);
        expect(state.finalized).toBe(true);
@@ -42075,7 +42078,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          value: 'test',
        });
  
-@@ -516,13 +816,13 @@
+@@ -516,13 +819,13 @@
        expect(message).toBeDefined();
        expect(state.finalized).toBe(true);
        expect(adapter.emittedMessages).toContain(message);
@@ -42090,7 +42093,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          value: 'test',
        });
        state.openBlocks.add(0);
-@@ -533,26 +833,26 @@
+@@ -533,26 +836,26 @@
      });
    });
  
@@ -42119,7 +42122,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  
        expect(state.blocks).toHaveLength(1);
        expect(state.blocks[0]).toMatchObject({
-@@ -560,151 +860,74 @@
+@@ -560,151 +863,74 @@
          text: 'Hello World',
        });
      });
@@ -42307,7 +42310,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          {
            callId: 'tool-1',
            name: 'test_tool',
-@@ -720,14 +943,14 @@
+@@ -720,14 +946,14 @@
          name: 'test_tool',
          input: { param: 'value' },
        });
@@ -42324,7 +42327,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          state,
          {
            callId: 'tool-1',
-@@ -743,49 +966,49 @@
+@@ -743,49 +969,49 @@
      });
    });
  
@@ -42379,7 +42382,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        adapter.processEvent({
          type: GeminiEventType.Content,
          value: 'Hello',
-@@ -796,22 +1019,21 @@
+@@ -796,22 +1022,21 @@
        expect(state.blocks[0]).toMatchObject({
          type: 'text',
          text: 'Hello',
@@ -42405,7 +42408,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        adapter.processEvent({
          type: GeminiEventType.Citation,
          value: 123,
-@@ -819,30 +1041,36 @@
+@@ -819,30 +1044,36 @@
  
        const state = adapter['mainAgentMessageState'];
        expect(state.blocks).toHaveLength(0);
@@ -42448,7 +42451,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            callId: 'tool-1',
            name: 'test_tool',
            args: { param: 'value' },
-@@ -858,63 +1086,279 @@
+@@ -858,63 +1089,279 @@
          id: 'tool-1',
          name: 'test_tool',
          input: { param: 'value' },
@@ -42738,7 +42741,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        expect(adapter.emittedMessages).toContain(message);
      });
    });
-@@ -1070,13 +1514,13 @@
+@@ -1070,13 +1517,13 @@
      const persistedOutputCases: Array<[string, string[] | undefined]> = [
        ['unhandled', undefined],
        ['handled without artifact', []],
@@ -42753,7 +42756,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            callId: 'tool-large',
            name: 'test_tool',
            args: {},
-@@ -1107,18 +1551,13 @@
+@@ -1107,18 +1554,13 @@
            block.type !== 'tool_result' ||
            typeof block.content !== 'string'
          ) {
@@ -42773,7 +42776,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          expect(response.resultDisplay).toBe(display);
          expect(response.persistedOutputFiles).toBe(persistedOutputFiles);
        },
-@@ -1153,13 +1592,14 @@
+@@ -1153,13 +1595,14 @@
        }
        expect(Object.hasOwn(block, 'content')).toBe(false);
      });
@@ -42789,7 +42792,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
                functionResponse: {
                  response: {
                    output: 'HEAD-' + 'p'.repeat(100_000) + '-TAIL',
-@@ -1170,63 +1610,63 @@
+@@ -1170,63 +1613,63 @@
            resultDisplay: undefined,
            error: undefined,
          },
@@ -42887,7 +42890,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should emit system message', () => {
        adapter.emitSystemMessage('test_subtype', { data: 'value' });
  
-@@ -1244,12 +1684,32 @@
+@@ -1244,12 +1687,32 @@
  
        const message = adapter.emittedMessages[0];
        if (message.type === 'system') {
@@ -42920,7 +42923,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should be a no-op in base class (does not emit any message)', () => {
        const request: ToolCallRequestInfo = {
          callId: 'tool-call-1',
-@@ -1268,25 +1728,23 @@
+@@ -1268,25 +1731,23 @@
        expect(adapter.emittedMessages).toHaveLength(0);
      });
    });
@@ -42949,7 +42952,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1301,13 +1759,13 @@
+@@ -1301,13 +1762,13 @@
          expect(result.num_turns).toBe(1);
        }
      });
@@ -42964,7 +42967,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1320,13 +1778,13 @@
+@@ -1320,13 +1781,13 @@
          expect(result.error?.message).toBe('Test error');
        }
      });
@@ -42979,7 +42982,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1334,33 +1792,58 @@
+@@ -1334,33 +1795,58 @@
  
        if (!result.is_error) {
          expect(result.result).toBe('Custom summary');
@@ -43055,7 +43058,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            totalSuccess: 4,
            totalFail: 1,
            totalDurationMs: 1000,
-@@ -1375,13 +1858,13 @@
+@@ -1375,13 +1861,13 @@
          files: {
            totalLinesAdded: 10,
            totalLinesRemoved: 5,
@@ -43070,7 +43073,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +1875,13 @@
+@@ -1392,13 +1878,13 @@
        }
      });
  
@@ -43085,7 +43088,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +1891,13 @@
+@@ -1408,13 +1894,13 @@
        }
      });
  
@@ -43100,7 +43103,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +1909,15 @@
+@@ -1426,15 +1912,15 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -43118,7 +43121,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +1934,13 @@
+@@ -1451,13 +1937,13 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -43133,7 +43136,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1474,41 +1957,53 @@
+@@ -1474,41 +1960,53 @@
    });
  
    describe('startSubagentAssistantMessage', () => {
@@ -43192,7 +43195,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1521,83 +2016,123 @@
+@@ -1521,83 +2019,123 @@
          expect(errorResult.num_turns).toBe(5);
        }
      });
@@ -43369,7 +43372,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          status: 'success',
          resultDisplay: 'Result',
        };
-@@ -1619,26 +2154,267 @@
+@@ -1619,26 +2157,267 @@
      });
    });
  
@@ -43640,7 +43643,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1764,12 +2540,46 @@
+@@ -1764,12 +2543,46 @@
  
          const result = toolResultContent(response);
  
@@ -43687,7 +43690,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,17 +2620,17 @@
+@@ -1810,17 +2623,17 @@
            error: undefined,
            errorType: undefined,
          };
@@ -43707,7 +43710,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
              type: 'vision_bridge_notice' as const,
              summary: 'Failed to read PDF after rendering pages 20-23',
              notice: 'Vision bridge (qwen3-vl-plus) failed.',
-@@ -1836,17 +2646,18 @@
+@@ -1836,17 +2649,18 @@
            errorType: undefined,
          };
  
@@ -43727,7 +43730,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
              type: 'vision_bridge_notice' as const,
              summary: 'Failed to read PDF after rendering pages 20-23',
              notice: 'Vision bridge (qwen3-vl-plus) failed.',
-@@ -1867,16 +2678,57 @@
+@@ -1867,16 +2681,59 @@
            errorType: undefined,
          };
  
@@ -43777,7 +43780,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +          errorType: undefined,
 +        };
 +
-+        expect(toolResultContent(response)).toBe('Partial output\nRead failed.');
++        expect(toolResultContent(response)).toBe(
++          'Partial output\nRead failed.',
++        );
 +      });
 +
        it('should extract content from responseParts', () => {
@@ -43786,7 +43791,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: undefined,
            responseParts: [{ text: 'Result' }],
            error: undefined,
-@@ -1992,19 +2844,8 @@
+@@ -1992,19 +2849,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -43975,7 +43980,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    ): void;
  
    getSessionId(): string;
-@@ -148,32 +167,134 @@
+@@ -148,32 +167,141 @@
    // Main agent message state
    protected mainAgentMessageState: MessageState;
  
@@ -44064,10 +44069,15 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +    }
 +    this.requestOriginPublished = true;
 +    const requests = this.takeModelEvidence();
-+    requestOutput.setDrain(async () => {
-+      for (const evidence of this.takeModelEvidence())
-+        this.emitMessageImpl(evidence);
-+      await this.flush();
++    requestOutput.setDrain(async (progress) => {
++      const unsubscribe = this.subscribeOutputProgress(progress);
++      try {
++        for (const evidence of this.takeModelEvidence())
++          this.emitMessageImpl(evidence);
++        await this.flush();
++      } finally {
++        unsubscribe();
++      }
 +    });
 +    if (message.type === 'system' && message.subtype === 'session_end') {
 +      const end = { ...message, ...requestOutput.terminalEvidence() };
@@ -44093,6 +44103,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +  }
 +
 +  abstract flush(): Promise<void>;
++
++  protected abstract subscribeOutputProgress(progress: () => void): () => void;
 +  abstract finalizeAssistantMessage(): CLIAssistantMessage | null;
 +
 +  closeRequestEvidence(): void {
@@ -44116,7 +44128,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      };
    }
  
-@@ -193,90 +314,46 @@
+@@ -193,90 +321,46 @@
        state = this.createMessageState();
        this.subagentMessageStates.set(parentToolUseId, state);
      }
@@ -44227,7 +44239,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Finalizes pending blocks (text or thinking) by closing them.
-@@ -369,13 +446,12 @@
+@@ -369,13 +453,12 @@
     * @param state - Message state to reset
     */
    protected startAssistantMessageInternal(state: MessageState): void {
@@ -44241,7 +44253,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -385,33 +461,47 @@
+@@ -385,33 +468,47 @@
     * @param parentToolUseId - null for main agent, string for subagent
     * @returns CLIAssistantMessage
     */
@@ -44293,7 +44305,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * to emit immediately (streaming) or collect for batch emission.
     * Note: The message object already contains parent_tool_use_id field,
     * so it doesn't need to be passed as a separate parameter.
-@@ -545,6 +635,25 @@
+@@ -545,6 +642,25 @@
    }
  
    /**
@@ -44319,7 +44331,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * Hook method called when a block is closed.
     * Subclasses can override this to emit stream events.
     *
-@@ -595,74 +704,78 @@
+@@ -595,74 +711,78 @@
    // ========== Main Agent APIs ==========
  
    /**
@@ -44430,7 +44442,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      }
    }
  
-@@ -671,51 +784,62 @@
+@@ -671,51 +791,62 @@
    /**
     * Starts a new assistant message for a subagent.
     * This is a shared implementation used by both streaming and non-streaming adapters.
@@ -44496,7 +44508,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    /**
     * Processes a subagent tool call.
     * This is a shared implementation used by both streaming and non-streaming adapters.
-@@ -727,26 +851,24 @@
+@@ -727,26 +858,24 @@
    processSubagentToolCall(
      toolCall: NonNullable<AgentResultDisplay['toolCalls']>[number],
      parentToolUseId: string,
@@ -44526,7 +44538,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      const { index } = this.createSubagentToolUseBlock(
        state,
-@@ -760,12 +882,43 @@
+@@ -760,12 +889,43 @@
  
      // Finalize tool_use message immediately
      this.finalizeSubagentAssistantMessage(parentToolUseId);
@@ -44570,7 +44582,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * input setting, and closure. Subclasses can override this to customize behavior.
     *
     * @param state - Message state
-@@ -789,20 +942,37 @@
+@@ -789,20 +949,37 @@
      this.onToolUseBlockCreated(state, index, startBlock, parentToolUseId);
      this.onToolUseInputSet(state, index, toolCall.args ?? {}, parentToolUseId);
      this.onBlockClosed(state, index, parentToolUseId);
@@ -44616,7 +44628,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Appends text content to the current message.
-@@ -844,35 +1014,22 @@
+@@ -844,35 +1021,22 @@
  
    /**
     * Appends thinking content to the current message.
@@ -44654,7 +44666,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      this.ensureBlockTypeConsistency(state, 'thinking', actualParentToolUseId);
      this.ensureMessageStarted(state, actualParentToolUseId);
-@@ -882,13 +1039,12 @@
+@@ -882,13 +1046,12 @@
        | undefined;
      const isNewBlock = !current || current.type !== 'thinking';
      if (isNewBlock) {
@@ -44668,7 +44680,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        this.openBlock(state, index, current);
        this.onThinkingBlockCreated(state, index, current, actualParentToolUseId);
      }
-@@ -936,6 +1092,42 @@
+@@ -936,6 +1099,42 @@
      this.onToolUseBlockCreated(state, index, startBlock, parentToolUseId);
      this.onToolUseInputSet(state, index, request.args ?? {}, parentToolUseId);
  
@@ -44711,7 +44723,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      this.onBlockClosed(state, index, parentToolUseId);
      this.closeBlock(state, index);
    }
-@@ -1057,13 +1249,13 @@
+@@ -1057,13 +1256,13 @@
        type: 'tool_result',
        tool_use_id: request.callId,
        is_error: hasError,
@@ -44726,7 +44738,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        type: 'user',
        uuid: randomUUID(),
        session_id: this.getSessionId(),
-@@ -1077,20 +1269,28 @@
+@@ -1077,20 +1276,28 @@
    }
  
    /**
@@ -44757,7 +44769,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -1173,43 +1373,35 @@
+@@ -1173,43 +1380,35 @@
  
    /**
     * Builds a result message from options.
@@ -44809,7 +44821,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      } else {
        // Track presence by property existence — `runNonInteractive` may
        // legitimately pass `structuredResult: undefined` (e.g. the model
-@@ -1231,22 +1423,22 @@
+@@ -1231,22 +1430,22 @@
          : resultText;
        const success: CLIResultMessageSuccess & {
          stats?: SessionMetrics;
@@ -44835,7 +44847,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        if (options.stats) {
          success.stats = options.stats;
        }
-@@ -1260,33 +1452,43 @@
+@@ -1260,33 +1459,43 @@
  
    /**
     * Builds a subagent error result message.
@@ -44886,7 +44898,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        error: { message: errorMessage },
      };
    }
-@@ -1390,70 +1592,46 @@
+@@ -1390,70 +1599,46 @@
      }
    }
  
@@ -44982,7 +44994,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
   * Extracts text from content blocks.
   *
   * @param blocks - Array of content blocks
-@@ -1462,18 +1640,6 @@
+@@ -1462,18 +1647,6 @@
  export function extractTextFromBlocks(blocks: ContentBlock[]): string {
    return blocks
      .filter((block) => block.type === 'text')
@@ -46489,7 +46501,7 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.ts b/packages/
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -20,68 +22,77 @@
+@@ -20,68 +22,86 @@
  export class JsonOutputAdapter
    extends BaseJsonOutputAdapter
    implements JsonOutputAdapterInterface
@@ -46504,6 +46516,15 @@ diff --git a/packages/cli/src/nonInteractive/io/JsonOutputAdapter.ts b/packages/
 +      () => this.stdout.flush(),
 +      () => this.stderr.flush(),
 +    ]);
++  }
++
++  protected subscribeOutputProgress(progress: () => void): () => void {
++    const stopStdout = this.stdout.subscribeProgress(progress);
++    const stopStderr = this.stderr.subscribeProgress(progress);
++    return () => {
++      stopStdout();
++      stopStderr();
++    };
 +  }
 +
    constructor(config: Config) {
@@ -49275,7 +49296,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts b/pac
    StreamEvent,
    TextBlock,
    ThinkingBlock,
-@@ -36,87 +38,86 @@
+@@ -36,87 +38,90 @@
   * Supports both main agent and subagent messages through distinct APIs.
   */
  export class StreamJsonOutputAdapter
@@ -49299,6 +49320,10 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts b/pac
 +
 +  flush(): Promise<void> {
 +    return this.writer.flush();
++  }
++
++  protected subscribeOutputProgress(progress: () => void): () => void {
++    return this.writer.subscribeProgress(progress);
    }
  
    /**
@@ -49397,7 +49422,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts b/pac
    emitMessage(message: CLIMessage | ControlMessage): void {
      // In stream mode, emit immediately
      this.emitMessageImpl(message);
-@@ -280,6 +281,27 @@
+@@ -280,6 +285,27 @@
    }
  
    /**
@@ -49425,7 +49450,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts b/pac
     * Overrides base class hook to emit stream event when block is closed.
     */
    protected override onBlockClosed(
-@@ -297,34 +319,29 @@
+@@ -297,34 +323,29 @@
        );
      }
    }
@@ -49471,7 +49496,7 @@ diff --git a/packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts b/pac
     * Emits a tool progress stream event when partial messages are enabled.
     * This overrides the no-op in BaseJsonOutputAdapter.
     */
-@@ -366,11 +383,18 @@
+@@ -366,11 +387,18 @@
  
      const partial: CLIPartialAssistantMessage = {
        type: 'stream_event',
@@ -106124,12 +106149,20 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
 diff --git a/packages/cli/src/utils/output-writer.ts b/packages/cli/src/utils/output-writer.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/output-writer.ts
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,126 @@
++import { RECORDING_STALL_TIMEOUT_MS } from '@qwen-code/qwen-code-core';
++
++// Each callback accounts for one bounded piece of a large record. A slow
++// consumer may take arbitrarily long if it keeps draining; silence is bounded.
++const OUTPUT_PROGRESS_QUANTUM_CODE_UNITS = 64 * 1024;
++
 +/** Ordered writes whose completion belongs to the output owner's lifetime. */
 +export class OutputWriter {
 +  private pending = 0;
 +  private failure: { error: unknown } | undefined;
 +  private readonly waiters = new Set<() => void>();
++  private readonly progressListeners = new Set<() => void>();
++  private stallTimer: ReturnType<typeof setTimeout> | undefined;
 +
 +  constructor(private readonly stream: NodeJS.WritableStream) {
 +    stream.on('error', (error: unknown) => this.fail(error));
@@ -106141,28 +106174,77 @@ diff --git a/packages/cli/src/utils/output-writer.ts b/packages/cli/src/utils/ou
 +    this.notify();
 +  }
 +
++  private monitorProgress(): void {
++    if (this.stallTimer !== undefined) clearTimeout(this.stallTimer);
++    this.stallTimer = undefined;
++    if (this.pending > 0 && !this.failure) {
++      this.stallTimer = setTimeout(
++        () =>
++          this.fail(
++            new Error(
++              `Output recording made no progress for ${RECORDING_STALL_TIMEOUT_MS} ms. Stop this Qwen session, make its output consumer responsive, then inspect the incomplete recording with the matching client before retrying.`,
++            ),
++          ),
++        RECORDING_STALL_TIMEOUT_MS,
++      );
++    }
++  }
++
 +  private notify(): void {
++    this.monitorProgress();
 +    if (this.pending === 0 || this.failure) {
 +      for (const resolve of this.waiters) resolve();
 +      this.waiters.clear();
 +    }
 +  }
 +
++  subscribeProgress(listener: () => void): () => void {
++    this.progressListeners.add(listener);
++    return () => this.progressListeners.delete(listener);
++  }
++
 +  write(bytes: string): void {
 +    if (this.failure) throw this.failure.error;
++    if (bytes.length === 0) {
++      this.writeChunk('');
++      return;
++    }
++    for (let start = 0; start < bytes.length; ) {
++      let end = Math.min(
++        start + OUTPUT_PROGRESS_QUANTUM_CODE_UNITS,
++        bytes.length,
++      );
++      // UTF-16 halves must reach the stream in the same write, or its UTF-8
++      // encoder would replace a valid pair with two replacement characters.
++      if (end < bytes.length) {
++        const last = bytes.charCodeAt(end - 1);
++        if (last >= 0xd800 && last <= 0xdbff) end--;
++      }
++      this.writeChunk(bytes.slice(start, end));
++      start = end;
++    }
++  }
++
++  private writeChunk(bytes: string): void {
++    if (this.failure) throw this.failure.error;
 +    this.pending++;
++    this.monitorProgress();
 +    let completed = false;
 +    const complete = (error?: Error | null) => {
 +      if (completed) return;
 +      completed = true;
 +      this.pending--;
 +      if (error != null) this.fail(error);
++      else for (const listener of this.progressListeners) listener();
 +      this.notify();
 +    };
 +    try {
 +      this.stream.write(bytes, complete);
 +    } catch (error) {
-+      complete();
++      if (!completed) {
++        completed = true;
++        this.pending--;
++      }
 +      this.fail(error);
 +      throw error;
 +    }
@@ -211076,8 +211158,9 @@ diff --git a/packages/core/src/hooks/types.ts b/packages/core/src/hooks/types.ts
 diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
 --- a/packages/core/src/index.ts
 +++ b/packages/core/src/index.ts
-@@ -1,18 +1,36 @@
+@@ -1,18 +1,37 @@
 +export type { ModelResponseEvidence } from './core/model-response-evidence.js';
++export { RECORDING_STALL_TIMEOUT_MS } from './core/recording-stall.js';
 +export {
 +  ModelRequestJournal,
 +  ModelRequestReplay,
@@ -211113,7 +211196,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './permissions/index.js';
  
  // Model configuration
-@@ -66,6 +84,8 @@
+@@ -66,6 +85,8 @@
  } from './agents/runtime/agent-context.js';
  export * from './core/reasoning-effort.js';
  export * from './core/coreToolScheduler.js';
@@ -211122,7 +211205,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './core/permissionFlow.js';
  export * from './core/permission-helpers.js';
  /** @internal */
-@@ -92,6 +112,7 @@
+@@ -92,6 +113,7 @@
  export * from './core/session-recovery.js';
  export * from './core/tokenLimits.js';
  export * from './core/tool-call-preparation.js';
@@ -211130,7 +211213,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './core/toolCallIdUtils.js';
  export * from './core/tool-invocation-guard.js';
  export * from './core/turn.js';
-@@ -234,16 +255,12 @@
+@@ -234,16 +256,12 @@
  export * from './providers/index.js';
  
  // ============================================================================
@@ -211147,7 +211230,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  } from './services/compactionInputSlimming.js';
  export * from './services/chatRecordingService.js';
  export * from './services/cronScheduler.js';
-@@ -266,27 +283,25 @@
+@@ -266,27 +284,25 @@
  } from './services/cronTasksFile.js';
  export * from './services/fileDiscoveryService.js';
  export * from './services/fileHistoryService.js';
@@ -211180,7 +211263,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './services/visionBridge/vision-bridge-service.js';
  export * from './services/visionBridge/tool-result-vision-bridge.js';
  export * from './services/visionBridge/image-part-utils.js';
-@@ -333,20 +348,19 @@
+@@ -333,20 +349,19 @@
  export * from './utils/transcript-records.js';
  export * from './utils/conversation-branches.js';
  export * from './services/sessionTitle.js';
@@ -211203,7 +211286,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +614,25 @@
+@@ -600,24 +615,25 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -211230,7 +211313,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +719,67 @@
+@@ -704,6 +720,67 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -243107,7 +243190,18 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/src/services/session-writer-lease.ts
 --- a/packages/core/src/services/session-writer-lease.ts
 +++ b/packages/core/src/services/session-writer-lease.ts
-@@ -20,13 +20,17 @@
+@@ -10,23 +10,28 @@
+ import type { Stats } from 'node:fs';
+ import * as fs from 'node:fs/promises';
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import { createDebugLogger } from '../utils/debugLogger.js';
+ import { hasVerifiableInode } from '../utils/file-identity.js';
++import { RECORDING_STALL_TIMEOUT_MS } from '../core/recording-stall.js';
+ 
+ const LEGACY_LOCK_SCHEMA_VERSION = 1;
+ const LOCK_SCHEMA_VERSION = 2;
+ const MALFORMED_RETRY_COUNT = 3;
  const MALFORMED_RETRY_DELAY_MS = 50;
  const CLAIMED_PRIMARY_WAIT_ATTEMPTS = 20;
  const RELEASE_PRECHECK_ATTEMPTS = 3;
@@ -243119,14 +243213,14 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
 +const TRANSCRIPT_IO_BUFFER_BYTES = 1024 * 1024;
 +// A minute without storage progress is a recording failure. This is an
 +// inactivity budget, never a limit on the duration or size of a transcript.
-+export const SESSION_WRITER_STALL_TIMEOUT_MS = 60_000;
++export const SESSION_WRITER_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS;
  const TRANSCRIPT_NO_FOLLOW_FLAG = nodeConstants.O_NOFOLLOW ?? 0;
  const TRANSCRIPT_NONBLOCK_FLAG = nodeConstants.O_NONBLOCK ?? 0;
  const TRANSCRIPT_READ_FLAGS =
    nodeConstants.O_RDONLY | TRANSCRIPT_NO_FOLLOW_FLAG | TRANSCRIPT_NONBLOCK_FLAG;
  const TRANSCRIPT_APPEND_FLAGS =
    nodeConstants.O_APPEND |
-@@ -45,17 +49,13 @@
+@@ -45,17 +50,13 @@
    const description = describeError(error);
    return error instanceof Error && error.cause !== undefined
      ? `${description} cause=${describeError(error.cause)}`
@@ -243145,7 +243239,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
    | 'session_writer_lost'
    | 'session_transcript_changed'
    | 'session_writer_unavailable';
-@@ -325,13 +325,13 @@
+@@ -325,13 +326,13 @@
      (record['process_start_identity'] === undefined ||
        (typeof record['process_start_identity'] === 'string' &&
          record['process_start_identity'].length > 0)) &&
@@ -243160,7 +243254,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        typeof record['qwen_version'] === 'string')
    );
  }
-@@ -571,16 +571,18 @@
+@@ -571,16 +572,18 @@
  }
  
  async function getOpenTranscriptState(
@@ -243179,7 +243273,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        (error as NodeJS.ErrnoException).code === 'ENOENT'
      ) {
        throw new SessionTranscriptChangedError();
-@@ -596,19 +598,21 @@
+@@ -596,19 +599,21 @@
      const { bytesRead } = await handle.read(
        lastByte,
        0,
@@ -243201,7 +243295,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        (error as NodeJS.ErrnoException).code === 'ENOENT'
      ) {
        throw new SessionTranscriptChangedError();
-@@ -627,16 +631,18 @@
+@@ -627,16 +632,18 @@
    return pathState;
  }
  
@@ -243220,7 +243314,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      }
      throw error;
    }
-@@ -647,16 +653,18 @@
+@@ -647,16 +654,18 @@
    return transcriptStateFromStat(stat);
  }
  
@@ -243239,7 +243333,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
    }
    if (!pathState.exists) return undefined;
  
-@@ -665,26 +673,33 @@
+@@ -665,26 +674,33 @@
    } catch (error) {
      if (expectedState !== undefined) {
        const code = (error as NodeJS.ErrnoException).code;
@@ -243275,7 +243369,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
  
    try {
      const flags = expectedState.exists
-@@ -693,32 +708,36 @@
+@@ -693,32 +709,36 @@
      return await fs.open(filePath, flags, 0o600);
    } catch (error) {
      const code = (error as NodeJS.ErrnoException).code;
@@ -243314,7 +243408,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      throw new SessionWriterUnavailableError({
        cause: error instanceof Error ? error : undefined,
      });
-@@ -728,63 +747,66 @@
+@@ -728,63 +748,66 @@
  }
  
  async function captureOpenTranscriptSnapshot(
@@ -243387,7 +243481,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      }
      if (sameTranscriptState(beforeState, afterState)) {
        return { state: afterState, hasher, attempts: attempt };
-@@ -799,17 +821,18 @@
+@@ -799,17 +822,18 @@
    });
  }
  
@@ -243408,7 +243502,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          expectedState &&
          !sameHardTranscriptState(missingState, expectedState)
        ) {
-@@ -822,13 +845,13 @@
+@@ -822,13 +846,13 @@
        };
      }
      return await captureOpenTranscriptSnapshot(
@@ -243423,7 +243517,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      throw new SessionWriterUnavailableError({
        cause: error instanceof Error ? error : undefined,
      });
-@@ -1309,6 +1332,19 @@
+@@ -1309,6 +1333,19 @@
          await waitForClaimedPrimaryCandidate(++candidateWaitAttempts);
          continue;
        }
@@ -243443,7 +243537,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        if (state === 'other') throw new SessionWriterLostError();
        throw new SessionWriterUnavailableError({
          cause: error instanceof Error ? error : undefined,
-@@ -1483,12 +1519,17 @@
+@@ -1483,12 +1520,17 @@
    readonly transcriptPath: string;
    private expectedTranscriptState: TranscriptState | undefined;
    private expectedTranscriptHasher: Hash | undefined;
@@ -243461,7 +243555,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
  
    private constructor(
      private readonly lockPath: string,
-@@ -1841,13 +1882,13 @@
+@@ -1841,13 +1883,13 @@
      const lease = new SessionWriterLease(lockPath, lockRecord, options);
      try {
        options.onOwnershipAcquired?.(lease);
@@ -243476,7 +243570,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
            options.transcriptPath,
          );
        }
-@@ -1929,34 +1970,36 @@
+@@ -1929,34 +1971,36 @@
        }
      }
      return { kind: 'malformed' };
@@ -243514,7 +243608,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        !isActiveLockRecord(record) ||
        record.owner_id !== this.ownerId ||
        raw !== this.lockRecordRaw
-@@ -1964,25 +2007,27 @@
+@@ -1964,25 +2008,27 @@
        throw new SessionWriterLostError();
      }
      return record;
@@ -243543,7 +243637,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      }
      if (!sameHardTranscriptState(transcriptState, expectedState)) {
        debugLogger.debug(
-@@ -1991,45 +2036,62 @@
+@@ -1991,45 +2037,62 @@
        throw new SessionTranscriptChangedError();
      }
      await this.reconcileTranscriptMetadata(transcriptState);
@@ -243614,7 +243708,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
            if (!sameHardTranscriptState(beforeState, expectedBefore)) {
              throw new SessionTranscriptChangedError();
            }
-@@ -2051,15 +2113,27 @@
+@@ -2051,15 +2114,27 @@
        await this.readOwnedLock();
        // Defence in depth only: every path that produces `beforeState` already
        // went through `transcriptStateFromStat`, which asserts. Kept so the
@@ -243643,7 +243737,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          !sameFileIdentity(afterState.fingerprint, beforeState.fingerprint) ||
          !sameFileSecurityMetadata(
            afterState.fingerprint,
-@@ -2067,16 +2141,19 @@
+@@ -2067,16 +2142,19 @@
          )
        ) {
          throw new SessionTranscriptChangedError();
@@ -243663,7 +243757,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          !sameFileIdentity(
            transcriptState.fingerprint,
            afterState.fingerprint,
-@@ -2104,13 +2181,13 @@
+@@ -2104,13 +2182,13 @@
          );
          const startedAt = Date.now();
          await this.readOwnedLock();
@@ -243678,7 +243772,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
              `Session transcript content changed after append metadata signal ` +
                `path=slow changedFields=${changedFields.join(',')} ` +
                `attempts=${snapshot.attempts} durationMs=${Date.now() - startedAt}`,
-@@ -2172,18 +2249,18 @@
+@@ -2172,18 +2250,18 @@
      await this.readOwnedLock();
      const snapshot = handle
        ? await captureOpenTranscriptSnapshot(
@@ -243699,7 +243793,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          `Session transcript content changed after metadata signal ` +
            `path=slow changedFields=${changedFields.join(',')} ` +
            `attempts=${snapshot.attempts} durationMs=${Date.now() - startedAt}`,
-@@ -2211,19 +2288,65 @@
+@@ -2211,19 +2289,65 @@
    }
  
    get isReleased(): boolean {
@@ -341968,8 +342062,8 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,589 @@
-+import { describe, it, expect, vi } from 'vitest';
+@@ -0,0 +1,683 @@
++import { afterEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
 +import {
@@ -341979,6 +342073,9 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  requireModelRequestEvidence,
 +  type ModelRequestEvidence,
 +} from './model-request-evidence.js';
++import { RECORDING_STALL_TIMEOUT_MS } from './recording-stall.js';
++
++afterEach(() => vi.useRealTimers());
 +
 +const TEST_POLICY = {
 +  mode: 'nonstream',
@@ -342089,6 +342186,90 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +      output.close();
 +    },
 +  );
++
++  it('waits for responsive output publication after durably admitting a request', async () => {
++    vi.useFakeTimers();
++    const f = fixture();
++    const output = f.journal.openOutputWindow();
++    let release!: () => void;
++    const published = new Promise<void>((resolve) => {
++      release = resolve;
++    });
++    output.setDrain(() => published);
++    const captured = f.journal.capture(
++      serialize([]),
++      'root',
++      'p',
++      's',
++      null,
++      TEST_POLICY,
++    );
++    let dispatched = false;
++    void captured.then(() => {
++      dispatched = true;
++    });
++    await vi.advanceTimersByTimeAsync(RECORDING_STALL_TIMEOUT_MS - 1);
++    expect(f.records).toHaveLength(1);
++    expect(dispatched).toBe(false);
++    release();
++    await captured;
++    expect(dispatched).toBe(true);
++    output.close();
++  });
++
++  it('allows publication longer than the stall budget while output advances', async () => {
++    vi.useFakeTimers();
++    const f = fixture();
++    const output = f.journal.openOutputWindow();
++    output.setDrain(async (progress) => {
++      for (let chunk = 0; chunk < 3; chunk++) {
++        await new Promise<void>((resolve) =>
++          setTimeout(resolve, RECORDING_STALL_TIMEOUT_MS - 1),
++        );
++        progress();
++      }
++    });
++    const captured = f.journal.capture(
++      serialize([]),
++      'root',
++      'p',
++      's',
++      null,
++      TEST_POLICY,
++    );
++    await vi.advanceTimersByTimeAsync(3 * (RECORDING_STALL_TIMEOUT_MS - 1));
++    await captured;
++    expect(f.records).toHaveLength(1);
++    output.close();
++  });
++
++  it('refuses a stalled output publication before dispatch and latches the journal failure', async () => {
++    vi.useFakeTimers();
++    const f = fixture();
++    const output = f.journal.openOutputWindow();
++    let release!: () => void;
++    const published = new Promise<void>((resolve) => {
++      release = resolve;
++    });
++    output.setDrain(() => published);
++    const captured = f.journal.capture(
++      serialize([]),
++      'root',
++      'p',
++      's',
++      null,
++      TEST_POLICY,
++    );
++    void captured.catch(() => {});
++    await vi.advanceTimersByTimeAsync(RECORDING_STALL_TIMEOUT_MS);
++    await expect(captured).rejects.toThrow();
++    await expect(f.journal.flush()).rejects.toThrow(
++      'model evidence publication made no progress',
++    );
++    expect(f.records).toHaveLength(1);
++    release();
++    output.close();
++  });
 +
 +  it('refuses a settled owner before persisting another request', async () => {
 +    const attempt = new ChatAttempt('root', vi.fn(), vi.fn());
@@ -342368,7 +342549,14 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +    );
 +    const failure = new Error('caller cancelled before admission');
 +    controller.abort(failure);
-+    const refused = expect(cancelled).rejects.toBe(failure);
++    const refused = cancelled.then(
++      () => {
++        throw new Error('queued cancellation was admitted');
++      },
++      (cause: unknown) => {
++        expect(cause).toBe(failure);
++      },
++    );
 +    release();
 +    await (await first).finish({ status: 'cancelled', error: null });
 +    await refused;
@@ -342561,7 +342749,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,938 @@
+@@ -0,0 +1,946 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -342587,6 +342775,10 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  describeResponseFailure,
 +  type ModelResponseEvidence,
 +} from './model-response-evidence.js';
++import {
++  RECORDING_STALL_TIMEOUT_MS,
++  withRecordingDeadline,
++} from './recording-stall.js';
 +
 +export type ModelEvidence =
 +  | { readonly type: 'model_request'; readonly request: ModelRequestEvidence }
@@ -343048,7 +343240,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  private async publish(evidence: ModelEvidence): Promise<void> {
 +    if (!this.outputStarted && this.retainForOutput())
 +      this.pending.push(evidence);
-+    for (const output of this.outputs) await output.append(evidence);
++    for (const output of this.outputs)
++      await withRecordingDeadline(
++        (progress) => output.append(evidence, progress),
++        `model evidence publication made no progress for ${RECORDING_STALL_TIMEOUT_MS} ms. Stop this Qwen session, inspect its incomplete recording with the matching reader, and retry after the stream-json output consumer is responsive.`,
++      );
 +  }
 +
 +  private recordResponse(evidence: ModelResponseEvidence): Promise<void> {
@@ -343130,7 +343326,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  private readonly responses = new ModelResponseReplay();
 +  private readonly generations = new ModelGenerationReplay();
 +  private failure: { cause: unknown } | undefined;
-+  private drain: (() => Promise<void>) | undefined;
++  private drain: ((progress: () => void) => Promise<void>) | undefined;
 +  constructor(
 +    readonly journalId: string,
 +    readonly firstSequence: number,
@@ -343178,7 +343374,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +          : null,
 +    });
 +  }
-+  async append(record: ModelEvidence): Promise<void> {
++  async append(record: ModelEvidence, progress: () => void): Promise<void> {
 +    try {
 +      this.enqueue(record);
 +    } catch (cause) {
@@ -343192,12 +343388,12 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      return;
 +    }
 +    try {
-+      await this.drain?.();
++      await this.drain?.(progress);
 +    } catch (cause) {
 +      if (!this.closed) throw cause;
 +    }
 +  }
-+  setDrain(drain: () => Promise<void>): void {
++  setDrain(drain: (progress: () => void) => Promise<void>): void {
 +    this.drain = drain;
 +  }
 +  takePending(): ReadonlyArray<
@@ -345827,7 +346023,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,860 @@
+@@ -0,0 +1,848 @@
 +import { createHash } from 'node:crypto';
 +import type { GenerateContentResponse } from '@google/genai';
 +import { recordGenerationSource } from './model-generation.js';
@@ -345841,6 +346037,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  verifyRecordedOpenAIGeneration,
 +} from './openaiContentGenerator/recorded-response-replay.js';
 +import { RecordingClock } from './recording-clock.js';
++import {
++  RECORDING_STALL_TIMEOUT_MS,
++  withRecordingDeadline,
++} from './recording-stall.js';
 +import {
 +  combineGenerationUsage,
 +  type GenerationUsageSummary,
@@ -345904,10 +346104,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +// A persistence quantum bounds each encoded response record and temporary copy.
 +// It never bounds or truncates the total response or a model argument.
 +const RESPONSE_RECORD_BYTES = 64 * 1024;
-+// A response operation has one minute to settle before its evidence is refused.
-+// This bounds both storage and transport cleanup without changing the model's
++// Response operations share the recording deadline but not the model's
 +// separate network generation budget.
-+export const RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = 60_000;
++export const RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS;
 +export const RESPONSE_CANCELLATION_STALL_TIMEOUT_MS =
 +  RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS;
 +
@@ -345968,25 +346167,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    pending: Promise<void>,
 +    stalled: string,
 +  ): Promise<void> {
-+    let timer: ReturnType<typeof setTimeout> | undefined;
-+    try {
-+      await Promise.race([
-+        pending,
-+        new Promise<never>((_resolve, reject) => {
-+          timer = setTimeout(
-+            () =>
-+              reject(
-+                new Error(
-+                  `${stalled} made no progress for ${RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS} ms. Stop this Qwen session, inspect its incomplete recording with the matching reader, and retry after recording storage and transport cleanup are responsive.`,
-+                ),
-+              ),
-+            RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS,
-+          );
-+        }),
-+      ]);
-+    } finally {
-+      if (timer !== undefined) clearTimeout(timer);
-+    }
++    await withRecordingDeadline(
++      () => pending,
++      `${stalled} made no progress for ${RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS} ms. Stop this Qwen session, inspect its incomplete recording with the matching reader, and retry after recording storage and transport cleanup are responsive.`,
++    );
 +  }
 +
 +  private boundCancellation(pending: Promise<void>): Promise<void> {
@@ -416203,3 +416387,98 @@ diff --git a/packages/core/src/core/openaiContentGenerator/__fixtures__/physical
 +  ],
 +  "disposition": "abandoned"
 +}
+diff --git a/packages/core/src/core/recording-stall.ts b/packages/core/src/core/recording-stall.ts
+--- /dev/null
++++ b/packages/core/src/core/recording-stall.ts
+@@ -0,0 +1,29 @@
++/** One inactivity budget for durable recording and its output publication. */
++export const RECORDING_STALL_TIMEOUT_MS = 60_000;
++
++/** Refuse an operation that produces no observable progress for the budget. */
++export async function withRecordingDeadline<T>(
++  operation: (progress: () => void) => Promise<T>,
++  message: string,
++): Promise<T> {
++  let timer: ReturnType<typeof setTimeout> | undefined;
++  let closed = false;
++  let progress = () => {};
++  const stalled = new Promise<never>((_resolve, reject) => {
++    progress = () => {
++      if (closed) return;
++      if (timer !== undefined) clearTimeout(timer);
++      timer = setTimeout(
++        () => reject(new Error(message)),
++        RECORDING_STALL_TIMEOUT_MS,
++      );
++    };
++    progress();
++  });
++  try {
++    return await Promise.race([operation(progress), stalled]);
++  } finally {
++    closed = true;
++    if (timer !== undefined) clearTimeout(timer);
++  }
++}
+diff --git a/packages/cli/src/utils/output-writer.test.ts b/packages/cli/src/utils/output-writer.test.ts
+--- /dev/null
++++ b/packages/cli/src/utils/output-writer.test.ts
+@@ -0,0 +1,58 @@
++import { Writable } from 'node:stream';
++import { afterEach, describe, expect, it, vi } from 'vitest';
++import { RECORDING_STALL_TIMEOUT_MS } from '@qwen-code/qwen-code-core';
++import { OutputWriter } from './output-writer.js';
++
++afterEach(() => vi.useRealTimers());
++
++describe('ordered output recording', () => {
++  it('preserves a Unicode pair at a publication chunk boundary', async () => {
++    const chunks: Buffer[] = [];
++    const stream = new Writable({
++      write(chunk: Buffer, _encoding, callback) {
++        chunks.push(Buffer.from(chunk));
++        callback();
++      },
++    });
++    const writer = new OutputWriter(stream);
++    const message = `${'x'.repeat(64 * 1024 - 1)}🌈${'y'.repeat(64 * 1024)}`;
++    writer.write(message);
++    await writer.flush();
++    expect(chunks.length).toBeGreaterThan(1);
++    expect(Buffer.concat(chunks).toString('utf8')).toBe(message);
++  });
++
++  it('allows an aggregate write longer than the stall budget while chunks drain', async () => {
++    vi.useFakeTimers();
++    const stream = new Writable({
++      write(_chunk, _encoding, callback) {
++        setTimeout(callback, RECORDING_STALL_TIMEOUT_MS - 1);
++      },
++    });
++    const writer = new OutputWriter(stream);
++    let completed = false;
++    writer.write('x'.repeat(64 * 1024 * 2 + 1));
++    const flushing = writer.flush().then(() => {
++      completed = true;
++    });
++    await vi.advanceTimersByTimeAsync(2 * (RECORDING_STALL_TIMEOUT_MS - 1));
++    expect(completed).toBe(false);
++    await vi.advanceTimersByTimeAsync(RECORDING_STALL_TIMEOUT_MS - 1);
++    await flushing;
++    expect(completed).toBe(true);
++  });
++
++  it('refuses a stream that stops acknowledging output and latches the failure', async () => {
++    vi.useFakeTimers();
++    const stream = new Writable({ write() {} });
++    const writer = new OutputWriter(stream);
++    writer.write('never acknowledged');
++    const flushing = writer.flush();
++    void flushing.catch(() => {});
++    await vi.advanceTimersByTimeAsync(RECORDING_STALL_TIMEOUT_MS);
++    await expect(flushing).rejects.toThrow('Output recording made no progress');
++    expect(() => writer.write('another record')).toThrow(
++      'Output recording made no progress',
++    );
++  });
++});

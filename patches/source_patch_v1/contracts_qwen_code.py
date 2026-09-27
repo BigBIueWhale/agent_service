@@ -6821,7 +6821,7 @@ def _validate_terminal_state_after(state: State) -> None:
         state,
         writer_path,
         "if (this.failure) throw this.failure.error;",
-        count=2,
+        count=3,
         label="falsy output failure retention",
     )
     _require_all(
@@ -8327,7 +8327,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.httpStatus = response.status;", "this.termination = termination;",
         "requireCompatibleProcessing(state.httpStatus, state.termination, event)",
         "completed processing has no successful HTTP transport completion",
-        "RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = 60_000",
+        "RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS",
         "await this.boundOperation(", "'response recording'",
         "Promise.all([cancelReader(), joinedCancellation!]).then(() => {})",
     ), label=label)
@@ -8335,6 +8335,46 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses a stalled header write and resumes the paused network clock",
         "refuses a stalled body write while cancellation waits for its read",
         "waits for a responsive durable write before delivering bytes",
+    ), label=label)
+    _require_all(state, core + "core/recording-stall.ts", (
+        "RECORDING_STALL_TIMEOUT_MS = 60_000",
+        "export async function withRecordingDeadline<T>(",
+        "return await Promise.race([operation(progress), stalled])",
+        "if (closed) return",
+        "if (timer !== undefined) clearTimeout(timer)",
+    ), label=label)
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "await withRecordingDeadline(",
+        "output.append(evidence, progress)",
+        "model evidence publication made no progress",
+    ), label=label)
+    _require_all(state, core + "core/model-request-evidence.test.ts", (
+        "waits for responsive output publication after durably admitting a request",
+        "allows publication longer than the stall budget while output advances",
+        "refuses a stalled output publication before dispatch and latches the journal failure",
+    ), label=label)
+    _require_all(state, "packages/cli/src/utils/output-writer.ts", (
+        "OUTPUT_PROGRESS_QUANTUM_CODE_UNITS = 64 * 1024",
+        "this.stream.write(bytes, complete)",
+        "subscribeProgress(listener: () => void)",
+        "Output recording made no progress",
+    ), label=label)
+    _require_all(state, "packages/cli/src/utils/output-writer.test.ts", (
+        "preserves a Unicode pair at a publication chunk boundary",
+        "allows an aggregate write longer than the stall budget while chunks drain",
+        "refuses a stream that stops acknowledging output and latches the failure",
+    ), label=label)
+    _require_all(state, "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts", (
+        "requestOutput.setDrain(async (progress)",
+        "this.subscribeOutputProgress(progress)",
+        "await this.flush()",
+    ), label=label)
+    _require_all(state, "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts", (
+        "this.writer.subscribeProgress(progress)",
+    ), label=label)
+    _require_all(state, "packages/cli/src/nonInteractive/io/JsonOutputAdapter.ts", (
+        "this.stdout.subscribeProgress(progress)",
+        "this.stderr.subscribeProgress(progress)",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
         "readonly served_usage: ServedUsage | null", "observeUsage(usage: ServedUsage)",
@@ -9141,6 +9181,7 @@ def _validate_served_accounting_after(state: State) -> None:
     lease = core + "services/session-writer-lease.ts"
     _require_all(state, lease, (
         "SESSION_WRITER_STALL_TIMEOUT_MS",
+        "SESSION_WRITER_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS",
         "this.runExclusive(() => this.assertOwnedAndUnchangedOnce(), true)",
         "this.runExclusive(() => this.appendJsonLinesOnce(values), true)",
         "if (this.stallFailure) return Promise.reject(this.stallFailure);",
