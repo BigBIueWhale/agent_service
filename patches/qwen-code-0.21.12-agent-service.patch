@@ -338113,6 +338113,40 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
  import type { Config, ChatRecord } from '@qwen-code/qwen-code-core';
  import type {
    InsightData,
+@@ -25,13 +26,13 @@
+ vi.mock('@qwen-code/qwen-code-core', async () => {
+   const actual = await vi.importActual<
+     typeof import('@qwen-code/qwen-code-core')
+   >('@qwen-code/qwen-code-core');
+   return {
+     ...actual,
+-    read: vi.fn(),
++    readCompleteCanonicalConversation: vi.fn(),
+     createDebugLogger: vi.fn(() => mockLogger),
+     runSideQuery: mockRunSideQuery,
+   };
+ });
+ 
+ vi.mock('fs/promises', () => ({
+@@ -41,16 +42,16 @@
+     readFile: vi.fn(),
+     writeFile: vi.fn(),
+   },
+ }));
+ 
+ import fs from 'fs/promises';
+-import { read as readJsonlFile } from '@qwen-code/qwen-code-core';
++import { readCompleteCanonicalConversation } from '@qwen-code/qwen-code-core';
+ 
+ const mockedFs = vi.mocked(fs);
+-const mockedReadJsonlFile = vi.mocked(readJsonlFile);
++const mockedReadComplete = vi.mocked(readCompleteCanonicalConversation);
+ 
+ describe('DataProcessor', () => {
+   let mockConfig: Config;
+   let dataProcessor: DataProcessor;
+   let mockGenerateJson: ReturnType<typeof vi.fn>;
+ 
 @@ -87,12 +88,13 @@
        expect(result).toContain('Duration: 0 turns');
      });
@@ -338295,7 +338329,50 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: {
              role: 'user',
              parts: [{ text: 'Help' }],
-@@ -1181,42 +1195,46 @@
+@@ -1134,13 +1148,13 @@
+       ).scanChatFiles('/base');
+ 
+       expect(result).toHaveLength(1);
+       expect(result[0].path).toContain('chat1.jsonl');
+     });
+ 
+-    it('should handle file stat errors gracefully', async () => {
++    it('refuses a report when a recording cannot be inspected', async () => {
+       mockedFs.readdir.mockResolvedValueOnce(['project1'] as unknown as Awaited<
+         ReturnType<typeof fs.readdir>
+       >);
+ 
+       mockedFs.stat.mockImplementation((path) => {
+         const pathStr = String(path);
+@@ -1164,59 +1178,64 @@
+         }
+         return Promise.resolve(
+           [] as unknown as Awaited<ReturnType<typeof fs.readdir>>,
+         );
+       });
+ 
+-      const result = await (
+-        dataProcessor as unknown as {
+-          scanChatFiles(
+-            baseDir: string,
+-          ): Promise<Array<{ path: string; mtime: number }>>;
+-        }
+-      ).scanChatFiles('/base');
+-
+-      // When stat fails for a file, it should be skipped but not crash
+-      expect(result).toEqual([]);
++      await expect(
++        (
++          dataProcessor as unknown as {
++            scanChatFiles(
++              baseDir: string,
++            ): Promise<Array<{ path: string; mtime: number }>>;
++          }
++        ).scanChatFiles('/base'),
++      ).rejects.toThrow(
++        'Cannot inspect insight recording /base/project1/chats/chat1.jsonl',
++      );
+     });
    });
  
    describe('generateMetrics', () => {
@@ -338342,7 +338419,22 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: {
              role: 'assistant',
              parts: [{ functionCall: { name: 'read_file', args: {} } }],
-@@ -1250,22 +1268,24 @@
+@@ -1225,13 +1244,13 @@
+           parentUuid: null,
+           cwd: '',
+           version: '',
+         },
+       ];
+ 
+-      mockedReadJsonlFile.mockResolvedValue(mockRecords);
++      mockedReadComplete.mockResolvedValue(mockRecords);
+ 
+       const files = [{ path: '/test/chat.jsonl', mtime: 1234567890 }];
+       const result = await (
+         dataProcessor as unknown as {
+           generateMetrics(
+             files: Array<{ path: string; mtime: number }>,
+@@ -1250,34 +1269,36 @@
  
      it('reports the wall-clock time of the most recent user interaction', async () => {
        const early = '2025-01-15T09:12:00Z';
@@ -338367,7 +338459,20 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: { role: 'user', parts: [{ text: 'earlier' }] },
            uuid: '',
            parentUuid: null,
-@@ -1303,12 +1323,13 @@
+           cwd: '',
+           version: '',
+         },
+       ];
+ 
+-      mockedReadJsonlFile.mockResolvedValue(mockRecords);
++      mockedReadComplete.mockResolvedValue(mockRecords);
+ 
+       const files = [{ path: '/test/chat.jsonl', mtime: 1234567890 }];
+       const result = (await (
+         dataProcessor as unknown as {
+           generateMetrics(
+             files: Array<{ path: string; mtime: number }>,
+@@ -1303,12 +1324,13 @@
        expect(result.latestActiveTime).not.toBe(buggyConstant);
      });
  
@@ -338381,7 +338486,7 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: {
              role: 'assistant',
              parts: [{ functionCall: { name: 'read_file', args: {} } }],
-@@ -1316,12 +1337,13 @@
+@@ -1316,12 +1338,13 @@
            uuid: '',
            parentUuid: null,
            cwd: '',
@@ -338395,7 +338500,7 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: {
              role: 'assistant',
              parts: [{ functionCall: { name: 'read_file', args: {} } }],
-@@ -1329,12 +1351,13 @@
+@@ -1329,12 +1352,13 @@
            uuid: '',
            parentUuid: null,
            cwd: '',
@@ -338409,8 +338514,54 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: {
              role: 'assistant',
              parts: [{ functionCall: { name: 'write_file', args: {} } }],
-@@ -1376,12 +1399,13 @@
-       expect(result.totalMessages).toBe(0);
+@@ -1343,13 +1367,13 @@
+           parentUuid: null,
+           cwd: '',
+           version: '',
+         },
+       ];
+ 
+-      mockedReadJsonlFile.mockResolvedValue(mockRecords);
++      mockedReadComplete.mockResolvedValue(mockRecords);
+ 
+       const files = [{ path: '/test/chat.jsonl', mtime: 1234567890 }];
+       const result = await (
+         dataProcessor as unknown as {
+           generateMetrics(
+             files: Array<{ path: string; mtime: number }>,
+@@ -1358,42 +1382,45 @@
+       ).generateMetrics(files);
+ 
+       expect(result.topTools).toContainEqual(['read_file', 2]);
+       expect(result.topTools).toContainEqual(['write_file', 1]);
+     });
+ 
+-    it('should handle file read errors gracefully', async () => {
+-      mockedReadJsonlFile.mockRejectedValue(new Error('Read failed'));
++    it('refuses incomplete metrics when a canonical recording cannot be read', async () => {
++      mockedReadComplete.mockRejectedValue(new Error('Read failed'));
+ 
+       const files = [{ path: '/test/chat.jsonl', mtime: 1234567890 }];
+-      const result = await (
+-        dataProcessor as unknown as {
+-          generateMetrics(
+-            files: Array<{ path: string; mtime: number }>,
+-          ): Promise<{ totalMessages: number }>;
+-        }
+-      ).generateMetrics(files);
+-
+-      expect(result.totalMessages).toBe(0);
++      await expect(
++        (
++          dataProcessor as unknown as {
++            generateMetrics(
++              files: Array<{ path: string; mtime: number }>,
++            ): Promise<{ totalMessages: number }>;
++          }
++        ).generateMetrics(files),
++      ).rejects.toThrow(
++        'Cannot generate a complete insight from /test/chat.jsonl: Read failed',
++      );
      });
  
      it('should call progress callback during processing', async () => {
@@ -338423,10 +338574,44 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: { role: 'user', parts: [{ text: 'Hello' }] },
            uuid: '',
            parentUuid: null,
-@@ -1648,12 +1672,13 @@
+           cwd: '',
+           version: '',
+         },
+       ];
+ 
+-      mockedReadJsonlFile.mockResolvedValue(mockRecords);
++      mockedReadComplete.mockResolvedValue(mockRecords);
+ 
+       const files = [
+         { path: '/test/chat1.jsonl', mtime: 1234567890 },
+         { path: '/test/chat2.jsonl', mtime: 1234567891 },
+       ];
+       const onProgress = vi.fn();
+@@ -1645,15 +1672,34 @@
+       expect(result).toBeDefined();
+       expect(mockGenerateJson).toHaveBeenCalledTimes(8);
+     });
    });
  
    describe('generateFacets', () => {
++    it('refuses facet selection when a canonical recording is unreadable', async () => {
++      mockedReadComplete.mockRejectedValue(
++        new Error('Unknown recording version'),
++      );
++      await expect(
++        (
++          dataProcessor as unknown as {
++            generateFacets(
++              files: Array<{ path: string; mtime: number }>,
++            ): Promise<SessionFacets[]>;
++          }
++        ).generateFacets([{ path: '/test/unknown.jsonl', mtime: 1 }]),
++      ).rejects.toThrow(
++        'Cannot generate a complete insight from /test/unknown.jsonl: Unknown recording version',
++      );
++      expect(mockGenerateJson).not.toHaveBeenCalled();
++    });
++
      it('should skip non-conversational sessions', async () => {
        const userOnlyRecords: ChatRecord[] = [
          {
@@ -338437,7 +338622,7 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: { role: 'user', parts: [{ text: 'Hello' }] },
            uuid: '',
            parentUuid: null,
-@@ -1661,22 +1686,24 @@
+@@ -1661,35 +1707,37 @@
            version: '',
          },
        ];
@@ -338462,7 +338647,21 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: { role: 'assistant', parts: [{ text: 'Hi' }] },
            uuid: '',
            parentUuid: null,
-@@ -1724,22 +1751,24 @@
+           cwd: '',
+           version: '',
+         },
+       ];
+ 
+       // First file is user-only, second is conversational
+-      mockedReadJsonlFile
++      mockedReadComplete
+         .mockResolvedValueOnce(userOnlyRecords)
+         .mockResolvedValueOnce(conversationalRecords);
+ 
+       const mockFacet = {
+         underlying_goal: 'Test',
+         goal_categories: {},
+@@ -1724,34 +1772,36 @@
        expect(result[0].session_id).toBe('conversational');
      });
  
@@ -338487,7 +338686,20 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: { role: 'assistant', parts: [{ text: 'Hi' }] },
            uuid: '',
            parentUuid: null,
-@@ -1798,22 +1827,24 @@
+           cwd: '',
+           version: '',
+         },
+       ];
+ 
+-      mockedReadJsonlFile.mockResolvedValue(conversationalRecords);
++      mockedReadComplete.mockResolvedValue(conversationalRecords);
+       mockedFs.readFile.mockResolvedValue(
+         JSON.stringify({
+           underlying_goal: ' Cached goal ',
+           goal_categories: null,
+           outcome: null,
+           user_satisfaction_counts: null,
+@@ -1798,35 +1848,37 @@
        );
      });
  
@@ -338512,6 +338724,20 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.test.ts 
            message: { role: 'assistant', parts: [{ text: 'Hi' }] },
            uuid: '',
            parentUuid: null,
+           cwd: '',
+           version: '',
+         },
+       ];
+       const writeError = new Error('disk full');
+ 
+-      mockedReadJsonlFile.mockResolvedValue(conversationalRecords);
++      mockedReadComplete.mockResolvedValue(conversationalRecords);
+       mockedFs.readFile.mockResolvedValue(
+         JSON.stringify({
+           underlying_goal: 'Cached goal',
+           brief_summary: 'Cached summary',
+         }),
+       );
 diff --git a/packages/cli/src/ui/components/SessionPreview.test.tsx b/packages/cli/src/ui/components/SessionPreview.test.tsx
 --- a/packages/cli/src/ui/components/SessionPreview.test.tsx
 +++ b/packages/cli/src/ui/components/SessionPreview.test.tsx
@@ -338965,7 +339191,7 @@ diff --git a/packages/core/src/core/session-recovery.test.ts b/packages/core/src
 diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/core/src/services/chat-recording-io.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/chat-recording-io.test.ts
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,144 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -338981,6 +339207,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +  readCanonicalChatLines,
 +  readCanonicalChatRecords,
 +  readCanonicalChatRecordsSync,
++  readCompleteCanonicalConversation,
 +} from './chat-recording-io.js';
 +
 +function record(uuid: string, parentUuid: string | null) {
@@ -339021,9 +339248,26 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +      records.map((item) => JSON.stringify(item)).join('\n') + '\n',
 +    );
 +    expect(await readCanonicalChatRecords(file)).toEqual(records);
++    expect(await readCompleteCanonicalConversation(file)).toEqual(records);
 +    expect(readCanonicalChatRecordsSync(file)).toEqual(records);
 +    expect(await readCanonicalChatLines(file, 1)).toEqual([records[0]]);
 +    expect(readLastTranscriptRecordUuidSync(file)).toBe('large');
++  });
++
++  it('uses the active conversation chain without resurrecting an inactive branch', async () => {
++    const root = record('root', null);
++    const inactive = record('inactive', 'root');
++    const active = record('active', 'root');
++    fs.writeFileSync(
++      file,
++      [root, inactive, active].map((item) => JSON.stringify(item)).join('\n') +
++        '\n',
++    );
++
++    expect(await readCompleteCanonicalConversation(file)).toEqual([
++      root,
++      active,
++    ]);
 +  });
 +
 +  it.each([
@@ -339062,6 +339306,9 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +        records.map((item) => JSON.stringify(item)).join('\n') + '\n';
 +      fs.writeFileSync(file, bytes);
 +      await expect(readCanonicalChatRecords(file)).rejects.toThrow(reason);
++      await expect(readCompleteCanonicalConversation(file)).rejects.toThrow(
++        reason,
++      );
 +      expect(() => readCanonicalChatRecordsSync(file)).toThrow(reason);
 +      expect(() => readLastTranscriptRecordUuidSync(file)).toThrow(reason);
 +      expect(fs.readFileSync(file, 'utf8')).toBe(bytes);
@@ -339092,7 +339339,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src/services/chat-recording-io.ts
 --- /dev/null
 +++ b/packages/core/src/services/chat-recording-io.ts
-@@ -0,0 +1,219 @@
+@@ -0,0 +1,238 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -339108,6 +339355,7 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +import type { ChatRecord, StoredChatRecord } from './chatRecordingService.js';
 +import { decodeJsonlRecord } from '../utils/jsonl-utils.js';
 +import {
++  prepareResolvedTranscriptRecords,
 +  requireStoredTranscriptRecord,
 +  resolveTranscriptRecord,
 +} from '../utils/transcript-records.js';
@@ -339248,6 +339496,24 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +    );
 +  }
 +  return snapshot.records;
++}
++
++/** The active conversation of a complete canonical artifact. */
++export async function readCompleteCanonicalConversation(
++  filePath: string,
++): Promise<ChatRecord[]> {
++  const records = (await readCompleteStoredCanonicalChatRecords(filePath)).map(
++    (record) => resolveTranscriptRecord(record) as ChatRecord,
++  );
++  const prepared = prepareResolvedTranscriptRecords(records);
++  const incomplete = prepared.diagnostics.filter(
++    (entry) => entry.affectsCompleteness,
++  );
++  if (incomplete.length > 0)
++    throw new Error(
++      `Cannot read complete conversation ${filePath}: ${incomplete.map((entry) => entry.message).join('; ')}. Inspect the original recording with its matching client, or start a new session.`,
++    );
++  return prepared.records as ChatRecord[];
 +}
 +
 +export async function readCanonicalChatLines(
@@ -411768,3 +412034,357 @@ diff --git a/packages/cli/src/utils/json-string-byte-projection.test.ts b/packag
 -    expect(projectJsonStringToByteBudget(once, BUDGET, MARKER)).toBe(once);
 -  });
 -});
+diff --git a/packages/cli/src/services/insight/generators/DataProcessor.ts b/packages/cli/src/services/insight/generators/DataProcessor.ts
+--- a/packages/cli/src/services/insight/generators/DataProcessor.ts
++++ b/packages/cli/src/services/insight/generators/DataProcessor.ts
+@@ -4,13 +4,13 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import fs from 'fs/promises';
+ import path from 'path';
+ import {
+-  read as readJsonlFile,
++  readCompleteCanonicalConversation,
+   createDebugLogger,
+ } from '@qwen-code/qwen-code-core';
+ import pLimit from 'p-limit';
+ import type {
+   InsightData,
+   HeatMapData,
+@@ -202,12 +202,25 @@
+ 
+   return hasMeaningfulInsightValue(meaningfulContent) ? normalizedFacet : null;
+ }
+ 
+ export class DataProcessor {
+   constructor(private config: Config) {}
++
++  private async readConversationRecords(
++    filePath: string,
++  ): Promise<ChatRecord[]> {
++    try {
++      return await readCompleteCanonicalConversation(filePath);
++    } catch (cause) {
++      throw new Error(
++        `Cannot generate a complete insight from ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}. Wait for its writer to finish, or inspect the recording with its matching client.`,
++        { cause },
++      );
++    }
++  }
+ 
+   // Format chat records for LLM analysis
+   private formatRecordsForAnalysis(records: ChatRecord[]): string {
+     let output = '';
+     const sessionStart =
+       records.length > 0 ? new Date(records[0].timestamp) : new Date();
+@@ -976,59 +989,68 @@
+   }
+ 
+   private async scanChatFiles(
+     baseDir: string,
+   ): Promise<Array<{ path: string; mtime: number }>> {
+     const allChatFiles: Array<{ path: string; mtime: number }> = [];
+-
++    let projectDirs: string[];
+     try {
+-      // Get all project directories in the base directory
+-      const projectDirs = await fs.readdir(baseDir);
+-
+-      // Process each project directory
+-      for (const projectDir of projectDirs) {
+-        const projectPath = path.join(baseDir, projectDir);
+-        const stats = await fs.stat(projectPath);
+-
+-        // Only process if it's a directory
+-        if (stats.isDirectory()) {
+-          const chatsDir = path.join(projectPath, 'chats');
+-
+-          try {
+-            // Get all chat files in the chats directory
+-            const files = await fs.readdir(chatsDir);
+-            const chatFiles = files.filter((file) => file.endsWith('.jsonl'));
+-
+-            for (const file of chatFiles) {
+-              const filePath = path.join(chatsDir, file);
+-
+-              // Get file stats for sorting by recency
+-              try {
+-                const fileStats = await fs.stat(filePath);
+-                allChatFiles.push({ path: filePath, mtime: fileStats.mtimeMs });
+-              } catch (e) {
+-                logger.error(`Failed to stat file ${filePath}:`, e);
+-              }
+-            }
+-          } catch (error) {
+-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+-              logger.error(
+-                `Error reading chats directory for project ${projectDir}: ${error}`,
+-              );
+-            }
+-            // Continue to next project if chats directory doesn't exist
+-            continue;
+-          }
+-        }
+-      }
++      projectDirs = await fs.readdir(baseDir);
+     } catch (error) {
+       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+-        // Base directory doesn't exist, return empty
+-        logger.info(`Base directory does not exist: ${baseDir}`);
+-      } else {
+-        logger.error(`Error reading base directory: ${error}`);
++        return [];
++      }
++      throw new Error(
++        `Cannot list insight projects in ${baseDir}. Check access and retry.`,
++        {
++          cause: error,
++        },
++      );
++    }
++
++    for (const projectDir of projectDirs) {
++      const projectPath = path.join(baseDir, projectDir);
++      let stats;
++      try {
++        stats = await fs.stat(projectPath);
++      } catch (cause) {
++        throw new Error(
++          `Cannot inspect insight project ${projectPath}. Check access and retry.`,
++          {
++            cause,
++          },
++        );
++      }
++      if (!stats.isDirectory()) continue;
++
++      const chatsDir = path.join(projectPath, 'chats');
++      let files: string[];
++      try {
++        files = await fs.readdir(chatsDir);
++      } catch (cause) {
++        if ((cause as NodeJS.ErrnoException).code === 'ENOENT') continue;
++        throw new Error(
++          `Cannot list insight recordings in ${chatsDir}. Check access and retry.`,
++          {
++            cause,
++          },
++        );
++      }
++      for (const file of files.filter((name) => name.endsWith('.jsonl'))) {
++        const filePath = path.join(chatsDir, file);
++        try {
++          const fileStats = await fs.stat(filePath);
++          allChatFiles.push({ path: filePath, mtime: fileStats.mtimeMs });
++        } catch (cause) {
++          throw new Error(
++            `Cannot inspect insight recording ${filePath}. Check access and retry.`,
++            {
++              cause,
++            },
++          );
++        }
+       }
+     }
+ 
+     return allChatFiles;
+   }
+ 
+@@ -1056,99 +1078,91 @@
+     for (let i = 0; i < totalFiles; i += BATCH_SIZE) {
+       const batchEnd = Math.min(i + BATCH_SIZE, totalFiles);
+       const batch = files.slice(i, batchEnd);
+ 
+       // Process batch sequentially to minimize memory usage
+       for (const fileInfo of batch) {
+-        try {
+-          const records = await readJsonlFile<ChatRecord>(fileInfo.path);
++        const records = await this.readConversationRecords(fileInfo.path);
+ 
+-          // Process each record
+-          for (const record of records) {
+-            const timestamp = new Date(record.timestamp);
+-            // Same local basis for the day key and the hour bucket — the
+-            // previous UTC day key put this record's activity on a
+-            // different "day" than its own active-hours bucket (#6835).
+-            const dateKey = dayKey(timestamp);
+-            const hour = hourOfDay(timestamp);
++        // Process each record
++        for (const record of records) {
++          const timestamp = new Date(record.timestamp);
++          // Same local basis for the day key and the hour bucket — the
++          // previous UTC day key put this record's activity on a
++          // different "day" than its own active-hours bucket (#6835).
++          const dateKey = dayKey(timestamp);
++          const hour = hourOfDay(timestamp);
+ 
+-            // Count user messages and slash commands (actual user interactions)
+-            const isUserMessage = record.type === 'user';
+-            const isSlashCommand =
+-              record.type === 'system' && record.subtype === 'slash_command';
+-            if (isUserMessage || isSlashCommand) {
+-              totalMessages++;
++          // Count user messages and slash commands (actual user interactions)
++          const isUserMessage = record.type === 'user';
++          const isSlashCommand =
++            record.type === 'system' && record.subtype === 'slash_command';
++          if (isUserMessage || isSlashCommand) {
++            totalMessages++;
+ 
+-              // Update heatmap (count of user interactions per day)
+-              heatmap[dateKey] = (heatmap[dateKey] || 0) + 1;
++            // Update heatmap (count of user interactions per day)
++            heatmap[dateKey] = (heatmap[dateKey] || 0) + 1;
+ 
+-              // Update active hours
+-              activeHours[hour] = (activeHours[hour] || 0) + 1;
++            // Update active hours
++            activeHours[hour] = (activeHours[hour] || 0) + 1;
+ 
+-              // Track the most recent activity for latestActiveTime.
+-              if (
+-                latestActiveTimestamp === null ||
+-                timestamp > latestActiveTimestamp
+-              ) {
+-                latestActiveTimestamp = timestamp;
+-              }
++            // Track the most recent activity for latestActiveTime.
++            if (
++              latestActiveTimestamp === null ||
++              timestamp > latestActiveTimestamp
++            ) {
++              latestActiveTimestamp = timestamp;
+             }
++          }
+ 
+-            // Track session times
+-            if (!sessionStartTimes[record.sessionId]) {
+-              sessionStartTimes[record.sessionId] = timestamp;
+-            }
+-            sessionEndTimes[record.sessionId] = timestamp;
++          // Track session times
++          if (!sessionStartTimes[record.sessionId]) {
++            sessionStartTimes[record.sessionId] = timestamp;
++          }
++          sessionEndTimes[record.sessionId] = timestamp;
+ 
+-            // Track tool usage
+-            if (record.type === 'assistant' && record.message?.parts) {
+-              for (const part of record.message.parts) {
+-                if ('functionCall' in part) {
+-                  const name = part.functionCall!.name!;
+-                  toolUsage[name] = (toolUsage[name] || 0) + 1;
+-                }
+-              }
+-            }
+-
+-            // Track lines and files from tool results
+-            if (
+-              record.type === 'tool_result' &&
+-              record.toolCallResult?.resultDisplay
+-            ) {
+-              const display = record.toolCallResult.resultDisplay;
+-              // Check if it matches FileDiff shape
+-              if (
+-                typeof display === 'object' &&
+-                display !== null &&
+-                'fileName' in display
+-              ) {
+-                // Cast to any to avoid importing FileDiff type which might not be available here
+-                const diff = display as {
+-                  fileName: unknown;
+-                  diffStat?: {
+-                    model_added_lines?: number;
+-                    model_removed_lines?: number;
+-                  };
+-                };
+-                if (typeof diff.fileName === 'string') {
+-                  uniqueFiles.add(diff.fileName);
+-                }
+-
+-                if (diff.diffStat) {
+-                  totalLinesAdded += diff.diffStat.model_added_lines || 0;
+-                  totalLinesRemoved += diff.diffStat.model_removed_lines || 0;
+-                }
++          // Track tool usage
++          if (record.type === 'assistant' && record.message?.parts) {
++            for (const part of record.message.parts) {
++              if ('functionCall' in part) {
++                const name = part.functionCall!.name!;
++                toolUsage[name] = (toolUsage[name] || 0) + 1;
+               }
+             }
+           }
+-        } catch (error) {
+-          logger.error(
+-            `Failed to process metrics for file ${fileInfo.path}:`,
+-            error,
+-          );
+-          // Continue to next file
++
++          // Track lines and files from tool results
++          if (
++            record.type === 'tool_result' &&
++            record.toolCallResult?.resultDisplay
++          ) {
++            const display = record.toolCallResult.resultDisplay;
++            // Check if it matches FileDiff shape
++            if (
++              typeof display === 'object' &&
++              display !== null &&
++              'fileName' in display
++            ) {
++              // Cast to any to avoid importing FileDiff type which might not be available here
++              const diff = display as {
++                fileName: unknown;
++                diffStat?: {
++                  model_added_lines?: number;
++                  model_removed_lines?: number;
++                };
++              };
++              if (typeof diff.fileName === 'string') {
++                uniqueFiles.add(diff.fileName);
++              }
++
++              if (diff.diffStat) {
++                totalLinesAdded += diff.diffStat.model_added_lines || 0;
++                totalLinesRemoved += diff.diffStat.model_removed_lines || 0;
++              }
++            }
++          }
+         }
+       }
+ 
+       // Update progress (mapped to 10-20% range of total progress)
+       if (onProgress) {
+         const percentComplete = batchEnd / totalFiles;
+@@ -1241,24 +1255,17 @@
+ 
+     for (const fileInfo of sortedFiles) {
+       if (eligibleSessions.length >= MAX_ELIGIBLE_SESSIONS) {
+         break;
+       }
+ 
+-      try {
+-        const records = await readJsonlFile<ChatRecord>(fileInfo.path);
+-        if (!this.hasUserAndAssistantRecords(records)) {
+-          continue;
+-        }
+-        eligibleSessions.push({ fileInfo, records });
+-      } catch (e) {
+-        logger.error(
+-          `Error reading session file ${fileInfo.path} for facet eligibility:`,
+-          e,
+-        );
++      const records = await this.readConversationRecords(fileInfo.path);
++      if (!this.hasUserAndAssistantRecords(records)) {
++        continue;
+       }
++      eligibleSessions.push({ fileInfo, records });
+     }
+ 
+     logger.info(
+       `Analyzing ${eligibleSessions.length} eligible recent sessions with LLM...`,
+     );
+ 

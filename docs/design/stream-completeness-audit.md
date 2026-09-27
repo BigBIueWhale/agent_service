@@ -311,12 +311,20 @@ review did not inspect deployed versions or prove migration compatibility.
 
 ## Reader coverage, retries and historical wording (§8)
 
-The broad “every transcript reader” claim in `38d83aa` was too strong. Current
-source still has two concrete omissions:
+The broad “every transcript reader” claim in `38d83aa` was too strong. The
+Insight omission was real: its statistics and facet paths used the permissive
+generic `read` helper and could skip damaged records while publishing a report.
+The shared complete canonical reader now admits the physical file and projects
+its active conversation chain before Insight counts or analyzes it. An unreadable
+or incomplete file refuses the report with its path and a possible next action;
+an inactive branch and model-evidence records do not become activity. This is
+source implementation, not an image qualification. The focused canonical,
+Insight and command source tests passed 66 cases. The adjacent static-generator
+suite could not start because this source checkout has no resolvable
+`@qwen-code/web-templates` package entry; no build was run to produce one.
 
-- Insight `DataProcessor` reads chat files through the permissive generic
-  `read` helper in its statistics and facet paths. That helper can recover or
-  skip malformed fragments rather than apply canonical record admission.
+One concrete source consumer omission remains:
+
 - Desktop `qwen-agent.ts` parses canonical transcript lines directly in text,
   telemetry and history projections. The examined loops continue after JSON
   errors and do not validate canonical recording versions. This is a source

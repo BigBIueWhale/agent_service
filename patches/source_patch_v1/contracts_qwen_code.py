@@ -8987,6 +8987,16 @@ def _validate_served_accounting_after(state: State) -> None:
     require_text(state, cli + "commands/review/lib/transcripts.ts", "readCanonicalChatRecordsSync(file)", label=label)
     forbid_text(state, cli + "commands/review/lib/transcripts.ts", "JSON.parse(line)", label=label)
     require_text(state, "packages/vscode-ide-companion/src/services/qwenSessionReader.ts", "readCanonicalChatRecords(filePath)", label=label)
+    _require_all(state, core + "services/chat-recording-io.ts", (
+        "readCompleteCanonicalConversation(", "readCompleteStoredCanonicalChatRecords(filePath)",
+        "prepareResolvedTranscriptRecords(records)", "entry.affectsCompleteness",
+    ), label=label)
+    insight = cli + "services/insight/generators/DataProcessor.ts"
+    _require_all(state, insight, (
+        "readCompleteCanonicalConversation(filePath)",
+        "Cannot generate a complete insight from", "this.readConversationRecords(fileInfo.path)",
+    ), label=label)
+    forbid_text(state, insight, "read as readJsonlFile", label=label)
     for path in (core + "config/config.ts", core + "services/chatRecordingService.ts"):
         for symbol in ("sessionWriterLeaseEnabled", "writerLeaseRequired"):
             forbid_text(state, path, symbol, label=label)
