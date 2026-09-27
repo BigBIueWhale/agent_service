@@ -124,10 +124,9 @@ generation. The first two events produced one prefix and two diagnostics. An
 admission rule that equates body presence with converter consumption would
 falsely admit the suffix; one that equates event and observation counts would
 reject valid cumulative and fragmented streams. The deterministic malformed-call
-failure can be replayed to infer this particular stop point. The run did not
-establish that an arbitrary caller cancellation boundary can be inferred, so
-the implementation must either retain enough producer-owned consumption state
-or prove that replay derives the boundary for every termination mode.
+failure can be replayed to infer this particular stop point. A separate caller
+cancellation case below proves that replay cannot infer every stop point from
+the existing physical records.
 
 The terminal observation in the cumulative case combines text from the fourth
 event and usage from the fifth. The tool-call observation in the fragmented
@@ -137,6 +136,32 @@ usage is billed once through the outcome even when a failed generation repeats
 the same cumulative usage in its prefix and diagnostics. These are executed
 source-level facts; they do not establish complete physical-to-decoded
 verification.
+
+## Executed caller-cancellation ambiguity
+
+The source-level reproducer at
+`/tmp/codex-physical-decoded-review/cancellation-boundary/REPORT.md` passed
+with the same SDK, recorder, pipeline, Chat and complete canonical reader. A
+469-byte SSE body contains `A`, `B`, terminal `C` and `[DONE]`. Closing Chat's
+generator after one delivery or after two gives identical physical `http`,
+`body`, `end` and `outcome` events: the whole body is recorded, transport and
+processing are cancelled, and history is abandoned in both. The first closed
+generation retains only `A`; the second retains `A` and `B`. Both are valid
+prefixes. The test compares the actual physical event values and the distinct
+SDK objects that reached conversion, and the capture preserves the exact
+generations and body. It did not exercise a deployed provider, the outer CLI
+or a terminal-holding cancellation race.
+
+The existing body, termination, processing outcome and disposition therefore
+cannot independently determine what a cancelled caller received. The shared
+producer must durably bind its processing progress to the physical response,
+and every admitting reader must check that bound while replaying the exact
+body. Progress must identify the SDK values admitted to conversion and the
+observations delivered to Chat, or an equivalent boundary with those semantics.
+The pipeline can hold a terminal pending EOF and expand a failed conversion
+into diagnostics, so an SDK-object count alone is not established as sufficient.
+This source-level result rules out a body-only replay check for cancellation;
+the producer and reader migration still needs a versioned implementation.
 
 ## Decoder proof required at admission
 
