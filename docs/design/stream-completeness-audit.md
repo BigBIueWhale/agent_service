@@ -484,3 +484,37 @@ review hunks matched both coordinate systems; unrelated authoritative edits and
 protected release inputs are unchanged. Framework tests passed 38 cases and
 identifiers retain 35 semantic concerns. These checks qualify the source splice,
 not compilation, owner gates or the standing goal's remaining implementation.
+
+## Admitted acquisition failure after 4bc2592
+
+The logical completion investigation reproduced another canonical omission:
+provider stream acquisition can exhaust after durable physical requests, before
+`processStreamResponse` ever starts. The actual SDK/child-writer baseline wrote
+two failed physical responses but no canonical generation. A required stdout
+publication failure after request persistence also left the request unattached
+to its Chat attempt. These findings are executed source observations, distinct
+from the audit's broader still-open certifier claims.
+
+The journal now attaches the physical response after request persistence and
+before publication. Shared Chat writes one existing-shape abandoned generation
+on acquisition failure when at least one request was admitted. A recovered inner
+retry and zero-request preflight do not acquire extra failure generations.
+Canonical recording failure stays visible with the acquisition failure; eligible
+outer preterminal retries retain separate attempt identities. See the
+[acquisition note](acquisition-failure-recording.md) for the exact boundary,
+source evidence and verification limits.
+
+This adds no wire version or conversation content. Resume continues to read the
+canonical runtime file; typed runtime-history projection excludes the failure
+diagnostic. That exclusion and unchanged history admission are established by
+reading; full version8 restoration and native certification remain unverified
+pending owner gates. Logical completion/output binding, input/runtime accounting
+and billing reconciliation remain required implementation work.
+
+Executed evidence for this correction comprises eleven independent actual-SDK
+and child-writer scenarios, 572 passing affected core cases including ten new
+regressions, and 38 transformer framework cases. Five full-wire cases remain
+unqualified at the unchanged generated v5 validator. A fresh archive matches all
+1,062 final identities, twelve intended changed paths and 6,925 both-sided review
+hunks; unrelated authoritative edits and protected release inputs are unchanged.
+Compilation, typechecking, full version8 resume and native gates were not run.

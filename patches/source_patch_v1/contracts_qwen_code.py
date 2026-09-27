@@ -8198,8 +8198,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "client.fetchWithTimeout.bind(client)", "attempt.capture(await fetchWithTimeout(...args))",
         "await createPromise.withResponse()", "clock.subscribe(rearm)",
         "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.finish(outcome)",
-        "request.generationContext.requestSegmentId,", "request.chatAttempt.owner",
-        "request.chatAttempt?.attach(responseEvidence)", "request.config?.abortSignal,",
+        "request.generationContext.requestSegmentId,", "request.chatAttempt,",
+        "request.config?.abortSignal,",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
         "export class ModelResponseRecorder", "export class ModelResponseReplay",
@@ -8246,11 +8246,23 @@ def _validate_served_accounting_after(state: State) -> None:
         "async flush(): Promise<void>", "if (this.failure) throw this.failure.cause;",
         "let cancelledBeforeAdmission = false;", "signal.throwIfAborted();",
         "if (!cancelledBeforeAdmission) this.failure = { cause: error };",
+        "attempt: ChatAttempt | null", "attempt?.assertOpen();",
+        "if (admitted)", "await response.finish({",
     ), label=label)
+    request_capture = _source(state, core + "core/model-request-evidence.ts", label=label).split(
+        "async capture(", 1)[1].split("private async publish(", 1)[0]
+    _require_ordered(request_capture, (
+        "attempt?.assertOpen();", "await this.persist(evidence);",
+        "admitted = true;", "attempt?.attach(response);",
+        "await this.publish({ type: 'model_request', request: evidence });",
+        "await write;", "catch (cause)", "await response.finish({",
+    ), label=label, location="durable request ownership before publication")
+    forbid_text(state, pipeline, "request.chatAttempt?.attach(responseEvidence)", label=label)
     require_text(state, core + "core/geminiChat.ts", "this.generationContext.startRequestSegment()", label=label)
     _require_all(state, core + "core/chat-attempt.ts", (
         "export class ChatAttempt", "readonly id = randomUUID()", "kind: 'chat'",
         "response.finishHistory(disposition)", "Promise.allSettled",
+        "get hasRequests(): boolean", "return this.responses.length > 0;", "assertOpen(): void",
     ), label=label)
     _require_all(state, core + "core/generation-context.ts", (
         "chatAttempt: ChatAttempt | null", "generateChatContentStream(", "chatAttempt: null",
@@ -8270,6 +8282,15 @@ def _validate_served_accounting_after(state: State) -> None:
         "disposition = chunk.historyDisposition;", "await settle();",
         "yield { type: StreamEventType.CHUNK, ...chunk };", "}, settle);",
     ), label=label, location=core + "core/geminiChat.ts")
+    acquisition = _source(state, core + "core/geminiChat.ts", label=label).split(
+        "const streamResponse = await retryWithBackoff(apiCall, {", 1)[1]
+    _require_ordered(acquisition, (
+        ").catch((error: unknown) =>", "withCleanup(", "throw error;",
+        "if (attempt.hasRequests)", "await this.chatRecordingService.recordGenerationFailure(",
+        "origin: attempt.origin", "message: []", "usageMetadata: null",
+        "finishReason: null", "incompleteToolCalls: []", "goalContext",
+        "return this.processStreamResponse(",
+    ), label=label, location="one admitted acquisition failure before processed-stream ownership")
     _require_all(state, core + "core/model-response-evidence.ts", (
         "finishHistory(disposition: ChatHistoryDisposition)", "kind: 'history'", "state.owner.kind !== 'chat'",
         "state.processing.status !== 'completed'", "chat attempt accepts multiple physical responses",
@@ -10624,6 +10645,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
+            "Durable request admission attaches its physical response before stdout publication. "
+            "Exhausted acquisition records one empty abandoned generation for an admitted chat "
+            "attempt, preserves provider and recording failures, and leaves unadmitted preflight "
+            "outside generation accounting. Acquisition recovery retains one eventual generation; "
+            "preterminal outer retries keep distinct abandoned and accepted attempts. "
             "Canonical decoding retains physical location and cause for syntax, version and evidence "
             "refusals. Session catalogs isolate rejected files without claiming absence, preserve "
             "timestamp ties and unscanned boundaries, and refuse ambiguous automatic selection. "
