@@ -1341,6 +1341,7 @@ mod tests {
             if record["type"] == "model_attempt_completion" {
                 record["completion"]["generation_sha256"] = serde_json::json!(hash);
                 record["completion"]["disposition"] = serde_json::json!("abandoned");
+                record["completion"]["consumer_observations"] = serde_json::json!(1);
             }
             admit(&mut owner, &record.to_string()).unwrap();
         }
@@ -1391,7 +1392,7 @@ mod tests {
             id,
             3,
             &format!(
-                r#"{{"kind":"outcome","status":"completed","error":null,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
+                r#"{{"kind":"outcome","status":"completed","error":null,"sdk_values_seen":0,"pipeline_outputs_delivered":0,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
             ),
         )
     }

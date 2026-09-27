@@ -200,13 +200,17 @@ identities there. Utility calls and Chat therefore have distinct consumer sites;
 neither a Chat-only marker nor a downstream-consumption count frozen into the
 response `outcome` covers both correctly.
 
-The physical response owner can bind SDK values and decoded outputs as they pass
-through the pipeline. Consumer membership must then be recorded at the Chat or
-utility consumption site, with a response request identity carried to that site
-and a closure later than the transport outcome where necessary. The admitting
-reader must require this closure before treating a generation or utility output
-as complete. This placement follows from the current source lifecycle; no wire
-field, consumer receipt or cross-reader verifier has been implemented here.
+The physical response owner records the count of SDK values admitted to
+conversion and decoded outputs delivered by the pipeline in each response
+outcome. Chat records a separate receipt count after incorporating each output
+into its generation; the attempt completion binds that count to the generation's
+observation count and the outcomes of its physical requests. This is stream
+contract v9 and canonical recording version 11. The TypeScript and Python source
+tests exercised the new counts, including early cancellation and a conversion
+failure that emits several diagnostics. Native and Java source includes the same
+admission checks but has not been compiled or executed here. A utility consumer
+still has no corresponding receipt, and these counts do not themselves prove
+that any decoded value came from the retained body bytes.
 
 ## Decoder proof required at admission
 
@@ -218,9 +222,9 @@ above has identical request and response bytes but different correct thought
 and text parts. A generation envelope cannot choose its own decoding profile
 after the fact. A changed required wire field needs a new stream-contract and
 canonical-recording identity, with all producers and admitting readers changed
-together. The policy field uses stream contract v8 and canonical recording
-version 10. A source-only migration cannot claim that generated bindings or
-native gates have run.
+together. The policy and progress fields use stream contract v9 and canonical
+recording version 11. A source-only migration cannot claim that generated
+bindings or native gates have run.
 
 For each physical response, a verifier must parse the exact stored bytes with
 the pinned SDK's relevant SSE or nonstreaming semantics, replay the selected
@@ -255,18 +259,18 @@ The selected policy is now required on every durable model request. The producer
 checks that provider decoration preserved the selected stream mode before
 recording. Request replay requires an explicit boolean `stream` in the exact
 body and the matching policy mode, and evidence rejects an absent, malformed or
-unknown policy. The v8 schema requires the same closed policy shape in stdout,
-Python and Java resources; the canonical runtime file uses version 10.
-Version 9 canonical files cannot supply the selected policy; the version 10
+unknown policy. The v9 schema requires the same closed policy shape in stdout,
+Python and Java resources; the canonical runtime file uses version 11.
+Canonical files from before that identity lack required evidence; the version 11
 reader refuses them with a matching-client or new-session action. Source reading
 shows that this change adds evidence beside runtime history and does not change
-the conversation parts or their order; complete version 10 resume remains
-unverified pending the owner's gates. Focused TypeScript
-request and pipeline tests passed 23 and 168 cases respectively; the
-Python unit suite passed 731 cases, including new policy refusals. The Rust and
+the conversation parts or their order; complete version 11 resume remains
+unverified pending the owner's gates. The current six focused TypeScript
+suites passed 394 cases and skipped two; the Python SDK unit and integration
+suites passed 746 cases, including policy and progress refusals. The Rust and
 Java refusal cases were authored but not executed. The installed TypeScript
 wire validator is still generated from v5 and rejects `stream_start` before
-these new records; its full-wire tests cannot qualify v8 until the owner's
+these new records; its full-wire tests cannot qualify v9 until the owner's
 generation and build gates run. No admitting reader yet replays retained response
 bytes through the selected decoder or compares them with a canonical generation.
 The policy binding is therefore a necessary input to physical-to-decoded proof,

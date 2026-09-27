@@ -39,14 +39,14 @@ def build_patchset(artifact_root: Path) -> PatchSet:
         name: (artifact_root / f"protocol/test-vectors/{name}.json").read_bytes()
         for name in ("goal-state-v1", "partial-stream-v2")
     }
-    schema = (artifact_root / "protocol/stream-contract-v8.json").read_bytes()
+    schema = (artifact_root / "protocol/stream-contract-v9.json").read_bytes()
 
     def validate_bound_final(state: dict[str, str]) -> None:
         validate_final(state)
         try:
-            if state["packages/sdk-python/src/qwen_code_sdk/stream-contract-v8.json"].encode("utf-8") != schema:
+            if state["packages/sdk-python/src/qwen_code_sdk/stream-contract-v9.json"].encode("utf-8") != schema:
                 raise PatchRefusedError("Python SDK stream schema differs from its authoritative source")
-            if state["packages/sdk-java/qwencode/src/main/resources/stream-contract-v8.json"].encode("utf-8") != schema:
+            if state["packages/sdk-java/qwencode/src/main/resources/stream-contract-v9.json"].encode("utf-8") != schema:
                 raise PatchRefusedError("Java SDK stream schema differs from its authoritative source")
             evidence = state["packages/sdk-python/tests/fixtures/record-evidence.json"]
             for path in (

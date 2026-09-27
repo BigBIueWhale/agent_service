@@ -5,7 +5,7 @@
     "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
     "parent_tool_use_id": null,
     "subtype": "stream_start",
-    "stream_contract_sha256": "186e4a55507a152d046a468b6d31b9d250038aec915470f006717ff0e91c34ea",
+    "stream_contract_sha256": "74e3f5a0a0c0237ff2503701fda7539a1cc33dedae4edab1c6f0d05199df45aa",
     "request_evidence_origin": {
       "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
       "first_sequence": 1
@@ -112,7 +112,9 @@
           "candidatesTokenCount": 7,
           "thoughtsTokenCount": 2,
           "cachedContentTokenCount": 4
-        }
+        },
+        "sdk_values_seen": 3,
+        "pipeline_outputs_delivered": 3
       }
     }
   },
@@ -161,7 +163,8 @@
       "request_ids": [
         "2b746e8d-b870-48fb-8b5b-158a02ef429e"
       ],
-      "disposition": "accepted"
+      "disposition": "accepted",
+      "consumer_observations": 3
     }
   },
   {

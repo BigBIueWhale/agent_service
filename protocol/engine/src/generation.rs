@@ -88,6 +88,7 @@ pub(crate) struct Generation {
     pub output_scope: OutputScope,
     pub usage: Option<ServedUsage>,
     pub finish: Option<String>,
+    pub observation_count: u64,
     pub text: String,
     pub thinking: String,
     pub calls: Vec<Call>,
@@ -217,6 +218,9 @@ impl Generation {
         validate(envelope, SchemaEntry::GenerationEnvelope, schema, line)?;
         finite_numbers(envelope)?;
         let usage = field(envelope, "usage", line)?;
+        let observations = values(envelope.get("observations"));
+        let observation_count = u64::try_from(observations.len())
+            .map_err(|_| refusal("observation count exceeds exact integer range"))?;
         let mut generation = Self {
             journal: text(evidence, "journal_id", line)?.into(),
             id: text(evidence, "generation_id", line)?.into(),
@@ -231,6 +235,7 @@ impl Generation {
             finish: field(envelope, "finish_reason", line)?
                 .as_str()
                 .map(str::to_string),
+            observation_count,
             text: String::new(),
             thinking: String::new(),
             calls: Vec::new(),
@@ -254,7 +259,7 @@ impl Generation {
         let mut observed_usage = None;
         let mut observed_finish = None;
         let mut previous_plain_nonempty = false;
-        for observation in values(envelope.get("observations")) {
+        for observation in observations {
             let response = field(observation, "response", line)?;
             if let Some(usage) = response
                 .get("usageMetadata")

@@ -637,7 +637,7 @@ def _validate_stream_commit_after(state: State) -> None:
     )
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
-        "for (const response of decoder.finish()) yield response",
+        "for (const response of decoder.finish()) {",
         "ResponseObservationError",
     ), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/responseDecoder.ts", (
@@ -8261,7 +8261,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 10;",
+            "export const CHAT_RECORDING_VERSION = 11;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8332,7 +8332,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "readonly served_usage: ServedUsage | null", "observeUsage(usage: ServedUsage)",
         "served usage follows response processing completion",
         "SERVED_USAGE_FIELDS.map((field) => [field, counts[field]])",
-        "['kind', 'status', 'error', 'served_usage']",
+        "!keys(event, [",
+        "'sdk_values_seen'", "'pipeline_outputs_delivered'",
+        "observeSdkValue(): void", "observePipelineOutput(): void",
         "requireServedUsage(event['served_usage'], 'recorded response usage')",
     ), label=label)
     pipeline_usage = _source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label)
@@ -8366,8 +8368,10 @@ def _validate_served_accounting_after(state: State) -> None:
                  label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
-        "for (const response of decoder.finish()) yield response",
-        "for (const diagnostic of decoder.diagnostics()) yield diagnostic",
+        "for (const response of decoder.finish()) {",
+        "for (const diagnostic of decoder.diagnostics()) {",
+        "responseEvidence.observeSdkValue();",
+        "responseEvidence.observePipelineOutput();",
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/pipeline.ts", (
         "const observation = readOpenAIUsage(usage)",
@@ -8411,6 +8415,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "if (!this.generation)",
         "await this.complete({", "generation_sha256: this.generation.generation_sha256",
         "request_ids: this.responses.map((response) => response.requestId)",
+        "consumer_observations: this.consumerObservations",
     ), label=label, location="generation publication and complete physical population before logical completion")
     _require_all(state, core + "core/model-generation.ts", (
         "export class ModelGenerationReplay", "readModelGeneration(value)",
@@ -8420,6 +8425,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "accepted !== (completion.disposition === 'accepted' ? 1 : 0)",
         "requireAcceptedGeneration(envelope)",
         "outcome.served_usage![field] !== envelope.usage![field]",
+        "completion.consumer_observations !== envelope.observations.length",
         "the stream ends with an incomplete logical attempt",
     ), label=label)
     _require_ordered(
@@ -8601,7 +8607,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v8.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v9.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -8627,6 +8633,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "200 <= state.http_status < 300", 'state.termination in ("eof", "cancelled")',
         'state.termination = event["termination"]',
         'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
+        'event["sdk_values_seen"]', 'event["pipeline_outputs_delivered"]',
+        'completion["consumer_observations"]',
         "completed processing has no successful HTTP transport completion",
         "not self.responses", "not self.group_open and not self.blocks",
     ), label=label)
@@ -8713,10 +8721,12 @@ def _validate_served_accounting_after(state: State) -> None:
         '"eof".equals(state.termination) || "cancelled".equals(state.termination)',
         'state.termination = (String) event.get("termination")',
         'RequestUsage.served(event.get("served_usage"))',
+        'event.get("sdk_values_seen")', 'event.get("pipeline_outputs_delivered")',
+        'completion.get("consumer_observations")',
         "completed processing has no successful HTTP transport completion",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v8.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v9.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (

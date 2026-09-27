@@ -127,7 +127,15 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             state["ended"] = True
             state["termination"] = termination
         elif event["kind"] == "outcome":
-            if set(event) != {"kind", "status", "error", "served_usage"} or event["status"] not in ("completed", "failed", "cancelled") or not (event["error"] is None or isinstance(event["error"], str)) or (event["status"] == "completed" and event["error"] is not None) or (event["status"] == "failed" and not isinstance(event["error"], str)):
+            progress = (event.get("sdk_values_seen"), event.get("pipeline_outputs_delivered"))
+            if (set(event) != {"kind", "status", "error", "served_usage", "sdk_values_seen", "pipeline_outputs_delivered"}
+                    or any(type(value) is not int or not 0 <= value <= 2**53 - 1 for value in progress)
+                    or (progress[0] > 0 and not state["http"])
+                    or (progress[1] > 0 and progress[0] == 0)
+                    or event["status"] not in ("completed", "failed", "cancelled")
+                    or not (event["error"] is None or isinstance(event["error"], str))
+                    or (event["status"] == "completed" and event["error"] is not None)
+                    or (event["status"] == "failed" and not isinstance(event["error"], str))):
                 raise ValueError("invalid response processing outcome; inspect the original stream")
             if event["status"] == "completed" and (not state["http"] or not 200 <= actual["response_status"] < 300 or state["termination"] not in ("eof", "cancelled")):
                 raise ValueError("completed processing has no successful HTTP transport completion; inspect the original stream")

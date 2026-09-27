@@ -64,6 +64,7 @@ pub(crate) struct ResponseOutcome {
     pub scope: String,
     pub usage: Option<ServedUsage>,
     pub completed: bool,
+    pub pipeline_outputs_delivered: u64,
 }
 
 pub(crate) struct RequestBody {
@@ -442,6 +443,21 @@ impl ModelRequests {
                     ));
                 }
                 let usage = field(event, "served_usage", line)?;
+                let sdk_values_seen = unsigned(
+                    field(event, "sdk_values_seen", line)?,
+                    "SDK values seen",
+                    SAFE_INTEGER,
+                )?;
+                let pipeline_outputs_delivered = unsigned(
+                    field(event, "pipeline_outputs_delivered", line)?,
+                    "pipeline outputs delivered",
+                    SAFE_INTEGER,
+                )?;
+                if (sdk_values_seen > 0 && state.http_status.is_none())
+                    || (pipeline_outputs_delivered > 0 && sdk_values_seen == 0)
+                {
+                    return Err(refusal("decoded progress has no observed SDK response"));
+                }
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
                     usage: if usage.is_null() {
@@ -450,6 +466,7 @@ impl ModelRequests {
                         Some(ServedUsage::read(usage, line)?)
                     },
                     completed,
+                    pipeline_outputs_delivered,
                 });
                 state.processing = Some(completed);
                 ended = state.attempt.is_none();
@@ -645,6 +662,24 @@ impl ModelRequests {
                 "logical disposition contradicts physical history decisions",
             ));
         }
+        let consumer_observations = unsigned(
+            field(completion, "consumer_observations", line)?,
+            "consumer observations",
+            SAFE_INTEGER,
+        )?;
+        let delivered = attempt.outcomes.values().try_fold(0u64, |total, outcome| {
+            total
+                .checked_add(outcome.pipeline_outputs_delivered)
+                .filter(|value| *value <= SAFE_INTEGER)
+                .ok_or_else(|| refusal("pipeline output count exceeds exact integer range"))
+        })?;
+        if consumer_observations != generation.observation_count
+            || consumer_observations > delivered
+        {
+            return Err(refusal(
+                "consumer receipt contradicts decoded output or generation observations",
+            ));
+        }
         if accepted {
             generation.require_accepted()?;
             let outcome = attempt
@@ -785,6 +820,7 @@ mod tests {
                 }));
                 events.push(json!({
                     "kind": "outcome", "served_usage": null, "status": status,
+                    "sdk_values_seen": 0, "pipeline_outputs_delivered": 0,
                     "error": if status == "failed" { json!("processing failed") } else { json!(null) }
                 }));
                 for (index, event) in events.iter().enumerate() {
@@ -836,6 +872,7 @@ mod tests {
                     state.commit_response(plan);
                 }
                 let mut event = json!({"kind":"outcome","status":status,
+                    "sdk_values_seen":0,"pipeline_outputs_delivered":0,
                     "error":if status == "failed" {json!("processing failed")} else {json!(null)},
                     "served_usage":{"promptTokenCount":5,"candidatesTokenCount":3,"totalTokenCount":8,
                         "cachedContentTokenCount":1,"thoughtsTokenCount":2}});
@@ -898,7 +935,7 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","served_usage":null,"status":"completed","error":null}),
+                json!({"kind":"outcome","served_usage":null,"status":"completed","error":null,"sdk_values_seen":0,"pipeline_outputs_delivered":0}),
             ].into_iter().enumerate() {
                 if id == "b" && event["kind"] == "outcome" {
                     assert!(state.validate_summary(terminal.root(), 3).is_err());
@@ -1002,7 +1039,7 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","served_usage":null,"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)}}),
+                json!({"kind":"outcome","served_usage":null,"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)},"sdk_values_seen":0,"pipeline_outputs_delivered":0}),
             ].into_iter().enumerate() {
                 let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();

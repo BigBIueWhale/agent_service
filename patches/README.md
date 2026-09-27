@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `f7905d0b770ab03e7d7671cfeb93bd300d4afd5b452f2fd591522f5ae502e67a`
+- Review-diff SHA-256: `a5a6471edc064f4141456aedff25641adace7875b7e93f301c2f3fb11a84ed72`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `b445102688d91924d58f2c5c69bd34b297ec59be54828d7cc778ea3dc60d9294`
+- Transformer-manifest SHA-256: `47dfc6bff4e9f32cd7eb0e95edbf12853e068df2da70be8a18dd6f68a3190cd5`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 10`, independently
+Every physical canonical chat record carries `recordingVersion: 11`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -365,7 +365,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 10 histories.
+new session. They are not promoted into complete version 11 histories.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
@@ -482,7 +482,7 @@ from the request's start, idle and generation clocks. A hung storage write can
 still defeat session deadlines; the shared write/cancellation correction remains
 open in the [audit disposition](../docs/design/stream-completeness-audit.md).
 
-Canonical format 9 structurally excludes response evidence from messages,
+Canonical format 11 structurally excludes response evidence from messages,
 conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix
@@ -491,6 +491,15 @@ logical completion. Native behavior remains unverified pending owner gates. Both
 providers compare recorded bytes with their actual response body, including
 malformed SSE and cancelled prefixes. Full/indexed/fork resume tests compare the
 entire restored model history byte for byte while preserving raw evidence.
+
+Each response outcome also records how many SDK values reached conversion and
+how many decoded outputs crossed the shared pipeline. A chat attempt completion
+records how many of those outputs Chat incorporated into its generation. Readers
+require that receipt to equal the generation observation count and to fit within
+the physical requests' delivered output count. These boundaries distinguish
+early cancellation from a complete response body and a diagnostic expansion
+from one SDK value. They do not yet prove that an observation's contents were
+derived from the captured bytes; a raw-response replay verifier is still needed.
 
 These records cover the HTTP response observed by every shared-client generation,
 including side queries and children. They cannot establish tokens generated but

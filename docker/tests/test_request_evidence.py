@@ -92,7 +92,7 @@ class ResponseEvidenceTests(unittest.TestCase):
             envelope(1, {"kind": "http", "status": 200, "content_type": "text/event-stream"}),
             envelope(2, {"kind": "body", "offset": 0, "base64": base64.b64encode(body).decode()}),
             envelope(3, {"kind": "end", "termination": termination, "body_bytes": len(body), "body_sha256": hashlib.sha256(body).hexdigest(), "error": None}),
-            envelope(4, {"kind": "outcome", "served_usage": None, "status": "failed", "error": "malformed JSON"}),
+            envelope(4, {"kind": "outcome", "served_usage": None, "status": "failed", "error": "malformed JSON", "sdk_values_seen": 0, "pipeline_outputs_delivered": 0}),
             {"type": "result", "request_evidence": {"open_response_ids": []}},
         ]
         served = [{"response_status": 200, "response_content_type": "text/event-stream", "response_chunks": [base64.b64encode(body + (b"unobserved" if termination == "cancelled" else b"")).decode()]}]
@@ -103,6 +103,21 @@ class ResponseEvidenceTests(unittest.TestCase):
         for termination in ["eof", "cancelled"]:
             events, served = self.fixture(termination)
             self.assertEqual(len(require_response_evidence(events, served)), 4)
+
+    def test_processing_progress_requires_an_observed_sdk_value(self):
+        from request_evidence import require_response_evidence
+        for defect in ("missing", "unseen_sdk", "unsafe_count"):
+            with self.subTest(defect=defect):
+                events, served = self.fixture()
+                outcome = events[-2]["response"]["event"]
+                if defect == "missing":
+                    del outcome["sdk_values_seen"]
+                elif defect == "unseen_sdk":
+                    outcome["pipeline_outputs_delivered"] = 1
+                else:
+                    outcome["sdk_values_seen"] = 2**53
+                with self.assertRaises(ValueError):
+                    require_response_evidence(events, served)
 
     def test_processing_outcome_matches_the_observed_transport(self):
         from request_evidence import require_response_evidence
@@ -178,7 +193,7 @@ class ResponseEvidenceTests(unittest.TestCase):
         self.assertEqual(len(require_response_evidence(events, served)), 5)
         history["response"]["event"]["disposition"] = "accepted"
         with self.assertRaises(ValueError): require_response_evidence(events, served)
-        events[-3]["response"]["event"] = {"kind": "outcome", "served_usage": None, "status": "completed", "error": None}
+        events[-3]["response"]["event"] = {"kind": "outcome", "served_usage": None, "status": "completed", "error": None, "sdk_values_seen": 0, "pipeline_outputs_delivered": 0}
         self.assertEqual(len(require_response_evidence(events, served)), 5)
 
     def test_output_cannot_claim_an_unissued_or_foreign_attempt(self):

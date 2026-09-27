@@ -49,7 +49,7 @@ COPY patches/qwen-code-0.21.12-agent-service.patch \
   /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch
 COPY patches/source_patch_v1 \
   /opt/agent-artifacts/patches/source_patch_v1
-COPY protocol/stream-contract-v8.json /opt/agent-artifacts/protocol/stream-contract-v8.json
+COPY protocol/stream-contract-v9.json /opt/agent-artifacts/protocol/stream-contract-v9.json
 COPY protocol/test-vectors /opt/agent-artifacts/protocol/test-vectors
 COPY scripts/generate-protocol-bindings.mjs \
   /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs
