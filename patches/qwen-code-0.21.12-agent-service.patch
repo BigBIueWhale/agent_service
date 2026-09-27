@@ -160057,7 +160057,7 @@ diff --git a/packages/core/src/core/final-message-slip.ts b/packages/core/src/co
 diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/geminiChat.test.ts
 --- a/packages/core/src/core/geminiChat.test.ts
 +++ b/packages/core/src/core/geminiChat.test.ts
-@@ -1,28 +1,73 @@
+@@ -1,28 +1,76 @@
 +import RealOpenAI from 'openai';
 +import { ContentGenerationPipeline } from './openaiContentGenerator/pipeline.js';
 +import { DefaultOpenAICompatibleProvider } from './openaiContentGenerator/provider/default.js';
@@ -160103,7 +160103,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +import type { ChatCommitRecorder } from '../services/chatRecordingService.js';
 +import { ToolCallCountDefectError } from './tool-call-count.js';
 +
-+import { GenerationContext, type OwnedGenerationRequest } from './generation-context.js';
++import {
++  GenerationContext,
++  type OwnedGenerationRequest,
++} from './generation-context.js';
  import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 +import type { Mock } from 'vitest';
 +import realFs from 'node:fs/promises';
@@ -160135,7 +160138,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
  import { classifyRetryError } from '../utils/retryErrorClassification.js';
  import { StreamContentError } from './openaiContentGenerator/pipeline.js';
-@@ -30,30 +75,206 @@
+@@ -30,30 +78,206 @@
  import { EnhancedErrorHandler } from './openaiContentGenerator/errorHandler.js';
  import { APIConnectionTimeoutError } from 'openai';
  import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider/index.js';
@@ -160351,7 +160354,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  vi.mock('node:fs', () => {
    const fsModule = {
      mkdirSync: vi.fn(),
-@@ -88,35 +309,29 @@
+@@ -88,35 +312,29 @@
    return {
      ...actual,
      retryWithBackoff: mockRetryWithBackoff,
@@ -160389,7 +160392,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  const { mockAcquireSleepInhibitor, mockSleepInhibitorRelease } = vi.hoisted(
    () => ({
      mockAcquireSleepInhibitor: vi.fn(),
-@@ -154,72 +369,115 @@
+@@ -154,72 +372,115 @@
  
    beforeEach(() => {
      vi.clearAllMocks();
@@ -160520,7 +160523,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    afterEach(() => {
      vi.restoreAllMocks();
-@@ -271,12 +529,13 @@
+@@ -271,12 +532,13 @@
        yield* responses;
      })();
    }
@@ -160534,7 +160537,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -284,15 +543,19 @@
+@@ -284,15 +546,19 @@
    }
  
    describe('system instruction helpers', () => {
@@ -160555,7 +160558,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
-@@ -302,15 +565,19 @@
+@@ -302,15 +568,19 @@
        );
      });
  
@@ -160576,7 +160579,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nUser memory\n\n---\n\nAppended rule',
        );
  
-@@ -322,20 +589,24 @@
+@@ -322,20 +592,24 @@
        );
      });
  
@@ -160602,7 +160605,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
  
-@@ -344,15 +615,19 @@
+@@ -344,15 +618,19 @@
        );
      });
  
@@ -160623,7 +160626,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.applySessionStartContext(
          '  Sync ctx  ',
-@@ -364,15 +639,19 @@
+@@ -364,15 +642,19 @@
        );
      });
  
@@ -160644,7 +160647,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nSessionStart additional context:\nLegitimate content',
        );
  
-@@ -382,19 +661,654 @@
+@@ -382,19 +664,662 @@
          'Legitimate content',
        );
        expect(isolatedChat['generationConfig'].systemInstruction).toContain(
@@ -160813,6 +160816,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          request.request_id,
 +          request.owner,
 +          request.kv_scope,
++          request.decode_policy,
 +        );
 +      for (const response of responses) replay.observe(response);
 +      replay.finish();
@@ -160944,7 +160948,9 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +    expect(durableCommits).toBe(mode === 'cancel_before_commit' ? 0 : 1);
 +    expect(new Set(owners.map((o) => o.owner.attempt_id)).size).toBe(1);
 +    const replay = new ModelResponseReplay();
-+    owners.forEach((o) => replay.begin('journal', o.id, o.owner, 'owned-chat'));
++    owners.forEach((o) =>
++      replay.begin('journal', o.id, o.owner, 'owned-chat', TEST_POLICY),
++    );
 +    records.forEach((r) => replay.observe(r));
 +    replay.finish();
 +  });
@@ -161254,12 +161260,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        [requests[1].request_id, 'accepted'],
 +      ]);
 +      expect(
-+        responses
-+          .flatMap((response) =>
-+            response.event.kind === 'outcome'
-+              ? [response.event.pipeline_outputs_delivered]
-+              : [],
-+          ),
++        responses.flatMap((response) =>
++          response.event.kind === 'outcome'
++            ? [response.event.pipeline_outputs_delivered]
++            : [],
++        ),
 +      ).toEqual([0, 1]);
 +      expect(recorder.recordGeneration).toHaveBeenCalledOnce();
 +      expect(
@@ -161280,7 +161285,13 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +      ).toBe(true);
 +      const replay = new ModelResponseReplay();
 +      requests.forEach((r) =>
-+        replay.begin(r.journal_id, r.request_id, r.owner, r.kv_scope),
++        replay.begin(
++          r.journal_id,
++          r.request_id,
++          r.owner,
++          r.kv_scope,
++          r.decode_policy,
++        ),
 +      );
 +      responses.forEach((r) => replay.observe(r));
 +      replay.finish();
@@ -161299,7 +161310,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -415,12 +1329,93 @@
+@@ -415,12 +1340,93 @@
          mockConfig,
          'Qwen Code is streaming a model response',
        );
@@ -161393,7 +161404,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
            streamResponse(stopResponse([{ text: 'ok' }])),
-@@ -525,29 +1520,34 @@
+@@ -525,29 +1531,34 @@
              ),
          ).toHaveLength(1);
        });
@@ -161434,7 +161445,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockConfig.restorePendingManualPlanExitNotice,
          ).toHaveBeenCalledWith(11);
  
-@@ -630,78 +1630,88 @@
+@@ -630,78 +1641,88 @@
            mockConfig.restorePendingManualPlanExitNotice,
          ).not.toHaveBeenCalled();
        });
@@ -161545,7 +161556,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    'changed outside the approved exit_plan_mode flow',
                  ),
                ),
-@@ -725,15 +1735,16 @@
+@@ -725,15 +1746,16 @@
              ),
            );
            expect(noticeTurn?.parts?.at(-1)?.text).toContain(
@@ -161564,7 +161575,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              mockConfig.takePendingManualPlanExitNotice,
            ).toHaveBeenCalledTimes(1);
            expect(
-@@ -764,13 +1775,22 @@
+@@ -764,13 +1786,22 @@
            'prompt-id-plan-exit-before-rebuild',
          );
          for await (const _ of firstStream) {
@@ -161588,7 +161599,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'replacement chat' },
            'prompt-id-plan-exit-after-rebuild',
          );
-@@ -795,12 +1815,13 @@
+@@ -795,12 +1826,13 @@
      });
  
      it('increments the user-content push counter once per surviving send', async () => {
@@ -161602,7 +161613,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -824,12 +1845,13 @@
+@@ -824,12 +1856,13 @@
      });
  
      it('releases the sleep inhibitor when the stream errors', async () => {
@@ -161616,7 +161627,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                },
              ],
            } as unknown as GenerateContentResponse;
-@@ -852,43 +1874,46 @@
+@@ -852,43 +1885,46 @@
        ).rejects.toThrow('stream aborted');
  
        expect(mockSleepInhibitorRelease).toHaveBeenCalledTimes(1);
@@ -161666,7 +161677,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'prompt-id-tool-call-empty-end',
        );
        await expect(
-@@ -907,38 +1932,40 @@
+@@ -907,38 +1943,40 @@
        expect(modelTurn?.parts![0]!.functionCall).toBeDefined();
      });
  
@@ -161712,7 +161723,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test message' },
            'prompt-id-no-finish-empty-end',
          );
-@@ -949,23 +1976,25 @@
+@@ -949,23 +1987,25 @@
      });
  
      it('should succeed if the stream ends with an invalid part but has a finishReason and contained a valid part', async () => {
@@ -161738,7 +161749,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '' }], // Invalid part
                },
-@@ -1002,20 +2031,22 @@
+@@ -1002,20 +2042,22 @@
      });
  
      it('should consolidate subsequent text chunks after receiving an empty text chunk', async () => {
@@ -161761,7 +161772,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1045,39 +2076,44 @@
+@@ -1045,39 +2087,44 @@
      });
  
      it('should consolidate adjacent text parts that arrive in separate stream chunks', async () => {
@@ -161806,7 +161817,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        })();
  
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
-@@ -1110,12 +2146,13 @@
+@@ -1110,12 +2157,13 @@
        expect(modelTurn.parts![2]!.text).toBe('This is the second part.');
      });
      it('should preserve text parts that stream in the same chunk as a thought', async () => {
@@ -161820,7 +161831,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    { thought: 'This is a thought.' },
-@@ -1160,14 +2197,13 @@
+@@ -1160,14 +2208,13 @@
        );
      });
  
@@ -161836,7 +161847,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'first message' }] },
          {
            role: 'model',
-@@ -1182,12 +2218,13 @@
+@@ -1182,12 +2229,13 @@
            ],
          },
        ]);
@@ -161850,7 +161861,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1256,12 +2293,13 @@
+@@ -1256,12 +2304,13 @@
            ],
          },
        ]);
@@ -161864,7 +161875,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1295,114 +2333,77 @@
+@@ -1295,114 +2344,77 @@
        expect(frParts[0]!.functionResponse?.id).toBe('call_retry_real_fr');
        expect(
          (frParts[0]!.functionResponse?.response as { output?: string })?.output,
@@ -162034,7 +162045,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            role: 'model',
            parts: [
-@@ -1426,21 +2427,23 @@
+@@ -1426,21 +2438,23 @@
                },
              },
            ],
@@ -162058,7 +162069,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    role: 'model',
                    parts: [
                      {
-@@ -1452,12 +2455,13 @@
+@@ -1452,12 +2466,13 @@
                      },
                    ],
                  },
@@ -162072,7 +162083,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const stream = await chat.sendMessageStream(
          'test-model',
          { message: 'second request' },
-@@ -1479,157 +2483,18 @@
+@@ -1479,157 +2494,18 @@
          functionCall?.type === StreamEventType.CHUNK
            ? functionCall.value.functionCalls?.[0]?.id
            : undefined,
@@ -162232,7 +162243,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: 'partial reply that will be lost' }],
                },
-@@ -1663,62 +2528,30 @@
+@@ -1663,62 +2539,30 @@
      });
  
      it('should throw InvalidStreamError when no tool call and no finish reason', async () => {
@@ -162301,7 +162312,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test' },
            'prompt-id-1',
          );
-@@ -1730,12 +2563,13 @@
+@@ -1730,12 +2574,13 @@
  
      it('should succeed when there is finish reason and only thought content (reasoning models)', async () => {
        // This test verifies that responses containing only thought/reasoning content
@@ -162315,7 +162326,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -1777,215 +2611,13 @@
+@@ -1777,215 +2622,13 @@
        expect(modelTurn.parts![0]).toEqual({
          thought: true,
          text: 'Let me think through this problem step by step...',
@@ -162532,7 +162543,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -2045,172 +2677,16 @@
+@@ -2045,172 +2688,16 @@
                (part) => part.functionCall?.id === 'call_list_files',
              ),
          ),
@@ -162707,7 +162718,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '(empty content)' }],
                },
-@@ -2259,12 +2735,14 @@
+@@ -2259,12 +2746,14 @@
          } as unknown as GenerateContentResponse;
  
          // Some providers emit a trailing usage-only chunk after finishReason.
@@ -162722,7 +162733,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2289,24 +2767,26 @@
+@@ -2289,24 +2778,26 @@
      });
  
      it('should succeed for thought-only content when finish reason arrives in a later chunk', async () => {
@@ -162749,7 +162760,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [],
                },
-@@ -2356,12 +2836,14 @@
+@@ -2356,12 +2847,14 @@
          } as unknown as GenerateContentResponse;
  
          // Provider can emit trailing usage-only chunk after finish.
@@ -162764,7 +162775,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2404,12 +2886,14 @@
+@@ -2404,12 +2897,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -162779,7 +162790,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2425,87 +2909,46 @@
+@@ -2425,87 +2920,46 @@
        for await (const _ of stream) {
          // consume stream
        }
@@ -162886,7 +162897,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        vi.mocked(mockConfig.getChatCompression).mockReturnValue({
          maxRecentImagesToRetain: 1,
          imagePayloadThreshold: 1,
-@@ -2527,12 +2970,13 @@
+@@ -2527,12 +2981,13 @@
            role: 'model',
            parts: [{ text: 'I see the second image' }],
          },
@@ -162900,7 +162911,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2594,12 +3038,13 @@
+@@ -2594,12 +3049,13 @@
              },
            ],
          },
@@ -162914,7 +162925,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2664,12 +3109,13 @@
+@@ -2664,12 +3120,13 @@
        chat.setHistory([
          { role: 'user', parts: [{ text: 'prior question' }] },
          { role: 'model', parts: [{ text: 'prior answer' }] },
@@ -162928,7 +162939,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2681,16 +3127,22 @@
+@@ -2681,16 +3138,22 @@
            text: () => 'response',
          } as unknown as GenerateContentResponse;
        })();
@@ -162953,7 +162964,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'hello' },
-@@ -2714,13 +3166,22 @@
+@@ -2714,13 +3177,22 @@
          'prompt-id-no-request-clone',
        );
      });
@@ -162977,7 +162988,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: {
-@@ -2731,12 +3192,14 @@
+@@ -2731,12 +3203,14 @@
                index: 0,
                safetyRatings: [],
              },
@@ -162992,7 +163003,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2751,25 +3214,27 @@
+@@ -2751,25 +3225,27 @@
        );
        for await (const _ of stream) {
          // consume stream
@@ -163022,7 +163033,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              candidates: [
                {
                  content: {
-@@ -2779,173 +3244,196 @@
+@@ -2779,173 +3255,196 @@
                  finishReason: 'STOP',
                  index: 0,
                  safetyRatings: [],
@@ -163357,7 +163368,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              {
                content: {
                  parts: [{ text: 'response' }],
-@@ -2953,12 +3441,13 @@
+@@ -2953,12 +3452,13 @@
                },
                finishReason: 'STOP',
              },
@@ -163371,7 +163382,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2966,27 +3455,35 @@
+@@ -2966,27 +3466,35 @@
          response,
        );
  
@@ -163414,7 +163425,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -3015,13 +3512,13 @@
+@@ -3015,13 +3523,13 @@
      });
    });
  
@@ -163429,7 +163440,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: { parts: [{ text }], role: 'model' },
-@@ -3038,31 +3535,35 @@
+@@ -3038,31 +3546,35 @@
  
      it('releases the send-lock when auto-compression throws (no deadlock)', async () => {
        const compressSpy = vi
@@ -163473,7 +163484,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
  
-@@ -3084,31 +3585,37 @@
+@@ -3084,31 +3596,37 @@
          .mockResolvedValue({
            newHistory: null,
            info: {
@@ -163520,7 +163531,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
        const stream = await chat.sendMessageStream(
-@@ -3127,35 +3634,46 @@
+@@ -3127,35 +3645,46 @@
            .some((content) =>
              content.parts?.some((part) => part.text === 'first'),
            ),
@@ -163579,7 +163590,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse(),
        );
  
-@@ -3166,29 +3684,31 @@
+@@ -3166,29 +3695,31 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -163613,7 +163624,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +3719,1636 @@
+@@ -3199,2262 +3730,1636 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -167306,7 +167317,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5699,12 +5593,13 @@
+@@ -5699,12 +5604,13 @@
                response: payload,
              },
            },
@@ -167320,7 +167331,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            throw new Error('unexpected deep clone');
          });
  
-@@ -5714,13 +5609,16 @@
+@@ -5714,13 +5620,16 @@
        expect(history).toEqual([content]);
        expect(history[0]).not.toBe(content);
        expect(history[0]!.parts).not.toBe(content.parts);
@@ -167338,7 +167349,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('getHistoryForForkWindow', () => {
      it('removes startup context before curating adjacent user turns', () => {
        const startup: Content = {
-@@ -5797,19 +5695,21 @@
+@@ -5797,19 +5706,21 @@
    describe('peekLastHistoryEntry', () => {
      it('returns the last entry without structured-cloning the full history', () => {
        const first: Content = { role: 'user', parts: [{ text: 'a' }] };
@@ -167361,7 +167372,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    describe('getLastModelMessageText', () => {
      it('returns text from the latest model message without cloning history', () => {
-@@ -5858,20 +5758,22 @@
+@@ -5858,20 +5769,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -167385,7 +167396,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +5817,302 @@
+@@ -5915,33 +5828,302 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -167692,7 +167703,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +6122,22 @@
+@@ -5951,22 +6133,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -167719,7 +167730,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +6149,13 @@
+@@ -5978,99 +6160,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -167819,7 +167830,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +6164,23 @@
+@@ -6079,23 +6175,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -167845,7 +167856,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6104,25 +6189,40 @@
+@@ -6104,25 +6200,40 @@
                  ],
                } as unknown as OpenAI.Chat.ChatCompletionChunk;
              })(),
@@ -167889,7 +167900,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,134 +6246,89 @@
+@@ -6146,134 +6257,89 @@
          } finally {
            vi.useRealTimers();
          }
@@ -168042,7 +168053,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6308,29 +6363,21 @@
+@@ -6308,29 +6374,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -168074,7 +168085,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +6392,13 @@
+@@ -6345,12 +6403,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -168088,7 +168099,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +6408,29 @@
+@@ -6360,21 +6419,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -168120,7 +168131,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +6445,18 @@
+@@ -6389,24 +6456,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -168147,7 +168158,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +6476,13 @@
+@@ -6426,12 +6487,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -168161,7 +168172,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +6492,29 @@
+@@ -6441,21 +6503,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -168193,7 +168204,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +6528,12 @@
+@@ -6469,56 +6539,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -168250,7 +168261,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +6541,13 @@
+@@ -6526,12 +6552,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -168264,7 +168275,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +6559,18 @@
+@@ -6543,14 +6570,18 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -168284,7 +168295,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +6581,16 @@
+@@ -6561,12 +6592,16 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -168301,7 +168312,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +6601,13 @@
+@@ -6577,13 +6612,13 @@
                  },
                },
              ],
@@ -168316,7 +168327,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +6634,13 @@
+@@ -6610,15 +6645,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -168333,7 +168344,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +6651,13 @@
+@@ -6629,12 +6662,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -168347,7 +168358,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +6694,12 @@
+@@ -6671,752 +6705,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -169100,7 +169111,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +6714,13 @@
+@@ -7431,12 +6725,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -169114,7 +169125,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +6781,13 @@
+@@ -7497,13 +6792,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -169129,7 +169140,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +6804,37 @@
+@@ -7520,116 +6815,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -169251,7 +169262,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +6845,13 @@
+@@ -7640,12 +6856,13 @@
                throw transportError;
              })(),
            )
@@ -169265,7 +169276,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +6884,22 @@
+@@ -7678,103 +6895,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -169370,7 +169381,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +6910,13 @@
+@@ -7785,12 +6921,13 @@
                throw transportError;
              })(),
            )
@@ -169384,7 +169395,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +6941,213 @@
+@@ -7815,1231 +6952,213 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -170780,7 +170791,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +7178,13 @@
+@@ -9070,12 +7189,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -170794,7 +170805,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +7234,21 @@
+@@ -9125,13 +7245,21 @@
              timeoutError,
              {
                model: 'test-model',
@@ -170817,7 +170828,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +7259,13 @@
+@@ -9142,12 +7270,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -170831,7 +170842,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +7318,13 @@
+@@ -9200,12 +7329,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -170845,7 +170856,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +7374,13 @@
+@@ -9255,12 +7385,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -170859,7 +170870,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,59 +7511,60 @@
+@@ -9391,59 +7522,60 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -170934,7 +170945,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +7579,13 @@
+@@ -9458,12 +7590,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -170948,7 +170959,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +7595,42 @@
+@@ -9473,130 +7606,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -171089,7 +171100,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +7640,13 @@
+@@ -9606,12 +7651,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -171103,7 +171114,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,39 +7661,43 @@
+@@ -9626,39 +7672,43 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -171152,7 +171163,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,16 +7735,21 @@
+@@ -9696,16 +7746,21 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -171176,7 +171187,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          vi.useRealTimers();
        }
-@@ -9733,12 +7777,13 @@
+@@ -9733,12 +7788,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -171190,7 +171201,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,23 +7797,27 @@
+@@ -9752,23 +7808,27 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -171223,7 +171234,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9792,12 +7841,13 @@
+@@ -9792,12 +7852,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -171237,7 +171248,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,31 +7868,35 @@
+@@ -9818,31 +7879,35 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -171278,7 +171289,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9884,18 +7938,22 @@
+@@ -9884,18 +7949,22 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -171304,7 +171315,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          await expect(nextPromise).rejects.toThrow();
  
          // Only one API call should have been made (no retry after abort)
-@@ -9905,12 +7963,13 @@
+@@ -9905,12 +7974,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -171318,7 +171329,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +8013,13 @@
+@@ -9954,12 +8024,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -171332,7 +171343,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,48 +8034,52 @@
+@@ -9974,48 +8045,52 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -171395,7 +171406,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +8092,14 @@
+@@ -10028,12 +8103,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -171410,7 +171421,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +8124,13 @@
+@@ -10058,12 +8135,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -171424,7 +171435,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,37 +8142,39 @@
+@@ -10075,37 +8153,39 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -171473,7 +171484,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(retryInfos.map((info) => info.delayMs)).toEqual([3_000, 5_000]);
          expect(
-@@ -10123,12 +8192,14 @@
+@@ -10123,12 +8203,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -171488,7 +171499,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +8225,13 @@
+@@ -10154,12 +8236,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -171502,7 +171513,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,32 +8242,33 @@
+@@ -10170,32 +8253,33 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -171545,7 +171556,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            events.some(
-@@ -10261,12 +8334,13 @@
+@@ -10261,12 +8345,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -171559,7 +171570,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +8413,13 @@
+@@ -10339,12 +8424,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -171573,7 +171584,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +8447,13 @@
+@@ -10372,12 +8458,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -171587,7 +171598,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +8461,22 @@
+@@ -10385,20 +8472,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -171611,7 +171622,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +8528,188 @@
+@@ -10450,103 +8539,188 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -171860,7 +171871,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +8724,58 @@
+@@ -10561,41 +8735,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -171932,7 +171943,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +8786,13 @@
+@@ -10606,12 +8797,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -171946,7 +171957,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +8822,310 @@
+@@ -10641,275 +8833,310 @@
          }),
          'prompt-id-res3',
        );
@@ -172490,7 +172501,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +9170,31 @@
+@@ -10954,28 +9181,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -172523,7 +172534,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +9215,58 @@
+@@ -10996,138 +9226,58 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -172676,7 +172687,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +9277,33 @@
+@@ -11138,33 +9288,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -172721,7 +172732,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +9313,30 @@
+@@ -11174,22 +9324,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -172753,7 +172764,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +9390,37 @@
+@@ -11243,31 +9401,37 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -172794,7 +172805,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +9431,64 @@
+@@ -11278,59 +9442,64 @@
                      },
                    ],
                  },
@@ -172863,7 +172874,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +9529,12 @@
+@@ -11371,252 +9540,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -173116,7 +173127,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +9708,686 @@
+@@ -11790,179 +9719,686 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -173937,7 +173948,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +10500,12 @@
+@@ -12075,17 +10511,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -173955,7 +173966,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,2978 +10988,1176 @@
+@@ -12568,2978 +10999,1176 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -342550,7 +342561,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,925 @@
+@@ -0,0 +1,938 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -343108,9 +343119,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +
 +/** Each renderer owns and closes its window; disconnected renderers retain nothing. */
 +export class ModelRequestOutputWindow {
-+  private readonly pending: (ModelEvidence & {
-+    readonly parent_tool_use_id: string | null;
-+  })[] = [];
++  private readonly pending: Array<
++    ModelEvidence & {
++      readonly parent_tool_use_id: string | null;
++    }
++  > = [];
 +  private count = 0;
 +  private closed = false;
 +  private readonly requestIds = new Set<string>();
@@ -343135,6 +343148,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        record.request.request_id,
 +        record.request.owner,
 +        record.request.kv_scope,
++        record.request.decode_policy,
 +      );
 +      this.generations.observeRequest(record.request);
 +      this.count++;
@@ -343149,6 +343163,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      outputScope = this.generations.observeGeneration(
 +        record.generation,
 +      ).output_scope;
++      this.responses.verifyGeneration(envelope);
 +    } else {
 +      const completion = requireModelAttemptCompletion(record.completion);
 +      if (!this.generations.hasAttempt(completion.origin.attempt_id)) return;
@@ -343185,9 +343200,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  setDrain(drain: () => Promise<void>): void {
 +    this.drain = drain;
 +  }
-+  takePending(): readonly (ModelEvidence & {
-+    readonly parent_tool_use_id: string | null;
-+  })[] {
++  takePending(): ReadonlyArray<
++    ModelEvidence & {
++      readonly parent_tool_use_id: string | null;
++    }
++  > {
 +    if (this.failure) throw this.failure.cause;
 +    return this.pending.splice(0);
 +  }
@@ -343272,6 +343289,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      request.request_id,
 +      request.owner,
 +      request.kv_scope,
++      request.decode_policy,
 +    );
 +    this.generations.observeRequest(request);
 +    this.count++;
@@ -343288,7 +343306,9 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    this.generations.observeResponse(input as ModelResponseEvidence);
 +  }
 +  observeGeneration(input: unknown): GenerationEnvelope {
-+    return this.generations.observeGeneration(input);
++    const envelope = this.generations.observeGeneration(input);
++    this.responses.verifyGeneration(envelope);
++    return envelope;
 +  }
 +  observeCompletion(input: unknown) {
 +    return this.generations.observeCompletion(input);
@@ -343398,6 +343418,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        request.request_id,
 +        request.owner,
 +        request.kv_scope,
++        request.decode_policy,
 +      );
 +      this.logical.observeRequest(request);
 +    } else if (record.type === 'model_response') {
@@ -343416,7 +343437,10 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        this.generationRecords.has(generation.generation_id)
 +      )
 +        return refusal('a model attempt has multiple canonical generations');
-+      if (!sidechain) this.logical.observeGeneration(generation);
++      if (!sidechain) {
++        this.logical.observeGeneration(generation);
++        this.responses.verifyGeneration(readModelGeneration(generation));
++      }
 +      const disposition =
 +        record.type === 'assistant' ? 'accepted' : record.historyDisposition;
 +      if (disposition !== 'accepted' && disposition !== 'abandoned')
@@ -344736,7 +344760,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,938 @@
+@@ -0,0 +1,991 @@
 +import { createHash } from 'node:crypto';
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -344749,6 +344773,15 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +  type ModelResponseEvidence,
 +  type ModelResponseTermination,
 +} from './model-response-evidence.js';
++
++const TEST_POLICY = {
++  mode: 'stream',
++  model: 'test',
++  strict_tool_calling: false,
++  named_tool_choice: null,
++  exact_token_counting: false,
++  tagged_thinking_tags: false,
++} as const;
 +
 +function fixture() {
 +  const records: ModelResponseEvidence[] = [];
@@ -345432,6 +345465,8 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      'j',
 +      'r',
 +      async (record) => {
++        // A falsy thrown value is the behavior this test exercises.
++        // eslint-disable-next-line no-restricted-syntax
 +        if (record.event.kind === 'body') throw false;
 +      },
 +      { kind: 'utility' },
@@ -345478,7 +345513,13 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +        false,
 +      );
 +      const replay = new ModelResponseReplay();
-+      replay.begin('journal', 'request', { kind: 'utility' }, 'scope');
++      replay.begin(
++        'journal',
++        'request',
++        { kind: 'utility' },
++        'scope',
++        TEST_POLICY,
++      );
 +      f.records.forEach((record) => replay.observe(record));
 +      expect(() => replay.finish()).toThrow('response completion');
 +    },
@@ -345498,7 +345539,13 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +        await response.body!.cancel('parsing finished');
 +      await f.recorder.finish({ status: 'completed', error: null });
 +      const replay = new ModelResponseReplay();
-+      replay.begin('journal', 'request', { kind: 'utility' }, 'scope');
++      replay.begin(
++        'journal',
++        'request',
++        { kind: 'utility' },
++        'scope',
++        TEST_POLICY,
++      );
 +      f.records.forEach((record) => replay.observe(record));
 +      expect(() => replay.finish()).not.toThrow();
 +      expect(f.records.at(-2)?.event).toMatchObject({ body_bytes: 0 });
@@ -345523,7 +345570,13 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    (httpStatus, termination, canComplete) => {
 +      for (const status of ['completed', 'failed', 'cancelled'] as const) {
 +        const replay = new ModelResponseReplay();
-+        replay.begin('journal', 'request', { kind: 'utility' }, 'scope');
++        replay.begin(
++          'journal',
++          'request',
++          { kind: 'utility' },
++          'scope',
++          TEST_POLICY,
++        );
 +        let sequence = 0;
 +        const observe = (event: ModelResponseEvidence['event']) =>
 +          replay.observe({
@@ -345577,11 +345630,17 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    const f = fixture();
 +    f.recorder.dispatched();
 +    await (
-+      await f.recorder.capture(new Response('data: {broken שלום\n\n'))
++      await f.recorder.capture(new Response(': observed שלום\n\n'))
 +    ).text();
 +    await f.recorder.finish({ status: 'completed', error: null });
 +    const replay = new ModelResponseReplay();
-+    replay.begin('journal', 'request', { kind: 'utility' }, 'fixture-scope');
++    replay.begin(
++      'journal',
++      'request',
++      { kind: 'utility' },
++      'fixture-scope',
++      TEST_POLICY,
++    );
 +    for (const record of f.records.slice(0, -1)) replay.observe(record);
 +    expect(replay.openRequestIds()).toEqual(['request']);
 +    expect(() => replay.finish()).toThrow('completion');
@@ -345626,7 +345685,13 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      Object.assign(record, { sequence: index + 1 }),
 +    );
 +    const replay = new ModelResponseReplay();
-+    replay.begin('journal', 'request', { kind: 'utility' }, 'fixture-scope');
++    replay.begin(
++      'journal',
++      'request',
++      { kind: 'utility' },
++      'fixture-scope',
++      TEST_POLICY,
++    );
 +    expect(() => {
 +      for (const record of records) replay.observe(record);
 +      replay.finish();
@@ -345650,7 +345715,13 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    await (await f.recorder.capture(new Response('exact bytes'))).text();
 +    await f.recorder.finish({ status: 'completed', error: null });
 +    const valid = new ModelResponseReplay();
-+    valid.begin('journal', 'request', { kind: 'utility' }, 'fixture-scope');
++    valid.begin(
++      'journal',
++      'request',
++      { kind: 'utility' },
++      'fixture-scope',
++      TEST_POLICY,
++    );
 +    f.records.forEach((record) => valid.observe(record));
 +    valid.finish();
 +    const records = structuredClone(f.records) as unknown as Array<{
@@ -345668,7 +345739,13 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    if (defect === 'size') records.at(-2)!.event['body_bytes'] = 0;
 +    if (defect === 'headers') records.splice(0, 1);
 +    const replay = new ModelResponseReplay();
-+    replay.begin('journal', 'request', { kind: 'utility' }, 'fixture-scope');
++    replay.begin(
++      'journal',
++      'request',
++      { kind: 'utility' },
++      'fixture-scope',
++      TEST_POLICY,
++    );
 +    expect(() => {
 +      for (const record of records) replay.observe(record);
 +      replay.finish();
@@ -345678,10 +345755,19 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,793 @@
+@@ -0,0 +1,846 @@
 +import { createHash } from 'node:crypto';
 +import type { GenerateContentResponse } from '@google/genai';
 +import { recordGenerationSource } from './model-generation.js';
++import type { GenerationEnvelope } from './model-generation.js';
++import {
++  requireOpenAIResponseDecodePolicy,
++  type OpenAIResponseDecodePolicy,
++} from './openaiContentGenerator/responseDecoder.js';
++import {
++  replayRecordedOpenAIObservations,
++  verifyRecordedOpenAIGeneration,
++} from './openaiContentGenerator/recorded-response-replay.js';
 +import { RecordingClock } from './recording-clock.js';
 +import {
 +  combineGenerationUsage,
@@ -346303,7 +346389,12 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  private finalizedUsage = combineGenerationUsage([]);
 +  private readonly attempts = new Map<
 +    string,
-+    { scope: string; accepted: boolean; outputScope?: string | null }
++    {
++      scope: string;
++      accepted: boolean;
++      outputScope?: string | null;
++      latestRequestId?: string;
++    }
 +  >();
 +  observeOrigin(origin: ModelOutputOrigin, outputScope: string | null): void {
 +    if (origin.kind === 'runtime') return;
@@ -346323,7 +346414,12 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    {
 +      journalId: string;
 +      owner: ModelRequestOwner;
-+      processing: ModelResponseOutcome | null;
++      processing: Extract<
++        ModelResponseEvidence['event'],
++        { kind: 'outcome' }
++      > | null;
++      policy: OpenAIResponseDecodePolicy;
++      bodyChunks: Buffer[];
 +      sequence: number;
 +      httpStatus: number | undefined;
 +      termination: ModelResponseTermination | undefined;
@@ -346336,6 +346432,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    requestId: string,
 +    owner: ModelRequestOwner,
 +    scope: string,
++    policy: OpenAIResponseDecodePolicy,
 +  ): void {
 +    if (this.requests.has(requestId) || this.ended.has(requestId))
 +      failure('reused request identity');
@@ -346349,11 +346446,14 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        );
 +      if (!previous)
 +        this.attempts.set(owner.attempt_id, { scope, accepted: false });
++      this.attempts.get(owner.attempt_id)!.latestRequestId = requestId;
 +    }
 +    this.requests.set(requestId, {
 +      journalId,
 +      owner,
 +      processing: null,
++      policy: requireOpenAIResponseDecodePolicy(policy),
++      bodyChunks: [],
 +      sequence: 0,
 +      httpStatus: undefined,
 +      termination: undefined,
@@ -346403,6 +346503,14 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        (event.pipeline_outputs_delivered > 0 && event.sdk_values_seen === 0)
 +      )
 +        failure('decoded progress has no observed SDK response');
++      if (state.owner.kind === 'utility') {
++        replayRecordedOpenAIObservations(
++          Buffer.concat(state.bodyChunks),
++          state.policy,
++          event,
++        );
++        state.bodyChunks.length = 0;
++      }
 +      const finalizedUsage = combineGenerationUsage([
 +        this.finalizedUsage,
 +        {
@@ -346435,6 +346543,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      if (!Number.isSafeInteger(state.bytes + bytes.length))
 +        failure('response byte count exceeds exact integer range');
 +      state.digest.update(bytes);
++      state.bodyChunks.push(bytes);
 +      state.bytes += bytes.length;
 +    } else {
 +      if (
@@ -346453,6 +346562,27 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  }
 +  openRequestIds(): string[] {
 +    return [...this.requests.keys()];
++  }
++  verifyGeneration(envelope: GenerationEnvelope): void {
++    const requestId = this.attempts.get(
++      envelope.origin.attempt_id,
++    )?.latestRequestId;
++    const state = requestId ? this.requests.get(requestId) : undefined;
++    if (!requestId || !state || !state.processing)
++      failure('generation has no complete physical response to replay');
++    if (
++      envelope.observations.some(
++        (observation) => observation.source_request_id !== requestId,
++      )
++    )
++      failure('generation observation belongs to another physical response');
++    verifyRecordedOpenAIGeneration(
++      Buffer.concat(state.bodyChunks),
++      state.policy,
++      state.processing,
++      envelope,
++    );
++    state.bodyChunks.length = 0;
 +  }
 +  usageSummary(): GenerationUsageSummary {
 +    const unfinalized = this.requestCount - this.finalizedUsage.requests;
@@ -346475,12 +346605,16 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,553 @@
+@@ -0,0 +1,755 @@
 +import OpenAI from 'openai';
++// The pinned SDK's public streaming export is the byte-parser oracle.
++// eslint-disable-next-line import/no-internal-modules
++import { Stream } from 'openai/streaming';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
 +import type { Config } from '../../config/config.js';
 +import { AuthType } from '../contentGenerator.js';
 +import { GenerationContext } from '../generation-context.js';
++import { takeGenerationObservation } from '../model-generation.js';
 +import {
 +  ModelRequestJournal,
 +  ModelRequestReplay,
@@ -346492,6 +346626,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +} from '../model-response-evidence.js';
 +import { ContentGenerationPipeline } from './pipeline.js';
 +import { DefaultOpenAICompatibleProvider } from './provider/default.js';
++import {
++  createOpenAIResponseDecodeContext,
++  decodeOpenAIResponse,
++  OpenAIStreamDecoder,
++  readOpenAIUsage,
++} from './responseDecoder.js';
++import { replayRecordedOpenAIObservations } from './recorded-response-replay.js';
 +import type { ErrorHandler } from './types.js';
 +import { STREAM_IDLE_TIMEOUT_MS } from './constants.js';
 +
@@ -346579,6 +346720,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +      request.request_id,
 +      { kind: 'utility' },
 +      'fixture-scope',
++      request.decode_policy,
 +    );
 +  }
 +  for (const response of f.responses) responses.observe(response);
@@ -346591,6 +346733,196 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +afterEach(() => vi.useRealTimers());
 +
 +describe('pipeline raw response ownership', () => {
++  it.each([false, true])(
++    'records the exact JSON body passed to the installed OpenAI SDK transport, streaming=%s',
++    async (streaming) => {
++      let sentBody: string | undefined;
++      const f = fixture(async (_input, init) => {
++        if (typeof init?.body !== 'string')
++          throw new Error('SDK did not send a JSON string body');
++        sentBody = init.body;
++        return streaming
++          ? sse(wire('answer', 'stop'))
++          : new Response(
++              JSON.stringify({
++                id: 'reply',
++                object: 'chat.completion',
++                created: 0,
++                model: 'test',
++                choices: [
++                  {
++                    index: 0,
++                    message: { role: 'assistant', content: 'answer' },
++                    finish_reason: 'stop',
++                  },
++                ],
++                usage: {
++                  prompt_tokens: 2,
++                  completion_tokens: 1,
++                  total_tokens: 3,
++                  prompt_tokens_details: { cached_tokens: 0 },
++                  completion_tokens_details: { reasoning_tokens: 0 },
++                },
++              }),
++              { headers: { 'content-type': 'application/json' } },
++            );
++      });
++      if (streaming) {
++        for await (const _ of await f.pipeline.executeStream(
++          f.request,
++          'request-bytes',
++        )) {
++          // Drain the selected SDK parser.
++        }
++      } else await f.pipeline.execute(f.request, 'request-bytes');
++      const replay = new ModelRequestReplay();
++      expect(f.requests).toHaveLength(1);
++      expect(replay.observe(f.requests[0])).toBe(sentBody);
++    },
++  );
++
++  it.each([false, true])(
++    'replays the retained response body through the selected decoder, streaming=%s',
++    async (streaming) => {
++      const f = fixture(async () =>
++        streaming
++          ? sse(wire('answer', 'stop'))
++          : new Response(
++              JSON.stringify({
++                id: 'reply',
++                object: 'chat.completion',
++                created: 0,
++                model: 'test',
++                choices: [
++                  {
++                    index: 0,
++                    message: { role: 'assistant', content: 'answer' },
++                    finish_reason: 'stop',
++                  },
++                ],
++                usage: {
++                  prompt_tokens: 2,
++                  completion_tokens: 1,
++                  total_tokens: 3,
++                  prompt_tokens_details: { cached_tokens: 0 },
++                  completion_tokens_details: { reasoning_tokens: 0 },
++                },
++              }),
++              { headers: { 'content-type': 'application/json' } },
++            ),
++      );
++      const live = [];
++      if (streaming) {
++        for await (const output of await f.pipeline.executeStream(
++          f.request,
++          'response-replay',
++        ))
++          live.push(output);
++      } else live.push(await f.pipeline.execute(f.request, 'response-replay'));
++      const policy = f.requests[0].decode_policy;
++      const context = createOpenAIResponseDecodeContext(policy, 0);
++      const body = raw(f.responses);
++      const decoded = [];
++      if (streaming) {
++        const decoder = new OpenAIStreamDecoder(context);
++        const parsed = Stream.fromSSEResponse<OpenAI.Chat.ChatCompletionChunk>(
++          sse(body),
++          new AbortController(),
++        );
++        for await (const chunk of parsed) {
++          const usage = readOpenAIUsage(chunk.usage);
++          decoder.observeUsage(usage);
++          decoded.push(...decoder.accept(chunk, usage));
++        }
++        decoded.push(...decoder.finish());
++      } else {
++        const completion = JSON.parse(
++          body.toString(),
++        ) as OpenAI.Chat.ChatCompletion;
++        decoded.push(
++          decodeOpenAIResponse(
++            completion,
++            context,
++            readOpenAIUsage(completion.usage),
++          ),
++        );
++      }
++      expect(JSON.parse(JSON.stringify(decoded))).toEqual(
++        JSON.parse(JSON.stringify(live)),
++      );
++      const outcome = f.responses.find(
++        (row) => row.event.kind === 'outcome',
++      )?.event;
++      if (!outcome || outcome.kind !== 'outcome')
++        throw new Error('Missing outcome');
++      expect(
++        JSON.parse(
++          JSON.stringify(
++            replayRecordedOpenAIObservations(body, policy, outcome),
++          ),
++        ),
++      ).toEqual(
++        JSON.parse(
++          JSON.stringify(
++            live.map((output) => takeGenerationObservation(output)),
++          ),
++        ),
++      );
++    },
++  );
++
++  it('replays only the SDK and delivery prefix that a cancelled caller consumed', async () => {
++    const body = wire('A') + wire('B') + wire('C', 'stop') + 'data: [DONE]\n\n';
++    const f = fixture(async () => sse(body));
++    const stream = await f.pipeline.executeStream(
++      f.request,
++      'cancelled-prefix',
++    );
++    const first = await stream.next();
++    expect(first.done).toBe(false);
++    await stream.return(undefined);
++    const outcome = f.responses.find(
++      (row) => row.event.kind === 'outcome',
++    )?.event;
++    if (!outcome || outcome.kind !== 'outcome')
++      throw new Error('Missing outcome');
++    expect(outcome.status).toBe('cancelled');
++    expect(outcome.pipeline_outputs_delivered).toBe(1);
++    expect(raw(f.responses).toString()).toBe(body);
++    const policy = f.requests[0].decode_policy;
++    const decoder = new OpenAIStreamDecoder(
++      createOpenAIResponseDecodeContext(policy, 0),
++    );
++    const parsed = Stream.fromSSEResponse<OpenAI.Chat.ChatCompletionChunk>(
++      sse(raw(f.responses)),
++      new AbortController(),
++    );
++    const decoded = [];
++    let seen = 0;
++    for await (const chunk of parsed) {
++      if (seen === outcome.sdk_values_seen) break;
++      seen++;
++      const usage = readOpenAIUsage(chunk.usage);
++      decoder.observeUsage(usage);
++      decoded.push(...decoder.accept(chunk, usage));
++    }
++    expect(seen).toBe(outcome.sdk_values_seen);
++    expect(
++      JSON.parse(
++        JSON.stringify(decoded.slice(0, outcome.pipeline_outputs_delivered)),
++      ),
++    ).toEqual(JSON.parse(JSON.stringify([first.value])));
++    expect(
++      JSON.parse(
++        JSON.stringify(
++          replayRecordedOpenAIObservations(raw(f.responses), policy, outcome),
++        ),
++      ),
++    ).toEqual(
++      JSON.parse(JSON.stringify([takeGenerationObservation(first.value!)])),
++    );
++  });
++
 +  const usage = {
 +    prompt_tokens: 5,
 +    completion_tokens: 3,
@@ -348240,7 +348572,7 @@ diff --git a/packages/cli/src/ui/components/messages/ToolGroupMessage.test.tsx b
 diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/core/chat-attempt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/chat-attempt.test.ts
-@@ -0,0 +1,265 @@
+@@ -0,0 +1,266 @@
 +import { describe, expect, it } from 'vitest';
 +import { ChatAttempt } from './chat-attempt.js';
 +import {
@@ -348331,6 +348663,7 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +        record.request.request_id,
 +        record.request.owner,
 +        record.request.kv_scope,
++        record.request.decode_policy,
 +      );
 +    else if (record.type === 'model_response') reader.observe(record.response);
 +  }
@@ -414978,3 +415311,809 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +    insert_before(wire, "result", executable)
 +    with pytest.raises(RecordContractError):
 +        admit(wire)
+diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
+@@ -0,0 +1,221 @@
++import { isDeepStrictEqual } from 'node:util';
++import type OpenAI from 'openai';
++import {
++  takeGenerationObservation,
++  type GenerationEnvelope,
++  type UnnormalizedGenerationObservation,
++} from '../model-generation.js';
++import type { ModelResponseEvidence } from '../model-response-evidence.js';
++import { SERVED_USAGE_FIELDS, type ServedUsage } from '../served-usage.js';
++import {
++  createOpenAIResponseDecodeContext,
++  decodeOpenAIResponse,
++  OpenAIStreamDecoder,
++  readOpenAIUsage,
++  type OpenAIResponseDecodePolicy,
++} from './responseDecoder.js';
++
++type RecordedOutcome = Extract<
++  ModelResponseEvidence['event'],
++  { kind: 'outcome' }
++>;
++
++function refuse(detail: string): never {
++  throw new Error(
++    `Recorded OpenAI response does not prove its decoded observation: ${detail}. Inspect the complete original recording with its matching client.`,
++  );
++}
++
++/** Parse a retained OpenAI HTTP body with the pinned SDK's value boundaries. */
++export interface RecordedOpenAIValues {
++  readonly values: readonly unknown[];
++  readonly failure: unknown | null;
++}
++
++export function parseRecordedOpenAIValues(
++  body: Uint8Array,
++  mode: 'stream' | 'nonstream',
++): RecordedOpenAIValues {
++  const text = new TextDecoder().decode(body);
++  if (mode === 'nonstream') {
++    try {
++      return { values: [JSON.parse(text)], failure: null };
++    } catch (failure) {
++      return { values: [], failure };
++    }
++  }
++
++  const lines = text.split(/\r\n|\r|\n/);
++  // String.split invents one final empty field after a terminal newline.
++  if (/[\r\n]$/.test(text)) lines.pop();
++  const values: unknown[] = [];
++  let event: string | null = null;
++  let data: string[] = [];
++  for (const line of lines) {
++    if (line !== '') {
++      if (line.startsWith(':')) continue;
++      const colon = line.indexOf(':');
++      const field = colon < 0 ? line : line.slice(0, colon);
++      let value = colon < 0 ? '' : line.slice(colon + 1);
++      if (value.startsWith(' ')) value = value.slice(1);
++      if (field === 'event') event = value;
++      if (field === 'data') data.push(value);
++      continue;
++    }
++    if (!event && data.length === 0) continue;
++    const payload = data.join('\n');
++    const name = event;
++    event = null;
++    data = [];
++    if (payload.startsWith('[DONE]')) break;
++    try {
++      const parsed = JSON.parse(payload) as unknown;
++      if (name !== null && name.startsWith('thread.')) {
++        if (name === 'error') throw new Error('OpenAI SSE error event');
++        values.push({ event: name, data: parsed });
++      } else {
++        if (
++          parsed !== null &&
++          typeof parsed === 'object' &&
++          'error' in parsed &&
++          (parsed as { error?: unknown }).error
++        )
++          throw new Error('OpenAI SSE error payload');
++        values.push(parsed);
++      }
++    } catch (failure) {
++      return { values, failure };
++    }
++  }
++  return { values, failure: null };
++}
++
++function sameUsage(
++  left: ServedUsage | null,
++  right: ServedUsage | null,
++): boolean {
++  return (
++    (left === null && right === null) ||
++    (left !== null &&
++      right !== null &&
++      SERVED_USAGE_FIELDS.every((field) => left[field] === right[field]))
++  );
++}
++
++function canonical(value: unknown): unknown {
++  return JSON.parse(JSON.stringify(value));
++}
++
++/** Recreate the output prefix actually delivered by one recorded response. */
++export function replayRecordedOpenAIObservations(
++  body: Uint8Array,
++  policy: OpenAIResponseDecodePolicy,
++  outcome: RecordedOutcome,
++): readonly UnnormalizedGenerationObservation[] {
++  const parsed = parseRecordedOpenAIValues(body, policy.mode);
++  if (
++    outcome.sdk_values_seen > parsed.values.length ||
++    (outcome.status === 'completed' &&
++      (parsed.failure !== null ||
++        outcome.sdk_values_seen !== parsed.values.length))
++  )
++    refuse('SDK processing claims an impossible byte prefix');
++  const context = createOpenAIResponseDecodeContext(policy, 0);
++  const outputs: Array<import('@google/genai').GenerateContentResponse> = [];
++  let servedUsage: ServedUsage | null = null;
++  if (policy.mode === 'nonstream') {
++    if (outcome.sdk_values_seen > 1)
++      refuse('nonstreaming response claims several SDK values');
++    if (outcome.sdk_values_seen === 1) {
++      const completion = parsed.values[0] as OpenAI.Chat.ChatCompletion;
++      try {
++        const usage = readOpenAIUsage(completion.usage);
++        if (usage.kind === 'observed') servedUsage = usage.usage;
++        const decoded = decodeOpenAIResponse(completion, context, usage);
++        outputs.push(decoded);
++      } catch {
++        if (outcome.status === 'completed')
++          refuse('completed nonstreaming response cannot be decoded');
++      }
++    }
++  } else {
++    const decoder = new OpenAIStreamDecoder(context);
++    let conversionFailed = false;
++    let seen = 0;
++    for (const raw of parsed.values.slice(0, outcome.sdk_values_seen)) {
++      seen++;
++      try {
++        const chunk = raw as OpenAI.Chat.ChatCompletionChunk;
++        const usage = readOpenAIUsage(chunk.usage);
++        decoder.observeUsage(usage);
++        if (usage.kind === 'observed') servedUsage = usage.usage;
++        if (chunk.choices?.[0]?.finish_reason === 'error_finish')
++          throw new Error('provider returned an error_finish stream chunk');
++        outputs.push(...decoder.accept(chunk, usage));
++      } catch {
++        conversionFailed = true;
++        if (outcome.status === 'completed')
++          refuse('completed streaming response cannot be decoded');
++        outputs.push(...decoder.diagnostics());
++        break;
++      }
++    }
++    if (seen !== outcome.sdk_values_seen)
++      refuse('SDK value count passes the first conversion failure');
++    if (outcome.status === 'completed') outputs.push(...decoder.finish());
++    else if (
++      !conversionFailed &&
++      outcome.error !== null &&
++      outputs.length < outcome.pipeline_outputs_delivered
++    )
++      outputs.push(...decoder.diagnostics());
++  }
++  if (!sameUsage(outcome.served_usage, servedUsage))
++    refuse('served usage differs from the processed physical response prefix');
++  if (
++    outcome.pipeline_outputs_delivered > outputs.length ||
++    (outcome.status === 'completed' &&
++      outcome.pipeline_outputs_delivered !== outputs.length)
++  )
++    refuse('decoded delivery count differs from the physical response replay');
++  return outputs
++    .slice(0, outcome.pipeline_outputs_delivered)
++    .map((output) => takeGenerationObservation(output));
++}
++
++/** Refuse a generation whose retained observations differ from their source bytes. */
++export function verifyRecordedOpenAIGeneration(
++  body: Uint8Array,
++  policy: OpenAIResponseDecodePolicy,
++  outcome: RecordedOutcome,
++  envelope: GenerationEnvelope,
++): void {
++  const replayed = replayRecordedOpenAIObservations(body, policy, outcome);
++  if (envelope.observations.length > replayed.length)
++    refuse('generation claims more observations than Chat could receive');
++  for (const [index, observation] of envelope.observations.entries()) {
++    const expected = replayed[index]!;
++    if (
++      !isDeepStrictEqual(
++        canonical(observation.response),
++        canonical(expected.response),
++      ) ||
++      !isDeepStrictEqual(
++        canonical(observation.incomplete_tool_calls),
++        canonical(expected.incomplete_tool_calls),
++      ) ||
++      !isDeepStrictEqual(
++        observation.tool_call_preparations.map(
++          ({ provider_call_id, toolName }) => ({
++            callId: provider_call_id,
++            toolName,
++          }),
++        ),
++        canonical(expected.tool_call_preparations),
++      )
++    )
++      refuse(
++        `generation observation ${index + 1} differs from its physical response`,
++      );
++  }
++}
+diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
+@@ -0,0 +1,321 @@
++import { describe, expect, it } from 'vitest';
++// The pinned SDK's public streaming export is the byte-parser oracle.
++// eslint-disable-next-line import/no-internal-modules
++import { Stream } from 'openai/streaming';
++import { readFileSync } from 'node:fs';
++import { createHash } from 'node:crypto';
++import { ModelRequestStreamReplay } from '../model-request-evidence.js';
++import {
++  parseRecordedOpenAIValues,
++  replayRecordedOpenAIObservations,
++  verifyRecordedOpenAIGeneration,
++} from './recorded-response-replay.js';
++
++async function pinnedSdkValues(body: Uint8Array) {
++  const stream = Stream.fromSSEResponse<unknown>(
++    new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
++    new AbortController(),
++  );
++  const values: unknown[] = [];
++  let failed = false;
++  try {
++    for await (const value of stream) values.push(value);
++  } catch {
++    failed = true;
++  }
++  return { values, failed };
++}
++
++type WireObject = Record<string, unknown>;
++
++function object(value: unknown): WireObject {
++  if (value === null || typeof value !== 'object' || Array.isArray(value))
++    throw new Error('Fixture member is not an object');
++  return value as WireObject;
++}
++
++function rowOf(rows: readonly WireObject[], type: string): WireObject {
++  const row = rows.find((item) => item['type'] === type);
++  if (!row) throw new Error(`Fixture lacks ${type}`);
++  return row;
++}
++
++function responseEvent(row: WireObject): WireObject {
++  return object(object(row['response'])['event']);
++}
++
++describe('retained OpenAI response parsing', () => {
++  it('does not invent a held terminal diagnostic for an ordinary caller cancellation', () => {
++    const body = Buffer.from(
++      `data: ${JSON.stringify({ id: 'reply', object: 'chat.completion.chunk', created: 0, model: 'test', choices: [{ index: 0, delta: { content: 'held' }, finish_reason: 'stop' }] })}\n\n`,
++    );
++    expect(() =>
++      replayRecordedOpenAIObservations(
++        body,
++        {
++          mode: 'stream',
++          model: 'test',
++          strict_tool_calling: true,
++          named_tool_choice: null,
++          exact_token_counting: false,
++          tagged_thinking_tags: false,
++        },
++        {
++          kind: 'outcome',
++          status: 'cancelled',
++          error: null,
++          served_usage: null,
++          sdk_values_seen: 1,
++          pipeline_outputs_delivered: 1,
++        },
++      ),
++    ).toThrow('decoded delivery count');
++  });
++
++  it('matches the pinned SDK across line endings and incomplete trailing frames', async () => {
++    for (const newline of ['\n', '\r', '\r\n']) {
++      for (const trailer of ['', newline, newline + newline]) {
++        const body = Buffer.from(
++          `data: {"a":1}${newline}${newline}data: {"b":2}${trailer}`,
++        );
++        const expected = await pinnedSdkValues(body);
++        const replay = parseRecordedOpenAIValues(body, 'stream');
++        expect(replay.values).toEqual(expected.values);
++        expect(replay.failure !== null).toBe(expected.failed);
++      }
++    }
++  });
++
++  it('matches the pinned SDK when UTF-8 and CRLF are split across transport chunks', async () => {
++    const body = Buffer.from(
++      'data: {"text":"שלום"}\r\n\r\ndata: {"next":1}\r\n\r\n',
++    );
++    const source = new ReadableStream<Uint8Array>({
++      start(controller) {
++        for (const byte of body) controller.enqueue(Uint8Array.of(byte));
++        controller.close();
++      },
++    });
++    const sdk = Stream.fromSSEResponse<unknown>(
++      new Response(source, {
++        headers: { 'content-type': 'text/event-stream' },
++      }),
++      new AbortController(),
++    );
++    const values = [];
++    for await (const value of sdk) values.push(value);
++    expect(parseRecordedOpenAIValues(body, 'stream')).toEqual({
++      values,
++      failure: null,
++    });
++  });
++
++  it('admits a physical fixture and refuses a rehashed text replacement in the stream reader', () => {
++    const original = JSON.parse(
++      readFileSync(
++        new URL(
++          '../../utils/__fixtures__/ordinary-tool-wire.json',
++          import.meta.url,
++        ),
++        'utf8',
++      ),
++    ) as WireObject[];
++    const admit = (rows: WireObject[]) => {
++      const replay = new ModelRequestStreamReplay();
++      for (const row of rows) {
++        if (row['type'] === 'system' && row['subtype'] === 'stream_start')
++          replay.begin(row['request_evidence_origin']);
++        if (row['type'] === 'model_request') replay.observe(row['request']);
++        if (row['type'] === 'model_response')
++          replay.observeResponse(row['response']);
++        if (row['type'] === 'model_generation')
++          replay.observeGeneration(row['generation']);
++        if (row['type'] === 'model_attempt_completion')
++          replay.observeCompletion(row['completion']);
++      }
++      replay.finishStream();
++    };
++    expect(() => admit(original)).not.toThrow();
++    const forged = structuredClone(original);
++    const generation = object(rowOf(forged, 'model_generation')['generation']);
++    const envelope = object(
++      JSON.parse(generation['generation_json'] as string),
++    );
++    const observations = envelope['observations'] as unknown[];
++    const response = object(object(observations[0])['response']);
++    const candidate = object((response['candidates'] as unknown[])[0]);
++    const content = object(candidate['content']);
++    object((content['parts'] as unknown[])[0])['text'] = 'forged';
++    const bytes = JSON.stringify(envelope);
++    generation['generation_json'] = bytes;
++    generation['generation_bytes'] = Buffer.byteLength(bytes);
++    generation['generation_sha256'] = createHash('sha256')
++      .update(bytes)
++      .digest('hex');
++    const completion = object(
++      rowOf(forged, 'model_attempt_completion')['completion'],
++    );
++    completion['generation_sha256'] = generation['generation_sha256'];
++    expect(() => admit(forged)).toThrow('differs from its physical response');
++
++    const alteredBody = structuredClone(original);
++    const bodyRow = alteredBody.find(
++      (item) =>
++        item['type'] === 'model_response' &&
++        responseEvent(item)['kind'] === 'body',
++    );
++    if (!bodyRow) throw new Error('Fixture lacks response body');
++    const bodyEvent = responseEvent(bodyRow);
++    const decoded = Buffer.from(
++      bodyEvent['base64'] as string,
++      'base64',
++    ).toString();
++    const changed = decoded.replace('raw thought', 'bad thought');
++    expect(changed).not.toBe(decoded);
++    bodyEvent['base64'] = Buffer.from(changed).toString('base64');
++    const endRow = alteredBody.find(
++      (item) =>
++        item['type'] === 'model_response' &&
++        responseEvent(item)['kind'] === 'end',
++    );
++    if (!endRow) throw new Error('Fixture lacks response end');
++    responseEvent(endRow)['body_sha256'] = createHash('sha256')
++      .update(changed)
++      .digest('hex');
++    expect(() => admit(alteredBody)).toThrow(
++      'differs from its physical response',
++    );
++  });
++
++  it.each([2, 3])(
++    'replays the malformed-tool diagnostic prefix of %s observations',
++    (delivered) => {
++      const fixture = JSON.parse(
++        readFileSync(
++          new URL(
++            './__fixtures__/physical-diagnostic-boundary.json',
++            import.meta.url,
++          ),
++          'utf8',
++        ),
++      );
++      const outcome = {
++        kind: 'outcome' as const,
++        status: 'cancelled' as const,
++        error: null,
++        served_usage: fixture.physicalEvents[3].served_usage,
++        sdk_values_seen: 2,
++        pipeline_outputs_delivered: delivered,
++      };
++      const policy = {
++        mode: 'stream' as const,
++        model: 'test',
++        strict_tool_calling: true,
++        named_tool_choice: null,
++        exact_token_counting: false,
++        tagged_thinking_tags: false,
++      };
++      const replayed = replayRecordedOpenAIObservations(
++        Buffer.from(fixture.body),
++        policy,
++        outcome,
++      );
++      const expected =
++        delivered === 2
++          ? fixture.afterFirstDiagnostic
++          : fixture.afterSecondDiagnostic;
++      expect(JSON.parse(JSON.stringify(replayed))).toEqual(
++        expected.map(
++          ({ call_ids: _callIds, ...raw }: { call_ids: unknown }) => raw,
++        ),
++      );
++    },
++  );
++
++  it('refuses a rehashed generation that replaces response text without changing retained bytes', () => {
++    const fixture = JSON.parse(
++      readFileSync(
++        new URL(
++          './__fixtures__/physical-diagnostic-boundary.json',
++          import.meta.url,
++        ),
++        'utf8',
++      ),
++    );
++    const outcome = {
++      kind: 'outcome' as const,
++      status: 'cancelled' as const,
++      error: null,
++      served_usage: fixture.physicalEvents[3].served_usage,
++      sdk_values_seen: 2,
++      pipeline_outputs_delivered: 3,
++    };
++    const policy = {
++      mode: 'stream' as const,
++      model: 'test',
++      strict_tool_calling: true,
++      named_tool_choice: null,
++      exact_token_counting: false,
++      tagged_thinking_tags: false,
++    };
++    const envelope = {
++      observations: fixture.afterSecondDiagnostic.map(
++        (observation: object) => ({
++          ...observation,
++          source_request_id: 'physical',
++        }),
++      ),
++    } as import('../model-generation.js').GenerationEnvelope;
++    expect(() =>
++      verifyRecordedOpenAIGeneration(
++        Buffer.from(fixture.body),
++        policy,
++        outcome,
++        envelope,
++      ),
++    ).not.toThrow();
++    const forged = structuredClone(envelope);
++    forged.observations[0]!.response.candidates![0]!.content!.parts![1]!.text =
++      'forged';
++    expect(() =>
++      verifyRecordedOpenAIGeneration(
++        Buffer.from(fixture.body),
++        policy,
++        outcome,
++        forged,
++      ),
++    ).toThrow('differs from its physical response');
++    expect(() =>
++      verifyRecordedOpenAIGeneration(
++        Buffer.from(fixture.body),
++        policy,
++        { ...outcome, sdk_values_seen: 3 },
++        envelope,
++      ),
++    ).toThrow('first conversion failure');
++  });
++
++  it.each([
++    'data: {"a":1}\n\ndata: {"b":2}\n\ndata: [DONE]\n\ndata: broken\n\n',
++    ': keepalive\r\ndata: {"a":1}\r\ndata: {"b":2}\r\n',
++    'event: message\ndata: {"a":\ndata: 1}\n\n',
++    'data: {"a":1}\r\rdata: {"b":2}\r\r',
++    'data: {"a":1}\n\ndata: malformed\n\n',
++    'data: {"a":1}\n\ndata: {"error":"no"}\n\n',
++    'data: {"a":1}\n',
++    'data: {"a":1}\n\n\n',
++    'event: thread.created\ndata: {"a":1}\n\n',
++    'event:\n\ndata: {"a":1}\n\n',
++    'event: \r\n\r\ndata: {"a":1}\r\n\r\n',
++    'event: thread.created\ndata: {"a":1}\ndata: {"b":2}\n\n',
++    'id: ignored\nevent: message\ndata: {"a":1}\n\n',
++    'data: {"a":1}\r\ndata: {"b":2}\r\n\r\n',
++    'data: {"a":1}\n\n: ignored\n\ndata: {"b":2}\n\n',
++  ])('matches the pinned SDK on %j', async (body) => {
++    const raw = Buffer.from(body);
++    const expected = await pinnedSdkValues(raw);
++    const replay = parseRecordedOpenAIValues(raw, 'stream');
++    expect(replay.values).toEqual(expected.values);
++    expect(replay.failure !== null).toBe(expected.failed);
++  });
++});
+diff --git a/packages/core/src/core/openaiContentGenerator/__fixtures__/physical-diagnostic-boundary.json b/packages/core/src/core/openaiContentGenerator/__fixtures__/physical-diagnostic-boundary.json
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/__fixtures__/physical-diagnostic-boundary.json
+@@ -0,0 +1,252 @@
++{
++  "body": "data: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"thought\",\"content\":\"prefix\"},\"finish_reason\":null}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\ndata: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"diagnostic\",\"tool_calls\":[{\"index\":0,\"id\":\"provider\",\"type\":\"function\",\"function\":{\"name\":\"audit_probe\",\"arguments\":\"[]\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\ndata: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"UNPROCESSED\"},\"finish_reason\":null}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\ndata: [DONE]\n\n",
++  "bodySha256": "f2ef93330a5a9b1a7ed3976306f4f55961c4934ad2996900b8df3dfd691033c8",
++  "physicalEvents": [
++    {
++      "kind": "http",
++      "status": 200,
++      "content_type": "text/event-stream"
++    },
++    {
++      "kind": "body",
++      "offset": 0,
++      "base64": "ZGF0YTogeyJpZCI6InJlcGx5Iiwib2JqZWN0IjoiY2hhdC5jb21wbGV0aW9uLmNodW5rIiwiY3JlYXRlZCI6MCwibW9kZWwiOiJ0ZXN0IiwiY2hvaWNlcyI6W3siaW5kZXgiOjAsImRlbHRhIjp7InJlYXNvbmluZ19jb250ZW50IjoidGhvdWdodCIsImNvbnRlbnQiOiJwcmVmaXgifSwiZmluaXNoX3JlYXNvbiI6bnVsbH1dLCJ1c2FnZSI6eyJwcm9tcHRfdG9rZW5zIjoxMiwiY29tcGxldGlvbl90b2tlbnMiOjcsInRvdGFsX3Rva2VucyI6MTksInByb21wdF90b2tlbnNfZGV0YWlscyI6eyJjYWNoZWRfdG9rZW5zIjo0fSwiY29tcGxldGlvbl90b2tlbnNfZGV0YWlscyI6eyJyZWFzb25pbmdfdG9rZW5zIjoyfX19CgpkYXRhOiB7ImlkIjoicmVwbHkiLCJvYmplY3QiOiJjaGF0LmNvbXBsZXRpb24uY2h1bmsiLCJjcmVhdGVkIjowLCJtb2RlbCI6InRlc3QiLCJjaG9pY2VzIjpbeyJpbmRleCI6MCwiZGVsdGEiOnsiY29udGVudCI6ImRpYWdub3N0aWMiLCJ0b29sX2NhbGxzIjpbeyJpbmRleCI6MCwiaWQiOiJwcm92aWRlciIsInR5cGUiOiJmdW5jdGlvbiIsImZ1bmN0aW9uIjp7Im5hbWUiOiJhdWRpdF9wcm9iZSIsImFyZ3VtZW50cyI6IltdIn19XX0sImZpbmlzaF9yZWFzb24iOiJ0b29sX2NhbGxzIn1dLCJ1c2FnZSI6eyJwcm9tcHRfdG9rZW5zIjoxMiwiY29tcGxldGlvbl90b2tlbnMiOjcsInRvdGFsX3Rva2VucyI6MTksInByb21wdF90b2tlbnNfZGV0YWlscyI6eyJjYWNoZWRfdG9rZW5zIjo0fSwiY29tcGxldGlvbl90b2tlbnNfZGV0YWlscyI6eyJyZWFzb25pbmdfdG9rZW5zIjoyfX19CgpkYXRhOiB7ImlkIjoicmVwbHkiLCJvYmplY3QiOiJjaGF0LmNvbXBsZXRpb24uY2h1bmsiLCJjcmVhdGVkIjowLCJtb2RlbCI6InRlc3QiLCJjaG9pY2VzIjpbeyJpbmRleCI6MCwiZGVsdGEiOnsiY29udGVudCI6IlVOUFJPQ0VTU0VEIn0sImZpbmlzaF9yZWFzb24iOm51bGx9XSwidXNhZ2UiOnsicHJvbXB0X3Rva2VucyI6MTIsImNvbXBsZXRpb25fdG9rZW5zIjo3LCJ0b3RhbF90b2tlbnMiOjE5LCJwcm9tcHRfdG9rZW5zX2RldGFpbHMiOnsiY2FjaGVkX3Rva2VucyI6NH0sImNvbXBsZXRpb25fdG9rZW5zX2RldGFpbHMiOnsicmVhc29uaW5nX3Rva2VucyI6Mn19fQoKZGF0YTogW0RPTkVdCgo="
++    },
++    {
++      "kind": "end",
++      "termination": "cancelled",
++      "body_bytes": 1133,
++      "body_sha256": "f2ef93330a5a9b1a7ed3976306f4f55961c4934ad2996900b8df3dfd691033c8",
++      "error": null
++    },
++    {
++      "kind": "outcome",
++      "status": "cancelled",
++      "error": null,
++      "served_usage": {
++        "totalTokenCount": 19,
++        "promptTokenCount": 12,
++        "candidatesTokenCount": 7,
++        "thoughtsTokenCount": 2,
++        "cachedContentTokenCount": 4
++      }
++    },
++    {
++      "kind": "history",
++      "disposition": "abandoned"
++    }
++  ],
++  "processedSDKValues": [
++    {
++      "id": "reply",
++      "object": "chat.completion.chunk",
++      "created": 0,
++      "model": "test",
++      "choices": [
++        {
++          "index": 0,
++          "delta": {
++            "reasoning_content": "thought",
++            "content": "prefix"
++          },
++          "finish_reason": null
++        }
++      ],
++      "usage": {
++        "prompt_tokens": 12,
++        "completion_tokens": 7,
++        "total_tokens": 19,
++        "prompt_tokens_details": {
++          "cached_tokens": 4
++        },
++        "completion_tokens_details": {
++          "reasoning_tokens": 2
++        }
++      }
++    },
++    {
++      "id": "reply",
++      "object": "chat.completion.chunk",
++      "created": 0,
++      "model": "test",
++      "choices": [
++        {
++          "index": 0,
++          "delta": {
++            "content": "diagnostic",
++            "tool_calls": [
++              {
++                "index": 0,
++                "id": "provider",
++                "type": "function",
++                "function": {
++                  "name": "audit_probe",
++                  "arguments": "[]"
++                }
++              }
++            ]
++          },
++          "finish_reason": "tool_calls"
++        }
++      ],
++      "usage": {
++        "prompt_tokens": 12,
++        "completion_tokens": 7,
++        "total_tokens": 19,
++        "prompt_tokens_details": {
++          "cached_tokens": 4
++        },
++        "completion_tokens_details": {
++          "reasoning_tokens": 2
++        }
++      }
++    }
++  ],
++  "afterFirstDiagnostic": [
++    {
++      "response": {
++        "candidates": [
++          {
++            "content": {
++              "parts": [
++                {
++                  "text": "thought",
++                  "thought": true
++                },
++                {
++                  "text": "prefix"
++                }
++              ],
++              "role": "model"
++            },
++            "index": 0,
++            "safetyRatings": []
++          }
++        ],
++        "usageMetadata": {
++          "promptTokenCount": 12,
++          "candidatesTokenCount": 7,
++          "totalTokenCount": 19,
++          "cachedContentTokenCount": 4,
++          "thoughtsTokenCount": 2
++        },
++        "responseId": "reply",
++        "createTime": "0",
++        "modelVersion": "test",
++        "promptFeedback": {
++          "safetyRatings": []
++        }
++      },
++      "incomplete_tool_calls": [],
++      "tool_call_preparations": [],
++      "call_ids": []
++    },
++    {
++      "response": {
++        "candidates": [
++          {
++            "content": {
++              "role": "model",
++              "parts": [
++                {
++                  "text": "diagnostic"
++                }
++              ]
++            }
++          }
++        ],
++        "usageMetadata": {
++          "promptTokenCount": 12,
++          "candidatesTokenCount": 7,
++          "totalTokenCount": 19,
++          "cachedContentTokenCount": 4,
++          "thoughtsTokenCount": 2
++        }
++      },
++      "incomplete_tool_calls": [],
++      "tool_call_preparations": [],
++      "call_ids": []
++    }
++  ],
++  "afterSecondDiagnostic": [
++    {
++      "response": {
++        "candidates": [
++          {
++            "content": {
++              "parts": [
++                {
++                  "text": "thought",
++                  "thought": true
++                },
++                {
++                  "text": "prefix"
++                }
++              ],
++              "role": "model"
++            },
++            "index": 0,
++            "safetyRatings": []
++          }
++        ],
++        "usageMetadata": {
++          "promptTokenCount": 12,
++          "candidatesTokenCount": 7,
++          "totalTokenCount": 19,
++          "cachedContentTokenCount": 4,
++          "thoughtsTokenCount": 2
++        },
++        "responseId": "reply",
++        "createTime": "0",
++        "modelVersion": "test",
++        "promptFeedback": {
++          "safetyRatings": []
++        }
++      },
++      "incomplete_tool_calls": [],
++      "tool_call_preparations": [],
++      "call_ids": []
++    },
++    {
++      "response": {
++        "candidates": [
++          {
++            "content": {
++              "role": "model",
++              "parts": [
++                {
++                  "text": "diagnostic"
++                }
++              ]
++            }
++          }
++        ],
++        "usageMetadata": {
++          "promptTokenCount": 12,
++          "candidatesTokenCount": 7,
++          "totalTokenCount": 19,
++          "cachedContentTokenCount": 4,
++          "thoughtsTokenCount": 2
++        }
++      },
++      "incomplete_tool_calls": [],
++      "tool_call_preparations": [],
++      "call_ids": []
++    },
++    {
++      "response": {
++        "usageMetadata": {
++          "promptTokenCount": 12,
++          "candidatesTokenCount": 7,
++          "totalTokenCount": 19,
++          "cachedContentTokenCount": 4,
++          "thoughtsTokenCount": 2
++        }
++      },
++      "incomplete_tool_calls": [],
++      "tool_call_preparations": [],
++      "call_ids": []
++    }
++  ],
++  "disposition": "abandoned"
++}

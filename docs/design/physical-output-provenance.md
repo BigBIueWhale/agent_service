@@ -2,9 +2,10 @@
 
 The response journal retains exact HTTP body bytes and the generation envelope
 retains decoded observations used to construct model history. Those are distinct
-authorities. Request IDs, response history decisions, generation hashes and
-served-usage equality currently bind their declared ownership, but do not
-establish that a decoded observation came from the retained response bytes.
+authorities. TypeScript root readers now replay OpenAI response bytes through
+the selected decoder and compare raw Chat observations before admission.
+The native, Python and Java readers still bind declared ownership and usage
+without independently establishing that byte-to-observation relation.
 
 The v7 source reproducer at
 `/tmp/codex-output-disposition-review/baseline/REPORT.md` keeps every physical
@@ -31,9 +32,10 @@ by the same mutable generation envelope cannot prove its relation to the body.
 ## Source boundaries the repair must cross
 
 `ModelResponseRecorder` persists HTTP headers and exact body chunks before the
-OpenAI SDK consumes them. `ModelResponseReplay` and the Python and native
-response owners currently keep byte counts and SHA-256 state, then discard the
-body. None can later compare a generation to its source. The OpenAI SDK's SSE
+OpenAI SDK consumes them. `ModelResponseReplay` now retains the current
+response body until TypeScript admission compares it with decoded observations;
+the Python and native response owners still discard the body after checking
+its byte count and SHA-256. The OpenAI SDK's SSE
 reader parses `data:` frames into JSON values, ignores `[DONE]`, and can stop
 before consuming a remaining body after a parser or caller failure. The
 nonstreaming path parses one JSON completion. A response digest proves the
@@ -97,8 +99,9 @@ arguments, finish reason and usage from that source, rather than accept an
 unconstrained converter assertion. The root and any independently readable
 child artifact need the same proof. Verification state should be scoped to the
 current physical response and generation, not accumulate all response bodies
-for a long session. The source inventory establishes these requirements; it
-does not establish an implemented verifier.
+for a long session. The TypeScript source now implements the raw observation
+comparison for its root readers; the remaining readers and normalization
+mapping still need the same proof.
 
 ## Executed event-attribution cases
 
@@ -249,9 +252,11 @@ a validated JSON-shaped decode policy and creates fresh parser state from it.
 Chat now applies `GenerationObservationNormalizer` to every delivered response;
 that shared routine preserves the raw observation, normalizes tool identities
 against the active history, records preparation mappings and removes executable
-calls from the provisional delivered chunk. Source reading establishes this
-single live normalization path. No reader yet invokes it to verify a generation
-against retained response bytes.
+calls from the provisional delivered chunk. The TypeScript root readers now
+replay the selected decoder from retained bytes and compare the raw response,
+incomplete calls and provider preparation identities. The recorded normalized
+call IDs remain checked for internal consistency, but are not independently
+recomputed from the conversation history at this admission boundary.
 An executed source test decoded identical provider content with tagged-thinking
 parsing off and on and obtained the two corresponding part sequences after a
 policy JSON round trip. The earlier converter, pipeline and policy source suites
@@ -272,10 +277,10 @@ unverified pending the owner's gates. The Rust and Java refusal cases were
 authored but not executed. The installed TypeScript
 wire validator is still generated from v5 and rejects `stream_start` before
 these new records; its full-wire tests cannot qualify v10 until the owner's
-generation and build gates run. No admitting reader yet replays retained response
-bytes through the selected decoder or compares them with a canonical generation.
-The policy binding is therefore a necessary input to physical-to-decoded proof,
-not that proof itself.
+generation and build gates run. TypeScript root stream and canonical readers
+now use the selected policy to replay retained bytes and compare raw Chat
+observations. Native, Python and Java admission still need equivalent decoding
+and comparison; the policy binding alone does not provide it.
 
 The completion's physical request membership and each observation's
 `source_request_id` identify the declared retry. The live Chat path only retries
@@ -306,8 +311,16 @@ continues to use the separate versioned runtime transcript, but any replay of
 its generation evidence needs verified physical membership before it can claim
 the model's exact output.
 
-This note records an open design obligation. No compiler, native certifier,
-provider or deployed application execution establishes the repair yet.
+The TypeScript verifier passed focused source tests for streamed and nonstreamed
+responses, early cancellation, malformed-call diagnostics and rehashed text or
+body substitutions. A deterministic 600-body local parser probe matched the
+pinned SDK's SSE value boundaries; it is not a proof for every transport shape.
+The native certifier, Python and Java readers, utility consumer receipts,
+standalone child proof and normalized ID derivation remain open. A local
+rehashed replacement of a preparation's normalized ID and its matching call
+mapping was admitted by the TypeScript stream reader while the raw provider ID
+stayed unchanged. No compiler, native certifier, deployed provider or release
+gate has verified the full repair.
 
 ## Provider coverage at the request boundary
 

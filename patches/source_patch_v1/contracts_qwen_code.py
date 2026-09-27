@@ -8367,6 +8367,26 @@ def _validate_served_accounting_after(state: State) -> None:
     require_text(state, core + "core/openaiContentGenerator/responseDecoder.test.ts",
                  "replays identical response bytes according to the dispatched parsing choice",
                  label=label)
+    recorded_replay = core + "core/openaiContentGenerator/recorded-response-replay.ts"
+    _require_all(state, recorded_replay, (
+        "export function parseRecordedOpenAIValues(",
+        "export function replayRecordedOpenAIObservations(",
+        "export function verifyRecordedOpenAIGeneration(",
+        "createOpenAIResponseDecodeContext(policy, 0)",
+        "new OpenAIStreamDecoder(context)",
+        "readOpenAIUsage(chunk.usage)",
+        "takeGenerationObservation(output)",
+        "observation.response",
+        "observation.incomplete_tool_calls",
+        "provider_call_id",
+        "SDK value count passes the first conversion failure",
+    ), label=label)
+    _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.test.ts", (
+        "matches the pinned SDK across line endings and incomplete trailing frames",
+        "admits a physical fixture and refuses a rehashed text replacement",
+        "replays the malformed-tool diagnostic prefix",
+        "does not invent a held terminal diagnostic",
+    ), label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
         "for (const response of decoder.finish()) {",
@@ -8380,6 +8400,21 @@ def _validate_served_accounting_after(state: State) -> None:
         "response.observeUsage(observation.usage)",
     ), label=label)
     response_recorder = _source(state, core + "core/model-response-evidence.ts", label=label)
+    _require_all(state, core + "core/model-response-evidence.ts", (
+        "policy: OpenAIResponseDecodePolicy,",
+        "policy: requireOpenAIResponseDecodePolicy(policy)",
+        "replayRecordedOpenAIObservations(",
+        "verifyRecordedOpenAIGeneration(",
+        "Buffer.concat(state.bodyChunks)",
+    ), label=label)
+    forbid_text(state, core + "core/model-response-evidence.ts",
+                "policy?: OpenAIResponseDecodePolicy", label=label)
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "this.responses.verifyGeneration(envelope)",
+        "this.responses.verifyGeneration(readModelGeneration(generation))",
+        "record.request.decode_policy",
+        "request.decode_policy",
+    ), label=label)
     outcome_write = response_recorder.split("const processing: ModelResponseOutcome = cleanup", 1)[1]
     _require_ordered(outcome_write, (
         "await this.enqueue(async () => {", "requireCompatibleProcessing(",

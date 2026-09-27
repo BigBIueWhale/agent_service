@@ -499,10 +499,13 @@ Chat incorporated into its generation. Readers require that receipt to equal the
 generation observation count and, for an accepted attempt, the count delivered
 by the final physical response. An abandoned attempt may retain a shorter
 consumer prefix. Readers require earlier retry requests to deliver no decoded
-output and bind every observation to the final physical request. These boundaries distinguish
-early cancellation from a complete response body and a diagnostic expansion
-from one SDK value. They do not yet prove that an observation's contents were
-derived from the captured bytes; a raw-response replay verifier is still needed.
+output and bind every observation to the final physical request. These
+boundaries distinguish early cancellation from a complete response body and a
+diagnostic expansion from one SDK value. TypeScript root readers now replay
+the retained OpenAI response with the selected decoder and compare raw Chat
+observations before admission. Native, Python and Java readers still need the
+same byte-to-observation proof. Normalized call IDs and utility consumer
+receipts also need independent verification.
 
 These records cover the HTTP response observed by every shared-client generation,
 including side queries and children. They cannot establish tokens generated but
