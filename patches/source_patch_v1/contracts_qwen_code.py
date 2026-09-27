@@ -8581,7 +8581,13 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, core + "utils/runtime-contract-admission.ts", (
         "origin.kv_scope !== (scope ?? wire.session_id)", "requests.observeOrigin(origin, scope)",
-        "partial.observeOrigin(origin)",
+        "partial.observeOrigin(origin)", "partial.completeMessage(text)",
+        "partial.verifyTerminalResult(", "session.clear();",
+    ), label=label)
+    _require_all(state, core + "utils/runtime-partial-stream.ts", (
+        "runtime partial group has no full assistant message",
+        "runtime partial text has no matching full assistant message",
+        "terminal result contradicts runtime assistant text",
     ), label=label)
     recorder = _source(state, core + "services/chatRecordingService.ts", label=label)
     evidence_writer = recorder.split("readonly modelRequests = new ModelRequestJournal(", 1)[1].split("/**", 1)[0]
@@ -8725,6 +8731,8 @@ def _validate_served_accounting_after(state: State) -> None:
         'session.requests.summary(record["request_evidence"])',
         'record["uuid"] not in session.terminal_ids', "partial.observe_origin(origin)",
         "session.requests.finish()", "partial.finish()", "self._pending_inputs == 0",
+        "session.partials.clear()", "partial.complete_message(",
+        "partial.verify_terminal_result(",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
@@ -8748,6 +8756,9 @@ def _validate_served_accounting_after(state: State) -> None:
         'a Chat attempt received decoded output before its final physical request',
         "completed processing has no successful HTTP transport completion",
         "not self.responses", "not self.group_open and not self.blocks",
+        "runtime partial group has no full assistant message",
+        "runtime partial text has no matching full assistant message",
+        "terminal result contradicts runtime assistant text",
     ), label=label)
     require_text(state, python_sdk + "src/qwen_code_sdk/json_lines.py",
                  "object_pairs_hook=_object", label=label)
@@ -8823,6 +8834,13 @@ def _validate_served_accounting_after(state: State) -> None:
         "StrictJson.parseObject", "StreamSchema.validate(record)", "observe(record)",
         "new StreamRecord(json, record, generation)", "public synchronized void finish()",
         "session.requests.finish()", "partial.finish()", "terminal record identity is repeated",
+        "session.partials.clear()", "partial.completeMessage(rendered.toString())",
+        "partial.verifyTerminalResult(",
+    ), label=label)
+    _require_all(state, java_cli + "protocol/PartialOutput.java", (
+        "runtime partial group has no full assistant message",
+        "runtime partial text has no matching full assistant message",
+        "terminal result contradicts runtime assistant text",
     ), label=label)
     _require_all(state, java_cli + "protocol/RequestEvidence.java", (
         "StreamSchema.sha256(bytes)", "slices.messages.equals(expected)",

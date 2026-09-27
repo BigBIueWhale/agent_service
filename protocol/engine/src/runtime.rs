@@ -11,6 +11,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -449,6 +450,7 @@ struct ScopeState {
     id: Option<String>,
     terminal: Option<Terminal>,
     partial: PartialStreamState,
+    runtime_text: Option<Arc<str>>,
 }
 struct ToolUse {
     name: String,
@@ -957,7 +959,22 @@ impl RuntimeContract {
                 completion = Some(admission);
             }
             EventKind::Assistant => {
-                state.partial.complete_message(line)?;
+                let content = field(field(object, "message", line)?, "content", line)?
+                    .elements()
+                    .ok_or_else(|| ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} has no runtime assistant content; inspect the original recording"
+                    )))?;
+                let mut rendered = String::new();
+                for block in content {
+                    if text(block, "type", line)? != "text" {
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} claims non-text runtime assistant output; inspect its producing operation"
+                        )));
+                    }
+                    rendered.push_str(text(block, "text", line)?);
+                }
+                state.partial.complete_message(&rendered, line)?;
+                state.runtime_text = Some(Arc::from(rendered));
             }
             EventKind::User => {
                 if let Some(blocks) = field(object, "message", line)?
@@ -1009,6 +1026,14 @@ impl RuntimeContract {
             EventKind::Result => {
                 state.partial.finish(line)?;
                 state.terminal = Some(terminal(object, line, scope.is_none())?);
+                if state.runtime_text.as_deref().is_some_and(|rendered| {
+                    state.terminal.as_ref().and_then(|terminal| terminal.response.as_deref())
+                        != Some(rendered)
+                }) {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} terminal result contradicts runtime assistant text; inspect the complete original recording"
+                    )));
+                }
                 if scope.is_none() {
                     if !runtime_initialized
                         && !state.terminal.as_ref().expect("parsed terminal").is_error
@@ -1281,6 +1306,17 @@ mod tests {
         format!(
             r#"{{"type":"assistant","origin":{{"kind":"runtime"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"id":"presentation-{id}","type":"message","role":"assistant","content":{content},"stop_reason":null,"usage":null}}}}"#
         )
+    }
+    fn runtime_result(value: &str) -> String {
+        serde_json::json!({
+            "type":"result", "uuid":"runtime-result", "session_id":"session", "parent_tool_use_id":null,
+            "subtype":"success", "is_error":false, "duration_ms":0, "duration_api_ms":0,
+            "num_turns":0, "result":value, "permission_denials":[],
+            "usage":{"requests":0,"usageReports":0,"unfinalizedRequests":0,
+                "unreportedUsageRequests":0,"usage":null},
+            "request_evidence":{"journal_id":"fixture","first_sequence":1,"request_count":0,
+                "open_response_ids":[],"open_attempt_ids":[]}
+        }).to_string()
     }
     fn fixture() -> Vec<serde_json::Value> {
         let mut rows: Vec<serde_json::Value> =
@@ -1613,6 +1649,44 @@ mod tests {
             assert!(admit(&mut owner, &raw).is_err());
         }
     }
+    #[test]
+    fn runtime_text_requires_matching_partial_full_and_terminal_records() {
+        let parts = [
+            ("start", r#"{"type":"message_start","message":{"id":"runtime","role":"assistant","content":[]}}"#),
+            ("block", r#"{"type":"content_block_start","index":0,"content_block":{"type":"text","text":"answer"}}"#),
+            ("close", r#"{"type":"content_block_stop","index":0}"#),
+        ];
+        let full = assistant("runtime-full", "null", r#"[{"type":"text","text":"answer"}]"#);
+        let mut accepted = initialized();
+        for (id, event) in parts {
+            admit(&mut accepted, &partial(id, event)).unwrap();
+        }
+        admit(&mut accepted, &full).unwrap();
+        admit(&mut accepted, &partial("stop", r#"{"type":"message_stop"}"#)).unwrap();
+        admit(&mut accepted, &runtime_result("answer")).unwrap();
+        assert_eq!(accepted.finish().unwrap().response, "answer");
+
+        let mut changed_full = initialized();
+        for (id, event) in parts {
+            admit(&mut changed_full, &partial(id, event)).unwrap();
+        }
+        let forged = assistant("runtime-full", "null", r#"[{"type":"text","text":"other"}]"#);
+        assert!(admit(&mut changed_full, &forged).unwrap_err().to_string()
+            .contains("runtime partial text"));
+
+        let mut missing_full = initialized();
+        for (id, event) in parts {
+            admit(&mut missing_full, &partial(id, event)).unwrap();
+        }
+        assert!(admit(&mut missing_full, &partial("stop", r#"{"type":"message_stop"}"#))
+            .unwrap_err().to_string().contains("no full assistant message"));
+
+        let mut changed_result = initialized();
+        admit(&mut changed_result, &full).unwrap();
+        assert!(admit(&mut changed_result, &runtime_result("other"))
+            .unwrap_err().to_string().contains("terminal result contradicts"));
+    }
+
     #[test]
     fn runtime_presentation_cannot_issue_tools_or_clear_partial_state() {
         let mut owner = initialized();

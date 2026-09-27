@@ -307,7 +307,7 @@ mod tests {
                 )
                 .unwrap();
                 assert!(state
-                    .complete_message(2)
+                    .complete_message("observed content", 2)
                     .unwrap_err()
                     .to_string()
                     .contains("unclosed"));
@@ -317,7 +317,7 @@ mod tests {
                     root,
                 )
                 .unwrap();
-                state.complete_message(3).unwrap();
+                state.complete_message("observed content", 3).unwrap();
                 assert!(state.finish(4).is_err());
                 partial(&mut state, serde_json::json!({"type":"message_stop"}), root).unwrap();
                 state.finish(5).unwrap();
@@ -423,7 +423,7 @@ mod tests {
                 );
                 owner.observe(record.partial().unwrap(), false, 1).unwrap();
             }
-            owner.complete_message(3).unwrap();
+            owner.complete_message("", 3).unwrap();
             partial(
                 &mut owner,
                 serde_json::json!({"type":"message_stop"}),
@@ -453,7 +453,10 @@ mod tests {
                         action["event"].clone(),
                         case["root"].as_bool().unwrap(),
                     ),
-                    "message_complete" => owner.complete_message(1),
+                    "message_complete" => owner.complete_message(
+                        action["text"].as_str().unwrap_or(""),
+                        1,
+                    ),
                     "scope_complete" => owner.finish(1),
                     other => panic!("unknown fixture action {other}"),
                 });

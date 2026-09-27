@@ -308904,7 +308904,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/core/src/utils/runtime-contract-admission.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.ts
-@@ -0,0 +1,429 @@
+@@ -0,0 +1,443 @@
 +import { ModelRequestStreamReplay } from '../core/model-request-evidence.js';
 +import { generationHistory } from '../core/model-generation.js';
 +import {
@@ -309096,6 +309096,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +                );
 +              requests.finishStream();
 +              for (const previous of session.values()) previous.finish();
++              session.clear();
 +              completion.issuedTools.clear();
 +            }
 +            requests.begin(envelope['request_evidence_origin']);
@@ -309255,8 +309256,21 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +            )
 +              completion.needsResult = true;
 +          }
-+          if (wire.type === 'assistant') partial.completeMessage();
-+          if (wire.type === 'result') partial.finish();
++          if (wire.type === 'assistant') {
++            const message = envelope['message'] as Record<string, unknown>;
++            const text = (message['content'] as Array<{ text: string }>)
++              .map((block) => block.text)
++              .join('');
++            partial.completeMessage(text);
++          }
++          if (wire.type === 'result') {
++            partial.finish();
++            partial.verifyTerminalResult(
++              envelope['is_error']
++                ? (envelope['error'] as { message: string }).message
++                : (envelope['result'] as string | undefined),
++            );
++          }
 +        } catch (error) {
 +          return `Stream evidence or partial ordering is invalid: ${String(error)}`;
 +        }
@@ -309337,7 +309351,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 diff --git a/packages/core/src/utils/runtime-partial-stream.test.ts b/packages/core/src/utils/runtime-partial-stream.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-partial-stream.test.ts
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,89 @@
 +import { describe, expect, it } from 'vitest';
 +import vectors from './__fixtures__/partial-stream-v2.json' with { type: 'json' };
 +import { RuntimePartialStream } from './runtime-partial-stream.js';
@@ -309370,7 +309384,11 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.test.ts b/packages/c
 +            break;
 +          }
 +          case 'message_complete':
-+            owner.completeMessage();
++            owner.completeMessage(
++              'text' in action && typeof action.text === 'string'
++                ? action.text
++                : '',
++            );
 +            break;
 +          case 'scope_complete':
 +            owner.finish();
@@ -309384,10 +309402,49 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.test.ts b/packages/c
 +    else expect(run).toThrow(test.expected.cause);
 +  });
 +});
++
++describe('runtime assistant text ownership', () => {
++  function partial(message = 'runtime answer') {
++    const owner = new RuntimePartialStream();
++    owner.observeOrigin({ kind: 'runtime' });
++    owner.observe({ type: 'message_start' });
++    owner.observe({
++      type: 'content_block_start',
++      index: 0,
++      content_block: { type: 'text', text: message },
++    });
++    owner.observe({ type: 'content_block_stop', index: 0 });
++    return owner;
++  }
++
++  it('admits matching partial, full and result text', () => {
++    const owner = partial();
++    owner.completeMessage('runtime answer');
++    owner.observe({ type: 'message_stop' });
++    owner.finish();
++    owner.verifyTerminalResult('runtime answer');
++    owner.verifyTerminalResult('a later turn has its own result');
++  });
++
++  it('refuses changed or missing full text and a contradictory result', () => {
++    expect(() => partial().completeMessage('altered')).toThrow(
++      'runtime partial text has no matching full assistant message',
++    );
++    expect(() => partial().observe({ type: 'message_stop' })).toThrow(
++      'runtime partial group has no full assistant message',
++    );
++    const owner = partial();
++    owner.completeMessage('runtime answer');
++    owner.observe({ type: 'message_stop' });
++    expect(() => owner.verifyTerminalResult('altered')).toThrow(
++      'terminal result contradicts runtime assistant text',
++    );
++  });
++});
 diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/src/utils/runtime-partial-stream.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-partial-stream.ts
-@@ -0,0 +1,231 @@
+@@ -0,0 +1,260 @@
 +import type { ModelOutputOrigin } from '../core/chat-attempt.js';
 +import {
 +  generationPartialAuthority,
@@ -309414,6 +309471,9 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/s
 +/** Groups delimit indexes; immutable generation evidence owns model claims. */
 +export class RuntimePartialStream {
 +  private groupOpen = false;
++  private runtimeGroupSeen = false;
++  private runtimeMessageSeen = false;
++  private lastRuntimeText: string | undefined;
 +  private origin: ModelOutputOrigin | undefined;
 +  private authority: GenerationPartialAuthority | undefined;
 +  private disposition: 'accepted' | 'abandoned' | undefined;
@@ -309434,6 +309494,9 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/s
 +      return;
 +    if (this.origin !== undefined) this.finish();
 +    this.origin = origin;
++    this.runtimeGroupSeen = false;
++    this.runtimeMessageSeen = false;
++    this.lastRuntimeText = undefined;
 +    this.authority = undefined;
 +    this.disposition = undefined;
 +    this.text = '';
@@ -309514,6 +309577,10 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/s
 +        if (this.groupOpen || this.blocks.size)
 +          refuse('message group is already open');
 +        this.groupOpen = true;
++        if (this.origin.kind === 'runtime') {
++          this.runtimeGroupSeen = true;
++          this.runtimeMessageSeen = false;
++        }
 +        return;
 +      case 'content_block_start': {
 +        if (!this.groupOpen) refuse('content block precedes its message group');
@@ -309589,10 +309656,15 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/s
 +          [...this.blocks.values()].some((block) => block.open)
 +        )
 +          refuse('message group stops before all its blocks close');
++        if (this.origin.kind === 'runtime' && !this.runtimeMessageSeen)
++          refuse('runtime partial group has no full assistant message');
 +        this.groupOpen = false;
 +        this.blocks.clear();
 +        this.reconcile();
-+        if (this.origin.kind === 'runtime') this.text = '';
++        if (this.origin.kind === 'runtime') {
++          this.text = '';
++          this.runtimeMessageSeen = false;
++        }
 +        return;
 +      default: {
 +        const unhandled: never = event.type;
@@ -309601,11 +309673,25 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/s
 +    }
 +  }
 +
-+  completeMessage(): void {
-+    if (this.origin?.kind === 'model')
++  completeMessage(message: string): void {
++    if (this.origin?.kind !== 'runtime')
 +      refuse('model output requires generation and completion records');
 +    if ([...this.blocks.values()].some((block) => block.open))
 +      refuse('runtime presentation has an unclosed partial block');
++    if (this.runtimeGroupSeen) {
++      if (!this.groupOpen || this.runtimeMessageSeen || this.text !== message)
++        refuse('runtime partial text has no matching full assistant message');
++      this.runtimeMessageSeen = true;
++    }
++    this.lastRuntimeText = message;
++  }
++
++  verifyTerminalResult(result: string | undefined): void {
++    if (this.lastRuntimeText !== undefined && this.lastRuntimeText !== result)
++      refuse('terminal result contradicts runtime assistant text');
++    this.lastRuntimeText = undefined;
++    this.runtimeGroupSeen = false;
++    this.runtimeMessageSeen = false;
 +  }
 +
 +  finish(): void {
@@ -350874,7 +350960,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/__init__.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,331 @@
 +"""Admission of the shared versioned CLI stream before SDK interpretation."""
 +
 +from __future__ import annotations
@@ -351030,6 +351116,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                session.requests.finish()
 +                for previous in session.partials.values():
 +                    previous.finish()
++                session.partials.clear()
 +                session.issued_tools.clear()
 +            session.requests.begin(record["request_evidence_origin"])
 +            session.started = True
@@ -351100,6 +351187,11 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                if self._pending_inputs:
 +                    self._pending_inputs -= 1
 +            partial.finish()
++            partial.verify_terminal_result(
++                record["error"]["message"]
++                if record["is_error"]
++                else record.get("result")
++            )
 +            if record["usage"] is not None:
 +                _usage(record["usage"])
 +        if kind in ("assistant", "user"):
@@ -351166,7 +351258,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                    "tool progress has no accepted, open tool use in its scope",
 +                )
 +        elif kind == "assistant":
-+            partial.complete_message()
++            partial.complete_message(
++                "".join(block["text"] for block in record["message"]["content"])
++            )
 +        elif (
 +            kind == "system"
 +            and subtype == "task_notification"
@@ -351201,7 +351295,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,661 @@
+@@ -0,0 +1,693 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -351685,6 +351779,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +class PartialOutput:
 +    def __init__(self) -> None:
 +        self.group_open = False
++        self.runtime_group_seen = False
++        self.runtime_message_seen = False
++        self.last_runtime_text: str | None = None
 +        self.origin: dict[str, Any] | None = None
 +        self.generation: Generation | None = None
 +        self.disposition: str | None = None
@@ -351700,6 +351797,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        if self.origin is not None:
 +            self.finish()
 +        self.origin = copy.deepcopy(origin)
++        self.runtime_group_seen = False
++        self.runtime_message_seen = False
++        self.last_runtime_text = None
 +        self.generation = None
 +        self.disposition = None
 +        self.text = self.thinking = ""
@@ -351747,6 +351847,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                not self.group_open and not self.blocks, "message group is already open"
 +            )
 +            self.group_open = True
++            if not model:
++                self.runtime_group_seen = True
++                self.runtime_message_seen = False
 +        elif kind == "content_block_start":
 +            _require(self.group_open, "content block precedes its message group")
 +            _require(
@@ -351832,15 +351935,20 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                and not any(block["open"] for block in self.blocks.values()),
 +                "message group stops before its blocks close",
 +            )
++            _require(
++                model or self.runtime_message_seen,
++                "runtime partial group has no full assistant message",
++            )
 +            self.group_open = False
 +            self.blocks.clear()
 +            self.reconcile()
 +            if not model:
 +                self.text = ""
++                self.runtime_message_seen = False
 +        else:
 +            raise ValueError("partial event has no interpretation")
 +
-+    def complete_message(self) -> None:
++    def complete_message(self, message: str) -> None:
 +        _require(
 +            self.origin is not None and self.origin["kind"] == "runtime",
 +            "full assistant output requires runtime origin",
@@ -351849,6 +351957,24 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            not any(block["open"] for block in self.blocks.values()),
 +            "runtime assistant message has an unclosed block",
 +        )
++        if self.runtime_group_seen:
++            _require(
++                self.group_open
++                and not self.runtime_message_seen
++                and self.text == message,
++                "runtime partial text has no matching full assistant message",
++            )
++            self.runtime_message_seen = True
++        self.last_runtime_text = message
++
++    def verify_terminal_result(self, result: str | None) -> None:
++        _require(
++            self.last_runtime_text is None or self.last_runtime_text == result,
++            "terminal result contradicts runtime assistant text",
++        )
++        self.last_runtime_text = None
++        self.runtime_group_seen = False
++        self.runtime_message_seen = False
 +
 +    def finish(self) -> None:
 +        _require(
@@ -351866,7 +351992,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,530 @@
+@@ -0,0 +1,563 @@
 +from __future__ import annotations
 +
 +import copy
@@ -351917,6 +352043,39 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    expected = copy.deepcopy(wire)
 +    admit_all(wire).finish()
 +    assert wire == expected
++
++
++@pytest.mark.parametrize(
++    ("change", "expected"),
++    [
++        ("full", "runtime partial text has no matching full assistant message"),
++        ("missing", "runtime partial group has no full assistant message"),
++        ("terminal", "terminal result contradicts runtime assistant text"),
++    ],
++)
++def test_runtime_output_must_agree_across_partial_full_and_terminal(
++    change: str, expected: str
++) -> None:
++    wire = records("runtime_partial_no_generation")
++    if change == "full":
++        full = next(row for row in wire if row["type"] == "assistant")
++        full["message"]["content"][0]["text"] = "altered"
++    elif change == "missing":
++        wire = [row for row in wire if row["type"] != "assistant"]
++    else:
++        next(row for row in wire if row["type"] == "result")["result"] = "altered"
++    with pytest.raises(RecordContractError, match=expected):
++        admit_all(wire).finish()
++
++
++def test_runtime_terminal_binding_ends_with_its_turn() -> None:
++    from qwen_code_sdk.record_evidence import PartialOutput
++
++    owner = PartialOutput()
++    owner.observe_origin({"kind": "runtime"})
++    owner.complete_message("first turn")
++    owner.verify_terminal_result("first turn")
++    owner.verify_terminal_result("a later turn has its own result")
 +
 +
 +@pytest.mark.parametrize(
@@ -352375,7 +352534,7 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +                assert STREAM.is_valid(record), list(STREAM.iter_errors(record))
 +                owner.observe(action["event"])
 +            elif kind == "message_complete":
-+                owner.complete_message()
++                owner.complete_message(action.get("text", ""))
 +            elif kind == "scope_complete":
 +                owner.finish()
 +            else:
@@ -354237,7 +354396,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -354376,7 +354535,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -354501,7 +354660,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -356393,7 +356552,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/PartialOutput.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/PartialOutput.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/PartialOutput.java
-@@ -0,0 +1,204 @@
+@@ -0,0 +1,231 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import java.nio.charset.StandardCharsets;
@@ -356411,6 +356570,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +
 +final class PartialOutput {
 +    private boolean groupOpen;
++    private boolean runtimeGroupSeen;
++    private boolean runtimeMessageSeen;
++    private String lastRuntimeText;
 +    private Map<String, Object> origin;
 +    private GenerationEvidence generation;
 +    private String disposition;
@@ -356428,6 +356590,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            finish();
 +        }
 +        origin = value;
++        runtimeGroupSeen = false;
++        runtimeMessageSeen = false;
++        lastRuntimeText = null;
 +        generation = null;
 +        disposition = null;
 +        text = new Prefix();
@@ -356471,6 +356636,10 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            case "message_start":
 +                require(!groupOpen && blocks.isEmpty(), "message group is already open");
 +                groupOpen = true;
++                if (!model) {
++                    runtimeGroupSeen = true;
++                    runtimeMessageSeen = false;
++                }
 +                break;
 +            case "content_block_start":
 +                require(groupOpen && integer(event.get("index")) == blocks.size(),
@@ -356540,11 +356709,13 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            case "message_stop":
 +                require(groupOpen && blocks.stream().noneMatch(blockValue -> blockValue.open),
 +                        "message group stops before its blocks close");
++                require(model || runtimeMessageSeen, "runtime partial group has no full assistant message");
 +                groupOpen = false;
 +                blocks.clear();
 +                reconcile();
 +                if (!model) {
 +                    text = new Prefix();
++                    runtimeMessageSeen = false;
 +                }
 +                break;
 +            default:
@@ -356552,9 +356723,24 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        }
 +    }
 +
-+    void completeMessage() {
++    void completeMessage(String message) {
 +        require(origin != null && "runtime".equals(origin.get("kind")), "full assistant output requires runtime origin");
 +        require(blocks.stream().noneMatch(block -> block.open), "runtime assistant message has an unclosed block");
++        if (runtimeGroupSeen) {
++            require(groupOpen && !runtimeMessageSeen && text.length == message.length(),
++                    "runtime partial text has no matching full assistant message");
++            text.bind(message);
++            runtimeMessageSeen = true;
++        }
++        lastRuntimeText = message;
++    }
++
++    void verifyTerminalResult(String result) {
++        require(lastRuntimeText == null || lastRuntimeText.equals(result),
++                "terminal result contradicts runtime assistant text");
++        lastRuntimeText = null;
++        runtimeGroupSeen = false;
++        runtimeMessageSeen = false;
 +    }
 +
 +    void finish() {
@@ -356601,7 +356787,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
-@@ -0,0 +1,257 @@
+@@ -0,0 +1,265 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -356691,6 +356877,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                for (PartialOutput previous : session.partials.values()) {
 +                    previous.finish();
 +                }
++                session.partials.clear();
 +                session.issuedTools.clear();
 +            }
 +            session.requests.begin(object(record.get("request_evidence_origin")));
@@ -356760,6 +356947,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    }
 +                }
 +                partial.finish();
++                partial.verifyTerminalResult(Boolean.TRUE.equals(record.get("is_error"))
++                        ? (String) object(record.get("error")).get("message")
++                        : (String) record.get("result"));
 +                if (record.get("usage") != null) {
 +                    RequestUsage.validate(object(record.get("usage")));
 +                }
@@ -356809,7 +356999,11 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                session.needsResult = true;
 +            }
 +        } else if ("assistant".equals(kind)) {
-+            partial.completeMessage();
++            StringBuilder rendered = new StringBuilder();
++            for (Object item : array(object(record.get("message")).get("content"))) {
++                rendered.append((String) object(item).get("text"));
++            }
++            partial.completeMessage(rendered.toString());
 +        } else if ("system".equals(kind) && "task_notification".equals(subtype)) {
 +            Map<String, Object> data = object(record.get("data"));
 +            if (data.containsKey("usage")) {
@@ -359974,7 +360168,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,444 @@
+@@ -0,0 +1,482 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -359986,6 +360180,44 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +import static org.junit.jupiter.api.Assertions.*;
 +
 +class RecordAdmissionTest {
++    @Test
++    void runtimeTextMustAgreeAcrossPartialFullAndTerminal() throws Exception {
++        for (String change : List.of("full", "missing", "terminal")) {
++            RecordAdmission admission = new RecordAdmission();
++            RecordContractException failure = null;
++            for (String line : EvidenceFixtures.records("runtime_partial_no_generation")) {
++                JSONObject row = JSON.parseObject(line);
++                if ("missing".equals(change) && "assistant".equals(row.getString("type"))) continue;
++                if ("full".equals(change) && "assistant".equals(row.getString("type"))) {
++                    row.getJSONObject("message").getJSONArray("content").getJSONObject(0).put("text", "altered");
++                }
++                if ("terminal".equals(change) && "result".equals(row.getString("type"))) {
++                    row.put("result", "altered");
++                }
++                try {
++                    admission.admit(row.toJSONString(JSONWriter.Feature.WriteNulls), null);
++                } catch (RecordContractException cause) {
++                    failure = cause;
++                    break;
++                }
++            }
++            assertNotNull(failure, change);
++            assertTrue(failure.getMessage().contains(
++                    "full".equals(change) ? "runtime partial text has no matching full assistant message"
++                    : "missing".equals(change) ? "runtime partial group has no full assistant message"
++                    : "terminal result contradicts runtime assistant text"));
++        }
++    }
++
++    @Test
++    void runtimeTerminalBindingEndsWithItsTurn() {
++        PartialOutput owner = new PartialOutput();
++        owner.origin(Map.of("kind", "runtime"));
++        owner.completeMessage("first turn");
++        owner.verifyTerminalResult("first turn");
++        owner.verifyTerminalResult("a later turn has its own result");
++    }
++
 +    @Test
 +    void fullBodyRequiresANewSegmentForItsScope() throws Exception {
 +        List<String> records = EvidenceFixtures.records("delta_requests");
@@ -363020,7 +363252,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -363159,7 +363391,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -363284,7 +363516,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -366448,7 +366680,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -366587,7 +366819,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -366712,7 +366944,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "duration_ms": 0,
 +      "duration_api_ms": 0,
 +      "num_turns": 1,
-+      "result": "done",
++      "result": " exact שלום 😀\\n ",
 +      "usage": {
 +        "requests": 0,
 +        "usageReports": 0,
@@ -386494,7 +386726,7 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-generation.ts b/packag
 diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packages/core/src/utils/__fixtures__/partial-stream-v2.json
 --- /dev/null
 +++ b/packages/core/src/utils/__fixtures__/partial-stream-v2.json
-@@ -0,0 +1,1389 @@
+@@ -0,0 +1,1399 @@
 +{
 +  "v": 2,
 +  "cases": [
@@ -386543,7 +386775,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": "exact delivered content"
 +        },
 +        {
 +          "kind": "partial",
@@ -386592,13 +386825,14 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
++          "kind": "message_complete",
++          "text": "exact delivered content"
++        },
++        {
 +          "kind": "partial",
 +          "event": {
 +            "type": "message_stop"
 +          }
-+        },
-+        {
-+          "kind": "message_complete"
 +        },
 +        {
 +          "kind": "scope_complete"
@@ -386653,7 +386887,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": "exact delivered content"
 +        },
 +        {
 +          "kind": "partial",
@@ -386702,13 +386937,14 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
++          "kind": "message_complete",
++          "text": "exact delivered content"
++        },
++        {
 +          "kind": "partial",
 +          "event": {
 +            "type": "message_stop"
 +          }
-+        },
-+        {
-+          "kind": "message_complete"
 +        },
 +        {
 +          "kind": "scope_complete"
@@ -386723,7 +386959,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +      "root": true,
 +      "actions": [
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": ""
 +        },
 +        {
 +          "kind": "scope_complete"
@@ -386738,7 +386975,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +      "root": false,
 +      "actions": [
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": ""
 +        },
 +        {
 +          "kind": "scope_complete"
@@ -387475,7 +387713,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": ""
 +        }
 +      ],
 +      "expected": {
@@ -387510,7 +387749,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": ""
 +        }
 +      ],
 +      "expected": {
@@ -387552,7 +387792,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": ""
 +        },
 +        {
 +          "kind": "scope_complete"
@@ -387597,7 +387838,8 @@ diff --git a/packages/core/src/utils/__fixtures__/partial-stream-v2.json b/packa
 +          }
 +        },
 +        {
-+          "kind": "message_complete"
++          "kind": "message_complete",
++          "text": ""
 +        },
 +        {
 +          "kind": "scope_complete"

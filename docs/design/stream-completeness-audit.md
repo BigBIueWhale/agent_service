@@ -718,3 +718,41 @@ semantic-contract or input mismatch. The exact report is
 `/tmp/codex-tool-ownership-final-state.json` at review SHA-256
 `d0f82e4498d46c5b6ed410c4e9da4ab9336de46355fea5c9b9b21dc4d3b9d3f4`.
 This proves the source splice, not compilation or deployed admission.
+
+## Runtime presentation coherence
+
+Source reading found that a `runtime` origin exempted a full assistant row from
+model-attempt ownership, while the native certifier and SDK readers did not
+compare its text with the optional partial stream or the terminal result. In
+the headless producer, `emitFinalAssistantMessage` emits the final local
+slash-command or no-continuation message and passes that same text to `finish`.
+The output adapter emits the full row before `message_stop` when partials are
+enabled. These are producer control-flow findings, not a run of the CLI.
+
+The native, TypeScript, Python and Java readers now require each runtime
+partial group to contain exactly one matching full assistant row before its
+stop, and require a runtime assistant row to agree with its scope's terminal
+text. Each SDK reader also clears that terminal text binding at the end of its
+turn, so a later turn must establish its own assistant text. Replacement output
+windows discard the preceding partial owner so text from an earlier window
+cannot be attributed to the next one. The three SDK fixture copies now carry
+the same runtime full/result text; the shared partial
+vectors put the full row before `message_stop`, matching producer order. This
+strengthens interpretation for every relevant headless invocation, independent
+of model, context length or benchmark. vLLM does not produce these local
+runtime messages, so there is no backend change at this boundary.
+
+The Python admission suite passed 348 source cases, including changed full
+text, omitted full row, changed terminal text refusals, and a later turn with
+its own result. Two direct TypeScript partial-owner source cases passed. The
+full TypeScript wire suites still encounter the installed generated-v5 validator
+before v10 admission;
+the new wire path is unverified. Native and Java refusal tests were authored
+and read but not executed. A fresh pinned archive applied the sealed patch and
+matched all 1,141 final identities; the 13 edited authoring files matched that
+archive byte for byte. No compiler, native/Java test, build, image, release,
+deployment or push was run. Runtime operation identity itself, physical model
+output replay in the native/Python/Java readers, and input-rendering provenance
+remain open. Canonical resume reads its separate runtime chat JSONL; this
+change only tightens stdout admission and does not rewrite or reorder that
+history by source reading. An end-to-end resumed run remains unverified.

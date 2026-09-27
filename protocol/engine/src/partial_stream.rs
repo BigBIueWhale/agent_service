@@ -76,6 +76,8 @@ pub struct PartialStreamState {
     authority: Option<Arc<Generation>>,
     accepted: Option<bool>,
     group_open: bool,
+    runtime_group_seen: bool,
+    runtime_message_seen: bool,
     text: ObservedText,
     thinking: ObservedText,
     called: BTreeSet<String>,
@@ -176,6 +178,10 @@ impl PartialStreamState {
                     return Err(refusal("message group is already open"));
                 }
                 self.group_open = true;
+                if !model {
+                    self.runtime_group_seen = true;
+                    self.runtime_message_seen = false;
+                }
             }
             PartialKind::ContentBlockStart => {
                 if !self.group_open {
@@ -333,10 +339,14 @@ impl PartialStreamState {
                 if !self.group_open || self.blocks.values().any(|block| block.open) {
                     return Err(refusal("message group stops before all its blocks close"));
                 }
+                if !model && !self.runtime_message_seen {
+                    return Err(refusal("runtime partial group has no full assistant message"));
+                }
                 self.group_open = false;
                 self.blocks.clear();
                 if !model {
                     self.text = ObservedText::default();
+                    self.runtime_message_seen = false;
                 }
             }
             PartialKind::GoalState | PartialKind::ActiveGoal | PartialKind::ToolProgress => {
@@ -346,8 +356,8 @@ impl PartialStreamState {
         Ok(())
     }
 
-    pub fn complete_message(&mut self, _line: usize) -> ContractResult<()> {
-        if matches!(self.origin, Some(OutputOrigin::Model(_))) {
+    pub fn complete_message(&mut self, message: &str, _line: usize) -> ContractResult<()> {
+        if !matches!(self.origin, Some(OutputOrigin::Runtime)) {
             return Err(refusal(
                 "model output requires generation and completion records",
             ));
@@ -356,6 +366,13 @@ impl PartialStreamState {
             return Err(refusal(
                 "runtime presentation has an unclosed partial block",
             ));
+        }
+        if self.runtime_group_seen {
+            if !self.group_open || self.runtime_message_seen || self.text.bytes != message.len() {
+                return Err(refusal("runtime partial text has no matching full assistant message"));
+            }
+            self.text.bind(message)?;
+            self.runtime_message_seen = true;
         }
         Ok(())
     }
