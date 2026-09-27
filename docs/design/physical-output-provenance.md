@@ -296,3 +296,36 @@ the model's exact output.
 
 This note records an open design obligation. No compiler, native certifier,
 provider or deployed application execution establishes the repair yet.
+
+## Provider coverage at the request boundary
+
+`createContentGenerator` can select OpenAI-compatible, Qwen OAuth, Anthropic,
+Gemini and Vertex generators. Qwen OAuth inherits the OpenAI generator. In the
+current source, the only production call to `modelRequests.capture` is in the
+OpenAI pipeline. `AnthropicContentGenerator` and `GeminiContentGenerator` build
+their own requests and call their SDKs without admitting a model request or
+attaching a response recorder to `request.chatAttempt`. The shared logging
+wrapper passes the request through; it does not admit one. `GeminiChat` then
+reads `attempt.journalId` while freezing the generation, and `ChatAttempt`
+requires at least one attached physical request. By code inspection, those
+provider paths cannot produce a completed, request-owned chat generation in
+the current implementation. This runtime consequence has not been executed.
+
+The provider transports do not expose one common interception point in the
+installed SDKs. The Anthropic SDK accepts a custom `fetch` function. The
+Google Gen AI SDK's `ApiClient.apiCall` calls the global `fetch` and its
+`GoogleGenAIOptions` type has no fetch option for this models path. Capturing
+the logical `GenerateContentParameters` before either SDK transforms it would
+claim exact provider bytes that the recorder has not seen. A complete repair
+must admit the actual dispatched body and response at each provider's
+transport boundary, select a provider-specific decoder policy before dispatch,
+and attach every chat retry to the common attempt journal. The journal and
+admitting readers must retain one shared completeness rule while interpreting
+each provider's distinct wire format. An OpenAI-only receipt or verifier cannot
+close this gap for all configured agent_service users.
+
+This finding also limits the existing physical-output proof plan. A verifier
+for OpenAI SSE is necessary for the vLLM deployment but cannot be described as
+end-to-end proof for Anthropic, Gemini or Vertex. No provider transport was
+called and no build or test was run to establish this section; its claims are
+from the current client and installed SDK source.
