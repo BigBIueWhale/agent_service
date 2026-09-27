@@ -239,6 +239,12 @@ conversion and streamed conversion with terminal holding and failure-diagnostic
 expansion. The module also exposes the pure served-usage observation applied
 before either conversion path. Before each response attempt the pipeline selects
 a validated JSON-shaped decode policy and creates fresh parser state from it.
+Chat now applies `GenerationObservationNormalizer` to every delivered response;
+that shared routine preserves the raw observation, normalizes tool identities
+against the active history, records preparation mappings and removes executable
+calls from the provisional delivered chunk. Source reading establishes this
+single live normalization path. No reader yet invokes it to verify a generation
+against retained response bytes.
 An executed source test decoded identical provider content with tagged-thinking
 parsing off and on and obtained the two corresponding part sequences after a
 policy JSON round trip. The earlier converter, pipeline and policy source suites

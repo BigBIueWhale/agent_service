@@ -3202,11 +3202,24 @@ def _validate_literal_response_after(state: State) -> None:
         state,
         chat,
         (
-            "const snapshot = structuredClone(observed)",
-            "observations.push({",
+            "const observationNormalizer = new GenerationObservationNormalizer(",
+            "const observed = observationNormalizer.accept(chunk)",
+            "observations.push(observed)",
             "generation = freezeModelGeneration(attempt.journalId, {",
             "const accepted = generationHistory(readModelGeneration(generation))",
             "const committed = this.chatRecordingService.recordGeneration({",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/model-generation.ts",
+        (
+            "export class GenerationObservationNormalizer",
+            "const snapshot = structuredClone(observed)",
+            "normalizeModelToolCallIds(",
+            "provider_call_id: observed.tool_call_preparations[index]!.callId",
+            "syncFunctionCallsField(chunk, deliveredContent.parts)",
         ),
         label=label,
     )

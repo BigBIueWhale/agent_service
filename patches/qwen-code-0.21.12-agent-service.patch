@@ -177969,14 +177969,14 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/geminiChat.ts
 --- a/packages/core/src/core/geminiChat.ts
 +++ b/packages/core/src/core/geminiChat.ts
-@@ -1,113 +1,126 @@
+@@ -1,1039 +1,233 @@
 +import {
 +  freezeModelGeneration,
 +  generationHistory,
 +  readModelGeneration,
-+  takeGenerationObservation,
++  GenerationObservationNormalizer,
++  syncFunctionCallsField,
 +  isValidGenerationContent as isValidContent,
-+  isValidGenerationResponse as isValidResponse,
 +  type GenerationObservation,
 +  type ModelGenerationEvidence,
 +} from './model-generation.js';
@@ -178009,7 +178009,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    GenerateContentResponse,
    Content,
    GenerateContentConfig,
-   FunctionCall,
+-  FunctionCall,
    SendMessageParameters,
    Part,
    Tool,
@@ -178143,12 +178143,19 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -123,38 +136,30 @@
+   getCustomSystemPrompt,
+   getManualPlanExitSystemReminder,
+ } from './prompts.js';
+ import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
  import {
-   getToolCallPreparations,
-   setToolCallPreparations,
- } from './tool-call-preparation.js';
-+import {
+-  collectToolCallIdsFromHistory,
+-  normalizeModelToolCallIds,
+-  reserveModelToolCallId,
+-} from './toolCallIdUtils.js';
+-import {
+-  getToolCallPreparations,
+-  setToolCallPreparations,
+-} from './tool-call-preparation.js';
 +  setIncompleteToolCalls,
 +  takeIncompleteToolCalls,
 +  type IncompleteToolCall,
@@ -178194,13 +178201,42 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  ): boolean {
    return Boolean(
      response.candidates?.some((candidate) =>
-@@ -191,849 +196,81 @@
-       value,
-       writable: true,
-       configurable: true,
-       enumerable: true,
-     });
-   }
+       candidate.content?.parts?.some((part) => !part.thought),
+     ),
+   );
+-}
+-
+-function syncFunctionCallsField(
+-  response: GenerateContentResponse,
+-  parts: readonly Part[],
+-): void {
+-  const functionCalls = parts
+-    .map((part) => part.functionCall)
+-    .filter((call): call is FunctionCall => Boolean(call));
+-  const value = functionCalls.length > 0 ? functionCalls : undefined;
+-
+-  let owner: object | null = response;
+-  let descriptor: PropertyDescriptor | undefined;
+-  while (owner && !descriptor) {
+-    descriptor = Object.getOwnPropertyDescriptor(owner, 'functionCalls');
+-    owner = Object.getPrototypeOf(owner);
+-  }
+-
+-  if (descriptor?.set) {
+-    (
+-      response as GenerateContentResponse & { functionCalls?: FunctionCall[] }
+-    ).functionCalls = value;
+-    return;
+-  }
+-
+-  if (!descriptor || descriptor.writable || descriptor.get) {
+-    Object.defineProperty(response, 'functionCalls', {
+-      value,
+-      writable: true,
+-      configurable: true,
+-      enumerable: true,
+-    });
+-  }
 -}
 -
 -/**
@@ -179073,7 +179109,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Starts at 60s to match DashScope's per-minute quota window, then backs off
   * across repeated stream-side throttling errors.
   * 10 retries aligns with Claude Code's retry behavior.
-@@ -1086,77 +323,12 @@
+@@ -1086,77 +280,12 @@
      promise,
      skip: () => {
        clearTimeout(timeoutId);
@@ -179151,7 +179187,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * Validates the history contains the correct roles.
   *
   * @throws Error if the history does not start with a user turn.
-@@ -1245,199 +417,58 @@
+@@ -1245,199 +374,58 @@
    return {
      ...content,
      parts,
@@ -179385,7 +179421,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   * tool_use ↔ tool_result pair. For each `model[functionCall]`:
   *  - SYNTHESIZE an `error` `functionResponse` for ids with no match;
   *  - HOIST a real fr from a non-adjacent later user turn into the
-@@ -1591,13 +622,17 @@
+@@ -1591,13 +579,17 @@
    const removals = [...plan.removalTargets].sort((a, b) => {
      if (a.turnIdx !== b.turnIdx) return b.turnIdx - a.turnIdx;
      return b.partIdx - a.partIdx;
@@ -179404,7 +179440,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    // Preserve the adjacent turn even if empty — we'll rewrite it
    // below.
    const adjacentIdx = plan.modelIdx + 1;
-@@ -1612,17 +647,20 @@
+@@ -1612,17 +604,20 @@
    // follows.
    const next = history[adjacentIdx];
    if (next?.role === 'user') {
@@ -179430,7 +179466,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    return { insertedBefore: 1 };
  }
  
-@@ -1680,6 +718,15 @@
+@@ -1680,6 +675,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -179446,7 +179482,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1712,74 +759,42 @@
+@@ -1712,74 +716,42 @@
  
  export class GeminiChat {
    // A promise to represent the current state of the message being sent to the
@@ -179550,7 +179586,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Incremented when `sendMessageStream` pushes the user content and decremented
     * only if that same push is rolled back on a setup-time failure. Auto-
     * compression mutates history length but never touches this counter, so a
-@@ -1787,351 +802,665 @@
+@@ -1787,351 +759,665 @@
     * whether the re-submitted content actually landed — a history-length delta
     * can't, since compression shrinks history independently of the push.
     */
@@ -180463,7 +180499,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +  /** The startup context every history of this chat opens with, compacted or not. */
 +  getStartupContext(): Content | undefined {
 +    return this.startupContext?.content;
-@@ -2153,6 +1482,16 @@
+@@ -2153,6 +1439,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -180480,7 +180516,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2192,1724 +1531,621 @@
+@@ -2192,1724 +1488,621 @@
    async sendMessageStream(
      model: string,
      params: SendMessageParameters,
@@ -182753,7 +182789,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            if (isInvalidArgumentError(error.message)) return false;
          }
  
-@@ -3933,23 +2169,14 @@
+@@ -3933,23 +2126,14 @@
          }
  
          return false;
@@ -182778,7 +182814,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            new ApiRetryEvent({
              model,
              promptId: prompt_id,
-@@ -3958,46 +2185,46 @@
+@@ -3958,46 +2142,46 @@
              statusCode: info.errorStatus,
              retryDelayMs: info.delayMs,
              subagentName: subagentNameContext.getStore(),
@@ -182851,7 +182887,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * @remarks
     * The history is a list of contents alternating between user and model.
     *
-@@ -4015,58 +2242,67 @@
+@@ -4015,58 +2199,67 @@
     *
     * @param curated - whether to return the curated history or the comprehensive
     * history.
@@ -182928,7 +182964,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Returns a defensive copy of the last raw history entry without cloning the
     * full conversation. This avoids O(history) cloning, though cloning the last
-@@ -4078,23 +2314,23 @@
+@@ -4078,23 +2271,23 @@
  
    /**
     * Returns the last raw history entry for read-only checks. Callers must not
@@ -182955,7 +182991,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
            ?.filter(
              (part): part is { text: string } =>
                typeof part.text === 'string' && !part.thought,
-@@ -4109,13 +2345,13 @@
+@@ -4109,13 +2302,13 @@
    /**
     * Returns the number of entries in the raw chat history. O(1) and
     * does not clone — use this when you only need the count and would
@@ -182970,7 +183006,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
     * Monotonic count of user-content pushes that survived into history (see the
     * field doc). Snapshot it before a send and compare after to tell whether the
     * send actually pushed the user content — robust to auto-compression, which
-@@ -4130,13 +2366,13 @@
+@@ -4130,13 +2323,13 @@
     * no clone — `useGeminiStream.handleCompletedTools` calls this per
     * tool-completion batch, so {@link getHistory}'s `structuredClone`
     * would stall the UI on long sessions.
@@ -182985,7 +183021,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
          if (id) ids.add(id);
        }
      }
-@@ -4144,207 +2380,92 @@
+@@ -4144,207 +2337,92 @@
    }
  
    /**
@@ -183248,7 +183284,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      ) {
        // Never pop a *pure* system-reminder user entry. These are structural,
        // not orphaned turns: the startup-context prelude (history[0]) and
-@@ -4362,44 +2483,38 @@
+@@ -4362,44 +2440,38 @@
        const lastEntry = this.history[this.history.length - 1];
        if (lastEntry && isSystemReminderContent(lastEntry)) {
          break;
@@ -183301,7 +183337,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    async maybeIncludeSchemaDepthContext(error: StructuredError): Promise<void> {
      // Check for potentially problematic cyclic tools with cyclic schemas
      // and include a recommendation to remove potentially problematic tools.
-@@ -4427,693 +2542,266 @@
+@@ -4427,693 +2499,222 @@
            `\n`;
          error.message += extraDetails;
        }
@@ -183335,9 +183371,12 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    // are never made and never enter history, and they are recorded with the
 +    // turn and published on its terminal like the reason itself.
 +    const incompleteToolCalls: IncompleteToolCall[] = [];
-     const usedToolCallIds = collectToolCallIdsFromHistory(this.history);
-     const rawToolCallIdsInCurrentTurn = new Set<string>();
-     const reservedToolCallIds = new Map<string, string>();
+-    const usedToolCallIds = collectToolCallIdsFromHistory(this.history);
+-    const rawToolCallIdsInCurrentTurn = new Set<string>();
+-    const reservedToolCallIds = new Map<string, string>();
++    const observationNormalizer = new GenerationObservationNormalizer(
++      this.history,
++    );
      let usageMetadata: GenerateContentResponseUsageMetadata | undefined;
 -    let coercedUsage:
 -      | {
@@ -183483,64 +183522,23 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        for await (const chunk of streamResponse) {
 -            );
 -            syncFunctionCallsField(chunk, content.parts);
-+          const observed = takeGenerationObservation(chunk);
-+          const preparations = observed.tool_call_preparations.map(
-+            (preparation) => ({
-+              ...preparation,
-+              callId: reserveModelToolCallId(
-+                preparation.callId,
-+                usedToolCallIds,
-+                reservedToolCallIds,
-+              ),
-+            }),
-+          );
-+          if (getToolCallPreparations(chunk).length > 0)
-+            setToolCallPreparations(chunk, preparations);
- 
+-
 -            if (content.parts.some((part) => part.functionCall)) {
 -              hasToolCall = true;
++          const observed = observationNormalizer.accept(chunk);
 +          // Use ||= to avoid later usage-only chunks (no candidates) overwriting
 +          // a finishReason that was already seen in an earlier chunk.
 +          hasFinishReason ||=
 +            chunk?.candidates?.some((candidate) => candidate.finishReason) ??
 +            false;
 +
-+          const snapshot = structuredClone(observed);
-+          let callIds: import('./toolCallIdUtils.js').NormalizedToolCallId[] =
-+            [];
-+          if (isValidResponse(observed.response)) {
-+            const content = observed.response.candidates?.[0]?.content;
-+            if (content?.parts) {
-+              const normalized = normalizeModelToolCallIds(
-+                content.parts,
-+                usedToolCallIds,
-+                rawToolCallIdsInCurrentTurn,
-+                reservedToolCallIds,
-+              );
-+              content.parts = normalized.parts;
-+              callIds = normalized.callIds;
-+              syncFunctionCallsField(observed.response, content.parts);
-             }
+-            }
 -
 -            // Collect all parts for recording
 -            allModelParts.push(...content.parts);
-+          }
-+          observations.push({
-+            ...snapshot,
-+            call_ids: callIds,
-+            tool_call_preparations: preparations.map((entry, index) => ({
-+              ...entry,
-+              provider_call_id: observed.tool_call_preparations[index]!.callId,
-+            })),
-+          });
-+          const deliveredContent = chunk.candidates?.[0]?.content;
-+          if (deliveredContent?.parts) {
-+            deliveredContent.parts = deliveredContent.parts.filter(
-+              (part) => !part.functionCall,
-+            );
-+            syncFunctionCallsField(chunk, deliveredContent.parts);
-           }
+-          }
 -        }
++          observations.push(observed);
  
 -        // Collect token usage for consolidated recording
 -        if (chunk.usageMetadata) {
@@ -382022,11 +382020,12 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/core/src/core/model-generation-mapping.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-mapping.test.ts
-@@ -0,0 +1,288 @@
+@@ -0,0 +1,343 @@
 +import { describe, expect, it } from 'vitest';
-+import type { Part } from '@google/genai';
++import type { GenerateContentResponse, Part } from '@google/genai';
 +import {
 +  freezeModelGeneration,
++  GenerationObservationNormalizer,
 +  readModelGeneration,
 +  generationHistory,
 +  generationParts,
@@ -382037,6 +382036,10 @@ diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/
 +  reserveModelToolCallId,
 +  getProviderToolCallId,
 +} from './toolCallIdUtils.js';
++import {
++  getToolCallPreparations,
++  setToolCallPreparations,
++} from './tool-call-preparation.js';
 +import {
 +  generationInput,
 +  observation,
@@ -382095,6 +382098,56 @@ diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/
 +}
 +
 +describe('generation positional call identities', () => {
++  it('keeps raw provider calls in evidence while delivering normalized preparations and no early executable call', () => {
++    const normalizer = new GenerationObservationNormalizer([
++      { role: 'model', parts: [call('provider')] },
++    ]);
++    const first = {
++      candidates: [
++        {
++          content: {
++            role: 'model',
++            parts: [{ text: 'before ' }, call('provider')],
++          },
++        },
++      ],
++    } as GenerateContentResponse;
++    setToolCallPreparations(first, [
++      { callId: 'provider', toolName: 'audit_probe' },
++    ]);
++    const observed = normalizer.accept(first);
++    expect(observed.response.candidates?.[0]?.content?.parts).toEqual([
++      { text: 'before ' },
++      call('provider'),
++    ]);
++    expect(observed.call_ids).toEqual([
++      { part_index: 1, normalized_id: 'provider__qwen_dup_2' },
++    ]);
++    expect(observed.tool_call_preparations).toEqual([
++      {
++        callId: 'provider__qwen_dup_2',
++        toolName: 'audit_probe',
++        provider_call_id: 'provider',
++      },
++    ]);
++    expect(getToolCallPreparations(first)[0]?.callId).toBe(
++      'provider__qwen_dup_2',
++    );
++    expect(first.candidates?.[0]?.content?.parts).toEqual([
++      { text: 'before ' },
++    ]);
++
++    const repeated = {
++      candidates: [
++        { content: { role: 'model', parts: [call('provider', 2)] } },
++      ],
++    } as GenerateContentResponse;
++    expect(normalizer.accept(repeated).call_ids).toEqual([
++      { part_index: 0, normalized_id: null },
++    ]);
++    expect(repeated.candidates?.[0]?.content?.parts).toEqual([]);
++  });
++
 +  it('keeps repeated raw calls while replay executes only the first normalized call', () => {
 +    const fixture = repeatedCalls();
 +    const decoded = readModelGeneration(
@@ -382516,13 +382569,21 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core/model-generation.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation.ts
-@@ -0,0 +1,793 @@
+@@ -0,0 +1,892 @@
 +import {
 +  restoreProviderToolCallId,
++  collectToolCallIdsFromHistory,
++  normalizeModelToolCallIds,
++  reserveModelToolCallId,
 +  type NormalizedToolCallId,
 +} from './toolCallIdUtils.js';
 +import { createHash, randomUUID } from 'node:crypto';
-+import type { Content, GenerateContentResponse, Part } from '@google/genai';
++import type {
++  Content,
++  FunctionCall,
++  GenerateContentResponse,
++  Part,
++} from '@google/genai';
 +import { requireRuntimeAssistantContent } from '../services/runtime-history.js';
 +import { parseStrictJson } from '../utils/strict-json.js';
 +import {
@@ -382547,6 +382608,7 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +} from './generation-context.js';
 +import {
 +  getToolCallPreparations,
++  setToolCallPreparations,
 +  type ToolCallPreparation,
 +} from './tool-call-preparation.js';
 +
@@ -382620,6 +382682,96 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +      tool_call_preparations: getToolCallPreparations(response),
 +    }
 +  );
++}
++
++export function syncFunctionCallsField(
++  response: GenerateContentResponse,
++  parts: readonly Part[],
++): void {
++  const functionCalls = parts
++    .map((part) => part.functionCall)
++    .filter((call): call is FunctionCall => Boolean(call));
++  const value = functionCalls.length > 0 ? functionCalls : undefined;
++
++  let owner: object | null = response;
++  let descriptor: PropertyDescriptor | undefined;
++  while (owner && !descriptor) {
++    descriptor = Object.getOwnPropertyDescriptor(owner, 'functionCalls');
++    owner = Object.getPrototypeOf(owner);
++  }
++
++  if (descriptor?.set) {
++    (
++      response as GenerateContentResponse & { functionCalls?: FunctionCall[] }
++    ).functionCalls = value;
++    return;
++  }
++
++  if (!descriptor || descriptor.writable || descriptor.get) {
++    Object.defineProperty(response, 'functionCalls', {
++      value,
++      writable: true,
++      configurable: true,
++      enumerable: true,
++    });
++  }
++}
++
++/** One normalization rule for live Chat observations and physical replay. */
++export class GenerationObservationNormalizer {
++  private readonly usedToolCallIds: Set<string>;
++  private readonly rawToolCallIdsInCurrentTurn = new Set<string>();
++  private readonly reservedToolCallIds = new Map<string, string>();
++
++  constructor(history: readonly Content[]) {
++    this.usedToolCallIds = collectToolCallIdsFromHistory(history);
++  }
++
++  accept(chunk: GenerateContentResponse): GenerationObservation {
++    const observed = takeGenerationObservation(chunk);
++    const preparations = observed.tool_call_preparations.map((preparation) => ({
++      ...preparation,
++      callId: reserveModelToolCallId(
++        preparation.callId,
++        this.usedToolCallIds,
++        this.reservedToolCallIds,
++      ),
++    }));
++    if (getToolCallPreparations(chunk).length > 0)
++      setToolCallPreparations(chunk, preparations);
++
++    const snapshot = structuredClone(observed);
++    let callIds: NormalizedToolCallId[] = [];
++    if (isValidGenerationResponse(observed.response)) {
++      const content = observed.response.candidates?.[0]?.content;
++      if (content?.parts) {
++        const normalized = normalizeModelToolCallIds(
++          content.parts,
++          this.usedToolCallIds,
++          this.rawToolCallIdsInCurrentTurn,
++          this.reservedToolCallIds,
++        );
++        content.parts = normalized.parts;
++        callIds = normalized.callIds;
++        syncFunctionCallsField(observed.response, content.parts);
++      }
++    }
++    const deliveredContent = chunk.candidates?.[0]?.content;
++    if (deliveredContent?.parts) {
++      deliveredContent.parts = deliveredContent.parts.filter(
++        (part) => !part.functionCall,
++      );
++      syncFunctionCallsField(chunk, deliveredContent.parts);
++    }
++    return {
++      ...snapshot,
++      call_ids: callIds,
++      tool_call_preparations: preparations.map((entry, index) => ({
++        ...entry,
++        provider_call_id: observed.tool_call_preparations[index]!.callId,
++      })),
++    };
++  }
 +}
 +
 +function refuse(detail: string): never {
