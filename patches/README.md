@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `da80f4f8fdfaa8c5cb95559020c4ae01b3e64f22f5ba63ad7c6446141449c6c2`
+- Review-diff SHA-256: `41c9724f6e0cccdfddf3a273255d1545f9b6eb46e539dcff66cb8233f6bfa674`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `d98cac7fc39dcdeb05bc6c1348da5b46b715824e05ad408cd1c9f2781460f746`
+- Transformer-manifest SHA-256: `0c98653f142f5e10e484dd7b80dac9ca4426501e3a3606862b914ce84c5a68f4`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -359,6 +359,26 @@ boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
 new session. They are not promoted into complete version 7 histories.
+
+Catalog pages retain readable sessions and required per-file refusal metadata.
+Refusals name the original file and physical location when available; directory
+errors fail the request and cancellation preserves its reason. Automatic latest
+selection refuses newer, tied or unknown-order unreadable candidates. Timestamp
+pages finish their boundary group, and a hard scan limit remains explicitly
+incomplete. An established Live target may be selected only if the core scan
+proves the unscanned tail is strictly older. This does not certify the tail.
+
+HTTP, ACP, cached catalogs and their SDK/browser/terminal/IDE consumers preserve
+these diagnostics. Array convenience calls refuse to discard them; browser reloads
+return the page. Desktop never infers deletion from a refused or incomplete scan.
+VS Code uses the ACP catalog and its existing canonical offline message reader;
+there is no alternate permissive catalog or JSONL branch. Inspect all returned
+refusals with `qwen sessions list --json`, following its cursor hints and using
+`--archive-state archived` for archived recordings. Live startup context labels
+partial recent-session discovery. These are source behaviors; compilation,
+native and application qualification remain pending owner gates. The
+[checked audit disposition](../docs/design/stream-completeness-audit.md) records
+executed evidence and outstanding work.
 
 Fresh canonical generations carry the producing chat attempt's exact origin.
 Accepted output is one complete assistant commit; abandoned output is system

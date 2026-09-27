@@ -83,12 +83,13 @@ invalidated by that separate stdout omission.
 
 ## Canonical resume and listing (§4)
 
-The location and listing problems are real by source reading:
-`decodeChatRecord` wraps JSON decoding with the filename and record location,
-but invokes `requireTranscriptRecord` outside that wrapper. `listSessions`
-has no per-file refusal handling around its canonical reads. One unsupported
-file can therefore fail the listing operation. The fix must identify the file
-and expose its refusal without losing access to other readable sessions.
+The location and listing problems were real at the audited checkpoint:
+`decodeChatRecord` wrapped JSON decoding with physical location but invoked
+`requireTranscriptRecord` outside that wrapper; `listSessions` lacked file-local
+refusal handling. The completed catalog correction described below closes these
+paths and propagates their diagnostics through the identified consumers. It
+keeps explicit readable selection available and refuses ambiguous automatic
+selection. It does not declare an incomplete catalog complete.
 
 Unknown and unversioned canonical formats are deliberately refused. The claim
 that every deployed file is unversioned has no inventory evidence and is not
@@ -277,3 +278,106 @@ there is no corresponding backend state to change. Compilation, native
 refusals, images and deployment remain unverified pending owner gates. Each
 remaining correction belongs to its shared owner and must preserve ordinary
 sessions, with source proof, executed tests and unrun gates reported separately.
+
+## Session catalog correction after f9edfea
+
+Canonical syntax, version and request-evidence admission now share a decoder
+that retains the physical file/line or byte offset and original cause. The
+ordinary and indexed readers use it without admitting evidence into the typed
+runtime-history accumulator. Resume continues to read the client's runtime chat
+JSONL, never `output/events.jsonl`; this correction changes refusal ownership,
+not the saved conversation or its replay order. Independent actual-writer and
+both-reader tests establish exact runtime-state equality for their fixtures;
+that does not establish native execution or all possible histories.
+
+The shared catalog returns readable rows with required file-local refusals.
+Directory errors fail the request, cancellation retains its reason, and vanished
+files remain absent. A failed stat retains unknown ordering. Timestamp ties stay
+on one page; a cap inside a group is explicitly incomplete and cannot supply a
+cursor that skips its tail. Automatic latest selection refuses an unreadable
+newer, equal-time or unknown-order candidate. Live can use an established target
+when the core scan proves every unscanned candidate is strictly older. The catalog
+result remains explicitly incomplete. Explicit selection of a readable session remains
+available even when automatic selection cannot be justified.
+
+HTTP/ACP and default, organized and filtered daemon pages preserve diagnostics.
+Unreadable identities are not replaced by live summaries; refusal entries count
+against cache and scan capacity. SDK array helpers refuse to erase metadata and
+retain the page on their error. Browser reload APIs return that page; the MCP
+session-list tool exposes a cursor. The terminal has real cursor/archive options,
+keeps JSON rows on stdout, reports refusals on stderr and sets a nonzero status.
+Picker warnings preserve visible selection even when a later page adds them.
+Completion, browser/IDE selectors and Live startup expose partial discovery.
+Live's startup notes intentionally tell the model that recent-session context
+is partial; presenting unreadability as absence would be false input.
+
+VS Code has one ACP catalog and uses its existing canonical offline reader for
+explicit history; the redundant permissive JSONL path is removed. Desktop
+upserts readable rows but permits absence-based deletion only after a complete
+scan without diagnostics. Refresh errors and completed partial results remain
+visible through the refresh event and its cached-state replay. Its renderer
+notification path was inspected in source; the Electron UI and IPC were not run.
+Unversioned files remain deliberately refused, with file and matching-client or
+new-session actions. There is no evidence that all deployed files have that
+format, and no deployed migration or adoption is claimed.
+
+Executed source evidence for this correction:
+
+- 30 final independent core/Live cases passed, repeating the prior 23 and adding
+  actual 10,001-file older/tied boundary and unknown-order controls. They use the
+  actual core catalog and default private Live selection owner; they do not
+  qualify public Live startup, provider/socket or lifecycle behavior. Permanent
+  coordinator tests separately execute public start using supplied page fixtures.
+- 12 final independent picker/completion cases passed, including actual Ink
+  frames, later warning/error resizing, follow navigation and the real completion
+  hook chain into InputPrompt.
+- 35 independent adapter cases passed for daemon/catalog/cache, in-memory HTTP
+  and ACP handlers, CLI output and Live selection/status. This run preceded the final Live
+  boundary and completion wording edits; the final paths have the separate
+  evidence above. It is not an application or transport deployment test.
+- 64 independent SDK/VS Code/Desktop candidate cases passed; four additional
+  baseline cases reproduce the old omissions. Whole production modules execute
+  with HTTP/ACP/process/upsert/deletion boundaries stubbed. No physical deletion,
+  process startup or full Desktop qualification is claimed.
+- Permanent source suites passed: 351 core cases before the final boundary
+  addition; 342 SDK cases; 125 browser catalog/dialog/overview/split cases; 83
+  sidebar cases; 19 Web UI provider cases; and 16 VS Code cases. The earlier CLI
+  run passed 147 of 149, with two obsolete empty-page assertions corrected and
+  the full 27-case command suite then passing. Eight other files contributed
+  122 passes. The final focused Live/picker/completion run passed 52 cases.
+  Server/ACP catalog suites passed 70 cases; the final ACP/HTTP session-list
+  selection passed 16 with 699 unrelated cases filtered.
+- The transformer framework passed 38 tests and documented identifiers passed
+  with the unchanged 35 semantic concerns. A first framework invocation had no
+  repository PYTHONPATH and failed before importing tests; the correctly scoped
+  invocation is the executed result. Early source-test failures and independent
+  reproductions were retained; they are not counted as candidate passes.
+- The final sealed transformation of the pinned archive passed. All 1,061
+  declared final identities match the authoring source; exactly 74 paths changed
+  from `f9edfea`, and authoritative edits outside those paths are unchanged.
+  Manifest entries, README/stack identities and protected release inputs match.
+  The 12 independent consumer files, eight picker/completion files and four
+  core/Live owners match their executed final test snapshots. This is source
+  transformation and byte-identity evidence, not compilation or qualification.
+
+Final read-only gate inspection found a separate runner-ownership defect.
+`docker/Dockerfile` discovers every patched `.test.ts`/`.test.tsx` and invokes
+Vitest for its package, but Desktop declares Bun and its affected tests import
+`bun:test`. Baseline `f9edfea` already discovers the unchanged Desktop slash-history
+suite through that loop. The final discovery also includes native-history and
+the adjacent SessionManager suite: three Bun suites among 448 discovered tests.
+No Desktop Vitest configuration/bridge was found for these suites.
+This is source evidence of a runner mismatch, not an observed image-build result.
+The full gate remains unverified and needs a pinned Bun runner with mandatory
+coverage preserved; excluding tests or dropping required fixture fields would
+hide the defect. No gate bypass, dependency adoption or release seal was made.
+
+This correction serves the shared Qwen recording/catalog owners for every
+relevant caller, independent of model, session size or benchmark. vLLM owns none
+of these local catalogs, so no backend change belongs in this correction. The
+existing shared backend whitespace preservation is retained. Compilation,
+typechecking, native certifier execution, full Desktop/Bun suites, application
+packaging, provider behavior, image/release/deployment gates remain unverified.
+No build, release, deployment or push was run. The other source-confirmed open
+questions above remain work to finish; this commit does not certify complete
+record sets or close the standing goal.

@@ -8517,8 +8517,56 @@ def _validate_served_accounting_after(state: State) -> None:
         _require_all(state, path, ("readCanonicalChatRecords",), label=label)
         forbid_text(state, path, "readStrict<ChatRecord>", label=label)
         forbid_text(state, path, "read<ChatRecord>", label=label)
-    for path in (core + "services/session-transcript-reader.ts", core + "services/session-api-history.ts"):
-        _require_all(state, path, ("requireTranscriptRecord", "projectRuntimeHistoryCommit"), label=label)
+    _require_all(state, core + "services/session-transcript-reader.ts", (
+        "decodeChatRecord", "projectRuntimeHistoryCommit", "modelRequests,",
+    ), label=label)
+    _require_all(state, core + "services/session-api-history.ts", (
+        "requireTranscriptRecord", "projectRuntimeHistoryCommit",
+    ), label=label)
+    _require_all(state, core + "services/chat-recording-io.ts", (
+        "requests?.observe(record)", "Invalid canonical JSONL record at ${location}",
+        "{ cause }", "with its matching client or start a new session",
+    ), label=label)
+    _require_all(state, core + "services/sessionService.ts", (
+        "refusals: SessionListRefusal[]", "fileSessionId: path.basename(name, '.jsonl')",
+        "requireUnambiguousSessionSelection", "refusal.mtime >= selected.mtime",
+        "refuse(file.name, file.mtime, error)", "refuse(file.name, null, file.error)",
+        "unscannedMtime = file.mtime", "file.mtime === lastProcessedMtime",
+        "lastProcessedMtime = undefined", "result.hasMore && result.nextCursor === undefined",
+    ), label=label)
+    _require_all(state, cli + "serve/server/session-list.ts", (
+        "refusals: SessionListRefusal[]", "sessions.length - refusals.length",
+        "persisted.refusals.map((refusal) => ({ ...refusal }))",
+        "refusedIds.has(live.sessionId)", "!persisted.hasMore",
+        "persisted.hasMore && persisted.nextCursor === undefined",
+    ), label=label)
+    _require_all(state, cli + "serve/server/persisted-session-list-cache.ts", (
+        "refusals: ReadonlyArray<Readonly<SessionListRefusal>>",
+        "snapshot.sessions.length + snapshot.refusals.length",
+    ), label=label)
+    _require_all(state, cli + "acp-integration/acpAgent.ts", (
+        "'qwen/sessionListRefusals': result.refusals", "'qwen/sessionListIncomplete':",
+    ), label=label)
+    _require_all(state, cli + "serve/live/live-session-coordinator.ts", (
+        "requireUnambiguousSessionSelection(page.refusals, match)",
+        "Number.isFinite(page.unscannedMtime)", "page.unscannedMtime < match.mtime",
+        "Recent-session context is partial.",
+    ), label=label)
+    _require_all(state, sdk + "src/daemon/session-catalog.ts", (
+        "readSessionListRefusals", "readAcpSessionListMetadata",
+        "SessionCatalogIncompleteError", "Use matching client and server versions",
+        "readonly page:", "throw new SessionCatalogIncompleteError(page)",
+    ), label=label)
+    _require_all(state, "packages/desktop/packages/server-core/src/sessions/SessionManager.ts", (
+        "result.refusals.map((refusal) => refusal.message)",
+        "reachedEnd && diagnostics.length === 0", "externalSessionListDiagnostics",
+    ), label=label)
+    _require_all(state, "packages/vscode-ide-companion/src/services/qwenAgentManager.ts", (
+        "readAcpSessionListMetadata(response._meta)",
+        "requireCompleteSessionList({ ...page, truncated: page.incomplete })",
+    ), label=label)
+    forbid_text(state, "packages/vscode-ide-companion/src/services/qwenAgentManager.ts",
+                "readJsonlMessages", label=label)
     _require_all(state, core + "services/runtime-history.ts", (
         "export interface RuntimeHistoryState", "imagePayloads: StoredImagePayload[]",
         "export class RuntimeHistoryReplay", "beforeLength !== this.length",
@@ -10524,6 +10572,12 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
+            "Canonical decoding retains physical location and cause for syntax, version and evidence "
+            "refusals. Session catalogs isolate rejected files without claiming absence, preserve "
+            "timestamp ties and unscanned boundaries, and refuse ambiguous automatic selection. "
+            "Required diagnostics survive cached daemon/ACP pages, SDKs and visible client selectors; "
+            "array conveniences refuse discarded diagnostics and Desktop reconciles absence only "
+            "after a complete scan without refusals. Catalog admission is not full resume certification. "
             "Canonical version 7 binds every atomic accepted or abandoned generation to its real "
             "chat attempt; abandoned output cannot become resume history. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
@@ -10536,7 +10590,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "carries the same origin, and exact-prefix reconciliation preserves ordinary streaming, "
             "canonical order, served usage and final dispositions across retained-file snapshots. "
             "Unsettled disappearance, replacement, partial retirement and publication failures refuse. "
-            "Direct ACP, SDK reduction and compaction, deployed browser views and shared exports "
+            "Direct ACP, SDK reduction and compaction, source browser consumers and shared exports "
             "retain attempt boundaries and label abandoned output outside the model's text. "
             "Export usage has one owner at collection, including empty and reasoning-only output. "
             "TypeScript and Python SDK byte framing preserves whole records independent of I/O "
