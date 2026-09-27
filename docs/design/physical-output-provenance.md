@@ -86,9 +86,12 @@ admission alone cannot establish resume's output provenance.
 An implementable single authority needs to freeze the effective response decoder
 context at dispatch and bind it to the selected runtime/provider configuration.
 A reader cannot let a mutable generation choose whichever valid profile makes
-its output pass. It must tie every converted observation to the exact physical
-request and provider event position, and verify that every output-bearing source
-event is consumed, suppressed by a defined conversion rule, or retained as a failed
+its output pass. It must reconstruct the contributing source-event history for
+each observation within its physical request, including events that advance
+converter state without yielding an observation and observations that combine
+several events. A stored one-to-one event pointer is neither required nor a
+correct model of this pipeline. Every output-bearing source event must be
+consumed, suppressed by a defined conversion rule, or outside a proved processed
 prefix. Readers must derive or check the resulting text, thought, tool
 arguments, finish reason and usage from that source, rather than accept an
 unconstrained converter assertion. The root and any independently readable
@@ -96,6 +99,80 @@ child artifact need the same proof. Verification state should be scoped to the
 current physical response and generation, not accumulate all response bodies
 for a long session. The source inventory establishes these requirements; it
 does not establish an implemented verifier.
+
+## Executed event-attribution cases
+
+The focused source run at
+`/tmp/codex-physical-decoded-review/event-attribution/REPORT.md` used the
+installed OpenAI SDK 5.11, the actual request and response recorder, selected
+provider, converter, Chat generation owner and canonical writer/complete reader
+with local in-memory SSE responses. Three cases passed. It did not run the outer
+CLI, native or Java reader, cancellation races, deployed provider or build gates.
+The fixture's pre-conversion observer is at the pipeline boundary, not inside
+the SDK JSON parser; its counts are SDK objects reaching conversion.
+
+| Case | Recorded JSON SSE events | Objects reaching conversion | Generation observations | Consequence |
+| --- | ---: | ---: | ---: | --- |
+| Cumulative reasoning and text | 5 | 5 | 3 | A rewind yields nothing; trailing usage merges into a held terminal. |
+| Fragmented tool arguments | 4 | 4 | 3 | An argument fragment yields nothing, but advances the parser used by the terminal call. |
+| Conversion failure after a prefix | 3 | 2 | 3 | A failing event yields two diagnostics; a later recorded event never reaches conversion. |
+
+The failed response recorded all 1,009 body bytes. The physical transport ended
+cancelled, processing failed and history was abandoned. Its third JSON event
+is in the recorded body but absent from both the pipeline observer and the
+generation. The first two events produced one prefix and two diagnostics. An
+admission rule that equates body presence with converter consumption would
+falsely admit the suffix; one that equates event and observation counts would
+reject valid cumulative and fragmented streams. The deterministic malformed-call
+failure can be replayed to infer this particular stop point. The run did not
+establish that an arbitrary caller cancellation boundary can be inferred, so
+the implementation must either retain enough producer-owned consumption state
+or prove that replay derives the boundary for every termination mode.
+
+The terminal observation in the cumulative case combines text from the fourth
+event and usage from the fifth. The tool-call observation in the fragmented
+case depends on all four events, including one that produced no observation.
+The preparation-only observation has no Parts but is still evidence. Physical
+usage is billed once through the outcome even when a failed generation repeats
+the same cumulative usage in its prefix and diagnostics. These are executed
+source-level facts; they do not establish complete physical-to-decoded
+verification.
+
+## Decoder proof required at admission
+
+The dispatch owner must bind the selected provider and every effective option
+that affects decoding: strict tool-call handling, forced tool name, exact usage
+handling and tagged-thinking parsing among the current `RequestContext` choices.
+The request JSON cannot supply all of them. The proven Default/MiniMax example
+above has identical request and response bytes but different correct thought
+and text parts. A generation envelope cannot choose its own decoding profile
+after the fact. A changed required wire field needs a new stream-contract and
+canonical-recording identity, with all producers and admitting readers changed
+together; the current identities are v7 and v9. A source-only migration cannot
+claim that generated bindings or native gates have run.
+
+For each physical response, a verifier must parse the exact stored bytes with
+the pinned SDK's relevant SSE or nonstreaming semantics, replay the selected
+converter and pipeline state, and compare the complete resulting observations
+with the generation that Chat recorded. This includes parser preparations,
+incomplete calls, normalized IDs, terminal holding, usage-only frames and
+failure diagnostics, not just rendered text. It must account for successful
+empty output, retries and failed prefixes without admitting later raw events
+that conversion did not process. The response recorder writes bytes before
+delivering them to the SDK, so its chunk boundary alone cannot prove a consumed
+event prefix. For nonstreaming responses the SDK also has a distinct JSON/text
+path; treating every body as SSE would be unsound.
+
+The completion's physical request membership gives the candidate requests but
+does not by itself identify which retry supplied an observation. Replay needs
+the request order and processing termination for each candidate. The accepted
+Chat history and displayed stream projections then need to be checked against
+that replayed generation and their declared disposition. Utility generations
+and standalone child evidence also need a physical owner or an explicit root
+verification dependency; a self-hash of their decoded SDK objects is not a
+substitute. This is one shared proof rule for ordinary and long sessions,
+bounded by one response at a time. It belongs at common producer and admission
+boundaries, not in a benchmark profile or a client-only presentation patch.
 
 The implementation must keep one output mode and bounded verification state for
 ordinary and long sessions. The shared client decoding boundary is where the
