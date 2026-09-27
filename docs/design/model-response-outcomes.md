@@ -72,6 +72,7 @@ history decisions remain joinable from stdout origins; the missing subagent
 field is a direct-label omission, not loss of all disposition evidence. Actual
 source-admission reproductions also accept omitted abandoned output, reassigned
 accepted text, duplicated billed output and abandoned-origin tool calls. The
-terminal tool chunk can precede ChatAttempt settlement; empty billed root output
-and usage before a later stream error need a complete attempt projection. This
-transport correction does not claim to close those separate requirements.
+terminal tool chunk's ordering is addressed by the separate
+[chat settlement correction](chat-attempt-settlement.md). Empty billed root
+output and usage before a later stream error need a complete attempt projection.
+This transport correction does not claim to close those separate requirements.

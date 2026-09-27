@@ -420,3 +420,35 @@ duplicated billed output and abandoned-origin tool calls. Source reading also
 found empty billed root output and usage observed before a later stream error
 can go unpublished. These and runtime/input ownership remain implementation
 work; neither source test success nor patch integrity closes them.
+
+## Terminal history settlement after d8f82de
+
+The actual producer baseline confirmed a distinct ordering gap: terminal tool
+calls and Turn's Finished event could reach the consumer before the physical
+response-history append started. Canonical assistant acceptance already blocked
+terminal delivery correctly. Sixteen independent source observation cases used
+the actual SDK, pipeline, Chat, Turn and adapters with in-memory responses and
+controlled recording callbacks. They establish consumer exposure, not premature
+execution by a complete CLI scheduler or filesystem durability.
+
+The shared GeminiChat stream now awaits one memoized response-history settlement
+before publishing a non-null terminal decision. Cleanup awaits the same Promise;
+early cleanup records abandonment. Early ordinary text remains streamable. Once
+a terminal decision exists, recording failure cannot start another generation,
+including empty and tool-only accepted output. See the
+[settlement note](chat-attempt-settlement.md) for ownership, resume behavior and
+verification limits.
+
+This adds no record mode or version and leaves canonical history content and
+order unchanged. It does not implement logical attempt completion or close the
+remaining output, usage, runtime and input-accounting gaps above. Builds and
+owner gates remain unrun.
+
+Executed candidate evidence is 18 independent source cases and 446 tests across
+the five relevant permanent suites, including the five new regressions. The
+independent cases preserve observations of the remaining projection gaps. The
+fresh transform matches all 1,062 final identities and the 17 recorded candidate
+source identities, with only the two intended client paths changed. Framework
+tests pass 38 cases and the semantic concern count remains 35. These results
+establish the bounded source change and patch identity, not native or release
+qualification or completion of the standing goal.

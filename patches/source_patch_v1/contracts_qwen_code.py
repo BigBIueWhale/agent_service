@@ -8236,8 +8236,19 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, core + "core/geminiChat.ts", (
         "new ChatAttempt(this.generationContext.kvScope)", "StreamEventType.ATTEMPT_STARTED",
-        "attempt.finish(disposition)", "generator.generateChatContentStream(",
+        "settlement ??= attempt.finish(disposition ?? 'abandoned')",
+        "if (deliveredContent || disposition !== null) throw error;",
+        "generator.generateChatContentStream(",
     ), label=label)
+    chat_stream = _source(state, core + "core/geminiChat.ts", label=label).split(
+        "const attempt = new ChatAttempt(this.generationContext.kvScope);", 1)[1]
+    _require_ordered(chat_stream, (
+        "let disposition: ChatHistoryDisposition | null = null;",
+        "const settle = () =>",
+        "if (chunk.historyDisposition !== null)",
+        "disposition = chunk.historyDisposition;", "await settle();",
+        "yield { type: StreamEventType.CHUNK, ...chunk };", "}, settle);",
+    ), label=label, location=core + "core/geminiChat.ts")
     _require_all(state, core + "core/model-response-evidence.ts", (
         "finishHistory(disposition: ChatHistoryDisposition)", "kind: 'history'", "state.owner.kind !== 'chat'",
         "state.processing.status !== 'completed'", "chat attempt accepts multiple physical responses",
