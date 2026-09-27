@@ -8312,6 +8312,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "request.generationContext.requestSegmentId,", "request.chatAttempt,",
         "decodePolicy,",
         "request.config?.abortSignal,",
+        "StreamIteratorCloseTimeoutError", "if (!sourceDone && it.return)",
+        "RESPONSE_CANCELLATION_STALL_TIMEOUT_MS", "iteratorCloseStalled(cause)",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
         "export class ModelResponseRecorder", "export class ModelResponseReplay",

@@ -130,3 +130,17 @@ generated-v5 wire validation of the candidate's v7 `stream_start`
 (`/tmp/codex-response-cancellation-attempt-final.log`). The validator was not
 replaced or generated. That run does not qualify ChatAttempt admission and is
 not attributed to this recorder correction.
+
+The OpenAI stream guard also owns SDK iterator closure. Once it has aborted an
+unfinished request, it allows the iterator the same one-minute cleanup window
+as response transport cancellation. An iterator that never settles cannot hold
+the pipeline before its response outcome forever: the guard raises an
+actionable cleanup refusal, retains an earlier source failure when there is
+one, and the pipeline passes failed processing to the recorder rather than a
+clean caller cancellation. Natural SDK EOF needs no second `return()` call. The two affected
+source suites passed 191 tests, including a held iterator, a held iterator
+after a source error, natural EOF and adjacent physical-response cases. These
+tests use a controlled SDK iterator and a stubbed processing recorder for the
+stall; they do not prove a hung installed SDK or deployed transport will settle,
+that its physical outcome is durable, or that output observations match retained
+response bytes. The raw-response proof remains open.
