@@ -163,6 +163,29 @@ into diagnostics, so an SDK-object count alone is not established as sufficient.
 This source-level result rules out a body-only replay check for cancellation;
 the producer and reader migration still needs a versioned implementation.
 
+## Executed diagnostic-delivery ambiguity
+
+The local actual-SDK case at
+`/tmp/codex-physical-decoded-review/cancellation-refactor/tests/diagnostic-boundary.test.ts`
+passed against the current authoring source. Its exact capture is retained in
+`docs/design/fixtures/physical-diagnostic-boundary.json`.
+One 1,133-byte SSE body (SHA-256
+`f2ef93330a5a9b1a7ed3976306f4f55961c4934ad2996900b8df3dfd691033c8`)
+contains a valid prefix, a malformed tool-call terminal and an unprocessed
+suffix. Conversion of the second SDK value yields more than one diagnostic.
+The test closes Chat after the first versus second diagnostic. Both runs have
+identical HTTP, body, cancelled end and cancelled outcome evidence, the same
+two SDK values reaching the pipeline, and abandoned history. Their canonical
+generations contain two versus three observations, respectively.
+
+Thus an SDK-value count is also insufficient to determine a cancelled
+generation. The producer needs a separate durable boundary for observations
+Chat actually incorporated, associated with the physical response that yielded
+them. A reader must check both boundaries against replay, including diagnostics
+from one failed source value. This is established by the executed local case;
+native and Python admission, terminal-holding cancellation, the outer CLI and
+deployed provider were not exercised by it.
+
 ## Decoder proof required at admission
 
 The dispatch owner must bind the selected provider and every effective option

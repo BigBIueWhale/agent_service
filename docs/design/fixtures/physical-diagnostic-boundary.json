@@ -1,0 +1,252 @@
+{
+  "body": "data: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"thought\",\"content\":\"prefix\"},\"finish_reason\":null}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\ndata: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"diagnostic\",\"tool_calls\":[{\"index\":0,\"id\":\"provider\",\"type\":\"function\",\"function\":{\"name\":\"audit_probe\",\"arguments\":\"[]\"}}]},\"finish_reason\":\"tool_calls\"}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\ndata: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"UNPROCESSED\"},\"finish_reason\":null}],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":7,\"total_tokens\":19,\"prompt_tokens_details\":{\"cached_tokens\":4},\"completion_tokens_details\":{\"reasoning_tokens\":2}}}\n\ndata: [DONE]\n\n",
+  "bodySha256": "f2ef93330a5a9b1a7ed3976306f4f55961c4934ad2996900b8df3dfd691033c8",
+  "physicalEvents": [
+    {
+      "kind": "http",
+      "status": 200,
+      "content_type": "text/event-stream"
+    },
+    {
+      "kind": "body",
+      "offset": 0,
+      "base64": "ZGF0YTogeyJpZCI6InJlcGx5Iiwib2JqZWN0IjoiY2hhdC5jb21wbGV0aW9uLmNodW5rIiwiY3JlYXRlZCI6MCwibW9kZWwiOiJ0ZXN0IiwiY2hvaWNlcyI6W3siaW5kZXgiOjAsImRlbHRhIjp7InJlYXNvbmluZ19jb250ZW50IjoidGhvdWdodCIsImNvbnRlbnQiOiJwcmVmaXgifSwiZmluaXNoX3JlYXNvbiI6bnVsbH1dLCJ1c2FnZSI6eyJwcm9tcHRfdG9rZW5zIjoxMiwiY29tcGxldGlvbl90b2tlbnMiOjcsInRvdGFsX3Rva2VucyI6MTksInByb21wdF90b2tlbnNfZGV0YWlscyI6eyJjYWNoZWRfdG9rZW5zIjo0fSwiY29tcGxldGlvbl90b2tlbnNfZGV0YWlscyI6eyJyZWFzb25pbmdfdG9rZW5zIjoyfX19CgpkYXRhOiB7ImlkIjoicmVwbHkiLCJvYmplY3QiOiJjaGF0LmNvbXBsZXRpb24uY2h1bmsiLCJjcmVhdGVkIjowLCJtb2RlbCI6InRlc3QiLCJjaG9pY2VzIjpbeyJpbmRleCI6MCwiZGVsdGEiOnsiY29udGVudCI6ImRpYWdub3N0aWMiLCJ0b29sX2NhbGxzIjpbeyJpbmRleCI6MCwiaWQiOiJwcm92aWRlciIsInR5cGUiOiJmdW5jdGlvbiIsImZ1bmN0aW9uIjp7Im5hbWUiOiJhdWRpdF9wcm9iZSIsImFyZ3VtZW50cyI6IltdIn19XX0sImZpbmlzaF9yZWFzb24iOiJ0b29sX2NhbGxzIn1dLCJ1c2FnZSI6eyJwcm9tcHRfdG9rZW5zIjoxMiwiY29tcGxldGlvbl90b2tlbnMiOjcsInRvdGFsX3Rva2VucyI6MTksInByb21wdF90b2tlbnNfZGV0YWlscyI6eyJjYWNoZWRfdG9rZW5zIjo0fSwiY29tcGxldGlvbl90b2tlbnNfZGV0YWlscyI6eyJyZWFzb25pbmdfdG9rZW5zIjoyfX19CgpkYXRhOiB7ImlkIjoicmVwbHkiLCJvYmplY3QiOiJjaGF0LmNvbXBsZXRpb24uY2h1bmsiLCJjcmVhdGVkIjowLCJtb2RlbCI6InRlc3QiLCJjaG9pY2VzIjpbeyJpbmRleCI6MCwiZGVsdGEiOnsiY29udGVudCI6IlVOUFJPQ0VTU0VEIn0sImZpbmlzaF9yZWFzb24iOm51bGx9XSwidXNhZ2UiOnsicHJvbXB0X3Rva2VucyI6MTIsImNvbXBsZXRpb25fdG9rZW5zIjo3LCJ0b3RhbF90b2tlbnMiOjE5LCJwcm9tcHRfdG9rZW5zX2RldGFpbHMiOnsiY2FjaGVkX3Rva2VucyI6NH0sImNvbXBsZXRpb25fdG9rZW5zX2RldGFpbHMiOnsicmVhc29uaW5nX3Rva2VucyI6Mn19fQoKZGF0YTogW0RPTkVdCgo="
+    },
+    {
+      "kind": "end",
+      "termination": "cancelled",
+      "body_bytes": 1133,
+      "body_sha256": "f2ef93330a5a9b1a7ed3976306f4f55961c4934ad2996900b8df3dfd691033c8",
+      "error": null
+    },
+    {
+      "kind": "outcome",
+      "status": "cancelled",
+      "error": null,
+      "served_usage": {
+        "totalTokenCount": 19,
+        "promptTokenCount": 12,
+        "candidatesTokenCount": 7,
+        "thoughtsTokenCount": 2,
+        "cachedContentTokenCount": 4
+      }
+    },
+    {
+      "kind": "history",
+      "disposition": "abandoned"
+    }
+  ],
+  "processedSDKValues": [
+    {
+      "id": "reply",
+      "object": "chat.completion.chunk",
+      "created": 0,
+      "model": "test",
+      "choices": [
+        {
+          "index": 0,
+          "delta": {
+            "reasoning_content": "thought",
+            "content": "prefix"
+          },
+          "finish_reason": null
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 12,
+        "completion_tokens": 7,
+        "total_tokens": 19,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2
+        }
+      }
+    },
+    {
+      "id": "reply",
+      "object": "chat.completion.chunk",
+      "created": 0,
+      "model": "test",
+      "choices": [
+        {
+          "index": 0,
+          "delta": {
+            "content": "diagnostic",
+            "tool_calls": [
+              {
+                "index": 0,
+                "id": "provider",
+                "type": "function",
+                "function": {
+                  "name": "audit_probe",
+                  "arguments": "[]"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 12,
+        "completion_tokens": 7,
+        "total_tokens": 19,
+        "prompt_tokens_details": {
+          "cached_tokens": 4
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 2
+        }
+      }
+    }
+  ],
+  "afterFirstDiagnostic": [
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "thought",
+                  "thought": true
+                },
+                {
+                  "text": "prefix"
+                }
+              ],
+              "role": "model"
+            },
+            "index": 0,
+            "safetyRatings": []
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 12,
+          "candidatesTokenCount": 7,
+          "totalTokenCount": 19,
+          "cachedContentTokenCount": 4,
+          "thoughtsTokenCount": 2
+        },
+        "responseId": "reply",
+        "createTime": "0",
+        "modelVersion": "test",
+        "promptFeedback": {
+          "safetyRatings": []
+        }
+      },
+      "incomplete_tool_calls": [],
+      "tool_call_preparations": [],
+      "call_ids": []
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "diagnostic"
+                }
+              ]
+            }
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 12,
+          "candidatesTokenCount": 7,
+          "totalTokenCount": 19,
+          "cachedContentTokenCount": 4,
+          "thoughtsTokenCount": 2
+        }
+      },
+      "incomplete_tool_calls": [],
+      "tool_call_preparations": [],
+      "call_ids": []
+    }
+  ],
+  "afterSecondDiagnostic": [
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "parts": [
+                {
+                  "text": "thought",
+                  "thought": true
+                },
+                {
+                  "text": "prefix"
+                }
+              ],
+              "role": "model"
+            },
+            "index": 0,
+            "safetyRatings": []
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 12,
+          "candidatesTokenCount": 7,
+          "totalTokenCount": 19,
+          "cachedContentTokenCount": 4,
+          "thoughtsTokenCount": 2
+        },
+        "responseId": "reply",
+        "createTime": "0",
+        "modelVersion": "test",
+        "promptFeedback": {
+          "safetyRatings": []
+        }
+      },
+      "incomplete_tool_calls": [],
+      "tool_call_preparations": [],
+      "call_ids": []
+    },
+    {
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "diagnostic"
+                }
+              ]
+            }
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 12,
+          "candidatesTokenCount": 7,
+          "totalTokenCount": 19,
+          "cachedContentTokenCount": 4,
+          "thoughtsTokenCount": 2
+        }
+      },
+      "incomplete_tool_calls": [],
+      "tool_call_preparations": [],
+      "call_ids": []
+    },
+    {
+      "response": {
+        "usageMetadata": {
+          "promptTokenCount": 12,
+          "candidatesTokenCount": 7,
+          "totalTokenCount": 19,
+          "cachedContentTokenCount": 4,
+          "thoughtsTokenCount": 2
+        }
+      },
+      "incomplete_tool_calls": [],
+      "tool_call_preparations": [],
+      "call_ids": []
+    }
+  ],
+  "disposition": "abandoned"
+}
