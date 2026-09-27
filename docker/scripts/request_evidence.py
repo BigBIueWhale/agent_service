@@ -76,7 +76,7 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
     if len(requests) != len(served) or events[-1]["request_evidence"]["open_response_ids"] != []:
         raise ValueError("response recording is incomplete; inspect the provider and recorder")
     states = {request["request_id"]: {"journal": request["journal_id"], "actual": actual,
-              "sequence": 0, "http": False, "ended": False, "outcome": None, "closed": False, "owner": request["owner"], "bytes": bytearray()}
+              "sequence": 0, "http": False, "termination": None, "ended": False, "outcome": None, "closed": False, "owner": request["owner"], "bytes": bytearray()}
               for request, actual in zip(requests, served)}
     if len(states) != len(requests):
         raise ValueError("response requests reuse an identity; inspect the original stream")
@@ -120,9 +120,12 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             else:
                 raise ValueError("served response was incorrectly called undispatched")
             state["ended"] = True
+            state["termination"] = termination
         elif event["kind"] == "outcome":
             if set(event) != {"kind", "status", "error"} or event["status"] not in ("completed", "failed", "cancelled") or not (event["error"] is None or isinstance(event["error"], str)) or (event["status"] == "completed" and event["error"] is not None) or (event["status"] == "failed" and not isinstance(event["error"], str)):
                 raise ValueError("invalid response processing outcome; inspect the original stream")
+            if event["status"] == "completed" and (not state["http"] or not 200 <= actual["response_status"] < 300 or state["termination"] not in ("eof", "cancelled")):
+                raise ValueError("completed processing has no successful HTTP transport completion; inspect the original stream")
             state["outcome"] = event["status"]
             state["closed"] = state["owner"]["kind"] == "utility"
         elif event["kind"] == "history":

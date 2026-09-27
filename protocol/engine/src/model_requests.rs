@@ -57,7 +57,8 @@ struct ResponseState {
     attempt: Option<String>,
     processing: Option<bool>,
     sequence: u64,
-    http: bool,
+    http_status: Option<u64>,
+    termination: Option<String>,
     bytes: u64,
     digest: Option<Sha256>,
 }
@@ -310,13 +311,17 @@ impl ModelRequests {
         }
         match kind {
             "http" => {
-                if state.http || state.sequence != 0 {
+                if state.http_status.is_some() || state.sequence != 0 {
                     return Err(refusal("response repeats HTTP headers"));
                 }
-                state.http = true;
+                state.http_status = Some(unsigned(
+                    field(event, "status", line)?,
+                    "HTTP response status",
+                    SAFE_INTEGER,
+                )?);
             }
             "body" => {
-                if !state.http
+                if state.http_status.is_none()
                     || state.bytes
                         != unsigned(
                             field(event, "offset", line)?,
@@ -342,7 +347,7 @@ impl ModelRequests {
             }
             "end" => {
                 let termination = text(event, "termination", line)?;
-                if (termination == "eof" && !state.http)
+                if (termination == "eof" && state.http_status.is_none())
                     || (termination == "not_dispatched" && state.sequence != 0)
                     || state.bytes
                         != unsigned(
@@ -366,9 +371,21 @@ impl ModelRequests {
                     ));
                 }
                 state.digest = None;
+                state.termination = Some(termination.to_string());
             }
             "outcome" => {
-                state.processing = Some(text(event, "status", line)? == "completed");
+                let completed = text(event, "status", line)? == "completed";
+                if completed
+                    && (!state
+                        .http_status
+                        .is_some_and(|status| (200..300).contains(&status))
+                        || !matches!(state.termination.as_deref(), Some("eof" | "cancelled")))
+                {
+                    return Err(refusal(
+                        "completed processing has no successful HTTP transport completion",
+                    ));
+                }
+                state.processing = Some(completed);
                 ended = state.attempt.is_none();
             }
             "history" => {
@@ -397,7 +414,7 @@ impl ModelRequests {
         Ok(ResponseAdmission {
             request_id: id.to_string(),
             accepted_attempt,
-            observed: ended && state.http && state.bytes > 0,
+            observed: ended && state.http_status.is_some() && state.bytes > 0,
             state: if ended { None } else { Some(state) },
         })
     }
@@ -495,6 +512,65 @@ mod tests {
         let admission = state.plan(document.root(), 1, LIMITS)?;
         state.commit(admission);
         Ok(())
+    }
+    #[test]
+    fn processing_completion_requires_successful_http_and_compatible_transport() {
+        for (http_status, termination, can_complete) in [
+            (None, "not_dispatched", false),
+            (None, "failed", false),
+            (None, "cancelled", false),
+            (Some(200), "eof", true),
+            (Some(204), "eof", true),
+            (Some(299), "cancelled", true),
+            (Some(300), "eof", false),
+            (Some(503), "cancelled", false),
+            (Some(200), "failed", false),
+        ] {
+            for status in ["completed", "failed", "cancelled"] {
+                let mut state = ModelRequests::default();
+                let body = r#"{"kv_scope":"owner","messages":[]}"#;
+                admit(
+                    &mut state,
+                    &request(1, "r", json!({"kind":"full","json":body}), body),
+                )
+                .unwrap();
+                let mut events = Vec::new();
+                if let Some(http_status) = http_status {
+                    events.push(json!({
+                        "kind": "http", "status": http_status, "content_type": null
+                    }));
+                }
+                events.push(json!({
+                    "kind": "end", "termination": termination,
+                    "body_bytes": 0, "body_sha256": sha256(""),
+                    "error": if termination == "failed" { json!("read failed") } else { json!(null) }
+                }));
+                events.push(json!({
+                    "kind": "outcome", "status": status,
+                    "error": if status == "failed" { json!("processing failed") } else { json!(null) }
+                }));
+                for (index, event) in events.iter().enumerate() {
+                    let raw = json!({"response": {
+                        "journal_id": "j", "request_id": "r",
+                        "sequence": index + 1, "event": event
+                    }}).to_string();
+                    let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                    let admission = state.plan_response(doc.root(), 1);
+                    if event["kind"] == "outcome" && status == "completed" && !can_complete {
+                        let error = admission.err().expect("contradictory completion was admitted");
+                        assert!(error.to_string().contains("successful HTTP transport"));
+                        assert_eq!(state.responses.len(), 1);
+                    } else {
+                        state.commit_response(admission.unwrap());
+                    }
+                }
+                assert_eq!(
+                    state.responses.is_empty(),
+                    status != "completed" || can_complete,
+                    "{http_status:?}/{termination}/{status}"
+                );
+            }
+        }
     }
     #[test]
     fn exact_request_replay_and_omission_refusals() {

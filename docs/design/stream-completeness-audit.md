@@ -53,8 +53,9 @@ Two narrower defects are real by source reading and remain open:
 
 ## Native certification and output disposition (§3)
 
-The following control-flow gaps are confirmed by reading
-`protocol/engine/src/model_requests.rs`; no native adversarial test was run:
+The following control-flow gaps were confirmed by reading
+`protocol/engine/src/model_requests.rs`; the transport correction below closes
+one of them. No native adversarial test was run:
 
 - `validate_output_origin` returns immediately for runtime origins. Runtime
   output is legitimate, but that label alone does not establish which runtime
@@ -63,10 +64,11 @@ The following control-flow gaps are confirmed by reading
 - Model output checks the attempt's identity and scope without binding that
   output to its final history disposition. Aggregate request/response counts
   in `validate_summary` do not provide that per-attempt association.
-- Response completion validates observed byte counts and digests and some
-  termination conditions, but a processing outcome is not linked to the
-  transport termination. The audit's broader implication that transport
-  completion is unchecked is false.
+- The baseline response completion validated byte counts, digests and some
+  termination conditions without linking processing success to transport.
+  The shared writer and readers now require observed 2xx HTTP and an EOF or
+  cancelled transport ending for completed processing. The audit's broader
+  implication that transport completion was unchecked is false.
 - There is no comparison tying displayed user/tool-result content to its
   admission and rendering in the next provider request. Such a comparison
   must account for reminders, media rendering and rejected inputs; simple
@@ -77,9 +79,11 @@ history acceptance are distinct facts. The defect is missing disposition
 accounting, not the inclusion of served work in usage totals.
 
 The stdout adapter's `emitSubagentRound` consumes origin, reasoning, text,
-malformed calls and usage but drops `historyDisposition`. This is a real
-remaining publication gap. The canonical and ACP acceptance fixes are not
-invalidated by that separate stdout omission.
+malformed calls and usage but drops the direct `historyDisposition` field.
+The whole stream retains response-history decisions and matching origins;
+independent journal/adapter tests confirmed the join in stream, partial-stream
+and batch modes. Direct labeling and per-attempt output reconciliation remain
+open. The canonical and ACP acceptance fixes are not invalidated by this gap.
 
 ## Canonical resume and listing (§4)
 
@@ -381,3 +385,38 @@ packaging, provider behavior, image/release/deployment gates remain unverified.
 No build, release, deployment or push was run. The other source-confirmed open
 questions above remain work to finish; this commit does not certify complete
 record sets or close the standing goal.
+
+## Transport and processing correction after a6c1b10
+
+The completed correction links processing success to captured successful HTTP
+and an EOF or cancelled transport ending in the shared writer and TS, Python,
+Java, native and fake-provider readers. It preserves zero-byte successful
+responses, consumer cancellation reasons, failed/cancelled processing and the
+separate history decision. Canonical resume reads the same runtime chat JSONL
+and the same typed history; this change strengthens evidence admission without
+changing conversation parts or their ordering. See
+[the outcome note](model-response-outcomes.md) for the invariant and test scope.
+
+Executed candidate source evidence comprises 56 independent TS cases, 59
+recorder/real-SDK pipeline/attempt tests, 577 affected core unit tests, 721
+independent Python checks, 274 SDK admission tests and seven helper methods.
+The transformer framework passed 38 tests and identifiers retain 35 concerns.
+The response settlement stub is confined to parsed-SDK unit fixtures that have
+no transport; actual recorder and SDK/fetch evidence tests remain intact.
+Native and Java regression tests are authored and source-reviewed, unexecuted.
+No build, typecheck, release, deployment or push was run.
+
+The fresh pinned archive transformation matches all 1,062 declared final
+identities; exactly 12 intended client paths changed from the baseline.
+Unrelated authoritative edits, manifest bindings and protected release inputs
+were checked. Executed authored source matches the sealed result; the existing
+generated test validator was not regenerated or qualified as a build artifact.
+
+Independent baseline output tests rejected the blanket whole-stream disposition
+loss claim: origins join the response-history decisions before child fragments
+in the tested journal/adapter traces. They did reproduce admission of omitted
+abandoned output, accepted text assigned to an abandoned same-scope attempt,
+duplicated billed output and abandoned-origin tool calls. Source reading also
+found empty billed root output and usage observed before a later stream error
+can go unpublished. These and runtime/input ownership remain implementation
+work; neither source test success nor patch integrity closes them.

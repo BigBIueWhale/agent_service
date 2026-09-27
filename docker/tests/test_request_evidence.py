@@ -84,6 +84,23 @@ class ResponseEvidenceTests(unittest.TestCase):
             events, served = self.fixture(termination)
             self.assertEqual(len(require_response_evidence(events, served)), 4)
 
+    def test_processing_outcome_matches_the_observed_transport(self):
+        from request_evidence import require_response_evidence
+        for http_status in (200, 299, 300, 503):
+            for termination in ("eof", "cancelled", "failed"):
+                for outcome in ("completed", "failed", "cancelled"):
+                    with self.subTest(http_status=http_status, termination=termination, outcome=outcome):
+                        events, served = self.fixture(termination)
+                        events[-3]["response"]["event"]["error"] = "transport failed" if termination == "failed" else None
+                        events[1]["response"]["event"]["status"] = http_status
+                        served[0]["response_status"] = http_status
+                        events[-2]["response"]["event"].update(status=outcome, error="processing failed" if outcome == "failed" else None)
+                        if outcome == "completed" and (not 200 <= http_status < 300 or termination == "failed"):
+                            with self.assertRaisesRegex(ValueError, "successful HTTP transport"):
+                                require_response_evidence(events, served)
+                        else:
+                            self.assertEqual(len(require_response_evidence(events, served)), 4)
+
     def test_missing_or_changed_wire_is_refused(self):
         from request_evidence import require_response_evidence
         for defect in ["missing", "unknown", "gap", "hash", "size", "provider", "open", "headers", "early", "outcome_status", "outcome_error", "missing_end"]:

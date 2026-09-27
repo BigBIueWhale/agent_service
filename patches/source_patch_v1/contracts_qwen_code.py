@@ -8208,7 +8208,18 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.clock.persist", "openRequestIds()", "terminal omits a response completion",
         "finish(outcome: ModelResponseOutcome)", "response outcome precedes transport completion",
         "transport event follows transport completion", "state.digest = null",
+        "function requireCompatibleProcessing(", "httpStatus < 200", "httpStatus >= 300",
+        "termination !== 'eof' && termination !== 'cancelled'",
+        "this.httpStatus = response.status;", "this.termination = termination;",
+        "requireCompatibleProcessing(state.httpStatus, state.termination, event)",
+        "completed processing has no successful HTTP transport completion",
     ), label=label)
+    response_recorder = _source(state, core + "core/model-response-evidence.ts", label=label)
+    outcome_write = response_recorder.split("const processing: ModelResponseOutcome = cleanup", 1)[1]
+    _require_ordered(outcome_write, (
+        "await this.enqueue(async () => {", "requireCompatibleProcessing(",
+        "await this.write({ kind: 'outcome', ...processing });", "this.processing = processing;",
+    ), label=label, location=core + "core/model-response-evidence.ts")
     _require_all(state, core + "core/model-request-evidence.ts", (
         "export class ModelEvidenceReplay", "open_response_ids", "await this.persistResponse(evidence)",
         "async flush(): Promise<void>", "if (this.failure) throw this.failure.cause;",
@@ -8379,6 +8390,9 @@ def _validate_served_accounting_after(state: State) -> None:
         'base64.b64decode(event["base64"], validate=True)',
         'event["body_sha256"] == state.digest.hexdigest()',
         'state.processing_status = event["status"]', "not attempt.accepted",
+        "200 <= state.http_status < 300", 'state.termination in ("eof", "cancelled")',
+        'state.termination = event["termination"]',
+        "completed processing has no successful HTTP transport completion",
         "not self.responses", "not self.root_open and not self.blocks",
     ), label=label)
     require_text(state, python_sdk + "src/qwen_code_sdk/json_lines.py",
@@ -8459,6 +8473,10 @@ def _validate_served_accounting_after(state: State) -> None:
         "StreamSchema.sha256(bytes)", "slices.messages.equals(expected)",
         "new ArrayList<>(responses.keySet())", "state.digest.update(bytes)",
         "processingStatus", "EOF omits a response completion",
+        "state.httpStatus >= 200 && state.httpStatus < 300",
+        '"eof".equals(state.termination) || "cancelled".equals(state.termination)',
+        'state.termination = (String) event.get("termination")',
+        "completed processing has no successful HTTP transport completion",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
         'getResourceAsStream("/stream-contract-v5.json")', "unsupported packaged schema keyword",
