@@ -344760,7 +344760,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,991 @@
+@@ -0,0 +1,1063 @@
 +import { createHash } from 'node:crypto';
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -344768,6 +344768,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +  ModelResponseRecorder,
 +  ModelResponseReplay,
 +  RESPONSE_CANCELLATION_STALL_TIMEOUT_MS,
++  RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS,
 +  describeResponseFailure,
 +  requireModelResponseEvidence,
 +  type ModelResponseEvidence,
@@ -345047,7 +345048,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    });
 +  });
 +
-+  it('waits for durable admission before delivering bytes and excludes that wait from the request clock', async () => {
++  it('waits for a responsive durable write before delivering bytes and excludes that wait from the request clock', async () => {
 +    vi.useFakeTimers();
 +    const gate = deferred();
 +    const records: ModelResponseEvidence[] = [];
@@ -345068,7 +345069,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      delivered = true;
 +      return text;
 +    });
-+    await vi.advanceTimersByTimeAsync(60_000);
++    await vi.advanceTimersByTimeAsync(RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS - 1);
 +    expect(delivered).toBe(false);
 +    expect(records.map((record) => record.event.kind)).toEqual(['http']);
 +    expect(recorder.clock.now()).toBe(at);
@@ -345232,6 +345233,77 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      ),
 +    });
 +    release.resolve();
++  });
++
++  it('refuses a stalled header write and resumes the paused network clock', async () => {
++    vi.useFakeTimers();
++    const held = deferred();
++    const recorder = new ModelResponseRecorder('j', 'r', () => held.promise, {
++      kind: 'utility',
++    });
++    recorder.dispatched();
++    const captured = recorder.capture(new Response('unrecorded'));
++    void captured.catch(() => {});
++    expect(recorder.clock.paused).toBe(true);
++    await vi.advanceTimersByTimeAsync(RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS);
++    await expect(captured).rejects.toThrow(
++      'response recording made no progress',
++    );
++    expect(recorder.clock.paused).toBe(false);
++    held.resolve();
++  });
++
++  it('refuses a stalled body write while cancellation waits for its read', async () => {
++    vi.useFakeTimers();
++    const held = deferred();
++    const bodyEntered = deferred();
++    const records: ModelResponseEvidence[] = [];
++    const recorder = new ModelResponseRecorder(
++      'j',
++      'r',
++      async (record) => {
++        if (record.event.kind === 'body') {
++          bodyEntered.resolve();
++          await held.promise;
++        } else {
++          records.push(record);
++        }
++      },
++      { kind: 'utility' },
++    );
++    recorder.dispatched();
++    let sent = false;
++    const response = await recorder.capture(
++      new Response(
++        new ReadableStream<Uint8Array>(
++          {
++            pull(controller) {
++              if (!sent) {
++                sent = true;
++                controller.enqueue(Buffer.from('unrecorded'));
++              }
++            },
++            cancel() {},
++          },
++          { highWaterMark: 0 },
++        ),
++      ),
++    );
++    const reader = response.body!.getReader();
++    const read = reader.read();
++    void read.catch(() => {});
++    await bodyEntered.promise;
++    const finished = recorder.finish({ status: 'cancelled', error: null });
++    void finished.catch(() => {});
++    await vi.advanceTimersByTimeAsync(RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS);
++    await expect(read).rejects.toThrow('response recording made no progress');
++    await expect(finished).rejects.toThrow(
++      'response recording made no progress',
++    );
++    expect(records.map((record) => record.event.kind)).toEqual(['http']);
++    expect(recorder.clock.paused).toBe(false);
++    held.resolve();
++    reader.releaseLock();
 +  });
 +
 +  it('shares pull-error cancellation with finish without hiding the write failure', async () => {
@@ -345755,7 +345827,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,846 @@
+@@ -0,0 +1,860 @@
 +import { createHash } from 'node:crypto';
 +import type { GenerateContentResponse } from '@google/genai';
 +import { recordGenerationSource } from './model-generation.js';
@@ -345832,8 +345904,12 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +// A persistence quantum bounds each encoded response record and temporary copy.
 +// It never bounds or truncates the total response or a model argument.
 +const RESPONSE_RECORD_BYTES = 64 * 1024;
-+// A cancelled transport has one minute to settle before its response is refused.
-+export const RESPONSE_CANCELLATION_STALL_TIMEOUT_MS = 60_000;
++// A response operation has one minute to settle before its evidence is refused.
++// This bounds both storage and transport cleanup without changing the model's
++// separate network generation budget.
++export const RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = 60_000;
++export const RESPONSE_CANCELLATION_STALL_TIMEOUT_MS =
++  RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS;
 +
 +function failure(detail: string): never {
 +  throw new Error(
@@ -345888,7 +345964,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    private readonly owner: ModelRequestOwner,
 +  ) {}
 +
-+  private async boundCancellation(pending: Promise<void>): Promise<void> {
++  private async boundOperation(
++    pending: Promise<void>,
++    stalled: string,
++  ): Promise<void> {
 +    let timer: ReturnType<typeof setTimeout> | undefined;
 +    try {
 +      await Promise.race([
@@ -345898,16 +345977,20 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +            () =>
 +              reject(
 +                new Error(
-+                  `response cancellation made no progress for ${RESPONSE_CANCELLATION_STALL_TIMEOUT_MS} ms. Stop this Qwen session, inspect its incomplete recording with the matching reader, and retry after transport cleanup is responsive.`,
++                  `${stalled} made no progress for ${RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS} ms. Stop this Qwen session, inspect its incomplete recording with the matching reader, and retry after recording storage and transport cleanup are responsive.`,
 +                ),
 +              ),
-+            RESPONSE_CANCELLATION_STALL_TIMEOUT_MS,
++            RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS,
 +          );
 +        }),
 +      ]);
 +    } finally {
 +      if (timer !== undefined) clearTimeout(timer);
 +    }
++  }
++
++  private boundCancellation(pending: Promise<void>): Promise<void> {
++    return this.boundOperation(pending, 'response cancellation');
 +  }
 +
 +  dispatched(): void {
@@ -345947,15 +346030,17 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    this.pipelineOutputsDelivered++;
 +  }
 +
-+  private write(event: ModelResponseEvidence['event']): Promise<void> {
-+    return this.append({
-+      journal_id: this.journalId,
-+      request_id: this.requestId,
-+      sequence: this.sequence + 1,
-+      event,
-+    }).then(() => {
-+      this.sequence++;
-+    });
++  private async write(event: ModelResponseEvidence['event']): Promise<void> {
++    await this.boundOperation(
++      this.append({
++        journal_id: this.journalId,
++        request_id: this.requestId,
++        sequence: this.sequence + 1,
++        event,
++      }),
++      'response recording',
++    );
++    this.sequence++;
 +  }
 +
 +  private enqueue(work: () => Promise<void>): Promise<void> {
@@ -346085,8 +346170,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        if (released && !rawCancellation) return;
 +        cancelled = true;
 +        try {
-+          await cancelReader();
-+          await joinedCancellation;
++          await this.boundCancellation(
++            Promise.all([cancelReader(), joinedCancellation!]).then(() => {}),
++          );
 +        } catch (cause) {
 +          if (!pullFailure || cause !== pullFailure.cause) throw cause;
 +        }

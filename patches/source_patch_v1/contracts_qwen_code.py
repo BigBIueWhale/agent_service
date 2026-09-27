@@ -8327,6 +8327,14 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.httpStatus = response.status;", "this.termination = termination;",
         "requireCompatibleProcessing(state.httpStatus, state.termination, event)",
         "completed processing has no successful HTTP transport completion",
+        "RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = 60_000",
+        "await this.boundOperation(", "'response recording'",
+        "Promise.all([cancelReader(), joinedCancellation!]).then(() => {})",
+    ), label=label)
+    _require_all(state, core + "core/model-response-evidence.test.ts", (
+        "refuses a stalled header write and resumes the paused network clock",
+        "refuses a stalled body write while cancellation waits for its read",
+        "waits for a responsive durable write before delivering bytes",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
         "readonly served_usage: ServedUsage | null", "observeUsage(usage: ServedUsage)",
