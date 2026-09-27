@@ -1357,13 +1357,15 @@ mod tests {
         .to_string()
     }
     fn utility_request(id: &str, sequence: u64) -> String {
-        let body = r#"{"kv_scope":"internal-utility","messages":[]}"#;
+        let body = r#"{"kv_scope":"internal-utility","stream":false,"messages":[]}"#;
         serde_json::json!({
             "type":"model_request", "uuid":format!("request-{id}"), "session_id":"session", "parent_tool_use_id":null,
             "request":{
                 "journal_id":"fixture", "request_id":id, "sequence":sequence,
                 "kv_scope":"internal-utility", "segment_id":"utility-segment", "prompt_id":"utility-prompt",
                 "owner":{"kind":"utility"}, "body":{"kind":"full","json":body},
+                "decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,
+                    "named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},
                 "body_bytes":body.len(), "body_sha256":crate::generation::sha256(body.as_bytes())
             }
         }).to_string()

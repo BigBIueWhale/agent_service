@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `094b782a68552c6b2799b796f0599baab3488c076e922072a93cae7dae0c0e62`
+- Review-diff SHA-256: `34c14b989e04f2f2bce44dfc064ff6bf1452184f256719bb211300cfc9ea4f32`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `a38fb01992ee9cf88591b6b0d908406b563f9027d493f88596dd89a0a4ca91b8`
+- Transformer-manifest SHA-256: `81de0f0e65304ab5f669c3747d533077f6ad781e1cfe9d673cd9b4cd4d0b5edc`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 9`, independently
+Every physical canonical chat record carries `recordingVersion: 10`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -365,7 +365,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 9 histories.
+new session. They are not promoted into complete version 10 histories.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
@@ -399,10 +399,15 @@ Every supported generation request is admitted by `pipeline.ts` immediately afte
 `buildRequest`, before optional diagnostics and the SDK transport. The canonical
 writer must accept a `model_request` record before dispatch. The record carries
 the UTF-8 byte count and SHA-256 of the complete serialized body, its invocation
-and compaction segment, and a replayable full body or message delta. Serialization
-is frozen before diagnostics, so the SDK sends precisely those bytes. A failed
-canonical write prevents dispatch. SDK-internal retries are disabled for these
-calls: the existing controlled retry loop re-enters capture for every attempt.
+and compaction segment, a replayable full body or message delta, and the selected
+OpenAI-compatible decoder mode, context model, strict tool-call handling, named
+tool choice, exact token-counting rule and tagged thinking rule. The exact body
+must state a boolean stream mode matching that policy; an absent or contradictory
+mode is refused by request replay.
+Serialization is frozen before diagnostics, so the SDK sends precisely those
+bytes. A failed canonical write prevents dispatch. SDK-internal retries are
+disabled for these calls: the existing controlled retry loop re-enters capture
+for every attempt.
 A request record establishes a dispatch intent, not proof of server receipt.
 
 Every request declares chat-attempt or utility ownership outside the model body.

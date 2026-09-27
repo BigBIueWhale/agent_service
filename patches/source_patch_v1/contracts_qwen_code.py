@@ -8248,7 +8248,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 9;",
+            "export const CHAT_RECORDING_VERSION = 10;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8265,6 +8265,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "candidate?.segmentId === segmentId ? candidate : undefined;",
         "body: previous", "base_request_id: previous.id",
         "added_messages: body.messages.slice(retained)",
+        "readonly decode_policy: OpenAIResponseDecodePolicy;",
+        "requireOpenAIResponseDecodePolicy(value['decode_policy'])",
+        "decode_policy: selectedPolicy,",
+        "typeof parsed['stream'] !== 'boolean'",
+        "body.stream !== (evidence.decode_policy.mode === 'stream')",
+        "body.stream !== (selectedPolicy.mode === 'stream')",
     ), label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",
                 "retained > 0 || previous.body.messages.length === 0", label=label)
@@ -8277,6 +8283,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "openaiRequest = await this.buildRequest(",
         "const body = JSON.stringify(openaiRequest)",
         "const decodePolicy = selectOpenAIResponseDecodePolicy(",
+        "openaiRequest.stream !== (decodePolicy.mode === 'stream')",
         "const decodeContext = createOpenAIResponseDecodeContext(",
         "getChatRecordingService()",
         ".modelRequests.capture(",
@@ -8290,6 +8297,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "await createPromise.withResponse()", "clock.subscribe(rearm)",
         "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.finish(outcome)",
         "request.generationContext.requestSegmentId,", "request.chatAttempt,",
+        "decodePolicy,",
         "request.config?.abortSignal,",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
@@ -8578,7 +8586,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v7.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v8.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -8594,6 +8602,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
         'hashlib.sha256(raw).hexdigest() == request["body_sha256"]',
+        'stream == (request["decode_policy"]["mode"] == "stream")',
         'previous.request_id == representation["base_request_id"]',
         'previous.segment_id == request["segment_id"]',
         'record["sequence"] == state.sequence + 1',
@@ -8682,6 +8691,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, java_cli + "protocol/RequestEvidence.java", (
         "StreamSchema.sha256(bytes)", "slices.messages.equals(expected)",
+        "slices.stream == \"stream\".equals(policy.get(\"mode\"))",
         "new ArrayList<>(responses.keySet())", "state.digest.update(bytes)",
         "processingStatus", "EOF omits a response completion",
         "state.httpStatus >= 200 && state.httpStatus < 300",
@@ -8691,7 +8701,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "completed processing has no successful HTTP transport completion",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v7.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v8.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (

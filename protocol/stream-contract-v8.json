@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:7",
+  "$id": "urn:agent-service:stream-contract:8",
   "type": "object",
   "required": [
     "type",
@@ -2414,6 +2414,46 @@
         }
       ]
     },
+    "openAiResponseDecodePolicy": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "stream",
+            "nonstream"
+          ]
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "strict_tool_calling": {
+          "type": "boolean"
+        },
+        "named_tool_choice": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        },
+        "exact_token_counting": {
+          "type": "boolean"
+        },
+        "tagged_thinking_tags": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "model",
+        "strict_tool_calling",
+        "named_tool_choice",
+        "exact_token_counting",
+        "tagged_thinking_tags"
+      ],
+      "additionalProperties": false
+    },
     "modelRequestEvidence": {
       "type": "object",
       "properties": {
@@ -2514,6 +2554,9 @@
         },
         "owner": {
           "$ref": "#/definitions/modelRequestOwner"
+        },
+        "decode_policy": {
+          "$ref": "#/definitions/openAiResponseDecodePolicy"
         }
       },
       "required": [
@@ -2526,7 +2569,8 @@
         "body_bytes",
         "body",
         "segment_id",
-        "owner"
+        "owner",
+        "decode_policy"
       ],
       "additionalProperties": false
     },

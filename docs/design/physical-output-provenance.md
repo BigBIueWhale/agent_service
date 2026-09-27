@@ -218,8 +218,9 @@ above has identical request and response bytes but different correct thought
 and text parts. A generation envelope cannot choose its own decoding profile
 after the fact. A changed required wire field needs a new stream-contract and
 canonical-recording identity, with all producers and admitting readers changed
-together; the current identities are v7 and v9. A source-only migration cannot
-claim that generated bindings or native gates have run.
+together. The policy field uses stream contract v8 and canonical recording
+version 10. A source-only migration cannot claim that generated bindings or
+native gates have run.
 
 For each physical response, a verifier must parse the exact stored bytes with
 the pinned SDK's relevant SSE or nonstreaming semantics, replay the selected
@@ -233,19 +234,37 @@ delivering them to the SDK, so its chunk boundary alone cannot prove a consumed
 event prefix. For nonstreaming responses the SDK also has a distinct JSON/text
 path; treating every body as SSE would be unsound.
 
-The live pipeline now uses the response decoder module for both nonstreaming
+The live pipeline uses the response decoder module for both nonstreaming
 conversion and streamed conversion with terminal holding and failure-diagnostic
 expansion. The module also exposes the pure served-usage observation applied
 before either conversion path. Before each response attempt the pipeline selects
 a validated JSON-shaped decode policy and creates fresh parser state from it.
 An executed source test decoded identical provider content with tagged-thinking
 parsing off and on and obtained the two corresponding part sequences after a
-policy JSON round trip. The converter, pipeline and policy source suites passed
-443 cases; four local actual-SDK attribution and cancellation cases also passed
-against the current authoring source. These runs establish preservation at their
-tested boundaries. The policy is not yet included in request evidence, and no
-admitting reader yet invokes the decoder on retained response bytes. This work
-does not establish physical-to-decoded proof or change the wire contract.
+policy JSON round trip. The earlier converter, pipeline and policy source suites
+passed 443 cases; four local actual-SDK attribution and cancellation cases also
+passed against their authoring source.
+
+The selected policy is now required on every durable model request. The producer
+checks that provider decoration preserved the selected stream mode before
+recording. Request replay requires an explicit boolean `stream` in the exact
+body and the matching policy mode, and evidence rejects an absent, malformed or
+unknown policy. The v8 schema requires the same closed policy shape in stdout,
+Python and Java resources; the canonical runtime file uses version 10.
+Version 9 canonical files cannot supply the selected policy; the version 10
+reader refuses them with a matching-client or new-session action. Source reading
+shows that this change adds evidence beside runtime history and does not change
+the conversation parts or their order; complete version 10 resume remains
+unverified pending the owner's gates. Focused TypeScript
+request and pipeline tests passed 23 and 168 cases respectively; the
+Python unit suite passed 731 cases, including new policy refusals. The Rust and
+Java refusal cases were authored but not executed. The installed TypeScript
+wire validator is still generated from v5 and rejects `stream_start` before
+these new records; its full-wire tests cannot qualify v8 until the owner's
+generation and build gates run. No admitting reader yet replays retained response
+bytes through the selected decoder or compares them with a canonical generation.
+The policy binding is therefore a necessary input to physical-to-decoded proof,
+not that proof itself.
 
 The completion's physical request membership gives the candidate requests but
 does not by itself identify which retry supplied an observation. Replay needs
