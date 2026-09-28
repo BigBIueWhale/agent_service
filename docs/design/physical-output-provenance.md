@@ -242,8 +242,8 @@ outcome. Chat records a separate receipt count after incorporating each output
 into its generation; the attempt completion binds that count to the generation's
 observation count and the outcomes of its physical requests. An accepted
 completion must consume every pipeline output; an abandoned completion can
-retain a shorter prefix when cancellation interrupts delivery. Stream contract v10
-and canonical recording version 12 also require each generation observation to
+retain a shorter prefix when cancellation interrupts delivery. Stream contract v11
+and canonical recording version 13 also require each generation observation to
 name its physical request. The TypeScript and Python source tests exercised the
 counts and per-request attribution, including early cancellation and a conversion
 failure that emits several diagnostics. Native and Java source includes the same
@@ -277,8 +277,8 @@ above has identical request and response bytes but different correct thought
 and text parts. A generation envelope cannot choose its own decoding profile
 after the fact. A changed required wire field needs a new stream-contract and
 canonical-recording identity, with all producers and admitting readers changed
-together. The policy and progress fields use stream contract v10 and canonical
-recording version 12. A source-only migration cannot claim that generated
+together. The policy and progress fields use stream contract v11 and canonical
+recording version 13. A source-only migration cannot claim that generated
 bindings or native gates have run.
 
 For each physical response, a verifier must parse the exact stored bytes with
@@ -303,9 +303,13 @@ that shared routine preserves the raw observation, normalizes tool identities
 against the active history, records preparation mappings and removes executable
 calls from the provisional delivered chunk. The TypeScript root readers now
 replay the selected decoder from retained bytes and compare the raw response,
-incomplete calls and provider preparation identities. The recorded normalized
-call IDs remain checked for internal consistency, but are not independently
-recomputed from the conversation history at this admission boundary.
+incomplete calls and provider preparation identities. Stream contract v11
+records the exact history call-ID set at the Chat normalizer's start boundary.
+The TypeScript root reader replays the same normalizer against the retained
+physical response and that seed. Native, Python and Java admission derive the
+expected duplicate suffixes and generated IDs from the seed, but still do not
+decode physical response bytes. These are source-level findings; the v11
+build and native gates remain unrun in this workspace.
 Source inspection narrows the required seed boundary. `processStreamResponse`
 constructs `GenerationObservationNormalizer(this.history)` before consuming
 the response stream, whereas the canonical generation record is committed
@@ -314,10 +318,12 @@ while a response is in flight. A reader using the history at the later
 generation record could therefore derive a different duplicate suffix and
 refuse an ordinary valid session. The dispatched OpenAI request is also not a
 substitute: request curation and orphan cleanup can omit IDs still present in
-Chat history. The repair must retain the seed actually given to the normalizer
-at its own boundary and let admitting readers derive the mapping from it;
-canonical history and stdout-only evidence need a defined way to account for
-that seed. This is a source-derived constraint, not an executed race test.
+Chat history. The v11 producer writes that seed before consuming the stream,
+and root canonical admission compares it with replayed history at the same
+record position. Child sidechains compare their local seed with their own
+replayed history; the root's mirrored child seed still lacks a cross-file proof
+that it equals the child's local seed. The concurrent history-splice case has
+not been executed against a live client.
 An executed source test decoded identical provider content with tagged-thinking
 parsing off and on and obtained the two corresponding part sequences after a
 policy JSON round trip. The earlier converter, pipeline and policy source suites
@@ -328,8 +334,8 @@ The selected policy is now required on every durable model request. The producer
 checks that provider decoration preserved the selected stream mode before
 recording. Request replay requires an explicit boolean `stream` in the exact
 body and the matching policy mode, and evidence rejects an absent, malformed or
-unknown policy. The v10 schema requires the same closed policy shape in stdout,
-Python and Java resources; the canonical runtime file uses version 12.
+unknown policy. The v11 schema requires the same closed policy shape in stdout,
+Python and Java resources; the canonical runtime file uses version 13.
 Provider decoration can override the final OpenAI request model through
 `extra_body`. The selected response policy now takes its model from that final
 request, and TypeScript, Python, Java, native and fake-provider request readers
@@ -342,14 +348,14 @@ timing assertion; it also failed here with the prior pipeline, decoder and test
 sources restored. Native and Java cases were authored but not executed; the
 model binding alone does not prove decoded observations came from physical
 bytes.
-Canonical files from before that identity lack required evidence; the version 12
+Canonical files from before that identity lack required evidence; the version 13
 reader refuses them with a matching-client or new-session action. Source reading
 shows that this change adds evidence beside runtime history and does not change
-the conversation parts or their order; complete version 12 resume remains
+the conversation parts or their order; complete version 13 resume remains
 unverified pending the owner's gates. The Rust and Java refusal cases were
 authored but not executed. The installed TypeScript
 wire validator is still generated from v5 and rejects `stream_start` before
-these new records; its full-wire tests cannot qualify v10 until the owner's
+these new records; its full-wire tests cannot qualify v11 until the owner's
 generation and build gates run. TypeScript root stream and canonical readers
 now use the selected policy to replay retained bytes and compare raw Chat
 observations. Native, Python and Java admission still need equivalent decoding

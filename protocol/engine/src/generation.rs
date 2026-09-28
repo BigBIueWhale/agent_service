@@ -188,13 +188,36 @@ fn finite_numbers(root: Value<'_>) -> ContractResult<()> {
     Ok(())
 }
 
+fn next_normalized_id(raw: Option<&str>, used: &BTreeSet<String>) -> ContractResult<String> {
+    let (base, first) = match raw.filter(|id| !id.is_empty()) {
+        Some(id) if !used.contains(id) => return Ok(id.to_string()),
+        Some(id) => (id.to_string(), 2_u64),
+        None => ("call_qwen".to_string(), 1_u64),
+    };
+    for suffix in first..=SAFE_INTEGER {
+        let candidate = if raw.is_some_and(|id| !id.is_empty()) {
+            format!("{base}__qwen_dup_{suffix}")
+        } else {
+            format!("{base}_{suffix}")
+        };
+        if !used.contains(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    Err(refusal("normalization identity space is exhausted"))
+}
+
 impl Generation {
-    pub fn read(
+    pub fn read<F>(
         evidence: Value<'_>,
         line: usize,
         json: Limits,
         schema: ValidationLimits,
-    ) -> ContractResult<Self> {
+        seed_for_origin: F,
+    ) -> ContractResult<Self>
+    where
+        F: FnOnce(&Origin) -> ContractResult<Vec<String>>,
+    {
         validate(evidence, SchemaEntry::ModelGenerationEvidence, schema, line)?;
         let raw = text(evidence, "generation_json", line)?;
         let hash = text(evidence, "generation_sha256", line)?;
@@ -257,6 +280,7 @@ impl Generation {
             }
         }
         let mut raw_ids = BTreeSet::new();
+        let mut used_ids: BTreeSet<String> = seed_for_origin(&generation.origin)?.into_iter().collect();
         let mut normalized_ids = BTreeSet::new();
         let mut preparations: BTreeMap<&str, (&str, &str)> = BTreeMap::new();
         let mut reservations: BTreeMap<&str, &str> = BTreeMap::new();
@@ -287,6 +311,14 @@ impl Generation {
                 let provider = text(preparation, "provider_call_id", line)?;
                 let id = text(preparation, "callId", line)?;
                 let name = text(preparation, "toolName", line)?;
+                let expected = if let Some((reserved, _)) = preparations.get(provider) {
+                    (*reserved).to_string()
+                } else {
+                    next_normalized_id(Some(provider), &used_ids)?
+                };
+                if id != expected {
+                    return Err(refusal("preparation does not follow the recorded history seed"));
+                }
                 if preparations
                     .get(provider)
                     .is_some_and(|previous| *previous != (id, name))
@@ -301,6 +333,7 @@ impl Generation {
                 }
                 preparations.insert(provider, (id, name));
                 reservations.insert(id, provider);
+                used_ids.insert(id.to_string());
             }
             let parts = primary_parts(response);
             for part in &parts {
@@ -358,6 +391,18 @@ impl Generation {
                             continue;
                         }
                         let id = text(*mapping, "normalized_id", line)?;
+                        let expected = if let Some((reserved, _)) = provider
+                            .filter(|value| !value.is_empty())
+                            .and_then(|value| preparations.get(value))
+                        {
+                            (*reserved).to_string()
+                        } else {
+                            next_normalized_id(provider, &used_ids)?
+                        };
+                        if id != expected {
+                            return Err(refusal("call mapping does not follow the recorded history seed"));
+                        }
+                        used_ids.insert(id.to_string());
                         if !normalized_ids.insert(id)
                             || reservations
                                 .get(id)

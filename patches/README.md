@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 12`, independently
+Every physical canonical chat record carries `recordingVersion: 13`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -357,6 +357,13 @@ holding the current physical record and the request replay state; title writes
 are not duplicated to keep them within a tail window. This format governs the runtime chat JSONL that resume
 reads. `output/events.jsonl` retains stdout bytes under the separate stream
 contract and cannot serve as canonical history.
+
+Each Chat generation records the tool-call identities present when its
+normalizer starts, before it consumes the provider stream. The seed is bound
+to the final physical request, and admitting readers derive normalized call
+identities from it. Canonical root and child readers compare local seeds with
+their replayed histories; a mirrored child seed in the root still needs
+cross-file proof against its sidechain.
 
 Canonical resume replays explicit runtime history checkpoints and splices with
 positioned assistant commits. Display inputs and request/response evidence cannot

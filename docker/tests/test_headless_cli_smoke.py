@@ -11,10 +11,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "docker/scripts"))
-from check_headless_cli import SmokeFailure, check, require_quantities_stated_once
+from check_headless_cli import SmokeFailure, check, require_quantities_stated_once, smoke_assistant_content
 
 
 class HeadlessSmokeTests(unittest.TestCase):
+    def test_projects_seeded_call_and_thought_from_generation(self):
+        rows = json.loads((ROOT / "protocol/engine/src/fixtures/ordinary-tool-wire.json").read_text())
+        generation = next(row["generation"] for row in rows if row["type"] == "model_generation")
+        self.assertEqual(smoke_assistant_content({"generation": generation}), {
+            "role": "model",
+            "parts": [
+                {"text": "  **raw thought**\n", "thought": True},
+                {"text": "before  after"},
+                {"functionCall": {"id": "provider__qwen_dup_2", "name": "audit_probe", "args": {"value": 1.0}}},
+            ],
+        })
+
     def test_refuses_missing_malformed_or_mismatched_pairing_before_starting_actors(self):
         for body in [None, b'{', b'null', b'{}', json.dumps({"schema_sha256": "1" * 64}).encode()]:
             with self.subTest(body=body), tempfile.TemporaryDirectory(prefix="headless-gate-pairing-") as temporary:

@@ -8262,7 +8262,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 12;",
+            "export const CHAT_RECORDING_VERSION = 13;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8430,7 +8430,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "takeGenerationObservation(output)",
         "observation.response",
         "observation.incomplete_tool_calls",
-        "provider_call_id",
+        "normalizer.normalizeObservation(",
+        "canonical(observation.call_ids)",
+        "seed.history_call_ids",
         "SDK value count passes the first conversion failure",
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.test.ts", (
@@ -8474,8 +8476,10 @@ def _validate_served_accounting_after(state: State) -> None:
     forbid_text(state, core + "core/model-response-evidence.ts",
                 "policy?: OpenAIResponseDecodePolicy", label=label)
     _require_all(state, core + "core/model-request-evidence.ts", (
-        "this.responses.verifyGeneration(envelope)",
-        "this.responses.verifyGeneration(readModelGeneration(generation))",
+        "this.generations.seedForAttempt(envelope.origin.attempt_id)",
+        "this.logical.seedForAttempt(origin.attempt_id)",
+        "this.history.toolCallIds()",
+        "this.logical.observeSeed(seed)",
         "record.request.decode_policy",
         "request.decode_policy",
     ), label=label)
@@ -8517,6 +8521,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "export class ChatAttempt", "readonly id = randomUUID()", "kind: 'chat'",
         "response.finishHistory(disposition)", "Promise.allSettled",
         "get hasRequests(): boolean", "return this.responses.length > 0;", "assertOpen(): void",
+        "get finalRequestId(): string",
         "assertCanIssueRequest(): void", "this.assertCanIssueRequest();",
         "observeConsumerOutput(sourceRequestId: string)",
         "this.responses.at(-1)?.requestId !== sourceRequestId",
@@ -8534,6 +8539,9 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label, location="generation publication and complete physical population before logical completion")
     _require_all(state, core + "core/model-generation.ts", (
         "export class ModelGenerationReplay", "readModelGeneration(value)",
+        "export function requireModelNormalizationSeed(",
+        "observeSeed(value: unknown): ModelNormalizationSeed",
+        "generation has no recorded normalization seed",
         "exactIntegerLexeme(source)",
         "a decoded integer differs from its recorded JSON spelling",
         "recordGenerationSource(", "takeGenerationSource(chunk)",
@@ -8568,6 +8576,21 @@ def _validate_served_accounting_after(state: State) -> None:
         "if (deliveredContent || disposition !== null) throw error;",
         "generator.generateChatContentStream(",
         "attempt.observeConsumerOutput(observed.source_request_id)",
+        "await this.chatRecordingService.recordNormalizationSeed({",
+        "history_call_ids: observationNormalizer.seedCallIds",
+        "request_id: attempt.finalRequestId",
+    ), label=label)
+    _require_all(state, core + "services/chatRecordingService.ts", (
+        "recordNormalizationSeed(", "recordChildNormalizationSeed(",
+        "type: 'model_normalization_seed'",
+    ), label=label)
+    _require_all(state, core + "agents/agent-transcript.ts", (
+        "recordNormalizationSeed: (seed) => {",
+        "recordChildNormalizationSeed(seed)",
+    ), label=label)
+    _require_all(state, core + "utils/runtime-contract-admission.ts", (
+        "wire.type === 'model_normalization_seed'",
+        "requests.observeNormalizationSeed(envelope['normalization_seed'])",
     ), label=label)
     chat_stream = _source(state, core + "core/geminiChat.ts", label=label).split(
         "const attempt = new ChatAttempt(", 1)[1]
@@ -8760,7 +8783,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v10.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v11.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -8783,6 +8806,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "def display_text(self) -> str:",
         'if not truthy(part.get("thought"))',
         "parse_json_line(raw, exact_integer_floats=True)",
+        "preparation does not follow the recorded history seed",
+        "call mapping does not follow the recorded history seed",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
@@ -8806,6 +8831,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'observation["source_request_id"]',
         'a Chat attempt received decoded output before its final physical request',
         "completed processing has no successful HTTP transport completion",
+        "generation has no recorded normalization seed",
         "not self.responses", "not self.group_open and not self.blocks",
         "runtime partial group has no full assistant message",
         "runtime partial text has no matching full assistant message",
@@ -8895,6 +8921,8 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, java_cli + "protocol/GenerationEvidence.java", (
         "final String displayText;", "displayText = display.toString();",
+        "preparation does not follow the recorded history seed",
+        "call mapping does not follow the recorded history seed",
     ), label=label)
     _require_all(state, java_cli + "protocol/PartialOutput.java", (
         "runtime partial group has no full assistant message",
@@ -8917,9 +8945,10 @@ def _validate_served_accounting_after(state: State) -> None:
         'object(item).get("source_request_id")',
         'a Chat attempt received decoded output before its final physical request',
         "completed processing has no successful HTTP transport completion",
+        "generation has no recorded normalization seed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v10.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v11.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (

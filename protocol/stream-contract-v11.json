@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:10",
+  "$id": "urn:agent-service:stream-contract:11",
   "type": "object",
   "required": [
     "type",
@@ -869,6 +869,36 @@
         "parent_tool_use_id",
         "response"
       ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "model_normalization_seed"
+        },
+        "uuid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_tool_use_id": {
+          "type": "null"
+        },
+        "normalization_seed": {
+          "$ref": "#/definitions/modelNormalizationSeed"
+        }
+      },
+      "required": [
+        "type",
+        "uuid",
+        "session_id",
+        "parent_tool_use_id",
+        "normalization_seed"
+      ],
+      "additionalProperties": false
     },
     {
       "type": "object",
@@ -2977,6 +3007,37 @@
       },
       "required": [
         "kind"
+      ],
+      "additionalProperties": false
+    },
+    "modelNormalizationSeed": {
+      "type": "object",
+      "properties": {
+        "journal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "$ref": "#/definitions/modelGenerationOrigin"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "history_call_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "journal_id",
+        "origin",
+        "request_id",
+        "history_call_ids"
       ],
       "additionalProperties": false
     },

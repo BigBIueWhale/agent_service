@@ -1,6 +1,6 @@
 //! Replay provider request evidence without reserializing its JSON body.
 use crate::{
-    generation::Generation,
+    generation::{Generation, Origin},
     json::{Document, Limits, Value},
     schema::ValidationLimits,
     stream::{field, text, unsigned},
@@ -46,8 +46,19 @@ struct AttemptState {
     requests: Vec<String>,
     settled: BTreeMap<String, bool>,
     outcomes: BTreeMap<String, ResponseOutcome>,
+    seed: Option<NormalizationSeed>,
     generation: Option<Arc<Generation>>,
     completed: bool,
+}
+
+#[derive(Clone)]
+struct NormalizationSeed {
+    origin: Origin,
+    history_call_ids: Vec<String>,
+}
+
+pub(crate) struct SeedAdmission {
+    seed: NormalizationSeed,
 }
 
 pub(crate) struct GenerationAdmission {
@@ -575,6 +586,60 @@ impl ModelRequests {
         Ok(Some(id.to_string()))
     }
 
+    pub(crate) fn plan_seed(
+        &self,
+        record: Value<'_>,
+        line: usize,
+    ) -> ContractResult<SeedAdmission> {
+        let value = field(record, "normalization_seed", line)?;
+        let origin = Origin::read(field(value, "origin", line)?, line)?;
+        let attempt = self
+            .attempts
+            .get(&origin.attempt)
+            .ok_or_else(|| refusal("normalization seed has no logical request owner"))?;
+        let journal = text(value, "journal_id", line)?;
+        let request = text(value, "request_id", line)?;
+        if self.journal_id.as_deref() != Some(journal)
+            || attempt.scope != origin.scope
+            || attempt.completed
+            || attempt.generation.is_some()
+            || attempt.seed.is_some()
+            || attempt.requests.last().map(String::as_str) != Some(request)
+        {
+            return Err(refusal(
+                "normalization seed has no unique final physical request",
+            ));
+        }
+        let mut unique = BTreeSet::new();
+        let mut history_call_ids = Vec::new();
+        for value in field(value, "history_call_ids", line)?
+            .elements()
+            .ok_or_else(|| refusal("normalization seed lacks history identities"))?
+        {
+            let id = value
+                .as_str()
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| refusal("normalization seed has an invalid history identity"))?;
+            if !unique.insert(id.to_string()) {
+                return Err(refusal("normalization seed repeats a history identity"));
+            }
+            history_call_ids.push(id.to_string());
+        }
+        Ok(SeedAdmission {
+            seed: NormalizationSeed {
+                origin,
+                history_call_ids,
+            },
+        })
+    }
+
+    pub(crate) fn commit_seed(&mut self, admission: SeedAdmission) {
+        self.attempts
+            .get_mut(&admission.seed.origin.attempt)
+            .expect("planned normalization seed owner")
+            .seed = Some(admission.seed);
+    }
+
     pub(crate) fn scope_usage(&self, scope: &str) -> GenerationUsageSummary {
         self.usage.get(scope).copied().unwrap_or_default()
     }
@@ -596,7 +661,20 @@ impl ModelRequests {
         json: Limits,
         schema: ValidationLimits,
     ) -> ContractResult<GenerationAdmission> {
-        let generation = Generation::read(field(record, "generation", line)?, line, json, schema)?;
+        let generation = Generation::read(
+            field(record, "generation", line)?,
+            line,
+            json,
+            schema,
+            |origin| {
+                self.attempts
+                    .get(&origin.attempt)
+                    .and_then(|attempt| attempt.seed.as_ref())
+                    .filter(|seed| &seed.origin == origin)
+                    .map(|seed| seed.history_call_ids.clone())
+                    .ok_or_else(|| refusal("generation has no recorded normalization seed"))
+            },
+        )?;
         let attempt = self
             .attempts
             .get(&generation.origin.attempt)
@@ -605,6 +683,7 @@ impl ModelRequests {
             || attempt.scope != generation.origin.scope
             || attempt.completed
             || attempt.generation.is_some()
+            || attempt.seed.is_none()
             || self.generation_ids.contains(&generation.id)
         {
             return Err(refusal(
@@ -735,6 +814,7 @@ impl ModelRequests {
             .get_mut(&admission.generation.origin.attempt)
             .expect("planned completion owner");
         attempt.generation = None;
+        attempt.seed = None;
         attempt.outcomes.clear();
         attempt.completed = true;
     }
@@ -900,6 +980,7 @@ mod tests {
                 ValidationLimits {
                     operations: 1_000_000,
                 },
+                |_| Ok(vec!["provider".to_string()]),
             )
             .unwrap();
             let mut completion = original_completion.clone();
@@ -1150,6 +1231,10 @@ mod tests {
                 "model_response" => {
                     let plan = state.plan_response(document.root(), 1).unwrap();
                     state.commit_response(plan);
+                }
+                "model_normalization_seed" => {
+                    let plan = state.plan_seed(document.root(), 1).unwrap();
+                    state.commit_seed(plan);
                 }
                 "model_generation" => {
                     let plan = state

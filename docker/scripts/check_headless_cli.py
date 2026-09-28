@@ -67,6 +67,44 @@ def require(condition: bool, message: str) -> None:
         raise SmokeFailure(message)
 
 
+def smoke_assistant_content(record: dict) -> dict:
+    """Project this fixture's accepted text and call from its raw generation."""
+    envelope = json.loads(record["generation"]["generation_json"])
+    observed_parts = []
+    for observation in envelope["observations"]:
+        calls = {entry["part_index"]: entry["normalized_id"] for entry in observation["call_ids"]}
+        candidates = observation["response"].get("candidates") or []
+        primary = candidates[0] if candidates else {}
+        for index, part in enumerate(primary.get("content", {}).get("parts", [])):
+            if "functionCall" in part:
+                require(index in calls, "canonical generation omitted a call identity")
+                if calls[index] is None:
+                    continue
+                call = dict(part["functionCall"])
+                call["id"] = calls[index]
+                observed_parts.append({**part, "functionCall": call})
+            else:
+                observed_parts.append(dict(part))
+    parts = []
+    thoughts = [part for part in observed_parts if part.get("thought")]
+    thought_text = "".join(part.get("text", "") for part in thoughts)
+    if thought_text:
+        signature = next((part["thoughtSignature"] for part in thoughts
+                          if part.get("thoughtSignature")), None)
+        parts.append({"text": thought_text, "thought": True,
+                      **({"thoughtSignature": signature} if signature else {})})
+    for part in observed_parts:
+        if part.get("thought") or part.get("text") == "":
+            continue
+        if (parts and set(parts[-1]) == {"text"} and set(part) == {"text"}):
+            parts[-1]["text"] += part["text"]
+        else:
+            require("text" in part or "functionCall" in part,
+                    "smoke fixture produced an unexpected model part")
+            parts.append(part)
+    return {"role": "model", "parts": parts}
+
+
 def certify(stdout: bytes, certifier: Path, events_path: Path) -> dict:
     with events_path.open("xb") as stream:
         os.fchmod(stream.fileno(), 0o600)
@@ -184,6 +222,14 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
     request_evidence = require_request_evidence(events, [request["raw_body"] for request in requests if request["path"] == "/v1/chat/completions"])
     require_output_ownership(events)
+    normalization_seeds = [event["normalization_seed"] for event in events
+                           if event["type"] == "model_normalization_seed"]
+    require(len(normalization_seeds) == 2 and
+            [seed["request_id"] for seed in normalization_seeds] ==
+            [request["request_id"] for request in request_evidence] and
+            normalization_seeds[0]["history_call_ids"] == [] and
+            "smoke_read" in normalization_seeds[1]["history_call_ids"],
+            "the two Chat generations lost their request-bound history seeds")
     response_evidence = require_response_evidence(events, [request for request in requests if request["path"] == "/v1/chat/completions"])
     require(all(response["event"]["status"] == "completed" for response in response_evidence if response["event"]["kind"] == "outcome"),
             "ordinary provider responses did not complete decoding; inspect the processing outcomes")
@@ -232,7 +278,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 8 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 13 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all(all(field not in event for field in
                     ("recordingVersion", "checkpointVersion", "historyRevision", "afterCommit"))
@@ -244,7 +290,8 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
                         for evidence in request_evidence if evidence["owner"]["kind"] == "chat"]
     fresh_assistants = [record for record in records
                         if record["type"] == "assistant" and record.get("subtype") is None]
-    require([record.get("origin") for record in fresh_assistants] == expected_origins,
+    require([json.loads(record["generation"]["generation_json"])["origin"]
+             for record in fresh_assistants] == expected_origins,
             "canonical assistant commits lost their exact producing attempts; inspect GeminiChat and the shared recorder")
     history = None
     edits = 0
@@ -267,9 +314,18 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
         elif record["type"] == "assistant" and record.get("subtype") is None:
             require(history is not None and record.get("historyLength") == len(history),
                     "assistant commit does not address its recorded history position")
-            history.append(record["message"])
+            history.append(smoke_assistant_content(record))
+        elif record["type"] == "model_normalization_seed":
+            require(history is not None, "normalization seed precedes the history checkpoint")
+            identities = list(dict.fromkeys(
+                part[owner]["id"] for content in history for part in content.get("parts", [])
+                for owner in ("functionCall", "functionResponse") if owner in part and part[owner].get("id")
+            ))
+            require(record["normalizationSeed"]["history_call_ids"] == identities,
+                    "normalization seed differs from the active canonical history")
     require(history is not None and edits >= 2, "both user and tool input need explicit history admission")
-    require(history[-1] == fresh_assistants[-1]["message"], "restored history lost the final assistant")
+    require(history[-1] == smoke_assistant_content(fresh_assistants[-1]),
+            "restored history lost the final assistant")
     restored_calls = [part["functionCall"] for content in history for part in content.get("parts", [])
                       if "functionCall" in part]
     restored_results = [part["functionResponse"] for content in history for part in content.get("parts", [])
@@ -284,10 +340,14 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             "canonical and stdout request evidence differ")
     require([r["modelResponse"] for r in records if r["type"] == "model_response"] == response_evidence,
             "canonical and stdout response evidence differ")
+    require([r["normalizationSeed"] for r in records if r["type"] == "model_normalization_seed"] ==
+            [e["normalization_seed"] for e in events if e["type"] == "model_normalization_seed"],
+            "canonical and stdout normalization seeds differ")
     parent = None
     for record in records:
         require(record["parentUuid"] == parent, "canonical transcript chain is incomplete")
-        if record["type"] in ("model_request", "model_response"):
+        if record["type"] in ("model_request", "model_response", "model_normalization_seed",
+                              "model_generation", "model_attempt_completion"):
             require("message" not in record, "request evidence entered replayable history")
         else:
             parent = record["uuid"]
@@ -300,11 +360,11 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(all(e["kv_scope"] == session for e in dispatches + usages), "durable generation ownership drifted")
     require(any(r.get("type") == "tool_result" and nonce in json.dumps(r) for r in records),
             "tool result was not recorded")
-    recorded_calls = [part["functionCall"] for record in records if record.get("type") == "assistant"
-                      for part in record["message"]["parts"] if "functionCall" in part]
+    recorded_calls = [part["functionCall"] for record in fresh_assistants
+                      for part in smoke_assistant_content(record)["parts"] if "functionCall" in part]
     require(recorded_calls == [{"id": uses[0]["id"], "name": uses[0]["name"], "args": uses[0]["input"]}],
             "canonical history rewrote the model's call; inspect assistant recording before testing resume")
-    require(records[-1]["type"] == "assistant" and records[-1]["message"]["parts"] ==
+    require(records[-1]["type"] == "assistant" and smoke_assistant_content(records[-1])["parts"] ==
             [{"text": "HEADLESS_SMOKE_OK " + nonce}], "final response was not recorded before exit")
     return {"check": "headless_cli", "status": "passed", "events": len(events),
             "transcript_records": len(records), "served_requests": 2, "real_tool_calls": 1,

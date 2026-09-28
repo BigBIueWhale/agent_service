@@ -744,6 +744,14 @@ print(json.dumps(found))
                 "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
         request_evidence = require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
         require_output_ownership(records)
+        seeds = [record["normalization_seed"] for record in records
+                 if record["type"] == "model_normalization_seed"]
+        require(len(seeds) == 2 and
+                [seed["request_id"] for seed in seeds] ==
+                [request["request_id"] for request in request_evidence] and
+                seeds[0]["history_call_ids"] == [] and
+                "composition_read" in seeds[1]["history_call_ids"],
+                "Chat normalization seeds lost the physical request or active call history")
         expected_attempts = {(evidence["kv_scope"], evidence["owner"]["attempt_id"])
                              for evidence in request_evidence if evidence["owner"]["kind"] == "chat"}
         observed_attempts = {(record["origin"]["kv_scope"], record["origin"]["attempt_id"])
@@ -761,7 +769,7 @@ print(json.dumps(found))
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v10.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v11.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")

@@ -466,6 +466,7 @@ struct AdmissionPlan {
     request_origin: Option<crate::model_requests::RequestOrigin>,
     request: Option<crate::model_requests::RequestAdmission>,
     response: Option<crate::model_requests::ResponseAdmission>,
+    seed: Option<crate::model_requests::SeedAdmission>,
     generation: Option<crate::model_requests::GenerationAdmission>,
     completion: Option<crate::model_requests::CompletionAdmission>,
     row: usize,
@@ -780,6 +781,9 @@ impl RuntimeContract {
         if let Some(response) = plan.response {
             self.requests.commit_response(response);
         }
+        if let Some(seed) = plan.seed {
+            self.requests.commit_seed(seed);
+        }
         if let Some(generation) = plan.generation {
             self.requests.commit_generation(generation);
         }
@@ -901,6 +905,7 @@ impl RuntimeContract {
         }
         let mut request = None;
         let mut response = None;
+        let mut seed = None;
         let mut generation = None;
         let mut completion = None;
         let mut additions = BTreeMap::new();
@@ -917,6 +922,9 @@ impl RuntimeContract {
             }
             EventKind::ModelResponse => {
                 response = Some(self.requests.plan_response(object, line)?);
+            }
+            EventKind::ModelNormalizationSeed => {
+                seed = Some(self.requests.plan_seed(object, line)?);
             }
             EventKind::ModelGeneration => {
                 let admission = self.requests.plan_generation(
@@ -1140,6 +1148,7 @@ impl RuntimeContract {
             },
             request,
             response,
+            seed,
             generation,
             completion,
             row,
@@ -1419,6 +1428,28 @@ mod tests {
         }
         assert!(owner.tool_uses.contains_key("provider__qwen_dup_2"));
         owner
+    }
+    #[test]
+    fn generation_requires_its_normalization_seed() {
+        for missing in [true, false] {
+            let mut rows = fixture();
+            if missing {
+                rows.retain(|row| row["type"] != "model_normalization_seed");
+            } else {
+                let seed = rows
+                    .iter_mut()
+                    .find(|row| row["type"] == "model_normalization_seed")
+                    .unwrap();
+                seed["normalization_seed"]["history_call_ids"] = serde_json::json!([]);
+            }
+            let mut reader = owner();
+            let refusal = rows
+                .iter()
+                .find_map(|row| admit(&mut reader, &row.to_string()).err())
+                .expect("forged generation must be refused")
+                .to_string();
+            assert!(refusal.contains("normalization seed") || refusal.contains("history seed"));
+        }
     }
     #[test]
     fn structured_result_requires_the_returned_accepted_tool_arguments() {

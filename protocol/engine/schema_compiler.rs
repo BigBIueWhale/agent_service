@@ -768,10 +768,10 @@ mod tests {
     fn owned_vocabulary_inventory_is_complete() {
         let compiled = compile(SOURCE).unwrap();
         let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
-        assert_eq!(inventory["object_schemas"], 675);
-        assert_eq!(inventory["false_schemas"], 97);
+        assert_eq!(inventory["object_schemas"], 687);
+        assert_eq!(inventory["false_schemas"], 99);
         assert_eq!(inventory["keywords"].as_object().unwrap().len(), 25);
-        assert_eq!(inventory["references"].as_array().unwrap().len(), 46);
+        assert_eq!(inventory["references"].as_array().unwrap().len(), 48);
         assert!(!compiled.rust.is_empty());
         assert_eq!(
             compiled.discriminators["EventKind"],
@@ -783,6 +783,7 @@ mod tests {
                 "stream_event",
                 "model_request",
                 "model_response",
+                "model_normalization_seed",
                 "model_generation",
                 "model_attempt_completion",
             ]
