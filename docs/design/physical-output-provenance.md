@@ -32,6 +32,20 @@ projection and refusal assertions. All 761 Python unit cases passed in the
 authoring source. This does not qualify the SDK's packaged execution, the
 native certifier, or deployed output.
 
+An executed probe of the installed OpenAI SDK 5.11 yielded one JSON value for
+an SSE `data:` line beginning with a UTF-8 byte order mark, including when that
+line followed a completed earlier event. Two consecutive marks at one line's
+start yielded no value. Its line decoder calls a fresh `TextDecoder` for each
+physical line, so each line loses exactly one leading mark. The native value
+counter now removes one mark from each buffered line; the Python counter uses
+`utf-8-sig` for each line; and the TypeScript replay decodes the body while
+retaining marks, then removes one from each line. Focused TypeScript SDK
+differential tests passed for the initial, later and doubled cases, and the
+focused Python generation test module passed 70 cases. Native behavior follows
+from source inspection and an authored Rust test; it remains unverified by
+execution pending the owner's gates. This is SDK value-count parity, not full
+physical-to-generation proof.
+
 Generation-envelope counters also require exact numeric interpretation. A
 rehashed envelope could spell an observed count as
 `12.00000000000000001`: Java and native source retain the nonzero fraction,
@@ -172,11 +186,12 @@ comparison for its root readers; the remaining readers and normalization
 mapping still need the same proof.
 
 A deterministic source differential test compared the retained-response SSE
-parser with the pinned OpenAI SDK on 1,041 combinations of complete, trailing,
-mixed-newline and malformed frames. Both cases passed; no parser divergence was
-observed in that bounded corpus. This supports the TypeScript frame boundary
-used by replay but does not prove converter equivalence for every provider
-value, physical output membership in native/Python/Java, or a deployed response.
+parser with the pinned OpenAI SDK on 1,044 combinations of complete, trailing,
+mixed-newline, malformed and byte-order-mark frames. All three cases passed;
+no parser divergence was observed in that bounded corpus. This supports the
+TypeScript frame boundary used by replay but does not prove converter
+equivalence for every provider value, physical output membership in
+native/Python/Java, or a deployed response.
 
 ## Executed event-attribution cases
 

@@ -8427,6 +8427,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "export function parseRecordedOpenAIValues(",
         "transport.status === 204",
         "mediaType?.includes('application/json')",
+        "new TextDecoder('utf-8', { ignoreBOM: true }).decode(body)",
+        "rawLine.startsWith('\\uFEFF') ? rawLine.slice(1) : rawLine",
         "parseRecordedOpenAIValues(body, policy.mode, transport)",
         "export function replayRecordedOpenAIObservations(",
         "export function verifyRecordedOpenAIGeneration(",
@@ -8451,6 +8453,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.differential.test.ts", (
         "Stream.fromSSEResponse<unknown>(",
+        "decodes one leading byte order mark on every SSE line",
         "parseRecordedOpenAIValues(bytes, 'stream', {",
         "compares complete and trailing frames under varied line boundaries",
         "compares mixed line endings and binary prefixes",
@@ -8843,6 +8846,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
+        'self.line.decode("utf-8-sig", "replace")',
         'hashlib.sha256(raw).hexdigest() == request["body_sha256"]',
         'stream == (request["decode_policy"]["mode"] == "stream")',
         'model == request["decode_policy"]["model"]',

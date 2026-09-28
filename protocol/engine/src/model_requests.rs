@@ -127,7 +127,14 @@ impl SseValues {
     }
 
     fn finish_line(&mut self) {
-        let line = String::from_utf8_lossy(&self.line).into_owned();
+        // The pinned SDK decodes each SSE line with a fresh TextDecoder, which
+        // removes one leading UTF-8 byte order mark from every physical line.
+        let line = String::from_utf8_lossy(
+            self.line
+                .strip_prefix(&[0xef, 0xbb, 0xbf])
+                .unwrap_or(&self.line),
+        )
+        .into_owned();
         self.line.clear();
         if line.is_empty() {
             self.finish_event();
@@ -1143,6 +1150,21 @@ mod tests {
             .require_prefix(1, false, Some(204), Some("application/json"))
             .unwrap();
         assert!(empty.require_prefix(1, false, None, None).is_err());
+    }
+    #[test]
+    fn physical_value_reader_decodes_each_sse_line_like_the_sdk() {
+        let mut stream = ResponseValues::new(true);
+        stream.push(&[0xef]);
+        stream.push(b"\xbb\xbfdata: {\"id\":1}\n\n\xef\xbb\xbfdata: {\"id\":2}\n\n");
+        stream
+            .require_prefix(2, true, Some(200), Some("text/event-stream"))
+            .unwrap();
+
+        let mut double_bom = ResponseValues::new(true);
+        double_bom.push(b"\xef\xbb\xbf\xef\xbb\xbfdata: {\"id\":1}\n\n");
+        double_bom
+            .require_prefix(0, true, Some(200), Some("text/event-stream"))
+            .unwrap();
     }
     #[test]
     fn selected_decoder_mode_must_match_the_request_body() {

@@ -352325,7 +352325,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,889 @@
+@@ -0,0 +1,888 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -352387,7 +352387,6 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    failed: bool = False
 +    done: bool = False
 +    after_cr: bool = False
-+    first_line: bool = True
 +
 +    def push(self, chunk: bytes) -> None:
 +        for byte in chunk:
@@ -352406,8 +352405,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                self.line.append(byte)
 +
 +    def _finish_line(self) -> None:
-+        line = self.line.decode("utf-8-sig" if self.first_line else "utf-8", "replace")
-+        self.first_line = False
++        # The pinned SDK decodes each SSE line separately with a fresh decoder.
++        line = self.line.decode("utf-8-sig", "replace")
 +        self.line.clear()
 +        if not line:
 +            self._finish_event()
@@ -410541,7 +410540,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,258 @@
 +import { isDeepStrictEqual } from 'node:util';
 +import type OpenAI from 'openai';
 +import {
@@ -410594,7 +410593,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +    transport.status >= 300
 +  )
 +    return { values: [], failure: null };
-+  const text = new TextDecoder().decode(body);
++  const text =
++    mode === 'stream'
++      ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(body)
++      : new TextDecoder().decode(body);
 +  if (mode === 'nonstream') {
 +    if (transport.status === 204) return { values: [null], failure: null };
 +    const mediaType = transport.content_type?.split(';')[0]?.trim();
@@ -410614,7 +410616,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  const values: unknown[] = [];
 +  let event: string | null = null;
 +  let data: string[] = [];
-+  for (const line of lines) {
++  for (const rawLine of lines) {
++    // The SDK decodes each SSE line separately, removing one leading BOM.
++    const line = rawLine.startsWith('\uFEFF') ? rawLine.slice(1) : rawLine;
 +    if (line !== '') {
 +      if (line.startsWith(':')) continue;
 +      const colon = line.indexOf(':');
@@ -411586,7 +411590,7 @@ diff --git a/packages/cli/src/utils/output-writer.test.ts b/packages/cli/src/uti
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,145 @@
 +import { describe, expect, it, vi } from 'vitest';
 +// eslint-disable-next-line import/no-internal-modules
 +import { Stream } from 'openai/streaming';
@@ -411608,6 +411612,45 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +}
 +
 +describe('retained SSE replay agrees with the pinned SDK on response frames', () => {
++  it('decodes one leading byte order mark on every SSE line', async () => {
++    const cases = [
++      {
++        body: Buffer.concat([
++          Buffer.from([0xef, 0xbb, 0xbf]),
++          Buffer.from('data: {"n":1}\n\n'),
++        ]),
++        values: [{ n: 1 }],
++      },
++      {
++        body: Buffer.concat([
++          Buffer.from('data: {"n":1}\n\n'),
++          Buffer.from([0xef, 0xbb, 0xbf]),
++          Buffer.from('data: {"n":2}\n\n'),
++        ]),
++        values: [{ n: 1 }, { n: 2 }],
++      },
++      {
++        body: Buffer.concat([
++          Buffer.from([0xef, 0xbb, 0xbf, 0xef, 0xbb, 0xbf]),
++          Buffer.from('data: {"n":1}\n\n'),
++        ]),
++        values: [],
++      },
++    ];
++    for (const { body, values } of cases) {
++      const sdk = await sdkValues(body);
++      const replay = parseRecordedOpenAIValues(body, 'stream', {
++        status: 200,
++        content_type: 'text/event-stream',
++      });
++      expect(sdk).toEqual({ values, failed: false });
++      expect({
++        values: replay.values,
++        failed: replay.failure !== null,
++      }).toEqual(sdk);
++    }
++  });
++
 +  it('compares complete and trailing frames under varied line boundaries', async () => {
 +    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
 +    try {
@@ -420340,7 +420383,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
-@@ -0,0 +1,848 @@
+@@ -0,0 +1,857 @@
 +from __future__ import annotations
 +
 +import base64
@@ -420627,6 +420670,15 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    failed.require_prefix(1, False, 200, "text/event-stream")
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
 +        failed.require_prefix(1, True, 200, "text/event-stream")
++
++    bom = _ResponseValues(True)
++    bom.push(b"\xef")
++    bom.push(b'\xbb\xbfdata: {"id":1}\n\n\xef\xbb\xbfdata: {"id":2}\n\n')
++    bom.require_prefix(2, True, 200, "text/event-stream")
++
++    double_bom = _ResponseValues(True)
++    double_bom.push(b'\xef\xbb\xbf\xef\xbb\xbfdata: {"id":1}\n\n')
++    double_bom.require_prefix(0, True, 200, "text/event-stream")
 +
 +
 +@pytest.mark.parametrize(
