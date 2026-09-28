@@ -121,8 +121,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "e9fec209337f490cc8deab1149cf5b16ff3b69116155d3e8eb297eef58c5a073",
-      "source_patch_manifest_sha256": "e0fb064537718efd21b2452b31ba0453b1c0fe11936279357c2338527f500540"
+      "patch_sha256": "44a2c7ec62065eb0c5acfd3f491e4b881b76bc330a74c9c383925cdd7cf170e0",
+      "source_patch_manifest_sha256": "c778c99b684b7a166e2f3529aa39cd6d1f1e4c6c7a0383525e54d6e6c9e9281f"
     }
   },
   "backend": {

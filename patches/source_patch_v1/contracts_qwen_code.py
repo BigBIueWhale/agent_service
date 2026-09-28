@@ -8542,6 +8542,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "export function requireModelNormalizationSeed(",
         "observeSeed(value: unknown): ModelNormalizationSeed",
         "generation has no recorded normalization seed",
+        "requireRecordedNormalization(envelope, attempt.seed)",
+        "generation normalization contradicts its recorded history seed",
         "exactIntegerLexeme(source)",
         "a decoded integer differs from its recorded JSON spelling",
         "recordGenerationSource(", "takeGenerationSource(chunk)",
@@ -8560,6 +8562,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "source_request_id: sourceRequestId",
         "the stream ends with an incomplete logical attempt",
     ), label=label)
+    require_text(state, core + "core/model-generation-mapping.test.ts",
+                 "derives prepared and generated call IDs from the recorded history seed",
+                 label=label)
     _require_ordered(
         _source(state, core + "core/model-request-evidence.ts", label=label).split(
             "recordCompletion(", 1

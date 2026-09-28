@@ -320,9 +320,11 @@ replay the selected decoder from retained bytes and compare the raw response,
 incomplete calls and provider preparation identities. Stream contract v11
 records the exact history call-ID set at the Chat normalizer's start boundary.
 The TypeScript root reader replays the same normalizer against the retained
-physical response and that seed. Native, Python and Java admission derive the
-expected duplicate suffixes and generated IDs from the seed, but still do not
-decode physical response bytes. These are source-level findings; the v11
+physical response and that seed. TypeScript logical replay also derives the
+expected duplicate suffixes and generated IDs from the seed before admitting
+a generation, including when it cannot access a physical response. Native,
+Python and Java admission derive those IDs too, but still do not decode
+physical response bytes. These are source-level findings; the v11
 build and native gates remain unrun in this workspace.
 Source inspection narrows the required seed boundary. `processStreamResponse`
 constructs `GenerationObservationNormalizer(this.history)` before consuming
@@ -409,11 +411,14 @@ responses, early cancellation, malformed-call diagnostics and rehashed text or
 body substitutions. A deterministic 600-body local parser probe matched the
 pinned SDK's SSE value boundaries; it is not a proof for every transport shape.
 The native certifier, Python and Java readers, utility consumer receipts,
-standalone child proof and normalized ID derivation remain open. A local
-rehashed replacement of a preparation's normalized ID and its matching call
-mapping was admitted by the TypeScript stream reader while the raw provider ID
-stayed unchanged. No compiler, native certifier, deployed provider or release
-gate has verified the full repair.
+standalone child proof remain open. The earlier local rehashed replacement of
+a preparation's normalized ID and its matching call mapping exposed the
+TypeScript logical reader's missing seed derivation. The current source uses
+the live normalizer for that check and has authored prepared and generated-ID
+forgery tests; Node was unavailable, so those tests remain unexecuted. This
+does not establish the byte-to-observation relation for readers without
+physical response replay. No compiler, native certifier, deployed provider or
+release gate has verified the full repair.
 
 ## Provider coverage at the request boundary
 

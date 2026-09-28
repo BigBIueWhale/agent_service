@@ -386040,12 +386040,13 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/core/src/core/model-generation-mapping.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-mapping.test.ts
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,418 @@
 +import { describe, expect, it } from 'vitest';
 +import type { GenerateContentResponse, Part } from '@google/genai';
 +import {
 +  freezeModelGeneration,
 +  GenerationObservationNormalizer,
++  ModelGenerationReplay,
 +  recordGenerationSource,
 +  readModelGeneration,
 +  generationHistory,
@@ -386063,7 +386064,10 @@ diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/
 +} from './tool-call-preparation.js';
 +import {
 +  generationInput,
++  normalizationSeed,
 +  observation,
++  rehash,
++  request,
 +  sha256,
 +} from '../test-utils/model-generation-fixture.js';
 +
@@ -386138,6 +386142,55 @@ diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/
 +}
 +
 +describe('generation positional call identities', () => {
++  it('derives prepared and generated call IDs from the recorded history seed', () => {
++    const prepared = freezeModelGeneration(
++      'journal-A',
++      repeatedCalls().input,
++    );
++    const admit = (
++      evidence: ReturnType<typeof freezeModelGeneration>,
++      historyCallIds: readonly string[],
++    ) => {
++      const replay = new ModelGenerationReplay();
++      replay.observeRequest(request('r1'));
++      replay.observeSeed(normalizationSeed('r1', historyCallIds));
++      return replay.observeGeneration(evidence);
++    };
++    expect(() => admit(prepared, ['provider'])).not.toThrow();
++
++    const changedPreparation = structuredClone(readModelGeneration(prepared));
++    Object.assign(
++      changedPreparation.observations[0]!.tool_call_preparations[0]!,
++      { callId: 'provider__qwen_dup_9' },
++    );
++    Object.assign(changedPreparation.observations[0]!.call_ids[0]!, {
++      normalized_id: 'provider__qwen_dup_9',
++    });
++    const forgedPreparation = rehash(changedPreparation, prepared);
++    expect(() => readModelGeneration(forgedPreparation)).not.toThrow();
++    expect(() => admit(forgedPreparation, ['provider'])).toThrow(
++      'generation normalization contradicts its recorded history seed',
++    );
++
++    const unprepared = freezeModelGeneration(
++      'journal-A',
++      generationInput([
++        observation([call(undefined)], [
++          { part_index: 0, normalized_id: 'call_qwen_1' },
++        ]),
++      ]),
++    );
++    expect(() => admit(unprepared, [])).not.toThrow();
++    const changedGenerated = structuredClone(readModelGeneration(unprepared));
++    Object.assign(changedGenerated.observations[0]!.call_ids[0]!, {
++      normalized_id: 'call_qwen_9',
++    });
++    const forgedGenerated = rehash(changedGenerated, unprepared);
++    expect(() => readModelGeneration(forgedGenerated)).not.toThrow();
++    expect(() => admit(forgedGenerated, [])).toThrow(
++      'generation normalization contradicts its recorded history seed',
++    );
++  });
 +  it('keeps raw provider calls in evidence while delivering normalized preparations and no early executable call', () => {
 +    const normalizer = new GenerationObservationNormalizer([
 +      { role: 'model', parts: [call('provider')] },
@@ -386611,7 +386664,7 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core/model-generation.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation.ts
-@@ -0,0 +1,1061 @@
+@@ -0,0 +1,1103 @@
 +import {
 +  restoreProviderToolCallId,
 +  collectToolCallIdsFromHistory,
@@ -387205,6 +387258,47 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +  return decoded;
 +}
 +
++/** Recreate Chat's tool identities from the seed recorded before delivery. */
++function requireRecordedNormalization(
++  envelope: GenerationEnvelope,
++  seed: ModelNormalizationSeed,
++): void {
++  const normalizer = new GenerationObservationNormalizer(
++    [],
++    seed.history_call_ids,
++  );
++  for (const observation of envelope.observations) {
++    const expected = normalizer.normalizeObservation({
++      response: structuredClone(observation.response),
++      incomplete_tool_calls: structuredClone(observation.incomplete_tool_calls),
++      tool_call_preparations: observation.tool_call_preparations.map(
++        ({ provider_call_id, toolName }) => ({
++          callId: provider_call_id,
++          toolName,
++        }),
++      ),
++    });
++    const preparations = observation.tool_call_preparations;
++    const calls = observation.call_ids;
++    if (
++      expected.tool_call_preparations.length !== preparations.length ||
++      expected.tool_call_preparations.some(
++        (item, index) =>
++          item.provider_call_id !== preparations[index]?.provider_call_id ||
++          item.callId !== preparations[index]?.callId ||
++          item.toolName !== preparations[index]?.toolName,
++      ) ||
++      expected.call_ids.length !== calls.length ||
++      expected.call_ids.some(
++        (item, index) =>
++          item.part_index !== calls[index]?.part_index ||
++          item.normalized_id !== calls[index]?.normalized_id,
++      )
++    )
++      refuse('generation normalization contradicts its recorded history seed');
++  }
++}
++
 +export function generationParts(envelope: GenerationEnvelope): Part[] {
 +  return envelope.observations.flatMap(
 +    ({ response }) => response.candidates?.[0]?.content?.parts ?? [],
@@ -387573,6 +387667,7 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +      this.generationIds.has(evidence.generation_id)
 +    )
 +      return refuse('generation has no unique open logical request owner');
++    requireRecordedNormalization(envelope, attempt.seed);
 +    attempt.generation = { evidence: Object.freeze({ ...evidence }) };
 +    this.generationIds.add(evidence.generation_id);
 +    return envelope;
