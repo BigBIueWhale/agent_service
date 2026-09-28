@@ -9011,6 +9011,30 @@ def _validate_served_accounting_after(state: State) -> None:
         "result.refusals.map((refusal) => refusal.message)",
         "reachedEnd && diagnostics.length === 0", "externalSessionListDiagnostics",
     ), label=label)
+    _require_all(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts", (
+        "response.partial !== undefined", "response.replayError !== undefined",
+        "error instanceof RequestError && error.code === -32601",
+        "if (!useStandardLoad)",
+        "!response.updates.every(isRecord)",
+        "Cannot present partial Qwen history for session",
+    ), label=label)
+    forbid_text(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts",
+                "response.updates.filter(isRecord)", label=label)
+    _require_all(state, "packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts", (
+        "refuses a partial history reply without falling back to another reader",
+        "recording refusal", "RequestError.methodNotFound('qwen/session/loadUpdates')",
+    ), label=label)
+    _require_all(state, "packages/desktop/packages/server-core/src/sessions/SessionManager.ts", (
+        "Cannot inspect Qwen history for session",
+        "retain its local mirror and inspect the canonical recording",
+        "Qwen history reader returned no result",
+        "Cannot load complete Qwen history for session",
+        "if (this.isQwenCanonicalMessageSession(managed))",
+    ), label=label)
+    _require_all(state, "packages/desktop/packages/server-core/src/sessions/qwen-native-history.test.ts", (
+        "retains a Qwen placeholder mirror when canonical history inspection fails",
+        "does not mark failed Qwen canonical history as loaded and retries it",
+    ), label=label)
     _require_all(state, "packages/vscode-ide-companion/src/services/qwenAgentManager.ts", (
         "readAcpSessionListMetadata(response._meta)",
         "requireCompleteSessionList({ ...page, truncated: page.incomplete })",

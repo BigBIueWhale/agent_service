@@ -341631,15 +341631,16 @@ diff --git a/packages/core/src/utils/sessionStorageUtils.ts b/packages/core/src/
 diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts b/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts
 --- a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts
 +++ b/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts
-@@ -1,6 +1,7 @@
+@@ -1,6 +1,8 @@
 +import { CHAT_RECORDING_VERSION } from '@qwen-code/qwen-code-core/transcriptRecords';
++import { RequestError } from '@agentclientprotocol/sdk';
  import { afterEach, describe, expect, it, mock } from 'bun:test';
  import {
    mkdirSync,
    mkdtempSync,
    readFileSync,
    rmSync,
-@@ -783,12 +784,13 @@
+@@ -783,12 +785,13 @@
            phase: 'invocation',
            rawCommand: '/model',
            hiddenInvocation: true,
@@ -341653,7 +341654,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T07:36:40.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -796,12 +798,13 @@
+@@ -796,12 +799,13 @@
            phase: 'result',
            rawCommand: '/model',
            outputHistoryItems: [],
@@ -341667,7 +341668,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T07:36:41.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -819,12 +822,13 @@
+@@ -819,12 +823,13 @@
          timestamp: insightInvocation,
          type: 'system',
          subtype: 'slash_command',
@@ -341681,7 +341682,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: insightResult,
          type: 'system',
          subtype: 'slash_command',
-@@ -837,12 +841,13 @@
+@@ -837,12 +842,13 @@
                text: 'This may take a couple minutes. Sit tight!',
              },
            ],
@@ -341695,7 +341696,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T07:36:54.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -855,12 +860,13 @@
+@@ -855,12 +861,13 @@
                text: 'Theme changes are disabled when NO_COLOR is set.',
              },
            ],
@@ -341709,7 +341710,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T07:36:55.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -937,12 +943,13 @@
+@@ -937,12 +944,13 @@
          timestamp: recapInvocation,
          type: 'system',
          subtype: 'slash_command',
@@ -341723,7 +341724,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T08:00:01.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -950,20 +957,22 @@
+@@ -950,20 +958,22 @@
            phase: 'result',
            rawCommand: '/recap',
            outputHistoryItems: [{ type: 'info', text: 'Manual recap' }],
@@ -341746,7 +341747,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T08:00:03.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -971,21 +980,23 @@
+@@ -971,21 +981,23 @@
            phase: 'result',
            rawCommand: '/recap',
            outputHistoryItems: [{ type: 'info', text: 'Automatic recap' }],
@@ -341770,7 +341771,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T08:01:01.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -993,12 +1004,13 @@
+@@ -993,12 +1005,13 @@
            phase: 'result',
            rawCommand: '/doctor',
            outputHistoryItems: [],
@@ -341784,7 +341785,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T08:01:02.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -1058,12 +1070,13 @@
+@@ -1058,12 +1071,13 @@
          timestamp: recapInvocation,
          type: 'system',
          subtype: 'slash_command',
@@ -341798,7 +341799,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T09:00:01.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -1071,20 +1084,22 @@
+@@ -1071,20 +1085,22 @@
            phase: 'result',
            rawCommand: '/recap',
            outputHistoryItems: [{ type: 'info', text: 'Manual recap' }],
@@ -341821,7 +341822,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-03-25T09:10:00.000Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -1208,12 +1223,13 @@
+@@ -1208,12 +1224,13 @@
      tempRoots.push(runtimeRoot, cwd);
      process.env.QWEN_RUNTIME_DIR = runtimeRoot;
  
@@ -341835,7 +341836,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-30T08:02:52.927Z',
          type: 'user',
          cwd,
-@@ -1266,22 +1282,24 @@
+@@ -1266,22 +1283,24 @@
      tempRoots.push(runtimeRoot, persistenceCwd, logicalCwd);
      process.env.QWEN_RUNTIME_DIR = runtimeRoot;
  
@@ -341860,7 +341861,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-30T08:02:53.927Z',
          type: 'system',
          subtype: 'user_text_elements',
-@@ -1354,22 +1372,24 @@
+@@ -1354,22 +1373,24 @@
      const cwd = mkdtempSync(join(tmpdir(), 'qwen-cwd-'));
      tempRoots.push(runtimeRoot, cwd);
      process.env.QWEN_RUNTIME_DIR = runtimeRoot;
@@ -341885,7 +341886,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
        timestamp: '2026-04-30T08:02:53.927Z',
        type: 'user',
        cwd,
-@@ -1499,12 +1519,13 @@
+@@ -1499,12 +1520,13 @@
      tempRoots.push(runtimeRoot, cwd);
      process.env.QWEN_RUNTIME_DIR = runtimeRoot;
  
@@ -341899,7 +341900,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-30T08:02:52.927Z',
          type: 'user',
          cwd,
-@@ -1557,12 +1578,13 @@
+@@ -1557,12 +1579,13 @@
      tempRoots.push(runtimeRoot, cwd);
      process.env.QWEN_RUNTIME_DIR = runtimeRoot;
  
@@ -341913,7 +341914,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-30T08:02:52.927Z',
          type: 'user',
          cwd,
-@@ -1614,22 +1636,24 @@
+@@ -1614,22 +1637,24 @@
      tempRoots.push(runtimeRoot, cwd);
      process.env.QWEN_RUNTIME_DIR = runtimeRoot;
  
@@ -341938,7 +341939,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-30T08:02:53.927Z',
          type: 'system',
          subtype: 'user_text_elements',
-@@ -1692,12 +1716,13 @@
+@@ -1692,12 +1717,13 @@
          timestamp: '2026-04-29T05:30:26.198Z',
          type: 'system',
          subtype: 'slash_command',
@@ -341952,7 +341953,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-29T05:30:26.335Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -1775,12 +1800,13 @@
+@@ -1775,12 +1801,13 @@
          timestamp: '2026-04-29T05:30:26.198Z',
          type: 'system',
          subtype: 'slash_command',
@@ -341966,7 +341967,109 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-04-29T05:30:26.335Z',
          type: 'system',
          subtype: 'slash_command',
-@@ -2674,12 +2700,13 @@
+@@ -2269,12 +2296,101 @@
+     ]);
+     expect(result.messages.map((message) => message.timestamp)).toEqual([
+       1_000, 2_000,
+     ]);
+   });
+ 
++  it('refuses a partial history reply without falling back to another reader', async () => {
++    const cwd = mkdtempSync(join(tmpdir(), 'qwen-cwd-'));
++    tempRoots.push(cwd);
++
++    const agent = createAgent(cwd);
++    const internals = agent as unknown as QwenAvailableCommandsInternals;
++    internals.ensureProcess = async () => {};
++    const calledMethods: string[] = [];
++    internals.callAcp = async (method, execute) => {
++      calledMethods.push(method);
++      return execute({
++        extMethod: async () => ({
++          updates: [
++            {
++              sessionUpdate: 'user_message_chunk',
++              content: { type: 'text', text: 'incomplete prefix' },
++            },
++          ],
++          partial: true,
++          replayError: 'replay boom',
++        }),
++        loadSession: async () => {
++          throw new Error('session/load must not hide partial history');
++        },
++      });
++    };
++
++    await expect(
++      agent.loadSessionMessages('qwen-session', { cwd }),
++    ).rejects.toThrow(/partial Qwen history.*replay boom/);
++    expect(calledMethods).toEqual(['ext/qwen/session/loadUpdates']);
++    agent.destroy();
++  });
++
++  it('refuses malformed history and reader failures, but loads through an older reader when the extension is absent', async () => {
++    const cwd = mkdtempSync(join(tmpdir(), 'qwen-cwd-'));
++    tempRoots.push(cwd);
++
++    const agent = createAgent(cwd);
++    const internals = agent as unknown as QwenAvailableCommandsInternals;
++    internals.ensureProcess = async () => {};
++    const calledMethods: string[] = [];
++    let reply: 'malformed' | 'invalid-container' | 'failed' | 'absent' = 'malformed';
++    internals.callAcp = async (method, execute) => {
++      calledMethods.push(method);
++      return execute({
++        extMethod: async () => {
++          if (reply === 'failed') throw new Error('recording refusal');
++          if (reply === 'absent')
++            throw RequestError.methodNotFound('qwen/session/loadUpdates');
++          if (reply === 'invalid-container')
++            return [] as unknown as Record<string, unknown>;
++          return { updates: ['not a record'] };
++        },
++        loadSession: async () => ({ models: {}, modes: {} }),
++      });
++    };
++
++    await expect(
++      agent.loadSessionMessages('qwen-session', { cwd }),
++    ).rejects.toThrow(/Invalid Qwen history reply/);
++    expect(calledMethods).toEqual(['ext/qwen/session/loadUpdates']);
++
++    calledMethods.length = 0;
++    reply = 'invalid-container';
++    await expect(
++      agent.loadSessionMessages('qwen-session', { cwd }),
++    ).rejects.toThrow(/Invalid Qwen history reply/);
++    expect(calledMethods).toEqual(['ext/qwen/session/loadUpdates']);
++
++    calledMethods.length = 0;
++    reply = 'failed';
++    await expect(
++      agent.loadSessionMessages('qwen-session', { cwd }),
++    ).rejects.toThrow(/recording refusal/);
++    expect(calledMethods).toEqual(['ext/qwen/session/loadUpdates']);
++
++    calledMethods.length = 0;
++    reply = 'absent';
++    await expect(
++      agent.loadSessionMessages('qwen-session', { cwd }),
++    ).resolves.toMatchObject({ messages: [] });
++    expect(calledMethods).toEqual([
++      'ext/qwen/session/loadUpdates',
++      'session/load',
++    ]);
++    agent.destroy();
++  });
++
+   it('does not re-add hook-expanded transcript users after ACP history replay', async () => {
+     const cwd = mkdtempSync(join(tmpdir(), 'qwen-cwd-'));
+     const runtimeRoot = mkdtempSync(join(tmpdir(), 'qwen-runtime-'));
+     tempRoots.push(cwd, runtimeRoot);
+     process.env.QWEN_RUNTIME_DIR = runtimeRoot;
+ 
+@@ -2674,12 +2790,13 @@
          message: {
            role: 'user',
            parts: [{ text: '调用 sub agent 帮我看看仓库' }],
@@ -341980,7 +342083,7 @@ diff --git a/packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-sla
          timestamp: '2026-05-09T16:38:21.458Z',
          type: 'assistant',
          message: {
-@@ -2697,12 +2724,13 @@
+@@ -2697,12 +2814,13 @@
                },
              },
            ],
@@ -378155,7 +378258,58 @@ diff --git a/packages/desktop/packages/server-core/src/sessions/SessionManager.t
      workspace: Workspace,
      backendContext: ReturnType<typeof resolveBackendContext>,
    ): AgentBackend {
-@@ -3955,20 +3972,23 @@
+@@ -2939,20 +2956,34 @@
+ 
+     return sanitized.substring(0, 150) || undefined
+   }
+ 
+   private async loadExternalListedMessages(
+     info: BackendSessionInfo,
++    connectionSlug: string,
+     loadMessages?: (
+       info: BackendSessionInfo,
+     ) => Promise<BackendSessionMessagesPayload | undefined>,
+   ): Promise<BackendSessionMessagesResult | undefined> {
+-    if (!loadMessages) return undefined
+     try {
+-      return normalizeBackendSessionMessages(await loadMessages(info))
++      if (!loadMessages) {
++        if (connectionSlug !== QWEN_CODE_CONNECTION_SLUG) return undefined
++        throw new Error('Qwen history reader is unavailable')
++      }
++      const result = normalizeBackendSessionMessages(await loadMessages(info))
++      if (!result && connectionSlug === QWEN_CODE_CONNECTION_SLUG) {
++        throw new Error('Qwen history reader returned no result')
++      }
++      return result
+     } catch (error) {
++      if (connectionSlug === QWEN_CODE_CONNECTION_SLUG) {
++        throw new Error(
++          `Cannot inspect Qwen history for session ${info.sessionId}; retain its local mirror and inspect the canonical recording before refreshing the catalog.`,
++          { cause: error },
++        )
++      }
+       sessionLog.debug(
+         `Failed to inspect provider-native session ${info.sessionId}:`,
+         error,
+       )
+       return undefined
+     }
+@@ -3242,12 +3273,13 @@
+     if (
+       this.isExternalSessionPlaceholderTitle(title) &&
+       this.shouldInspectExternalPlaceholderSession(managed)
+     ) {
+       inspectedResult = await this.loadExternalListedMessages(
+         info,
++        connectionSlug,
+         loadMessages,
+       )
+       const inspectedMessages = inspectedResult?.messages
+ 
+       if (!inspectedMessages || inspectedMessages.length === 0) {
+         if (
+@@ -3955,20 +3987,23 @@
      )
    }
  
@@ -378179,6 +378333,41 @@ diff --git a/packages/desktop/packages/server-core/src/sessions/SessionManager.t
    /**
     * Get a single session by ID with all messages loaded.
     * Used for lazy loading session messages when session is selected.
+@@ -4217,12 +4252,15 @@
+             cwd: this.resolveQwenCanonicalCwd(managed),
+           })
+         }),
+       )
+ 
+       if (!result) {
++        if (this.isQwenCanonicalMessageSession(managed)) {
++          throw new Error('Qwen history reader is unavailable')
++        }
+         sessionLog.debug(
+           `Provider-native message loader unavailable for session ${managed.id} (connection=${managed.llmConnection ?? 'unset'}, sdkSessionId=${managed.sdkSessionId})`,
+         )
+         return 'unavailable'
+       }
+       this.applyAvailableCommandsFromMessagesResult(
+@@ -4244,12 +4282,18 @@
+ 
+       sessionLog.info(
+         `Loaded ${messages.length} provider-native message(s) for session ${managed.id}`,
+       )
+       return 'loaded'
+     } catch (error) {
++      if (this.isQwenCanonicalMessageSession(managed)) {
++        throw new Error(
++          `Cannot load complete Qwen history for session ${managed.sdkSessionId}; inspect the canonical recording and retry.`,
++          { cause: error },
++        )
++      }
+       sessionLog.warn(
+         `Failed to load provider-native messages for session ${managed.id}:`,
+         error,
+       )
+       return 'failed'
+     }
 diff --git a/packages/desktop/packages/server-core/src/sessions/qwen-native-history.test.ts b/packages/desktop/packages/server-core/src/sessions/qwen-native-history.test.ts
 --- a/packages/desktop/packages/server-core/src/sessions/qwen-native-history.test.ts
 +++ b/packages/desktop/packages/server-core/src/sessions/qwen-native-history.test.ts
@@ -378272,7 +378461,136 @@ diff --git a/packages/desktop/packages/server-core/src/sessions/qwen-native-hist
                  cwd: projectRoot,
                  title: '(session)',
                  updatedAt: new Date(timestamp).toISOString(),
-@@ -2475,12 +2487,14 @@
+@@ -2399,12 +2411,128 @@
+       manager
+         .getSessions(workspace.id)
+         .some((session) => session.id === sessionId),
+     ).toBe(false);
+   });
+ 
++  it('retains a Qwen placeholder mirror when canonical history inspection fails', async () => {
++    const workspaceRoot = mkdtempSync(join(tmpdir(), 'craft-managed-workspace-'));
++    tempRoots.push(workspaceRoot);
++    const sessionId = '5ed6265d-321d-4dc4-b186-8c69de6e20bb';
++    const workspace: Workspace = {
++      id: 'workspace-qwen',
++      name: 'qwen-code',
++      slug: 'qwen-code',
++      rootPath: workspaceRoot,
++      createdAt: Date.now(),
++    };
++    const managed = createManagedSession(
++      {
++        id: sessionId,
++        sdkSessionId: sessionId,
++        name: '(session)',
++        messageCount: 0,
++        llmConnection: 'qwen-code',
++      },
++      workspace,
++    );
++    const manager = new SessionManager();
++    const sessions = (
++      manager as unknown as { sessions: Map<string, typeof managed> }
++    ).sessions;
++    sessions.set(sessionId, managed);
++
++    const upsert = (
++      manager as unknown as {
++        upsertExternalListedSession: (args: {
++          workspace: Workspace;
++          info: { sessionId: string; cwd: string; title: string };
++          connectionSlug: string;
++          defaultPermissionMode: 'ask';
++          defaultThinkingLevel: 'medium';
++          loadMessages?: () => Promise<Message[] | undefined>;
++        }) => Promise<boolean>;
++      }
++    ).upsertExternalListedSession.bind(manager);
++
++    await expect(
++      upsert({
++        workspace,
++        info: { sessionId, cwd: workspaceRoot, title: '(session)' },
++        connectionSlug: 'qwen-code',
++        defaultPermissionMode: 'ask',
++        defaultThinkingLevel: 'medium',
++        loadMessages: async () => {
++          throw new Error('recording refusal');
++        },
++      }),
++    ).rejects.toThrow('Cannot inspect Qwen history');
++    expect(sessions.get(sessionId)).toBe(managed);
++
++    for (const loadMessages of [undefined, async () => undefined]) {
++      await expect(
++        upsert({
++          workspace,
++          info: { sessionId, cwd: workspaceRoot, title: '(session)' },
++          connectionSlug: 'qwen-code',
++          defaultPermissionMode: 'ask',
++          defaultThinkingLevel: 'medium',
++          loadMessages,
++        }),
++      ).rejects.toThrow('Cannot inspect Qwen history');
++      expect(sessions.get(sessionId)).toBe(managed);
++    }
++  });
++
++  it('does not mark failed Qwen canonical history as loaded and retries it', async () => {
++    const workspaceRoot = mkdtempSync(join(tmpdir(), 'craft-managed-workspace-'));
++    tempRoots.push(workspaceRoot);
++    const sessionId = '5ed6265d-321d-4dc4-b186-8c69de6e20bc';
++    const workspace: Workspace = {
++      id: 'workspace-qwen',
++      name: 'qwen-code',
++      slug: 'qwen-code',
++      rootPath: workspaceRoot,
++      createdAt: Date.now(),
++    };
++    const managed = createManagedSession(
++      {
++        id: sessionId,
++        sdkSessionId: sessionId,
++        llmConnection: 'qwen-code',
++      },
++      workspace,
++    );
++    let attempts = 0;
++    const manager = new SessionManager({
++      createExternalSessionAgent: () =>
++        ({
++          loadSessionMessages: async () => {
++            attempts += 1;
++            if (attempts === 1) throw new Error('recording refusal');
++            return [{ id: 'recovered', role: 'user', content: 'hello', timestamp: Date.now() }];
++          },
++          destroy: () => {},
++          dispose: () => {},
++        }) as unknown as AgentBackend,
++    });
++    (
++      manager as unknown as { sessions: Map<string, typeof managed> }
++    ).sessions.set(sessionId, managed);
++
++    await expect(manager.getSession(sessionId)).rejects.toThrow(
++      'Cannot load complete Qwen history',
++    );
++    expect(managed.messagesLoaded).toBe(false);
++    expect(managed.externalMessagesLoadedThroughAt).toBeUndefined();
++
++    const loaded = await manager.getSession(sessionId);
++    expect(attempts).toBe(2);
++    expect(loaded?.messages.map((message) => message.content)).toEqual(['hello']);
++  });
++
+   it('repairs placeholder mirrors that only captured slash command output', async () => {
+     const workspaceRoot = mkdtempSync(
+       join(tmpdir(), 'craft-managed-workspace-'),
+     );
+     const projectRoot = mkdtempSync(join(tmpdir(), 'qwen-code-project-'));
+     tempRoots.push(workspaceRoot, projectRoot);
+@@ -2475,12 +2603,14 @@
      ];
      let loadCalls = 0;
      const manager = new SessionManager({
@@ -378316,7 +378634,21 @@ diff --git a/packages/desktop/packages/shared/src/agent/backend/types.ts b/packa
 diff --git a/packages/desktop/packages/shared/src/agent/qwen-agent.ts b/packages/desktop/packages/shared/src/agent/qwen-agent.ts
 --- a/packages/desktop/packages/shared/src/agent/qwen-agent.ts
 +++ b/packages/desktop/packages/shared/src/agent/qwen-agent.ts
-@@ -2493,13 +2493,24 @@
+@@ -12,12 +12,13 @@
+ import { isAbsolute, join, resolve } from 'node:path';
+ import { Readable, Writable } from 'node:stream';
+ 
+ import {
+   ClientSideConnection,
+   PROTOCOL_VERSION,
++  RequestError,
+   ndJsonStream,
+   type Client,
+   type ContentBlock,
+   type McpServer,
+   type ModelInfo,
+   type RequestPermissionRequest,
+@@ -2493,13 +2494,24 @@
                ? { size: Math.floor(options.size) }
                : undefined,
          }),
@@ -378341,6 +378673,77 @@ diff --git a/packages/desktop/packages/shared/src/agent/qwen-agent.ts b/packages
          cwd: session.cwd,
          title: session.title,
          createdAt:
+@@ -2653,34 +2665,62 @@
+         messages: messagesWithTextElements,
+         ...(availableCommandsSnapshot ?? {}),
+         ...(tokenUsage ? { tokenUsage } : {}),
+       };
+     };
+ 
++    let response: JsonRecord | undefined;
++    let useStandardLoad = false;
+     try {
+-      const response = toRecord(
++      response = toRecord(
+         await this.callAcp(
+           'ext/qwen/session/loadUpdates',
+           (connection) =>
+             connection.extMethod('qwen/session/loadUpdates', {
+               sessionId,
+               cwd,
+             }),
+           30_000,
+         ),
+       );
+-      const updates = Array.isArray(response.updates)
+-        ? response.updates.filter(isRecord)
+-        : undefined;
+-      if (updates) {
+-        return buildResultFromUpdates(updates);
++    } catch (error) {
++      if (!(error instanceof RequestError && error.code === -32601)) {
++        throw new Error(
++          `Cannot load Qwen session ${sessionId} through its history reader: ${getErrorMessage(error)}. Inspect the original recording with the matching client, or retry after repairing the reader.`,
++          { cause: error },
++        );
+       }
+-    } catch (error) {
+       this.debug(
+-        `Qwen loadSessionMessages extension unavailable; falling back to session/load for ${sessionId}: ${error instanceof Error ? error.message : String(error)}`,
++        `Qwen history extension is unavailable; loading ${sessionId} through session/load.`,
+       );
++      useStandardLoad = true;
++    }
++
++    if (!useStandardLoad) {
++      if (!response) {
++        throw new Error(
++          `Invalid Qwen history reply for session ${sessionId}. Inspect the original recording with the matching client, or retry after repairing the reader.`,
++        );
++      }
++      if (
++        response.partial !== undefined ||
++        response.replayError !== undefined
++      ) {
++        throw new Error(
++          `Cannot present partial Qwen history for session ${sessionId}: ${asString(response.replayError) || 'history replay did not complete'}. Inspect the original recording with the matching client, or retry after repairing the replay failure.`,
++        );
++      }
++      if (
++        !Array.isArray(response.updates) ||
++        !response.updates.every(isRecord)
++      ) {
++        throw new Error(
++          `Invalid Qwen history reply for session ${sessionId}. Inspect the original recording with the matching client, or retry after repairing the reader.`,
++        );
++      }
++      return buildResultFromUpdates(response.updates);
+     }
+ 
+     const collector: HistoryCollector = { updates: [] };
+     this.historyCollectors.set(sessionId, collector);
+ 
+     try {
 diff --git a/packages/desktop/packages/shared/src/protocol/events.ts b/packages/desktop/packages/shared/src/protocol/events.ts
 --- a/packages/desktop/packages/shared/src/protocol/events.ts
 +++ b/packages/desktop/packages/shared/src/protocol/events.ts

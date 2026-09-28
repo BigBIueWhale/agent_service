@@ -361,6 +361,20 @@ One concrete source consumer omission remains:
   errors and do not validate canonical recording versions. This is a source
   consumer gap regardless of whether the image ships that application.
 
+Desktop's separate ACP history path also ignored the server's explicit
+`partial` and `replayError` reply after a replay failure, filtering malformed
+updates out and treating the remaining prefix as complete. Source reading now
+shows this path refuses partial or malformed replies and propagates extension
+errors; only an ACP method-not-found error uses the existing `session/load`
+path for an older runtime. The Desktop session manager also now propagates a
+Qwen canonical history refusal on session load, leaving it eligible for retry,
+and retains a placeholder mirror when catalog inspection fails or has no
+reader or payload instead of deleting it as empty. This leaves the direct
+canonical-file loops above open.
+The ACP and manager boundary tests are authored but unexecuted here because
+Bun is unavailable. vLLM does not own Desktop history interpretation, and the
+sealed service image does not ship Desktop.
+
 A later source read found that the synchronous canonical scanner validated
 individual records but did not check its model-evidence completion state at
 EOF. The review cost ledger and agent-transcript report used that scanner and
