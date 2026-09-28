@@ -982,3 +982,28 @@ assertion is authored but unexecuted: its suite could not collect because the
 local web-template and channel package entries require build artifacts. A
 source test cannot establish the owner-built CLI or end-to-end provider
 behavior.
+
+## Compaction checkpoint admission in canonical resume
+
+Source reading found that canonical `chat_compression` records were projected
+as unconditional history checkpoints. The producer records the current history
+on a failed compaction and records the installed history in both
+`compressedHistory` and `info.postCompactionHistory` on success. The shared
+runtime replay now treats a failure as an assertion that history and image
+payloads stayed exactly the same, and requires a successful checkpoint to
+equal its committed composition. The indexed reader's existing complete
+evidence scan uses that replay, so it makes the same content comparison while
+retaining selective restore reads. Canonical decoding also rejects a missing,
+unknown or NOOP status.
+This is a Qwen canonical-history correction for every affected agent_service
+session. vLLM has no ownership of this client recording or its resume state.
+
+Seven focused Core source suites passed 518 tests with two skipped cases,
+including forged failure history and a forged successful composition. Three
+other source suites passed 44 cases. A wider sweep was attempted but does not
+qualify: the installed generated-v5 admission refused `system/stream_start`,
+and a GeminiChat test failed earlier in request evidence with an invalid
+synthetic body. Those failures have not been established as caused by this
+checkpoint change or as passing at the prior commit. Native compilation,
+owner gates and end-to-end `--resume` remain unverified. The provider-byte
+binding for compaction draws and input rendering provenance remain open.

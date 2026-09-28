@@ -9331,6 +9331,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "historyLength !== this.length", "no initial history checkpoint",
         "export type RuntimeHistoryCommit", "export class RuntimeHistoryCursor",
         "ownedImageReferenceIds", "runtimeHistoryPosition",
+        "requireRuntimeCompaction", "applyCompaction(",
+        "failed compaction changes retained history",
+        "compaction checkpoint differs from committed composition",
         "export function requireRuntimeConversationContent(",
         "requireRuntimeConversationContent(value, 'model')",
     ), label=label)
@@ -9340,13 +9343,17 @@ def _validate_served_accounting_after(state: State) -> None:
         "buildRuntimeHistoryFromConversation", "finishState(): RuntimeHistoryState",
         "export function projectRuntimeHistoryChange(",
         "const change = projectRuntimeHistoryChange(record)",
+        "return requireRuntimeCompaction(record.systemPayload)",
     ), label=label)
     _require_all(state, core + "core/model-request-evidence.ts", (
         "projectRuntimeHistoryChange(record)",
-        "if (historyChange) this.history.apply(historyChange)",
+        "this.history.applyCompaction(",
+        "requireRuntimeCompaction(record.systemPayload)",
     ), label=label)
     require_text(state, core + "services/runtime-history.test.ts",
                  "keeps canonical evidence history aligned after a %s checkpoint", label=label)
+    require_text(state, core + "services/runtime-history.test.ts",
+                 "keeps a failed compaction inert and refuses a forged retained history", label=label)
     require_text(state, core + "services/session-writer-lease.test.ts",
                  "restores and forks exact canonical history after a compaction segment", label=label)
     require_text(state, core + "services/session-writer-lease.test.ts",
@@ -9361,6 +9368,8 @@ def _validate_served_accounting_after(state: State) -> None:
                  "reports open physical evidence even when its visible page ends at the snapshot tail", label=label)
     require_text(state, core + "services/session-transcript-reader.test.ts",
                  "refuses an adopted answer that claims locally served model usage", label=label)
+    require_text(state, core + "services/session-transcript-reader.test.ts",
+                 "refuses a failed compaction that rewrites the indexed resume history", label=label)
     _require_all(state, cli + "acp-integration/session/history-replay-page.ts", (
         "page.modelEvidenceCompletion.openRequests !== 0",
         "page.modelEvidenceCompletion.openAttempts !== 0",
@@ -11530,11 +11539,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Required diagnostics survive cached daemon/ACP pages, SDKs and visible client selectors; "
             "array conveniences refuse discarded diagnostics and Desktop reconciles absence only "
             "after a complete scan without refusals. Catalog admission is not full resume certification. "
-            "Canonical version 12 binds complete generation bytes and their completion to the real "
+            "Canonical version 15 binds complete generation bytes and their completion to the real "
             "chat attempt and its full physical request population; abandoned output cannot become "
             "resume history. Stored generation evidence excludes derived message fields. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
-            "including image payload state, without inferring admission from display records. Tool "
+            "including image payload state, without inferring admission from display records. "
+            "Successful compaction checkpoints equal the committed composition; failed compactions "
+            "preserve exact retained history in both full and indexed restore. Tool "
             "restore snapshots carry the same complete state, validate before file rewind, and "
             "publish UI success and tool replay only after the replacement is durable. Recovery "
             "preserves accepted empty/whitespace output, pending calls and Content boundaries, "
