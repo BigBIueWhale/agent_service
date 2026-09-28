@@ -1602,6 +1602,36 @@ def _validate_stream_evidence_after(state: State) -> None:
     # a short resultDisplay is used only when neither is available.
     adapter_source = _source(state, adapter, label=label)
     require_text(state, adapter, "block.content = content;", label=label)
+    require_text(
+        state,
+        adapter,
+        "textContent = functionResponseContent(part.functionResponse.response);",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/utils/nonInteractiveHelpers.ts",
+        "return functionResponseContent(part.functionResponse?.response);",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.ts",
+        "const textContent = functionResponseContent(response.response);",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/utils/function-response-content.ts",
+        "return JSON.stringify(response) ?? String(response);",
+        label=label,
+    )
+    require_text(
+        state,
+        adapter_test,
+        "records structured tool output with its model-facing JSON spelling",
+        label=label,
+    )
     forbid_text(state, adapter, "projectHeadlessToolResultContent", label=label)
     _require(
         "packages/cli/src/nonInteractive/io/headless-tool-result-text-projection.ts" not in state,

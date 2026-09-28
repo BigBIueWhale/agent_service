@@ -41488,7 +41488,7 @@ diff --git a/packages/cli/src/nonInteractive/control/controllers/systemControlle
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts
-@@ -1,83 +1,127 @@
+@@ -1,85 +1,129 @@
 +import { ModelRequestJournal } from '@qwen-code/qwen-code-core';
  /**
   * @license
@@ -41534,11 +41534,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
    extractTextFromBlocks,
 -  createExtendedUsage,
  } from './BaseJsonOutputAdapter.js';
--import {
+ import {
 -  HEADLESS_TOOL_RESULT_TEXT_JSON_BYTE_BUDGET,
 -  HEADLESS_TOOL_RESULT_TEXT_TRUNCATION_MARKER,
 -} from './headless-tool-result-text-projection.js';
-+import {
 +  capturePhysical,
 +  recordUtility,
 +  recordGeneration,
@@ -41573,8 +41572,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
    protected emitMessageImpl(message: CLIMessage): void {
 +    this.observeAdmittedMessage(message);
      this.emittedMessages.push(message);
-+  }
-+
+   }
+ 
 +  initializeEvidence(): void {
 +    for (const message of this.messagesWithRequestEvidence({
 +      type: 'system',
@@ -41593,8 +41592,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +      agents: [],
 +    }))
 +      this.emitMessageImpl(message);
-   }
- 
++  }
++
    protected shouldEmitStreamEvents(): boolean {
      return false;
    }
@@ -41604,8 +41603,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      return this.finalizeAssistantMessageInternal(
        this.mainAgentMessageState,
        null,
--    );
-+    );
+     );
    }
  
    emitResult(options: ResultOptions): void {
@@ -41624,17 +41622,19 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  
    exposeCreateMessageState(): MessageState {
      return this.createMessageState();
--  }
--
--  exposeCreateUsage(metadata?: GenerateContentResponseUsageMetadata | null) {
--    return this.createUsage(metadata);
    }
  
+-  exposeCreateUsage(metadata?: GenerateContentResponseUsageMetadata | null) {
+-    return this.createUsage(metadata);
+-  }
+-
    exposeBuildMessage(parentToolUseId: string | null): CLIAssistantMessage {
      return this.buildMessage(parentToolUseId);
    }
  
-@@ -108,31 +152,30 @@
+   exposeFinalizePendingBlocks(
+     state: MessageState,
+@@ -108,13 +152,13 @@
      this.startAssistantMessageInternal(state);
    }
  
@@ -41642,15 +41642,14 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      state: MessageState,
      parentToolUseId: string | null,
 -  ): CLIAssistantMessage {
--    return this.finalizeAssistantMessageInternal(state, parentToolUseId);
 +  ): CLIAssistantMessage | null {
-+    return this.finalizeAssistantMessageInternal(state, parentToolUseId);
+     return this.finalizeAssistantMessageInternal(state, parentToolUseId);
    }
  
    exposeAppendText(
      state: MessageState,
      fragment: string,
-     parentToolUseId: string | null,
+@@ -122,17 +166,16 @@
    ): void {
      this.appendText(state, fragment, parentToolUseId);
    }
@@ -41750,6 +41749,21 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -  describe('createUsage', () => {
 -    it('should create usage with default values when metadata is not provided', () => {
 -      const usage = adapter.exposeCreateUsage();
+-
+-      expect(usage).toEqual({
+-        input_tokens: 0,
+-        output_tokens: 0,
+-      });
+-    });
+-
+-    it('should create usage with null metadata', () => {
+-      const usage = adapter.exposeCreateUsage(null);
+-
+-      expect(usage).toEqual({
+-        input_tokens: 0,
+-        output_tokens: 0,
+-      });
+-    });
 +  describe('physical usage ownership', () => {
 +    it.each([undefined, null])(
 +      'keeps Finished metadata %s out of runtime billing',
@@ -41775,21 +41789,6 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +      },
 +    );
  
--      expect(usage).toEqual({
--        input_tokens: 0,
--        output_tokens: 0,
--      });
--    });
--
--    it('should create usage with null metadata', () => {
--      const usage = adapter.exposeCreateUsage(null);
--
--      expect(usage).toEqual({
--        input_tokens: 0,
--        output_tokens: 0,
--      });
--    });
--
 -    it('should extract usage from metadata', () => {
 -      const metadata: GenerateContentResponseUsageMetadata = {
 +    it.each([
@@ -41798,8 +41797,6 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          candidatesTokenCount: 50,
          cachedContentTokenCount: 10,
 -        totalTokenCount: 160,
-+        thoughtsTokenCount: 30,
-+        totalTokenCount: 150,
 -      };
 -
 -      const usage = adapter.exposeCreateUsage(metadata);
@@ -41809,6 +41806,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -        output_tokens: 50,
 -        cache_read_input_tokens: 10,
 -        total_tokens: 160,
++        thoughtsTokenCount: 30,
++        totalTokenCount: 150,
 +      },
 +      {
 +        promptTokenCount: 0,
@@ -41840,8 +41839,6 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -        promptTokenCount: 100,
 -        // candidatesTokenCount missing
 -      };
--
--      const usage = adapter.exposeCreateUsage(metadata);
 +    it.each([
 +      { promptTokenCount: 100 },
 +      {
@@ -41906,14 +41903,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        });
 +      },
 +    );
--
--      expect(usage).toEqual({
--        input_tokens: 100,
--        output_tokens: 0,
--      });
--    });
-   });
++  });
  
+-      const usage = adapter.exposeCreateUsage(metadata);
 +  describe('emitSubagentRound', () => {
 +    const servedUsage: ServedUsage = {
 +      promptTokenCount: 18_204,
@@ -41922,7 +41914,12 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +      cachedContentTokenCount: 18_176,
 +      totalTokenCount: 18_300,
 +    };
-+
+ 
+-      expect(usage).toEqual({
+-        input_tokens: 100,
+-        output_tokens: 0,
+-      });
+-    });
 +    it.each([
 +      {
 +        text: 'The manifest lists three services.',
@@ -42043,8 +42040,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        });
 +      },
 +    );
-+  });
-+
+   });
+ 
    describe('buildMessage', () => {
      beforeEach(() => {
 -      adapter.startAssistantMessage();
@@ -42087,6 +42084,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        expect(message.message.stop_reason).toBeNull();
      });
  
+-    it('should set stop_reason to tool_use when message contains only tool_use blocks', () => {
+-      adapter.startAssistantMessage();
 +    it('never renders a transport error as something the model said', () => {
 +      adapter.startAssistantMessage({ kind: 'runtime' });
 +      adapter.processEvent({
@@ -42115,8 +42114,6 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +      });
 +    });
 +
--    it('should set stop_reason to tool_use when message contains only tool_use blocks', () => {
--      adapter.startAssistantMessage();
 +    it('refuses tool content in a runtime assistant row', () => {
 +      adapter.startAssistantMessage({ kind: 'runtime' });
        adapter.processEvent({
@@ -42304,23 +42301,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  
    describe('appendThinking', () => {
 -    it('should create new thinking block', () => {
-+    it.each([
-+      '**Planning**\nThinking about task',
-+      '**Planning**',
-+      'The user just said "Hello"',
-+      '  content with spaces  ',
-+      ' \t\n',
-+    ])(
-+      'keeps the exact raw fragment %j without synthesizing a signature',
-+      (raw) => {
-+        const state = adapter.exposeCreateMessageState();
-+        adapter.exposeAppendThinking(state, raw, null);
-+        expect(state.blocks).toEqual([{ type: 'thinking', thinking: raw }]);
-+      },
-+    );
-+
-+    it('appends raw fragments without trimming or adding separators', () => {
-       const state = adapter.exposeCreateMessageState();
+-      const state = adapter.exposeCreateMessageState();
 -      adapter.startAssistantMessage();
 -
 -      adapter.exposeAppendThinking(
@@ -42336,24 +42317,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -        thinking: 'Planning: Thinking about task',
 -        signature: 'Planning',
 -      });
-+      for (const fragment of [
-+        'The user just',
-+        ' said "Hello"',
-+        '. This is a simple greeting',
-+      ]) {
-+        adapter.exposeAppendThinking(state, fragment, null);
-+      }
-+      expect(state.blocks).toEqual([
-+        {
-+          type: 'thinking',
-+          thinking: 'The user just said "Hello". This is a simple greeting',
-+        },
-+      ]);
-     });
- 
+-    });
+-
 -    it('should append to existing thinking block', () => {
-+    it('ignores an empty fragment', () => {
-       const state = adapter.exposeCreateMessageState();
+-      const state = adapter.exposeCreateMessageState();
 -      adapter.startAssistantMessage();
 -      adapter.exposeAppendThinking(state, 'Planning', 'First thought', null);
 -
@@ -42409,9 +42376,24 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -      expect(block.thinking).toContain('user just');
 -      expect(block.thinking).not.toContain('userjust');
 -    });
--
++    it.each([
++      '**Planning**\nThinking about task',
++      '**Planning**',
++      'The user just said "Hello"',
++      '  content with spaces  ',
++      ' \t\n',
++    ])(
++      'keeps the exact raw fragment %j without synthesizing a signature',
++      (raw) => {
++        const state = adapter.exposeCreateMessageState();
++        adapter.exposeAppendThinking(state, raw, null);
++        expect(state.blocks).toEqual([{ type: 'thinking', thinking: raw }]);
++      },
++    );
+ 
 -    it('should preserve whitespace when appending multiple thinking fragments', () => {
--      const state = adapter.exposeCreateMessageState();
++    it('appends raw fragments without trimming or adding separators', () => {
+       const state = adapter.exposeCreateMessageState();
 -      adapter.startAssistantMessage();
 -
 -      // Simulate streaming thinking content in fragments
@@ -42420,7 +42402,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -      adapter.exposeAppendThinking(
 -        state,
 -        '',
--        '. This is a simple greeting',
++      for (const fragment of [
++        'The user just',
++        ' said "Hello"',
+         '. This is a simple greeting',
 -        null,
 -      );
 -
@@ -42436,10 +42421,20 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 -      expect(block.thinking).toContain('". This');
 -      expect(block.thinking).not.toContain('userjust');
 -      expect(block.thinking).not.toContain('justsaid');
--    });
--
++      ]) {
++        adapter.exposeAppendThinking(state, fragment, null);
++      }
++      expect(state.blocks).toEqual([
++        {
++          type: 'thinking',
++          thinking: 'The user just said "Hello". This is a simple greeting',
++        },
++      ]);
+     });
+ 
 -    it('should preserve leading and trailing whitespace in description', () => {
--      const state = adapter.exposeCreateMessageState();
++    it('ignores an empty fragment', () => {
+       const state = adapter.exposeCreateMessageState();
 -      adapter.startAssistantMessage();
 -
 -      adapter.exposeAppendThinking(state, '', '  content with spaces  ', null);
@@ -42610,8 +42605,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          name: 'test_tool',
          input: { param: 'value' },
        });
-+    });
-+
+     });
+ 
+-    it('should process Finished events with usage metadata', () => {
 +    it('[stopped-call] retains stopped arguments in abandoned generation evidence without granting execution', async () => {
 +      const served =
 +        '{"file_path": "notes/book-4.md", "content": "Chapter 28 \\u2014 cut';
@@ -42680,9 +42676,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +      expect(adapter.exposeGetMessageState(null).blocks).toEqual([
 +        { type: 'incomplete_tool_use', name: 'write_file', arguments: served },
 +      ]);
-     });
- 
--    it('should process Finished events with usage metadata', () => {
++    });
++
 +    it('Finished closes pending blocks without assigning model usage to runtime output', () => {
 +      adapter.processEvent({
 +        type: GeminiEventType.Content,
@@ -43148,34 +43143,14 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        };
  
 -      const result = adapter.exposeBuildResultMessage(options);
--
--      if (!result.is_error) {
--        expect(result.result).toBe('Custom summary');
--      }
--    });
 +        expect(() => adapter.exposeBuildResultMessage(options)).toThrow(
 +          'A result summary cannot replace accepted model text',
 +        );
 +      },
 +    );
  
--    it('should include usage information', () => {
--      const usage = {
--        input_tokens: 100,
--        output_tokens: 50,
--        total_tokens: 150,
--      };
--      const options: ResultOptions = {
--        isError: false,
--        usage,
--        durationMs: 1000,
--        apiDurationMs: 800,
--        numTurns: 1,
--      };
--
--      const result = adapter.exposeBuildResultMessage(options);
--
--      expect(result.usage).toEqual(usage);
+-      if (!result.is_error) {
+-        expect(result.result).toBe('Custom summary');
 +    it('includes the exact mixed physical population owned by the output window', async () => {
 +      adapter.initializeEvidence();
 +      await recordUtility(mockConfig, 'reported-a', {
@@ -43216,9 +43191,28 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        });
 +      } finally {
 +        await pending.finish({ status: 'cancelled', error: null });
-+      }
+       }
      });
  
+-    it('should include usage information', () => {
+-      const usage = {
+-        input_tokens: 100,
+-        output_tokens: 50,
+-        total_tokens: 150,
+-      };
+-      const options: ResultOptions = {
+-        isError: false,
+-        usage,
+-        durationMs: 1000,
+-        apiDurationMs: 800,
+-        numTurns: 1,
+-      };
+-
+-      const result = adapter.exposeBuildResultMessage(options);
+-
+-      expect(result.usage).toEqual(usage);
+-    });
+-
      it('should include stats when provided', () => {
        const stats = {
 +        generationUsage: noRecordedUsage,
@@ -43656,8 +43650,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        parent_tool_use_id: parentToolUseId,
 +        num_turns: 3,
 +        error: { message: 'MAX_TURNS' },
-       });
-     });
++      });
++    });
 +
 +    it('[subagent-scope] leaves the session terminal result unscoped', () => {
 +      adapter.emitResult({
@@ -43677,8 +43671,8 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        is_error: false,
 +        parent_tool_use_id: null,
 +        num_turns: 2,
-+      });
-+    });
+       });
+     });
 +
 +    it('[subagent-scope] leaves a session error result unscoped too', () => {
 +      adapter.emitResult({
@@ -43812,7 +43806,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1764,12 +2546,46 @@
+@@ -1764,12 +2546,81 @@
  
          const result = toolResultContent(response);
  
@@ -43841,6 +43835,41 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +        );
 +      });
 +
++      it('records structured tool output with its model-facing JSON spelling', () => {
++        const request = {
++          callId: 'tool-structured',
++          name: 'structured_tool',
++          args: {},
++          isClientInitiated: false,
++          prompt_id: 'prompt-structured',
++        };
++        adapter.emitToolResult(request, {
++          callId: request.callId,
++          responseParts: [
++            {
++              functionResponse: {
++                id: request.callId,
++                name: request.name,
++                response: { output: { rows: [1, 2] } },
++              },
++            },
++          ],
++          resultDisplay: '2 rows',
++          error: undefined,
++          errorType: undefined,
++        });
++        const message = adapter.emittedMessages[0];
++        if (message.type !== 'user') throw new Error('Expected user message');
++        expect(message.message.content).toEqual([
++          {
++            type: 'tool_result',
++            tool_use_id: request.callId,
++            is_error: false,
++            content: '{"output":{"rows":[1,2]}}',
++          },
++        ]);
++      });
++
 +      it('falls back to display text when no response parts exist', () => {
 +        const response = {
 +          callId: 'tool-display-only',
@@ -43859,7 +43888,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
            resultDisplay: {
              type: 'vision_bridge_notice' as const,
              summary: 'Transcribed PDF pages 20-23; remaining pages 24-25',
-@@ -1810,17 +2626,17 @@
+@@ -1810,17 +2661,17 @@
            error: undefined,
            errorType: undefined,
          };
@@ -43879,7 +43908,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
              type: 'vision_bridge_notice' as const,
              summary: 'Failed to read PDF after rendering pages 20-23',
              notice: 'Vision bridge (qwen3-vl-plus) failed.',
-@@ -1836,17 +2652,18 @@
+@@ -1836,17 +2687,18 @@
            errorType: undefined,
          };
  
@@ -43899,7 +43928,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
              type: 'vision_bridge_notice' as const,
              summary: 'Failed to read PDF after rendering pages 20-23',
              notice: 'Vision bridge (qwen3-vl-plus) failed.',
-@@ -1867,16 +2684,59 @@
+@@ -1867,13 +2719,56 @@
            errorType: undefined,
          };
  
@@ -43928,9 +43957,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +
 +        expect(toolResultContent(response)).toBe(
 +          'Partial output\nCommand timed out.',
-         );
-       });
- 
++        );
++      });
++
 +      it('retains an embedded error when its response part also has output', () => {
 +        const response = {
 +          callId: 'tool-partial-response',
@@ -43951,16 +43980,13 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +
 +        expect(toolResultContent(response)).toBe(
 +          'Partial output\nRead failed.',
-+        );
-+      });
-+
+         );
+       });
+ 
        it('should extract content from responseParts', () => {
          const response = {
            callId: 'tool-1',
-           resultDisplay: undefined,
-           responseParts: [{ text: 'Result' }],
-           error: undefined,
-@@ -1992,19 +2852,8 @@
+@@ -1992,19 +2887,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -43983,7 +44009,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-@@ -1,79 +1,89 @@
+@@ -1,79 +1,90 @@
 +import type { ModelOutputOrigin } from '@qwen-code/qwen-code-core';
 +import {
 +  readModelGeneration,
@@ -43993,6 +44019,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +  isVisionBridgeNoticeDisplay,
 +  ToolErrorType,
 +  STREAM_CONTRACT_SHA256,
++  functionResponseContent,
 +} from '@qwen-code/qwen-code-core';
  /**
   * @license
@@ -44089,7 +44116,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * top-level `structured_result` field is added to the result message.
     */
    readonly structuredResult?: unknown;
-@@ -84,20 +94,25 @@
+@@ -84,20 +95,25 @@
   * Implementations decide whether to emit messages immediately (streaming)
   * or collect them for batch emission (non-streaming).
   * This interface defines the common message emission methods that
@@ -44116,7 +44143,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * In non-streaming mode, this is a no-op.
     *
     * @param request - Tool call request info
-@@ -112,26 +127,29 @@
+@@ -112,26 +128,29 @@
  /**
   * JSON-focused output adapter interface.
   * Handles structured JSON output for both streaming and non-streaming modes.
@@ -44149,7 +44176,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    ): void;
  
    getSessionId(): string;
-@@ -148,32 +166,141 @@
+@@ -148,32 +167,141 @@
    // Main agent message state
    protected mainAgentMessageState: MessageState;
  
@@ -44297,7 +44324,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      };
    }
  
-@@ -193,90 +320,46 @@
+@@ -193,90 +321,46 @@
        state = this.createMessageState();
        this.subagentMessageStates.set(parentToolUseId, state);
      }
@@ -44336,22 +44363,20 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 -    }
 -
 -    return usage;
--  }
--
--  /**
--   * Builds a CLIAssistantMessage from the current message state.
--   *
--   * @param parentToolUseId - null for main agent, string for subagent
--   * @returns CLIAssistantMessage
--   */
 +  protected requireOutputOrigin(state: MessageState): ModelOutputOrigin {
 +    if (state.origin === null)
 +      throw new Error(
 +        'Assistant output has no producing attempt. Inspect the generation event path.',
 +      );
 +    return state.origin;
-+  }
-+
+   }
+ 
+-  /**
+-   * Builds a CLIAssistantMessage from the current message state.
+-   *
+-   * @param parentToolUseId - null for main agent, string for subagent
+-   * @returns CLIAssistantMessage
+-   */
    protected buildMessage(parentToolUseId: string | null): CLIAssistantMessage {
      const state = this.getMessageState(parentToolUseId);
 -
@@ -44408,7 +44433,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Finalizes pending blocks (text or thinking) by closing them.
-@@ -369,13 +452,12 @@
+@@ -369,13 +453,12 @@
     * @param state - Message state to reset
     */
    protected startAssistantMessageInternal(state: MessageState): void {
@@ -44422,7 +44447,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -385,33 +467,47 @@
+@@ -385,34 +468,48 @@
     * @param parentToolUseId - null for main agent, string for subagent
     * @returns CLIAssistantMessage
     */
@@ -44448,10 +44473,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        this.closeBlock(state, index);
      }
  
-+    if (!state.messageId) throw new Error('Message not started');
-+    if (state.origin === null && !state.messageStarted) return null;
 -    const message = this.buildMessage(parentToolUseId);
 -    if (state.messageStarted) {
++    if (!state.messageId) throw new Error('Message not started');
++    if (state.origin === null && !state.messageStarted) return null;
 +    this.requireOutputOrigin(state);
 +    const message =
 +      state.origin?.kind === 'runtime'
@@ -44463,21 +44488,26 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +    if (state.messageStarted) this.onMessageFinalized(state, parentToolUseId);
      return message;
    }
-+
+ 
 +  protected onMessageFinalized(
 +    _state: MessageState,
 +    _parentToolUseId: string | null,
 +  ): void {}
- 
++
    /**
     * Abstract method for emitting messages. Implementations decide whether
     * to emit immediately (streaming) or collect for batch emission.
     * Note: The message object already contains parent_tool_use_id field,
     * so it doesn't need to be passed as a separate parameter.
-@@ -545,6 +641,25 @@
+    *
+@@ -541,12 +638,31 @@
+     _input: unknown,
+     _parentToolUseId: string | null,
+   ): void {
+     // Default implementation does nothing
    }
  
-   /**
++  /**
 +   * Hook method called when an incomplete_tool_use block is created. The
 +   * block is whole when it is created: a stopped call has no later delta.
 +   * Subclasses can override this to emit stream events.
@@ -44496,11 +44526,13 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +    // Default implementation does nothing
 +  }
 +
-+  /**
+   /**
     * Hook method called when a block is closed.
     * Subclasses can override this to emit stream events.
     *
-@@ -595,74 +710,78 @@
+    * @param state - Message state
+    * @param index - Block index
+@@ -595,74 +711,78 @@
    // ========== Main Agent APIs ==========
  
    /**
@@ -44556,10 +44588,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
          break;
        case GeminiEventType.ToolCallRequest:
          this.appendToolUse(state, event.value, null);
-+        break;
+         break;
 +      case GeminiEventType.IncompleteToolCall:
 +        this.appendIncompleteToolUse(state, event.value, null);
-         break;
++        break;
        case GeminiEventType.Finished:
 -        if (event.value?.usageMetadata) {
 -          state.usage = this.createUsage(event.value.usageMetadata);
@@ -44611,7 +44643,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      }
    }
  
-@@ -671,51 +790,62 @@
+@@ -671,51 +791,62 @@
    /**
     * Starts a new assistant message for a subagent.
     * This is a shared implementation used by both streaming and non-streaming adapters.
@@ -44677,7 +44709,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    /**
     * Processes a subagent tool call.
     * This is a shared implementation used by both streaming and non-streaming adapters.
-@@ -727,26 +857,24 @@
+@@ -727,26 +858,24 @@
    processSubagentToolCall(
      toolCall: NonNullable<AgentResultDisplay['toolCalls']>[number],
      parentToolUseId: string,
@@ -44707,7 +44739,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      const { index } = this.createSubagentToolUseBlock(
        state,
-@@ -760,12 +888,43 @@
+@@ -760,12 +889,43 @@
  
      // Finalize tool_use message immediately
      this.finalizeSubagentAssistantMessage(parentToolUseId);
@@ -44751,7 +44783,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * input setting, and closure. Subclasses can override this to customize behavior.
     *
     * @param state - Message state
-@@ -789,20 +948,37 @@
+@@ -789,20 +949,37 @@
      this.onToolUseBlockCreated(state, index, startBlock, parentToolUseId);
      this.onToolUseInputSet(state, index, toolCall.args ?? {}, parentToolUseId);
      this.onBlockClosed(state, index, parentToolUseId);
@@ -44797,7 +44829,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Appends text content to the current message.
-@@ -844,35 +1020,22 @@
+@@ -844,35 +1021,22 @@
  
    /**
     * Appends thinking content to the current message.
@@ -44835,7 +44867,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      this.ensureBlockTypeConsistency(state, 'thinking', actualParentToolUseId);
      this.ensureMessageStarted(state, actualParentToolUseId);
-@@ -882,13 +1045,12 @@
+@@ -882,13 +1046,12 @@
        | undefined;
      const isNewBlock = !current || current.type !== 'thinking';
      if (isNewBlock) {
@@ -44849,14 +44881,13 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        this.openBlock(state, index, current);
        this.onThinkingBlockCreated(state, index, current, actualParentToolUseId);
      }
-@@ -936,6 +1098,42 @@
-     this.onToolUseBlockCreated(state, index, startBlock, parentToolUseId);
+@@ -937,12 +1100,48 @@
      this.onToolUseInputSet(state, index, request.args ?? {}, parentToolUseId);
  
-+    this.onBlockClosed(state, index, parentToolUseId);
-+    this.closeBlock(state, index);
-+  }
-+
+     this.onBlockClosed(state, index, parentToolUseId);
+     this.closeBlock(state, index);
+   }
+ 
 +  /**
 +   * Appends an incomplete_tool_use block: a call from a generation its
 +   * output limit stopped, with the arguments exactly as the provider served
@@ -44889,10 +44920,17 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +    state.blocks.push(block);
 +    this.openBlock(state, index, block);
 +    this.onIncompleteToolUseBlockCreated(state, index, block, parentToolUseId);
-     this.onBlockClosed(state, index, parentToolUseId);
-     this.closeBlock(state, index);
-   }
-@@ -1057,13 +1255,13 @@
++    this.onBlockClosed(state, index, parentToolUseId);
++    this.closeBlock(state, index);
++  }
++
+   /**
+    * Ensures that a message has been started.
+    * Calls hook method for subclasses to emit message_start events.
+    *
+    * @param state - Message state
+    * @param parentToolUseId - null for main agent, string for subagent
+@@ -1057,13 +1256,13 @@
        type: 'tool_result',
        tool_use_id: request.callId,
        is_error: hasError,
@@ -44907,7 +44945,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        type: 'user',
        uuid: randomUUID(),
        session_id: this.getSessionId(),
-@@ -1077,20 +1275,28 @@
+@@ -1077,20 +1276,28 @@
    }
  
    /**
@@ -44938,7 +44976,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -1173,43 +1379,39 @@
+@@ -1173,43 +1380,39 @@
  
    /**
     * Builds a result message from options.
@@ -44994,7 +45032,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      } else {
        // Track presence by property existence — `runNonInteractive` may
        // legitimately pass `structuredResult: undefined` (e.g. the model
-@@ -1231,22 +1433,22 @@
+@@ -1231,22 +1434,22 @@
          : resultText;
        const success: CLIResultMessageSuccess & {
          stats?: SessionMetrics;
@@ -45020,7 +45058,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        if (options.stats) {
          success.stats = options.stats;
        }
-@@ -1260,33 +1462,43 @@
+@@ -1260,33 +1463,43 @@
  
    /**
     * Builds a subagent error result message.
@@ -45071,7 +45109,27 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        error: { message: errorMessage },
      };
    }
-@@ -1390,70 +1602,46 @@
+@@ -1311,18 +1524,13 @@
+     // Handle text parts
+     if ('text' in part && typeof part.text === 'string') {
+       textContent = part.text;
+     }
+     // Handle functionResponse parts - extract output content
+     else if ('functionResponse' in part && part.functionResponse) {
+-      const output =
+-        part.functionResponse.response?.['output'] ??
+-        part.functionResponse.response?.['content'] ??
+-        '';
+-      textContent =
+-        typeof output === 'string' ? output : JSON.stringify(output);
++      textContent = functionResponseContent(part.functionResponse.response);
+     }
+     // Handle other part types - convert to JSON string
+     else {
+       textContent = JSON.stringify(part);
+     }
+ 
+@@ -1390,70 +1598,46 @@
      }
    }
  
@@ -45100,12 +45158,10 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 -    return content
 -      ? `${response.visionBridgeNotice}\n${content}`
 -      : response.visionBridgeNotice;
+-  }
 +  const lines: string[] = [];
 +  if (response.visionBridgeNotice) lines.push(response.visionBridgeNotice);
-+  if (isVisionBridgeNoticeDisplay(response.resultDisplay)) {
-+    lines.push(formatVisionBridgeNoticeDisplay(response.resultDisplay));
-   }
--  if (isVisionBridgeNoticeDisplay(response.resultDisplay)) {
+   if (isVisionBridgeNoticeDisplay(response.resultDisplay)) {
 -    const notice = formatVisionBridgeNoticeDisplay(response.resultDisplay);
 -    if (response.error) {
 -      return `${notice}\n${response.error.message}`;
@@ -45120,15 +45176,12 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 -      return `${notice}\n${functionResponsePartsToString(response.responseParts)}`;
 -    }
 -    return notice;
--  }
++    lines.push(formatVisionBridgeNoticeDisplay(response.resultDisplay));
+   }
 -  // Prefer model-facing detail over the short operational error summary.
 -  const responsePartsError = checkResponsePartsForError(response.responseParts);
 -  if (responsePartsError) {
 -    return responsePartsError;
--  }
--  if (response.error) {
--    return response.error.message;
--  }
 +  const partsContent = response.responseParts?.length
 +    ? functionResponsePartsToString(response.responseParts)
 +    : undefined;
@@ -45137,7 +45190,9 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +  if (content) lines.push(content);
 +  if (embeddedError && content && !content.includes(embeddedError)) {
 +    lines.push(embeddedError);
-+  }
+   }
+-  if (response.error) {
+-    return response.error.message;
 +  if (
 +    response.error &&
 +    content &&
@@ -45145,20 +45200,20 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +    response.error.message !== embeddedError
 +  ) {
 +    lines.push(response.error.message);
-+  }
+   }
    if (
 +    !content &&
      typeof response.resultDisplay === 'string' &&
      response.resultDisplay.trim().length > 0
    ) {
 -    return response.resultDisplay;
-+    lines.push(response.resultDisplay);
-   }
+-  }
 -  if (response.responseParts && response.responseParts.length > 0) {
 -    // Always use functionResponsePartsToString to properly handle
 -    // functionResponse parts that contain output content
 -    return functionResponsePartsToString(response.responseParts);
--  }
++    lines.push(response.resultDisplay);
+   }
 -  return undefined;
 +  return lines.length > 0 ? lines.join('\n') : undefined;
  }
@@ -45167,7 +45222,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
   * Extracts text from content blocks.
   *
   * @param blocks - Array of content blocks
-@@ -1462,18 +1650,6 @@
+@@ -1462,18 +1646,6 @@
  export function extractTextFromBlocks(blocks: ContentBlock[]): string {
    return blocks
      .filter((block) => block.type === 'text')
@@ -105120,8 +105175,8 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
      expect(result).toEqual({
        type: 'system',
        subtype: 'init',
-+      stream_contract_sha256: STREAM_CONTRACT_SHA256,
 -      uuid: 'test-session-id',
++      stream_contract_sha256: STREAM_CONTRACT_SHA256,
 +      uuid: expect.any(String),
        session_id: 'test-session-id',
 +      parent_tool_use_id: null,
@@ -105131,7 +105186,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
          { name: 'mcp-server-1', status: 'connected' },
          { name: 'mcp-server-2', status: 'connected' },
        ],
-@@ -452,25 +321,61 @@
+@@ -452,27 +321,63 @@
        slash_commands: ['commit', 'compress', 'init', 'summary'],
        qwen_code_version: '1.0.0',
        agents: [],
@@ -105159,8 +105214,8 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +    vi.mocked(mockConfig.getToolRegistry().getAllToolNames).mockReturnValue([]);
 +    const result = await buildSystemMessage(mockConfig, 'session', 'default');
      expect(result.tools).toEqual([]);
-+  });
-+
+   });
+ 
 +  it('refuses failed command discovery with its cause', async () => {
 +    const cause = new Error('command discovery failed');
 +    vi.mocked(getAvailableCommands).mockRejectedValueOnce(cause);
@@ -105193,12 +105248,14 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +    expect(first.uuid).not.toBe(second.uuid);
 +    expect(first.session_id).toBe(second.session_id);
 +    expect(first).not.toHaveProperty('request_evidence_origin');
-   });
- 
++  });
++
    it('should handle empty MCP servers', async () => {
      const config = {
        ...mockConfig,
        getMcpServers: vi.fn().mockReturnValue(null),
+     } as unknown as Config;
+ 
 @@ -660,79 +565,199 @@
      );
    });
@@ -105983,10 +106040,47 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
  
      const taskDisplay: AgentResultDisplay = {
        type: 'task_execution',
+@@ -1135,21 +1448,34 @@
+         },
+       },
+     ];
+     expect(functionResponsePartsToString(parts)).toBe('output1output2');
+   });
+ 
+-  it('should return empty string for missing output', () => {
++  it('keeps an empty response object in the same form sent to the model', () => {
+     const parts: Part[] = [
+       {
+         functionResponse: {
+           response: {},
+         },
+       },
+     ];
+-    expect(functionResponsePartsToString(parts)).toBe('');
++    expect(functionResponsePartsToString(parts)).toBe('{}');
++  });
++
++  it('serializes structured output as the complete model-facing response', () => {
++    const parts: Part[] = [
++      {
++        functionResponse: {
++          response: { output: { rows: [1, 2] } },
++        },
++      },
++    ];
++    expect(functionResponsePartsToString(parts)).toBe(
++      '{"output":{"rows":[1,2]}}',
++    );
+   });
+ 
+   it('should JSON.stringify non-functionResponse parts', () => {
+     const parts: Part[] = [
+       { text: 'text part' },
+       {
 diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/utils/nonInteractiveHelpers.ts
 --- a/packages/cli/src/utils/nonInteractiveHelpers.ts
 +++ b/packages/cli/src/utils/nonInteractiveHelpers.ts
-@@ -1,47 +1,43 @@
+@@ -1,48 +1,45 @@
  /**
   * @license
   * Copyright 2025 Qwen Team
@@ -106014,6 +106108,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
    getMCPServerStatus,
    getPlanModeSystemReminder,
    isShellProgressData,
++  functionResponseContent,
  } from '@qwen-code/qwen-code-core';
  import type { Part, PartListUnion } from '@google/genai';
  import type {
@@ -106029,23 +106124,22 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
  } from '../nonInteractive/io/BaseJsonOutputAdapter.js';
 -import { computeSessionStats } from '../ui/utils/computeStats.js';
  import { getAvailableCommands } from '../nonInteractiveCliCommands.js';
--
--const debugLogger = createDebugLogger('NON_INTERACTIVE');
  
+-const debugLogger = createDebugLogger('NON_INTERACTIVE');
+-
  /**
   * Normalizes various part list formats into a consistent Part[] array.
   *
   * @param parts - Input parts in various formats (string, Part, Part[], or null)
   * @returns Normalized array of Part objects
-@@ -59,12 +55,21 @@
-     return parts.map((part) =>
-       typeof part === 'string' ? { text: part } : (part as Part),
+  */
+@@ -61,12 +58,21 @@
      );
    }
  
    return [parts as Part];
-+}
-+
+ }
+ 
 +/**
 + * The agent-service prompt is always literal task text. Interpreting a leading
 + * slash would let copied workspace commands or workflows execute before the
@@ -106053,21 +106147,21 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
 + */
 +export function shouldInterpretSlashCommands(config: Config): boolean {
 +  return !config.getForegroundAgentsOnly();
- }
- 
++}
++
  /**
   * Extracts user message parts from a CLI protocol message.
   *
   * @param message - User message sourced from the CLI protocol layer
-@@ -95,47 +100,12 @@
-       }
-     }
+  * @returns Extracted parts or null if the message lacks textual content
+  */
+@@ -97,47 +103,12 @@
      return parts.length > 0 ? parts : null;
    }
  
    return null;
--}
--
+ }
+ 
 -/**
 - * Computes Usage information from SessionMetrics using computeSessionStats.
 - * Aggregates token usage across all models in the session.
@@ -106101,13 +106195,15 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
 -  }
 -
 -  return usage;
- }
- 
+-}
+-
  export function buildInitialSystemReminders(config: Config): Part[] {
    const reminders: Part[] = [];
  
    if (config.getApprovalMode() === ApprovalMode.PLAN) {
-@@ -183,17 +153,16 @@
+     reminders.push({ text: getPlanModeSystemReminder(config.getSdkMode?.()) });
+   }
+@@ -183,17 +154,16 @@
        'non_interactive',
      );
  
@@ -106128,7 +106224,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
  }
  
  /**
-@@ -216,40 +185,58 @@
+@@ -216,40 +186,58 @@
  export async function buildSystemMessage(
    config: Config,
    sessionId: string,
@@ -106181,8 +106277,8 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
    const systemMessage: CLISystemMessage = {
      type: 'system',
      subtype: 'init',
-+    stream_contract_sha256: STREAM_CONTRACT_SHA256,
 -    uuid: sessionId,
++    stream_contract_sha256: STREAM_CONTRACT_SHA256,
 +    uuid: randomUUID(),
      session_id: sessionId,
 +    parent_tool_use_id: null,
@@ -106192,7 +106288,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
      model: config.getModel(),
      permission_mode: permissionMode,
      slash_commands: slashCommands,
-@@ -303,30 +290,34 @@
+@@ -303,30 +291,34 @@
  /**
   * Creates an output update handler specifically for Agent tool subagent execution.
   * This handler monitors AgentResultDisplay updates and converts them to protocol messages
@@ -106229,7 +106325,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
     *
     * @param toolCall - The tool call information
     * @returns ToolCallRequestInfo object
-@@ -513,12 +504,36 @@
+@@ -513,12 +505,36 @@
          !adapter.emitSubagentErrorResult
        ) {
          previousTaskStates.set(callId, taskDisplay);
@@ -106266,7 +106362,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
            for (const toolCall of taskDisplay.toolCalls) {
              processToolCall(toolCall);
            }
-@@ -530,56 +545,60 @@
+@@ -530,57 +546,61 @@
              );
              processToolCall(toolCall, previousCall);
            }
@@ -106323,8 +106419,8 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
 +            agentToolCallId,
 +          );
          }
--      }
--
+       }
+ 
 -      // Handle subagent initial message (prompt) in non-interactive mode with json/stream-json output
 -      // Emit when this is the first update (previous is undefined) and task starts
 -      if (
@@ -106339,20 +106435,37 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
 -          [{ text: taskDisplay.taskPrompt }],
 -          agentToolCallId,
 -        );
-       }
- 
+-      }
+-
        // Update previous state
        previousTaskStates.set(callId, taskDisplay);
      }
    };
--
--  // No longer need to attach adapter to handler - task.ts uses AgentResultDisplay.message instead
  
+-  // No longer need to attach adapter to handler - task.ts uses AgentResultDisplay.message instead
+-
    return {
      handler: outputUpdateHandler,
    };
  }
  
+ /**
+@@ -591,14 +611,12 @@
+  * @returns String representation of the parts
+  */
+ export function functionResponsePartsToString(parts: Part[]): string {
+   return parts
+     .map((part) => {
+       if ('functionResponse' in part) {
+-        const response = part.functionResponse?.response;
+-        const content = response?.['output'] ?? response?.['error'] ?? '';
+-        return content;
++        return functionResponseContent(part.functionResponse?.response);
+       }
+       return JSON.stringify(part);
+     })
+     .join('');
+ }
 diff --git a/packages/cli/src/utils/output-writer.ts b/packages/cli/src/utils/output-writer.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/output-writer.ts
@@ -191659,11 +191772,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -19,17 +25,12 @@
+@@ -17,43 +23,69 @@
+   PartUnion,
+   Candidate,
  } from '@google/genai';
  import { GenerateContentResponse, FinishReason } from '@google/genai';
  import type OpenAI from 'openai';
  import { safeJsonParse } from '../../utils/safeJsonParse.js';
++import { functionResponseContent } from '../../utils/function-response-content.js';
  import { createDebugLogger } from '../../utils/debugLogger.js';
  import { createOpenAIReasoningThoughtPart } from '../../utils/thoughtUtils.js';
 -import {
@@ -191677,7 +191793,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    convertSchema,
    relaxSchemaForFunctionCalling,
    type SchemaComplianceMode,
-@@ -38,22 +39,52 @@
+ } from '../../utils/schemaConverter.js';
+ import {
    setToolCallPreparations,
    type ToolCallPreparation,
  } from '../tool-call-preparation.js';
@@ -191736,7 +191853,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    extends OpenAI.Chat.ChatCompletionAssistantMessageParam {
    reasoning_content?: string | null;
  }
-@@ -424,13 +455,20 @@
+@@ -424,13 +456,20 @@
  /**
   * Convert Gemini response to OpenAI completion format (for logging).
   */
@@ -191758,7 +191875,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    // Parse parts inline
    const thoughtParts: string[] = [];
    const contentParts: string[] = [];
-@@ -474,27 +512,25 @@
+@@ -474,27 +513,25 @@
      message.tool_calls = toolCalls;
    }
  
@@ -191775,11 +191892,6 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -    (
 -      usage as OpenAI.CompletionUsage & {
 -        prompt_tokens_details?: { cached_tokens?: number };
--      }
--    ).prompt_tokens_details = {
--      cached_tokens: usageMetadata.cachedContentTokenCount,
--    };
--  }
 +  const usage = usageMetadata
 +    ? {
 +        prompt_tokens: usageMetadata.promptTokenCount,
@@ -191791,7 +191903,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +        completion_tokens_details: {
 +          reasoning_tokens: usageMetadata.thoughtsTokenCount,
 +        },
-+      }
+       }
+-    ).prompt_tokens_details = {
+-      cached_tokens: usageMetadata.cachedContentTokenCount,
+-    };
+-  }
 +    : undefined;
  
    const createdMs = response.createTime
@@ -191799,7 +191915,59 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      : Date.now();
    const createdSeconds = Number.isFinite(createdMs)
      ? Math.floor(createdMs / 1000)
-@@ -879,12 +915,17 @@
+@@ -767,50 +804,20 @@
+       content:
+         contentParts as unknown as OpenAI.Chat.ChatCompletionContentPart[],
+     });
+   }
+ }
+ 
+-function extractFunctionResponseContent(response: unknown): string {
+-  if (response === null || response === undefined) {
+-    return '';
+-  }
+-
+-  if (typeof response === 'string') {
+-    return response;
+-  }
+-
+-  if (typeof response === 'object') {
+-    const responseObject = response as Record<string, unknown>;
+-    const output = responseObject['output'];
+-    if (typeof output === 'string') {
+-      return output;
+-    }
+-
+-    const error = responseObject['error'];
+-    if (typeof error === 'string') {
+-      return error;
+-    }
+-  }
+-
+-  try {
+-    const serialized = JSON.stringify(response);
+-    return serialized ?? String(response);
+-  } catch {
+-    return String(response);
+-  }
+-}
+-
+ /**
+  * Create a tool message from function response (with embedded media parts).
+  */
+ function createToolMessage(
+   response: FunctionResponse,
+   requestContext: RequestContext,
+ ): OpenAI.Chat.ChatCompletionToolMessageParam | null {
+-  const textContent = extractFunctionResponseContent(response.response);
++  const textContent = functionResponseContent(response.response);
+   const contentParts: OpenAIContentPart[] = [];
+ 
+   // Add text content first if present
+   if (textContent) {
+     contentParts.push({ type: 'text' as const, text: textContent });
+   }
+@@ -879,12 +886,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -191817,7 +191985,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1001,15 @@
+@@ -960,16 +972,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -191837,7 +192005,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,108 +1148,29 @@
+@@ -1108,106 +1119,27 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -191929,18 +192097,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -
 -  if (!hasNestedOpening) return 'pending';
 -  return streamFinished ? 'leaked' : 'suspicious';
--}
--
--function throwProtocolTagLeak(requestContext: RequestContext): never {
--  requestContext.pendingThinkingTagCandidate = undefined;
--  requestContext.pendingUntrustedResponseParts = undefined;
--  throw new InvalidStreamError(
--    'Model response leaked thinking tags.',
--    'PROTOCOL_TAG_LEAK',
--  );
--}
--
- /**
++/**
 + * The terminal a strict response ends a completed call with: `tool_calls`,
 + * or, for a request that forced one function by name, `stop`, which is what
 + * the OpenAI protocol -- and the served engine -- report for a named choice.
@@ -191949,21 +192106,26 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +  requestContext: RequestContext,
 +): 'tool_calls' | 'stop' {
 +  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';
-+}
-+
+ }
+ 
+-function throwProtocolTagLeak(requestContext: RequestContext): never {
+-  requestContext.pendingThinkingTagCandidate = undefined;
+-  requestContext.pendingUntrustedResponseParts = undefined;
+-  throw new InvalidStreamError(
+-    'Model response leaked thinking tags.',
+-    'PROTOCOL_TAG_LEAK',
+-  );
 +function missingCallTerminalMessage(requestContext: RequestContext): string {
 +  return requestContext.namedToolChoice === undefined
 +    ? 'Model response carried tool calls without a tool_calls terminal.'
 +    : `Model response carried tool calls without the stop terminal a call to the forced ${requestContext.namedToolChoice} ends with.`;
-+}
-+
-+/**
+ }
+ 
+ /**
   * Convert OpenAI response to Gemini format.
   */
  export function convertOpenAIResponseToGemini(
-   openaiResponse: OpenAI.Chat.ChatCompletion,
-   requestContext: RequestContext,
-@@ -1233,19 +1194,151 @@
+@@ -1233,19 +1165,151 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -192119,7 +192281,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
              functionCall: {
                id: toolCall.id,
                name: toolCall.function.name,
-@@ -1259,81 +1352,42 @@
+@@ -1259,81 +1323,42 @@
      response.candidates = [
        {
          content: {
@@ -192217,7 +192379,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1417,21 +1471,12 @@
+@@ -1417,21 +1442,12 @@
          cumulativeMode: false,
        });
        const normalizedReasoningText = normalizeStreamingTextDelta(
@@ -192239,7 +192401,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        ) {
          parts.push(createOpenAIReasoningThoughtPart(normalizedReasoningText));
        } else if (
-@@ -1482,12 +1527,25 @@
+@@ -1482,12 +1498,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -192265,7 +192427,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,226 +1573,109 @@
+@@ -1515,226 +1544,109 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -192451,27 +192613,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +      : choice.finish_reason
 +        ? toolCallParser.getCompletedToolCalls()
 +        : [];
-+    if (
+     if (
 +      requestContext.strictToolCalling &&
-+      choice.finish_reason &&
+       choice.finish_reason &&
+-      requestContext.pendingThinkingTagCandidate?.closingTagName
 +      choice.finish_reason !== callTerminal &&
 +      choice.finish_reason !== 'length' &&
 +      parsedToolCalls.length > 0
-+    ) {
-+      requestContext.pendingUntrustedResponseParts = undefined;
-+      throw new ResponseObservationError(
-+        response,
-+        new InvalidStreamError(
-+          missingCallTerminalMessage(requestContext),
-+          'MALFORMED_TOOL_CALL',
-+        ),
-+      );
-+    }
-+
-     if (
-       choice.finish_reason &&
--      requestContext.pendingThinkingTagCandidate?.closingTagName
--    ) {
+     ) {
 -      if (
 -        requestContext.hasThinkingTagInReasoning === true ||
 -        choice.finish_reason !== 'tool_calls' ||
@@ -192488,10 +192637,18 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -        toolCallCount: completedToolCalls.length,
 -      };
 -      requestContext.pendingThinkingTagCandidate = undefined;
--    }
--
--    if (
--      choice.finish_reason &&
++      requestContext.pendingUntrustedResponseParts = undefined;
++      throw new ResponseObservationError(
++        response,
++        new InvalidStreamError(
++          missingCallTerminalMessage(requestContext),
++          'MALFORMED_TOOL_CALL',
++        ),
++      );
+     }
+ 
+     if (
+       choice.finish_reason &&
 -      (toolCallParser.hasInvalidToolCallIndex() ||
 -        toolCallWithoutName ||
 +      ((invalidToolCall &&
@@ -192509,23 +192666,20 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -      throw new InvalidStreamError(
 -        'Model response contained a malformed tool call.',
 -        'MALFORMED_TOOL_CALL',
--      );
--    }
--
--    const shouldHoldParts =
--      !choice.finish_reason &&
--      (toolCallWithoutName ||
--        requestContext.hasThinkingTagInReasoning === true ||
--        requestContext.pendingThinkingTagCandidate !== undefined);
 +      throw new ResponseObservationError(
 +        response,
 +        new InvalidStreamError(
 +          'Model response contained a malformed tool call.',
 +          'MALFORMED_TOOL_CALL',
 +        ),
-+      );
-+    }
-+
+       );
+     }
+ 
+-    const shouldHoldParts =
+-      !choice.finish_reason &&
+-      (toolCallWithoutName ||
+-        requestContext.hasThinkingTagInReasoning === true ||
+-        requestContext.pendingThinkingTagCandidate !== undefined);
 +    const shouldHoldParts = !choice.finish_reason && toolCallWithoutName;
      if (shouldHoldParts) {
        (requestContext.pendingUntrustedResponseParts ??= []).push(...parts);
@@ -192566,11 +192720,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
            });
          }
        }
-@@ -1746,6 +1687,17 @@
+@@ -1744,12 +1656,23 @@
+     // (turn.ts) correctly sets wasOutputTruncated=true.
+     const effectiveFinishReason =
        toolCallsTruncated && choice.finish_reason !== 'length'
          ? 'length'
          : choice.finish_reason;
-+
+ 
 +    // A generation its limit stopped makes none of its calls, and what the
 +    // provider served of them is still what the model wrote. The parser holds
 +    // the only copy, so it goes on the terminal, exactly as served, for every
@@ -192581,10 +192737,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +        setIncompleteToolCalls(response, incomplete);
 +      }
 +    }
- 
++
      // Only include finishReason key if finish_reason is present
      const candidate: Candidate = {
-@@ -1764,70 +1716,26 @@
+       content: {
+         parts,
+         role: 'model' as const,
+       },
+@@ -1764,70 +1687,26 @@
      response.candidates = [candidate];
    } else {
      response.candidates = [];
@@ -192663,7 +192823,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1755,19 @@
+@@ -1847,17 +1726,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -192688,7 +192848,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,16 +1777,14 @@
+@@ -1867,16 +1748,14 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:
@@ -211441,7 +211601,24 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './permissions/index.js';
  
  // Model configuration
-@@ -66,6 +85,8 @@
+@@ -48,12 +67,13 @@
+   validateModelConfig,
+ } from './models/index.js';
+ 
+ // Output formatting
+ export * from './output/json-formatter.js';
+ export * from './output/types.js';
++export { functionResponseContent } from './utils/function-response-content.js';
+ 
+ // ============================================================================
+ // Core Engine
+ // ============================================================================
+ 
+ export * from './core/client.js';
+@@ -63,12 +83,14 @@
+   runWithRuntimeContentGenerator,
+   type RuntimeContentGeneratorView,
+   runOutsideAgentContext,
  } from './agents/runtime/agent-context.js';
  export * from './core/reasoning-effort.js';
  export * from './core/coreToolScheduler.js';
@@ -211450,7 +211627,13 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './core/permissionFlow.js';
  export * from './core/permission-helpers.js';
  /** @internal */
-@@ -92,6 +113,7 @@
+ export {
+   type PlanModeShellDecision,
+   evaluatePlanModeShellPolicy,
+@@ -89,12 +111,13 @@
+ export * from './core/message-display-dispatcher.js';
+ export * from './core/nonInteractiveToolExecutor.js';
+ export * from './core/prompts.js';
  export * from './core/session-recovery.js';
  export * from './core/tokenLimits.js';
  export * from './core/tool-call-preparation.js';
@@ -211458,7 +211641,10 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './core/toolCallIdUtils.js';
  export * from './core/tool-invocation-guard.js';
  export * from './core/turn.js';
-@@ -234,16 +256,12 @@
+ export * from './core/turn-interruption.js';
+ 
+ // ============================================================================
+@@ -234,16 +257,12 @@
  export * from './providers/index.js';
  
  // ============================================================================
@@ -211475,7 +211661,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  } from './services/compactionInputSlimming.js';
  export * from './services/chatRecordingService.js';
  export * from './services/cronScheduler.js';
-@@ -266,27 +284,25 @@
+@@ -266,29 +285,27 @@
  } from './services/cronTasksFile.js';
  export * from './services/fileDiscoveryService.js';
  export * from './services/fileHistoryService.js';
@@ -211508,7 +211694,9 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './services/visionBridge/vision-bridge-service.js';
  export * from './services/visionBridge/tool-result-vision-bridge.js';
  export * from './services/visionBridge/image-part-utils.js';
-@@ -333,20 +349,19 @@
+ export * from './services/visionBridge/image-capability.js';
+ export * from './services/sessionRecap.js';
+@@ -333,20 +350,19 @@
  export * from './utils/transcript-records.js';
  export * from './utils/conversation-branches.js';
  export * from './services/sessionTitle.js';
@@ -211531,7 +211719,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +615,25 @@
+@@ -600,24 +616,25 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -211558,7 +211746,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +720,67 @@
+@@ -704,6 +721,67 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -422804,4 +422992,23 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        input.close();
 +        output.close();
 +    }
++}
+diff --git a/packages/core/src/utils/function-response-content.ts b/packages/core/src/utils/function-response-content.ts
+--- /dev/null
++++ b/packages/core/src/utils/function-response-content.ts
+@@ -0,0 +1,15 @@
++/** The text the OpenAI request renderer puts in one tool message. */
++export function functionResponseContent(response: unknown): string {
++  if (response === null || response === undefined) return '';
++  if (typeof response === 'string') return response;
++  if (typeof response === 'object') {
++    const value = response as Record<string, unknown>;
++    if (typeof value['output'] === 'string') return value['output'];
++    if (typeof value['error'] === 'string') return value['error'];
++  }
++  try {
++    return JSON.stringify(response) ?? String(response);
++  } catch {
++    return String(response);
++  }
 +}

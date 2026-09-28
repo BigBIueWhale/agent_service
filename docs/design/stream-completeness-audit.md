@@ -925,3 +925,25 @@ A fresh pinned archive accepted the sealed landmark transform and matched all
 1,143 final identities, including 44 intentional deletions; the six edited
 client files matched the authoring source byte for byte. Native, Java,
 compilation, owner gates, and end-to-end resume are unverified.
+
+## Structured tool-response display
+
+The OpenAI request converter sends a string `functionResponse.response.output`
+as text and serializes the complete response object when that output is
+structured. The JSON stream adapter's separate helper instead joined a
+structured output as JavaScript's `[object Object]`. That display record did
+not describe the text put in the provider request. One Core function now owns
+the selection and serialization for both the request converter and the JSON
+adapter's user and tool-result projections. This changes display evidence for
+structured responses, not the provider request, canonical history, or resume
+order. It applies to ordinary and long agent_service sessions through the
+shared adapters. vLLM does not render these client tool-result records, so
+there is no backend edit at this boundary.
+
+The fresh sealed-source Core converter suite passed 252 source tests and the
+CLI helper suite passed 64, including a structured-output case and an empty
+response object whose model-facing text is `{}`. The adapter integration
+assertion is authored but unexecuted: its suite could not collect because the
+local web-template and channel package entries require build artifacts. A
+source test cannot establish the owner-built CLI or end-to-end provider
+behavior.
