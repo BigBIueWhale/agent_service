@@ -310237,7 +310237,7 @@ diff --git a/packages/core/src/utils/retryErrorClassification.ts b/packages/core
 diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packages/core/src/utils/runtime-contract-admission.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.test.ts
-@@ -0,0 +1,405 @@
+@@ -0,0 +1,464 @@
 +import { describe, expect, it } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { readFileSync } from 'node:fs';
@@ -310246,7 +310246,10 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +  RuntimeContractViolation,
 +} from './runtime-contract-admission.js';
 +
-+import { STREAM_CONTRACT_SHA256 } from './runtime-stream-contract.js';
++import {
++  STREAM_CONTRACT_SHA256,
++  validateCompactionOutcome,
++} from './runtime-stream-contract.js';
 +
 +function startedOwner(): RuntimeContractAdmission {
 +  const owner = new RuntimeContractAdmission();
@@ -310274,6 +310277,38 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +});
 +
 +describe('required runtime admission', () => {
++  it('refuses a compaction outcome that contradicts the retained history', () => {
++    const failed = {
++      status: 'COMPRESSION_FAILED_PROTOCOL_ERROR',
++      succeeded: false,
++      originalTokenCount: 24,
++      newTokenCount: 24,
++      triggerReason: null,
++      rejectedAttempts: [] as Array<{ status: string }>,
++    };
++    expect(validateCompactionOutcome(failed)).toBeNull();
++    for (const changed of [
++      { status: 'COMPRESSED' },
++      { status: 'NOOP' },
++      { status: 'UNKNOWN_STATUS' },
++      { newTokenCount: 12 },
++      { triggerReason: 'unclassified' },
++      { rejectedAttempts: [{ status: 'COMPRESSED' }] },
++    ]) {
++      expect(
++        validateCompactionOutcome({ ...failed, ...changed }),
++      ).not.toBeNull();
++    }
++    expect(
++      validateCompactionOutcome({
++        ...failed,
++        status: 'COMPRESSED',
++        succeeded: true,
++        newTokenCount: 12,
++      }),
++    ).toBeNull();
++  });
++
 +  it.each([
 +    ['missing', /no local operation receipt/],
 +    ['foreign', /no local operation receipt/],
@@ -310476,6 +310511,14 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +    for (const data of [
 +      { ...record.data, postCompactionHistory: null },
 +      { ...record.data, succeeded: false },
++      { ...record.data, status: 'COMPRESSION_FAILED_PROTOCOL_ERROR' },
++      { ...record.data, status: 'NOOP' },
++      { ...record.data, status: 'UNKNOWN_STATUS' },
++      { ...record.data, triggerReason: 'unclassified' },
++      {
++        ...record.data,
++        rejectedAttempts: [{ ...draw, status: 'COMPRESSED' }],
++      },
 +      { ...record.data, unknown_evidence: true },
 +      {
 +        ...record.data,
@@ -310486,6 +310529,22 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +        RuntimeContractViolation,
 +      );
 +    }
++    const failed = {
++      ...record.data,
++      status: 'COMPRESSION_FAILED_PROTOCOL_ERROR',
++      succeeded: false,
++      postCompactionHistory: null,
++      newTokenCount: 24,
++      output: null,
++      rejectedAttempts: [],
++    };
++    expect(startedOwner().admit({ ...record, data: failed })).toBeDefined();
++    expect(() =>
++      startedOwner().admit({
++        ...record,
++        data: { ...failed, newTokenCount: 12 },
++      }),
++    ).toThrow(RuntimeContractViolation);
 +  });
 +
 +  it('retains the offending bytes and failure across an optional subscriber catch', () => {
@@ -311845,8 +311904,9 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.test.ts b/packages/
 diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/src/utils/runtime-stream-contract.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-stream-contract.ts
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,206 @@
 +import type { GoalSnapshotV2 } from '../goals/goal-protocol.js';
++import { CompressionStatus } from '../core/turn.js';
 +import { requireGenerationUsage } from '../telemetry/generation-usage.js';
 +import {
 +  GOAL_CHECKPOINT_EVIDENCE_MAX_BYTES,
@@ -311884,6 +311944,61 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +  return errors
 +    .map((error) => `${error.instancePath}: ${error.message}`)
 +    .join('; ');
++}
++
++const rejectedCompactionStatuses = new Set<string>([
++  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT],
++  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY],
++  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED],
++  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_INSUFFICIENT_ROOM],
++  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND],
++]);
++
++export function validateCompactionOutcome(
++  data: Record<string, unknown>,
++): string | null {
++  const status = data['status'];
++  const succeeded = data['succeeded'];
++  const knownStatus =
++    typeof status === 'string' &&
++    Object.values(CompressionStatus).includes(status);
++  if (
++    !knownStatus ||
++    status === 'NOOP' ||
++    typeof succeeded !== 'boolean' ||
++    (status === 'COMPRESSED') !== succeeded
++  )
++    return 'Compaction status contradicts whether history was replaced';
++  const original = data['originalTokenCount'];
++  const next = data['newTokenCount'];
++  if (
++    !Number.isSafeInteger(original) ||
++    (original as number) < 0 ||
++    (next !== null && (!Number.isSafeInteger(next) || (next as number) < 0)) ||
++    (succeeded && next === null) ||
++    (!succeeded && next !== null && next !== original)
++  )
++    return 'Compaction token counts contradict the retained history';
++  if (
++    data['triggerReason'] !== null &&
++    data['triggerReason'] !== 'token_limit' &&
++    data['triggerReason'] !== 'manual'
++  )
++    return 'Compaction has an unknown trigger reason';
++  const rejected = data['rejectedAttempts'];
++  if (
++    !Array.isArray(rejected) ||
++    rejected.some(
++      (attempt: unknown) =>
++        attempt === null ||
++        typeof attempt !== 'object' ||
++        !rejectedCompactionStatuses.has(
++          (attempt as Record<string, unknown>)['status'] as string,
++        ),
++    )
++  )
++    return 'Compaction rejected attempt does not name a resampleable rule';
++  return null;
 +}
 +
 +export function validateGoalSnapshot(value: unknown): string | null {
@@ -311940,6 +312055,12 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +  }
 +  if (!validateStreamStructure(value))
 +    return schemaError(validateStreamStructure.errors);
++  if (envelope['type'] === 'system' && envelope['subtype'] === 'compaction') {
++    const cause = validateCompactionOutcome(
++      envelope['data'] as Record<string, unknown>,
++    );
++    if (cause !== null) return cause;
++  }
 +  if (envelope['type'] === 'assistant') {
 +    const origin = envelope['origin'] as { kind?: unknown } | undefined;
 +    const message = envelope['message'] as
@@ -354594,7 +354715,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/__init__.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
-@@ -0,0 +1,470 @@
+@@ -0,0 +1,537 @@
 +"""Admission of the shared versioned CLI stream before SDK interpretation."""
 +
 +from __future__ import annotations
@@ -354715,6 +354836,71 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +    usage = summary["usage"]
 +    if usage is not None:
 +        _served_usage(usage)
++
++
++_FAILED_COMPACTION_STATUSES = frozenset(
++    (
++        "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT",
++        "COMPRESSION_FAILED_TOKEN_COUNT_ERROR",
++        "COMPRESSION_FAILED_EMPTY_SUMMARY",
++        "COMPRESSION_FAILED_OUTPUT_TRUNCATED",
++        "COMPRESSION_FAILED_PROTOCOL_ERROR",
++        "COMPRESSION_FAILED_INSUFFICIENT_ROOM",
++        "COMPRESSION_FAILED_SUMMARY_OVER_BOUND",
++        "COMPRESSION_FAILED_HISTORY_CHANGED",
++    )
++)
++_RESAMPLEABLE_COMPACTION_STATUSES = frozenset(
++    (
++        "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT",
++        "COMPRESSION_FAILED_EMPTY_SUMMARY",
++        "COMPRESSION_FAILED_OUTPUT_TRUNCATED",
++        "COMPRESSION_FAILED_INSUFFICIENT_ROOM",
++        "COMPRESSION_FAILED_SUMMARY_OVER_BOUND",
++    )
++)
++
++
++def _compaction_outcome(data: dict[str, Any]) -> None:
++    status = data.get("status")
++    succeeded = data.get("succeeded")
++    _require(
++        type(succeeded) is bool
++        and (
++            (status == "COMPRESSED" and succeeded)
++            or (status in _FAILED_COMPACTION_STATUSES and not succeeded)
++        ),
++        "compaction status contradicts whether history was replaced",
++    )
++    original = data.get("originalTokenCount")
++    new = data.get("newTokenCount")
++
++    def safe(value: Any) -> bool:
++        return type(value) is int and 0 <= value <= 2**53 - 1
++
++    _require(
++        safe(original)
++        and "newTokenCount" in data
++        and (new is None or safe(new))
++        and (not succeeded or new is not None)
++        and (succeeded or new is None or new == original),
++        "compaction token counts contradict the retained history",
++    )
++    _require(
++        "triggerReason" in data
++        and data["triggerReason"] in (None, "token_limit", "manual"),
++        "compaction has an unknown trigger reason",
++    )
++    rejected = data.get("rejectedAttempts")
++    _require(
++        isinstance(rejected, list)
++        and all(
++            isinstance(attempt, dict)
++            and attempt.get("status") in _RESAMPLEABLE_COMPACTION_STATUSES
++            for attempt in rejected
++        ),
++        "compaction rejected attempt does not name a resampleable rule",
++    )
 +
 +
 +class RecordAdmission:
@@ -354839,6 +355025,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +            session.runtime_operations[scope] = data
 +            session.completed_runtime_operations.pop(scope, None)
 +            session.needs_result = True
++        if kind == "system" and subtype == "compaction":
++            _compaction_outcome(record["data"])
 +        if kind == "model_request":
 +            session.requests.observe_request(record["request"])
 +            session.needs_result = True
@@ -356004,7 +356192,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,787 @@
+@@ -0,0 +1,843 @@
 +from __future__ import annotations
 +
 +import copy
@@ -356092,6 +356280,62 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        "event": {"kind": "delivery", "outputs_delivered": 0},
 +    })
 +    reader.finish()
++
++
++def test_compaction_status_agrees_with_retained_history() -> None:
++    start = records()[0]
++    compaction = {
++        "type": "system",
++        "subtype": "compaction",
++        "uuid": "compaction",
++        "session_id": start["session_id"],
++        "parent_tool_use_id": None,
++        "data": {
++            "status": "COMPRESSION_FAILED_PROTOCOL_ERROR",
++            "succeeded": False,
++            "originalTokenCount": 24,
++            "newTokenCount": 24,
++            "triggerReason": None,
++            "postCompactionHistory": None,
++            "output": None,
++            "rejectedAttempts": [],
++        },
++    }
++    admission = RecordAdmission()
++    admission.admit(start)
++    admission.admit(compaction)
++    for field, value in (
++        ("status", "COMPRESSED"),
++        ("status", "NOOP"),
++        ("status", "UNKNOWN_STATUS"),
++        ("newTokenCount", 12),
++        ("triggerReason", "unclassified"),
++    ):
++        forged = copy.deepcopy(compaction)
++        forged["data"][field] = value
++        admission = RecordAdmission()
++        admission.admit(start)
++        with pytest.raises(RecordContractError):
++            admission.admit(forged)
++    forged = copy.deepcopy(compaction)
++    forged["data"]["rejectedAttempts"] = [
++        {
++            "status": "COMPRESSED",
++            "text": "",
++            "reasoning": "",
++            "sdkValuesJson": [],
++            "newTokenCount": None,
++            "snapshotBytes": None,
++            "incompleteToolCalls": [],
++            "finishReason": None,
++            "requestAttempts": 1,
++            "usage": None,
++        }
++    ]
++    admission = RecordAdmission()
++    admission.admit(start)
++    with pytest.raises(RecordContractError, match="resampleable rule"):
++        admission.admit(forged)
 +
 +
 +@pytest.mark.parametrize("name", FIXTURES)
@@ -361369,7 +361613,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
-@@ -0,0 +1,383 @@
+@@ -0,0 +1,436 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -361389,6 +361633,16 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +
 +/** Shared admission before state changes, control routing or callback delivery. */
 +public final class RecordAdmission {
++    private static final long SAFE_INTEGER = (1L << 53) - 1;
++    private static final Set<String> FAILED_COMPACTION_STATUSES = Set.of(
++            "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT", "COMPRESSION_FAILED_TOKEN_COUNT_ERROR",
++            "COMPRESSION_FAILED_EMPTY_SUMMARY", "COMPRESSION_FAILED_OUTPUT_TRUNCATED",
++            "COMPRESSION_FAILED_PROTOCOL_ERROR", "COMPRESSION_FAILED_INSUFFICIENT_ROOM",
++            "COMPRESSION_FAILED_SUMMARY_OVER_BOUND", "COMPRESSION_FAILED_HISTORY_CHANGED");
++    private static final Set<String> RESAMPLEABLE_COMPACTION_STATUSES = Set.of(
++            "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT", "COMPRESSION_FAILED_EMPTY_SUMMARY",
++            "COMPRESSION_FAILED_OUTPUT_TRUNCATED", "COMPRESSION_FAILED_INSUFFICIENT_ROOM",
++            "COMPRESSION_FAILED_SUMMARY_OVER_BOUND");
 +    private RecordContractException failure;
 +    private final Map<String, SessionState> sessions = new HashMap<>();
 +    private long pendingInputs;
@@ -361417,6 +361671,46 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            }
 +        }
 +        return true;
++    }
++
++    private static Long compactionCount(Object value) {
++        if (!(value instanceof Number)) return null;
++        try {
++            long count = StreamSchema.integer(value);
++            return count >= 0 && count <= SAFE_INTEGER ? count : null;
++        } catch (ArithmeticException cause) {
++            return null;
++        }
++    }
++
++    private static void compactionOutcome(Map<String, Object> data) {
++        Object status = data.get("status");
++        Object succeeded = data.get("succeeded");
++        require(succeeded instanceof Boolean
++                && (("COMPRESSED".equals(status) && Boolean.TRUE.equals(succeeded))
++                    || (status instanceof String && FAILED_COMPACTION_STATUSES.contains(status)
++                        && Boolean.FALSE.equals(succeeded))),
++                "compaction status contradicts whether history was replaced");
++        Long original = compactionCount(data.get("originalTokenCount"));
++        Object nextValue = data.get("newTokenCount");
++        Long next = compactionCount(nextValue);
++        require(original != null && data.containsKey("newTokenCount")
++                && (nextValue == null || next != null)
++                && (!Boolean.TRUE.equals(succeeded) || next != null)
++                && (Boolean.TRUE.equals(succeeded) || next == null || next.equals(original)),
++                "compaction token counts contradict the retained history");
++        Object trigger = data.get("triggerReason");
++        require(data.containsKey("triggerReason")
++                && (trigger == null || "token_limit".equals(trigger) || "manual".equals(trigger)),
++                "compaction has an unknown trigger reason");
++        Object rejected = data.get("rejectedAttempts");
++        require(rejected instanceof List<?>,
++                "compaction rejected attempt does not name a resampleable rule");
++        for (Object attempt : array(rejected)) {
++            Object refused = object(attempt).get("status");
++            require(refused instanceof String && RESAMPLEABLE_COMPACTION_STATUSES.contains(refused),
++                    "compaction rejected attempt does not name a resampleable rule");
++        }
 +    }
 +
 +    public synchronized void submittedInput() {
@@ -361532,6 +361826,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            session.runtimeOperations.put(scope, new RuntimeOperation(data));
 +            session.completedRuntimeOperations.remove(scope);
 +            session.needsResult = true;
++        }
++        if ("system".equals(kind) && "compaction".equals(subtype)) {
++            compactionOutcome(object(record.get("data")));
 +        }
 +        switch (kind) {
 +            case "model_request":
@@ -364921,7 +365218,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,655 @@
+@@ -0,0 +1,692 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -364937,6 +365234,43 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +import static org.junit.jupiter.api.Assertions.*;
 +
 +class RecordAdmissionTest {
++    @Test
++    void compactionStatusAgreesWithRetainedHistory() {
++        String start = EvidenceFixtures.records("chat_request_response_history").get(0);
++        JSONObject compaction = JSON.parseObject("{\"type\":\"system\",\"subtype\":\"compaction\","
++                + "\"uuid\":\"compaction\",\"parent_tool_use_id\":null,"
++                + "\"data\":{\"status\":\"COMPRESSION_FAILED_PROTOCOL_ERROR\",\"succeeded\":false,"
++                + "\"originalTokenCount\":24,\"newTokenCount\":24,\"triggerReason\":null,"
++                + "\"postCompactionHistory\":null,\"output\":null,\"rejectedAttempts\":[]}}");
++        compaction.put("session_id", JSON.parseObject(start).getString("session_id"));
++        RecordAdmission valid = new RecordAdmission();
++        valid.admit(start, null);
++        valid.admit(compaction.toJSONString(JSONWriter.Feature.WriteNulls), null);
++        for (Map.Entry<String, Object> change : List.of(
++                Map.<String, Object>entry("status", "COMPRESSED"),
++                Map.<String, Object>entry("status", "NOOP"),
++                Map.<String, Object>entry("status", "UNKNOWN_STATUS"),
++                Map.<String, Object>entry("newTokenCount", 12),
++                Map.<String, Object>entry("triggerReason", "unclassified"))) {
++            JSONObject forged = JSON.parseObject(compaction.toJSONString(JSONWriter.Feature.WriteNulls));
++            forged.getJSONObject("data").put(change.getKey(), change.getValue());
++            RecordAdmission admission = new RecordAdmission();
++            admission.admit(start, null);
++            assertThrows(RecordContractException.class,
++                    () -> admission.admit(forged.toJSONString(JSONWriter.Feature.WriteNulls), null));
++        }
++        JSONObject rejected = JSON.parseObject("{\"status\":\"COMPRESSED\",\"text\":\"\",\"reasoning\":\"\","
++                + "\"sdkValuesJson\":[],\"newTokenCount\":null,\"snapshotBytes\":null,"
++                + "\"incompleteToolCalls\":[],\"finishReason\":null,\"requestAttempts\":1,\"usage\":null}");
++        JSONObject forged = JSON.parseObject(compaction.toJSONString(JSONWriter.Feature.WriteNulls));
++        forged.getJSONObject("data").put("rejectedAttempts", List.of(rejected));
++        RecordAdmission admission = new RecordAdmission();
++        admission.admit(start, null);
++        RecordContractException failure = assertThrows(RecordContractException.class,
++                () -> admission.admit(forged.toJSONString(JSONWriter.Feature.WriteNulls), null));
++        assertTrue(failure.getMessage().contains("resampleable rule"));
++    }
++
 +    @Test
 +    void utilityResponseRequiresDeliveryAfterProcessing() {
 +        String body = "{\"kv_scope\":\"utility\",\"model\":\"fixture-model\",\"stream\":false,\"messages\":[]}";

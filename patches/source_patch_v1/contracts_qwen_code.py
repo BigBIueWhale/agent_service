@@ -5644,6 +5644,34 @@ def _validate_compaction_accounting_after(state: State) -> None:
     label = "compaction output-accounting result"
     _require_all(
         state,
+        "packages/core/src/utils/runtime-stream-contract.ts",
+        (
+            "validateCompactionOutcome(",
+            "Compaction status contradicts whether history was replaced",
+            "Compaction rejected attempt does not name a resampleable rule",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/sdk-python/src/qwen_code_sdk/record_admission.py",
+        (
+            "_compaction_outcome(record[\"data\"])",
+            "compaction status contradicts whether history was replaced",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java",
+        (
+            "compactionOutcome(object(record.get(\"data\")))",
+            "compaction status contradicts whether history was replaced",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
         "packages/core/src/core/turn.ts",
         (
             "export interface CompactionOutputAccounting {",
@@ -11319,7 +11347,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         rationale=(
             "A compaction attempt retains its observed text, reasoning, terminal, request attempts, "
             "what a call its ceiling stopped had written, as served, and "
-            "full served usage or explicit absence. Failure after a partial stream cannot erase the "
+            "full served usage or explicit absence. Its status and retained token count agree with "
+            "whether history was replaced, and refused draws name resampleable rules. "
+            "Failure after a partial stream cannot erase the "
             "last valid observation. Reasoning remains inline; this contract does not assert reference "
             "persistence."
         ),

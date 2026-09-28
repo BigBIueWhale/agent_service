@@ -122,27 +122,52 @@ fn validate_compaction_event(
             _ => Err(refuse(&format!("whose {key} is neither a string nor null"))),
         }
     };
-    if !record
+    let succeeded = record
+        .get("succeeded")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| refuse("without a boolean succeeded"))?;
+    let status = record
         .get("status")
         .and_then(Value::as_str)
-        .is_some_and(|s| !s.is_empty())
-    {
-        return Err(refuse("without a non-empty status"));
+        .ok_or_else(|| refuse("without a compaction status"))?;
+    let failed_status = matches!(
+        status,
+        "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT"
+            | "COMPRESSION_FAILED_TOKEN_COUNT_ERROR"
+            | "COMPRESSION_FAILED_EMPTY_SUMMARY"
+            | "COMPRESSION_FAILED_OUTPUT_TRUNCATED"
+            | "COMPRESSION_FAILED_PROTOCOL_ERROR"
+            | "COMPRESSION_FAILED_INSUFFICIENT_ROOM"
+            | "COMPRESSION_FAILED_SUMMARY_OVER_BOUND"
+            | "COMPRESSION_FAILED_HISTORY_CHANGED"
+    );
+    if !(status == "COMPRESSED" && succeeded || failed_status && !succeeded) {
+        return Err(refuse(
+            "whose status contradicts whether history was replaced; inspect the compaction producer",
+        ));
     }
-    if !record.get("succeeded").is_some_and(Value::is_boolean) {
-        return Err(refuse("without a boolean succeeded"));
-    }
-    count(record, "originalTokenCount")?;
+    let original_tokens = count(record, "originalTokenCount")?;
     if field(record, "newTokenCount", line)?.is_null() {
-        if record.get("succeeded").and_then(Value::as_bool) != Some(false) {
+        if succeeded {
             return Err(refuse(
                 "whose successful replacement has no measured token count; inspect the compaction producer",
             ));
         }
     } else {
-        count(record, "newTokenCount")?;
+        let new_tokens = count(record, "newTokenCount")?;
+        if !succeeded && new_tokens != original_tokens {
+            return Err(refuse(
+                "whose failed attempt changes the retained history token count; inspect the compaction producer",
+            ));
+        }
     }
-    string_or_null(record, "triggerReason")?;
+    if !matches!(
+        record.get("triggerReason").and_then(Value::as_str),
+        Some("token_limit" | "manual")
+    ) && !record.get("triggerReason").is_some_and(Value::is_null)
+    {
+        return Err(refuse("with an unknown compaction trigger reason"));
+    }
 
     // What one drawn candidate spent. `budget` is the transition's frozen
     // output ceiling when the record reports it; every candidate was issued
@@ -274,13 +299,18 @@ fn validate_compaction_event(
         let attempt = attempt
             .as_object()
             .ok_or_else(|| refuse(&format!("whose {whose} is not an object")))?;
-        if !attempt
-            .get("status")
-            .and_then(Value::as_str)
-            .is_some_and(|s| !s.is_empty())
-        {
+        if !matches!(
+            attempt.get("status").and_then(Value::as_str),
+            Some(
+                "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT"
+                    | "COMPRESSION_FAILED_EMPTY_SUMMARY"
+                    | "COMPRESSION_FAILED_OUTPUT_TRUNCATED"
+                    | "COMPRESSION_FAILED_INSUFFICIENT_ROOM"
+                    | "COMPRESSION_FAILED_SUMMARY_OVER_BOUND"
+            )
+        ) {
             return Err(refuse(&format!(
-                "whose {whose} has no non-empty status naming the rule it failed"
+                "whose {whose} does not name a resampleable rule it failed"
             )));
         }
         candidate(attempt, &whose, budget)?;
@@ -1473,6 +1503,57 @@ mod tests {
         admit(&mut owner, &stream_start()).unwrap();
         admit(&mut owner, &init()).unwrap();
         owner
+    }
+    #[test]
+    fn compaction_status_and_retained_count_agree_with_the_history_decision() {
+        let failed = serde_json::json!({
+            "type":"system", "subtype":"compaction", "uuid":"compaction",
+            "session_id":"session", "parent_tool_use_id":null,
+            "data":{
+                "status":"COMPRESSION_FAILED_PROTOCOL_ERROR", "succeeded":false,
+                "originalTokenCount":24, "newTokenCount":24,
+                "triggerReason":null, "postCompactionHistory":null,
+                "output":null, "rejectedAttempts":[]
+            }
+        });
+        admit(&mut initialized(), &failed.to_string()).unwrap();
+        let mut success = failed.clone();
+        success["data"]["status"] = serde_json::json!("COMPRESSED");
+        success["data"]["succeeded"] = serde_json::json!(true);
+        success["data"]["newTokenCount"] = serde_json::json!(12);
+        success["data"]["postCompactionHistory"] = serde_json::json!([
+            {"role":"user", "parts":[{"text":"retained input"}]}
+        ]);
+        success["data"]["output"] = serde_json::json!({
+            "maxOutputTokens":8, "requestAttempts":1,
+            "text":"summary", "reasoning":"", "sdkValuesJson":["{}"],
+            "newTokenCount":12, "snapshotBytes":7,
+            "incompleteToolCalls":[], "finishReason":"STOP",
+            "usage":{"promptTokenCount":24,"candidatesTokenCount":4,
+                "thoughtsTokenCount":0,"cachedContentTokenCount":0,
+                "totalTokenCount":28}
+        });
+        admit(&mut initialized(), &success.to_string()).unwrap();
+        for changed in [
+            ("status", serde_json::json!("COMPRESSED")),
+            ("status", serde_json::json!("NOOP")),
+            ("status", serde_json::json!("UNKNOWN_STATUS")),
+            ("newTokenCount", serde_json::json!(12)),
+            ("triggerReason", serde_json::json!("unclassified")),
+        ] {
+            let mut forged = failed.clone();
+            forged["data"][changed.0] = changed.1;
+            assert!(admit(&mut initialized(), &forged.to_string()).is_err());
+        }
+        let mut forged = success;
+        forged["data"]["status"] = serde_json::json!("COMPRESSION_FAILED_PROTOCOL_ERROR");
+        assert!(admit(&mut initialized(), &forged.to_string()).is_err());
+        let mut rejected = forged["data"]["output"].clone();
+        rejected.as_object_mut().unwrap().remove("maxOutputTokens");
+        rejected["status"] = serde_json::json!("COMPRESSED");
+        forged["data"]["status"] = serde_json::json!("COMPRESSED");
+        forged["data"]["rejectedAttempts"] = serde_json::json!([rejected]);
+        assert!(admit(&mut initialized(), &forged.to_string()).is_err());
     }
     fn partial(id: &str, event: &str) -> String {
         let parsed: serde_json::Value = serde_json::from_str(event).unwrap();
