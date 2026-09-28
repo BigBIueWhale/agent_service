@@ -9319,6 +9319,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "historyLength !== this.length", "no initial history checkpoint",
         "export type RuntimeHistoryCommit", "export class RuntimeHistoryCursor",
         "ownedImageReferenceIds", "runtimeHistoryPosition",
+        "export function requireRuntimeConversationContent(",
+        "requireRuntimeConversationContent(value, 'model')",
     ), label=label)
     _require_all(state, core + "services/session-api-history.ts", (
         "add(commit: RuntimeHistoryCommit)",
@@ -9360,7 +9362,11 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "utils/transcript-records.ts", (
         "readModelGeneration(value['generation'])", "export function resolveTranscriptRecord(",
         "generationHistory(envelope)", "Stored generation records cannot contain derived history or presentation fields",
+        "requireRuntimeConversationContent(value['message'], 'model')",
+        "requireRuntimeConversationContent(value['message'], 'user')",
     ), label=label)
+    require_text(state, core + "utils/transcript-records.test.ts",
+                 "refuses malformed %s even on an inactive branch", label=label)
     _require_all(state, core + "utils/forkedAgent.ts", (
         "extraHistory?: RuntimeHistoryState", "initialImagePayloads: params.extraHistory?.imagePayloads",
         "params.imagePayloads", "imagePayloads: StoredImagePayload[]",

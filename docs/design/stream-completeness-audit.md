@@ -372,7 +372,7 @@ One concrete source consumer omission remains:
   consumer gap regardless of whether the image ships that application.
 
 The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
-while the current patched Qwen source requires canonical recording version 13.
+while the current patched Qwen source requires canonical recording version 14.
 Hard-coding that version into Desktop's local JSONL loops would bind them to a
 different runtime source and could reject an ordinary session from its pinned
 runtime. The patched ACP `qwen/session/loadUpdates` path already asks the

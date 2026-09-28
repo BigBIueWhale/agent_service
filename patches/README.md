@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `3edfbe92266361589ba578cea9fe6237af5f109c9cec51730860bb22e19217c5`
+- Review-diff SHA-256: `6b98f4adc9f005b1487fd7bf2040c1a0227472d05490b00299d3769a288a943d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `cc65013be61a333296260fc665166f1e97df1aa38631d891468b553dcbe9747b`
+- Transformer-manifest SHA-256: `4ae8129690413a877b7b844850ac2ee9a91a82599a9327bd3cbacf677adaade9`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -346,7 +346,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 13`, independently
+Every physical canonical chat record carries `recordingVersion: 14`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -372,7 +372,11 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 12 histories.
+new session. They are not promoted into complete version 14 histories.
+Adopted and realtime conversation records must carry content with the role
+declared by their record type; non-object parts and invalid image-reference
+identities are refused even on inactive branches. The same admission runs
+before writing and in full and indexed readers.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
@@ -496,8 +500,9 @@ They can inspect an explicitly open live prefix; they do not certify that prefix
 as a complete record set. Native certifier source refuses missing response and
 logical completion. Native behavior remains unverified pending owner gates. Both fake
 providers compare recorded bytes with their actual response body, including
-malformed SSE and cancelled prefixes. Full/indexed/fork resume tests compare the
-entire restored model history byte for byte while preserving raw evidence.
+malformed SSE and cancelled prefixes. Exact full/indexed/fork resume behavior
+still needs the owner's complete gates; focused source tests do not establish
+that end-to-end result.
 
 Each response outcome also records how many SDK values reached conversion and
 how many decoded outputs crossed the shared pipeline. A chat attempt completion

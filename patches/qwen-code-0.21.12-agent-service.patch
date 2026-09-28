@@ -317574,7 +317574,7 @@ diff --git a/packages/core/src/utils/toolResultCleanup.ts b/packages/core/src/ut
 diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/src/utils/transcript-records.test.ts
 --- a/packages/core/src/utils/transcript-records.test.ts
 +++ b/packages/core/src/utils/transcript-records.test.ts
-@@ -3,47 +3,52 @@
+@@ -3,47 +3,53 @@
   * Copyright 2025 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
   */
@@ -317584,6 +317584,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
 +  CHAT_RECORDING_VERSION,
    prepareTranscriptRecords,
    projectUserTranscriptForDisplay,
++  requireStoredTranscriptRecord,
    wrapUserPromptSubmitContext,
    type TranscriptRecordPreparationError,
  } from './transcript-records.js';
@@ -317631,7 +317632,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
      expect(prepared.records.map((item) => item.uuid)).toEqual([
        'root',
        'active',
-@@ -55,13 +60,17 @@
+@@ -55,13 +61,17 @@
      expect(prepared.records[1]?.timestamp).toBe('2026-07-14T00:00:01.000Z');
    });
  
@@ -317650,7 +317651,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
        }),
      ]);
  
-@@ -104,41 +113,38 @@
+@@ -104,41 +114,38 @@
  
      expect(prepared.diagnostics.map((item) => item.code)).toEqual(
        expect.arrayContaining(['parent_cycle', 'conflicting_parent_uuid']),
@@ -317716,7 +317717,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
        record('source', null, {
          type: 'system',
          subtype: 'session_source',
-@@ -154,27 +160,43 @@
+@@ -154,27 +161,43 @@
          recordId: 'source',
          path: 'subtype',
        }),
@@ -317769,7 +317770,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
    });
  
    it('accepts Realtime dialogue as a known record subtype', () => {
-@@ -183,12 +205,44 @@
+@@ -183,12 +206,95 @@
          subtype: 'realtime_message',
          message: { role: 'user', parts: [{ text: 'voice question' }] },
        }),
@@ -317778,6 +317779,57 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
      expect(prepared.records).toHaveLength(1);
 +    expect(prepared.diagnostics).toEqual([]);
 +  });
++
++  it.each([
++    [
++      'adopted assistant role',
++      'assistant',
++      'adopted_message',
++      { role: 'user', parts: [{ text: 'wrong role' }] },
++      /non-model role/,
++    ],
++    [
++      'realtime assistant role',
++      'assistant',
++      'realtime_message',
++      { role: 'user', parts: [{ text: 'wrong role' }] },
++      /non-model role/,
++    ],
++    [
++      'adopted assistant reference',
++      'assistant',
++      'adopted_message',
++      { role: 'model', parts: [{ imageReferenceId: 42 }] },
++      /Invalid recorded image reference/,
++    ],
++    [
++      'realtime user role',
++      'user',
++      'realtime_message',
++      { role: 'model', parts: [{ text: 'wrong role' }] },
++      /non-user role/,
++    ],
++    [
++      'missing adopted content',
++      'assistant',
++      'adopted_message',
++      undefined,
++      /invalid Content entries/,
++    ],
++  ] as const)(
++    'refuses malformed %s even on an inactive branch',
++    (_name, type, subtype, message, reason) => {
++      const invalid = record('invalid', 'root', { type, subtype, message });
++      expect(() => requireStoredTranscriptRecord(invalid)).toThrow(reason);
++      expect(() =>
++        prepareTranscriptRecords([
++          record('root', null),
++          invalid,
++          record('active', 'root'),
++        ]),
++      ).toThrow(reason);
++    },
++  );
 +
 +  it('accepts adopted assistant content without marking history incomplete', () => {
 +    const prepared = prepareTranscriptRecords([
@@ -317817,7 +317869,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
 diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/utils/transcript-records.ts
 --- a/packages/core/src/utils/transcript-records.ts
 +++ b/packages/core/src/utils/transcript-records.ts
-@@ -1,48 +1,209 @@
+@@ -1,48 +1,210 @@
 +import {
 +  generationHistory,
 +  generationIncompleteCalls,
@@ -317831,6 +317883,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +  type GenerationEnvelope,
 +} from '../core/model-generation.js';
 +import {
++  requireRuntimeConversationContent,
 +  requireRuntimeHistoryChange,
 +  requireRuntimeHistoryState,
 +} from '../services/runtime-history.js';
@@ -318030,7 +318083,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  export const USER_PROMPT_SUBMIT_CONTEXT_CLOSE =
    '</qwen:user-prompt-submit-context>';
  
-@@ -64,17 +225,19 @@
+@@ -64,17 +226,19 @@
    readonly missingParentUuid: string;
  }
  
@@ -318050,7 +318103,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
  export class TranscriptRecordPreparationError extends TypeError {
    constructor(
-@@ -98,41 +261,54 @@
+@@ -98,41 +262,54 @@
  
  const RECORD_TYPES = new Set<TranscriptRecordType>([
    'user',
@@ -318112,7 +318165,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  }
  
  export function wrapUserPromptSubmitContext(context: string): string {
-@@ -223,13 +399,20 @@
+@@ -223,13 +400,20 @@
    };
  }
  
@@ -318134,7 +318187,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    readonly type?: unknown;
    readonly subtype?: unknown;
  }): boolean {
-@@ -237,33 +420,41 @@
+@@ -237,33 +421,41 @@
      record.type === 'system' &&
      typeof record.subtype === 'string' &&
      ARTIFACT_RECORD_SUBTYPES.has(record.subtype)
@@ -318179,7 +318232,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    const recordId = typeof uuid === 'string' ? uuid : undefined;
    if (
      typeof uuid !== 'string' ||
-@@ -272,13 +463,13 @@
+@@ -272,13 +464,13 @@
      typeof sessionId !== 'string' ||
      sessionId.length === 0
    ) {
@@ -318194,7 +318247,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
      );
      return { diagnostics };
    }
-@@ -286,37 +477,221 @@
+@@ -286,37 +478,228 @@
      typeof type !== 'string' ||
      !RECORD_TYPES.has(type as TranscriptRecordType)
    ) {
@@ -318375,11 +318428,13 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +        'invalid_records',
 +        'Invalid assistant recording subtype. Inspect the original recording or start a new session.',
 +      );
-+    } else if (value['origin'] !== undefined) {
-+      throw new TranscriptRecordPreparationError(
-+        'invalid_records',
-+        'Adopted and realtime records cannot claim a local chat attempt origin. Inspect the original recording.',
-+      );
++    } else {
++      if (value['origin'] !== undefined)
++        throw new TranscriptRecordPreparationError(
++          'invalid_records',
++          'Adopted and realtime records cannot claim a local chat attempt origin. Inspect the original recording.',
++        );
++      requireRuntimeConversationContent(value['message'], 'model');
 +    }
 +  } else if (value['origin'] !== undefined) {
 +    throw new TranscriptRecordPreparationError(
@@ -318387,6 +318442,11 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +      'Only a committed chat assistant record carries a model attempt origin. Inspect the original recording.',
 +    );
 +  }
++  if (
++    type === 'user' &&
++    (subtype === 'adopted_message' || subtype === 'realtime_message')
++  )
++    requireRuntimeConversationContent(value['message'], 'user');
 +  if (type === 'system' && subtype === 'runtime_history') {
 +    requireRuntimeHistoryChange(value['systemPayload']);
 +    if (value['message'] !== undefined)
@@ -318418,7 +318478,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    ) {
      diagnostics.push(
        diagnostic(
-@@ -331,54 +706,97 @@
+@@ -331,54 +714,97 @@
    let message: TranscriptRecordInput['message'];
    if (value['message'] !== undefined) {
      if (!isObjectRecord(value['message'])) {
@@ -318528,7 +318588,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    records: readonly TranscriptRecordInput[],
    leafUuid?: string,
  ): string | undefined {
-@@ -428,19 +846,46 @@
+@@ -428,19 +854,46 @@
    }
  
    uuids.reverse();
@@ -318575,7 +318635,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
      : undefined;
  
    for (let index = 1; index < records.length; index += 1) {
-@@ -477,23 +922,29 @@
+@@ -477,23 +930,29 @@
      throw new TranscriptRecordPreparationError(
        'invalid_records',
        'Transcript records must be an array.',
@@ -318615,7 +318675,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
      throw new TranscriptRecordPreparationError(
        'mixed_session_ids',
        'Transcript records contain multiple session ids.',
-@@ -517,37 +968,30 @@
+@@ -517,37 +976,30 @@
          ),
        );
      }
@@ -318660,7 +318720,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
        firstByUuid.set(record.uuid, record);
      }
    }
-@@ -573,15 +1017,48 @@
+@@ -573,15 +1025,48 @@
          true,
          { recordId: chain.cycleUuid },
        ),
@@ -377633,7 +377693,7 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 diff --git a/packages/core/src/services/runtime-history.ts b/packages/core/src/services/runtime-history.ts
 --- /dev/null
 +++ b/packages/core/src/services/runtime-history.ts
-@@ -0,0 +1,252 @@
+@@ -0,0 +1,264 @@
 +import type { Content } from '@google/genai';
 +import { createHash } from 'node:crypto';
 +import { collectToolCallIdsFromHistory } from '../core/toolCallIdUtils.js';
@@ -377799,12 +377859,24 @@ diff --git a/packages/core/src/services/runtime-history.ts b/packages/core/src/s
 +  ownedImageReferenceIds(value);
 +}
 +
-+export function requireRuntimeAssistantContent(
++export function requireRuntimeConversationContent(
 +  value: unknown,
++  role: 'user' | 'model',
 +): asserts value is Content {
 +  requireContents([value]);
 +  const content = value as Content;
-+  if (content.role !== 'model') refuse('assistant commit has a non-model role');
++  if (content.role !== role)
++    refuse(
++      role === 'model'
++        ? 'assistant commit has a non-model role'
++        : 'user record has a non-user role',
++    );
++}
++
++export function requireRuntimeAssistantContent(
++  value: unknown,
++): asserts value is Content {
++  requireRuntimeConversationContent(value, 'model');
 +}
 +
 +export function requireRuntimeHistoryState(
