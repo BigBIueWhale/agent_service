@@ -805,3 +805,34 @@ fresh pinned archive applied the sealed patch and matched all 1,141 final
 identities and the authoring source byte for byte. Native compilation, owner
 gates and end-to-end resume remain unverified. The canonical runtime chat JSONL
 and its replay order are unchanged by source reading.
+
+## Terminal result source
+
+Source reading found a producer inconsistency after ordinary successful
+results acquired an accepted-model-text admission rule: the shared
+`BaseJsonOutputAdapter.buildResultMessage` still let a caller's optional
+`summary` replace that text. The production noninteractive session does not
+pass a summary, so this was a capability of the shared adapter, not an
+observed production regression. The adapter now refuses a supplied summary,
+including a present property whose value is `undefined`, and directs a caller
+to emit a runtime assistant message for local text or use `structuredResult`
+for structured output. An ordinary success therefore uses the last accepted
+assistant text; runtime and structured results retain their distinct sources.
+vLLM does not construct this client-owned terminal record.
+
+The source fixture for physical JSON output was also brought into line with
+the existing request and response evidence protocol: it supplies the selected
+nonstream decode policy, decodes its recorded OpenAI completion through the
+shared converter, and publishes the observed output and source request ID
+through the normalizer. Its pending request closes as cancelled, and synthetic
+failure/cancellation cases no longer claim completed processing. These fixture
+changes support the affected source tests; they do not establish deployed
+behavior. The focused adapter and refusal suites passed 149 source tests.
+Prettier passed on six changed TypeScript files, and ESLint reported zero
+errors (eight duplicate-import warnings). The broader JSON/stream suites were
+run but did not qualify: 115 of 136 tests failed after the installed
+generated-v5 validator refused `system/stream_start` before current admission.
+A fresh pinned archive accepted the sealed landmark transform and matched all
+1,143 final identities, including 44 intentional deletions; the six edited
+client files matched the authoring source byte for byte. Native, Java,
+compilation, owner gates, and end-to-end resume are unverified.

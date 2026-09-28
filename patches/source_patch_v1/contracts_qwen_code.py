@@ -8585,6 +8585,18 @@ def _validate_served_accounting_after(state: State) -> None:
         "event.type === GeminiEventType.Retry", "this.startAssistantMessage(event.value)",
         "state.origin = round.origin", "state.origin = toolCall.origin",
     ), label=label)
+    _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
+        "if (Object.hasOwn(options, 'summary'))",
+        "A result summary cannot replace accepted model text",
+        "const resultText = this.lastAssistantText;",
+    ), label=label)
+    forbid_text(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts",
+                "readonly summary?: string", label=label)
+    _require_all(state, cli + "nonInteractive/io/terminal-summary-refusal.test.ts", (
+        "it.each(['replacement', undefined])",
+        "before reading terminal evidence",
+        "A result summary cannot replace accepted model text",
+    ), label=label)
     _require_all(state, core + "utils/runtime-contract-admission.ts", (
         "origin.kv_scope !== (scope ?? wire.session_id)", "requests.observeOrigin(origin, scope)",
         "partial.observeOrigin(origin)", "partial.completeMessage(text)",
