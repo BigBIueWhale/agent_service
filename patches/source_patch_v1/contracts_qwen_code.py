@@ -393,12 +393,18 @@ def _validate_exact_tokens_before(state: State) -> None:
 
 
 def _validate_exact_tokens_after(state: State) -> None:
-    require_text(
-        state,
-        "packages/core/src/core/generation-context.ts",
-        "{ ...request, generationContext: this.context, chatAttempt: null }",
-        count=3,
+    context_source = _source(state, "packages/core/src/core/generation-context.ts",
+                             label="captured generation owner precedence")
+    require_text(state, "packages/core/src/core/generation-context.ts",
+                 "{ ...request, generationContext: this.context, chatAttempt: null }",
+                 count=2, label="captured generation owner precedence")
+    _require_ordered(
+        context_source.split("async generateContent(request:", 1)[1].split(
+            "async generateContentStream(", 1)[0],
+        ("this.provider.generateContent(", "...request,", "generationContext: this.context,",
+         "chatAttempt: null,"),
         label="captured generation owner precedence",
+        location="packages/core/src/core/generation-context.ts",
     )
     label = "owned server-authoritative generation result"
     context = "packages/core/src/core/generation-context.ts"
@@ -413,7 +419,8 @@ def _validate_exact_tokens_after(state: State) -> None:
             "Object.freeze(this)",
             "readonly generationContext: GenerationContext",
             "generateContent(request: GenerateContentParameters",
-            "generateContentStream(request: GenerateContentParameters",
+            "async generateContentStream(",
+            "request: GenerateContentParameters,",
             "countRequestTokens(request: GenerateContentParameters",
         ),
         label=label,
@@ -8292,7 +8299,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 13;",
+            "export const CHAT_RECORDING_VERSION = 14;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8317,6 +8324,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "body.stream !== (selectedPolicy.mode === 'stream')",
         "body.model !== evidence.decode_policy.model",
         "body.model !== selectedPolicy.model",
+        "operation_id: utilityDelivery!.operationId",
+        "utilityDelivery!.attach(response)",
+        "if (!attempt && !utilityDelivery)",
     ), label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",
                 "retained > 0 || previous.body.messages.length === 0", label=label)
@@ -8364,7 +8374,40 @@ def _validate_served_accounting_after(state: State) -> None:
         "RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS",
         "await this.boundOperation(", "'response recording'",
         "Promise.all([cancelReader(), joinedCancellation!]).then(() => {})",
+        "recordUtilityDelivery(outputsDelivered: number)",
+        "kind: 'delivery', outputs_delivered: outputsDelivered",
+        "state.owner.kind !== 'utility'",
+        "event.outputs_delivered > state.processing.pipeline_outputs_delivered",
     ), label=label)
+    _require_all(state, core + "core/utility-delivery.ts", (
+        "readonly operationId = retryContext.getStore()?.operationId ?? randomUUID()",
+        "this.responses.set(response.requestId, response)",
+        "const requestId = takeGenerationSource(output)",
+        "response.recordUtilityDelivery(",
+        "this.delivered.get(requestId) ?? 0",
+        "next: (value?: unknown) => advance(() => stream.next(value))",
+        "return: (value?: unknown) => advance(() => stream.return(value))",
+        "throw: (cause?: unknown) => advance(() => stream.throw(cause))",
+        "() => this.settleAfter({ cause })",
+    ), label=label)
+    _require_all(state, core + "core/generation-context.ts", (
+        "const delivery = new UtilityDelivery()",
+        "utilityDeliveryContext.run(delivery",
+        "delivery.observe(output)",
+        "return delivery.wrapStream(stream)",
+        "delivery.settleAfter(failure) : delivery.settle()",
+    ), label=label)
+    _require_all(state, core + "utils/retry.ts", (
+        "const operationId = randomUUID()",
+        "operationId,",
+    ), label=label)
+    _require_all(state, core + "core/utility-delivery.test.ts", (
+        "keeps one logical identity across physical retry invocations",
+        "settles only the stream prefix returned before caller cancellation",
+    ), label=label)
+    require_text(state, core + "core/model-response-evidence.test.ts",
+                 "requires exactly one utility delivery receipt after processing",
+                 label=label)
     _require_all(state, core + "core/model-response-evidence.test.ts", (
         "refuses a stalled header write and resumes the paused network clock",
         "refuses a stalled body write while cancellation waits for its read",
@@ -8617,7 +8660,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "async capture(", 1)[1].split("private async publish(", 1)[0]
     _require_ordered(request_capture, (
         "attempt?.assertCanIssueRequest();", "await this.persist(evidence);",
-        "admitted = true;", "attempt?.attach(response);",
+        "admitted = true;", "if (attempt) attempt.attach(response);",
+        "else utilityDelivery!.attach(response);",
         "await this.publish({ type: 'model_request', request: evidence });",
         "await write;", "catch (cause)", "await response.finish({",
     ), label=label, location="durable request ownership before publication")
@@ -8662,7 +8706,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation normalization contradicts its recorded history seed",
         "exactIntegerLexeme(source)",
         "a decoded integer differs from its recorded JSON spelling",
-        "recordGenerationSource(", "takeGenerationSource(chunk)",
+        "takeGenerationSource(chunk)",
         "attempt.generation.evidence.generation_sha256 !==",
         "JSON.stringify(completion.request_ids)",
         "attempt.settled.size !== attempt.requests.length",
@@ -8677,6 +8721,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "accepted physical history precedes its generation",
         "source_request_id: sourceRequestId",
         "the stream ends with an incomplete logical attempt",
+    ), label=label)
+    _require_all(state, core + "core/generation-source.ts", (
+        "export function recordGenerationSource(",
+        "export function takeGenerationSource(",
+        "generationSources.delete(response)",
     ), label=label)
     require_text(state, core + "core/model-generation-mapping.test.ts",
                  "derives prepared and generated call IDs from the recorded history seed",
@@ -8910,7 +8959,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v11.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v12.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -8954,6 +9003,8 @@ def _validate_served_accounting_after(state: State) -> None:
         'base64.b64decode(event["base64"], validate=True)',
         'event["body_sha256"] == state.digest.hexdigest()',
         'state.processing_status = event["status"]', "not attempt.accepted",
+        'if kind == "delivery":',
+        'event["outputs_delivered"] <= state.pipeline_outputs',
         "200 <= state.http_status < 300", 'state.termination in ("eof", "cancelled")',
         'state.termination = event["termination"]',
         'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
@@ -8992,6 +9043,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_delivered_record_mutation_cannot_change_response_owner",
         "test_duplicate_terminal_cannot_settle_queued_input",
         "test_structured_result_binds_to_successful_accepted_submission",
+        "test_utility_response_requires_its_delivery_receipt",
     ), label=label)
     _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
         "seed_row[\"normalization_seed\"].update(",
@@ -9114,6 +9166,8 @@ def _validate_served_accounting_after(state: State) -> None:
         'state.termination = (String) event.get("termination")',
         'RequestUsage.served(event.get("served_usage"))',
         'event.get("sdk_values_seen")', 'event.get("pipeline_outputs_delivered")',
+        '"delivery".equals(kind)',
+        'delivered <= state.pipelineOutputs',
         'completion.get("consumer_observations")',
         '(!isAccepted || consumed == finalOutcome.pipelineOutputs)',
         'object(item).get("source_request_id")',
@@ -9123,7 +9177,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation has no recorded normalization seed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v11.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v12.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (
@@ -9145,6 +9199,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, java_tests + "protocol/RecordAdmissionTest.java", (
         "replaysAuthoredEvidenceIncludingResumedAndLiveWindows", "refusesEveryIncompletePrefixAtEof",
         "fullBodyRequiresANewSegmentForItsScope",
+        "utilityResponseRequiresDeliveryAfterProcessing",
         "structuredResultRequiresTheSuccessfulAcceptedSubmission",
         "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
     ), label=label)

@@ -50,7 +50,8 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
             raise ValueError("request capture identity or sequence is incomplete")
         seen.add(request["request_id"])
         owner = request["owner"]
-        if owner != {"kind": "utility"} and not (set(owner) == {"kind", "attempt_id"} and owner["kind"] == "chat" and isinstance(owner["attempt_id"], str) and owner["attempt_id"]):
+        if not ((set(owner) == {"kind", "operation_id"} and owner["kind"] == "utility" and isinstance(owner["operation_id"], str) and owner["operation_id"])
+                or (set(owner) == {"kind", "attempt_id"} and owner["kind"] == "chat" and isinstance(owner["attempt_id"], str) and owner["attempt_id"])):
             raise ValueError("request ownership is unknown; inspect the matching client")
         representation = request["body"]
         previous = scopes.get(request["kv_scope"])
@@ -109,7 +110,7 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             raise ValueError("response identity or sequence is incomplete")
         event = response["event"]
         actual = state["actual"]
-        if (event["kind"] == "history") != (state["outcome"] is not None) or (event["kind"] != "history" and (event["kind"] == "outcome") != state["ended"]):
+        if (event["kind"] in ("history", "delivery")) != (state["outcome"] is not None) or (event["kind"] not in ("history", "delivery") and (event["kind"] == "outcome") != state["ended"]):
             raise ValueError("response outcome must follow transport completion; inspect the original stream")
         if event["kind"] == "http":
             if state["http"] or state["sequence"] or event["status"] != actual["response_status"] or event["content_type"] != actual["response_content_type"]:
@@ -160,7 +161,13 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             if event["status"] == "completed" and "served_usage" in actual and usage != actual["served_usage"]:
                 raise ValueError("completed response usage differs from provider; inspect the original stream")
             state["outcome"] = event["status"]
-            state["closed"] = state["owner"]["kind"] == "utility"
+            state["pipeline_outputs"] = progress[1]
+        elif event["kind"] == "delivery":
+            delivered = event.get("outputs_delivered")
+            if (set(event) != {"kind", "outputs_delivered"} or state["owner"]["kind"] != "utility"
+                    or type(delivered) is not int or not 0 <= delivered <= state["pipeline_outputs"]):
+                raise ValueError("utility delivery has no matching physical output prefix")
+            state["closed"] = True
         elif event["kind"] == "history":
             if set(event) != {"kind", "disposition"} or state["owner"]["kind"] != "chat" or event["disposition"] not in ("accepted", "abandoned") or (event["disposition"] == "accepted" and state["outcome"] != "completed"):
                 raise ValueError("chat history decision has no valid processing owner")

@@ -768,8 +768,8 @@ mod tests {
     fn owned_vocabulary_inventory_is_complete() {
         let compiled = compile(SOURCE).unwrap();
         let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
-        assert_eq!(inventory["object_schemas"], 687);
-        assert_eq!(inventory["false_schemas"], 99);
+        assert_eq!(inventory["object_schemas"], 691);
+        assert_eq!(inventory["false_schemas"], 100);
         assert_eq!(inventory["keywords"].as_object().unwrap().len(), 25);
         assert_eq!(inventory["references"].as_array().unwrap().len(), 48);
         assert!(!compiled.rust.is_empty());

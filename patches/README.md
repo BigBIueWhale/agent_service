@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `6f5063cf87a530ffd86277eb91899f3e399a3b14b343c3bef972887638d83238`
+- Review-diff SHA-256: `3edfbe92266361589ba578cea9fe6237af5f109c9cec51730860bb22e19217c5`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `03a60c9b490706f098d8937d4240c1f1cb28d716eb8f4d3bea0c1fa02c8eaf98`
+- Transformer-manifest SHA-256: `cc65013be61a333296260fc665166f1e97df1aa38631d891468b553dcbe9747b`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -489,7 +489,7 @@ from the request's start, idle and generation clocks. A hung storage write can
 still defeat session deadlines; the shared write/cancellation correction remains
 open in the [audit disposition](../docs/design/stream-completeness-audit.md).
 
-Canonical format 12 structurally excludes response evidence from messages,
+Canonical format 14 structurally excludes response evidence from messages,
 conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix
@@ -511,14 +511,24 @@ boundaries distinguish early cancellation from a complete response body and a
 diagnostic expansion from one SDK value. TypeScript root readers now replay
 the retained OpenAI response with the selected decoder and compare raw Chat
 observations before admission. Native, Python and Java readers still need the
-same byte-to-observation proof. Normalized call IDs and utility consumer
-receipts also need independent verification.
+same byte-to-observation proof. Normalized call IDs still need independent
+verification. Every utility request names the logical operation shared by its
+retries and ends with a separate receipt for the exact decoded prefix returned
+to the shared client. A stream returned before its first read still closes its
+physical iterator and writes a zero-output receipt. The TypeScript, native,
+Python and Java readers require that receipt after the processing outcome,
+reject duplicate or excessive counts, and leave a missing receipt open at EOF.
+The fake-provider harness makes the same check. These are source and focused
+test findings; native and Java execution remains unverified pending owner gates.
 
 These records cover the HTTP response observed by every shared-client generation,
 including side queries and children. They cannot establish tokens generated but
 never transmitted, parser omissions inside a backend, or why an attempt was
 accepted or abandoned. Transport EOF is not semantic acceptance. Those obligations
 remain separate; no backend record is inferred from client bytes.
+The utility delivery receipt belongs in the shared client because only that
+client can observe which decoded outputs it returned to its caller; the vLLM
+backend cannot witness that boundary for either this client or direct callers.
 
 Every chat requires a canonical commit recorder. Root chats, ordinary children,
 background and resumed children, workflow calls, utility forks, and speculation

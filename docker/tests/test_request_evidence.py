@@ -29,7 +29,7 @@ class RequestEvidenceTests(unittest.TestCase):
             events.append({"type": "model_request", "request": {
                 "journal_id": "journal", "sequence": sequence,
                 "request_id": f"r{sequence}", "kv_scope": "root", "segment_id": "s",
-                "prompt_id": "prompt", "owner": {"kind": "utility"}, "body": representation,
+                "prompt_id": "prompt", "owner": {"kind": "utility", "operation_id": "utility-operation"}, "body": representation,
                 "decode_policy": {"mode": "nonstream", "model": "fixture-model"},
                 "body_bytes": len(body.encode()), "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
             }})
@@ -106,11 +106,12 @@ class ResponseEvidenceTests(unittest.TestCase):
         request = {"journal_id": "j", "request_id": "r"}
         envelope = lambda sequence, event: {"type": "model_response", "response": {**request, "sequence": sequence, "event": event}}
         events = [
-            {"type": "model_request", "request": {**request, "owner": {"kind": "utility"}}},
+            {"type": "model_request", "request": {**request, "owner": {"kind": "utility", "operation_id": "utility-operation"}}},
             envelope(1, {"kind": "http", "status": 200, "content_type": "text/event-stream"}),
             envelope(2, {"kind": "body", "offset": 0, "base64": base64.b64encode(body).decode()}),
             envelope(3, {"kind": "end", "termination": termination, "body_bytes": len(body), "body_sha256": hashlib.sha256(body).hexdigest(), "error": None}),
             envelope(4, {"kind": "outcome", "served_usage": None, "status": "failed", "error": "malformed JSON", "sdk_values_seen": 0, "pipeline_outputs_delivered": 0}),
+            envelope(5, {"kind": "delivery", "outputs_delivered": 0}),
             {"type": "result", "request_evidence": {"open_response_ids": []}},
         ]
         served = [{"response_status": 200, "response_content_type": "text/event-stream", "response_chunks": [base64.b64encode(body + (b"unobserved" if termination == "cancelled" else b"")).decode()]}]
@@ -120,14 +121,14 @@ class ResponseEvidenceTests(unittest.TestCase):
         from request_evidence import require_response_evidence
         for termination in ["eof", "cancelled"]:
             events, served = self.fixture(termination)
-            self.assertEqual(len(require_response_evidence(events, served)), 4)
+            self.assertEqual(len(require_response_evidence(events, served)), 5)
 
     def test_processing_progress_requires_an_observed_sdk_value(self):
         from request_evidence import require_response_evidence
         for defect in ("missing", "unseen_sdk", "unsafe_count"):
             with self.subTest(defect=defect):
                 events, served = self.fixture()
-                outcome = events[-2]["response"]["event"]
+                outcome = events[-3]["response"]["event"]
                 if defect == "missing":
                     del outcome["sdk_values_seen"]
                 elif defect == "unseen_sdk":
@@ -144,15 +145,15 @@ class ResponseEvidenceTests(unittest.TestCase):
                 for outcome in ("completed", "failed", "cancelled"):
                     with self.subTest(http_status=http_status, termination=termination, outcome=outcome):
                         events, served = self.fixture(termination)
-                        events[-3]["response"]["event"]["error"] = "transport failed" if termination == "failed" else None
+                        events[-4]["response"]["event"]["error"] = "transport failed" if termination == "failed" else None
                         events[1]["response"]["event"]["status"] = http_status
                         served[0]["response_status"] = http_status
-                        events[-2]["response"]["event"].update(status=outcome, error="processing failed" if outcome == "failed" else None)
+                        events[-3]["response"]["event"].update(status=outcome, error="processing failed" if outcome == "failed" else None)
                         if outcome == "completed" and (not 200 <= http_status < 300 or termination == "failed"):
                             with self.assertRaisesRegex(ValueError, "successful HTTP transport"):
                                 require_response_evidence(events, served)
                         else:
-                            self.assertEqual(len(require_response_evidence(events, served)), 4)
+                            self.assertEqual(len(require_response_evidence(events, served)), 5)
 
     def test_physical_usage_is_explicit_and_valid(self):
         from request_evidence import require_response_evidence
@@ -162,7 +163,7 @@ class ResponseEvidenceTests(unittest.TestCase):
                     events, served = self.fixture()
                     usage = dict(promptTokenCount=5, candidatesTokenCount=3, totalTokenCount=8,
                                  cachedContentTokenCount=1, thoughtsTokenCount=2)
-                    event = events[-2]["response"]["event"]
+                    event = events[-3]["response"]["event"]
                     event.update(status=status, error="processing failed" if status == "failed" else None, served_usage=usage)
                     if defect == "null": event["served_usage"] = None
                     if defect == "zero": event["served_usage"] = dict.fromkeys(usage, 0)
@@ -178,24 +179,26 @@ class ResponseEvidenceTests(unittest.TestCase):
                     if defect == "provider": served[0]["served_usage"] = dict.fromkeys(usage, 0)
                     valid = defect in ("valid", "null", "zero") or (defect == "provider" and status != "completed")
                     if valid:
-                        self.assertEqual(len(require_response_evidence(events, served)), 4)
+                        self.assertEqual(len(require_response_evidence(events, served)), 5)
                     else:
                         with self.assertRaises(ValueError): require_response_evidence(events, served)
 
     def test_missing_or_changed_wire_is_refused(self):
         from request_evidence import require_response_evidence
-        for defect in ["missing", "unknown", "gap", "hash", "size", "provider", "open", "headers", "early", "outcome_status", "outcome_error", "missing_end"]:
+        for defect in ["missing", "missing_delivery", "excess_delivery", "unknown", "gap", "hash", "size", "provider", "open", "headers", "early", "outcome_status", "outcome_error", "missing_end"]:
             with self.subTest(defect=defect):
                 events, served = self.fixture()
-                if defect == "missing": del events[-2]
-                if defect == "missing_end": del events[-3]
-                if defect == "outcome_status": events[-2]["response"]["event"]["status"] = "unknown"
-                if defect == "outcome_error": events[-2]["response"]["event"]["error"] = None
+                if defect == "missing": del events[-3]
+                if defect == "missing_delivery": del events[-2]
+                if defect == "excess_delivery": events[-2]["response"]["event"]["outputs_delivered"] = 1
+                if defect == "missing_end": del events[-4]
+                if defect == "outcome_status": events[-3]["response"]["event"]["status"] = "unknown"
+                if defect == "outcome_error": events[-3]["response"]["event"]["error"] = None
                 if defect == "early": events[0], events[1] = events[1], events[0]
                 if defect == "unknown": events[2]["response"]["event"]["kind"] = "unknown"
                 if defect == "gap": events[2]["response"]["event"]["offset"] = 1
-                if defect == "hash": events[-3]["response"]["event"]["body_sha256"] = "0" * 64
-                if defect == "size": events[-3]["response"]["event"]["body_bytes"] = 0
+                if defect == "hash": events[-4]["response"]["event"]["body_sha256"] = "0" * 64
+                if defect == "size": events[-4]["response"]["event"]["body_bytes"] = 0
                 if defect == "provider": served[0]["response_chunks"] = ["e30="]
                 if defect == "open": events[-1]["request_evidence"]["open_response_ids"] = ["r"]
                 if defect == "headers": served[0]["response_status"] = 500
@@ -205,6 +208,7 @@ class ResponseEvidenceTests(unittest.TestCase):
         from request_evidence import require_response_evidence
         events, served = self.fixture()
         events[0]["request"]["owner"] = {"kind": "chat", "attempt_id": "attempt"}
+        del events[-2]
         with self.assertRaises(ValueError): require_response_evidence(events, served)
         history = {"type": "model_response", "response": {"journal_id": "j", "request_id": "r", "sequence": 5, "event": {"kind": "history", "disposition": "abandoned"}}}
         events.insert(-1, history)

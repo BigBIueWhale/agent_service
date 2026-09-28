@@ -318,6 +318,7 @@ struct ResponseState {
     scope: String,
     attempt: Option<String>,
     processing: Option<bool>,
+    pipeline_outputs: Option<u64>,
     sequence: u64,
     http_status: Option<u64>,
     content_type: Option<String>,
@@ -608,8 +609,9 @@ impl ModelRequests {
         let mut outcome = None;
         let mut body = None;
         let kind = text(event, "kind", line)?;
-        if (kind == "history") != state.processing.is_some()
-            || (kind != "history" && (kind == "outcome") != state.digest.is_none())
+        if matches!(kind, "history" | "delivery") != state.processing.is_some()
+            || (!matches!(kind, "history" | "delivery")
+                && (kind == "outcome") != state.digest.is_none())
         {
             return Err(refusal(
                 "response processing outcome must follow transport completion",
@@ -735,7 +737,24 @@ impl ModelRequests {
                     pipeline_outputs_delivered,
                 });
                 state.processing = Some(completed);
-                ended = state.attempt.is_none();
+                state.pipeline_outputs = Some(pipeline_outputs_delivered);
+            }
+            "delivery" => {
+                let delivered = unsigned(
+                    field(event, "outputs_delivered", line)?,
+                    "utility outputs delivered",
+                    SAFE_INTEGER,
+                )?;
+                if state.attempt.is_some()
+                    || state
+                        .pipeline_outputs
+                        .is_none_or(|pipeline_outputs| delivered > pipeline_outputs)
+                {
+                    return Err(refusal(
+                        "utility delivery has no matching physical output prefix",
+                    ));
+                }
+                ended = true;
             }
             "history" => {
                 let attempt = state
@@ -1123,7 +1142,7 @@ mod tests {
         depth: 100,
     };
     fn request(sequence: u64, id: &str, body: serde_json::Value, json: &str) -> String {
-        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,"named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
+        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,"named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
     }
     fn admit(state: &mut ModelRequests, json: &str) -> ContractResult<()> {
         let document = Document::decode(json.as_bytes(), LIMITS).unwrap();
@@ -1508,11 +1527,18 @@ mod tests {
                         state.commit_response(admission.unwrap());
                     }
                 }
-                assert_eq!(
-                    state.responses.is_empty(),
-                    status != "completed" || can_complete,
-                    "{http_status:?}/{termination}/{status}"
-                );
+                assert!(!state.responses.is_empty(), "outcome is not delivery");
+                if status != "completed" || can_complete {
+                    let raw = json!({"response": {
+                        "journal_id": "j", "request_id": "r",
+                        "sequence": events.len() + 1,
+                        "event": {"kind": "delivery", "outputs_delivered": 0}
+                    }}).to_string();
+                    let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                    let admission = state.plan_response(doc.root(), 1).unwrap();
+                    state.commit_response(admission);
+                    assert!(state.responses.is_empty(), "{http_status:?}/{termination}/{status}");
+                }
             }
         }
     }
@@ -1604,6 +1630,7 @@ mod tests {
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
                 json!({"kind":"outcome","served_usage":null,"status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+                json!({"kind":"delivery","outputs_delivered":0}),
             ].into_iter().enumerate() {
                 if id == "b" && event["kind"] == "outcome" {
                     assert!(state.validate_summary(terminal.root(), 3).is_err());
