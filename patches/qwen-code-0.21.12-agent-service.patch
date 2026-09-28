@@ -10923,7 +10923,78 @@ diff --git a/packages/acp-bridge/src/transcript-replay.test.ts b/packages/acp-br
  
  function updates(
    machine: ReturnType<typeof createTranscriptReplayMachine>,
-@@ -880,13 +894,23 @@
+@@ -74,12 +88,70 @@
+     subtype: 'slash_command',
+     systemPayload: { phase: 'result', outputHistoryItems: items },
+   });
+ }
+ 
+ describe('createTranscriptReplayMachine', () => {
++  it('replays visible local slash invocations without inventing a model turn', () => {
++    const machine = createTranscriptReplayMachine();
++    const invocation = updates(
++      machine,
++      record('slash-invocation', 'system', {
++        subtype: 'slash_command',
++        systemPayload: {
++          phase: 'invocation',
++          rawCommand: '/about  literal args',
++          sentToModel: false,
++          hiddenInvocation: false,
++        },
++      }),
++    );
++    expect(invocation).toHaveLength(1);
++    expect(invocation[0]).toMatchObject({
++      sessionUpdate: 'user_message_chunk',
++      content: { type: 'text', text: '/about  literal args' },
++      _meta: {
++        source: 'slash_command',
++        qwenDiscreteMessage: true,
++      },
++    });
++
++    const result = updates(
++      machine,
++      goalCardRecord('slash-result', { type: 'assistant', text: 'about result' }),
++    );
++    expect(result).toHaveLength(1);
++    expect(result[0]).toMatchObject({
++      sessionUpdate: 'agent_message_chunk',
++      content: { type: 'text', text: 'about result' },
++    });
++  });
++
++  it('leaves model-submitted and hidden slash invocations to their owners', () => {
++    const machine = createTranscriptReplayMachine();
++    for (const payload of [
++      { phase: 'invocation', rawCommand: '/skill now', sentToModel: true },
++      {
++        phase: 'invocation',
++        rawCommand: '/private',
++        sentToModel: false,
++        hiddenInvocation: true,
++      },
++    ]) {
++      expect(
++        updates(
++          machine,
++          record(`slash-${payload.rawCommand}`, 'system', {
++            subtype: 'slash_command',
++            systemPayload: payload,
++          }),
++        ),
++      ).toEqual([]);
++    }
++  });
++
+   it('does not replay internal Goal runtime prompts as user messages', () => {
+     expect(
+       updates(
+         createTranscriptReplayMachine(),
+         record('goal-runtime', 'user', {
+           subtype: 'goal_runtime',
+@@ -880,13 +952,23 @@
        }),
      );
  
@@ -10947,7 +11018,7 @@ diff --git a/packages/acp-bridge/src/transcript-replay.test.ts b/packages/acp-br
      });
    });
  
-@@ -1028,85 +1052,73 @@
+@@ -1028,85 +1110,73 @@
        createTranscriptReplayMachine({
          initialState: { v: 2 } as unknown as TranscriptReplayStateV1,
        }),
@@ -11076,7 +11147,7 @@ diff --git a/packages/acp-bridge/src/transcript-replay.test.ts b/packages/acp-br
        record('todo-result', 'tool_result', {
          message: {
            role: 'user',
-@@ -1138,22 +1150,439 @@
+@@ -1138,22 +1208,439 @@
            status: 'completed',
            _meta: {
              qwenTodo: { id: 'ship', blockedBy: ['test'] },
@@ -11866,7 +11937,39 @@ diff --git a/packages/acp-bridge/src/transcript-replay.ts b/packages/acp-bridge/
      record: TranscriptRecordInput,
      emit: (update: SessionUpdate) => TranscriptReplayEmission,
      meta: UpdateMetaOptions,
-@@ -911,20 +929,12 @@
+@@ -873,12 +891,31 @@
+       return;
+     }
+     if (record.subtype !== 'slash_command') return;
+     const payload = isObjectRecord(record.systemPayload)
+       ? record.systemPayload
+       : undefined;
++    if (payload?.['phase'] === 'invocation') {
++      const command = payload['rawCommand'];
++      if (
++        payload['sentToModel'] === false &&
++        payload['hiddenInvocation'] !== true &&
++        typeof command === 'string' &&
++        command.length > 0
++      ) {
++        yield emit(
++          createTranscriptMessageUpdate({
++            role: 'user',
++            text: command,
++            ...meta,
++            extra: { source: 'slash_command', qwenDiscreteMessage: true },
++          }),
++        );
++      }
++      return;
++    }
+     if (payload?.['phase'] !== 'result') return;
+     const items = Array.isArray(payload['outputHistoryItems'])
+       ? payload['outputHistoryItems']
+       : [];
+     for (const item of items) {
+       const goalStatus = parseTranscriptGoalStatus(item);
+@@ -911,20 +948,12 @@
            extra: { source: 'slash_command' },
          }),
        );
@@ -11887,7 +11990,7 @@ diff --git a/packages/acp-bridge/src/transcript-replay.ts b/packages/acp-bridge/
      );
      if (candidates.length === 1) return candidates[0]!.callId;
      this.report(
-@@ -1083,120 +1093,79 @@
+@@ -1083,120 +1112,79 @@
          text: `${resultDisplay['summary']}\n${resultDisplay['notice']}`,
        },
      },
@@ -12046,7 +12149,7 @@ diff --git a/packages/acp-bridge/src/transcript-replay.ts b/packages/acp-bridge/
  function fallbackToolMetadata(
    toolName: string,
    args: Readonly<Record<string, unknown>>,
-@@ -1411,44 +1380,12 @@
+@@ -1411,44 +1399,12 @@
            : {}),
        },
      ];

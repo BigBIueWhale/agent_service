@@ -373,6 +373,17 @@ decision for the older vendored runtime, before the direct loops can be removed.
 This is a source ownership conclusion, not an implemented repair or a measured
 runtime compatibility result.
 
+The shared ACP transcript replay now projects a visible `system/slash_command`
+invocation as a user update only when its canonical payload says it was not
+sent to the model. It keeps hidden invocations hidden and leaves model-submitted
+commands to their actual user records. This brings one source-owned view into
+the validated replay for every ACP consumer; it does not remove Desktop's
+direct JSONL readers for text elements, telemetry or older runtime sessions.
+The focused bridge cases are authored but unexecuted here because Node and Bun
+are unavailable. The reviewed patch applied to a fresh pinned archive and the
+bridge source and test files matched the authored source byte for byte. This
+proves the source splice, not application behavior.
+
 Desktop's separate ACP history path also ignored the server's explicit
 `partial` and `replayError` reply after a replay failure, filtering malformed
 updates out and treating the remaining prefix as complete. Source reading now

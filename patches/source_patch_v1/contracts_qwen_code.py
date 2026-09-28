@@ -9231,7 +9231,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "readGenerationAttemptCommit(record)", "qwenGenerationAttempt:", "commit.parts",
         "case 'model_generation':", "historyDisposition: commit.historyDisposition",
         "status: abandoned ? 'failed' : 'in_progress'", "role === 'assistant' && !abandoned",
+        "payload['sentToModel'] === false", "payload['hiddenInvocation'] !== true",
+        "source: 'slash_command', qwenDiscreteMessage: true",
     ), label=label)
+    require_text(state, "packages/acp-bridge/src/transcript-replay.test.ts",
+                 "replays visible local slash invocations without inventing a model turn", label=label)
     _require_all(state, "packages/acp-bridge/src/compactionEngine.ts", (
         "function sameAttemptUpdate(", "generationAttemptMeta(left)?.historyDisposition",
         "this.textSlotIndex.text.delete(parent)", "this.textSlotIndex.thought.delete(parent)",
