@@ -8223,7 +8223,10 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(
         state,
         core + "services/session-resume-usage.ts",
-        ("requireServedUsage",),
+        (
+            "requireServedUsage",
+            "record.subtype === undefined",
+        ),
         label=label,
     )
     for path in (core + "services/session-resume-token-counts.ts",):
@@ -9337,6 +9340,8 @@ def _validate_served_accounting_after(state: State) -> None:
                  "keeps canonical evidence history aligned after a %s checkpoint", label=label)
     require_text(state, core + "services/session-writer-lease.test.ts",
                  "restores and forks exact canonical history after a compaction segment", label=label)
+    require_text(state, core + "services/session-writer-lease.test.ts",
+                 "expect(indexed?.runtime.resumeServedUsage).toEqual(generationUsage)", label=label)
     _require_all(state, core + "services/session-transcript-reader.ts", (
         "runtimeHistoryPosition: runtimeHistoryPosition(historyCommit)",
         "historyCursor.apply(entry.runtimeHistoryPosition)",
@@ -9345,6 +9350,8 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     require_text(state, core + "services/session-transcript-reader.test.ts",
                  "reports open physical evidence even when its visible page ends at the snapshot tail", label=label)
+    require_text(state, core + "services/session-transcript-reader.test.ts",
+                 "refuses an adopted answer that claims locally served model usage", label=label)
     _require_all(state, cli + "acp-integration/session/history-replay-page.ts", (
         "page.modelEvidenceCompletion.openRequests !== 0",
         "page.modelEvidenceCompletion.openAttempts !== 0",
@@ -9374,6 +9381,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generationHistory(envelope)", "Stored generation records cannot contain derived history or presentation fields",
         "requireRuntimeConversationContent(value['message'], 'model')",
         "requireRuntimeConversationContent(value['message'], 'user')",
+        "Adopted and realtime messages cannot claim locally served model usage",
     ), label=label)
     require_text(state, core + "utils/transcript-records.test.ts",
                  "refuses malformed %s even on an inactive branch", label=label)

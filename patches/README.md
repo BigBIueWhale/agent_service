@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `2d32cb15d3b401f4547f497ac07c1be081579f20920ac1921f62b4fc85554ee3`
+- Review-diff SHA-256: `a4e091341859b2f35a05e2d11cc928d299da1031d16ddb849f111be149c61606`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `722c82989861325b2c74a7d7eda0831ed80a7fb688524b3ec89c1196f0b43d47`
+- Transformer-manifest SHA-256: `c86aee8f79de844e65f6d671cb724e1785573493d3fcb7c110b91b08618f6d00`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -382,6 +382,11 @@ Adopted and realtime conversation records must carry content with the role
 declared by their record type; non-object parts and invalid image-reference
 identities are refused even on inactive branches. The same admission runs
 before writing and in full and indexed readers.
+Those presentation records cannot claim locally served model usage. Full and
+indexed resume select served usage only from committed local model generations;
+the canonical reader refuses an adopted or realtime assistant with a fabricated
+usage report. Source tests exercise that refusal and compare full and indexed
+served usage after a physically recorded generation. Owner gates remain pending.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory

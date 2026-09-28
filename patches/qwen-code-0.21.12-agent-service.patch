@@ -239725,7 +239725,7 @@ diff --git a/packages/core/src/services/session-resume-token-counts.ts b/package
 diff --git a/packages/core/src/services/session-resume-usage.ts b/packages/core/src/services/session-resume-usage.ts
 --- /dev/null
 +++ b/packages/core/src/services/session-resume-usage.ts
-@@ -0,0 +1,35 @@
+@@ -0,0 +1,43 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -239738,7 +239738,11 @@ diff --git a/packages/core/src/services/session-resume-usage.ts b/packages/core/
 +export class ResumeServedUsageAccumulator {
 +  private value: ServedUsage | undefined;
 +  add(record: ChatRecord): void {
-+    if (record.type === 'assistant' && record.usageMetadata !== undefined) {
++    if (
++      record.type === 'assistant' &&
++      record.subtype === undefined &&
++      record.usageMetadata !== undefined
++    ) {
 +      this.value = requireServedUsage(
 +        record.usageMetadata,
 +        'Resumed assistant',
@@ -239751,7 +239755,11 @@ diff --git a/packages/core/src/services/session-resume-usage.ts b/packages/core/
 +}
 +
 +export function isResumeServedUsageCandidate(record: ChatRecord): boolean {
-+  return record.type === 'assistant' && record.usageMetadata !== undefined;
++  return (
++    record.type === 'assistant' &&
++    record.subtype === undefined &&
++    record.usageMetadata !== undefined
++  );
 +}
 +
 +export function getResumeServedUsage(conversation: {
@@ -239835,7 +239843,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    }
  
    async function writeRawTranscript(content: string): Promise<string> {
-@@ -124,12 +135,107 @@
+@@ -124,12 +135,110 @@
      );
      await fs.mkdir(chatsDir, { recursive: true });
      const filePath = path.join(chatsDir, `${sessionId}.jsonl`);
@@ -239914,6 +239922,9 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +          result.message!,
 +        ]),
 +        answer,
++        runtimeAppend('answer-history', 'a2', composed.length + 1, [
++          answer.message!,
++        ]),
 +      ]);
 +
 +      const service = new SessionService(workspaceDir);
@@ -239943,7 +239954,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    // once a record's text reached 10+ chars; a base + per-record offset keeps
    // every timestamp valid and strictly increasing regardless of count.
    const RECORD_BASE_MS = Date.UTC(2026, 0, 1, 0, 0, 0);
-@@ -138,25 +244,156 @@
+@@ -138,25 +247,154 @@
      uuid: string,
      parentUuid: string | null,
      text: string,
@@ -239957,14 +239968,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        timestamp: new Date(RECORD_BASE_MS + recordSeq++ * 1000).toISOString(),
        type: uuid.startsWith('a') ? 'assistant' : 'user',
 +      ...(uuid.startsWith('a')
-+        ? {
-+            historyLength: 0,
-+            origin: {
-+              kind: 'model' as const,
-+              attempt_id: uuid,
-+              kv_scope: targetSessionId,
-+            },
-+          }
++        ? { subtype: 'adopted_message' as const, historyLength: 0 }
 +        : {}),
        cwd: workspaceDir,
        version: '1.0.0',
@@ -240026,6 +240030,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +      if (damage === 'assistant') {
 +        invalid = {
 +          ...record('assistant-invalid', initial.uuid, 'answer'),
++          subtype: undefined,
 +          historyLength: 9,
 +        };
 +      } else {
@@ -240060,7 +240065,11 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +            replay: { kind: 'none' },
 +          },
 +        ),
-+      ).rejects.toThrow(/recorded state|reference has no payload/);
++      ).rejects.toThrow(
++        damage === 'assistant'
++          ? /Invalid model generation evidence/
++          : /recorded state|reference has no payload/,
++      );
 +    },
 +  );
 +
@@ -240100,7 +240109,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      parentUuid: string,
      callId: string,
    ): ChatRecord {
-@@ -189,12 +426,13 @@
+@@ -189,12 +427,13 @@
                response: { output: 'ok' },
              },
            },
@@ -240114,7 +240123,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    function encodeCursor(
      state: Parameters<typeof encodeSessionTranscriptCursor>[0],
    ): string {
-@@ -225,34 +463,264 @@
+@@ -225,34 +464,264 @@
      expect(page.filePath).toBe(filePath);
      const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
      expect(page.startTime).toMatch(ISO_8601);
@@ -240189,7 +240198,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +        runtimeCheckpoint('initial-history', 'u1', [first.message!]),
 +        { ...record('a1', 'initial-history', 'Understood'), historyLength: 1 },
 +        correctionRecord,
-+        runtimeAppend('correction-history', 'u2', 2, [
++        runtimeAppend('correction-history', 'u2', 1, [
 +          correctionRecord.message!,
 +        ]),
 +      ]);
@@ -240390,7 +240399,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const page = await new SessionTranscriptReader(workspaceDir).readPage(
        sessionId,
      );
-@@ -433,23 +901,25 @@
+@@ -433,23 +902,25 @@
              activeTimeMs: 0,
              createdAt: 1,
              updatedAt: 1,
@@ -240416,7 +240425,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'goal-state', 'first prompt'),
        record('a1', 'u1', 'first answer'),
        record('u2', 'a1', 'second prompt'),
-@@ -500,12 +970,13 @@
+@@ -500,12 +971,13 @@
              activeTimeMs: 0,
              createdAt: 1,
              updatedAt: 1,
@@ -240430,7 +240439,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'goal_state',
        message: undefined,
-@@ -528,12 +999,13 @@
+@@ -528,12 +1000,13 @@
              activeTimeMs: 0,
              createdAt: 1,
              updatedAt: 1,
@@ -240444,7 +240453,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'goal-state', 'first prompt'),
        record('a1', 'u1', 'first answer'),
        malformedGoalState,
-@@ -553,12 +1025,13 @@
+@@ -553,12 +1026,13 @@
  
    it('includes leading session metadata with the first backward page', async () => {
      const sessionSource = {
@@ -240458,7 +240467,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'source', 'first prompt'),
        record('a1', 'u1', 'first answer'),
      ]);
-@@ -597,12 +1070,13 @@
+@@ -597,12 +1071,13 @@
        type: 'system' as const,
        subtype: 'session_source' as const,
        systemPayload: {
@@ -240472,7 +240481,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        inheritedUser,
        inheritedAssistant,
        record('side-u1', 'parent-a1', 'side prompt'),
-@@ -628,12 +1102,13 @@
+@@ -628,12 +1103,13 @@
        type: 'system' as const,
        subtype: 'session_source' as const,
        systemPayload: {
@@ -240486,7 +240495,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        forkedFrom: {
          sessionId: 'parent-session',
          messageUuid: 'parent-u1',
-@@ -644,12 +1119,13 @@
+@@ -644,12 +1120,13 @@
        type: 'system' as const,
        subtype: 'session_source' as const,
        systemPayload: {
@@ -240500,7 +240509,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        inheritedUser,
        record('side-u1', 'parent-u1', 'side prompt'),
        deadBranchSource,
-@@ -672,12 +1148,13 @@
+@@ -672,12 +1149,13 @@
      const source: ChatRecord = {
        ...record('source', null, ''),
        type: 'system',
@@ -240514,7 +240523,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        systemPayload: { sourceType: 'side_task', sourceId: 'parent-session' },
      };
      const inherited = {
-@@ -709,55 +1186,67 @@
+@@ -709,55 +1187,58 @@
      const source: ChatRecord = {
        ...record('source', null, 'source'),
        type: 'system',
@@ -240527,16 +240536,15 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        promptId: string;
      };
      firstUser.promptId = `${sessionId}########3`;
-     const firstAssistant: ChatRecord = {
-       ...record('a1', 'u1', 'first answer'),
-       usageMetadata: {
-         promptTokenCount: 30,
-         candidatesTokenCount: 4,
-         totalTokenCount: 34,
-+        thoughtsTokenCount: 0,
-+        cachedContentTokenCount: 0,
-       },
-     };
+-    const firstAssistant: ChatRecord = {
+-      ...record('a1', 'u1', 'first answer'),
+-      usageMetadata: {
+-        promptTokenCount: 30,
+-        candidatesTokenCount: 4,
+-        totalTokenCount: 34,
+-      },
+-    };
++    const firstAssistant = record('a1', 'u1', 'first answer');
      const compression: ChatRecord = {
        ...record('compression', 'a1', ''),
        type: 'system',
@@ -240583,7 +240591,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'file_history_snapshot',
        message: undefined,
-@@ -767,12 +1256,13 @@
+@@ -767,12 +1248,13 @@
              promptId: `${sessionId}########3`,
              timestamp: '2026-01-01T00:00:00.000Z',
              trackedFileBackups: {},
@@ -240597,7 +240605,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        cause: 'create',
        snapshot: {
          v: 2,
-@@ -793,12 +1283,13 @@
+@@ -793,12 +1275,13 @@
      const goal: ChatRecord = {
        ...record('goal', 'files', ''),
        type: 'system',
@@ -240611,7 +240619,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        subtype: 'notification',
        systemPayload: {
          backgroundTask: { taskId: 'task-1' },
-@@ -836,31 +1327,41 @@
+@@ -836,31 +1319,41 @@
                updatedAt: '2026-01-01T00:00:01.000Z',
                persistedAt: '2026-01-01T00:00:01.000Z',
              },
@@ -240653,7 +240661,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const service = new SessionService(workspaceDir, {
-@@ -876,14 +1377,14 @@
+@@ -876,14 +1369,14 @@
      expect(loaded).toBeDefined();
      expect(projection).toBeDefined();
      expect(projection?.replay).toBeUndefined();
@@ -240670,7 +240678,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      );
      expect(projection?.runtime.artifactSnapshot).toEqual(
        loaded?.artifactSnapshot,
-@@ -952,37 +1453,43 @@
+@@ -952,37 +1445,43 @@
      expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
        'qwen-code.daemon.session_restore.compression_selected',
        expect.any(Boolean),
@@ -240721,7 +240729,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const activeArtifactId = stableSessionArtifactId(
        sessionId,
        'url:https://example.com/active',
-@@ -1025,17 +1532,21 @@
+@@ -1025,17 +1524,21 @@
                updatedAt: '2026-01-01T00:00:00.000Z',
                persistedAt: '2026-01-01T00:00:00.000Z',
              },
@@ -240746,7 +240754,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          2,
          abandonedArtifactId,
          'https://example.com/abandoned',
-@@ -1044,14 +1555,15 @@
+@@ -1044,14 +1547,15 @@
          'active-artifact',
          'a1',
          1,
@@ -240756,7 +240764,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 -      record('u2', 'a1', 'next prompt'),
 -      record('a2', 'u2', 'next answer'),
 +      second,
-+      runtimeAppend('second-history', 'u2', 2, [second.message!]),
++      runtimeAppend('second-history', 'u2', 1, [second.message!]),
 +      { ...record('a2', 'second-history', 'next answer'), historyLength: 3 },
      ]);
  
@@ -240764,7 +240772,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        runtimeBaseDir: runtimeDir,
      });
      const [loaded, projection] = await Promise.all([
-@@ -1104,14 +1616,20 @@
+@@ -1104,14 +1608,20 @@
                updatedAt: leadingTimestamp,
                persistedAt: leadingTimestamp,
              },
@@ -240786,7 +240794,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      });
      const [loaded, projection] = await Promise.all([
        service.loadSession(sessionId),
-@@ -1157,19 +1675,30 @@
+@@ -1157,19 +1667,30 @@
                updatedAt: '2026-01-01T00:00:00.000Z',
                persistedAt: '2026-01-01T00:00:00.000Z',
              },
@@ -240817,7 +240825,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        runtimeBaseDir: runtimeDir,
      });
      const [loaded, projection] = await Promise.all([
-@@ -1204,26 +1733,35 @@
+@@ -1204,26 +1725,35 @@
            activeTimeMs: 0,
            createdAt: 1,
            updatedAt: 1,
@@ -240841,13 +240849,13 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        },
        record('u2', 'goal', 'two'),
 -      record('a2', 'u2', 'two answer'),
-+      runtimeAppend('u2-history', 'u2', 2, [
++      runtimeAppend('u2-history', 'u2', 1, [
 +        { role: 'user', parts: [{ text: 'two' }] },
 +      ]),
 +      { ...record('a2', 'u2-history', 'two answer'), historyLength: 3 },
        record('u3', 'a2', 'three'),
 -      record('a3', 'u3', 'three answer'),
-+      runtimeAppend('u3-history', 'u3', 4, [
++      runtimeAppend('u3-history', 'u3', 2, [
 +        { role: 'user', parts: [{ text: 'three' }] },
 +      ]),
 +      { ...record('a3', 'u3-history', 'three answer'), historyLength: 5 },
@@ -240857,7 +240865,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        workspaceDir,
      ).readRestoreProjection(sessionId, {
        replay: {
-@@ -1233,12 +1771,13 @@
+@@ -1233,12 +1763,13 @@
        },
      });
  
@@ -240871,7 +240879,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        anchorRecordId: 'u3',
        replay: {
          goalState: goalPayload.snapshot,
-@@ -1250,13 +1789,14 @@
+@@ -1250,13 +1781,14 @@
    it('applies inherited-history filtering only to replay', async () => {
      const inheritedUser = {
        ...record('u1', null, 'inherited prompt'),
@@ -240887,7 +240895,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        ...record('goal', 'a1', ''),
        type: 'system',
        subtype: 'slash_command',
-@@ -1270,38 +1810,49 @@
+@@ -1270,38 +1802,49 @@
              type: 'goal_status',
              kind: 'set',
              condition: 'inherited goal',
@@ -240906,7 +240914,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        inheritedGoal,
        record('u2', 'goal', 'branch prompt'),
 -      record('a2', 'u2', 'branch answer'),
-+      runtimeAppend('branch-history', 'u2', 2, [
++      runtimeAppend('branch-history', 'u2', 1, [
 +        { role: 'user', parts: [{ text: 'branch prompt' }] },
 +      ]),
 +      { ...record('a2', 'branch-history', 'branch answer'), historyLength: 3 },
@@ -240938,7 +240946,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(visible?.runtime.goalRecoverySourceUuid).toBe('goal');
      expect(hidden?.runtime.goalRecoverySourceUuid).toBe('goal');
      expect(hidden?.replay?.goalRecoverySourceUuid).toBeUndefined();
-@@ -1311,12 +1862,13 @@
+@@ -1311,12 +1854,13 @@
  
      const hiddenLive = await reader.readLiveRestoreProjection(sessionId, {
        replay: { kind: 'all', hideInheritedHistory: true },
@@ -240952,7 +240960,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(hiddenLive?.goalRecords).toBeUndefined();
    });
  
-@@ -1330,12 +1882,13 @@
+@@ -1330,12 +1874,13 @@
          rawCommand: '/goal visible goal',
          phase: 'result',
          outputHistoryItems: [
@@ -240966,7 +240974,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'slash_command',
        message: undefined,
-@@ -1344,22 +1897,32 @@
+@@ -1344,22 +1889,32 @@
          rawCommand: '/goal hidden goal',
          phase: 'result',
          outputHistoryItems: [
@@ -240986,13 +240994,13 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        hiddenGoal,
        record('u1', 'hidden-goal', 'branch prompt'),
 -      record('a1', 'u1', 'branch answer'),
-+      runtimeAppend('branch-history', 'u1', 2, [
++      runtimeAppend('branch-history', 'u1', 1, [
 +        { role: 'user', parts: [{ text: 'branch prompt' }] },
 +      ]),
 +      { ...record('a1', 'branch-history', 'branch answer'), historyLength: 3 },
        record('u2', 'a1', 'latest prompt'),
 -      record('a2', 'u2', 'latest answer'),
-+      runtimeAppend('latest-history', 'u2', 4, [
++      runtimeAppend('latest-history', 'u2', 2, [
 +        { role: 'user', parts: [{ text: 'latest prompt' }] },
 +      ]),
 +      { ...record('a2', 'latest-history', 'latest answer'), historyLength: 5 },
@@ -241002,7 +241010,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        replay: {
          kind: 'recent' as const,
          limit: 2,
-@@ -1369,12 +1932,13 @@
+@@ -1369,12 +1924,13 @@
  
      const cold = await reader.readRestoreProjection(sessionId, options);
      const live = await reader.readLiveRestoreProjection(sessionId, options);
@@ -241016,7 +241024,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(cold?.replay?.goalRecoverySourceUuid).toBe('visible-goal');
      expect(cold?.replay?.goalBootstrapRecords).toEqual([
        expect.objectContaining({ uuid: 'visible-goal' }),
-@@ -1382,52 +1946,59 @@
+@@ -1382,103 +1938,99 @@
      expect(live?.goalRecoverySourceUuid).toBe('visible-goal');
      expect(live?.goalRecords?.map((record) => record.uuid)).toEqual([
        'visible-goal',
@@ -241024,29 +241032,25 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
 -  it('uses the aggregated final usage metadata when selecting resume tokens', async () => {
-+  it('uses the complete latest attempt usage when selecting resume tokens', async () => {
 -    const earlier = record('a1', 'u1', 'earlier answer');
-+    const earlier = record('a1', 'initial-history', 'earlier answer');
-+    earlier.historyLength = 1;
-     earlier.usageMetadata = {
+-    earlier.usageMetadata = {
++  it('refuses an adopted answer that claims locally served model usage', async () => {
++    const adopted = record('a1', 'initial-history', 'adopted answer');
++    adopted.usageMetadata = {
        promptTokenCount: 20,
        candidatesTokenCount: 3,
 +      totalTokenCount: 23,
-+      thoughtsTokenCount: 0,
-+      cachedContentTokenCount: 0,
-     };
+-    };
 -    const latest = record('a2', 'u2', 'latest answer');
-+    const latest = record('a2', 'second-history', 'latest answer');
-+    latest.historyLength = 3;
-     latest.usageMetadata = {
+-    latest.usageMetadata = {
 -      promptTokenCount: 10,
 -      candidatesTokenCount: 2,
 -    };
 -    const latestFragment = record('a2', 'u2', 'latest tail');
 -    latestFragment.usageMetadata = {
-       promptTokenCount: 0,
-       totalTokenCount: 0,
-       candidatesTokenCount: 0,
+-      promptTokenCount: 0,
+-      totalTokenCount: 0,
+-      candidatesTokenCount: 0,
 +      thoughtsTokenCount: 0,
 +      cachedContentTokenCount: 0,
      };
@@ -241055,41 +241059,40 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +      runtimeCheckpoint('initial-history', 'u1', [
 +        { role: 'user', parts: [{ text: 'first' }] },
 +      ]),
-       earlier,
-       record('u2', 'a1', 'second'),
-+      runtimeAppend('second-history', 'u2', 2, [
-+        { role: 'user', parts: [{ text: 'second' }] },
-+      ]),
-       latest,
+-      earlier,
+-      record('u2', 'a1', 'second'),
+-      latest,
 -      latestFragment,
++      adopted,
      ]);
  
      const service = new SessionService(workspaceDir, {
        runtimeBaseDir: runtimeDir,
      });
-     const [loaded, projection] = await Promise.all([
-       service.loadSession(sessionId),
+-    const [loaded, projection] = await Promise.all([
+-      service.loadSession(sessionId),
++    await expect(service.loadSession(sessionId)).rejects.toThrow(
++      /cannot claim locally served model usage/i,
++    );
++    await expect(
        service.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
        }),
-     ]);
- 
+-    ]);
+-
 -    expect(projection?.runtime.resumeTokenCounts).toEqual(
 -      getResumeTokenCounts(loaded!.conversation),
-+    expect(projection?.runtime.resumeServedUsage).toEqual(
-+      getResumeServedUsage(loaded!.conversation),
-     );
+-    );
 -    expect(projection?.runtime.resumeTokenCounts).toMatchObject({
 -      promptTokenCount: 20,
-+    expect(projection?.runtime.resumeServedUsage).toMatchObject({
-+      promptTokenCount: 0,
-     });
+-    });
++    ).rejects.toThrow(/cannot claim locally served model usage/i);
    });
  
    it('ignores a later non-snapshot attribution record like the full loader', async () => {
      const snapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1435,50 +2006,59 @@
+       version: 1,
        surface: 'cli',
        fileStates: {},
        promptCount: 2,
@@ -241153,7 +241156,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
      await expect(
        new SessionTranscriptReader(workspaceDir).readRestoreProjection(
-@@ -1529,13 +2109,13 @@
+@@ -1529,13 +2081,13 @@
          },
        ),
      ).rejects.toBeInstanceOf(RangeError);
@@ -241168,7 +241171,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
        }),
-@@ -1543,13 +2123,13 @@
+@@ -1543,13 +2095,13 @@
  
      await writeRawTranscript('{not-json}\n');
      await expect(
@@ -241183,7 +241186,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(
          sessionId,
          { replay: { kind: 'none' } },
-@@ -1579,14 +2159,25 @@
+@@ -1579,14 +2131,25 @@
      const source: ChatRecord = {
        ...record('source', null, ''),
        type: 'system',
@@ -241209,7 +241212,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
  
      expect(projection?.runtime.apiHistory).toEqual([]);
-@@ -1603,30 +2194,31 @@
+@@ -1603,30 +2166,31 @@
        {
          ...record('compression', 'u1', ''),
          type: 'system',
@@ -241248,7 +241251,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const validGoal: GoalStateRecordPayloadV2 = {
        v: 2,
        cause: 'create',
-@@ -1643,50 +2235,56 @@
+@@ -1643,50 +2207,56 @@
            activeTimeMs: 0,
            createdAt: 1,
            updatedAt: 1,
@@ -241312,7 +241315,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        workspaceDir,
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
  
-@@ -1694,53 +2292,43 @@
+@@ -1694,53 +2264,43 @@
        kind: 'v2',
        payload: validGoal,
      });
@@ -241374,7 +241377,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const artifactId = stableSessionArtifactId(
        sessionId,
        'url:https://example.com/live',
-@@ -1775,12 +2363,13 @@
+@@ -1775,12 +2335,13 @@
                  updatedAt: '2026-01-01T00:00:01.000Z',
                  persistedAt: '2026-01-01T00:00:01.000Z',
                },
@@ -241388,7 +241391,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a2', 'u2', 'two answer'),
      ]);
      const reader = new SessionTranscriptReader(workspaceDir);
-@@ -1811,14 +2400,14 @@
+@@ -1811,14 +2372,14 @@
      expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
        'qwen-code.daemon.session_restore.index_cache_state',
        'hit',
@@ -241405,7 +241408,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        message: undefined,
        systemPayload: {
          rawCommand: '/goal keep the live goal visible',
-@@ -1829,15 +2418,16 @@
+@@ -1829,15 +2390,16 @@
              kind: 'set',
              condition: 'keep the live goal visible',
              iterations: 0,
@@ -241423,7 +241426,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a2', 'u2', 'two answer'),
      ]);
  
-@@ -1865,37 +2455,44 @@
+@@ -1865,37 +2427,43 @@
      const permit = { goalId: 'goal-1', revision: 1, turnId: 'turn-1' };
      const cursor: ChatRecord = {
        ...record('cursor', null, ''),
@@ -241434,13 +241437,14 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      const evidence = Array.from({ length: 80 }, (_, index) => ({
        ...record(
-         `a-evidence-${index}`,
+-        `a-evidence-${index}`,
 -        index === 0 ? 'cursor' : `a-evidence-${index - 1}`,
-+        index === 0 ? 'initial-history' : `a-evidence-${index - 1}`,
++        `u-evidence-${index}`,
++        index === 0 ? 'initial-history' : `u-evidence-${index - 1}`,
          `evidence ${index}`,
        ),
-+      historyLength: index,
-       provenance: 'assistant_output' as const,
+-      provenance: 'assistant_output' as const,
++      provenance: 'real_user' as const,
        goalContext: permit,
      }));
 -    const fragmentedEvidence: ChatRecord = {
@@ -241473,7 +241477,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        cause: 'turn_finished',
        snapshot: {
          v: 2,
-@@ -1920,17 +2517,18 @@
+@@ -1920,17 +2488,18 @@
      const goalState: ChatRecord = {
        ...record('goal-state', 'compression', ''),
        type: 'system',
@@ -241493,7 +241497,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
      let buildCount = 0;
      setSessionTranscriptIndexBuildCompleteHookForTest((builtPath) => {
-@@ -1969,13 +2567,13 @@
+@@ -1969,13 +2538,13 @@
      const evidence = {
        ...record('evidence', null, 'result'),
        provenance: 'assistant_output' as const,
@@ -241508,7 +241512,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        systemPayload: {
          v: 2,
          cause: 'turn_finished',
-@@ -1993,14 +2591,19 @@
+@@ -1993,14 +2562,19 @@
              createdAt: 1,
              updatedAt: 2,
            },
@@ -241529,7 +241533,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
  
      expect(projection?.runtime.goalCheckpointWindow).toBeUndefined();
-@@ -2010,12 +2613,13 @@
+@@ -2010,12 +2584,13 @@
  
    it('keeps backward pages within a normal user turn boundary', async () => {
      const toolCall = record('a-tool', 'u1', 'call tool');
@@ -241543,7 +241547,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        toolCall,
        toolResult,
        record('a1', 't1', 'first answer'),
-@@ -2038,12 +2642,13 @@
+@@ -2038,12 +2613,13 @@
  
    it('keeps a long user turn complete when it exceeds the record limit', async () => {
      const toolCall = record('a-tool', 'u1', 'call tool');
@@ -241557,7 +241561,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        toolCall,
        toolResult,
        record('a-final', 't1', 'final answer'),
-@@ -2067,12 +2672,13 @@
+@@ -2067,12 +2643,13 @@
    it('returns a backward turn that exceeds maxBytes after alignment', async () => {
      const prompt = record('u1', null, 'prompt');
      const toolCall = record('a-tool', 'u1', 'call tool');
@@ -241571,7 +241575,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        ...turnRecords,
        record('u2', 'a-final', 'next prompt'),
-@@ -2323,23 +2929,22 @@
+@@ -2323,23 +2900,22 @@
            position: 999,
          }),
        }),
@@ -241601,7 +241605,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('u1', null, ' world'),
-@@ -2355,36 +2960,25 @@
+@@ -2355,36 +2931,25 @@
        { text: 'hello' },
        { text: ' world' },
      ]);
@@ -241645,7 +241649,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('a1', 'u1', 'reply'),
-@@ -2506,63 +3100,111 @@
+@@ -2506,63 +3071,111 @@
  
      await expect(
        otherReader.readPage(sessionId, { cursor }),
@@ -241789,7 +241793,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const fixed = new Date('2026-02-02T02:02:02.000Z');
      await fs.utimes(filePath, fixed, fixed);
      const reader = new SessionTranscriptReader(workspaceDir);
-@@ -2643,33 +3285,42 @@
+@@ -2643,33 +3256,39 @@
  
      expect(page.records.map((item) => item.uuid)).toEqual(['u1', 'a1', 'u2']);
      expect(yielded.length).toBeGreaterThanOrEqual(6);
@@ -241820,13 +241824,14 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        workspaceDir,
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
 -
-     expect(projection?.runtime.apiHistory).toEqual([
-       first.message,
-       second.message,
-     ]);
+-    expect(projection?.runtime.apiHistory).toEqual([
+-      first.message,
+-      second.message,
+-    ]);
 -    expect(selectedReads).toEqual([
 -      { offset: 0, length: Buffer.byteLength(gluedLine) },
 -    ]);
++    expect(projection?.runtime.apiHistory).toEqual([first.message]);
 +    let offset = 0;
 +    const expectedReads = records.map((record) => {
 +      const length = Buffer.byteLength(JSON.stringify(record));
@@ -241841,7 +241846,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const filePath = await writeRecords([record('u1', null, 'hello')]);
      await fs.truncate(filePath, SESSION_TRANSCRIPT_MAX_INDEX_BYTES + 1);
  
-@@ -2836,13 +3487,16 @@
+@@ -2836,13 +3455,16 @@
      });
    });
  
@@ -241859,7 +241864,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const cachedBuildBlocked = new Promise<void>((resolve) => {
        releaseCachedBuild = resolve;
      });
-@@ -2866,12 +3520,13 @@
+@@ -2866,12 +3488,13 @@
      });
  
      releaseCachedBuild?.();
@@ -241873,7 +241878,18 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(
        getSessionTranscriptIndexCacheStatsForTest().byteSize,
      ).toBeGreaterThan(0);
-@@ -2925,13 +3580,17 @@
+@@ -2915,23 +3538,27 @@
+       record('u1', null, 'local'),
+       record('a1', 'u1', 'foreign', foreignSessionId),
+     ]);
+ 
+     await expect(
+       new SessionTranscriptReader(workspaceDir).readPage(sessionId),
+-    ).rejects.toBeInstanceOf(SessionTranscriptSnapshotUnavailableError);
++    ).rejects.toThrow(/canonical file mixes session identities/);
+   });
+ 
+   it('rejects foreign dead-branch metadata even when no consumer selects it', async () => {
      const foreignSessionId = '660e8400-e29b-41d4-a716-446655440000';
      const foreignMetadata: ChatRecord = {
        ...record('metadata', 'u1', '', foreignSessionId),
@@ -241892,7 +241908,22 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a1', 'u1', 'local reply'),
        foreignMetadata,
        record('u2', 'a1', 'next local prompt'),
-@@ -2973,12 +3632,13 @@
+@@ -2940,13 +3567,13 @@
+ 
+     await expect(
+       new SessionTranscriptReader(workspaceDir).readRestoreProjection(
+         sessionId,
+         { replay: { kind: 'none' } },
+       ),
+-    ).rejects.toBeInstanceOf(SessionTranscriptSnapshotUnavailableError);
++    ).rejects.toThrow(/canonical file mixes session identities/);
+   });
+ 
+   it('rejects tampered cursor snapshots before cache lookup', async () => {
+     await writeRecords([
+       record('u1', null, 'hello'),
+       record('a1', 'u1', 'reply'),
+@@ -2973,12 +3600,13 @@
    });
  
    // Regression: an in-place rewrite that keeps the inode AND byte length must
@@ -241906,7 +241937,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        timestamp: '2026-01-01T00:00:01.000Z',
        type: 'user',
        cwd: workspaceDir,
-@@ -3367,12 +4027,13 @@
+@@ -3367,12 +3995,13 @@
        }
        records.push({
          ...record('sys1', 'a9', 'goal state'),
@@ -241920,7 +241951,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        await writeRecords(records);
  
        const page = await new SessionTranscriptReader(workspaceDir).readPage(
-@@ -3401,16 +4062,18 @@
+@@ -3401,16 +4030,18 @@
        }
        let parent = 'af9';
        for (let i = 0; i < 3; i++) {
@@ -241939,7 +241970,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        await writeRecords(records);
  
        const page = await new SessionTranscriptReader(workspaceDir).readPage(
-@@ -3436,12 +4099,13 @@
+@@ -3436,12 +4067,13 @@
        for (let i = 0; i < 200; i++) {
          records.push({
            ...record(`sys${i}`, i === 0 ? null : `sys${i - 1}`, `event ${i}`),
@@ -241953,7 +241984,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        let parent = 'u1';
        for (let i = 1; i <= 5; i++) {
          records.push(record(`a${i}`, parent, `step ${i}`));
-@@ -3514,13 +4178,15 @@
+@@ -3514,13 +4146,15 @@
          resultsByCall.set(callUuid, resultUuids);
          parent = resultUuids[resultUuids.length - 1]!;
        }
@@ -241970,7 +242001,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        });
        for (;;) {
          pages.push(page.records);
-@@ -3645,12 +4311,13 @@
+@@ -3645,12 +4279,13 @@
        records.push(record('af0', 'u1', 'filler'));
        records.push(toolCallRecord('ac1', 'af0', 'call-1'));
        records.push(toolResultRecord('ar0', 'ac1', 'call-1'));
@@ -242993,7 +243024,8 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    type ChatRecord,
  } from './chatRecordingService.js';
 +import { buildRuntimeHistoryFromConversation } from './session-api-history.js';
- import { SessionService } from './sessionService.js';
+-import { SessionService } from './sessionService.js';
++import { getResumeServedUsage, SessionService } from './sessionService.js';
 +import { SessionTranscriptReader } from './session-transcript-reader.js';
  import {
    getSessionWriterLockPath,
@@ -243570,7 +243602,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        .trim()
        .split('\n')
        .map((line) => JSON.parse(line) as ChatRecord);
-@@ -533,12 +912,165 @@
+@@ -533,12 +912,169 @@
          getSessionWriterLockPath(
            fixture.runtimeBaseDir,
            fixture.options.sessionId,
@@ -243729,6 +243761,10 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +        buildRuntimeHistoryFromConversation(loaded!.conversation).history,
 +      ).toEqual(expected);
 +      expect(indexed?.runtime.apiHistory).toEqual(expected);
++      expect(getResumeServedUsage(loaded!.conversation)).toEqual(
++        generationUsage,
++      );
++      expect(indexed?.runtime.resumeServedUsage).toEqual(generationUsage);
 +    }
    });
  
@@ -243736,7 +243772,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const fixture = await createFixture('managed-config-handoff-session');
      const createConfig = () =>
        Storage.runWithRuntimeBaseDir(
-@@ -548,15 +1080,14 @@
+@@ -548,15 +1084,14 @@
            new Config({
              sessionId: fixture.options.sessionId,
              cwd: fixture.projectRoot,
@@ -243753,7 +243789,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            }),
        );
      const initialize = (config: Config) =>
-@@ -570,13 +1101,13 @@
+@@ -570,13 +1105,13 @@
        });
  
      const first = createConfig();
@@ -243768,7 +243804,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          await fs.readFile(
            getSessionWriterLockPath(
              fixture.runtimeBaseDir,
-@@ -600,23 +1131,23 @@
+@@ -600,23 +1135,23 @@
        shutdownTelemetry: false,
        skipSessionWriter: true,
      });
@@ -243794,7 +243830,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        timestamp: '2026-01-01T00:00:01.000Z',
        type: 'system',
        subtype: 'custom_title',
-@@ -625,21 +1156,25 @@
+@@ -625,21 +1160,25 @@
        systemPayload: {
          customTitle: 'operator-title',
          titleSource: 'manual',
@@ -243821,7 +243857,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.transcriptPath,
        `${JSON.stringify(firstUser)}\n${JSON.stringify(titleRecord)}\n${JSON.stringify(rewindRecord)}\n`,
        'utf8',
-@@ -665,15 +1200,14 @@
+@@ -665,15 +1204,14 @@
            sessionId: fixture.options.sessionId,
            sessionData: preview,
            cwd: fixture.projectRoot,
@@ -243838,7 +243874,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -684,27 +1218,29 @@
+@@ -684,27 +1222,29 @@
        skipSkillManager: true,
        skipFileCheckpointing: true,
        lenientToolWarmup: true,
@@ -243875,7 +243911,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  
    it('preserves transcript-changed during Config activation cleanup', async () => {
      const fixture = await createFixture('config-truncated-session');
-@@ -717,15 +1253,14 @@
+@@ -717,15 +1257,14 @@
          new Config({
            sessionId: fixture.options.sessionId,
            cwd: fixture.projectRoot,
@@ -243892,7 +243928,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -948,33 +1483,39 @@
+@@ -948,33 +1487,39 @@
      );
      await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(
        '{"replacement":true}',
@@ -243952,7 +243988,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const lockPath = getSessionWriterLockPath(
        fixture.runtimeBaseDir,
        fixture.options.sessionId,
-@@ -2116,12 +2657,137 @@
+@@ -2116,12 +2661,137 @@
      );
      await expect(
        Promise.all([lease.release(), lease.release()]),
@@ -244090,7 +244126,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        const fixture = await createFixture();
        const lease = await SessionWriterLease.acquire(fixture.options);
  
-@@ -2230,13 +2896,13 @@
+@@ -2230,13 +2900,13 @@
        state: 'active',
        hostname: 'retired-foreign-host',
      });
@@ -244105,7 +244141,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.options.sessionId,
      );
      const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
-@@ -2759,19 +3425,136 @@
+@@ -2759,19 +3429,136 @@
      };
      const results = await Promise.all(
        contenders.map((child) =>
@@ -244243,7 +244279,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      );
      const first = await SessionWriterLease.acquire(fixture.options);
      await first.sealForHandoff();
-@@ -3180,27 +3963,42 @@
+@@ -3180,27 +3967,42 @@
      const fixture = await createFixture(sessionId);
      const firstUser = record(
        'user-1',
@@ -244291,7 +244327,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      expect(
        await requestChild(processA, {
          type: 'acquire',
-@@ -3208,56 +4006,91 @@
+@@ -3208,56 +4010,91 @@
        }),
      ).toMatchObject({ ok: true });
      await expect(
@@ -248330,7 +248366,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            error.code = 'ENOENT';
            throw error;
          },
-@@ -2696,214 +2772,144 @@
+@@ -2696,214 +2772,159 @@
        );
        await expect(
          sessionService.sessionExistsInAnyState(sessionIdA),
@@ -248551,6 +248587,21 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
 -        },
 -      };
 -
++    it('does not treat adopted answer metadata as local served usage', () => {
++      expect(
++        getResumeServedUsage({
++          messages: [
++            { ...baseRecord, usageMetadata: usage },
++            {
++              ...baseRecord,
++              uuid: 'adopted',
++              subtype: 'adopted_message',
++              usageMetadata: { ...usage, promptTokenCount: 0 },
++            },
++          ],
++        }),
++      ).toEqual(usage);
++    });
 +    it('does not invent served usage from exact compression sizes or absent reports', () => {
        expect(
 -        getResumeTokenCounts(
@@ -248622,7 +248673,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
  
        expect(history).toEqual([recordA1.message, assistantA1.message]);
      });
-@@ -2911,33 +2917,40 @@
+@@ -2911,33 +2932,40 @@
      it('keeps Realtime dialogue out of backend model history', () => {
        const realtimeUser: ChatRecord = {
          ...recordA1,
@@ -248664,7 +248715,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          backendUser.message,
        ]);
      });
-@@ -2945,14 +2958,15 @@
+@@ -2945,14 +2973,15 @@
      it('does not deep-clone stored messages when rebuilding resume API history', () => {
        const largePayload = {
          output: 'x'.repeat(128 * 1024),
@@ -248681,7 +248732,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          message: {
            role: 'user',
            parts: [
-@@ -2970,13 +2984,17 @@
+@@ -2970,13 +2999,17 @@
        };
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -248700,7 +248751,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          .mockImplementation(() => {
            throw new Error('unexpected deep clone');
          });
-@@ -2990,19 +3008,22 @@
+@@ -2990,19 +3023,22 @@
        const response = history[1].parts![0] as {
          functionResponse: { response: typeof largePayload };
        };
@@ -248724,7 +248775,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              {
                functionCall: {
                  id: 'call-1',
-@@ -3013,12 +3034,13 @@
+@@ -3013,12 +3049,13 @@
            ],
          },
          cwd: '/test/project/root',
@@ -248738,7 +248789,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-01T00:02:00Z',
          type: 'tool_result',
          message: {
-@@ -3034,12 +3056,13 @@
+@@ -3034,12 +3071,13 @@
            ],
          },
          cwd: '/test/project/root',
@@ -248752,7 +248803,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-01T00:03:00Z',
          type: 'user',
          subtype: 'mid_turn_user_message',
-@@ -3058,15 +3081,30 @@
+@@ -3058,15 +3096,30 @@
          sessionId: sessionIdA,
          projectHash: 'test-project-hash',
          startTime: '2024-01-01T00:00:00Z',
@@ -248783,7 +248834,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const history = buildApiHistoryFromConversation(conversation);
  
        expect(history).toEqual([
-@@ -3081,26 +3119,29 @@
+@@ -3081,26 +3134,29 @@
          },
        ]);
      });
@@ -248813,7 +248864,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              {
                role: 'model',
                parts: [{ text: 'Got it. Thanks for the additional context!' }],
-@@ -3108,12 +3149,13 @@
+@@ -3108,12 +3164,13 @@
              recordB2.message!,
            ],
          },
@@ -248827,7 +248878,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-02T04:00:00Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'new question' }] },
-@@ -3126,15 +3168,31 @@
+@@ -3126,15 +3183,31 @@
          sessionId: sessionIdA,
          projectHash: 'test-project-hash',
          startTime: '2024-01-01T00:00:00Z',
@@ -248860,7 +248911,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const history = buildApiHistoryFromConversation(conversation);
  
        expect(history).toEqual([
-@@ -3145,36 +3203,40 @@
+@@ -3145,36 +3218,40 @@
          },
          recordB2.message,
          postCompressionRecord.message,
@@ -248902,7 +248953,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-02T04:00:00Z',
          type: 'tool_result',
          message: {
-@@ -3191,12 +3253,13 @@
+@@ -3191,12 +3268,13 @@
          },
          cwd: '/test/project/root',
          version: '1.0.0',
@@ -248916,7 +248967,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-02T04:01:00Z',
          type: 'user',
          subtype: 'mid_turn_user_message',
-@@ -3216,16 +3279,40 @@
+@@ -3216,16 +3294,40 @@
          sessionId: sessionIdA,
          projectHash: 'test-project-hash',
          startTime: '2024-01-01T00:00:00Z',
@@ -248958,7 +249009,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const history = buildApiHistoryFromConversation(conversation);
  
        expect(history).toEqual([
-@@ -3240,17 +3327,20 @@
+@@ -3240,17 +3342,20 @@
          },
        ]);
      });
@@ -248980,7 +249031,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              { text: 'reasoning step', thought: true },
              { text: 'final answer' },
            ],
-@@ -3261,13 +3351,17 @@
+@@ -3261,13 +3366,17 @@
  
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -248999,7 +249050,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
  
        // Thought parts should be preserved by default
        expect(history).toHaveLength(2);
-@@ -3276,17 +3370,20 @@
+@@ -3276,17 +3385,20 @@
          { text: 'final answer' },
        ]);
      });
@@ -249021,7 +249072,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              { text: 'reasoning step', thought: true },
              { text: 'final answer' },
            ],
-@@ -3297,13 +3394,17 @@
+@@ -3297,13 +3409,17 @@
  
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -249040,7 +249091,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          stripThoughtsFromHistory: true,
        });
  
-@@ -3311,26 +3412,29 @@
+@@ -3311,26 +3427,29 @@
        expect(history).toHaveLength(2);
        expect(history[1].parts).toEqual([{ text: 'final answer' }]);
      });
@@ -249070,7 +249121,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              {
                role: 'model',
                parts: [
-@@ -3344,13 +3448,22 @@
+@@ -3344,13 +3463,22 @@
  
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -249094,7 +249145,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
  
        // Thought parts should be preserved in compressed history by default.
        // The compressedHistory has 2 entries (user, model), and no messages
-@@ -3361,33 +3474,38 @@
+@@ -3361,33 +3489,38 @@
          { text: 'final answer' },
        ]);
      });
@@ -249134,7 +249185,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        vi.mocked(path.dirname).mockImplementation(
          realPath.dirname as unknown as typeof path.dirname,
-@@ -3405,14 +3523,33 @@
+@@ -3405,14 +3538,33 @@
        // Storage.getProjectDir calls sanitizeCwd via a non-spied namespace import;
        // restore it module-globally so getChatsDir() returns a real path.
        const mockedPaths = (await import('../utils/paths.js')) as unknown as {
@@ -249170,7 +249221,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        vi.mocked(statSyncSpy).mockRestore?.();
        vi.mocked(unlinkSyncSpy).mockRestore?.();
        vi.mocked(rmSyncSpy).mockRestore?.();
-@@ -3447,26 +3584,30 @@
+@@ -3447,26 +3599,30 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -249201,7 +249252,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            message: { role: 'model', parts: [{ text: 'hi' }] },
          },
        ];
-@@ -3491,18 +3632,20 @@
+@@ -3491,18 +3647,20 @@
          .trim()
          .split('\n')
          .map((l) => JSON.parse(l));
@@ -249222,7 +249273,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          forkedFrom: { sessionId: oldId, messageUuid: 'u2' },
        });
        // Source file is untouched.
-@@ -3522,12 +3665,13 @@
+@@ -3522,12 +3680,13 @@
        const { file, lines } = seedSession(oldId);
        fs.writeFileSync(
          file,
@@ -249236,7 +249287,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              type: 'system',
              subtype: 'custom_title',
              timestamp: '2026-04-22T00:00:02.000Z',
-@@ -3585,12 +3729,13 @@
+@@ -3585,12 +3744,13 @@
        const { file, lines } = seedSession(oldId);
        const oldArtifactId = stableSessionArtifactId(
          oldId,
@@ -249250,7 +249301,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.500Z',
-@@ -3664,12 +3809,13 @@
+@@ -3664,12 +3824,13 @@
        const { file, lines } = seedSession(oldId);
        const oldArtifactId = stableSessionArtifactId(
          oldId,
@@ -249264,7 +249315,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.500Z',
-@@ -3702,12 +3848,13 @@
+@@ -3702,12 +3863,13 @@
            ],
          },
        };
@@ -249278,7 +249329,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          file,
          [lines[0], artifactRecord, abandonedChild, lines[1]]
            .map((line) => JSON.stringify(line))
-@@ -3736,12 +3883,13 @@
+@@ -3736,12 +3898,13 @@
        const oldId = '73737373-7373-7373-7373-737373737373';
        const newId = '83838383-8383-8383-8383-838383838383';
        const { file, lines } = seedSession(oldId);
@@ -249292,7 +249343,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:01.500Z',
-@@ -3802,12 +3950,13 @@
+@@ -3802,12 +3965,13 @@
        const newId = '82828282-8282-8282-8282-828282828282';
        const { file, lines } = seedSession(oldId);
        const url = 'https://example.com/forked-then-removed';
@@ -249306,7 +249357,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.500Z',
-@@ -3838,12 +3987,13 @@
+@@ -3838,12 +4002,13 @@
                },
              },
            ],
@@ -249320,7 +249371,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.750Z',
-@@ -3899,12 +4049,13 @@
+@@ -3899,12 +4064,13 @@
  
      it('preserves file history snapshots on the forked session', async () => {
        const oldId = '31313131-3131-3131-3131-313131313131';
@@ -249334,7 +249385,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'file_history_snapshot',
          timestamp: '2026-04-22T00:00:02.000Z',
-@@ -3969,61 +4120,80 @@
+@@ -3969,61 +4135,80 @@
        );
        fs.mkdirSync(chatsDir, { recursive: true });
        fs.writeFileSync(
@@ -249416,7 +249467,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            .join('\n') + '\n',
        );
  
-@@ -4045,17 +4215,13 @@
+@@ -4045,17 +4230,13 @@
      });
  
      it('throws when the target session file already exists', async () => {
@@ -249435,7 +249486,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
      });
  
-@@ -4065,24 +4231,28 @@
+@@ -4065,24 +4246,28 @@
        seedSession(oldId);
        const targetPath = realPath.join(
          service['storage'].getProjectDir(),
@@ -249474,7 +249525,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
      it('throws when the source session belongs to a different project', async () => {
        // Defensive guard: a file can physically sit in this project's chats
        // dir but carry a record whose cwd hashes to a different project
-@@ -4095,12 +4265,13 @@
+@@ -4095,12 +4280,13 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -249488,7 +249539,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'user',
            timestamp: '2026-04-22T00:00:00.000Z',
            cwd: '/some/other/project',
-@@ -4163,44 +4334,50 @@
+@@ -4163,44 +4349,50 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -249539,7 +249590,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_source',
          timestamp: '2026-04-22T00:00:00.750Z',
-@@ -4262,12 +4439,15 @@
+@@ -4262,12 +4454,15 @@
          await vi.importActual<typeof import('../utils/paths.js')>(
            '../utils/paths.js',
          );
@@ -249555,7 +249606,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        vi.mocked(path.dirname).mockImplementation(
          realPath.dirname as unknown as typeof path.dirname,
-@@ -4280,14 +4460,33 @@
+@@ -4280,14 +4475,33 @@
        );
        vi.mocked(getProjectHash).mockImplementation(actualPaths.getProjectHash);
        const mockedPaths = (await import('../utils/paths.js')) as unknown as {
@@ -249591,7 +249642,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        vi.mocked(unlinkSyncSpy).mockRestore?.();
  
        realTmpDir = fs.mkdtempSync(
-@@ -4317,22 +4516,24 @@
+@@ -4317,22 +4531,24 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -249616,7 +249667,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'system',
            subtype: 'custom_title',
            timestamp: '2026-04-22T00:00:01.000Z',
-@@ -4401,12 +4602,13 @@
+@@ -4401,12 +4617,13 @@
        );
        fs.mkdirSync(chatsDir, { recursive: true });
        const file = realPath.join(chatsDir, `${sessionId}.jsonl`);
@@ -249630,7 +249681,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'user',
            timestamp: '2026-04-22T00:00:00.000Z',
            cwd,
-@@ -4425,13 +4627,13 @@
+@@ -4425,13 +4642,13 @@
  
      it('includes a session whose transcript cwd is a worktree under this project', async () => {
        (path as unknown as Record<string, unknown>)['sep'] = '/';
@@ -249645,7 +249696,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            cwd: '/test/project/root/.qwen/worktrees/my-task',
          },
        ]);
-@@ -4450,13 +4652,13 @@
+@@ -4450,13 +4667,13 @@
  
      it('excludes a session whose worktree belongs to a different project', async () => {
        (path as unknown as Record<string, unknown>)['sep'] = '/';
@@ -249660,7 +249711,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            cwd: '/other/repo/.qwen/worktrees/my-task',
          },
        ]);
-@@ -4470,13 +4672,13 @@
+@@ -4470,13 +4687,13 @@
      });
    });
  
@@ -249675,7 +249726,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
      let service: SessionService;
      let cwd: string;
  
-@@ -4487,12 +4689,15 @@
+@@ -4487,12 +4704,15 @@
          await vi.importActual<typeof import('../utils/paths.js')>(
            '../utils/paths.js',
          );
@@ -249691,7 +249742,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        vi.mocked(path.dirname).mockImplementation(
          realPath.dirname as unknown as typeof path.dirname,
-@@ -4505,14 +4710,33 @@
+@@ -4505,14 +4725,33 @@
        );
        vi.mocked(getProjectHash).mockImplementation(actualPaths.getProjectHash);
        const mockedPaths = (await import('../utils/paths.js')) as unknown as {
@@ -249727,7 +249778,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        vi.mocked(unlinkSyncSpy).mockRestore?.();
  
        realTmpDir = fs.mkdtempSync(
-@@ -4539,35 +4763,38 @@
+@@ -4539,35 +4778,38 @@
        );
        fs.mkdirSync(chatsDir, { recursive: true });
        return chatsDir;
@@ -249766,7 +249817,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        type: 'system',
        subtype: 'session_source',
        timestamp: '2026-04-22T00:00:02.000Z',
-@@ -4676,12 +4903,13 @@
+@@ -4676,12 +4918,13 @@
          userLine(sessionId, 'hello'),
          parentSessionLine(sessionId, 'parent-head'),
        ];
@@ -249780,7 +249831,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'user',
            timestamp: '2026-04-22T00:01:00.000Z',
            cwd,
-@@ -4719,6 +4947,11 @@
+@@ -4719,6 +4962,11 @@
        const sessionId = '66666666-6666-6666-6666-666666666666';
  
        expect(await service.readParentSessionId(sessionId)).toBeUndefined();
@@ -318478,7 +318529,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
      );
      return { diagnostics };
    }
-@@ -286,37 +478,228 @@
+@@ -286,37 +478,233 @@
      typeof type !== 'string' ||
      !RECORD_TYPES.has(type as TranscriptRecordType)
    ) {
@@ -318665,6 +318716,11 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +          'invalid_records',
 +          'Adopted and realtime records cannot claim a local chat attempt origin. Inspect the original recording.',
 +        );
++      if (value['usageMetadata'] !== undefined)
++        throw new TranscriptRecordPreparationError(
++          'invalid_records',
++          'Adopted and realtime messages cannot claim locally served model usage. Inspect the original recording.',
++        );
 +      requireRuntimeConversationContent(value['message'], 'model');
 +    }
 +  } else if (value['origin'] !== undefined) {
@@ -318709,7 +318765,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    ) {
      diagnostics.push(
        diagnostic(
-@@ -331,54 +714,97 @@
+@@ -331,54 +719,97 @@
    let message: TranscriptRecordInput['message'];
    if (value['message'] !== undefined) {
      if (!isObjectRecord(value['message'])) {
@@ -318819,7 +318875,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    records: readonly TranscriptRecordInput[],
    leafUuid?: string,
  ): string | undefined {
-@@ -428,19 +854,46 @@
+@@ -428,19 +859,46 @@
    }
  
    uuids.reverse();
@@ -318866,7 +318922,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
      : undefined;
  
    for (let index = 1; index < records.length; index += 1) {
-@@ -477,23 +930,29 @@
+@@ -477,23 +935,29 @@
      throw new TranscriptRecordPreparationError(
        'invalid_records',
        'Transcript records must be an array.',
@@ -318906,7 +318962,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
      throw new TranscriptRecordPreparationError(
        'mixed_session_ids',
        'Transcript records contain multiple session ids.',
-@@ -517,37 +976,30 @@
+@@ -517,37 +981,30 @@
          ),
        );
      }
@@ -318951,7 +319007,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
        firstByUuid.set(record.uuid, record);
      }
    }
-@@ -573,15 +1025,48 @@
+@@ -573,15 +1030,48 @@
          true,
          { recordId: chain.cycleUuid },
        ),
