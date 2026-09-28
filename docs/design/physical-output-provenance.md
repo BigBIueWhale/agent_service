@@ -46,6 +46,17 @@ from source inspection and an authored Rust test; it remains unverified by
 execution pending the owner's gates. This is SDK value-count parity, not full
 physical-to-generation proof.
 
+The installed SDK's nonstreaming path calls `Response.json()` for JSON media
+types and `Response.text()` otherwise. An executed local SDK probe on the pinned
+Node 22 runtime accepted JSON bodies with one or two leading UTF-8 byte order
+marks and rejected a third; `Response.text()` likewise removed two marks. The
+TypeScript replay now removes the second mark after `TextDecoder`, and the
+native and Python JSON value counters remove up to two before parsing. The
+focused TypeScript suites passed 36 cases, including actual-SDK comparisons for
+JSON and text marks; the Python generation module passed 72 cases. The native
+source test was authored but not run. These observations establish the pinned
+runtime's parsing boundary, not provider behavior or full generation provenance.
+
 Generation-envelope counters also require exact numeric interpretation. A
 rehashed envelope could spell an observed count as
 `12.00000000000000001`: Java and native source retain the nonzero fraction,

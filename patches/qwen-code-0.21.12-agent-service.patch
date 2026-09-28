@@ -352325,7 +352325,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,888 @@
+@@ -0,0 +1,890 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -352479,7 +352479,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            )
 +            if is_json:
 +                try:
-+                    _parse_sdk_json(self.body.decode("utf-8-sig", "replace"))
++                    text = self.body.decode("utf-8-sig", "replace")
++                    text = text.removeprefix("\ufeff")
++                    _parse_sdk_json(text)
 +                except ValueError:
 +                    available, failed = 0, True
 +                else:
@@ -410596,7 +410598,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  const text =
 +    mode === 'stream'
 +      ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(body)
-+      : new TextDecoder().decode(body);
++      : new TextDecoder().decode(body).replace(/^\uFEFF/, '');
 +  if (mode === 'nonstream') {
 +    if (transport.status === 204) return { values: [null], failure: null };
 +    const mediaType = transport.content_type?.split(';')[0]?.trim();
@@ -410802,7 +410804,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
-@@ -0,0 +1,433 @@
+@@ -0,0 +1,437 @@
 +import { describe, expect, it } from 'vitest';
 +import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
@@ -410855,8 +410857,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +describe('retained OpenAI response parsing', () => {
 +  it.each([
 +    [200, 'application/json', '{"choices":[]}'],
++    [200, 'application/json', '\uFEFF{"choices":[]}'],
++    [200, 'application/json', '\uFEFF\uFEFF{"choices":[]}'],
++    [200, 'application/json', '\uFEFF\uFEFF\uFEFF{"choices":[]}'],
 +    [200, 'application/problem+json', '{"choices":[]}'],
 +    [200, 'text/plain', '{"choices":[]}'],
++    [200, 'text/plain', '\uFEFF\uFEFFplain response'],
 +    [200, null, 'plain response'],
 +    [204, 'application/json', null],
 +    [200, 'application/json', '{bad json'],
@@ -420383,7 +420389,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
-@@ -0,0 +1,857 @@
+@@ -0,0 +1,864 @@
 +from __future__ import annotations
 +
 +import base64
@@ -420685,6 +420691,8 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    "status, content_type, body, seen, completed",
 +    [
 +        (200, "application/json; charset=utf-8", b'{"choices":[]}', 1, True),
++        (200, "application/json", b'\xef\xbb\xbf{"choices":[]}', 1, True),
++        (200, "application/json", b'\xef\xbb\xbf\xef\xbb\xbf{"choices":[]}', 1, True),
 +        (200, "text/plain", b"{not JSON}", 1, True),
 +        (200, None, b"", 1, True),
 +        (204, "application/json", b"", 1, False),
@@ -420707,6 +420715,11 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    values.require_prefix(0, False, 200, "application/json")
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
 +        values.require_prefix(0, True, 200, "application/json")
++
++    triple_bom = _ResponseValues(False)
++    triple_bom.push(b'\xef\xbb\xbf\xef\xbb\xbf\xef\xbb\xbf{"choices":[]}')
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        triple_bom.require_prefix(0, True, 200, "application/json")
 +
 +
 +def test_accepted_completion_cannot_leave_a_delivered_output_unobserved():

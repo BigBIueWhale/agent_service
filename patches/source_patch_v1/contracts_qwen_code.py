@@ -8428,6 +8428,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "transport.status === 204",
         "mediaType?.includes('application/json')",
         "new TextDecoder('utf-8', { ignoreBOM: true }).decode(body)",
+        "new TextDecoder().decode(body).replace(/^\\uFEFF/, '')",
         "rawLine.startsWith('\\uFEFF') ? rawLine.slice(1) : rawLine",
         "parseRecordedOpenAIValues(body, policy.mode, transport)",
         "export function replayRecordedOpenAIObservations(",
@@ -8445,6 +8446,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.test.ts", (
         "matches the pinned SDK nonstream parser for HTTP",
+        "'\\uFEFF\\uFEFF{\"choices\":[]}'",
         "replays non-JSON and no-content outcomes without inventing JSON bytes",
         "matches the pinned SDK across line endings and incomplete trailing frames",
         "admits a physical fixture and refuses a rehashed text replacement",
@@ -8847,6 +8849,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
         'self.line.decode("utf-8-sig", "replace")',
+        '.removeprefix("\\ufeff")',
         'hashlib.sha256(raw).hexdigest() == request["body_sha256"]',
         'stream == (request["decode_policy"]["mode"] == "stream")',
         'model == request["decode_policy"]["model"]',

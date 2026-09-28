@@ -73,7 +73,13 @@ impl ResponseValues {
                         value.contains("application/json") || value.ends_with("+json")
                     });
                     if is_json {
-                        let text = String::from_utf8_lossy(body);
+                        // Node's fetch Body parser removes up to two leading
+                        // UTF-8 marks before the pinned SDK parses JSON.
+                        let bom = &[0xef, 0xbb, 0xbf];
+                        let without_first = body.strip_prefix(bom).unwrap_or(body);
+                        let without_second =
+                            without_first.strip_prefix(bom).unwrap_or(without_first);
+                        let text = String::from_utf8_lossy(without_second);
                         let valid = serde_json::from_str::<serde_json::Value>(&text).is_ok();
                         (u64::from(valid), !valid)
                     } else {
@@ -1127,6 +1133,24 @@ mod tests {
         nonstream
             .require_prefix(1, true, Some(200), Some("application/json"))
             .unwrap();
+        for count in 1..=3 {
+            let mut with_bom = ResponseValues::new(false);
+            for _ in 0..count {
+                with_bom.push(&[0xef, 0xbb, 0xbf]);
+            }
+            with_bom.push(b"{}");
+            assert_eq!(
+                with_bom
+                    .require_prefix(
+                        u64::from(count <= 2),
+                        true,
+                        Some(200),
+                        Some("application/json"),
+                    )
+                    .is_ok(),
+                count <= 2,
+            );
+        }
         assert!(nonstream
             .require_prefix(0, true, Some(200), Some("application/json"))
             .is_err());
