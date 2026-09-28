@@ -352387,8 +352387,9 @@ diff --git a/packages/cli/src/ui/components/messages/ToolGroupMessage.test.tsx b
 diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/core/chat-attempt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/chat-attempt.test.ts
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,334 @@
 +import { describe, expect, it } from 'vitest';
++import type OpenAI from 'openai';
 +import { ChatAttempt } from './chat-attempt.js';
 +import {
 +  ModelRequestJournal,
@@ -352400,11 +352401,18 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +} from './model-response-evidence.js';
 +import { RuntimeContractAdmission } from '../utils/runtime-contract-admission.js';
 +import { STREAM_CONTRACT_SHA256 } from '../utils/runtime-stream-contract.js';
-+import { freezeModelGeneration } from './model-generation.js';
 +import {
-+  generationUsage,
-+  observation,
-+} from '../test-utils/model-generation-fixture.js';
++  freezeModelGeneration,
++  GenerationObservationNormalizer,
++  readModelGeneration,
++  takeGenerationObservation,
++  type ModelNormalizationSeed,
++} from './model-generation.js';
++import {
++  createOpenAIResponseDecodeContext,
++  decodeOpenAIResponse,
++  readOpenAIUsage,
++} from './openaiContentGenerator/responseDecoder.js';
 +
 +const TEST_POLICY = {
 +  mode: 'nonstream',
@@ -352438,7 +352446,12 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +      }),
 +  );
 +  const response = await journal.capture(
-+    JSON.stringify({ kv_scope: scope, stream: false, messages: [] }),
++    JSON.stringify({
++      kv_scope: scope,
++      model: 'model',
++      stream: false,
++      messages: [],
++    }),
 +    scope,
 +    'prompt',
 +    'segment',
@@ -352446,16 +352459,53 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +    TEST_POLICY,
 +  );
 +  response.dispatched();
++  const physical = {
++    id: 'physical-reply',
++    object: 'chat.completion',
++    created: 0,
++    model: 'model',
++    choices: [
++      {
++        index: 0,
++        message: { role: 'assistant', content: 'exact output' },
++        finish_reason: 'stop',
++      },
++    ],
++    usage: {
++      prompt_tokens: 12,
++      completion_tokens: 7,
++      total_tokens: 19,
++      prompt_tokens_details: { cached_tokens: 4 },
++      completion_tokens_details: { reasoning_tokens: 2 },
++    },
++  } as OpenAI.Chat.ChatCompletion;
++  const usage = readOpenAIUsage(physical.usage);
++  if (usage.kind !== 'observed') throw new Error('Fixture lacks served usage');
++  const decoded = decodeOpenAIResponse(
++    physical,
++    createOpenAIResponseDecodeContext(TEST_POLICY, 0),
++    usage,
++  );
 +  const observed = {
-+    ...observation([{ text: 'exact output' }]),
++    ...new GenerationObservationNormalizer([], []).normalizeObservation(
++      takeGenerationObservation(decoded),
++    ),
 +    source_request_id: response.requestId,
 +  };
-+  await (await response.capture(Response.json(observed.response))).text();
++  await (await response.capture(Response.json(physical))).text();
 +  response.observeSdkValue();
-+  response.observePipelineOutput(observed.response);
-+  response.observeUsage(generationUsage);
++  response.observePipelineOutput(decoded);
++  response.observeUsage(usage.usage);
 +  await response.finish({ status: 'completed', error: null });
 +  attempt.observeConsumerOutput(response.requestId);
++  const seed: ModelNormalizationSeed = {
++    journal_id: journal.id,
++    origin: attempt.origin,
++    request_id: response.requestId,
++    history_call_ids: [],
++  };
++  await journal.publishNormalizationSeed(seed);
++  records.push({ type: 'model_normalization_seed', normalization_seed: seed });
 +  attempt.commitGeneration(
 +    freezeModelGeneration(journal.id, {
 +      origin: attempt.origin,
@@ -352471,6 +352521,7 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +}
 +function replay(records: ModelEvidence[]) {
 +  const reader = new ModelResponseReplay();
++  let seed: ModelNormalizationSeed | undefined;
 +  for (const record of records) {
 +    if (record.type === 'model_request')
 +      reader.begin(
@@ -352481,6 +352532,12 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +        record.request.decode_policy,
 +      );
 +    else if (record.type === 'model_response') reader.observe(record.response);
++    else if (record.type === 'model_normalization_seed')
++      seed = record.normalization_seed;
++    else if (record.type === 'model_generation') {
++      if (!seed) throw new Error('Fixture generation lacks a seed');
++      reader.verifyGeneration(readModelGeneration(record.generation), seed);
++    }
 +  }
 +  return reader;
 +}
@@ -352491,7 +352548,12 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +    const before = records.length;
 +    await expect(
 +      journal.capture(
-+        JSON.stringify({ kv_scope: 'session', stream: false, messages: [] }),
++        JSON.stringify({
++          kv_scope: 'session',
++          model: 'model',
++          stream: false,
++          messages: [],
++        }),
 +        'session',
 +        'prompt',
 +        'segment',
@@ -352640,17 +352702,20 @@ diff --git a/packages/core/src/core/chat-attempt.test.ts b/packages/core/src/cor
 +    );
 +    if (processing?.type !== 'model_response')
 +      throw new Error('Missing fixture outcome');
++    if (processing.response.event.kind !== 'outcome')
++      throw new Error('Fixture outcome has another event kind');
 +    records[records.indexOf(processing)] = {
 +      ...processing,
 +      response: {
 +        ...processing.response,
 +        event: {
 +          kind: 'outcome',
-+          served_usage: null,
++          served_usage: processing.response.event.served_usage,
 +          status: 'failed',
 +          error: 'provider failure',
-+          sdk_values_seen: 1,
-+          pipeline_outputs_delivered: 1,
++          sdk_values_seen: processing.response.event.sdk_values_seen,
++          pipeline_outputs_delivered:
++            processing.response.event.pipeline_outputs_delivered,
 +        },
 +      },
 +    };
