@@ -10630,8 +10630,13 @@ def _validate_stream_bounds_after(state: State) -> None:
         location=pipeline,
     )
     _require_all(state, pipeline, ("clock.subscribe(rearm)", "if (clock.paused) return;", "unsubscribe?.()"), label=label)
-    require_text(state, "packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts",
-                 "does not count durable recording delay toward first-chunk or idle guards", label=label)
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts", (
+        "excludes progressing durable writes from first-chunk and idle guards",
+        "const writeDelayMs = RECORDING_STALL_TIMEOUT_MS / 2;",
+        "const heldWrites = Math.floor(STREAM_IDLE_TIMEOUT_MS / writeDelayMs) + 1;",
+        "await vi.advanceTimersByTimeAsync(writeDelayMs);",
+        "expect(values).toEqual(['first', 'second']);",
+    ), label=label)
     # One mode: no knob, no default beside the derived bound, nothing that
     # disables a bound, and the retired names do not return.
     for path in (constants, pipeline, content):

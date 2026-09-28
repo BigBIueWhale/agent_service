@@ -347927,7 +347927,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,797 @@
+@@ -0,0 +1,804 @@
 +import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
 +// eslint-disable-next-line import/no-internal-modules
@@ -347957,6 +347957,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +import { replayRecordedOpenAIObservations } from './recorded-response-replay.js';
 +import type { ErrorHandler } from './types.js';
 +import { STREAM_IDLE_TIMEOUT_MS } from './constants.js';
++import { RECORDING_STALL_TIMEOUT_MS } from '../recording-stall.js';
 +
 +function deferred() {
 +  let resolve!: () => void;
@@ -348648,10 +348649,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +    validate(f);
 +  });
 +
-+  it('does not count durable recording delay toward first-chunk or idle guards', async () => {
++  it('excludes progressing durable writes from first-chunk and idle guards', async () => {
 +    vi.useFakeTimers();
-+    const gates = [deferred(), deferred()];
-+    const reached = [deferred(), deferred()];
++    const writeDelayMs = RECORDING_STALL_TIMEOUT_MS / 2;
++    const heldWrites = Math.floor(STREAM_IDLE_TIMEOUT_MS / writeDelayMs) + 1;
++    const gates = Array.from({ length: heldWrites + 2 }, deferred);
++    const reached = Array.from({ length: heldWrites + 2 }, deferred);
 +    let recordIndex = 0;
 +    let next = 0;
 +    const f = fixture(
@@ -348661,7 +348664,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +            {
 +              pull(controller) {
 +                if (next === 0) controller.enqueue(Buffer.from(wire('first')));
-+                else if (next === 1)
++                else if (next <= heldWrites)
++                  controller.enqueue(Buffer.from(`: ignored ${next}\n\n`));
++                else if (next === heldWrites + 1)
 +                  controller.enqueue(
 +                    Buffer.from(wire('second', 'stop') + 'data: [DONE]\n\n'),
 +                  );
@@ -348675,6 +348680,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +      async (record) => {
 +        if (record.event.kind === 'body') {
 +          const index = recordIndex++;
++          if (!reached[index] || !gates[index])
++            throw new Error(`unexpected response body record ${index}`);
 +          reached[index].resolve();
 +          await gates[index].promise;
 +        }
@@ -348697,9 +348704,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +      .finally(() => {
 +        settled = true;
 +      });
-+    for (let index = 0; index < 2; index++) {
++    for (let index = 0; index < gates.length; index++) {
 +      await reached[index].promise;
-+      await vi.advanceTimersByTimeAsync(STREAM_IDLE_TIMEOUT_MS * 2);
++      await vi.advanceTimersByTimeAsync(writeDelayMs);
 +      expect(settled).toBe(false);
 +      gates[index].resolve();
 +    }

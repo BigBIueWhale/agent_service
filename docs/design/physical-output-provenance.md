@@ -375,9 +375,11 @@ require the retained body's model to equal the policy's model. The producer
 still sends the same request bytes; the relation fixes which model's response
 decoder interprets them for every OpenAI-compatible caller. Focused TypeScript
 source tests, the Python admission suite and the shared harness test exercised
-this binding. The full local TypeScript suite still fails its recording-delay
-timing assertion; it also failed here with the prior pipeline, decoder and test
-sources restored. Native and Java cases were authored but not executed; the
+this binding. The focused 27-case pipeline response suite passed against the
+authoring source. Its progressing-write case holds each body write for half
+the 60-second storage deadline while total storage time exceeds the 240-second
+stream idle guard. The full TypeScript suite was not run for this change.
+Native and Java cases were authored but not executed; the
 model binding alone does not prove decoded observations came from physical
 bytes.
 Canonical files from before that identity lack required evidence; the version 13
