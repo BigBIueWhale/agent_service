@@ -11,9 +11,12 @@ use runtime_contract::{
     schema::ValidationLimits,
 };
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::io::{BufRead, BufReader, Read};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 fn pinned_contract() -> ServiceResult<RuntimeContract> {
     // The build validates and embeds only the fixed deployment facts used here.
@@ -62,6 +65,7 @@ pub struct EventSnapshot {
     pub observed: OutputProgress,
     pub replay_completion: ReplayCompletion,
     pub certified: ServiceResult<AgentResult>,
+    wire_sha256: String,
 }
 
 /// Reaching the selected descriptor extent is separate from the capture
@@ -94,8 +98,73 @@ struct EventPrefix<R> {
 /// Both running reads and terminal finalization consume this one descriptor scan.
 pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> {
     open_event_prefix(path)?
-        .map(|prefix| read_opened_event_snapshot(path, prefix))
+        .map(|prefix| {
+            let mut snapshot = read_opened_event_snapshot(path, prefix)?;
+            if snapshot.certified.is_ok() {
+                if let Err(cause) = verify_physical_generations(
+                    path,
+                    snapshot.observed.output_event_bytes,
+                    &snapshot.wire_sha256,
+                ) {
+                    snapshot.certified = Err(cause);
+                }
+            }
+            Ok(snapshot)
+        })
         .transpose()
+}
+
+/// The patched client bundle owns the one response converter and normalizer.
+/// A second read is bound to the exact native-read stream by its byte count and
+/// digest, so replacement or append between the two passes cannot certify.
+fn verify_physical_generations(path: &Path, bytes: u64, digest: &str) -> ServiceResult<()> {
+    const NODE: &str = "/usr/local/bin/node";
+    const VERIFIER: &str = "/opt/qwen-code/dist/record-verifier.js";
+    // Pure local replay has at least one minute; each MiB grants one more
+    // second so the watchdog does not penalize a legitimate long session.
+    let deadline = Duration::from_secs(60_u64.saturating_add(bytes / (1024 * 1024)));
+    let mut child = Command::new(NODE)
+        .arg(VERIFIER)
+        .arg(path)
+        .arg(bytes.to_string())
+        .arg(digest)
+        .arg(crate::stream_contract::STREAM_CONTRACT_SHA256)
+        .arg(MAX_EVENT_RECORD_BYTES.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|error| ServiceError::AgentOutputMissing(format!(
+            "cannot start the pinned physical response verifier for {}: {error}; inspect the service image and the retained recording, then retry",
+            path.display(),
+        )))?;
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => return Ok(()),
+            Ok(Some(status)) => return Err(ServiceError::AgentOutputMissing(format!(
+                "physical response replay refused {} with status {status}; inspect the original recording with its matching client or start a new session",
+                path.display(),
+            ))),
+            Ok(None) if started.elapsed() < deadline => std::thread::sleep(Duration::from_millis(20)),
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(ServiceError::AgentOutputMissing(format!(
+                    "physical response replay exceeded its local verification deadline for {}; inspect the retained recording and service load, then retry",
+                    path.display(),
+                )));
+            }
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(ServiceError::AgentOutputMissing(format!(
+                    "physical response replay could not settle for {}: {error}; inspect the retained recording and service process state, then retry",
+                    path.display(),
+                )));
+            }
+        }
+    }
 }
 
 fn open_event_prefix(path: &Path) -> ServiceResult<Option<EventPrefix<std::fs::File>>> {
@@ -154,6 +223,7 @@ fn read_opened_event_snapshot<R: Read>(
     let mut reader = BufReader::new(prefix.file.take(prefix.bytes));
     let mut replay_completion = ReplayCompletion::ReachedBoundary;
     let mut contract = pinned_contract()?;
+    let mut wire_digest = Sha256::new();
     let mut physical_line = 0usize;
     let mut record = Vec::new();
     loop {
@@ -192,6 +262,7 @@ fn read_opened_event_snapshot<R: Read>(
             contract.observe_gap(runtime_contract::ContractError::InvalidRecord(format!("events.jsonl line {physical_line} is not newline-terminated; incomplete trailing record is unaccounted")))?;
             break;
         }
+        wire_digest.update(&record);
         let line = record.strip_suffix(b"\n").expect("terminated frame has LF");
         if line.iter().all(|byte| byte.is_ascii_whitespace()) {
             contract.observe_gap(runtime_contract::ContractError::InvalidRecord(format!(
@@ -239,6 +310,11 @@ fn read_opened_event_snapshot<R: Read>(
         observed,
         replay_completion,
         certified,
+        wire_sha256: wire_digest
+            .finalize()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect(),
     })
 }
 

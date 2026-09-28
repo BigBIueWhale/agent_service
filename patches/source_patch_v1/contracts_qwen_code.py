@@ -8465,6 +8465,27 @@ def _validate_served_accounting_after(state: State) -> None:
         "compares complete and trailing frames under varied line boundaries",
         "compares mixed line endings and binary prefixes",
     ), label=label)
+    _require_all(state, core + "core/record-verifier-core.ts", (
+        "export async function verifyPhysicalModelRecords(",
+        "constants.O_RDONLY | constants.O_NOFOLLOW",
+        "stat.size !== expectedBytes",
+        "digest.update(chunk)",
+        "replay.observeGeneration(record['generation'])",
+        "replay.finishStream()",
+        "digest.digest('hex') !== expectedSha256",
+    ), label=label)
+    _require_all(state, core + "core/record-verifier-core.test.ts", (
+        "accepts a complete physical generation from the captured body",
+        "refuses a rehashed thought that the physical response did not produce",
+        "refuses a changed captured file even when its records still parse",
+    ), label=label)
+    _require_all(state, core + "core/record-verifier.ts", (
+        "STREAM_CONTRACT_SHA256",
+        "await verifyPhysicalModelRecords({",
+    ), label=label)
+    require_text(state, "esbuild.config.js",
+                 "'record-verifier': 'packages/core/src/core/record-verifier.ts'",
+                 label=label)
     _require_all(state, core + "core/runtime-history-recording.test.ts", (
         "new OpenAI({",
         "new ContentGenerationPipeline({",

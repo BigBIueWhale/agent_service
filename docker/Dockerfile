@@ -116,6 +116,7 @@ RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
       packages/core/src/generated/git-commit.ts \
  && DEV=true node esbuild.config.js \
  && node scripts/copy_bundle_assets.js \
+ && test -f dist/record-verifier.js \
  && npx --no-install vitest run --config scripts/tests/vitest.config.ts \
       scripts/tests/package-assets.test.js \
       scripts/tests/stream-contract-assets.test.js \
@@ -161,6 +162,10 @@ RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
 FROM ${RUST_IMAGE} AS agent-runtime-build
 WORKDIR /build
 ARG AGENT_EXEC_SOURCE_SHA256
+COPY --from=qwen-build /usr/local/bin/node /usr/local/bin/node
+COPY --from=qwen-build /src/dist /opt/qwen-code/dist
+COPY --from=qwen-build /src/node_modules /opt/qwen-code/node_modules
+COPY --from=qwen-build /src/package.json /opt/qwen-code/package.json
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY protocol protocol
 COPY src/bin/agent_exec.rs src/bin/agent_exec.rs

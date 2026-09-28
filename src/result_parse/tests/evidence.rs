@@ -1,6 +1,38 @@
 use super::*;
 
 #[test]
+fn rehashed_generation_thought_cannot_certify_without_its_physical_source() {
+    let mut trace = Trace::new();
+    trace.chat(None, "call-x");
+    trace.terminal(None, 1, None);
+    trace.certify();
+
+    let generation = trace
+        .rows
+        .iter_mut()
+        .find(|row| row["type"] == "model_generation")
+        .unwrap();
+    let evidence = &mut generation["generation"];
+    let mut envelope: Value =
+        serde_json::from_str(evidence["generation_json"].as_str().unwrap()).unwrap();
+    envelope["observations"][0]["response"]["candidates"][0]["content"]["parts"][0]["text"] =
+        json!("  **forged thought**\\n");
+    let text = envelope.to_string();
+    let digest = hash(text.as_bytes());
+    evidence["generation_json"] = json!(text);
+    evidence["generation_bytes"] = json!(text.len());
+    evidence["generation_sha256"] = json!(digest);
+    let completion = trace
+        .rows
+        .iter_mut()
+        .find(|row| row["type"] == "model_attempt_completion")
+        .unwrap();
+    completion["completion"]["generation_sha256"] = json!(digest);
+
+    assert_refused_at(&trace, "physical response replay refused");
+}
+
+#[test]
 fn refuses_missing_or_corrupted_raw_response_evidence() {
     let complete = Trace::ordinary();
     complete.certify();

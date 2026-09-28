@@ -421570,3 +421570,307 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    insert_before(wire, "result", executable)
 +    with pytest.raises(RecordContractError):
 +        admit(wire)
+diff --git a/esbuild.config.js b/esbuild.config.js
+--- a/esbuild.config.js
++++ b/esbuild.config.js
+@@ -167,13 +167,16 @@
+ // strips this exact segment when modules look up sibling assets at runtime.
+ // Renaming here without renaming there silently breaks bundled-binary lookup
+ // in skill-manager / ripgrepUtils / i18n / extensions/new.
+ const BUNDLE_CHUNK_DIR = 'chunks';
+ 
+ const mainBuild = esbuild.build({
+-  entryPoints: { cli: 'packages/cli/src/cli.ts' },
++  entryPoints: {
++    cli: 'packages/cli/src/cli.ts',
++    'record-verifier': 'packages/core/src/core/record-verifier.ts',
++  },
+   bundle: true,
+   outdir: 'dist',
+   entryNames: '[name]',
+   chunkNames: `${BUNDLE_CHUNK_DIR}/[name]-[hash]`,
+   splitting: true,
+   platform: 'node',
+diff --git a/packages/core/src/core/record-verifier-core.ts b/packages/core/src/core/record-verifier-core.ts
+--- /dev/null
++++ b/packages/core/src/core/record-verifier-core.ts
+@@ -0,0 +1,163 @@
++import { createHash } from 'node:crypto';
++import { constants } from 'node:fs';
++import { open } from 'node:fs/promises';
++import { ModelRequestStreamReplay } from './model-request-evidence.js';
++
++interface RecordVerifierInput {
++  readonly path: string;
++  readonly expectedBytes: bigint;
++  readonly expectedSha256: string;
++  readonly maxRecordBytes: number;
++}
++
++/** Check physical generation membership against the exact native-read file. */
++export async function verifyPhysicalModelRecords({
++  path,
++  expectedBytes,
++  expectedSha256,
++  maxRecordBytes,
++}: RecordVerifierInput): Promise<void> {
++  if (
++    !Number.isSafeInteger(maxRecordBytes) ||
++    maxRecordBytes < 1 ||
++    expectedBytes < 0n ||
++    !/^[0-9a-f]{64}$/.test(expectedSha256)
++  )
++    throw new Error(
++      'Invalid physical verification bounds. Inspect the certifier invocation and retry with the matching image.',
++    );
++
++  const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
++  try {
++    const stat = await handle.stat({ bigint: true });
++    if (
++      !stat.isFile() ||
++      (stat.mode & 0o777n) !== 0o600n ||
++      stat.uid !== 1000n ||
++      stat.gid !== 1000n ||
++      stat.size !== expectedBytes
++    )
++      throw new Error(
++        `Captured events file ${path} changed type, owner, mode or length during physical verification. Inspect the original recording and retry after capture has settled.`,
++      );
++
++    const replay = new ModelRequestStreamReplay();
++    const digest = createHash('sha256');
++    let bytes = 0n;
++    let line = 0;
++    let fragments: Buffer[] = [];
++    let fragmentBytes = 0;
++    let started = false;
++    let terminated = false;
++    const observe = (raw: Buffer) => {
++      line++;
++      let record: Record<string, unknown>;
++      try {
++        const value: unknown = JSON.parse(raw.toString('utf8'));
++        if (!value || typeof value !== 'object' || Array.isArray(value))
++          throw new Error('record is not an object');
++        record = value as Record<string, unknown>;
++      } catch (cause) {
++        throw new Error(
++          `Captured events line ${line} cannot be physically replayed: ${String(cause)}. Inspect the original recording with its matching client.`,
++        );
++      }
++      if (record['type'] === 'system' && record['subtype'] === 'stream_start') {
++        if (started)
++          throw new Error(
++            'Captured events repeat stream_start. Retain one complete invocation and retry.',
++          );
++        replay.begin(record['request_evidence_origin']);
++        started = true;
++      }
++      if (!started)
++        throw new Error(
++          'Captured events precede stream_start. Retain the complete invocation and retry.',
++        );
++      switch (record['type']) {
++        case 'model_request':
++          replay.observe(record['request']);
++          break;
++        case 'model_response':
++          replay.observeResponse(record['response']);
++          break;
++        case 'model_normalization_seed':
++          replay.observeNormalizationSeed(record['normalization_seed']);
++          break;
++        case 'model_generation':
++          replay.observeGeneration(record['generation']);
++          break;
++        case 'model_attempt_completion':
++          replay.observeCompletion(record['completion']);
++          break;
++        case 'result':
++          if (record['parent_tool_use_id'] === null) {
++            if (terminated)
++              throw new Error(
++                'Captured events repeat the root terminal. Retain one complete invocation and retry.',
++              );
++            replay.finish(record['request_evidence']);
++            replay.requireUsage(record['usage']);
++            terminated = true;
++          }
++          break;
++        default:
++          break;
++      }
++    };
++    for await (const chunk of handle.createReadStream({ autoClose: false })) {
++      bytes += BigInt(chunk.length);
++      if (bytes > expectedBytes)
++        throw new Error(
++          'Captured events grew during physical verification. Wait for capture to settle and retry.',
++        );
++      digest.update(chunk);
++      let start = 0;
++      for (
++        let end = chunk.indexOf(0x0a, start);
++        end >= 0;
++        end = chunk.indexOf(0x0a, start)
++      ) {
++        const tail = chunk.subarray(start, end);
++        const recordBytes = fragmentBytes + tail.length + 1;
++        if (recordBytes > maxRecordBytes)
++          throw new Error(
++            `Captured events line ${line + 1} exceeds the certifier record bound. Inspect the original recording and retry with a matching client.`,
++          );
++        const raw =
++          fragments.length > 0
++            ? Buffer.concat([...fragments, tail], recordBytes - 1)
++            : tail;
++        fragments = [];
++        fragmentBytes = 0;
++        observe(raw);
++        start = end + 1;
++      }
++      if (start < chunk.length) {
++        const remaining = chunk.subarray(start);
++        fragmentBytes += remaining.length;
++        if (fragmentBytes >= maxRecordBytes)
++          throw new Error(
++            `Captured events line ${line + 1} exceeds the certifier record bound. Inspect the original recording and retry with a matching client.`,
++          );
++        fragments.push(Buffer.from(remaining));
++      }
++    }
++    if (
++      bytes !== expectedBytes ||
++      fragmentBytes !== 0 ||
++      !started ||
++      !terminated
++    )
++      throw new Error(
++        'Captured events omit bytes, a line delimiter, initialization or the root terminal. Retain the complete invocation and retry.',
++      );
++    replay.finishStream();
++    if (digest.digest('hex') !== expectedSha256)
++      throw new Error(
++        'Captured events changed between native and physical verification. Wait for capture to settle and retry.',
++      );
++  } finally {
++    await handle.close();
++  }
++}
+diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core/src/core/record-verifier-core.test.ts
+--- /dev/null
++++ b/packages/core/src/core/record-verifier-core.test.ts
+@@ -0,0 +1,77 @@
++import { createHash } from 'node:crypto';
++import { mkdtemp, rm, writeFile } from 'node:fs/promises';
++import { tmpdir } from 'node:os';
++import { join } from 'node:path';
++import { readFileSync } from 'node:fs';
++import { afterEach, expect, it } from 'vitest';
++import { verifyPhysicalModelRecords } from './record-verifier-core.js';
++
++type WireRow = Record<string, unknown>;
++const fixture = JSON.parse(
++  readFileSync(
++    new URL('../utils/__fixtures__/ordinary-tool-wire.json', import.meta.url),
++    'utf8',
++  ),
++) as WireRow[];
++const directories: string[] = [];
++afterEach(async () => {
++  for (const directory of directories.splice(0))
++    await rm(directory, { recursive: true, force: true });
++});
++
++async function verify(rows: WireRow[], expectedDigest?: string): Promise<void> {
++  const directory = await mkdtemp(join(tmpdir(), 'qwen-physical-verifier-'));
++  directories.push(directory);
++  const path = join(directory, 'events.jsonl');
++  const bytes = Buffer.from(
++    rows.map((row) => JSON.stringify(row)).join('\n') + '\n',
++  );
++  await writeFile(path, bytes, { mode: 0o600 });
++  await verifyPhysicalModelRecords({
++    path,
++    expectedBytes: BigInt(bytes.length),
++    expectedSha256:
++      expectedDigest ?? createHash('sha256').update(bytes).digest('hex'),
++    maxRecordBytes: 128 * 1024 * 1024,
++  });
++}
++
++it('accepts a complete physical generation from the captured body', async () => {
++  await expect(verify(structuredClone(fixture))).resolves.toBeUndefined();
++});
++
++it('refuses a rehashed thought that the physical response did not produce', async () => {
++  const rows = structuredClone(fixture);
++  const generation = rows.find((row) => row['type'] === 'model_generation')![
++    'generation'
++  ] as Record<string, unknown>;
++  const envelope = JSON.parse(generation['generation_json'] as string);
++  envelope.observations[0].response.candidates[0].content.parts[0].text =
++    '  **forged thought**\n';
++  const text = JSON.stringify(envelope);
++  generation['generation_json'] = text;
++  generation['generation_bytes'] = Buffer.byteLength(text);
++  generation['generation_sha256'] = createHash('sha256')
++    .update(text)
++    .digest('hex');
++  const completion = rows.find(
++    (row) => row['type'] === 'model_attempt_completion',
++  )!['completion'] as Record<string, unknown>;
++  completion['generation_sha256'] = generation['generation_sha256'];
++  await expect(verify(rows)).rejects.toThrow(/physical response/);
++});
++
++it('refuses a changed captured file even when its records still parse', async () => {
++  const rows = structuredClone(fixture);
++  const bytes = Buffer.from(
++    rows.map((row) => JSON.stringify(row)).join('\n') + '\n',
++  );
++  const originalDigest = createHash('sha256').update(bytes).digest('hex');
++  const request = rows.find((row) => row['type'] === 'model_request')![
++    'request'
++  ] as Record<string, unknown>;
++  request['prompt_id'] = 'a different prompt';
++  await expect(verify(rows, originalDigest)).rejects.toThrow(
++    /changed between native and physical verification/,
++  );
++});
+diff --git a/packages/core/src/core/record-verifier.ts b/packages/core/src/core/record-verifier.ts
+--- /dev/null
++++ b/packages/core/src/core/record-verifier.ts
+@@ -0,0 +1,31 @@
++import { STREAM_CONTRACT_SHA256 } from '../generated/stream-contract.js';
++import { verifyPhysicalModelRecords } from './record-verifier-core.js';
++
++const [path, byteCount, digest, contract, maxRecordBytes] =
++  process.argv.slice(2);
++if (
++  !path ||
++  !/^(0|[1-9][0-9]*)$/.test(byteCount ?? '') ||
++  !digest ||
++  contract !== STREAM_CONTRACT_SHA256 ||
++  !/^[1-9][0-9]*$/.test(maxRecordBytes ?? '')
++) {
++  process.stderr.write(
++    'Physical verifier requires the captured file, native-read length and SHA-256, matching stream contract and record bound. Inspect the certifier image and retry.\n',
++  );
++  process.exitCode = 2;
++} else {
++  try {
++    await verifyPhysicalModelRecords({
++      path,
++      expectedBytes: BigInt(byteCount),
++      expectedSha256: digest,
++      maxRecordBytes: Number(maxRecordBytes),
++    });
++  } catch (cause) {
++    process.stderr.write(
++      `${cause instanceof Error ? cause.message : String(cause)}. Inspect the retained recording with its matching client and retry after capture has settled.\n`,
++    );
++    process.exitCode = 1;
++  }
++}

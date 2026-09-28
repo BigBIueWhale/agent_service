@@ -576,3 +576,26 @@ mixed line endings, byte order marks, malformed bytes, and unfinished frames.
 This is evidence for those specific cases, not a proof of all possible byte
 streams or of which values a caller consumed before cancellation. The native
 case is authored and formatted but unexecuted; no build or release gate ran.
+
+## Service physical generation certification
+
+The production service snapshot reader now requires the patched client's
+physical response replay after its native protocol pass has accepted a complete
+stream. The client bundle exposes that existing converter and normalizer as a
+record verifier. It rereads the captured JSONL, checks the same stream contract,
+requires the native-read byte count and SHA-256, and compares each generation's
+observations with those derived from its recorded response. The native pass
+hashes the exact LF-terminated bytes it read; a replacement or append between
+passes cannot satisfy both digests. Verification runs only for a semantically
+complete native result, so live progress reads of incomplete streams retain
+their prior behavior. A missing verifier is a refusal, not a weaker mode.
+
+A source-level verifier test accepted the complete ordinary tool fixture and
+refused a rehashed thought with unchanged response bytes and a changed file
+with a stale digest. The adjacent response replay tests passed. The Rust
+integration refusal case is authored but unexecuted, and the bundle, Docker
+stage, native binary and service image remain unverified pending the owner's
+gates. This service repair applies to every session through the same snapshot
+reader; it does not change model requests or responses. Python and Java SDK
+readers still require equivalent physical replay before they can claim full
+generation certification.
