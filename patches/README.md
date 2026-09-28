@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `a4e091341859b2f35a05e2d11cc928d299da1031d16ddb849f111be149c61606`
+- Review-diff SHA-256: `4efdaa4f72a9ff13d531d7bb2dffc749bd723813d015049566f4f2f27b14058c`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `c86aee8f79de844e65f6d671cb724e1785573493d3fcb7c110b91b08618f6d00`
+- Transformer-manifest SHA-256: `a25762654940e299f84d2ae0580a6c75c9903ee09c2c719e27971b1fb663aab0`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -387,6 +387,12 @@ indexed resume select served usage only from committed local model generations;
 the canonical reader refuses an adopted or realtime assistant with a fabricated
 usage report. Source tests exercise that refusal and compare full and indexed
 served usage after a physically recorded generation. Owner gates remain pending.
+The SessionService and transcript-preparation source fixtures now use version 14
+stored record shapes. Fork cases read their temporary JSONL files through the
+complete canonical reader; unit projection cases supply already admitted rows.
+The three affected suites passed 194 source tests, including refusal of a
+legacy assistant without generation evidence and refusal of an obsolete
+generation-failure subtype. These tests do not qualify a packaged resume run.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
