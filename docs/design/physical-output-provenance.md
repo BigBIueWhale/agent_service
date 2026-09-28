@@ -428,12 +428,16 @@ responsibility of the caller that makes it.
 `PromptHookRunner` races its provider call against timeout and cancellation;
 the losing provider promise can still settle afterward. Its utility owner
 cannot honestly declare the physical call finished just because the race
-returned. Source also shows that `LoggingContentGenerator` wraps all configured
-auth types while the present byte journal and output source tag live in the
-OpenAI pipeline. A mandatory physical receipt for another provider needs
-equivalent evidence at that provider's shared physical boundary; an invented
-client-side request ID would not establish response-byte provenance. No code
-or test in this note claims this migration is implemented.
+returned. `createContentGenerator` retains constructors for several upstream
+auth types, but its shared `validateModelConfig` currently refuses every
+generation route except the OpenAI-compatible vLLM contract before those
+constructors run. The present byte journal and output source tag in the OpenAI
+pipeline therefore serve every admitted generation route, including ordinary
+sessions. If another route is admitted later, it needs equivalent evidence at
+its physical boundary before a receipt can claim response-byte provenance; a
+client-side invented request ID would not establish it. This qualification is
+from source reading, not a provider test. No code or test in this note claims
+the receipt migration is implemented.
 
 ## Decoder proof required at admission
 
