@@ -436,9 +436,9 @@ substitute: request curation and orphan cleanup can omit IDs still present in
 Chat history. The v11 producer writes that seed before consuming the stream,
 and root canonical admission compares it with replayed history at the same
 record position. Child sidechains compare their local seed with their own
-replayed history; the root's mirrored child seed still lacks a cross-file proof
-that it equals the child's local seed. The concurrent history-splice case has
-not been executed against a live client.
+replayed history; complete child admission also compares it with the root's
+mirrored seed and physically verified generation. The concurrent history-splice
+case has not been executed against a live client.
 An executed source test decoded identical provider content with tagged-thinking
 parsing off and on and obtained the two corresponding part sequences after a
 policy JSON round trip. The earlier converter, pipeline and policy source suites
@@ -490,9 +490,10 @@ observation from the processed
 prefix of that response. The accepted Chat history and displayed stream
 projections then need to be checked against
 that replayed generation and their declared disposition. Utility generations
-and standalone child evidence also need a physical owner or an explicit root
-verification dependency; a self-hash of their decoded SDK objects is not a
-substitute. This is one shared proof rule for ordinary and long sessions,
+need a consumer receipt bound to their physical response; complete child
+evidence now depends explicitly on root verification. A self-hash of decoded
+SDK objects is not a substitute. This is one shared proof rule for ordinary and
+long sessions,
 bounded by one response at a time. It belongs at common producer and admission
 boundaries, not in a benchmark profile or a client-only presentation patch.
 
@@ -657,8 +658,8 @@ only. Java compilation and tests, the CLI bundle, the process-to-process
 integration, native execution and owner gates have not run. Direct construction
 of the Python and Java admission classes outside their SDK process transports
 still lacks this physical verifier and cannot be described as full generation
-certification. Utility consumer receipts and standalone child proof remain
-separate work.
+certification. Utility consumer receipts remain separate work. Complete child
+admission now requires the root's physical proof as described above.
 
 The standalone `event_certifier` imports the service's `read_event_snapshot`,
 which now calls physical response replay for a structurally certified result.
