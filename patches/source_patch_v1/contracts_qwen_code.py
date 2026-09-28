@@ -9398,7 +9398,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "canonicalGenerationOrigin(record)", "this.generations.has(origin.attempt_id)",
         "this.generationRecords.has(generation.generation_id)", "multiple canonical generations",
         "canonical completion has no unique matching generation", "requireCompleteModelEvidence(this.completionState())",
-        "...this.seeds.keys()",
+        "...this.seeds.keys()", "finishWithAsyncRoot(", "rootProofVerifier()",
+        "child generation or completion differs from its physically verified root attempt",
+        "root proof seed lacks child placement",
     ), label=label)
     _require_all(state, core + "core/model-request-evidence.test.ts", (
         "refuses a closed child artifact with a normalization seed but no generation",
@@ -9429,8 +9431,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "before?.size === transcript?.size", "terminal === (this.task.status !== 'running')",
         "await target.refreshAt(bounds)", "await this.refreshAt(bounds)",
         "requireAgentStreamRecord(", "decodeJsonlRecord(", "this.attempts.settle(commit.origin, commit)",
-        "this.requestReplay.finish()", "this.attempts.finish()", "this.retentionTimer !== timer",
+        "await this.requestReplay.finishWithAsyncRoot(", "this.attempts.finish()", "this.retentionTimer !== timer",
     ), label=label)
+    _require_ordered(reader, (
+        "await this.requestReplay.finishWithAsyncRoot(",
+        "await this.refreshOnce(records);",
+    ), label=label, location=reader_path)
     _require_ordered(reader.split("if (stream.retired)", 1)[1], (
         "if (this.streamTailPending)", "this.attempts.requireDispositions(committing)",
         "this.streamIdentity = undefined", "this.streamOffset = 0",
@@ -9503,10 +9509,21 @@ def _validate_served_accounting_after(state: State) -> None:
         "readCompleteCanonicalConversation(", "readCompleteStoredCanonicalChatRecords(filePath)",
         "prepareResolvedTranscriptRecords(records)", "entry.affectsCompleteness",
         "readCompleteCanonicalChatRecordsSync(",
-        "requireCompleteModelEvidence(decoder.completionState())",
+        "finishWithAsyncRoot(", "readRootModelEvidencePrefixSync(",
+        "requires exactly one active or archived root recording",
     ), label=label)
     require_text(state, core + "services/chat-recording-io.test.ts",
                  "refuses an open physical request in complete synchronous reports", label=label)
+    require_text(state, core + "services/chat-recording-io.test.ts",
+                 "reads a child that ended before any model attempt without requiring root output", label=label)
+    _require_all(state, core + "core/model-generation-recording.test.ts", (
+        "refuses a child generation that differs from its physically verified root attempt",
+        "refuses a child seed naming a different physical request than its root",
+        "requires the matching root seed to retain its child placement",
+        "verifies a completed child against the complete root prefix during another append",
+        "verifies a child against its uniquely archived root recording",
+        "refuses ambiguous active and archived roots for one child",
+    ), label=label)
     insight = cli + "services/insight/generators/DataProcessor.ts"
     _require_all(state, insight, (
         "readCompleteCanonicalConversation(filePath)",

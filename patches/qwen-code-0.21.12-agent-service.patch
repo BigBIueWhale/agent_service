@@ -68334,7 +68334,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.test.ts b/packages
 diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/src/serve/virtual-subagent-sessions.ts
 --- a/packages/cli/src/serve/virtual-subagent-sessions.ts
 +++ b/packages/cli/src/serve/virtual-subagent-sessions.ts
-@@ -2,18 +2,26 @@
+@@ -2,18 +2,27 @@
   * @license
   * Copyright 2026 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
@@ -68356,6 +68356,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +  type AgentAttemptTextUpdate,
 +  decodeChatRecord,
 +  ModelEvidenceReplay,
++  readRootModelEvidencePrefixForChild,
 +  SessionService,
 +  requireGenerationUsage,
 +  type GenerationUsageSummary,
@@ -68365,7 +68366,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
    type SessionTranscriptCursorState,
    type SessionTranscriptRecordPage,
  } from '@qwen-code/qwen-code-core';
-@@ -50,80 +58,40 @@
+@@ -50,80 +59,40 @@
    id: string;
    title: string;
    outputFile: string;
@@ -68456,7 +68457,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
    return typeof value === 'object' && value !== null
      ? (value as Record<string, unknown>)
      : undefined;
-@@ -182,18 +150,15 @@
+@@ -182,18 +151,15 @@
    const summary = asRecord(display?.['executionSummary']);
    return {
      status:
@@ -68478,7 +68479,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
  function encodePart(value: string): string {
    return Buffer.from(value, 'utf8').toString('base64url');
  }
-@@ -294,23 +259,22 @@
+@@ -294,23 +260,22 @@
  
  class VirtualSubagentTarget {
    private readonly bus = new EventBus(1_024, 8);
@@ -68507,7 +68508,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
    private subscribers = 0;
    private retentionTimer: NodeJS.Timeout | undefined;
  
-@@ -335,226 +299,167 @@
+@@ -335,226 +300,167 @@
    }
  
    private rememberEvent(event: BridgeEvent | undefined): void {
@@ -68522,6 +68523,33 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 -    this.streamRunIds.clear();
 -    this.streamedRounds.clear();
 -    this.legacyStreamedSinceCanonical = false;
+-  }
+-
+-  private resetStreamState(): void {
+-    this.streamOffset = 0;
+-    this.completedStreamRounds.clear();
+-    this.streamRunIds.clear();
+-    this.streamedRounds.clear();
+-    this.legacyStreamedSinceCanonical = false;
+-  }
+-
+-  private async readNewRecords(endOffset?: number): Promise<ChatRecord[]> {
+-    let handle: fs.FileHandle | undefined;
+-    try {
+-      handle = await fs.open(this.task.outputFile, 'r');
+-      const stat = await handle.stat();
+-      const identity = `${stat.dev}:${stat.ino}`;
+-      if (
+-        (this.transcriptIdentity !== undefined &&
+-          this.transcriptIdentity !== identity) ||
+-        stat.size < this.offset
+-      ) {
+-        this.resetCanonicalState();
+-      }
+-      this.transcriptIdentity = identity;
+-      const size = Math.min(stat.size, endOffset ?? stat.size);
+-      if (size <= this.offset) return [];
+-      const bytes = Buffer.alloc(size - this.offset);
 +  private async readNewRecords(
 +    file: CapturedFile | undefined,
 +    terminal: boolean,
@@ -68548,18 +68576,46 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +    const bytes = Buffer.alloc(size - this.offset);
 +    let read = 0;
 +    while (read < bytes.length) {
-+      const { bytesRead } = await handle.read(
-+        bytes,
+       const { bytesRead } = await handle.read(
+         bytes,
+-        0,
+-        bytes.length,
+-        this.offset,
 +        read,
 +        bytes.length - read,
 +        this.offset + read,
-+      );
+       );
+-      const chunk = bytes.subarray(0, bytesRead);
+-      const lastNewline = chunk.lastIndexOf(0x0a);
+-      if (lastNewline < 0) return [];
+-      const complete = chunk.subarray(0, lastNewline + 1);
+-      this.offset += complete.length;
+-      return complete
+-        .toString('utf8')
+-        .split('\n')
+-        .flatMap((line) => {
+-          const trimmed = line.trim();
+-          return trimmed
+-            ? parseLineTolerant<ChatRecord>(trimmed, this.task.outputFile)
+-            : [];
+-        });
+-    } catch (error) {
+-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+-        if (this.transcriptIdentity !== undefined) {
+-          this.transcriptIdentity = undefined;
+-          this.resetCanonicalState();
+-        }
+-        return [];
+-      }
+-      throw error;
+-    } finally {
+-      await handle?.close();
 +      if (bytesRead === 0)
 +        throw new Error(
 +          `Canonical child recording ended before its captured size in ${this.task.outputFile}. Inspect the original recording.`,
 +        );
 +      read += bytesRead;
-+    }
+     }
 +    const chunk = bytes;
 +    const lastNewline = chunk.lastIndexOf(0x0a);
 +    if (terminal && lastNewline !== chunk.length - 1) {
@@ -68588,12 +68644,9 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +    return records;
    }
  
--  private resetStreamState(): void {
--    this.streamOffset = 0;
--    this.completedStreamRounds.clear();
--    this.streamRunIds.clear();
--    this.streamedRounds.clear();
--    this.legacyStreamedSinceCanonical = false;
+-  private async readStreamUpdates(endOffset?: number): Promise<void> {
+-    const replayingExisting = !this.streamReady;
+-    this.streamReady = true;
 +  private async readStreamUpdates(
 +    file: CapturedFile,
 +    committing: ReadonlySet<string>,
@@ -68603,7 +68656,23 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +      update: AgentAttemptTextUpdate;
 +      timestamp: number;
 +    }> = [];
-+    const filePath = `${this.task.outputFile}.stream`;
+     const filePath = `${this.task.outputFile}.stream`;
+-    let handle: fs.FileHandle | undefined;
+-    try {
+-      handle = await fs.open(filePath, 'r');
+-      const stat = await handle.stat();
+-      const identity = `${stat.dev}:${stat.ino}`;
+-      if (
+-        this.streamIdentity !== undefined &&
+-        this.streamIdentity !== identity
+-      ) {
+-        this.resetStreamState();
+-      }
+-      this.streamIdentity = identity;
+-      if (stat.size < this.streamOffset) this.resetStreamState();
+-      const size = Math.min(stat.size, endOffset ?? stat.size);
+-      if (size <= this.streamOffset) return;
+-      const bytes = Buffer.alloc(size - this.streamOffset);
 +    const { handle, identity, size } = file;
 +    if (this.streamIdentity !== undefined && this.streamIdentity !== identity) {
 +      if (this.streamTailPending)
@@ -68621,123 +68690,15 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +    const bytes = Buffer.alloc(size - this.streamOffset);
 +    let read = 0;
 +    while (read < bytes.length) {
-+      const { bytesRead } = await handle.read(
-+        bytes,
-+        read,
-+        bytes.length - read,
-+        this.streamOffset + read,
-+      );
-+      if (bytesRead === 0)
-+        throw new Error(
-+          `Child live recording ended before its captured size in ${filePath}. Inspect the original recording.`,
-+        );
-+      read += bytesRead;
-+    }
-+    const lastNewline = bytes.lastIndexOf(0x0a);
-+    this.streamTailPending = lastNewline !== bytes.length - 1;
-+    if (terminal && this.streamTailPending) {
-+      throw new Error(
-+        `Unterminated child live recording ${filePath}. Inspect the original recording or start a new session.`,
-+      );
-+    }
-+    let start = 0;
-+    for (
-+      let end = bytes.indexOf(0x0a);
-+      end >= 0;
-+      end = bytes.indexOf(0x0a, start)
-+    ) {
-+      const record = requireAgentStreamRecord(
-+        decodeJsonlRecord(bytes.subarray(start, end), filePath),
-+      );
-+      for (const update of this.attempts.observeText(
-+        record,
-+        !committing.has(generationAttemptKey(record.origin)),
-+      )) {
-+        updates.push({ update, timestamp: record.timestamp });
-+      }
-+      start = end + 1;
-+    }
-+    this.streamOffset += lastNewline + 1;
-+    return updates;
-   }
- 
--  private async readNewRecords(endOffset?: number): Promise<ChatRecord[]> {
--    let handle: fs.FileHandle | undefined;
--    try {
--      handle = await fs.open(this.task.outputFile, 'r');
--      const stat = await handle.stat();
--      const identity = `${stat.dev}:${stat.ino}`;
--      if (
--        (this.transcriptIdentity !== undefined &&
--          this.transcriptIdentity !== identity) ||
--        stat.size < this.offset
--      ) {
--        this.resetCanonicalState();
--      }
--      this.transcriptIdentity = identity;
--      const size = Math.min(stat.size, endOffset ?? stat.size);
--      if (size <= this.offset) return [];
--      const bytes = Buffer.alloc(size - this.offset);
--      const { bytesRead } = await handle.read(
--        bytes,
--        0,
--        bytes.length,
--        this.offset,
--      );
--      const chunk = bytes.subarray(0, bytesRead);
--      const lastNewline = chunk.lastIndexOf(0x0a);
--      if (lastNewline < 0) return [];
--      const complete = chunk.subarray(0, lastNewline + 1);
--      this.offset += complete.length;
--      return complete
--        .toString('utf8')
--        .split('\n')
--        .flatMap((line) => {
--          const trimmed = line.trim();
--          return trimmed
--            ? parseLineTolerant<ChatRecord>(trimmed, this.task.outputFile)
--            : [];
--        });
--    } catch (error) {
--      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
--        if (this.transcriptIdentity !== undefined) {
--          this.transcriptIdentity = undefined;
--          this.resetCanonicalState();
--        }
--        return [];
--      }
--      throw error;
--    } finally {
--      await handle?.close();
--    }
--  }
--
--  private async readStreamUpdates(endOffset?: number): Promise<void> {
--    const replayingExisting = !this.streamReady;
--    this.streamReady = true;
--    const filePath = `${this.task.outputFile}.stream`;
--    let handle: fs.FileHandle | undefined;
--    try {
--      handle = await fs.open(filePath, 'r');
--      const stat = await handle.stat();
--      const identity = `${stat.dev}:${stat.ino}`;
--      if (
--        this.streamIdentity !== undefined &&
--        this.streamIdentity !== identity
--      ) {
--        this.resetStreamState();
--      }
--      this.streamIdentity = identity;
--      if (stat.size < this.streamOffset) this.resetStreamState();
--      const size = Math.min(stat.size, endOffset ?? stat.size);
--      if (size <= this.streamOffset) return;
--      const bytes = Buffer.alloc(size - this.streamOffset);
--      const { bytesRead } = await handle.read(
--        bytes,
+       const { bytesRead } = await handle.read(
+         bytes,
 -        0,
 -        bytes.length,
 -        this.streamOffset,
--      );
++        read,
++        bytes.length - read,
++        this.streamOffset + read,
+       );
 -      const chunk = bytes.subarray(0, bytesRead);
 -      const lastNewline = chunk.lastIndexOf(0x0a);
 -      if (lastNewline < 0) return;
@@ -68793,7 +68754,34 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 -        if (!this.streamRunIds.has(runId)) {
 -          this.completedStreamRounds.delete(completed);
 -        }
--      }
++      if (bytesRead === 0)
++        throw new Error(
++          `Child live recording ended before its captured size in ${filePath}. Inspect the original recording.`,
++        );
++      read += bytesRead;
++    }
++    const lastNewline = bytes.lastIndexOf(0x0a);
++    this.streamTailPending = lastNewline !== bytes.length - 1;
++    if (terminal && this.streamTailPending) {
++      throw new Error(
++        `Unterminated child live recording ${filePath}. Inspect the original recording or start a new session.`,
++      );
++    }
++    let start = 0;
++    for (
++      let end = bytes.indexOf(0x0a);
++      end >= 0;
++      end = bytes.indexOf(0x0a, start)
++    ) {
++      const record = requireAgentStreamRecord(
++        decodeJsonlRecord(bytes.subarray(start, end), filePath),
++      );
++      for (const update of this.attempts.observeText(
++        record,
++        !committing.has(generationAttemptKey(record.origin)),
++      )) {
++        updates.push({ update, timestamp: record.timestamp });
+       }
 -    } catch (error) {
 -      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
 -      this.streamIdentity = undefined;
@@ -68803,9 +68791,12 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 -      this.legacyStreamedSinceCanonical = false;
 -    } finally {
 -      await handle?.close();
--    }
--  }
--
++      start = end + 1;
+     }
++    this.streamOffset += lastNewline + 1;
++    return updates;
+   }
+ 
 -  private refreshOnce = async (endOffset?: number): Promise<void> => {
 -    let records = await this.readNewRecords(endOffset);
 -    if (records.length === 0) {
@@ -68883,7 +68874,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        records[records.length - 1]?.timestamp ?? new Date().toISOString();
      const page: SessionTranscriptRecordPage = {
        sessionId: this.sessionId,
-@@ -579,91 +484,280 @@
+@@ -579,91 +485,292 @@
        page,
        encodeCursor: (state) => {
          nextReplayState = state.replay;
@@ -68949,12 +68940,10 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 -  private refreshAt(bounds?: TranscriptReadBounds): Promise<void> {
 -    return this.refreshOnce(bounds?.transcript).then(async () => {
 -      if (this.task.status === 'running') {
+-        await this.readStreamUpdates(bounds?.stream);
 +  private async refreshAt(limits: TranscriptReadBounds): Promise<void> {
 +    if (this.readFailure) throw this.readFailure;
 +    try {
--        await this.readStreamUpdates(bounds?.stream);
--      }
--    });
 +      const records = await this.readNewRecords(
 +        limits.transcript,
 +        limits.terminal,
@@ -68987,6 +68976,22 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +      }
 +      if (limits.streams.length === 0)
 +        this.attempts.requireDispositions(committing);
++      if (limits.terminal) {
++        const rootSessionId = this.requestReplay.rootProofSessionId();
++        if (rootSessionId && rootSessionId !== this.parentSessionId)
++          throw new Error(
++            `Child recording ${this.task.outputFile} belongs to another parent session. Inspect the original recording and launch metadata.`,
++          );
++        await this.requestReplay.finishWithAsyncRoot(
++          rootSessionId
++            ? readRootModelEvidencePrefixForChild(
++                this.task.outputFile,
++                rootSessionId,
++              )
++            : undefined,
++        );
++        this.attempts.finish();
++      }
 +      await this.refreshOnce(records);
 +      for (const { update, timestamp } of live) {
 +        this.rememberEvent(
@@ -69001,16 +69006,12 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +            }),
 +          }),
 +        );
-+      }
-+      if (limits.terminal) {
-+        this.requestReplay.finish();
-+        this.attempts.finish();
-+      }
+       }
 +    } catch (error) {
 +      throw this.failRead(error);
 +    }
-   }
- 
++  }
++
 +  private failRead(error: unknown): Error {
 +    if (this.readFailure) return this.readFailure;
 +    this.readFailure =
@@ -69018,13 +69019,13 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +    this.bus.publish({
 +      type: 'stream_error',
 +      data: { error: this.readFailure.message },
-+    });
+     });
 +    this.bus.close();
 +    if (this.pollTimer) clearInterval(this.pollTimer);
 +    this.pollTimer = undefined;
 +    return this.readFailure;
-+  }
-+
+   }
+ 
    private enqueueRefresh<T>(work: () => Promise<T>): Promise<T> {
 -    const result = this.refreshPromise.catch(() => undefined).then(work);
 +    const result = this.refreshPromise
@@ -69201,7 +69202,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
      events: BridgeEvent[];
      lastEventId: number;
    }> {
-@@ -673,12 +767,13 @@
+@@ -673,12 +780,13 @@
        () => undefined,
      );
      return snapshot;
@@ -69215,7 +69216,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        sessionId: this.sessionId,
        workspaceCwd: this.workspaceCwd,
        attached: true,
-@@ -693,16 +788,13 @@
+@@ -693,16 +801,13 @@
      };
    }
  
@@ -69233,26 +69234,26 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        if (!this.snapshotDelivered) {
          this.events.length = 0;
          this.snapshotDelivered = true;
-@@ -727,16 +819,38 @@
+@@ -727,16 +832,38 @@
    subscribe(opts: VirtualSubagentSubscribeOptions): AsyncIterable<BridgeEvent> {
      return {
        [Symbol.asyncIterator]: () => this.iterate(opts),
      };
    }
  
+-  private scheduleRetention(): void {
 +  retainUntilUsed(): void {
 +    if (this.subscribers === 0) this.scheduleRetention();
 +  }
 +
 +  private cancelRetention(): void {
-+    if (this.retentionTimer) clearTimeout(this.retentionTimer);
+     if (this.retentionTimer) clearTimeout(this.retentionTimer);
+-    this.retentionTimer = setTimeout(this.onExpired, TARGET_RETENTION_MS);
+-    this.retentionTimer.unref();
 +    this.retentionTimer = undefined;
 +  }
 +
-   private scheduleRetention(): void {
--    if (this.retentionTimer) clearTimeout(this.retentionTimer);
--    this.retentionTimer = setTimeout(this.onExpired, TARGET_RETENTION_MS);
--    this.retentionTimer.unref();
++  private scheduleRetention(): void {
 +    this.cancelRetention();
 +    const timer = setTimeout(() => {
 +      // A subscriber or load can acquire this target while the read drains.
@@ -69275,7 +69276,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
  export class VirtualSubagentSessions {
    private readonly targets = new Map<string, VirtualSubagentTarget>();
  
-@@ -748,12 +862,15 @@
+@@ -748,12 +875,15 @@
        id: string;
        outputFile?: string;
        toolUseId?: string;
@@ -69291,7 +69292,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
          typeof candidate.outputFile === 'string' &&
          predicate(candidate),
      );
-@@ -766,13 +883,15 @@
+@@ -766,13 +896,15 @@
          startTime: task.startTime,
          durationMs:
            task.stats?.durationMs ??
@@ -69308,7 +69309,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
      const projectDir = Storage.runWithResolvedRuntimeBaseDir(
        runtime.sessionRuntimeBaseDir,
        () => new Storage(runtime.workspaceCwd).getProjectDir(),
-@@ -786,12 +905,17 @@
+@@ -786,12 +918,17 @@
        throw error;
      }
      for (const name of names) {
@@ -69326,7 +69327,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
            kind: 'agent',
            id: meta.agentId,
            toolUseId: meta.toolUseId,
-@@ -811,188 +935,85 @@
+@@ -811,188 +948,85 @@
          durationMs: durationBetween(meta.createdAt, meta.lastUpdatedAt),
        };
      }
@@ -69439,11 +69440,11 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
 +    const service = Storage.runWithResolvedRuntimeBaseDir(
        runtime.sessionRuntimeBaseDir,
 -      () => new Storage(runtime.workspaceCwd).getProjectDir(),
-+      () => new SessionService(runtime.workspaceCwd),
-     );
+-    );
 -    const records = await readJsonl<ChatRecord>(
 -      `${projectDir}/chats/${parentSessionId}.jsonl`,
--    );
++      () => new SessionService(runtime.workspaceCwd),
+     );
 +    const records = await service.readSessionRecords(parentSessionId);
      return findToolCallMetrics(records, toolCallId);
    }
@@ -340679,7 +340680,7 @@ diff --git a/packages/core/src/core/session-recovery.test.ts b/packages/core/src
 diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/core/src/services/chat-recording-io.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/chat-recording-io.test.ts
-@@ -0,0 +1,195 @@
+@@ -0,0 +1,211 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -340698,6 +340699,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +  readCanonicalChatRecordsSync,
 +  readCompleteCanonicalChatRecordsSync,
 +  readCompleteCanonicalConversation,
++  readCompleteStoredCanonicalChatRecords,
 +} from './chat-recording-io.js';
 +
 +function record(uuid: string, parentUuid: string | null) {
@@ -340742,6 +340744,21 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +    expect(readCanonicalChatRecordsSync(file)).toEqual(records);
 +    expect(await readCanonicalChatLines(file, 1)).toEqual([records[0]]);
 +    expect(readLastTranscriptRecordUuidSync(file)).toBe('large');
++  });
++
++  it('reads a child that ended before any model attempt without requiring root output', async () => {
++    const childDir = path.join(directory, 'subagents', 'session');
++    fs.mkdirSync(childDir, { recursive: true });
++    const childPath = path.join(childDir, 'agent-empty.jsonl');
++    const child = {
++      ...record('child-input', null),
++      isSidechain: true,
++      agentId: 'empty',
++    };
++    fs.writeFileSync(childPath, JSON.stringify(child) + '\n');
++    expect(await readCompleteStoredCanonicalChatRecords(childPath)).toEqual([
++      child,
++    ]);
 +  });
 +
 +  it('uses the active conversation chain without resurrecting an inactive branch', async () => {
@@ -340878,7 +340895,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src/services/chat-recording-io.ts
 --- /dev/null
 +++ b/packages/core/src/services/chat-recording-io.ts
-@@ -0,0 +1,263 @@
+@@ -0,0 +1,367 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -340886,6 +340903,7 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 + */
 +
 +import fs from 'node:fs';
++import path from 'node:path';
 +import {
 +  ModelEvidenceReplay,
 +  requireCompleteModelEvidence,
@@ -340929,11 +340947,16 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +
 +/** Decode complete physical records while copying long lines only once. */
 +class CanonicalRecordDecoder {
-+  private readonly requests = new ModelEvidenceReplay();
++  private readonly requests: ModelEvidenceReplay | undefined;
 +  private fragments: Buffer[] = [];
 +  private byteLength = 0;
 +  private recordIndex = 0;
-+  constructor(private readonly filePath: string) {}
++  constructor(
++    private readonly filePath: string,
++    verifyEvidence = true,
++  ) {
++    this.requests = verifyEvidence ? new ModelEvidenceReplay() : undefined;
++  }
 +
 +  *accept(chunk: Buffer): Generator<StoredChatRecord> {
 +    let start = 0;
@@ -340976,7 +340999,13 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +  }
 +
 +  completionState(): ModelEvidenceCompletionState {
-+    return this.requests.completionState();
++    return this.replay().completionState();
++  }
++
++  replay(): ModelEvidenceReplay {
++    if (!this.requests)
++      throw new Error('Root proof decoding is owned by its child verifier.');
++    return this.requests;
 +  }
 +}
 +
@@ -340987,6 +341016,7 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +): Promise<{
 +  records: StoredChatRecord[];
 +  completion: ModelEvidenceCompletionState;
++  replay: ModelEvidenceReplay;
 +}> {
 +  if (!Number.isSafeInteger(count) || count < 0) {
 +    throw new Error(
@@ -340995,17 +341025,78 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +  }
 +  const records: StoredChatRecord[] = [];
 +  const decoder = new CanonicalRecordDecoder(filePath);
-+  if (count === 0) return { records, completion: decoder.completionState() };
++  if (count === 0)
++    return {
++      records,
++      completion: decoder.completionState(),
++      replay: decoder.replay(),
++    };
 +  const stream = fs.createReadStream(filePath, { signal: options.signal });
 +  for await (const chunk of stream) {
 +    for (const record of decoder.accept(chunk as Buffer)) {
 +      records.push(record);
 +      if (records.length === count)
-+        return { records, completion: decoder.completionState() };
++        return {
++          records,
++          completion: decoder.completionState(),
++          replay: decoder.replay(),
++        };
 +    }
 +  }
 +  decoder.finish();
-+  return { records, completion: decoder.completionState() };
++  return {
++    records,
++    completion: decoder.completionState(),
++    replay: decoder.replay(),
++  };
++}
++
++function rootProofFilePath(childPath: string, sessionId: string): string {
++  const childDir = path.dirname(childPath);
++  if (
++    path.basename(path.dirname(childDir)) !== 'subagents' ||
++    path.basename(childDir) !== sessionId ||
++    !/^agent-[^/]+\.jsonl$/.test(path.basename(childPath))
++  )
++    throw new Error(
++      `Cannot locate the root physical recording for child ${childPath}. Read the child from its original subagents/<session-id>/agent-<id>.jsonl location with its parent session recording.`,
++    );
++  const chatsDir = path.join(path.dirname(path.dirname(childDir)), 'chats');
++  const candidates = [
++    path.join(chatsDir, `${sessionId}.jsonl`),
++    path.join(chatsDir, 'archive', `${sessionId}.jsonl`),
++  ];
++  const present = candidates.filter((candidate) => {
++    try {
++      return fs.lstatSync(candidate).isFile();
++    } catch (error) {
++      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
++      throw error;
++    }
++  });
++  if (present.length !== 1)
++    throw new Error(
++      `Child ${childPath} requires exactly one active or archived root recording for ${sessionId}; found ${present.length}. Restore the matching root recording or resolve the duplicate before resuming, or start a new session.`,
++    );
++  return present[0]!;
++}
++
++/** Stream complete root rows; a concurrent append may leave an unobserved tail. */
++export async function* readRootModelEvidencePrefixForChild(
++  childPath: string,
++  sessionId: string,
++): AsyncGenerator<StoredChatRecord> {
++  const rootPath = rootProofFilePath(childPath, sessionId);
++  try {
++    const decoder = new CanonicalRecordDecoder(rootPath, false);
++    const stream = fs.createReadStream(rootPath);
++    for await (const chunk of stream) yield* decoder.accept(chunk as Buffer);
++  } catch (cause) {
++    throw new Error(
++      `Cannot verify child recording ${childPath} against ${rootPath}: ${cause instanceof Error ? cause.message : String(cause)}. Restore the matching root recording before resuming, or start a new session.`,
++      { cause },
++    );
++  }
 +}
 +
 +/** A bounded metadata read validates every physical record it consumes. */
@@ -341028,6 +341119,12 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +  );
 +  try {
 +    requireCompleteModelEvidence(snapshot.completion);
++    const rootSessionId = snapshot.replay.rootProofSessionId();
++    await snapshot.replay.finishWithAsyncRoot(
++      rootSessionId
++        ? readRootModelEvidencePrefixForChild(filePath, rootSessionId)
++        : undefined,
++    );
 +  } catch (cause) {
 +    throw new Error(
 +      `Cannot resume or fork incomplete recording ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -341082,6 +341179,8 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +function* scanCanonicalChatRecordsSync(
 +  filePath: string,
 +  requireCompletion: boolean,
++  allowUnterminatedTail = false,
++  verifyEvidence = true,
 +): Generator<ChatRecord> {
 +  // I/O granularity only; records can span arbitrarily many buffers.
 +  const buffer = Buffer.alloc(64 * 1024);
@@ -341092,7 +341191,7 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +  try {
 +    const size = fs.fstatSync(fd).size;
 +    let offset = 0;
-+    const decoder = new CanonicalRecordDecoder(filePath);
++    const decoder = new CanonicalRecordDecoder(filePath, verifyEvidence);
 +    while (offset < size) {
 +      const bytes = fs.readSync(
 +        fd,
@@ -341109,10 +341208,17 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +      for (const record of decoder.accept(buffer.subarray(0, bytes)))
 +        yield resolveTranscriptRecord(record) as ChatRecord;
 +    }
-+    decoder.finish();
++    if (!allowUnterminatedTail) decoder.finish();
 +    if (requireCompletion) {
 +      try {
-+        requireCompleteModelEvidence(decoder.completionState());
++        const rootSessionId = decoder.replay().rootProofSessionId();
++        decoder
++          .replay()
++          .finish(
++            rootSessionId
++              ? readRootModelEvidencePrefixSync(filePath, rootSessionId)
++              : undefined,
++          );
 +      } catch (cause) {
 +        throw new Error(
 +          `Cannot read complete recording ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}`,
@@ -341122,6 +341228,21 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +    }
 +  } finally {
 +    fs.closeSync(fd);
++  }
++}
++
++function* readRootModelEvidencePrefixSync(
++  childPath: string,
++  sessionId: string,
++): Generator<ChatRecord> {
++  const rootPath = rootProofFilePath(childPath, sessionId);
++  try {
++    yield* scanCanonicalChatRecordsSync(rootPath, false, true, false);
++  } catch (cause) {
++    throw new Error(
++      `Cannot verify child recording ${childPath} against ${rootPath}: ${cause instanceof Error ? cause.message : String(cause)}. Restore the matching root recording before resuming, or start a new session.`,
++      { cause },
++    );
 +  }
 +}
 +
@@ -344210,10 +344331,11 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1047 @@
+@@ -0,0 +1,1179 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
++import { isDeepStrictEqual } from 'node:util';
 +import type { ChatAttempt, ModelRequestOwner } from './chat-attempt.js';
 +import { withCleanup } from '../utils/cleanup.js';
 +import { requireGenerationUsage } from '../telemetry/generation-usage.js';
@@ -345074,7 +345196,43 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  }
 +}
 +
-+/** Canonical readers validate all physical evidence before selecting history. */
++export interface CanonicalModelEvidenceRecord {
++  type: string;
++  uuid?: string;
++  subtype?: string;
++  origin?: unknown;
++  systemPayload?: unknown;
++  isSidechain?: boolean;
++  sessionId?: string;
++  placement?: string;
++  historyLength?: number;
++  modelRequest?: ModelRequestEvidence;
++  modelResponse?: ModelResponseEvidence;
++  normalizationSeed?: ModelNormalizationSeed;
++  generation?: ModelGenerationEvidence;
++  completion?: ModelAttemptCompletion;
++  historyDisposition?: 'accepted' | 'abandoned';
++}
++
++interface CompletedChildAttempt {
++  seed: ModelNormalizationSeed;
++  generation: Omit<ModelGenerationEvidence, 'generation_json'>;
++  completion: ModelAttemptCompletion;
++  disposition: 'accepted' | 'abandoned';
++}
++
++function generationIdentity(
++  evidence: ModelGenerationEvidence,
++): CompletedChildAttempt['generation'] {
++  return {
++    journal_id: evidence.journal_id,
++    generation_id: evidence.generation_id,
++    generation_bytes: evidence.generation_bytes,
++    generation_sha256: evidence.generation_sha256,
++  };
++}
++
++/** Canonical readers validate physical output at its owning root journal. */
 +export class ModelEvidenceReplay {
 +  private readonly recordKinds = new Map<string, boolean>();
 +  private readonly generations = new Map<
@@ -345091,28 +345249,24 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  private readonly logical = new ModelGenerationReplay();
 +  private readonly history = new RuntimeHistoryReplay();
 +  private readonly seeds = new Map<string, ModelNormalizationSeed>();
++  private readonly completedChildAttempts = new Map<
++    string,
++    CompletedChildAttempt
++  >();
 +  private sidechain: boolean | undefined;
-+  observe(record: {
-+    type: string;
-+    uuid?: string;
-+    subtype?: string;
-+    origin?: unknown;
-+    systemPayload?: unknown;
-+    isSidechain?: boolean;
-+    sessionId?: string;
-+    placement?: string;
-+    historyLength?: number;
-+    modelRequest?: ModelRequestEvidence;
-+    modelResponse?: ModelResponseEvidence;
-+    normalizationSeed?: ModelNormalizationSeed;
-+    generation?: ModelGenerationEvidence;
-+    completion?: ModelAttemptCompletion;
-+    historyDisposition?: 'accepted' | 'abandoned';
-+  }): void {
++  private sessionId: string | undefined;
++  observe(record: CanonicalModelEvidenceRecord): void {
 +    const sidechain = record.isSidechain === true;
 +    if (this.sidechain !== undefined && this.sidechain !== sidechain)
 +      return refusal('canonical file mixes root and child artifact ownership');
++    if (
++      this.sessionId !== undefined &&
++      record.sessionId !== undefined &&
++      this.sessionId !== record.sessionId
++    )
++      return refusal('canonical file mixes session identities');
 +    this.sidechain = sidechain;
++    this.sessionId ??= record.sessionId;
 +    const historyCommit =
 +      record.type === 'model_generation' ||
 +      record.type === 'model_attempt_completion' ||
@@ -345225,13 +345379,112 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +          'canonical completion has no unique matching generation',
 +        );
 +      if (!sidechain) this.logical.observeCompletion(completion);
++      if (sidechain)
++        this.completedChildAttempts.set(completion.origin.attempt_id, {
++          seed: structuredClone(this.seeds.get(completion.origin.attempt_id)!),
++          generation: generationIdentity(generation),
++          completion: structuredClone(completion),
++          disposition: recorded!.disposition,
++        });
 +      this.completed.add(completion.origin.attempt_id);
 +      this.generations.delete(completion.origin.attempt_id);
 +      this.seeds.delete(completion.origin.attempt_id);
 +    }
 +  }
-+  finish(): void {
++  finish(rootRecords?: Iterable<CanonicalModelEvidenceRecord>): void {
 +    requireCompleteModelEvidence(this.completionState());
++    if (!this.sidechain || this.completedChildAttempts.size === 0) return;
++    if (!rootRecords)
++      return refusal(
++        'a complete child transcript needs its root physical recording; read the child with its parent session recording',
++      );
++    const verifier = this.rootProofVerifier();
++    for (const record of rootRecords) verifier.observe(record);
++    verifier.finish();
++  }
++  async finishWithAsyncRoot(
++    rootRecords?: AsyncIterable<CanonicalModelEvidenceRecord>,
++  ): Promise<void> {
++    requireCompleteModelEvidence(this.completionState());
++    if (!this.sidechain || this.completedChildAttempts.size === 0) return;
++    if (!rootRecords)
++      return refusal(
++        'a complete child transcript needs its root physical recording; read the child with its parent session recording',
++      );
++    const verifier = this.rootProofVerifier();
++    for await (const record of rootRecords) verifier.observe(record);
++    verifier.finish();
++  }
++  private rootProofVerifier(): {
++    observe: (record: CanonicalModelEvidenceRecord) => void;
++    finish: () => void;
++  } {
++    const root = new ModelEvidenceReplay();
++    const matching = new Map<
++      string,
++      Partial<CompletedChildAttempt> & { placement?: string }
++    >();
++    return {
++      observe: (record) => {
++        if (
++          record.isSidechain === true ||
++          (this.sessionId !== undefined && record.sessionId !== this.sessionId)
++        )
++          return refusal('child proof contains another root session');
++        root.observe(record);
++        const seed =
++          record.type === 'model_normalization_seed'
++            ? record.normalizationSeed
++            : undefined;
++        const generation = canonicalGenerationOrigin(record);
++        const completion =
++          record.type === 'model_attempt_completion'
++            ? record.completion
++            : undefined;
++        const attemptId =
++          seed?.origin.attempt_id ??
++          generation?.attempt_id ??
++          completion?.origin.attempt_id;
++        if (!attemptId || !this.completedChildAttempts.has(attemptId)) return;
++        const matched = matching.get(attemptId) ?? {};
++        if (seed) {
++          if (record.placement !== 'child')
++            return refusal('root proof seed lacks child placement');
++          matched.seed = seed;
++        }
++        if (generation) {
++          matched.generation = generationIdentity(record.generation!);
++          matched.disposition =
++            record.type === 'assistant'
++              ? 'accepted'
++              : record.historyDisposition;
++          matched.placement = record.placement;
++        }
++        if (completion) matched.completion = completion;
++        matching.set(attemptId, matched);
++      },
++      finish: () => {
++        for (const [attemptId, child] of this.completedChildAttempts) {
++          const corresponding = matching.get(attemptId);
++          if (
++            !corresponding ||
++            corresponding.placement !== 'child' ||
++            !isDeepStrictEqual(corresponding.seed, child.seed) ||
++            !isDeepStrictEqual(corresponding.generation, child.generation) ||
++            !isDeepStrictEqual(corresponding.completion, child.completion) ||
++            corresponding.disposition !== child.disposition
++          )
++            return refusal(
++              'child generation or completion differs from its physically verified root attempt',
++            );
++        }
++      },
++    };
++  }
++  rootProofSessionId(): string | undefined {
++    return this.sidechain && this.completedChildAttempts.size > 0
++      ? this.sessionId
++      : undefined;
 +  }
 +  completionState(): ModelEvidenceCompletionState {
 +    return {
@@ -387558,18 +387811,213 @@ diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/
 diff --git a/packages/core/src/core/model-generation-recording.test.ts b/packages/core/src/core/model-generation-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-recording.test.ts
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,359 @@
 +import { expect, it } from 'vitest';
-+import { randomUUID } from 'node:crypto';
++import { createHash, randomUUID } from 'node:crypto';
++import fs from 'node:fs/promises';
++import path from 'node:path';
 +import { generationHistory, generationParts } from './model-generation.js';
++import { ModelEvidenceReplay } from './model-request-evidence.js';
 +import { getProviderToolCallId } from './toolCallIdUtils.js';
 +import { buildRuntimeHistoryFromConversation } from '../services/session-api-history.js';
 +import {
 +  readCanonicalChatRecords,
++  readCompleteCanonicalChatRecordsSync,
 +  readCompleteStoredCanonicalChatRecords,
 +} from '../services/chat-recording-io.js';
 +import { createRecordedGenerationFixture } from '../test-utils/recorded-generation-fixture.js';
 +import { generationUsage } from '../test-utils/model-generation-fixture.js';
++
++it('refuses a child generation that differs from its physically verified root attempt', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    const result = await fixture.run('accepted');
++    const original = result.records.find(
++      (record) => record.type === 'assistant',
++    )!.generation!;
++    const generationJson = original.generation_json.replace(
++      'before ',
++      'fabricated ',
++    );
++    expect(generationJson).not.toBe(original.generation_json);
++    const generationSha256 = createHash('sha256')
++      .update(generationJson)
++      .digest('hex');
++    const changed = result.records.map((record) => {
++      if (record.type === 'assistant')
++        return {
++          ...record,
++          generation: {
++            ...original,
++            generation_json: generationJson,
++            generation_bytes: Buffer.byteLength(generationJson),
++            generation_sha256: generationSha256,
++          },
++        };
++      if (record.type === 'model_attempt_completion')
++        return {
++          ...record,
++          completion: {
++            ...record.completion!,
++            generation_sha256: generationSha256,
++          },
++        };
++      return record;
++    });
++    await fs.writeFile(
++      fixture.childPath,
++      changed.map((record) => JSON.stringify(record)).join('\n') + '\n',
++    );
++    const local = new ModelEvidenceReplay();
++    for (const record of changed) local.observe(record);
++    expect(() => local.finish()).toThrow('needs its root physical recording');
++    await expect(
++      readCompleteStoredCanonicalChatRecords(fixture.childPath),
++    ).rejects.toThrow('differs from its physically verified root attempt');
++  } finally {
++    await fixture.cleanup();
++  }
++});
++
++it('refuses a child seed naming a different physical request than its root', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    const result = await fixture.run('accepted');
++    const changed = result.records.map((record) =>
++      record.type === 'model_normalization_seed'
++        ? {
++            ...record,
++            normalizationSeed: {
++              ...record.normalizationSeed!,
++              request_id: 'nonexistent-request',
++            },
++          }
++        : record,
++    );
++    await fs.writeFile(
++      fixture.childPath,
++      changed.map((record) => JSON.stringify(record)).join('\n') + '\n',
++    );
++    await expect(
++      readCompleteStoredCanonicalChatRecords(fixture.childPath),
++    ).rejects.toThrow('differs from its physically verified root attempt');
++  } finally {
++    await fixture.cleanup();
++  }
++});
++
++it('requires the matching root seed to retain its child placement', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    const result = await fixture.run('accepted');
++    const changed = result.roots.map((record) => {
++      if (record.type === 'model_normalization_seed')
++        return { ...record, placement: undefined };
++      if (record.type === 'system' && record.subtype === 'runtime_history')
++        return {
++          ...record,
++          systemPayload: {
++            kind: 'checkpoint',
++            state: { history: fixture.history, imagePayloads: [] },
++          },
++        };
++      return record;
++    });
++    await fs.writeFile(
++      fixture.rootPath,
++      changed.map((record) => JSON.stringify(record)).join('\n') + '\n',
++    );
++    await expect(
++      readCompleteStoredCanonicalChatRecords(fixture.childPath),
++    ).rejects.toThrow('root proof seed lacks child placement');
++  } finally {
++    await fixture.cleanup();
++  }
++});
++
++it('verifies a completed child against the complete root prefix during another append', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    await fixture.run('accepted');
++    await fs.appendFile(fixture.rootPath, '{"unfinished":');
++    await expect(
++      readCompleteStoredCanonicalChatRecords(fixture.childPath),
++    ).resolves.toBeDefined();
++    expect(() =>
++      readCompleteCanonicalChatRecordsSync(fixture.childPath),
++    ).not.toThrow();
++  } finally {
++    await fixture.cleanup();
++  }
++});
++
++it('refuses completed child resume when its root physical recording is unavailable', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    await fixture.run('accepted');
++    await fs.rename(fixture.rootPath, `${fixture.rootPath}.held`);
++    try {
++      await expect(
++        readCompleteStoredCanonicalChatRecords(fixture.childPath),
++      ).rejects.toThrow('Restore the matching root recording');
++      expect(() =>
++        readCompleteCanonicalChatRecordsSync(fixture.childPath),
++      ).toThrow('Restore the matching root recording');
++    } finally {
++      await fs.rename(`${fixture.rootPath}.held`, fixture.rootPath);
++    }
++  } finally {
++    await fixture.cleanup();
++  }
++});
++
++it('verifies a child against its uniquely archived root recording', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    await fixture.run('accepted');
++    const archivePath = path.join(
++      path.dirname(fixture.rootPath),
++      'archive',
++      path.basename(fixture.rootPath),
++    );
++    await fs.mkdir(path.dirname(archivePath), { recursive: true });
++    await fs.rename(fixture.rootPath, archivePath);
++    try {
++      await expect(
++        readCompleteStoredCanonicalChatRecords(fixture.childPath),
++      ).resolves.toBeDefined();
++      expect(() =>
++        readCompleteCanonicalChatRecordsSync(fixture.childPath),
++      ).not.toThrow();
++    } finally {
++      await fs.rename(archivePath, fixture.rootPath);
++    }
++  } finally {
++    await fixture.cleanup();
++  }
++});
++
++it('refuses ambiguous active and archived roots for one child', async () => {
++  const fixture = await createRecordedGenerationFixture(true);
++  try {
++    await fixture.run('accepted');
++    const archivePath = path.join(
++      path.dirname(fixture.rootPath),
++      'archive',
++      path.basename(fixture.rootPath),
++    );
++    await fs.mkdir(path.dirname(archivePath), { recursive: true });
++    await fs.copyFile(fixture.rootPath, archivePath);
++    await expect(
++      readCompleteStoredCanonicalChatRecords(fixture.childPath),
++    ).rejects.toThrow('requires exactly one active or archived root');
++    expect(() =>
++      readCompleteCanonicalChatRecordsSync(fixture.childPath),
++    ).toThrow('requires exactly one active or archived root');
++  } finally {
++    await fixture.cleanup();
++  }
++});
 +
 +it.each([false, true])(
 +  'records exact SDK output and normalized live/resume call identity (child=%s)',
@@ -387626,40 +388074,6 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 +    }
 +  },
 +);
-+it('keeps repeated decoded raw calls in both canonical copies while history has one executable call', async () => {
-+  const fixture = await createRecordedGenerationFixture(true);
-+  try {
-+    const result = await fixture.run('repeat');
-+    expect(result.failure).toBeUndefined();
-+    expect(
-+      generationParts(result.envelope)
-+        .filter((part) => part.functionCall)
-+        .map((part) => part.functionCall!.args),
-+    ).toEqual([{ value: 1 }, { value: 2 }]);
-+    expect(
-+      result.envelope.observations.map((observed) => observed.call_ids),
-+    ).toEqual([
-+      [{ part_index: 2, normalized_id: 'provider__qwen_dup_2' }],
-+      [{ part_index: 0, normalized_id: null }],
-+    ]);
-+    const restored = generationHistory(result.envelope);
-+    expect(restored.parts!.filter((part) => part.functionCall)).toHaveLength(1);
-+    expect(fixture.chat.getHistory().at(-1)).toEqual(restored);
-+    expect(
-+      getProviderToolCallId(
-+        restored.parts!.find((part) => part.functionCall)!.functionCall!,
-+      ),
-+    ).toBe('provider');
-+    expect(
-+      result.records.find((record) => record.type === 'assistant')!.generation,
-+    ).toEqual(
-+      result.roots.find((record) => record.type === 'model_generation')!
-+        .generation,
-+    );
-+  } finally {
-+    await fixture.cleanup();
-+  }
-+});
 +it.each([false, true])(
 +  'retains hidden STOP and last valid usage after invalid usage refuses delivery (child=%s)',
 +  async (child) => {
@@ -389466,18 +389880,14 @@ diff --git a/packages/core/src/test-utils/model-generation-fixture.ts b/packages
 diff --git a/packages/core/src/test-utils/recorded-generation-fixture.ts b/packages/core/src/test-utils/recorded-generation-fixture.ts
 --- /dev/null
 +++ b/packages/core/src/test-utils/recorded-generation-fixture.ts
-@@ -0,0 +1,390 @@
+@@ -0,0 +1,338 @@
 +import { expect } from 'vitest';
 +import fs from 'node:fs/promises';
 +import os from 'node:os';
 +import path from 'node:path';
 +import { randomUUID } from 'node:crypto';
 +import OpenAI from 'openai';
-+import {
-+  FinishReason,
-+  GenerateContentResponse,
-+  type Content,
-+} from '@google/genai';
++import type { GenerateContentResponse, Content } from '@google/genai';
 +import type { Config } from '../config/config.js';
 +import { OutputFormat } from '../output/types.js';
 +import { GeminiChat } from '../core/geminiChat.js';
@@ -389487,7 +389897,6 @@ diff --git a/packages/core/src/test-utils/recorded-generation-fixture.ts b/packa
 +  type ChatHistoryDisposition,
 +} from '../core/chat-attempt.js';
 +import { readModelGeneration } from '../core/model-generation.js';
-+import { setToolCallPreparations } from '../core/tool-call-preparation.js';
 +import { ChatRecordingService } from '../services/chatRecordingService.js';
 +import { SessionService } from '../services/sessionService.js';
 +import { SessionTranscriptReader } from '../services/session-transcript-reader.js';
@@ -389511,8 +389920,7 @@ diff --git a/packages/core/src/test-utils/recorded-generation-fixture.ts b/packa
 +export type RecordedGenerationMode =
 +  | 'accepted'
 +  | 'diagnostic'
-+  | 'invalid_usage'
-+  | 'repeat';
++  | 'invalid_usage';
 +export type RecordingStage = 'physical' | 'generation';
 +type WireDelta = OpenAI.Chat.Completions.ChatCompletionChunk.Choice.Delta & {
 +  reasoning_content?: string;
@@ -389548,7 +389956,12 @@ diff --git a/packages/core/src/test-utils/recorded-generation-fixture.ts b/packa
 +  const reader = new SessionTranscriptReader(dir, undefined, runtimeBaseDir);
 +  const service = new SessionService(dir, { runtimeBaseDir });
 +  const rootPath = reader.getSessionFilePath(session);
-+  const childPath = path.join(dir, 'child.jsonl');
++  const childPath = path.join(
++    path.dirname(path.dirname(rootPath)),
++    'subagents',
++    session,
++    'agent-child.jsonl',
++  );
 +  // Config is an integration seam: every exercised recorder/pipeline owner is real.
 +  const config = {
 +    getSessionId: () => session,
@@ -389682,7 +390095,7 @@ diff --git a/packages/core/src/test-utils/recorded-generation-fixture.ts b/packa
 +      provider,
 +      errorHandler: new EnhancedErrorHandler(() => true),
 +    });
-+    let stream = await pipeline.executeStream(
++    const stream = await pipeline.executeStream(
 +      {
 +        chatAttempt: attempt,
 +        generationContext: new GenerationContext(scope, {
@@ -389696,57 +390109,6 @@ diff --git a/packages/core/src/test-utils/recorded-generation-fixture.ts b/packa
 +    );
 +    await root.flush();
 +    await stages?.('physical');
-+    if (mode === 'repeat') {
-+      // This case replaces decoded Parts after settling a real SDK response.
-+      // It does not claim OpenAI's converter itself emits repeated raw calls.
-+      for await (const chunk of stream) void chunk;
-+      const first = new GenerateContentResponse();
-+      first.candidates = [
-+        {
-+          content: {
-+            role: 'model',
-+            parts: [
-+              { thought: true, text: '  **raw thought**\n' },
-+              { text: 'before ' },
-+              {
-+                functionCall: {
-+                  id: 'provider',
-+                  name: 'audit_probe',
-+                  args: { value: 1 },
-+                },
-+              },
-+            ],
-+          },
-+        },
-+      ];
-+      const last = new GenerateContentResponse();
-+      last.candidates = [
-+        {
-+          content: {
-+            role: 'model',
-+            parts: [
-+              {
-+                functionCall: {
-+                  id: 'provider',
-+                  name: 'audit_probe',
-+                  args: { value: 2 },
-+                },
-+              },
-+              { text: ' after' },
-+            ],
-+          },
-+          finishReason: FinishReason.STOP,
-+        },
-+      ];
-+      last.usageMetadata = { ...generationUsage };
-+      setToolCallPreparations(first, [
-+        { callId: 'provider', toolName: 'audit_probe' },
-+      ]);
-+      stream = (async function* () {
-+        yield first;
-+        yield last;
-+      })();
-+    }
 +    const events: Array<{
 +      value: GenerateContentResponse;
 +      historyDisposition: ChatHistoryDisposition | null;

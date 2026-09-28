@@ -178,15 +178,36 @@ required physical proof or is explicitly verified against its root artifact.
 Resume reads the canonical chat recording, not `output/events.jsonl`, so stdout
 admission alone cannot establish resume's output provenance.
 
-The child completion check also has to count a recorded normalization seed
-whose generation has not been committed. A source regression constructed a
-child checkpoint and seed with no generation or completion; the closed child
-artifact was accepted before the seed was counted and is refused afterward.
-The targeted request-evidence and canonical-I/O suites passed 39 tests after
-this correction. This proves only that an unfinished child attempt cannot pass
-that completion check. A separate executed probe still showed that a
-self-consistent child generation naming a nonexistent physical request passes
-standalone replay; joining it to verified root evidence remains necessary.
+The child completion check counts a recorded normalization seed until its
+generation and completion have been committed. A child checkpoint and seed
+with no generation therefore cannot pass as a closed artifact. A completed
+child generation also cannot be certified by its self-hash alone: the physical
+request and response remain in the root recording.
+
+Complete child admission now performs that join. The child reader validates its
+own history seed, generation and completion, then streams the root's complete
+JSONL prefix through the physical replay verifier. It requires the same seed,
+generation identity, history disposition and completion for each child attempt
+in the root. The TypeScript root reader checks the generation's raw
+observations against the recorded response bytes before the child can be
+called complete. The root file must be the unique
+active or archived parent recording for the child path and session ID; a
+missing, ambiguous or mismatched root is a refusal with a recovery action.
+The virtual child reader checks this before publishing a terminal page, while
+in-flight pages remain live prefixes. A child that ends before a model attempt
+needs no physical generation proof.
+
+Executed source fixtures used the real request pipeline and both canonical
+writers: an unchanged child passed, while a rehashed child answer, a seed
+pointing to another request and a root seed stripped of child placement were
+refused. Async resume and synchronous complete readers accepted a proven child
+when the root had an unterminated tail or was uniquely archived; both refused
+a missing or duplicated root.
+The repeated-call canonical fixture was removed because it substituted
+untracked synthetic decoded chunks after consuming a real SDK response, so it
+never supplied physical proof for its claimed output. The separate observation
+normalizer tests retain its repeated-call behavior. These source tests do not
+establish a packaged client, native or Java behavior, or owner-gate results.
 
 An implementable single authority needs to freeze the effective response decoder
 context at dispatch and bind it to the selected runtime/provider configuration.
