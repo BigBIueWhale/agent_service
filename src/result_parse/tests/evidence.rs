@@ -35,6 +35,43 @@ fn refuses_missing_or_corrupted_raw_response_evidence() {
 }
 
 #[test]
+fn completed_response_counts_match_physical_sdk_values() {
+    for (mut trace, expected) in [(Trace::ordinary(), 1_u64), (Trace::delegated(), 3_u64)] {
+        trace.certify();
+        let outcome = trace
+            .rows
+            .iter_mut()
+            .find(|row| {
+                row["response"]["event"]["kind"] == "outcome"
+                    && row["response"]["event"]["sdk_values_seen"].as_u64() == Some(expected)
+            })
+            .unwrap();
+        let seen = outcome["response"]["event"]["sdk_values_seen"]
+            .as_u64()
+            .unwrap();
+        outcome["response"]["event"]["sdk_values_seen"] = json!(seen + 1);
+        assert_refused_at(
+            &trace,
+            "SDK value count claims an impossible physical response prefix",
+        );
+    }
+    let mut trace = Trace::delegated();
+    let outcome = trace
+        .rows
+        .iter_mut()
+        .find(|row| {
+            row["response"]["event"]["kind"] == "outcome"
+                && row["response"]["event"]["sdk_values_seen"].as_u64() == Some(3)
+        })
+        .unwrap();
+    outcome["response"]["event"]["sdk_values_seen"] = json!(2);
+    assert_refused_at(
+        &trace,
+        "SDK value count claims an impossible physical response prefix",
+    );
+}
+
+#[test]
 fn refuses_missing_or_corrupted_request_evidence() {
     let complete = Trace::ordinary();
     complete.certify();

@@ -5,7 +5,14 @@ retains decoded observations used to construct model history. Those are distinct
 authorities. TypeScript root readers now replay OpenAI response bytes through
 the selected decoder and compare raw Chat observations before admission.
 The native, Python and Java readers still bind declared ownership and usage
-without independently establishing that byte-to-observation relation.
+without independently establishing that byte-to-observation relation. Native
+source now also counts the SDK values available from each retained physical
+response: complete outcomes must claim the exact count, and failed or
+cancelled outcomes cannot claim a value beyond the available prefix. This
+narrows impossible processing claims but does not prove that a particular
+decoded observation, tool argument or usage report came from those values.
+The native count check and its Rust tests have been reviewed as source only;
+they are unverified pending the owner's build and test gates.
 
 Generation-envelope counters also require exact numeric interpretation. A
 rehashed envelope could spell an observed count as

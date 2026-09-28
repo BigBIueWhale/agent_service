@@ -27,6 +27,145 @@ fn refusal(detail: &str) -> ContractError {
     ))
 }
 
+/// Count the values the pinned OpenAI SDK can yield from one physical body.
+/// Streaming state retains only the unfinished SSE event; nonstreaming JSON
+/// has one value and is retained until its transport end.
+enum ResponseValues {
+    Stream(SseValues),
+    Nonstream(Vec<u8>),
+}
+
+impl ResponseValues {
+    fn new(stream: bool) -> Self {
+        if stream {
+            Self::Stream(SseValues::default())
+        } else {
+            Self::Nonstream(Vec::new())
+        }
+    }
+
+    fn push(&mut self, bytes: &[u8]) {
+        match self {
+            Self::Stream(values) => values.push(bytes),
+            Self::Nonstream(body) => body.extend_from_slice(bytes),
+        }
+    }
+
+    fn require_prefix(&self, seen: u64, completed: bool) -> ContractResult<()> {
+        let (available, failed) = match self {
+            Self::Stream(values) => (values.count, values.failed),
+            Self::Nonstream(body) => {
+                let text = String::from_utf8_lossy(body);
+                let valid = serde_json::from_str::<serde_json::Value>(&text).is_ok();
+                (u64::from(valid), !valid)
+            }
+        };
+        if seen > available || (completed && (failed || seen != available)) {
+            return Err(refusal(
+                "SDK value count claims an impossible physical response prefix",
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct SseValues {
+    line: Vec<u8>,
+    event: Option<String>,
+    data: Vec<String>,
+    count: u64,
+    failed: bool,
+    done: bool,
+    after_cr: bool,
+}
+
+impl SseValues {
+    fn push(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            if self.failed || self.done {
+                return;
+            }
+            if self.after_cr {
+                self.after_cr = false;
+                if byte == b'\n' {
+                    continue;
+                }
+            }
+            match byte {
+                b'\r' => {
+                    self.finish_line();
+                    self.after_cr = true;
+                }
+                b'\n' => self.finish_line(),
+                _ => self.line.push(byte),
+            }
+        }
+    }
+
+    fn finish_line(&mut self) {
+        let line = String::from_utf8_lossy(&self.line).into_owned();
+        self.line.clear();
+        if line.is_empty() {
+            self.finish_event();
+            return;
+        }
+        if line.starts_with(':') {
+            return;
+        }
+        let (field, value) = line.split_once(':').unwrap_or((&line, ""));
+        let value = value.strip_prefix(' ').unwrap_or(value);
+        match field {
+            "event" => self.event = Some(value.to_string()),
+            "data" => self.data.push(value.to_string()),
+            _ => {}
+        }
+    }
+
+    fn finish_event(&mut self) {
+        if self.event.as_deref().unwrap_or("").is_empty() && self.data.is_empty() {
+            self.event = None;
+            return;
+        }
+        let name = self.event.take();
+        let payload = self.data.join("\n");
+        self.data.clear();
+        if payload.starts_with("[DONE]") {
+            self.done = true;
+            return;
+        }
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&payload) else {
+            self.failed = true;
+            return;
+        };
+        let ordinary = !name
+            .as_deref()
+            .is_some_and(|event| event.starts_with("thread."));
+        if ordinary && value.get("error").is_some_and(js_truthy) {
+            self.failed = true;
+            return;
+        }
+        match self
+            .count
+            .checked_add(1)
+            .filter(|count| *count <= SAFE_INTEGER)
+        {
+            Some(count) => self.count = count,
+            None => self.failed = true,
+        }
+    }
+}
+
+fn js_truthy(value: &serde_json::Value) -> bool {
+    match value {
+        serde_json::Value::Null => false,
+        serde_json::Value::Bool(value) => *value,
+        serde_json::Value::Number(value) => value.as_f64().is_none_or(|number| number != 0.0),
+        serde_json::Value::String(value) => !value.is_empty(),
+        serde_json::Value::Array(_) | serde_json::Value::Object(_) => true,
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ModelRequests {
     journal_id: Option<String>,
@@ -34,6 +173,7 @@ pub(crate) struct ModelRequests {
     ids: BTreeSet<String>,
     scopes: BTreeMap<String, RequestBody>,
     responses: BTreeMap<String, ResponseState>,
+    response_values: BTreeMap<String, ResponseValues>,
     attempts: BTreeMap<String, AttemptState>,
     generation_ids: BTreeSet<String>,
     usage: BTreeMap<String, GenerationUsageSummary>,
@@ -95,6 +235,7 @@ pub(crate) struct RequestAdmission {
     scope: String,
     body: RequestBody,
     attempt: Option<String>,
+    stream: bool,
     usage: GenerationUsageSummary,
     all_usage: GenerationUsageSummary,
 }
@@ -117,6 +258,7 @@ pub(crate) struct ResponseAdmission {
     settlement: Option<bool>,
     pub outcome: Option<ResponseOutcome>,
     usage: Option<(GenerationUsageSummary, GenerationUsageSummary)>,
+    body: Option<Vec<u8>>,
 }
 
 impl ModelRequests {
@@ -272,7 +414,9 @@ impl ModelRequests {
             .ok_or_else(|| refusal("body has no stream mode"))?;
         let policy = field(request, "decode_policy", line)?;
         if stream != (text(policy, "mode", line)? == "stream") {
-            return Err(refusal("selected decoder contradicts the request stream mode"));
+            return Err(refusal(
+                "selected decoder contradicts the request stream mode",
+            ));
         }
         let model = text(root, "model", line)?;
         if model.trim().is_empty() || model != text(policy, "model", line)? {
@@ -316,6 +460,7 @@ impl ModelRequests {
             journal_id: journal_id.to_string(),
             sequence,
             scope: scope.to_string(),
+            stream,
             usage: self.scope_usage(scope).admit_request()?,
             all_usage: self.all_usage.admit_request()?,
             attempt,
@@ -341,6 +486,10 @@ impl ModelRequests {
                 .push(admission.body.id.clone());
         }
         self.ids.insert(admission.body.id.clone());
+        self.response_values.insert(
+            admission.body.id.clone(),
+            ResponseValues::new(admission.stream),
+        );
         self.responses.insert(
             admission.body.id.clone(),
             ResponseState {
@@ -383,6 +532,7 @@ impl ModelRequests {
         let mut ended = false;
         let mut settlement = None;
         let mut outcome = None;
+        let mut body = None;
         let kind = text(event, "kind", line)?;
         if (kind == "history") != state.processing.is_some()
             || (kind != "history" && (kind == "outcome") != state.digest.is_none())
@@ -425,7 +575,8 @@ impl ModelRequests {
                     .checked_add(bytes.len() as u64)
                     .filter(|bytes| *bytes <= SAFE_INTEGER)
                     .ok_or_else(|| refusal("response exceeds exact byte accounting"))?;
-                state.digest.as_mut().unwrap().update(bytes);
+                state.digest.as_mut().unwrap().update(&bytes);
+                body = Some(bytes);
             }
             "end" => {
                 let termination = text(event, "termination", line)?;
@@ -483,6 +634,10 @@ impl ModelRequests {
                 {
                     return Err(refusal("decoded progress has no observed SDK response"));
                 }
+                self.response_values
+                    .get(id)
+                    .ok_or_else(|| refusal("response has no physical value reader"))?
+                    .require_prefix(sdk_values_seen, completed)?;
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
                     usage: if usage.is_null() {
@@ -534,11 +689,21 @@ impl ModelRequests {
                 })
                 .transpose()?,
             outcome,
+            body,
             state: if ended { None } else { Some(state) },
         })
     }
 
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
+        if let Some(body) = &admission.body {
+            self.response_values
+                .get_mut(&admission.request_id)
+                .expect("planned physical value reader")
+                .push(body);
+        }
+        if admission.outcome.is_some() {
+            self.response_values.remove(&admission.request_id);
+        }
         if let Some((usage, all_usage)) = admission.usage {
             self.usage.insert(
                 admission
@@ -789,8 +954,7 @@ impl ModelRequests {
             .ok_or_else(|| refusal("final physical request has no processing outcome"))?;
         if consumer_observations != generation.observation_count
             || consumer_observations > final_outcome.pipeline_outputs_delivered
-            || (accepted
-                && consumer_observations != final_outcome.pipeline_outputs_delivered)
+            || (accepted && consumer_observations != final_outcome.pipeline_outputs_delivered)
         {
             return Err(refusal(
                 "consumer receipt contradicts decoded output or generation observations",
@@ -882,6 +1046,35 @@ mod tests {
         Ok(())
     }
     #[test]
+    fn physical_value_reader_follows_sdk_sse_boundaries_and_errors() {
+        let mut stream = ResponseValues::new(true);
+        for chunk in [
+            ": keepalive\r".as_bytes(),
+            "\ndata: {\"id\":1}\r".as_bytes(),
+            "\n\r\nevent: thread.message\n".as_bytes(),
+            "data: {\"error\":{\"message\":\"ordinary only\"}}\n\n".as_bytes(),
+        ] {
+            stream.push(chunk);
+        }
+        stream.require_prefix(2, true).unwrap();
+        assert!(stream.require_prefix(3, false).is_err());
+        stream.push(b"data: [DONE]\n\ndata: {\"id\":3}\n\n");
+        stream.require_prefix(2, true).unwrap();
+
+        let mut stopped = ResponseValues::new(true);
+        stopped.push(b"data: {\"id\":1}\n\ndata: {\"error\":{\"message\":\"stop\"}}\n\n");
+        stopped.require_prefix(1, false).unwrap();
+        assert!(stopped.require_prefix(1, true).is_err());
+        assert!(stopped.require_prefix(2, false).is_err());
+
+        let mut nonstream = ResponseValues::new(false);
+        nonstream.push(b"{");
+        nonstream.push(b"}");
+        nonstream.require_prefix(1, true).unwrap();
+        assert!(nonstream.require_prefix(0, true).is_err());
+        assert!(nonstream.require_prefix(2, false).is_err());
+    }
+    #[test]
     fn selected_decoder_mode_must_match_the_request_body() {
         let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
         let mut record: serde_json::Value = serde_json::from_str(&request(
@@ -930,7 +1123,10 @@ mod tests {
             )
             .unwrap();
         state.commit_origin(origin);
-        let request = rows.iter().find(|row| row["type"] == "model_request").unwrap();
+        let request = rows
+            .iter()
+            .find(|row| row["type"] == "model_request")
+            .unwrap();
         let document = Document::decode(request.to_string().as_bytes(), LIMITS).unwrap();
         let admission = state.plan(document.root(), 1, LIMITS).unwrap();
         state.commit(admission);
@@ -1086,7 +1282,8 @@ mod tests {
         ] {
             for status in ["completed", "failed", "cancelled"] {
                 let mut state = ModelRequests::default();
-                let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
+                let body =
+                    r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
                 admit(
                     &mut state,
                     &request(1, "r", json!({"kind":"full","json":body}), body),
@@ -1141,7 +1338,8 @@ mod tests {
                 "valid", "null", "zero", "missing", "total", "cached", "thoughts", "negative",
             ] {
                 let mut state = ModelRequests::default();
-                let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
+                let body =
+                    r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
                 admit(
                     &mut state,
                     &request(1, "r", json!({"kind":"full","json":body}), body),
@@ -1220,7 +1418,7 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","served_usage":null,"status":"completed","error":null,"sdk_values_seen":0,"pipeline_outputs_delivered":0}),
+                json!({"kind":"outcome","served_usage":null,"status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
             ].into_iter().enumerate() {
                 if id == "b" && event["kind"] == "outcome" {
                     assert!(state.validate_summary(terminal.root(), 3).is_err());
@@ -1318,7 +1516,8 @@ mod tests {
     fn chat_processing_requires_one_history_decision_and_a_matching_origin() {
         for status in ["completed", "failed"] {
             let mut state = ModelRequests::default();
-            let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
+            let body =
+                r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
             let mut value: serde_json::Value =
                 serde_json::from_str(&request(1, "r", json!({"kind":"full","json":body}), body))
                     .unwrap();
@@ -1328,7 +1527,7 @@ mod tests {
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
                 json!({"kind":"body","offset":0,"base64":"e30="}),
                 json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","served_usage":null,"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)},"sdk_values_seen":0,"pipeline_outputs_delivered":0}),
+                json!({"kind":"outcome","served_usage":null,"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)},"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
             ].into_iter().enumerate() {
                 let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
