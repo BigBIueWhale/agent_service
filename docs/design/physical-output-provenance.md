@@ -380,6 +380,25 @@ output, that additional claim must be recorded by the caller that made the
 decision. The source census establishes these ownership paths; no receipt has
 been implemented or executed by this note.
 
+Current-source review after the child-root proof checked this boundary again.
+`GenerationClient` forwards each utility call into the provider; the OpenAI
+pipeline records `pipeline_outputs_delivered` before its nonstreaming result
+returns or while its stream yields. `LoggingContentGenerator` then forwards the
+result or each chunk without recording a caller receipt. Its logging and
+telemetry are not physical response evidence. `BaseLlmClient`,
+`PromptHookRunner`, ACP generation, and `GeminiClient` consume those forwarded
+values differently. The existing outcome count, checked against response-byte
+replay by the TypeScript reader, establishes the pipeline's output prefix. The
+exact request and response bodies establish what crossed the HTTP boundary;
+none of those facts establishes what a utility caller incorporated. An
+implementation must allocate one utility-call identity across
+its physical retries and durably settle the forwarded prefix at the shared
+delivery boundary. Claims about a later caller decision require that caller's
+own record. This needs a versioned producer and reader change, not a receipt
+invented from the old outcome count. No such migration was executed in this
+review, and the existing production process readers' separate physical gates
+do not supply this missing downstream decision.
+
 ## Decoder proof required at admission
 
 The dispatch owner must bind the selected provider and every effective option
