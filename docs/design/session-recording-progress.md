@@ -62,6 +62,15 @@ read-only fixture review at
 found no remaining issue in that bounded change. The tests assert both the
 physical tail and restored text-only runtime history. This is source-test
 evidence for those cases, not an application resume or native admission result.
+After the physical generation verifier was added, those two source cases again
+stopped at admission. The helper had no normalization seed and its constructed
+generation did not match its retained SSE body. The helper now derives the
+generation through the shared response decoder, records the seed before the
+generation, and excludes that evidence record from the expected conversation
+projection. The full writer-lease and producer-backed runtime-history suites
+then passed 117 source tests with two existing skips. This strengthens the
+source evidence for exact resume history; it does not run a packaged resume,
+compiler, native certifier or deployed provider.
 The raw-response suite passed without altering its direct recorder-clock tests
 or substituting any validator.
 

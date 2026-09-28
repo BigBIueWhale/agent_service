@@ -9418,6 +9418,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "expected exactly one certified replacement; the contenders answered",
     ):
         require_text(state, core + "services/session-writer-lease.test.ts", case, label=label)
+    _require_all(state, core + "services/session-writer-lease.test.ts", (
+        "replayRecordedOpenAIObservations(",
+        "new GenerationObservationNormalizer([], [])",
+        "type: 'model_normalization_seed'",
+        "message.type !== 'model_normalization_seed'",
+    ), label=label)
 
 
 def _validate_manual_compaction_before(state: State) -> None:
