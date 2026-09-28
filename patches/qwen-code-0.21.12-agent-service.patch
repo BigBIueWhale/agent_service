@@ -35276,7 +35276,7 @@ diff --git a/packages/cli/src/commands/review/cost-ledger.ts b/packages/cli/src/
 +  getRecordedGenerationObservations,
 +  summarizeGenerationUsage,
 +  formatGenerationUsage,
-+  readCanonicalChatRecordsSync,
++  readCompleteCanonicalChatRecordsSync,
 +  type GenerationObservation,
 +  type GenerationUsageSummary,
 +} from '@qwen-code/qwen-code-core';
@@ -35456,7 +35456,7 @@ diff --git a/packages/cli/src/commands/review/cost-ledger.ts b/packages/cli/src/
 -  // one parser, so the two readers cannot drift apart again.
 -  return parsed;
 +function readUsage(file: string, floorMs: number) {
-+  const records = readCanonicalChatRecordsSync(file);
++  const records = readCompleteCanonicalChatRecordsSync(file);
 +  return getRecordedGenerationObservations(records).filter(
 +    (event) => Date.parse(event.dispatch['event.timestamp']) >= floorMs,
 +  );
@@ -337719,7 +337719,7 @@ diff --git a/packages/cli/src/commands/review/lib/transcripts.ts b/packages/cli/
   * SPDX-License-Identifier: Apache-2.0
   */
  
-+import { readCanonicalChatRecordsSync } from '@qwen-code/qwen-code-core';
++import { readCompleteCanonicalChatRecordsSync } from '@qwen-code/qwen-code-core';
  // Read what the review's agents actually did, from the harness's own records.
  //
  // Every gate this skill has built read a file the orchestrator wrote, and the
@@ -337756,7 +337756,7 @@ diff --git a/packages/cli/src/commands/review/lib/transcripts.ts b/packages/cli/
 -  }
 -  const lines = raw.split('\n').filter((l) => l.trim());
 -  if (lines.length === 0) return null;
-+  const records = readCanonicalChatRecordsSync(file);
++  const records = readCompleteCanonicalChatRecordsSync(file);
 +  if (records.length === 0) return null;
  
    let agentId = '';
@@ -339724,7 +339724,7 @@ diff --git a/packages/core/src/core/session-recovery.test.ts b/packages/core/src
 diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/core/src/services/chat-recording-io.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/chat-recording-io.test.ts
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,195 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -339733,6 +339733,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +import fs from 'node:fs';
 +import os from 'node:os';
 +import path from 'node:path';
++import { createHash } from 'node:crypto';
 +import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 +import { CHAT_RECORDING_VERSION } from '../utils/transcript-records.js';
 +import { readLastTranscriptRecordUuidSync } from '../agents/agent-transcript.js';
@@ -339740,6 +339741,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +  readCanonicalChatLines,
 +  readCanonicalChatRecords,
 +  readCanonicalChatRecordsSync,
++  readCompleteCanonicalChatRecordsSync,
 +  readCompleteCanonicalConversation,
 +} from './chat-recording-io.js';
 +
@@ -339801,6 +339803,55 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 +      root,
 +      active,
 +    ]);
++  });
++
++  it('refuses an open physical request in complete synchronous reports', async () => {
++    const body = JSON.stringify({
++      model: 'test-model',
++      stream: false,
++      messages: [],
++      kv_scope: 'session',
++    });
++    const openRequest = {
++      recordingVersion: CHAT_RECORDING_VERSION,
++      uuid: 'open-request',
++      parentUuid: 'root',
++      sessionId: 'session',
++      type: 'model_request',
++      modelRequest: {
++        journal_id: 'journal',
++        sequence: 1,
++        request_id: 'request',
++        kv_scope: 'session',
++        segment_id: 'segment',
++        prompt_id: 'prompt',
++        owner: { kind: 'utility' },
++        decode_policy: {
++          mode: 'nonstream',
++          model: 'test-model',
++          strict_tool_calling: false,
++          named_tool_choice: null,
++          exact_token_counting: false,
++          tagged_thinking_tags: false,
++        },
++        body_sha256: createHash('sha256').update(body).digest('hex'),
++        body_bytes: Buffer.byteLength(body),
++        body: { kind: 'full', json: body },
++      },
++    };
++    const records = [record('root', null), openRequest];
++    fs.writeFileSync(
++      file,
++      records.map((item) => JSON.stringify(item)).join('\n') + '\n',
++    );
++
++    expect(readCanonicalChatRecordsSync(file)).toEqual(records);
++    expect(() => readCompleteCanonicalChatRecordsSync(file)).toThrow(
++      /incomplete requests or logical generations/,
++    );
++    await expect(readCompleteCanonicalConversation(file)).rejects.toThrow(
++      /incomplete requests or logical generations/,
++    );
 +  });
 +
 +  it.each([
@@ -339872,7 +339923,7 @@ diff --git a/packages/core/src/services/chat-recording-io.test.ts b/packages/cor
 diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src/services/chat-recording-io.ts
 --- /dev/null
 +++ b/packages/core/src/services/chat-recording-io.ts
-@@ -0,0 +1,238 @@
+@@ -0,0 +1,263 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -340073,8 +340124,9 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +}
 +
 +/** Scan a snapshot of the file without retaining unrelated message bodies. */
-+export function* iterateCanonicalChatRecordsSync(
++function* scanCanonicalChatRecordsSync(
 +  filePath: string,
++  requireCompletion: boolean,
 +): Generator<ChatRecord> {
 +  // I/O granularity only; records can span arbitrarily many buffers.
 +  const buffer = Buffer.alloc(64 * 1024);
@@ -340103,13 +340155,37 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +        yield resolveTranscriptRecord(record) as ChatRecord;
 +    }
 +    decoder.finish();
++    if (requireCompletion) {
++      try {
++        requireCompleteModelEvidence(decoder.completionState());
++      } catch (cause) {
++        throw new Error(
++          `Cannot read complete recording ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}`,
++          { cause },
++        );
++      }
++    }
 +  } finally {
 +    fs.closeSync(fd);
 +  }
 +}
 +
++/** Read a live canonical prefix, validating every physical record it contains. */
++export function* iterateCanonicalChatRecordsSync(
++  filePath: string,
++): Generator<ChatRecord> {
++  yield* scanCanonicalChatRecordsSync(filePath, false);
++}
++
 +export function readCanonicalChatRecordsSync(filePath: string): ChatRecord[] {
 +  return [...iterateCanonicalChatRecordsSync(filePath)];
++}
++
++/** Reports on a complete snapshot must refuse open physical or logical work. */
++export function readCompleteCanonicalChatRecordsSync(
++  filePath: string,
++): ChatRecord[] {
++  return [...scanCanonicalChatRecordsSync(filePath, true)];
 +}
 diff --git a/packages/core/src/utils/conversation-chain.test.ts b/packages/core/src/utils/conversation-chain.test.ts
 --- a/packages/core/src/utils/conversation-chain.test.ts

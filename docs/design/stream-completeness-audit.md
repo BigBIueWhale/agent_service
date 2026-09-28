@@ -361,6 +361,17 @@ One concrete source consumer omission remains:
   errors and do not validate canonical recording versions. This is a source
   consumer gap regardless of whether the image ships that application.
 
+A later source read found that the synchronous canonical scanner validated
+individual records but did not check its model-evidence completion state at
+EOF. The review cost ledger and agent-transcript report used that scanner and
+could therefore report on a file with an open physical request or logical
+generation. They now use a synchronous read of a complete snapshot that applies the
+same completion refusal as canonical resume. The live-prefix reader remains
+available for metadata while a writer is active. A source regression fixture
+contains a valid open utility request and checks that only the complete read
+refuses it. This is source implementation and an authored test, not an executed
+client or native gate; Desktop's direct parsers remain a separate gap.
+
 The blanket retry allegation is also too strong. `BaseLlmClient.generateText`
 and `generateJson` use `retryWithBackoff`; compaction and title paths route
 through that owner. Prompt hooks directly race `generateContent` against

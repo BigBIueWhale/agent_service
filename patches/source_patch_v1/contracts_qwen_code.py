@@ -9235,14 +9235,19 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     require_text(state, cli + "ui/utils/export/collect.test.ts",
                  "preserves served usage once through collection and normalization", label=label)
-    require_text(state, cli + "commands/review/cost-ledger.ts", "readCanonicalChatRecordsSync(file)", label=label)
-    require_text(state, cli + "commands/review/lib/transcripts.ts", "readCanonicalChatRecordsSync(file)", label=label)
+    for path in (cli + "commands/review/cost-ledger.ts", cli + "commands/review/lib/transcripts.ts"):
+        require_text(state, path, "readCompleteCanonicalChatRecordsSync(file)", label=label)
+        forbid_text(state, path, "readCanonicalChatRecordsSync(file)", label=label)
     forbid_text(state, cli + "commands/review/lib/transcripts.ts", "JSON.parse(line)", label=label)
     require_text(state, "packages/vscode-ide-companion/src/services/qwenSessionReader.ts", "readCanonicalChatRecords(filePath)", label=label)
     _require_all(state, core + "services/chat-recording-io.ts", (
         "readCompleteCanonicalConversation(", "readCompleteStoredCanonicalChatRecords(filePath)",
         "prepareResolvedTranscriptRecords(records)", "entry.affectsCompleteness",
+        "readCompleteCanonicalChatRecordsSync(",
+        "requireCompleteModelEvidence(decoder.completionState())",
     ), label=label)
+    require_text(state, core + "services/chat-recording-io.test.ts",
+                 "refuses an open physical request in complete synchronous reports", label=label)
     insight = cli + "services/insight/generators/DataProcessor.ts"
     _require_all(state, insight, (
         "readCompleteCanonicalConversation(filePath)",
