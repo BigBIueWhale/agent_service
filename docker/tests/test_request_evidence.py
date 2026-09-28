@@ -14,9 +14,9 @@ class RequestEvidenceTests(unittest.TestCase):
     def fixture(self):
         messages = [{"role": "user", "content": "שלום 🌈 \n \""}]
         serialize = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-        first = serialize({"messages": messages, "kv_scope": "root"})
+        first = serialize({"messages": messages, "model": "fixture-model", "stream": False, "kv_scope": "root"})
         added = {"role": "user", "content": "new reminder"}
-        second = serialize({"messages": messages + [added], "kv_scope": "root"})
+        second = serialize({"messages": messages + [added], "model": "fixture-model", "stream": False, "kv_scope": "root"})
         bodies = [first, second]
         origin = {"journal_id": "journal", "first_sequence": 3}
         events = [{"type": "system", "subtype": "stream_start", "request_evidence_origin": origin}]
@@ -24,12 +24,13 @@ class RequestEvidenceTests(unittest.TestCase):
             representation = {"kind": "full", "json": body} if sequence == 3 else {
                 "kind": "delta", "base_request_id": "r3", "retain_messages": 1,
                 "added_messages": [serialize(added)], "prefix": '{"messages":[',
-                "suffix": '],"kv_scope":"root"}',
+                "suffix": '],"model":"fixture-model","stream":false,"kv_scope":"root"}',
             }
             events.append({"type": "model_request", "request": {
                 "journal_id": "journal", "sequence": sequence,
                 "request_id": f"r{sequence}", "kv_scope": "root", "segment_id": "s",
                 "prompt_id": "prompt", "owner": {"kind": "utility"}, "body": representation,
+                "decode_policy": {"mode": "nonstream", "model": "fixture-model"},
                 "body_bytes": len(body.encode()), "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
             }})
         events.append({"type": "result", "request_evidence": {**origin, "request_count": 2}})
@@ -48,12 +49,20 @@ class RequestEvidenceTests(unittest.TestCase):
         second["segment_id"] = "next-segment"
         self.assertEqual(len(require_request_evidence(events, bodies)), 2)
 
+    def test_selected_decoder_uses_the_dispatched_model(self):
+        for mode, model in (("nonstream", "another-model"), ("unknown", "fixture-model")):
+            with self.subTest(mode=mode, model=model):
+                events, bodies = self.fixture()
+                events[1]["request"]["decode_policy"].update(mode=mode, model=model)
+                with self.assertRaisesRegex(ValueError, "selected decoder contradicts the dispatched request"):
+                    require_request_evidence(events, bodies)
+
     def test_zero_retained_messages_replace_or_remove_the_whole_message_list(self):
         for messages in ([], [{"role": "user", "content": "replacement שלום 🧪\n"}]):
             with self.subTest(messages=messages):
                 events, bodies = self.fixture()
                 serialize = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-                bodies[1] = serialize({"messages": messages, "kv_scope": "root"})
+                bodies[1] = serialize({"messages": messages, "model": "fixture-model", "stream": False, "kv_scope": "root"})
                 request = events[2]["request"]
                 request["body"].update(retain_messages=0, added_messages=[serialize(message) for message in messages])
                 request.update(body_bytes=len(bodies[1].encode()), body_sha256=hashlib.sha256(bodies[1].encode()).hexdigest())

@@ -262,6 +262,10 @@ impl ModelRequests {
         if stream != (text(policy, "mode", line)? == "stream") {
             return Err(refusal("selected decoder contradicts the request stream mode"));
         }
+        let model = text(root, "model", line)?;
+        if model.trim().is_empty() || model != text(policy, "model", line)? {
+            return Err(refusal("selected decoder contradicts the dispatched model"));
+        }
         let array = field(root, "messages", line)?;
         if text(body, "kind", line)? == "delta" {
             let range = array.byte_range();
@@ -797,7 +801,7 @@ mod tests {
     }
     #[test]
     fn selected_decoder_mode_must_match_the_request_body() {
-        let body = r#"{"kv_scope":"owner","stream":false,"messages":[]}"#;
+        let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
         let mut record: serde_json::Value = serde_json::from_str(&request(
             1,
             "request",
@@ -814,8 +818,26 @@ mod tests {
         ));
     }
     #[test]
+    fn selected_decoder_model_must_match_the_request_body() {
+        let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
+        let mut record: serde_json::Value = serde_json::from_str(&request(
+            1,
+            "request",
+            json!({"kind":"full","json":body}),
+            body,
+        ))
+        .unwrap();
+        record["request"]["decode_policy"]["model"] = json!("another-model");
+        let mut state = ModelRequests::default();
+        assert!(matches!(
+            admit(&mut state, &record.to_string()),
+            Err(ContractError::InvalidRecord(message))
+                if message.contains("selected decoder contradicts the dispatched model")
+        ));
+    }
+    #[test]
     fn full_body_requires_a_new_segment_for_its_scope() {
-        let body = r#"{"kv_scope":"owner","stream":false,"messages":[]}"#;
+        let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
         let mut state = ModelRequests::default();
         admit(
             &mut state,
@@ -945,7 +967,7 @@ mod tests {
         ] {
             for status in ["completed", "failed", "cancelled"] {
                 let mut state = ModelRequests::default();
-                let body = r#"{"kv_scope":"owner","stream":false,"messages":[]}"#;
+                let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
                 admit(
                     &mut state,
                     &request(1, "r", json!({"kind":"full","json":body}), body),
@@ -1000,7 +1022,7 @@ mod tests {
                 "valid", "null", "zero", "missing", "total", "cached", "thoughts", "negative",
             ] {
                 let mut state = ModelRequests::default();
-                let body = r#"{"kv_scope":"owner","stream":false,"messages":[]}"#;
+                let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
                 admit(
                     &mut state,
                     &request(1, "r", json!({"kind":"full","json":body}), body),
@@ -1054,13 +1076,13 @@ mod tests {
     }
     #[test]
     fn exact_request_replay_and_omission_refusals() {
-        let first = r#"{"kv_scope":"owner","stream":false,"messages":[{"role":"system","content":"tools \\"}],"tools":[{"messages":"nested"}]}"#;
-        let second = r#"{"kv_scope":"owner","stream":false,"messages":[{"role":"system","content":"tools \\"},{"role":"user","content":"שלום\n"}],"tools":[]}"#;
+        let first = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[{"role":"system","content":"tools \\"}],"tools":[{"messages":"nested"}]}"#;
+        let second = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[{"role":"system","content":"tools \\"},{"role":"user","content":"שלום\n"}],"tools":[]}"#;
         let a = request(3, "a", json!({"kind":"full","json":first}), first);
         let b = request(
             4,
             "b",
-            json!({"kind":"delta","base_request_id":"a","retain_messages":1,"prefix":"{\"kv_scope\":\"owner\",\"stream\":false,\"messages\":[","suffix":"],\"tools\":[]}","added_messages":[r#"{"role":"user","content":"שלום\n"}"#]}),
+            json!({"kind":"delta","base_request_id":"a","retain_messages":1,"prefix":"{\"kv_scope\":\"owner\",\"model\":\"fixture-model\",\"stream\":false,\"messages\":[","suffix":"],\"tools\":[]}","added_messages":[r#"{"role":"user","content":"שלום\n"}"#]}),
             second,
         );
         let mut state = ModelRequests::default();
@@ -1173,7 +1195,7 @@ mod tests {
     fn chat_processing_requires_one_history_decision_and_a_matching_origin() {
         for status in ["completed", "failed"] {
             let mut state = ModelRequests::default();
-            let body = r#"{"kv_scope":"owner","stream":false,"messages":[]}"#;
+            let body = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
             let mut value: serde_json::Value =
                 serde_json::from_str(&request(1, "r", json!({"kind":"full","json":body}), body))
                     .unwrap();

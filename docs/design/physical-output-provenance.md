@@ -276,6 +276,18 @@ recording. Request replay requires an explicit boolean `stream` in the exact
 body and the matching policy mode, and evidence rejects an absent, malformed or
 unknown policy. The v10 schema requires the same closed policy shape in stdout,
 Python and Java resources; the canonical runtime file uses version 12.
+Provider decoration can override the final OpenAI request model through
+`extra_body`. The selected response policy now takes its model from that final
+request, and TypeScript, Python, Java, native and fake-provider request readers
+require the retained body's model to equal the policy's model. The producer
+still sends the same request bytes; the relation fixes which model's response
+decoder interprets them for every OpenAI-compatible caller. Focused TypeScript
+source tests, the Python admission suite and the shared harness test exercised
+this binding. The full local TypeScript suite still fails its recording-delay
+timing assertion; it also failed here with the prior pipeline, decoder and test
+sources restored. Native and Java cases were authored but not executed; the
+model binding alone does not prove decoded observations came from physical
+bytes.
 Canonical files from before that identity lack required evidence; the version 12
 reader refuses them with a matching-client or new-session action. Source reading
 shows that this change adds evidence beside runtime history and does not change

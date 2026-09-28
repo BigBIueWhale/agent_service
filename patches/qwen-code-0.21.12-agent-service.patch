@@ -200060,7 +200060,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,39 +1357,101 @@
+@@ -1318,39 +1357,102 @@
    }
  
    /**
@@ -200096,6 +200096,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +      const decodePolicy = selectOpenAIResponseDecodePolicy(
 +        context,
 +        isStreaming ? 'stream' : 'nonstream',
++        openaiRequest.model,
 +      );
 +      if (openaiRequest.stream !== (decodePolicy.mode === 'stream'))
 +        throw new Error(
@@ -200171,7 +200172,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        return await executeAttempt();
      } catch (error) {
        const model = context.model.toLowerCase();
-@@ -1398,31 +1499,32 @@
+@@ -1398,31 +1500,32 @@
  
    /**
     * Create request context with common properties
@@ -200214,7 +200215,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
          // Default true: the OpenAI Chat Completions spec only permits text on
          // `role: "tool"` messages, so tool-returned media (e.g. an image read
          // by read_file) embedded there is silently dropped or rejected by
-@@ -1432,12 +1534,10 @@
+@@ -1432,12 +1535,10 @@
          // Opt out via generationConfig.splitToolMedia = false.
          true,
        toolResultContentFormat:
@@ -342202,7 +342203,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,703 @@
+@@ -0,0 +1,715 @@
 +import { afterEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -342287,12 +342288,24 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +        decode_policy: { ...TEST_POLICY, mode: 'stream' },
 +      }),
 +    ).toThrow('selected decoder contradicts the request stream mode');
++    expect(() =>
++      new ModelRequestReplay().observe({
++        ...f.records[0],
++        decode_policy: { ...TEST_POLICY, model: 'another-model' },
++      }),
++    ).toThrow('selected decoder contradicts the dispatched model');
 +    await expect(
 +      f.journal.capture(serialize([]), 'root', 'p', 's', null, {
 +        ...TEST_POLICY,
 +        mode: 'stream',
 +      }),
 +    ).rejects.toThrow('selected decoder contradicts the request stream mode');
++    await expect(
++      f.journal.capture(serialize([]), 'root', 'p', 's', null, {
++        ...TEST_POLICY,
++        model: 'another-model',
++      }),
++    ).rejects.toThrow('selected decoder contradicts the dispatched model');
 +  });
 +  it.each(['persist', 'publish'])(
 +    'owns a request exactly when persistence succeeds before a %s refusal',
@@ -342909,7 +342922,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,952 @@
+@@ -0,0 +1,960 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -342993,6 +343006,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  readonly messages: readonly string[];
 +  readonly suffix: string;
 +  readonly stream: boolean;
++  readonly model: string;
 +}
 +
 +const refusal = (detail: string): never => {
@@ -343036,6 +343050,8 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    typeof parsed !== 'object' ||
 +    !Array.isArray(parsed['messages']) ||
 +    typeof parsed['stream'] !== 'boolean' ||
++    typeof parsed['model'] !== 'string' ||
++    !parsed['model'].trim() ||
 +    parsed['kv_scope'] !== scope
 +  )
 +    return refusal(
@@ -343075,6 +343091,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        messages,
 +        suffix: json.slice(end - 1),
 +        stream: parsed['stream'],
++        model: parsed['model'],
 +      };
 +    }
 +    at = end + 1;
@@ -343239,6 +343256,8 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      return refusal(
 +        'the selected decoder contradicts the request stream mode',
 +      );
++    if (body.model !== evidence.decode_policy.model)
++      return refusal('the selected decoder contradicts the dispatched model');
 +    if (
 +      representation.kind === 'delta' &&
 +      (representation.prefix !== body.prefix ||
@@ -343314,6 +343333,8 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      return refusal(
 +        'the selected decoder contradicts the request stream mode',
 +      );
++    if (body.model !== selectedPolicy.model)
++      return refusal('the selected decoder contradicts the dispatched model');
 +    const segment = this.segment;
 +    // A replacement output window starts a new evidence segment even if the
 +    // caller's history context has not changed its own segment identity.
@@ -347041,7 +347062,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,755 @@
+@@ -0,0 +1,797 @@
 +import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
 +// eslint-disable-next-line import/no-internal-modules
@@ -347082,6 +347103,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +function fixture(
 +  fetch: NonNullable<ConstructorParameters<typeof OpenAI>[0]>['fetch'],
 +  persist: (record: ModelResponseEvidence) => Promise<void> = async () => {},
++  providerModel?: string,
 +) {
 +  const requests: ModelRequestEvidence[] = [];
 +  const responses: ModelResponseEvidence[] = [];
@@ -347102,6 +347124,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +    timeout: 1000,
 +    samplingParams: { max_tokens: 1000 },
 +    strictToolCalling: true,
++    ...(providerModel ? { extra_body: { model: providerModel } } : {}),
 +  };
 +  const config = {
 +    getSessionId: () => 'session',
@@ -347169,6 +347192,46 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +afterEach(() => vi.useRealTimers());
 +
 +describe('pipeline raw response ownership', () => {
++  it('decodes with the model in the final provider request', async () => {
++    let sentModel: string | undefined;
++    const f = fixture(
++      async (_input, init) => {
++        sentModel = JSON.parse(String(init?.body)).model as string;
++        return new Response(
++          JSON.stringify({
++            id: 'reply',
++            object: 'chat.completion',
++            created: 0,
++            model: 'provider-selected-model',
++            choices: [
++              {
++                index: 0,
++                message: { role: 'assistant', content: 'answer' },
++                finish_reason: 'stop',
++              },
++            ],
++            usage: {
++              prompt_tokens: 2,
++              completion_tokens: 1,
++              total_tokens: 3,
++              prompt_tokens_details: { cached_tokens: 0 },
++              completion_tokens_details: { reasoning_tokens: 0 },
++            },
++          }),
++          { headers: { 'content-type': 'application/json' } },
++        );
++      },
++      async () => {},
++      'provider-selected-model',
++    );
++    await f.pipeline.execute(f.request, 'provider-model');
++    expect(sentModel).toBe('provider-selected-model');
++    expect(f.requests[0]?.decode_policy.model).toBe(sentModel);
++    expect(
++      JSON.parse(new ModelRequestReplay().observe(f.requests[0])).model,
++    ).toBe(sentModel);
++  });
++
 +  it.each([false, true])(
 +    'records the exact JSON body passed to the installed OpenAI SDK transport, streaming=%s',
 +    async (streaming) => {
@@ -351363,7 +351426,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,693 @@
+@@ -0,0 +1,708 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -351399,12 +351462,14 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    )
 +
 +
-+def _split_request(body: str, scope: str) -> tuple[str, list[str], str, bool]:
++def _split_request(body: str, scope: str) -> tuple[str, list[str], str, bool, str]:
 +    value = parse_json_line(body)
 +    _require(
 +        isinstance(value, dict)
 +        and value.get("kv_scope") == scope
 +        and isinstance(value.get("stream"), bool)
++        and isinstance(value.get("model"), str)
++        and bool(value["model"].strip())
 +        and isinstance(value.get("messages"), list)
 +        and all(isinstance(message, dict) for message in value["messages"]),
 +        "request body must contain messages and stream mode for its invocation scope",
@@ -351431,7 +351496,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                at = skip(at)
 +                if body[at] == ",":
 +                    at = skip(at + 1)
-+            return body[: start + 1], messages, body[end - 1 :], value["stream"]
++            return (
++                body[: start + 1],
++                messages,
++                body[end - 1 :],
++                value["stream"],
++                value["model"],
++            )
 +        at = skip(end)
 +        if body[at] == ",":
 +            at += 1
@@ -351542,10 +351613,14 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            and hashlib.sha256(raw).hexdigest() == request["body_sha256"],
 +            "reconstructed request differs from its byte count or SHA-256",
 +        )
-+        prefix, messages, suffix, stream = _split_request(body, scope)
++        prefix, messages, suffix, stream, model = _split_request(body, scope)
 +        _require(
 +            stream == (request["decode_policy"]["mode"] == "stream"),
 +            "selected decoder contradicts the request stream mode",
++        )
++        _require(
++            model == request["decode_policy"]["model"],
++            "selected decoder contradicts the dispatched model",
 +        )
 +        if expected_messages is not None:
 +            _require(
@@ -351645,7 +351720,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                observation["source_request_id"] == final_request
 +                for observation in generation.envelope["observations"]
 +            )
-+            and (completion["disposition"] != "accepted" or final_request == accepted[0]),
++            and (
++                completion["disposition"] != "accepted" or final_request == accepted[0]
++            ),
 +            "a Chat attempt received decoded output before its final physical request",
 +        )
 +        final_outcome = attempt.outcomes.get(final_request)
@@ -351667,7 +351744,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                final_outcome["status"] == "completed"
 +                and final_outcome["served_usage"] is not None
 +                and all(
-+                    final_outcome["served_usage"][key] == generation.envelope["usage"][key]
++                    final_outcome["served_usage"][key]
++                    == generation.envelope["usage"][key]
 +                    for key in USAGE_FIELDS
 +                ),
 +                "accepted generation usage contradicts its physical response",
@@ -352060,7 +352138,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,586 @@
+@@ -0,0 +1,613 @@
 +from __future__ import annotations
 +
 +import copy
@@ -352149,7 +352227,9 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +def test_successful_model_result_matches_last_accepted_conversation_text() -> None:
 +    wire = records("chat_request_response_history")
 +    next(row for row in wire if row["type"] == "result")["result"] = "forged terminal"
-+    with pytest.raises(RecordContractError, match="successful result contradicts accepted model text"):
++    with pytest.raises(
++        RecordContractError, match="successful result contradicts accepted model text"
++    ):
 +        admit_all(wire).finish()
 +
 +
@@ -352161,7 +352241,11 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    admit_all(structured).finish()
 +
 +    runtime = records("chat_request_response_history")
-+    local = next(row for row in records("runtime_partial_no_generation") if row["type"] == "assistant")
++    local = next(
++        row
++        for row in records("runtime_partial_no_generation")
++        if row["type"] == "assistant"
++    )
 +    local["uuid"] = "runtime-after-model"
 +    local["session_id"] = runtime[0]["session_id"]
 +    runtime.insert(-1, local)
@@ -352191,7 +352275,18 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        admit_all(wire)
 +
 +
-+def _tool_result(wire: list[dict[str, Any]], identity: str, scope: str | None = None) -> dict[str, Any]:
++def test_request_decoder_model_must_match_exact_body() -> None:
++    wire = records()
++    request(wire)["decode_policy"]["model"] = "another-model"
++    with pytest.raises(
++        RecordContractError, match="selected decoder contradicts the dispatched model"
++    ):
++        admit_all(wire)
++
++
++def _tool_result(
++    wire: list[dict[str, Any]], identity: str, scope: str | None = None
++) -> dict[str, Any]:
 +    return {
 +        "type": "user",
 +        "uuid": f"tool-result-{identity}",
@@ -352199,7 +352294,9 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        "parent_tool_use_id": scope,
 +        "message": {
 +            "role": "user",
-+            "content": [{"type": "tool_result", "tool_use_id": identity, "content": "done"}],
++            "content": [
++                {"type": "tool_result", "tool_use_id": identity, "content": "done"}
++            ],
 +        },
 +    }
 +
@@ -352274,7 +352371,9 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +
 +def test_tool_progress_before_issuing_completion_is_refused() -> None:
 +    wire = records()
-+    point = next(i for i, item in enumerate(wire) if item["type"] == "model_attempt_completion")
++    point = next(
++        i for i, item in enumerate(wire) if item["type"] == "model_attempt_completion"
++    )
 +    wire.insert(point, _tool_progress(wire, "call-attempt-0"))
 +    with pytest.raises(RecordContractError, match="tool progress has no accepted"):
 +        admit_all(wire).finish()
@@ -352538,7 +352637,13 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    # Numeric notation, object order, escaped scalar, and whitespace are hashed
 +    # as recorded; Python serialization would rewrite these bytes.
 +    message = '{"role":"user","content":"\\ud83d\\ude00","10":1e+21,"2":-0.0}'
-+    prefix = '{"kv_scope":' + json.dumps(scope) + ', "stream":false, "messages":['
++    prefix = (
++        '{"kv_scope":'
++        + json.dumps(scope)
++        + ', "model":'
++        + json.dumps(first["decode_policy"]["model"])
++        + ', "stream":false, "messages":['
++    )
 +    suffix = '],"temperature":1e-7 }'
 +    first_body = prefix + message + suffix
 +    first["body"] = {"kind": "full", "json": first_body}
@@ -357241,7 +357346,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,425 @@
+@@ -0,0 +1,431 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -357322,6 +357427,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        Map<String, Object> policy = object(request.get("decode_policy"));
 +        require(slices.stream == "stream".equals(policy.get("mode")),
 +                "selected decoder contradicts the request stream mode");
++        require(slices.model.equals(policy.get("model")),
++                "selected decoder contradicts the dispatched model");
 +        if (expected != null) {
 +            require(slices.prefix.equals(representation.get("prefix"))
 +                    && slices.suffix.equals(representation.get("suffix")) && slices.messages.equals(expected),
@@ -357527,6 +357634,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private static BodySlices split(String body, String scope) {
 +        Map<String, Object> value = StrictJson.parseObject(body, "model request body");
 +        require(scope.equals(value.get("kv_scope")) && value.get("stream") instanceof Boolean
++                && value.get("model") instanceof String && !((String) value.get("model")).isBlank()
 +                && value.get("messages") instanceof List
 +                && array(value.get("messages")).stream().allMatch(message -> message instanceof Map),
 +                "request body must contain messages and stream mode for its invocation scope");
@@ -357548,7 +357656,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                        at = skipSpace(body, at + 1);
 +                    }
 +                }
-+                return new BodySlices(body.substring(0, start + 1), messages, body.substring(end - 1), (Boolean) value.get("stream"));
++                return new BodySlices(body.substring(0, start + 1), messages, body.substring(end - 1),
++                        (Boolean) value.get("stream"), (String) value.get("model"));
 +            }
 +            at = skipSpace(body, end);
 +            if (body.charAt(at) == ',') {
@@ -357615,12 +357724,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        private final List<String> messages;
 +        private final String suffix;
 +        private final boolean stream;
++        private final String model;
 +
-+        private BodySlices(String prefix, List<String> messages, String suffix, boolean stream) {
++        private BodySlices(String prefix, List<String> messages, String suffix, boolean stream, String model) {
 +            this.prefix = prefix;
 +            this.messages = messages;
 +            this.suffix = suffix;
 +            this.stream = stream;
++            this.model = model;
 +        }
 +    }
 +
@@ -360270,7 +360381,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,496 @@
+@@ -0,0 +1,504 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -360397,6 +360508,14 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        RecordContractException conflict = assertThrows(RecordContractException.class,
 +                () -> third.admit(mismatched.toJSONString(JSONWriter.Feature.WriteNulls), null));
 +        assertTrue(conflict.getMessage().contains("selected decoder contradicts"));
++
++        JSONObject wrongModel = JSON.parseObject(records.get(1));
++        wrongModel.getJSONObject("request").getJSONObject("decode_policy").put("model", "another-model");
++        RecordAdmission fourth = new RecordAdmission();
++        fourth.admit(records.get(0), null);
++        RecordContractException modelConflict = assertThrows(RecordContractException.class,
++                () -> fourth.admit(wrongModel.toJSONString(JSONWriter.Feature.WriteNulls), null));
++        assertTrue(modelConflict.getMessage().contains("selected decoder contradicts the dispatched model"));
 +    }
 +
 +    private static JSONObject toolResult(JSONObject header, String identity, String scope) {
@@ -406900,7 +407019,7 @@ diff --git a/packages/cli/src/services/insight/generators/DataProcessor.ts b/pac
 diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/packages/core/src/core/openaiContentGenerator/responseDecoder.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/responseDecoder.ts
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,240 @@
 +/** One response-scoped conversion path for streamed provider values. */
 +import { GenerateContentResponse } from '@google/genai';
 +import type OpenAI from 'openai';
@@ -406969,6 +407088,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/
 +export function selectOpenAIResponseDecodePolicy(
 +  context: RequestContext,
 +  mode: OpenAIResponseDecodePolicy['mode'],
++  model: string,
 +): OpenAIResponseDecodePolicy {
 +  const options = context.responseParsingOptions;
 +  if (
@@ -406982,7 +407102,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/
 +    );
 +  return requireOpenAIResponseDecodePolicy({
 +    mode,
-+    model: context.model,
++    model,
 +    strict_tool_calling: context.strictToolCalling === true,
 +    named_tool_choice: context.namedToolChoice ?? null,
 +    exact_token_counting: context.exactTokenCounting === true,
@@ -407143,7 +407263,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.ts b/
 diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.ts b/packages/core/src/core/openaiContentGenerator/responseDecoder.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/responseDecoder.test.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,111 @@
 +import { describe, expect, it } from 'vitest';
 +import type OpenAI from 'openai';
 +import {
@@ -407183,6 +407303,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 +      const selected = selectOpenAIResponseDecodePolicy(
 +        selectedContext(taggedThinkingTags),
 +        'nonstream',
++        'test-model',
 +      );
 +      const retained = JSON.parse(JSON.stringify(selected));
 +      return decodeOpenAIResponse(
@@ -407203,6 +407324,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 +    const selected = selectOpenAIResponseDecodePolicy(
 +      selectedContext(true),
 +      'stream',
++      'test-model',
 +    );
 +    const first = createOpenAIResponseDecodeContext(selected, 1);
 +    const second = createOpenAIResponseDecodeContext(selected, 1);
@@ -407224,6 +407346,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 +          },
 +        } as RequestContext,
 +        'stream',
++        'test-model',
 +      ),
 +    ).toThrow('retry with a matching client');
 +    expect(() =>
@@ -407235,8 +407358,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 +          },
 +        },
 +        'stream',
++        'test-model',
 +      ),
 +    ).toThrow('Unknown OpenAI response parsing option');
++  });
++
++  it('selects the dispatched model after provider request enhancement', () => {
++    const selected = selectOpenAIResponseDecodePolicy(
++      selectedContext(false),
++      'stream',
++      'provider-selected-model',
++    );
++    expect(selected.model).toBe('provider-selected-model');
++    expect(createOpenAIResponseDecodeContext(selected, 1).model).toBe(
++      'provider-selected-model',
++    );
 +  });
 +});
 diff --git a/packages/sdk-java/qwencode/src/main/resources/stream-contract-v10.json b/packages/sdk-java/qwencode/src/main/resources/stream-contract-v10.json

@@ -8284,6 +8284,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "typeof parsed['stream'] !== 'boolean'",
         "body.stream !== (evidence.decode_policy.mode === 'stream')",
         "body.stream !== (selectedPolicy.mode === 'stream')",
+        "body.model !== evidence.decode_policy.model",
+        "body.model !== selectedPolicy.model",
     ), label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",
                 "retained > 0 || previous.body.messages.length === 0", label=label)
@@ -8296,6 +8298,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "openaiRequest = await this.buildRequest(",
         "const body = JSON.stringify(openaiRequest)",
         "const decodePolicy = selectOpenAIResponseDecodePolicy(",
+        "openaiRequest.model,",
         "openaiRequest.stream !== (decodePolicy.mode === 'stream')",
         "const decodeContext = createOpenAIResponseDecodeContext(",
         "getChatRecordingService()",
@@ -8770,6 +8773,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
         'hashlib.sha256(raw).hexdigest() == request["body_sha256"]',
         'stream == (request["decode_policy"]["mode"] == "stream")',
+        'model == request["decode_policy"]["model"]',
         'previous.request_id == representation["base_request_id"]',
         'previous.segment_id == request["segment_id"]',
         'previous.segment_id != request["segment_id"]',

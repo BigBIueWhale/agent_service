@@ -71,8 +71,16 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
         encoded = body.encode("utf-8")
         if body != actual or len(encoded) != request["body_bytes"] or hashlib.sha256(encoded).hexdigest() != request["body_sha256"]:
             raise ValueError("replayed request differs from bytes received by provider")
-        if json.loads(body)["kv_scope"] != request["kv_scope"]:
+        parsed = json.loads(body)
+        if parsed["kv_scope"] != request["kv_scope"]:
             raise ValueError("request body and evidence name different invocations")
+        policy = request["decode_policy"]
+        if (policy.get("mode") not in ("stream", "nonstream")
+                or not isinstance(policy.get("model"), str) or not policy["model"].strip()
+                or type(parsed.get("stream")) is not bool
+                or parsed["stream"] != (policy["mode"] == "stream")
+                or parsed.get("model") != policy["model"]):
+            raise ValueError("selected decoder contradicts the dispatched request; inspect the original request and matching client")
         scopes[request["kv_scope"]] = request["request_id"], request["segment_id"], message_bytes(body)
     return requests
 
