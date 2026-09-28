@@ -636,7 +636,12 @@ wrapper passes the request through; it does not admit one. `GeminiChat` then
 reads `attempt.journalId` while freezing the generation, and `ChatAttempt`
 requires at least one attached physical request. By code inspection, those
 provider paths cannot produce a completed, request-owned chat generation in
-the current implementation. This runtime consequence has not been executed.
+the current implementation. A local source execution passed a provider that
+returned an ordinary source-less response through `GenerationContext.bind()`
+and `generateContent()`; the shared utility wrapper refused it with `decoded
+output has no physical request`. This executes the utility boundary with a
+fake provider, not an Anthropic or Gemini SDK call. The chat-path conclusion
+remains a source-reading inference.
 
 The provider transports do not expose one common interception point in the
 installed SDKs. The Anthropic SDK accepts a custom `fetch` function. The
@@ -660,9 +665,10 @@ coverage defect if the patched Qwen package is used outside the sealed service.
 
 This finding also limits the existing physical-output proof plan. A verifier
 for OpenAI SSE is necessary for the vLLM deployment but cannot be described as
-end-to-end proof for Anthropic, Gemini or Vertex. No provider transport was
-called and no build or test was run to establish this section; its claims are
-from the current client and installed SDK source.
+end-to-end proof for Anthropic, Gemini or Vertex. No provider transport, build
+or release gate was run for this section. The source execution above establishes
+the shared utility wrapper's behavior for a source-less result; provider wire
+behavior and the chat-path consequence remain unverified by execution.
 
 ## SSE transport-end admission
 
