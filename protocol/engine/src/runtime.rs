@@ -166,7 +166,9 @@ fn validate_compaction_event(
         Some("token_limit" | "manual")
     ) && !record.get("triggerReason").is_some_and(Value::is_null)
     {
-        return Err(refuse("with an unknown compaction trigger reason"));
+        return Err(refuse(
+            "with an unknown compaction trigger reason; retain the original stream and recapture with a corrected compaction producer",
+        ));
     }
 
     // What one drawn candidate spent. `budget` is the transition's frozen
@@ -310,7 +312,7 @@ fn validate_compaction_event(
             )
         ) {
             return Err(refuse(&format!(
-                "whose {whose} does not name a resampleable rule it failed"
+                "whose {whose} does not name a resampleable rule it failed; retain the original stream and recapture with a corrected compaction producer"
             )));
         }
         candidate(attempt, &whose, budget)?;

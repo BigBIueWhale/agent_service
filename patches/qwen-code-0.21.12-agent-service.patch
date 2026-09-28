@@ -311968,7 +311968,7 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +    typeof succeeded !== 'boolean' ||
 +    (status === 'COMPRESSED') !== succeeded
 +  )
-+    return 'Compaction status contradicts whether history was replaced';
++    return 'Compaction status contradicts whether history was replaced; retain the original stream and recapture with a corrected compaction producer';
 +  const original = data['originalTokenCount'];
 +  const next = data['newTokenCount'];
 +  if (
@@ -311978,13 +311978,13 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +    (succeeded && next === null) ||
 +    (!succeeded && next !== null && next !== original)
 +  )
-+    return 'Compaction token counts contradict the retained history';
++    return 'Compaction token counts contradict the retained history; retain the original stream and recapture with a corrected compaction producer';
 +  if (
 +    data['triggerReason'] !== null &&
 +    data['triggerReason'] !== 'token_limit' &&
 +    data['triggerReason'] !== 'manual'
 +  )
-+    return 'Compaction has an unknown trigger reason';
++    return 'Compaction has an unknown trigger reason; retain the original stream and recapture with a corrected compaction producer';
 +  const rejected = data['rejectedAttempts'];
 +  if (
 +    !Array.isArray(rejected) ||
@@ -311997,7 +311997,7 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +        ),
 +    )
 +  )
-+    return 'Compaction rejected attempt does not name a resampleable rule';
++    return 'Compaction rejected attempt does not name a resampleable rule; retain the original stream and recapture with a corrected compaction producer';
 +  return null;
 +}
 +
