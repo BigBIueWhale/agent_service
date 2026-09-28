@@ -1,7 +1,9 @@
 use super::*;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use runtime_contract::usage::ServedUsage;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::io::Write;
 
 mod compaction;
@@ -35,6 +37,7 @@ fn frames(rows: &[Value]) -> String {
 struct Trace {
     rows: Vec<Value>,
     requests: Vec<(String, Option<Value>)>,
+    last_model_text: BTreeMap<Option<String>, String>,
 }
 
 impl Trace {
@@ -59,6 +62,7 @@ impl Trace {
                 init,
             ],
             requests: Vec::new(),
+            last_model_text: BTreeMap::new(),
         }
     }
 
@@ -77,44 +81,79 @@ impl Trace {
 
     /// A transport prefix without an outcome remains pending, even when its
     /// body is complete. Utility calls have no logical history disposition.
-    fn pending(&mut self, scope: &str) -> String {
+    fn pending(&mut self, scope: &str, usage: Option<&Value>) -> String {
         let sequence = self.requests.len() + 1;
         let id = format!("request-{sequence}");
-        let body = json!({"model":"fixture","kv_scope":scope,"messages":[]}).to_string();
+        let body =
+            json!({"model":"fixture","kv_scope":scope,"stream":false,"messages":[]}).to_string();
+        let wire_usage = usage
+            .filter(|value| {
+                value["promptTokenCount"].as_u64().is_some()
+                    && value["candidatesTokenCount"].as_u64().is_some()
+                    && value["totalTokenCount"].as_u64().is_some()
+                    && value["cachedContentTokenCount"].as_u64().is_some()
+                    && value["thoughtsTokenCount"].as_u64().is_some()
+            })
+            .map(|value| {
+                json!({
+                    "prompt_tokens":value["promptTokenCount"],
+                    "completion_tokens":value["candidatesTokenCount"],
+                    "total_tokens":value["totalTokenCount"],
+                    "prompt_tokens_details":{"cached_tokens":value["cachedContentTokenCount"]},
+                    "completion_tokens_details":{"reasoning_tokens":value["thoughtsTokenCount"]}
+                })
+            });
+        let response_body = json!({
+            "id":"utility-reply","object":"chat.completion","created":1,
+            "model":"fixture","choices":[{"index":0,
+                "message":{"role":"assistant","content":"ok"},
+                "finish_reason":"stop"}],
+            "usage":wire_usage
+        })
+        .to_string();
         self.push(json!({"type":"model_request","request":{
             "journal_id":"fixture","sequence":sequence,"request_id":id,
             "owner":{"kind":"utility"},"kv_scope":scope,
             "segment_id":format!("segment-{sequence}"),"prompt_id":"fixture",
+            "decode_policy":{"mode":"nonstream","model":"fixture",
+                "strict_tool_calling":false,"named_tool_choice":null,
+                "exact_token_counting":false,"tagged_thinking_tags":false},
             "body":{"kind":"full","json":body},"body_bytes":body.len(),"body_sha256":hash(body.as_bytes())}}));
         self.response(
             &id,
             1,
             json!({"kind":"http","status":200,"content_type":"application/json"}),
         );
-        self.response(&id, 2, json!({"kind":"body","offset":0,"base64":"e30="}));
+        self.response(
+            &id,
+            2,
+            json!({"kind":"body","offset":0,"base64":STANDARD.encode(&response_body)}),
+        );
         self.response(
             &id,
             3,
             json!({"kind":"end","termination":"eof",
-            "body_bytes":2,"body_sha256":hash(b"{}"),"error":null}),
+            "body_bytes":response_body.len(),"body_sha256":hash(response_body.as_bytes()),"error":null}),
         );
         self.requests.push((scope.into(), None));
         id
     }
 
     fn utility(&mut self, scope: &str, usage: Value) {
-        let id = self.pending(scope);
+        let id = self.pending(scope, Some(&usage));
         self.response(
             &id,
             4,
-            json!({"kind":"outcome","status":"completed","error":null,"served_usage":usage}),
+            json!({"kind":"outcome","status":"completed","error":null,"served_usage":usage,
+                "sdk_values_seen":1,"pipeline_outputs_delivered":1}),
         );
         self.requests.last_mut().unwrap().1 = Some(usage);
     }
 
-    /// Keep the captured response and raw argument lexemes. Rebind only test
-    /// identities and the normalized call ID, then seal those changed bodies.
-    /// Runtime metadata is authored from the service manifest in Trace::new.
+    /// Rebind the captured request, seed, physical tool ID, generation and
+    /// projection together, then seal their changed byte bodies. The raw tool
+    /// argument lexemes remain captured. Runtime metadata comes from the
+    /// service manifest in Trace::new.
     fn chat(&mut self, parent: Option<&str>, call_id: &str) {
         let captured: Vec<Value> = serde_json::from_str(include_str!(
             "../../protocol/engine/src/fixtures/ordinary-tool-wire.json"
@@ -124,6 +163,8 @@ impl Trace {
         let original_attempt = captured[1]["request"]["owner"]["attempt_id"]
             .as_str()
             .unwrap();
+        let original_request = captured[1]["request"]["request_id"].as_str().unwrap();
+        assert_ne!(call_id, "provider");
         let scope = parent.unwrap_or("a");
         let sequence = self.requests.len() + 1;
         let request_id = format!("request-{sequence}");
@@ -131,6 +172,7 @@ impl Trace {
         let generation_id = format!("generation-{sequence}");
         let origin = json!({"kind":"model","attempt_id":attempt_id,"kv_scope":scope});
         let mut generation_hash = String::new();
+        let mut response_body = None;
         let mut usage = None;
         for source in &captured {
             let mut row = source.clone();
@@ -158,9 +200,37 @@ impl Trace {
                     row["parent_tool_use_id"] = Value::Null;
                     row["response"]["journal_id"] = json!("fixture");
                     row["response"]["request_id"] = json!(request_id);
-                    if row["response"]["event"]["kind"] == "outcome" {
-                        usage = Some(row["response"]["event"]["served_usage"].clone());
+                    let event = &mut row["response"]["event"];
+                    match event["kind"].as_str().unwrap() {
+                        "body" => {
+                            assert!(response_body.is_none());
+                            let raw = String::from_utf8(
+                                STANDARD.decode(event["base64"].as_str().unwrap()).unwrap(),
+                            )
+                            .unwrap();
+                            let provider_id = r#""id":"provider""#;
+                            assert_eq!(raw.matches(provider_id).count(), 1);
+                            let changed =
+                                raw.replace(provider_id, &format!(r#""id":{}"#, json!(call_id)));
+                            response_body = Some((changed.len(), hash(changed.as_bytes())));
+                            event["base64"] = json!(STANDARD.encode(changed.as_bytes()));
+                        }
+                        "end" => {
+                            let (size, digest) = response_body.as_ref().unwrap();
+                            event["body_bytes"] = json!(size);
+                            event["body_sha256"] = json!(digest);
+                        }
+                        "outcome" => {
+                            usage = Some(event["served_usage"].clone());
+                        }
+                        _ => {}
                     }
+                }
+                "model_normalization_seed" => {
+                    let seed = &mut row["normalization_seed"];
+                    seed["journal_id"] = json!("fixture");
+                    seed["origin"] = origin.clone();
+                    seed["request_id"] = json!(request_id);
                 }
                 "model_generation" => {
                     let evidence = &mut row["generation"];
@@ -169,12 +239,30 @@ impl Trace {
                         .unwrap()
                         .replace(original_session, scope)
                         .replace(original_attempt, &attempt_id)
+                        .replace(original_request, &request_id)
                         .replace("provider__qwen_dup_2", call_id)
+                        .replace("\"provider\"", &json!(call_id).to_string())
                         .replace(
                             "\"parent_tool_use_id\":null",
                             &format!("\"parent_tool_use_id\":{}", json!(parent)),
                         );
                     generation_hash = hash(envelope.as_bytes());
+                    let parsed: Value = serde_json::from_str(&envelope).unwrap();
+                    let mut display = String::new();
+                    for observation in parsed["observations"].as_array().unwrap() {
+                        let parts = observation["response"]["candidates"][0]["content"]["parts"]
+                            .as_array()
+                            .unwrap();
+                        for part in parts {
+                            if part["thought"] != true {
+                                if let Some(text) = part["text"].as_str() {
+                                    display.push_str(text);
+                                }
+                            }
+                        }
+                    }
+                    self.last_model_text
+                        .insert(parent.map(str::to_string), display);
                     evidence["journal_id"] = json!("fixture");
                     evidence["generation_id"] = json!(generation_id);
                     evidence["generation_bytes"] = json!(envelope.len());
@@ -182,9 +270,12 @@ impl Trace {
                     evidence["generation_json"] = json!(envelope);
                 }
                 "model_attempt_completion" => {
-                    row["completion"] = json!({"journal_id":"fixture","origin":origin,
-                        "generation_id":generation_id,"generation_sha256":generation_hash,
-                        "request_ids":[request_id],"disposition":"accepted"});
+                    let completion = &mut row["completion"];
+                    completion["journal_id"] = json!("fixture");
+                    completion["origin"] = origin.clone();
+                    completion["generation_id"] = json!(generation_id);
+                    completion["generation_sha256"] = json!(generation_hash);
+                    completion["request_ids"] = json!([request_id]);
                 }
                 "stream_event" => {
                     row["origin"] = origin.clone();
@@ -233,9 +324,14 @@ impl Trace {
     }
 
     fn terminal(&mut self, parent: Option<&str>, turns: u64, error: Option<(&str, &str)>) {
+        let result = self
+            .last_model_text
+            .get(&parent.map(str::to_string))
+            .cloned()
+            .unwrap_or_else(|| "ok".to_string());
         let mut row = json!({"type":"result","parent_tool_use_id":parent,
             "subtype":"success","is_error":false,"duration_ms":2,"duration_api_ms":1,
-            "num_turns":turns,"result":"ok","usage":self.summary(parent),"permission_denials":[]});
+            "num_turns":turns,"result":result,"usage":self.summary(parent),"permission_denials":[]});
         if parent.is_none() {
             row["request_evidence"] = json!({"journal_id":"fixture","first_sequence":1,
                 "request_count":self.requests.len(),"open_response_ids":[],"open_attempt_ids":[]});

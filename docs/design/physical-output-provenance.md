@@ -442,6 +442,17 @@ behavior across every session shape. A broader transcript-reader run failed 89
 cases because its synthetic assistant fixtures omit the required generation
 envelope; those fixtures must use canonical generations before they can serve
 as resume evidence.
+The native result-parse fixture now gives utility requests the required stream
+mode and selected decoder, a complete nonstreaming response body and explicit
+SDK/delivery counts. Its captured Chat branch rebases the normalization seed,
+physical tool-call ID, source request ID, generation, completion and displayed
+tool ID together, then reseals the changed response and generation bytes. The
+terminal result comes from the accepted generation's visible text. A Python
+source reader admitted the intended rebased Chat and utility vectors, and the
+TypeScript physical verifier accepted the rebased Chat bytes and observations.
+These cross-checks exercise the intended vector, not the Rust test helper; no
+native test or build was run, and this fixture repair does not add native
+byte-to-observation admission.
 The native certifier, Python and Java readers, utility consumer receipts,
 standalone child proof remain open. The earlier local rehashed replacement of
 a preparation's normalized ID and its matching call mapping exposed the

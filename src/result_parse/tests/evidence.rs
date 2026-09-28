@@ -190,7 +190,7 @@ fn child_results_preserve_reported_claims_without_terminating_the_root() {
         trace.rows[child]["num_turns"] = json!(turns);
         let result = trace.certify();
         assert!(!result.is_error);
-        assert_eq!(result.response, "ok");
+        assert_eq!(result.response, "before  after");
         assert_eq!(result.num_turns, 1);
         assert_eq!(result.scopes.len(), 1);
         let scope = &result.scopes[0];
@@ -424,7 +424,7 @@ fn no_dispatch_zero_usage_unknown_usage_and_pending_are_distinct() {
         assert_eq!(snapshot.observed.observed_unaccounted_records, 0);
     }
     let mut trace = Trace::new();
-    trace.pending("a");
+    trace.pending("a", None);
     assert_eq!(
         trace.snapshot().observed.observed_usage,
         GenerationUsageSummary {
