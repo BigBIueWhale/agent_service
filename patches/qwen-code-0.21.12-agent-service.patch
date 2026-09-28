@@ -242239,10 +242239,7 @@ diff --git a/packages/core/src/services/session-usage-retention.test.ts b/packag
 diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/core/src/services/session-writer-lease.test.ts
 --- a/packages/core/src/services/session-writer-lease.test.ts
 +++ b/packages/core/src/services/session-writer-lease.test.ts
-@@ -1,12 +1,13 @@
- /**
-  * @license
-  * Copyright 2025 Qwen Team
+@@ -4,6 +4,7 @@
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -242250,13 +242247,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  import { execFileSync, fork, type ChildProcess } from 'node:child_process';
  import { createHash } from 'node:crypto';
  import {
-   appendFileSync,
-   constants as fsConstants,
-   mkdirSync,
-@@ -22,19 +23,33 @@
- import * as path from 'node:path';
- import { fileURLToPath } from 'node:url';
- import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+@@ -25,6 +26,19 @@
  import { Config } from '../config/config.js';
  import { Storage } from '../config/storage.js';
  import {
@@ -242276,7 +242267,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    resetDebugLoggingState,
    setDebugLogSession,
  } from '../utils/debugLogger.js';
- import {
+@@ -32,6 +46,7 @@
    ChatRecordingService,
    type ChatRecord,
  } from './chatRecordingService.js';
@@ -242284,15 +242275,10 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  import { SessionService } from './sessionService.js';
  import {
    getSessionWriterLockPath,
-   SessionTranscriptChangedError,
-   SessionTranscriptIdentityUnavailableError,
-   SessionWriterConflictError,
-@@ -77,6 +92,17 @@
- const restoreLinkFault = vi.hoisted(() => ({
-   linkTo: undefined as string | undefined,
+@@ -79,6 +94,17 @@
    remainingFailures: 0,
-+}));
-+
+ }));
+ 
 +/**
 + * Runs `onConflict` after a link into `linkTo` fails because the path is
 + * taken, and before the failure reaches the caller: the gap in which another
@@ -242302,33 +242288,26 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +  linkTo: undefined as string | undefined,
 +  onConflict: undefined as (() => Promise<void> | void) | undefined,
 +  conflicts: 0,
- }));
- 
++}));
++
  const unlinkFault = vi.hoisted(() => ({
-@@ -88,12 +114,19 @@
- const writeFault = vi.hoisted(() => ({
+   path: undefined as string | undefined,
+   afterUnlink: undefined as (() => Promise<void> | void) | undefined,
+@@ -89,6 +115,13 @@
    contains: undefined as string | undefined,
    onEntered: undefined as (() => void) | undefined,
    wait: undefined as Promise<void> | undefined,
- }));
- 
++}));
++
 +const fileSyncFault = vi.hoisted(() => ({
 +  path: undefined as string | undefined,
 +  entered: undefined as (() => void) | undefined,
 +  wait: undefined as Promise<void> | undefined,
 +  failure: undefined as Error | undefined,
-+}));
-+
- const claimInstallFault = vi.hoisted(() => ({
-   path: undefined as string | undefined,
-   afterInstall: undefined as (() => Promise<void> | void) | undefined,
  }));
  
- const readFileFault = vi.hoisted(() => ({
-@@ -135,12 +168,21 @@
-       }
-       return result;
-     },
+ const claimInstallFault = vi.hoisted(() => ({
+@@ -138,6 +171,15 @@
      open: async (filePath: PathLike, flags: string | number, mode?: Mode) => {
        await fsOpenTestHook.beforeOpen?.(filePath, flags);
        const handle = await actual.open(filePath, flags, mode);
@@ -242344,9 +242323,6 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        const writeFile = handle.writeFile.bind(handle);
        handle.writeFile = async (data, options) => {
          if (
-           writeFault.contains &&
-           Buffer.isBuffer(data) &&
-           data.toString('utf8').includes(writeFault.contains)
 @@ -178,7 +220,18 @@
            code: 'EIO',
          });
@@ -242367,46 +242343,46 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        if (newPath === claimInstallFault.path) {
          await claimInstallFault.afterInstall?.();
        }
-@@ -337,33 +390,252 @@
-   // On Windows PIDs recycle aggressively, so a still-answerable signal 0
-   // almost always means a reused PID, not a leaked child; do not turn that
-   // teardown observation into a test failure.
+@@ -340,27 +393,247 @@
    console.warn(`Process ${pid} remained live after close`);
  }
  
--function record(
 +function baseRecord(
++  uuid: string,
++  parentUuid: string | null,
++  sessionId: string,
++  cwd: string,
++) {
++  return {
++    recordingVersion: CHAT_RECORDING_VERSION,
++    uuid,
++    parentUuid,
++    sessionId,
++    timestamp: '2026-01-01T00:00:00.000Z',
++    cwd,
++    version: 'test',
++  };
++}
++
+ function record(
    uuid: string,
    parentUuid: string | null,
    sessionId: string,
    cwd: string,
 -  type: 'user' | 'assistant',
--  text: string,
--): ChatRecord {
-+) {
+   text: string,
+ ): ChatRecord {
    return {
-+    recordingVersion: CHAT_RECORDING_VERSION,
-     uuid,
-     parentUuid,
-     sessionId,
-     timestamp: '2026-01-01T00:00:00.000Z',
+-    uuid,
+-    parentUuid,
+-    sessionId,
+-    timestamp: '2026-01-01T00:00:00.000Z',
 -    type,
-     cwd,
-     version: 'test',
+-    cwd,
+-    version: 'test',
 -    message: {
 -      role: type === 'user' ? 'user' : 'model',
 -      parts: [{ text }],
-+  };
-+}
-+
-+function record(
-+  uuid: string,
-+  parentUuid: string | null,
-+  sessionId: string,
-+  cwd: string,
-+  text: string,
-+): ChatRecord {
-+  return {
 +    ...baseRecord(uuid, parentUuid, sessionId, cwd),
 +    type: 'user',
 +    message: { role: 'user', parts: [{ text }] },
@@ -242520,6 +242496,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +      body,
 +      decodePolicy,
 +      processing,
++      { status: 200, content_type: 'text/event-stream' },
 +    ).map((observed) => ({
 +      source_request_id: requestId,
 +      ...normalizer.normalizeObservation(structuredClone(observed)),
@@ -242568,13 +242545,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +    type: 'assistant',
 +    historyLength,
 +    generation,
-+  };
+   };
 +  const normalizationSeed: ModelNormalizationSeed = {
 +    journal_id: sessionId,
 +    origin,
 +    request_id: requestId,
 +    history_call_ids: [],
-   };
++  };
 +  const completion: ModelAttemptCompletion = {
 +    journal_id: sessionId,
 +    origin,
@@ -242625,10 +242602,10 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  }
  
  function positionalReadLength(args: unknown): number | undefined {
-   const values = args as readonly unknown[];
-   return typeof values[2] === 'number' ? values[2] : undefined;
- }
-@@ -411,12 +683,19 @@
+@@ -408,12 +681,19 @@
+   transitionFault.throwAfterLink = false;
+   restoreLinkFault.linkTo = undefined;
+   restoreLinkFault.remainingFailures = 0;
 +  linkConflictFault.linkTo = undefined;
 +  linkConflictFault.onConflict = undefined;
 +  linkConflictFault.conflicts = 0;
@@ -242645,19 +242622,14 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    claimInstallFault.path = undefined;
    claimInstallFault.afterInstall = undefined;
    readFileFault.path = undefined;
-   readFileFault.triggerCall = 0;
-   readFileFault.calls = 0;
-   readFileFault.afterRead = undefined;
-@@ -439,48 +718,77 @@
-     const fixture = await createFixture('config-authoritative-session');
-     const firstUser = record(
-       'user-1',
+@@ -442,21 +722,36 @@
        null,
        fixture.options.sessionId,
        fixture.projectRoot,
 -      'user',
        'start',
      );
+-    const previewTail = record(
 +    const initialHistory: ChatRecord = {
 +      ...firstUser,
 +      uuid: 'initial-history',
@@ -242670,7 +242642,6 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +        state: { history: [firstUser.message!], imagePayloads: [] },
 +      },
 +    };
--    const previewTail = record(
 +    const previewTurn = acceptedTurnRecords(
        'tool-tail',
 -      firstUser.uuid,
@@ -242679,9 +242650,10 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.projectRoot,
 -      'assistant',
        'tool result',
+-    );
 +      1,
 +      [{ role: 'user', content: 'start' }],
-     );
++    );
 +    const previewTail = previewTurn.assistant;
      await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
      await fs.writeFile(
@@ -242693,20 +242665,19 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        'utf8',
      );
      const sessionService = new SessionService(fixture.projectRoot, {
-       runtimeBaseDir: fixture.runtimeBaseDir,
-     });
-     const stalePreview = await sessionService.loadSession(
+@@ -466,18 +761,32 @@
        fixture.options.sessionId,
      );
      expect(stalePreview?.lastCompletedUuid).toBe(previewTail.uuid);
+-
+-    const physicalFinal = record(
 +    expect(
 +      buildRuntimeHistoryFromConversation(stalePreview!.conversation).history,
 +    ).toEqual([
 +      firstUser.message,
 +      { role: 'model', parts: [{ text: 'tool result' }] },
 +    ]);
- 
--    const physicalFinal = record(
++
 +    const finalTurn = acceptedTurnRecords(
        'physical-final',
        previewTail.uuid,
@@ -242714,13 +242685,14 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.projectRoot,
 -      'assistant',
        'final answer',
+-    );
 +      2,
 +      [
 +        { role: 'user', content: 'start' },
 +        { role: 'assistant', content: 'tool result' },
 +      ],
 +      previewTurn.request,
-     );
++    );
 +    const physicalFinal = finalTurn.assistant;
      await fs.writeFile(
        fixture.transcriptPath,
@@ -242731,13 +242703,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        'utf8',
      );
      const config = Storage.runWithRuntimeBaseDir(
-       fixture.runtimeBaseDir,
-       fixture.projectRoot,
-       () =>
-@@ -488,15 +796,14 @@
-           sessionId: fixture.options.sessionId,
-           sessionData: stalePreview,
-           cwd: fixture.projectRoot,
+@@ -491,9 +800,8 @@
            targetDir: fixture.projectRoot,
            debugMode: false,
            model: 'test-model',
@@ -242748,13 +242714,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            bareMode: true,
            telemetry: { enabled: false },
            usageStatisticsEnabled: false,
-         }),
-     );
- 
-@@ -508,15 +815,24 @@
-       skipFileCheckpointing: true,
-       lenientToolWarmup: true,
-     });
+@@ -511,9 +819,18 @@
      expect(config.getResumedSessionData()?.lastCompletedUuid).toBe(
        physicalFinal.uuid,
      );
@@ -242774,13 +242734,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      await recorder?.flush();
  
      const written = (await fs.readFile(fixture.transcriptPath, 'utf8'))
-       .trim()
-       .split('\n')
-       .map((line) => JSON.parse(line) as ChatRecord);
-@@ -548,15 +864,14 @@
-           new Config({
-             sessionId: fixture.options.sessionId,
-             cwd: fixture.projectRoot,
+@@ -551,9 +868,8 @@
              targetDir: fixture.projectRoot,
              debugMode: false,
              model: 'test-model',
@@ -242791,13 +242745,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
              bareMode: true,
              telemetry: { enabled: false },
              usageStatisticsEnabled: false,
-           }),
-       );
-     const initialize = (config: Config) =>
-@@ -570,13 +885,13 @@
-       });
- 
-     const first = createConfig();
+@@ -573,7 +889,7 @@
      first.setSessionWriterReclaimPolicy('never');
      first.setSessionWriterTakeoverPolicy('certified');
      await initialize(first);
@@ -242806,13 +242754,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      await first.closeSessionWriter({ handoff: true });
      expect(
        JSON.parse(
-         await fs.readFile(
-           getSessionWriterLockPath(
-             fixture.runtimeBaseDir,
-@@ -600,23 +915,23 @@
-       shutdownTelemetry: false,
-       skipSessionWriter: true,
-     });
+@@ -603,17 +919,17 @@
      await replacement.shutdown({ shutdownTelemetry: false });
    });
  
@@ -242832,13 +242774,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        uuid: 'title-1',
        parentUuid: firstUser.uuid,
        sessionId: fixture.options.sessionId,
-       timestamp: '2026-01-01T00:00:01.000Z',
-       type: 'system',
-       subtype: 'custom_title',
-@@ -625,21 +940,25 @@
-       systemPayload: {
-         customTitle: 'operator-title',
-         titleSource: 'manual',
+@@ -628,6 +944,7 @@
        },
      };
      const rewindRecord: ChatRecord = {
@@ -242846,8 +242782,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        uuid: 'rewind-1',
        parentUuid: firstUser.uuid,
        sessionId: fixture.options.sessionId,
-       timestamp: '2026-01-01T00:00:02.000Z',
-       type: 'system',
+@@ -636,7 +953,10 @@
        subtype: 'rewind',
        cwd: fixture.projectRoot,
        version: 'test',
@@ -242859,13 +242794,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      };
      await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
      await fs.writeFile(
-       fixture.transcriptPath,
-       `${JSON.stringify(firstUser)}\n${JSON.stringify(titleRecord)}\n${JSON.stringify(rewindRecord)}\n`,
-       'utf8',
-@@ -665,15 +984,14 @@
-           sessionId: fixture.options.sessionId,
-           sessionData: preview,
-           cwd: fixture.projectRoot,
+@@ -668,9 +988,8 @@
            targetDir: fixture.projectRoot,
            debugMode: false,
            model: 'test-model',
@@ -242876,13 +242805,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            bareMode: true,
            telemetry: { enabled: false },
            usageStatisticsEnabled: false,
-         }),
-     );
- 
-@@ -684,27 +1002,29 @@
-       skipSkillManager: true,
-       skipFileCheckpointing: true,
-       lenientToolWarmup: true,
+@@ -687,21 +1006,23 @@
      });
      const recorder = config.getChatRecordingService();
      expect(recorder?.getCurrentCustomTitle()).toBe('operator-title');
@@ -242904,22 +242827,17 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 -        customTitle: 'operator-title',
 -        titleSource: 'manual',
 -      },
+-    });
 +      type: 'user',
 +      parentUuid: rewindRecord.uuid,
-     });
++    });
 +    expect(
 +      sessionService.getSessionTitleInfo(fixture.options.sessionId),
 +    ).toEqual({ title: 'operator-title', source: 'manual' });
  
      await config.shutdown({ shutdownTelemetry: false });
    });
- 
-   it('preserves transcript-changed during Config activation cleanup', async () => {
-     const fixture = await createFixture('config-truncated-session');
-@@ -717,15 +1037,14 @@
-         new Config({
-           sessionId: fixture.options.sessionId,
-           cwd: fixture.projectRoot,
+@@ -720,9 +1041,8 @@
            targetDir: fixture.projectRoot,
            debugMode: false,
            model: 'test-model',
@@ -242930,13 +242848,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            bareMode: true,
            telemetry: { enabled: false },
            usageStatisticsEnabled: false,
-         }),
-     );
- 
-@@ -948,33 +1267,39 @@
-     );
-     await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(
-       '{"replacement":true}',
+@@ -951,27 +1271,33 @@
      );
    });
  
@@ -242990,13 +242902,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  
    it('fails closed on a malformed lock', async () => {
      const fixture = await createFixture();
-     const lockPath = getSessionWriterLockPath(
-       fixture.runtimeBaseDir,
-       fixture.options.sessionId,
-@@ -2116,12 +2441,137 @@
-     );
-     await expect(
-       Promise.all([lease.release(), lease.release()]),
+@@ -2119,6 +2445,131 @@
      ).resolves.toEqual([undefined, undefined]);
    });
  
@@ -243128,13 +243034,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    it.runIf(process.platform !== 'win32')(
      'creates the transcript directory with owner-only permissions',
      async () => {
-       const fixture = await createFixture();
-       const lease = await SessionWriterLease.acquire(fixture.options);
- 
-@@ -2230,13 +2680,13 @@
-       state: 'active',
-       hostname: 'retired-foreign-host',
-     });
+@@ -2233,7 +2684,7 @@
    });
  
    it('keeps schema v1 records on the active-owner path', async () => {
@@ -243143,10 +243043,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const first = await SessionWriterLease.acquire(fixture.options);
      const lockPath = getSessionWriterLockPath(
        fixture.runtimeBaseDir,
-       fixture.options.sessionId,
-     );
-     const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
-@@ -2762,11 +3212,128 @@
+@@ -2762,11 +3213,128 @@
          requestChild(child, { type: 'acquire', options }),
        ),
      );
@@ -243276,16 +243173,14 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    });
  
    it('releases a losing takeover claim before its transition starts', async () => {
-@@ -3180,27 +3747,42 @@
-     const fixture = await createFixture(sessionId);
-     const firstUser = record(
-       'user-1',
+@@ -3183,21 +3751,36 @@
        null,
        sessionId,
        fixture.projectRoot,
 -      'user',
        '看下调度的 wiki',
      );
+-    const firstToolTail = record(
 +    const initialHistory: ChatRecord = {
 +      ...firstUser,
 +      uuid: 'initial-history',
@@ -243298,7 +243193,6 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +        state: { history: [firstUser.message!], imagePayloads: [] },
 +      },
 +    };
--    const firstToolTail = record(
 +    const firstTurn = acceptedTurnRecords(
        'tool-tail',
 -      firstUser.uuid,
@@ -243307,9 +243201,10 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.projectRoot,
 -      'assistant',
        'first tool result',
+-    );
 +      1,
 +      [{ role: 'user', content: '看下调度的 wiki' }],
-     );
++    );
 +    const firstToolTail = firstTurn.assistant;
      await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
      await fs.writeFile(
@@ -243321,13 +243216,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      );
  
      const processA = startLeaseProcess();
-     expect(
-       await requestChild(processA, {
-         type: 'acquire',
-@@ -3208,56 +3790,91 @@
-       }),
-     ).toMatchObject({ ok: true });
-     await expect(
+@@ -3211,17 +3794,25 @@
        SessionWriterLease.acquire(fixture.options),
      ).rejects.toBeInstanceOf(SessionWriterConflictError);
  
@@ -243339,16 +243228,17 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.projectRoot,
 -      'assistant',
        '完整调度 Wiki 回答',
+-    );
+-    expect(
+-      await requestChild(processA, { type: 'append', value: finalAnswer }),
+-    ).toMatchObject({ ok: true });
 +      2,
 +      [
 +        { role: 'user', content: '看下调度的 wiki' },
 +        { role: 'assistant', content: 'first tool result' },
 +      ],
 +      firstTurn.request,
-     );
--    expect(
--      await requestChild(processA, { type: 'append', value: finalAnswer }),
--    ).toMatchObject({ ok: true });
++    );
 +    const finalAnswer = finalTurn.assistant;
 +    for (const entry of finalTurn.records) {
 +      expect(
@@ -243358,21 +243248,17 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      expect(await requestChild(processA, { type: 'release' })).toMatchObject({
        ok: true,
      });
- 
-     const processBLease = await SessionWriterLease.acquire(fixture.options);
-     const sessionService = new SessionService(fixture.projectRoot, {
-       runtimeBaseDir: fixture.runtimeBaseDir,
-     });
+@@ -3233,8 +3824,20 @@
      const authoritative = await sessionService.loadSession(sessionId);
      expect(authoritative?.lastCompletedUuid).toBe(finalAnswer.uuid);
-+    expect(
+     expect(
 +      buildRuntimeHistoryFromConversation(authoritative!.conversation).history,
 +    ).toEqual([
 +      firstUser.message,
 +      { role: 'model', parts: [{ text: 'first tool result' }] },
 +      { role: 'model', parts: [{ text: '完整调度 Wiki 回答' }] },
 +    ]);
-     expect(
++    expect(
        authoritative?.conversation.messages.map((message) => message.uuid),
 -    ).toEqual([firstUser.uuid, firstToolTail.uuid, finalAnswer.uuid]);
 +    ).toEqual([
@@ -243384,11 +243270,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  
      const config = {
        getSessionId: () => sessionId,
-       getResumedSessionData: () => authoritative,
-       getProjectRoot: () => fixture.projectRoot,
-       getCliVersion: () => 'test',
-       getFastModel: () => undefined,
-       isInteractive: () => false,
+@@ -3246,7 +3849,7 @@
      } as unknown as Config;
      const recorder = new ChatRecordingService(config);
      recorder.activate(processBLease, authoritative);
@@ -243397,11 +243279,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      await recorder.flush();
      await recorder.close();
  
-     const physicalRecords = (await fs.readFile(fixture.transcriptPath, 'utf8'))
-       .trim()
-       .split('\n')
-       .map((line) => JSON.parse(line) as ChatRecord);
-     expect(physicalRecords.at(-1)?.parentUuid).toBe(finalAnswer.uuid);
+@@ -3258,6 +3861,21 @@
      const reloaded = await sessionService.loadSession(sessionId);
      expect(
        reloaded?.conversation.messages.map((message) => message.uuid),
@@ -345920,7 +345798,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,1109 @@
+@@ -0,0 +1,1157 @@
 +import { createHash } from 'node:crypto';
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -346784,6 +346662,54 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    },
 +  );
 +
++  it.each([
++    [200, 'text/plain', 'plain response', 'completed', 1],
++    [204, 'application/json', '', 'failed', 0],
++  ] as const)(
++    'replays nonstream HTTP %i with its actual SDK value',
++    (status, contentType, body, processing, delivered) => {
++      const replay = new ModelResponseReplay();
++      replay.begin('journal', 'request', { kind: 'utility' }, 'scope', {
++        ...TEST_POLICY,
++        mode: 'nonstream',
++      });
++      let sequence = 0;
++      const observe = (event: ModelResponseEvidence['event']) =>
++        replay.observe({
++          journal_id: 'journal',
++          request_id: 'request',
++          sequence: ++sequence,
++          event,
++        });
++      observe({ kind: 'http', status, content_type: contentType });
++      if (body)
++        observe({
++          kind: 'body',
++          offset: 0,
++          base64: Buffer.from(body).toString('base64'),
++        });
++      observe({
++        kind: 'end',
++        termination: 'eof',
++        body_bytes: Buffer.byteLength(body),
++        body_sha256: createHash('sha256').update(body).digest('hex'),
++        error: null,
++      });
++      const counts = {
++        kind: 'outcome' as const,
++        served_usage: null,
++        sdk_values_seen: 1,
++        pipeline_outputs_delivered: delivered,
++      };
++      observe(
++        processing === 'failed'
++          ? { ...counts, status: 'failed', error: 'No completion object' }
++          : { ...counts, status: 'completed', error: null },
++      );
++      expect(() => replay.finish()).not.toThrow();
++    },
++  );
++
 +  const transports: Array<
 +    [number | undefined, ModelResponseTermination, boolean]
 +  > = [
@@ -347033,7 +346959,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,890 @@
+@@ -0,0 +1,896 @@
 +import { createHash } from 'node:crypto';
 +import type { GenerateContentResponse } from '@google/genai';
 +import { recordGenerationSource } from './model-generation.js';
@@ -347677,6 +347603,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  bodyChunks: Buffer[];
 +  sequence: number;
 +  httpStatus: number | undefined;
++  contentType: string | null;
 +  termination: ModelResponseTermination | undefined;
 +  bytes: number;
 +  digest: ReturnType<typeof createHash> | null;
@@ -347740,6 +347667,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          Buffer.concat(settled.bodyChunks),
 +          settled.policy,
 +          settled.processing!,
++          { status: settled.httpStatus, content_type: settled.contentType },
 +        );
 +        this.settledAwaitingGeneration.delete(previousId!);
 +      }
@@ -347755,6 +347683,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      bodyChunks: [],
 +      sequence: 0,
 +      httpStatus: undefined,
++      contentType: null,
 +      termination: undefined,
 +      bytes: 0,
 +      digest: createHash('sha256'),
@@ -347810,6 +347739,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          Buffer.concat(state.bodyChunks),
 +          state.policy,
 +          event,
++          { status: state.httpStatus, content_type: state.contentType },
 +        );
 +        state.bodyChunks.length = 0;
 +      }
@@ -347838,6 +347768,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      if (state.httpStatus !== undefined || state.sequence !== 0)
 +        failure('repeated or late HTTP headers');
 +      state.httpStatus = event.status;
++      state.contentType = event.content_type;
 +    } else if (event.kind === 'body') {
 +      if (state.httpStatus === undefined || event.offset !== state.bytes)
 +        failure('response body has no headers or a byte gap');
@@ -347898,6 +347829,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      state.processing,
 +      envelope,
 +      seed,
++      { status: state.httpStatus, content_type: state.contentType },
 +    );
 +    state.generationVerified = true;
 +    state.bodyChunks.length = 0;
@@ -347927,7 +347859,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,804 @@
+@@ -0,0 +1,812 @@
 +import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
 +// eslint-disable-next-line import/no-internal-modules
@@ -348223,7 +348155,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +      expect(
 +        JSON.parse(
 +          JSON.stringify(
-+            replayRecordedOpenAIObservations(body, policy, outcome),
++            replayRecordedOpenAIObservations(body, policy, outcome, {
++              status: 200,
++              content_type: streaming
++                ? 'text/event-stream'
++                : 'application/json',
++            }),
 +          ),
 +        ),
 +      ).toEqual(
@@ -348280,7 +348217,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +    expect(
 +      JSON.parse(
 +        JSON.stringify(
-+          replayRecordedOpenAIObservations(raw(f.responses), policy, outcome),
++          replayRecordedOpenAIObservations(raw(f.responses), policy, outcome, {
++            status: 200,
++            content_type: 'text/event-stream',
++          }),
 +        ),
 +      ),
 +    ).toEqual(
@@ -410408,7 +410348,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
-@@ -0,0 +1,229 @@
+@@ -0,0 +1,253 @@
 +import { isDeepStrictEqual } from 'node:util';
 +import type OpenAI from 'openai';
 +import {
@@ -410445,12 +410385,29 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  readonly failure: unknown | null;
 +}
 +
++export interface RecordedOpenAITransport {
++  readonly status: number | undefined;
++  readonly content_type: string | null;
++}
++
 +export function parseRecordedOpenAIValues(
 +  body: Uint8Array,
 +  mode: 'stream' | 'nonstream',
++  transport: RecordedOpenAITransport,
 +): RecordedOpenAIValues {
++  if (
++    transport.status === undefined ||
++    transport.status < 200 ||
++    transport.status >= 300
++  )
++    return { values: [], failure: null };
 +  const text = new TextDecoder().decode(body);
 +  if (mode === 'nonstream') {
++    if (transport.status === 204) return { values: [null], failure: null };
++    const mediaType = transport.content_type?.split(';')[0]?.trim();
++    const isJSON =
++      mediaType?.includes('application/json') || mediaType?.endsWith('+json');
++    if (!isJSON) return { values: [text], failure: null };
 +    try {
 +      return { values: [JSON.parse(text)], failure: null };
 +    } catch (failure) {
@@ -410524,8 +410481,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  body: Uint8Array,
 +  policy: OpenAIResponseDecodePolicy,
 +  outcome: RecordedOutcome,
++  transport: RecordedOpenAITransport,
 +): readonly UnnormalizedGenerationObservation[] {
-+  const parsed = parseRecordedOpenAIValues(body, policy.mode);
++  const parsed = parseRecordedOpenAIValues(body, policy.mode, transport);
 +  if (
 +    outcome.sdk_values_seen > parsed.values.length ||
 +    (outcome.status === 'completed' &&
@@ -410603,8 +410561,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  outcome: RecordedOutcome,
 +  envelope: GenerationEnvelope,
 +  seed: ModelNormalizationSeed,
++  transport: RecordedOpenAITransport,
 +): void {
-+  const replayed = replayRecordedOpenAIObservations(body, policy, outcome);
++  const replayed = replayRecordedOpenAIObservations(
++    body,
++    policy,
++    outcome,
++    transport,
++  );
 +  const normalizer = new GenerationObservationNormalizer(
 +    [],
 +    seed.history_call_ids,
@@ -410641,8 +410605,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,433 @@
 +import { describe, expect, it } from 'vitest';
++import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
 +// eslint-disable-next-line import/no-internal-modules
 +import { Stream } from 'openai/streaming';
@@ -410654,6 +410619,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  replayRecordedOpenAIObservations,
 +  verifyRecordedOpenAIGeneration,
 +} from './recorded-response-replay.js';
++
++const SSE_TRANSPORT = { status: 200, content_type: 'text/event-stream' };
 +
 +async function pinnedSdkValues(body: Uint8Array) {
 +  const stream = Stream.fromSSEResponse<unknown>(
@@ -410689,6 +410656,95 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +}
 +
 +describe('retained OpenAI response parsing', () => {
++  it.each([
++    [200, 'application/json', '{"choices":[]}'],
++    [200, 'application/problem+json', '{"choices":[]}'],
++    [200, 'text/plain', '{"choices":[]}'],
++    [200, null, 'plain response'],
++    [204, 'application/json', null],
++    [200, 'application/json', '{bad json'],
++  ] as const)(
++    'matches the pinned SDK nonstream parser for HTTP %i and %s',
++    async (status, content_type, body) => {
++      const client = new OpenAI({
++        apiKey: 'local-test',
++        baseURL: 'http://localhost',
++        maxRetries: 0,
++        fetch: async () =>
++          new Response(body, {
++            status,
++            headers: content_type ? { 'content-type': content_type } : {},
++          }),
++      });
++      let sdkValue: unknown;
++      let failed = false;
++      try {
++        sdkValue = await client.chat.completions.create({
++          model: 'local-test',
++          stream: false,
++          messages: [{ role: 'user', content: 'local test' }],
++        });
++      } catch {
++        failed = true;
++      }
++      const replay = parseRecordedOpenAIValues(
++        Buffer.from(body ?? ''),
++        'nonstream',
++        { status, content_type },
++      );
++      expect(replay.values).toEqual(failed ? [] : [sdkValue]);
++      expect(replay.failure !== null).toBe(failed);
++    },
++  );
++
++  it('replays non-JSON and no-content outcomes without inventing JSON bytes', () => {
++    const policy = {
++      mode: 'nonstream' as const,
++      model: 'local-test',
++      strict_tool_calling: false,
++      named_tool_choice: null,
++      exact_token_counting: false,
++      tagged_thinking_tags: false,
++    };
++    const completed = {
++      kind: 'outcome' as const,
++      status: 'completed' as const,
++      error: null,
++      served_usage: null,
++      sdk_values_seen: 1,
++      pipeline_outputs_delivered: 1,
++    };
++    expect(
++      replayRecordedOpenAIObservations(
++        Buffer.from('plain response'),
++        policy,
++        completed,
++        { status: 200, content_type: 'text/plain' },
++      ),
++    ).toHaveLength(1);
++    expect(
++      replayRecordedOpenAIObservations(
++        Buffer.alloc(0),
++        policy,
++        {
++          ...completed,
++          status: 'failed',
++          error: 'No completion object',
++          pipeline_outputs_delivered: 0,
++        },
++        { status: 204, content_type: 'application/json' },
++      ),
++    ).toEqual([]);
++    expect(() =>
++      replayRecordedOpenAIObservations(
++        Buffer.from('{"choices":[]}'),
++        policy,
++        { ...completed, status: 'failed', error: 'HTTP failure' },
++        { status: 503, content_type: 'application/json' },
++      ),
++    ).toThrow('impossible byte prefix');
++  });
++
 +  it('does not invent a held terminal diagnostic for an ordinary caller cancellation', () => {
 +    const body = Buffer.from(
 +      `data: ${JSON.stringify({ id: 'reply', object: 'chat.completion.chunk', created: 0, model: 'test', choices: [{ index: 0, delta: { content: 'held' }, finish_reason: 'stop' }] })}\n\n`,
@@ -410712,6 +410768,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +          sdk_values_seen: 1,
 +          pipeline_outputs_delivered: 1,
 +        },
++        SSE_TRANSPORT,
 +      ),
 +    ).toThrow('decoded delivery count');
 +  });
@@ -410723,7 +410780,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +          `data: {"a":1}${newline}${newline}data: {"b":2}${trailer}`,
 +        );
 +        const expected = await pinnedSdkValues(body);
-+        const replay = parseRecordedOpenAIValues(body, 'stream');
++        const replay = parseRecordedOpenAIValues(body, 'stream', SSE_TRANSPORT);
 +        expect(replay.values).toEqual(expected.values);
 +        expect(replay.failure !== null).toBe(expected.failed);
 +      }
@@ -410748,7 +410805,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +    );
 +    const values = [];
 +    for await (const value of sdk) values.push(value);
-+    expect(parseRecordedOpenAIValues(body, 'stream')).toEqual({
++    expect(parseRecordedOpenAIValues(body, 'stream', SSE_TRANSPORT)).toEqual({
 +      values,
 +      failure: null,
 +    });
@@ -410865,6 +410922,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        Buffer.from(fixture.body),
 +        policy,
 +        outcome,
++        SSE_TRANSPORT,
 +      );
 +      const expected =
 +        delivered === 2
@@ -410914,7 +410972,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +    } as import('../model-generation.js').GenerationEnvelope;
 +    const seed = {
 +      journal_id: 'fixture',
-+      origin: { kind: 'model' as const, attempt_id: 'fixture', kv_scope: 'fixture' },
++      origin: {
++        kind: 'model' as const,
++        attempt_id: 'fixture',
++        kv_scope: 'fixture',
++      },
 +      request_id: 'physical',
 +      history_call_ids: [],
 +    };
@@ -410925,6 +410987,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        outcome,
 +        envelope,
 +        seed,
++        SSE_TRANSPORT,
 +      ),
 +    ).not.toThrow();
 +    const forged = structuredClone(envelope);
@@ -410937,6 +411000,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        outcome,
 +        forged,
 +        seed,
++        SSE_TRANSPORT,
 +      ),
 +    ).toThrow('differs from its physical response');
 +    expect(() =>
@@ -410946,6 +411010,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        { ...outcome, sdk_values_seen: 3 },
 +        envelope,
 +        seed,
++        SSE_TRANSPORT,
 +      ),
 +    ).toThrow('first conversion failure');
 +  });
@@ -410969,7 +411034,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  ])('matches the pinned SDK on %j', async (body) => {
 +    const raw = Buffer.from(body);
 +    const expected = await pinnedSdkValues(raw);
-+    const replay = parseRecordedOpenAIValues(raw, 'stream');
++    const replay = parseRecordedOpenAIValues(raw, 'stream', SSE_TRANSPORT);
 +    expect(replay.values).toEqual(expected.values);
 +    expect(replay.failure !== null).toBe(expected.failed);
 +  });
@@ -411328,7 +411393,7 @@ diff --git a/packages/cli/src/utils/output-writer.test.ts b/packages/cli/src/uti
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,106 @@
 +import { describe, expect, it, vi } from 'vitest';
 +// eslint-disable-next-line import/no-internal-modules
 +import { Stream } from 'openai/streaming';
@@ -411371,7 +411436,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +                `${first}${ending}${ending}${second}${trailer}`,
 +              );
 +              const sdk = await sdkValues(body);
-+              const replay = parseRecordedOpenAIValues(body, 'stream');
++              const replay = parseRecordedOpenAIValues(body, 'stream', {
++                status: 200,
++                content_type: 'text/event-stream',
++              });
 +              expect(
 +                { values: replay.values, failed: replay.failure !== null },
 +                `first=${JSON.stringify(first)} second=${JSON.stringify(second)} ending=${JSON.stringify(ending)} trailer=${JSON.stringify(trailer)}`,
@@ -411418,7 +411486,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +              : Buffer.alloc(0);
 +        const bytes = Buffer.concat([prefix, Buffer.from(body)]);
 +        const sdk = await sdkValues(bytes);
-+        const replay = parseRecordedOpenAIValues(bytes, 'stream');
++        const replay = parseRecordedOpenAIValues(bytes, 'stream', {
++          status: 200,
++          content_type: 'text/event-stream',
++        });
 +        expect(
 +          { values: replay.values, failed: replay.failure !== null },
 +          `case=${caseId} bytes=${bytes.toString('hex')}`,

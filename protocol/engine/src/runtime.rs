@@ -1339,6 +1339,7 @@ fn decode_failure(cause: crate::json::DecodeError, line: usize) -> ContractError
 #[cfg(test)]
 mod tests {
     use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
     fn owner() -> RuntimeContract {
         let manifest = format!(
             r#"{{"stream_contract_sha256":"{STREAM_CONTRACT_SHA256}","cwd":"/owned","model":"model","permission_mode":"default","qwen_code_version":"version","tools":["tool"],"agents":[],"slash_commands":[],"mcp_servers":[]}}"#
@@ -1457,8 +1458,7 @@ mod tests {
         let history = rows
             .iter()
             .position(|row| {
-                row["type"] == "model_response"
-                    && row["response"]["event"]["kind"] == "history"
+                row["type"] == "model_response" && row["response"]["event"]["kind"] == "history"
             })
             .unwrap();
         let history = rows.remove(history);
@@ -1560,12 +1560,12 @@ mod tests {
         .to_string()
     }
     fn utility_request(id: &str, sequence: u64) -> String {
-        let body = r#"{"kv_scope":"internal-utility","stream":false,"messages":[]}"#;
+        let body = r#"{"kv_scope":"internal-utility","model":"fixture-model","stream":false,"messages":[]}"#;
         serde_json::json!({
             "type":"model_request", "uuid":format!("request-{id}"), "session_id":"session", "parent_tool_use_id":null,
             "request":{
                 "journal_id":"fixture", "request_id":id, "sequence":sequence,
-                "kv_scope":"internal-utility", "segment_id":"utility-segment", "prompt_id":"utility-prompt",
+                "kv_scope":"internal-utility", "segment_id":format!("utility-segment-{id}"), "prompt_id":"utility-prompt",
                 "owner":{"kind":"utility"}, "body":{"kind":"full","json":body},
                 "decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,
                     "named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},
@@ -1578,23 +1578,36 @@ mod tests {
             r#"{{"type":"model_response","uuid":"response-{id}-{sequence}","session_id":"session","parent_tool_use_id":null,"response":{{"journal_id":"fixture","request_id":"{id}","sequence":{sequence},"event":{event}}}}}"#
         )
     }
-    fn utility_transport(owner: &mut RuntimeContract, id: &str, sequence: u64) {
+    fn utility_transport(owner: &mut RuntimeContract, id: &str, sequence: u64, output: u64) {
         admit(owner, &utility_request(id, sequence)).unwrap();
         admit(
             owner,
-            &response(id, 1, r#"{"kind":"http","status":200,"content_type":null}"#),
+            &response(
+                id,
+                1,
+                r#"{"kind":"http","status":200,"content_type":"application/json"}"#,
+            ),
         )
         .unwrap();
-        let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":0,
-            "body_sha256":crate::generation::sha256(b""),"error":null});
-        admit(owner, &response(id, 2, &end.to_string())).unwrap();
+        let body = serde_json::json!({
+            "id":"utility-reply","object":"chat.completion","created":1,"model":"fixture-model",
+            "choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"stop"}],
+            "usage":{"prompt_tokens":0,"completion_tokens":output,"total_tokens":output,
+                "prompt_tokens_details":{"cached_tokens":0},
+                "completion_tokens_details":{"reasoning_tokens":0}}
+        }).to_string();
+        let chunk = serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(&body)});
+        admit(owner, &response(id, 2, &chunk.to_string())).unwrap();
+        let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":body.len(),
+            "body_sha256":crate::generation::sha256(body.as_bytes()),"error":null});
+        admit(owner, &response(id, 3, &end.to_string())).unwrap();
     }
     fn outcome(id: &str, output: &str) -> String {
         response(
             id,
-            3,
+            4,
             &format!(
-                r#"{{"kind":"outcome","status":"completed","error":null,"sdk_values_seen":0,"pipeline_outputs_delivered":0,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
+                r#"{{"kind":"outcome","status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":1,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
             ),
         )
     }
@@ -1659,7 +1672,7 @@ mod tests {
         assert!(!ready.runtime_initialized);
         ready.commit(&mut token).unwrap();
         assert!(ready.runtime_initialized);
-        utility_transport(&mut ready, "ordinary", 1);
+        utility_transport(&mut ready, "ordinary", 1, 0);
 
         let mut mismatch = owner();
         admit(&mut mismatch, &stream_start()).unwrap();
@@ -1959,7 +1972,7 @@ mod tests {
     fn mathematical_served_counts_preserve_zero_and_exact_large_domains() {
         for token in ["0", "0.0", "0e999999999999999999999999999999999999"] {
             let mut owner = initialized();
-            utility_transport(&mut owner, "served", 1);
+            utility_transport(&mut owner, "served", 1, 0);
             admit(&mut owner, &outcome("served", token)).unwrap();
             assert_eq!(owner.observations.num_turns, None);
             assert_eq!(owner.observations.observed_usage.usage_reports, 1);
@@ -1973,7 +1986,7 @@ mod tests {
             "1e1000001",
         ] {
             let mut owner = initialized();
-            utility_transport(&mut owner, "bad", 1);
+            utility_transport(&mut owner, "bad", 1, 0);
             assert!(
                 admit(&mut owner, &outcome("bad", token)).is_err(),
                 "{token}"
@@ -1987,7 +2000,7 @@ mod tests {
     #[test]
     fn observations_after_refusal_cannot_restore_a_certificate_or_double_bill_identity() {
         let mut owner = initialized();
-        utility_transport(&mut owner, "served", 1);
+        utility_transport(&mut owner, "served", 1, 1);
         let prefix = owner.prefix;
         assert!(admit(&mut owner, "{broken").is_err());
         let raw = outcome("served", "1.0");
@@ -1997,7 +2010,7 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("repeats event uuid"));
-        let repeated = raw.replace("response-served-3", "another-outcome");
+        let repeated = raw.replace("response-served-4", "another-outcome");
         assert!(admit(&mut owner, &repeated).is_err());
         assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 1);
         assert_eq!(owner.observations.observed_unaccounted_records, 3);
@@ -2043,9 +2056,9 @@ mod tests {
     #[test]
     fn overflow_does_not_publish_a_partially_updated_usage_population() {
         let mut owner = initialized();
-        utility_transport(&mut owner, "largest", 1);
+        utility_transport(&mut owner, "largest", 1, SAFE_INTEGER);
         admit(&mut owner, &outcome("largest", &SAFE_INTEGER.to_string())).unwrap();
-        utility_transport(&mut owner, "overflow", 2);
+        utility_transport(&mut owner, "overflow", 2, 1);
         let before = owner.observations.observed_usage;
         assert!(admit(&mut owner, &outcome("overflow", "1")).is_err());
         assert_eq!(owner.observations.observed_usage, before);

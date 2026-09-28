@@ -28,8 +28,8 @@ fn refusal(detail: &str) -> ContractError {
 }
 
 /// Count the values the pinned OpenAI SDK can yield from one physical body.
-/// Streaming state retains only the unfinished SSE event; nonstreaming JSON
-/// has one value and is retained until its transport end.
+/// Streaming state retains only the unfinished SSE event; nonstreaming bodies
+/// have one SDK value when their HTTP status and media type permit decoding.
 enum ResponseValues {
     Stream(SseValues),
     Nonstream(Vec<u8>),
@@ -51,13 +51,36 @@ impl ResponseValues {
         }
     }
 
-    fn require_prefix(&self, seen: u64, completed: bool) -> ContractResult<()> {
-        let (available, failed) = match self {
-            Self::Stream(values) => (values.count, values.failed),
-            Self::Nonstream(body) => {
-                let text = String::from_utf8_lossy(body);
-                let valid = serde_json::from_str::<serde_json::Value>(&text).is_ok();
-                (u64::from(valid), !valid)
+    fn require_prefix(
+        &self,
+        seen: u64,
+        completed: bool,
+        status: Option<u64>,
+        content_type: Option<&str>,
+    ) -> ContractResult<()> {
+        let (available, failed) = if status.is_none_or(|status| !(200..300).contains(&status)) {
+            // The SDK rejects an unsuccessful HTTP response before decoding it.
+            (0, false)
+        } else {
+            match self {
+                Self::Stream(values) => (values.count, values.failed),
+                Self::Nonstream(_) if status == Some(204) => (1, false),
+                Self::Nonstream(body) => {
+                    let media_type = content_type
+                        .and_then(|value| value.split(';').next())
+                        .map(str::trim);
+                    let is_json = media_type.is_some_and(|value| {
+                        value.contains("application/json") || value.ends_with("+json")
+                    });
+                    if is_json {
+                        let text = String::from_utf8_lossy(body);
+                        let valid = serde_json::from_str::<serde_json::Value>(&text).is_ok();
+                        (u64::from(valid), !valid)
+                    } else {
+                        // The SDK returns even an empty text body as one value.
+                        (1, false)
+                    }
+                }
             }
         };
         if seen > available || (completed && (failed || seen != available)) {
@@ -247,6 +270,7 @@ struct ResponseState {
     processing: Option<bool>,
     sequence: u64,
     http_status: Option<u64>,
+    content_type: Option<String>,
     termination: Option<String>,
     bytes: u64,
     digest: Option<Sha256>,
@@ -551,6 +575,12 @@ impl ModelRequests {
                     "HTTP response status",
                     SAFE_INTEGER,
                 )?);
+                let media_type = field(event, "content_type", line)?;
+                state.content_type = if media_type.is_null() {
+                    None
+                } else {
+                    Some(text(event, "content_type", line)?.to_string())
+                };
             }
             "body" => {
                 if state.http_status.is_none()
@@ -637,7 +667,12 @@ impl ModelRequests {
                 self.response_values
                     .get(id)
                     .ok_or_else(|| refusal("response has no physical value reader"))?
-                    .require_prefix(sdk_values_seen, completed)?;
+                    .require_prefix(
+                        sdk_values_seen,
+                        completed,
+                        state.http_status,
+                        state.content_type.as_deref(),
+                    )?;
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
                     usage: if usage.is_null() {
@@ -1056,23 +1091,58 @@ mod tests {
         ] {
             stream.push(chunk);
         }
-        stream.require_prefix(2, true).unwrap();
-        assert!(stream.require_prefix(3, false).is_err());
+        stream
+            .require_prefix(2, true, Some(200), Some("text/event-stream"))
+            .unwrap();
+        assert!(stream
+            .require_prefix(3, false, Some(200), Some("text/event-stream"))
+            .is_err());
         stream.push(b"data: [DONE]\n\ndata: {\"id\":3}\n\n");
-        stream.require_prefix(2, true).unwrap();
+        stream
+            .require_prefix(2, true, Some(200), Some("text/event-stream"))
+            .unwrap();
 
         let mut stopped = ResponseValues::new(true);
         stopped.push(b"data: {\"id\":1}\n\ndata: {\"error\":{\"message\":\"stop\"}}\n\n");
-        stopped.require_prefix(1, false).unwrap();
-        assert!(stopped.require_prefix(1, true).is_err());
-        assert!(stopped.require_prefix(2, false).is_err());
+        stopped
+            .require_prefix(1, false, Some(200), Some("text/event-stream"))
+            .unwrap();
+        assert!(stopped
+            .require_prefix(1, true, Some(200), Some("text/event-stream"))
+            .is_err());
+        assert!(stopped
+            .require_prefix(2, false, Some(200), Some("text/event-stream"))
+            .is_err());
 
         let mut nonstream = ResponseValues::new(false);
         nonstream.push(b"{");
         nonstream.push(b"}");
-        nonstream.require_prefix(1, true).unwrap();
-        assert!(nonstream.require_prefix(0, true).is_err());
-        assert!(nonstream.require_prefix(2, false).is_err());
+        nonstream
+            .require_prefix(1, true, Some(200), Some("application/json"))
+            .unwrap();
+        assert!(nonstream
+            .require_prefix(0, true, Some(200), Some("application/json"))
+            .is_err());
+        assert!(nonstream
+            .require_prefix(2, false, Some(200), Some("application/json"))
+            .is_err());
+        assert!(nonstream
+            .require_prefix(1, false, Some(503), Some("application/json"))
+            .is_err());
+
+        let mut plain = ResponseValues::new(false);
+        plain.push(b"{not JSON}");
+        plain
+            .require_prefix(1, true, Some(200), Some("text/plain"))
+            .unwrap();
+        assert!(plain
+            .require_prefix(1, true, Some(200), Some("application/json"))
+            .is_err());
+        let empty = ResponseValues::new(false);
+        empty
+            .require_prefix(1, false, Some(204), Some("application/json"))
+            .unwrap();
+        assert!(empty.require_prefix(1, false, None, None).is_err());
     }
     #[test]
     fn selected_decoder_mode_must_match_the_request_body() {
@@ -1302,7 +1372,7 @@ mod tests {
                 }));
                 events.push(json!({
                     "kind": "outcome", "served_usage": null, "status": status,
-                    "sdk_values_seen": 0, "pipeline_outputs_delivered": 0,
+                    "sdk_values_seen": if status == "completed" { 1 } else { 0 }, "pipeline_outputs_delivered": 0,
                     "error": if status == "failed" { json!("processing failed") } else { json!(null) }
                 }));
                 for (index, event) in events.iter().enumerate() {
@@ -1355,7 +1425,7 @@ mod tests {
                     state.commit_response(plan);
                 }
                 let mut event = json!({"kind":"outcome","status":status,
-                    "sdk_values_seen":0,"pipeline_outputs_delivered":0,
+                    "sdk_values_seen":if status == "completed" { 1 } else { 0 },"pipeline_outputs_delivered":0,
                     "error":if status == "failed" {json!("processing failed")} else {json!(null)},
                     "served_usage":{"promptTokenCount":5,"candidatesTokenCount":3,"totalTokenCount":8,
                         "cachedContentTokenCount":1,"thoughtsTokenCount":2}});

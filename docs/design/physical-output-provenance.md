@@ -11,8 +11,16 @@ response: complete outcomes must claim the exact count, and failed or
 cancelled outcomes cannot claim a value beyond the available prefix. This
 narrows impossible processing claims but does not prove that a particular
 decoded observation, tool argument or usage report came from those values.
-The native count check and its Rust tests have been reviewed as source only;
-they are unverified pending the owner's build and test gates.
+The selected HTTP status and content type also determine that count. The
+pinned OpenAI SDK rejects a non-2xx response before parsing, returns `null`
+for nonstreaming HTTP 204, parses JSON only for its JSON media types, and
+otherwise returns response text as one value, even when empty. A local probe
+executed that installed SDK against JSON, text, absent media type, 204 and
+malformed-JSON responses. The TypeScript replay owner and native count source
+now use those transport facts. Focused TypeScript parser, pipeline, response
+replay and writer-lease source tests passed; the native Rust tests were authored
+but not run. Neither source tests nor code reading prove a deployed provider or
+native execution; those remain unverified pending the owner's gates.
 
 Generation-envelope counters also require exact numeric interpretation. A
 rehashed envelope could spell an observed count as
@@ -87,7 +95,8 @@ the Python and native response owners still discard the body after checking
 its byte count and SHA-256. The OpenAI SDK's SSE
 reader parses `data:` frames into JSON values, ignores `[DONE]`, and can stop
 before consuming a remaining body after a parser or caller failure. The
-nonstreaming path parses one JSON completion. A response digest proves the
+nonstreaming path follows the HTTP status and media type to return one parsed
+JSON, text or no-content value. A response digest proves the
 retained body, not which of its events reached the converter.
 
 The converter is stateful. It can suppress cumulative content and reasoning

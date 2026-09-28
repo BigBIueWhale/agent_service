@@ -8389,6 +8389,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "observeSdkValue(): void", "observePipelineOutput(response: GenerateContentResponse): void",
         "recordGenerationSource(response, this.requestId)",
         "requireServedUsage(event['served_usage'], 'recorded response usage')",
+        "state.contentType = event.content_type",
+        "content_type: state.contentType",
     ), label=label)
     pipeline_usage = _source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label)
     _require_ordered(pipeline_usage.split("const openaiResponse =", 1)[1], (
@@ -8421,7 +8423,11 @@ def _validate_served_accounting_after(state: State) -> None:
                  label=label)
     recorded_replay = core + "core/openaiContentGenerator/recorded-response-replay.ts"
     _require_all(state, recorded_replay, (
+        "export interface RecordedOpenAITransport",
         "export function parseRecordedOpenAIValues(",
+        "transport.status === 204",
+        "mediaType?.includes('application/json')",
+        "parseRecordedOpenAIValues(body, policy.mode, transport)",
         "export function replayRecordedOpenAIObservations(",
         "export function verifyRecordedOpenAIGeneration(",
         "createOpenAIResponseDecodeContext(policy, 0)",
@@ -8436,6 +8442,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "SDK value count passes the first conversion failure",
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.test.ts", (
+        "matches the pinned SDK nonstream parser for HTTP",
+        "replays non-JSON and no-content outcomes without inventing JSON bytes",
         "matches the pinned SDK across line endings and incomplete trailing frames",
         "admits a physical fixture and refuses a rehashed text replacement",
         "replays the malformed-tool diagnostic prefix",
@@ -8443,7 +8451,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.differential.test.ts", (
         "Stream.fromSSEResponse<unknown>(",
-        "parseRecordedOpenAIValues(bytes, 'stream')",
+        "parseRecordedOpenAIValues(bytes, 'stream', {",
         "compares complete and trailing frames under varied line boundaries",
         "compares mixed line endings and binary prefixes",
     ), label=label)
