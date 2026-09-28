@@ -293,6 +293,18 @@ replay the selected decoder from retained bytes and compare the raw response,
 incomplete calls and provider preparation identities. The recorded normalized
 call IDs remain checked for internal consistency, but are not independently
 recomputed from the conversation history at this admission boundary.
+Source inspection narrows the required seed boundary. `processStreamResponse`
+constructs `GenerationObservationNormalizer(this.history)` before consuming
+the response stream, whereas the canonical generation record is committed
+after consumption. `GeminiChat.addHistory` can append a versioned history splice
+while a response is in flight. A reader using the history at the later
+generation record could therefore derive a different duplicate suffix and
+refuse an ordinary valid session. The dispatched OpenAI request is also not a
+substitute: request curation and orphan cleanup can omit IDs still present in
+Chat history. The repair must retain the seed actually given to the normalizer
+at its own boundary and let admitting readers derive the mapping from it;
+canonical history and stdout-only evidence need a defined way to account for
+that seed. This is a source-derived constraint, not an executed race test.
 An executed source test decoded identical provider content with tagged-thinking
 parsing off and on and obtained the two corresponding part sequences after a
 policy JSON round trip. The earlier converter, pipeline and policy source suites
