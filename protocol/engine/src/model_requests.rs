@@ -180,11 +180,12 @@ impl ModelRequests {
                 if self.attempts.get(id).is_some_and(|attempt| {
                     attempt.scope != scope
                         || attempt.generation.is_some()
+                        || attempt.seed.is_some()
                         || attempt.completed
                         || attempt.settled.values().any(|accepted| *accepted)
                 }) {
                     return Err(refusal(
-                        "chat attempt changes scope or issues a request after acceptance",
+                        "chat attempt changes scope or issues a request after normalization or acceptance",
                     ));
                 }
                 Some(id.to_string())
@@ -914,6 +915,42 @@ mod tests {
             Err(ContractError::InvalidRecord(message))
                 if message.contains("selected decoder contradicts the dispatched model")
         ));
+    }
+    #[test]
+    fn chat_request_cannot_follow_its_normalization_seed() {
+        let rows: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+        let mut state = ModelRequests::default();
+        let start = Document::decode(rows[0].to_string().as_bytes(), LIMITS).unwrap();
+        let origin = state
+            .plan_origin(
+                field(start.root(), "request_evidence_origin", 1).unwrap(),
+                1,
+            )
+            .unwrap();
+        state.commit_origin(origin);
+        let request = rows.iter().find(|row| row["type"] == "model_request").unwrap();
+        let document = Document::decode(request.to_string().as_bytes(), LIMITS).unwrap();
+        let admission = state.plan(document.root(), 1, LIMITS).unwrap();
+        state.commit(admission);
+        let seed = rows
+            .iter()
+            .find(|row| row["type"] == "model_normalization_seed")
+            .unwrap();
+        let document = Document::decode(seed.to_string().as_bytes(), LIMITS).unwrap();
+        let admission = state.plan_seed(document.root(), 1).unwrap();
+        state.commit_seed(admission);
+
+        let mut later = request.clone();
+        later["request"]["sequence"] = json!(2);
+        later["request"]["request_id"] = json!("retry-after-seed");
+        later["request"]["segment_id"] = json!("new-segment");
+        let document = Document::decode(later.to_string().as_bytes(), LIMITS).unwrap();
+        let refusal = match state.plan(document.root(), 1, LIMITS) {
+            Ok(_) => panic!("chat request followed its normalization seed"),
+            Err(error) => error,
+        };
+        assert!(refusal.to_string().contains("after normalization"));
     }
     #[test]
     fn full_body_requires_a_new_segment_for_its_scope() {
