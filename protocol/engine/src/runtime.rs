@@ -1452,6 +1452,30 @@ mod tests {
         }
     }
     #[test]
+    fn accepted_history_requires_published_generation() {
+        let mut rows = fixture();
+        let history = rows
+            .iter()
+            .position(|row| {
+                row["type"] == "model_response"
+                    && row["response"]["event"]["kind"] == "history"
+            })
+            .unwrap();
+        let history = rows.remove(history);
+        let generation = rows
+            .iter()
+            .position(|row| row["type"] == "model_generation")
+            .unwrap();
+        rows.insert(generation, history);
+        let mut reader = owner();
+        let refusal = rows
+            .iter()
+            .find_map(|row| admit(&mut reader, &row.to_string()).err())
+            .expect("early accepted history must be refused")
+            .to_string();
+        assert!(refusal.contains("acceptance precedes generation"));
+    }
+    #[test]
     fn structured_result_requires_the_returned_accepted_tool_arguments() {
         let mut owner = issued_owner();
         let issued = owner.tool_uses.get_mut("provider__qwen_dup_2").unwrap();

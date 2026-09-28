@@ -224,6 +224,20 @@ deployed provider were not exercised by it.
 
 ## Consumer closure follows response processing
 
+History settlement has two valid publication paths. Failed Chat response
+cleanup records `abandoned` immediately after its processing outcome, so that
+decision can precede the attempt's generation. `accepted` is written by
+`ModelResponseRecorder.finishHistory`, which `ChatAttempt.finish` calls after
+attempting generation publication. A failed publication can leave an incomplete
+fragment; a complete accepted attempt has its generation first. The native,
+TypeScript, Python and Java admission paths now refuse
+accepted history before that generation without refusing early abandonment.
+Authored accepted fixtures were moved into this producer order. A Python source
+probe admitted all 24 fixture sets and refused 23 reorderings that put an
+accepted history row before its generation; the native, TypeScript and Java
+tests were authored but not executed here. This ordering check does not prove
+the generation observations came from the physical response bytes.
+
 Source inspection establishes another constraint on where that boundary can be
 recorded. `ContentGenerationPipeline.executeWithErrorHandling` calls
 `responseEvidence.finish({ status: 'completed', error: null })` before it returns

@@ -352178,7 +352178,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,742 @@
+@@ -0,0 +1,746 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -352567,6 +352567,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            attempt = self.attempts[state.attempt_id]
 +            _require(
 +                not attempt.completed, "history decision follows logical completion"
++            )
++            _require(
++                event["disposition"] != "accepted" or attempt.generation is not None,
++                "accepted history decision precedes generation",
 +            )
 +            attempt.settled[record["request_id"]] = event["disposition"]
 +            if event["disposition"] == "accepted":
@@ -353733,21 +353737,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
-+        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -353774,6 +353763,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"406a8ae3-8ac4-4886-9950-8d7960adc163\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "6f9b8f0bbefd182921cd14f4d49a9450f9d151b2845d2c591bba631c2dba8933"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -353952,21 +353956,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -353993,6 +353982,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"98d9b2f1-4acf-421a-b3c1-038b50f1346e\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "68ccc7be98c050bb58af0ff2b10d1b6d9d25b3e54506a1668b2f15185d6e19e1"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -354130,21 +354134,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -354171,6 +354160,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"21dbad0d-e043-4c01-81fd-d02672dc6690\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "2e2d15903ecac4cb3321b9714992ed5dd9099c7689b9be488e784d7579f3d841"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -354349,21 +354353,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
-+        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "stream_event",
 +      "uuid": "fixture",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -354462,6 +354451,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"5da22840-e4b8-4657-a661-81f7c19332ff\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "880800088abd42b9eb5e33c4599231bfe3879a57779073afb25ff6ab761ae833"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -354654,21 +354658,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
-+        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "uuid": "fixture",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": "child-call",
@@ -354781,6 +354770,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":\"child-call\"},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"child-call\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"c581b4d6-986f-482e-b31a-fd994f98e54b\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 852,
 +        "generation_sha256": "6fefaa5a7caba4fb2fa1710f34ca79b67329ff21809c974810307e8a5ed21c7d"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -354959,21 +354963,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
-+        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -355000,6 +354989,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"c1aebba5-fcd3-4593-8a31-139443b5f748\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "c0e55abfd1a5dff747d37c9361a24ac94f50924e9d0d4d5723339f7ff3067378"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -355137,21 +355141,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
-+        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -355178,6 +355167,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"a9bdd730-f145-4d09-b83b-d1432692a2ed\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "9434dca0d83f861e9fb01e9a01c5c9ec3b675c2ab1b5b3c1e85c846372000fb2"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -355978,21 +355982,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -356019,6 +356008,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"98d9b2f1-4acf-421a-b3c1-038b50f1346e\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "68ccc7be98c050bb58af0ff2b10d1b6d9d25b3e54506a1668b2f15185d6e19e1"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -356189,21 +356193,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -356230,6 +356219,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"21dbad0d-e043-4c01-81fd-d02672dc6690\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "2e2d15903ecac4cb3321b9714992ed5dd9099c7689b9be488e784d7579f3d841"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -356439,21 +356443,6 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
-+        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -356480,6 +356469,21 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"406a8ae3-8ac4-4886-9950-8d7960adc163\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "6f9b8f0bbefd182921cd14f4d49a9450f9d151b2845d2c591bba631c2dba8933"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -358433,7 +358437,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,464 @@
+@@ -0,0 +1,466 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -358660,6 +358664,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            Attempt attempt = attempts.get(state.attemptId);
 +            require(!attempt.completed && (!"accepted".equals(event.get("disposition"))
 +                    || !attempt.settled.containsValue("accepted")), "chat attempt accepts multiple responses or is complete");
++            require(!"accepted".equals(event.get("disposition")) || attempt.generation != null,
++                    "accepted chat history precedes generation");
 +            attempt.settled.put(id, (String) event.get("disposition"));
 +            responses.remove(id);
 +            return;
@@ -362947,21 +362953,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
-+        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -362988,6 +362979,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"406a8ae3-8ac4-4886-9950-8d7960adc163\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "6f9b8f0bbefd182921cd14f4d49a9450f9d151b2845d2c591bba631c2dba8933"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -363166,21 +363172,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -363207,6 +363198,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"98d9b2f1-4acf-421a-b3c1-038b50f1346e\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "68ccc7be98c050bb58af0ff2b10d1b6d9d25b3e54506a1668b2f15185d6e19e1"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -363344,21 +363350,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -363385,6 +363376,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"21dbad0d-e043-4c01-81fd-d02672dc6690\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "2e2d15903ecac4cb3321b9714992ed5dd9099c7689b9be488e784d7579f3d841"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -363563,21 +363569,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
-+        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "stream_event",
 +      "uuid": "fixture",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -363676,6 +363667,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"5da22840-e4b8-4657-a661-81f7c19332ff\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "880800088abd42b9eb5e33c4599231bfe3879a57779073afb25ff6ab761ae833"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -363868,21 +363874,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
-+        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "uuid": "fixture",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": "child-call",
@@ -363995,6 +363986,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":\"child-call\"},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"child-call\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"c581b4d6-986f-482e-b31a-fd994f98e54b\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 852,
 +        "generation_sha256": "6fefaa5a7caba4fb2fa1710f34ca79b67329ff21809c974810307e8a5ed21c7d"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -364173,21 +364179,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
-+        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -364214,6 +364205,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"c1aebba5-fcd3-4593-8a31-139443b5f748\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "c0e55abfd1a5dff747d37c9361a24ac94f50924e9d0d4d5723339f7ff3067378"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -364351,21 +364357,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
-+        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -364392,6 +364383,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"a9bdd730-f145-4d09-b83b-d1432692a2ed\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "9434dca0d83f861e9fb01e9a01c5c9ec3b675c2ab1b5b3c1e85c846372000fb2"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -365192,21 +365198,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -365233,6 +365224,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"98d9b2f1-4acf-421a-b3c1-038b50f1346e\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "68ccc7be98c050bb58af0ff2b10d1b6d9d25b3e54506a1668b2f15185d6e19e1"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -365403,21 +365409,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -365444,6 +365435,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"21dbad0d-e043-4c01-81fd-d02672dc6690\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "2e2d15903ecac4cb3321b9714992ed5dd9099c7689b9be488e784d7579f3d841"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -365653,21 +365659,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
-+        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -365694,6 +365685,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"406a8ae3-8ac4-4886-9950-8d7960adc163\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "6f9b8f0bbefd182921cd14f4d49a9450f9d151b2845d2c591bba631c2dba8933"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -366561,21 +366567,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
-+        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -366602,6 +366593,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"406a8ae3-8ac4-4886-9950-8d7960adc163\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "6f9b8f0bbefd182921cd14f4d49a9450f9d151b2845d2c591bba631c2dba8933"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -366780,21 +366786,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -366821,6 +366812,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"98d9b2f1-4acf-421a-b3c1-038b50f1346e\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "68ccc7be98c050bb58af0ff2b10d1b6d9d25b3e54506a1668b2f15185d6e19e1"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -366958,21 +366964,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -366999,6 +366990,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"21dbad0d-e043-4c01-81fd-d02672dc6690\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "2e2d15903ecac4cb3321b9714992ed5dd9099c7689b9be488e784d7579f3d841"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -367177,21 +367183,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
-+        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "stream_event",
 +      "uuid": "fixture",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -367290,6 +367281,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"5da22840-e4b8-4657-a661-81f7c19332ff\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "880800088abd42b9eb5e33c4599231bfe3879a57779073afb25ff6ab761ae833"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
++        "request_id": "5da22840-e4b8-4657-a661-81f7c19332ff",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -367482,21 +367488,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
-+        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "uuid": "fixture",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": "child-call",
@@ -367609,6 +367600,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":\"child-call\"},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"child-call\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"c581b4d6-986f-482e-b31a-fd994f98e54b\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 852,
 +        "generation_sha256": "6fefaa5a7caba4fb2fa1710f34ca79b67329ff21809c974810307e8a5ed21c7d"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
++        "request_id": "c581b4d6-986f-482e-b31a-fd994f98e54b",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -367787,21 +367793,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
-+        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -367828,6 +367819,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"c1aebba5-fcd3-4593-8a31-139443b5f748\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "c0e55abfd1a5dff747d37c9361a24ac94f50924e9d0d4d5723339f7ff3067378"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "c1aebba5-fcd3-4593-8a31-139443b5f748",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -367965,21 +367971,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
-+        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -368006,6 +367997,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"a9bdd730-f145-4d09-b83b-d1432692a2ed\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "9434dca0d83f861e9fb01e9a01c5c9ec3b675c2ab1b5b3c1e85c846372000fb2"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
++        "request_id": "a9bdd730-f145-4d09-b83b-d1432692a2ed",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -368806,21 +368812,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -368847,6 +368838,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"98d9b2f1-4acf-421a-b3c1-038b50f1346e\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "68ccc7be98c050bb58af0ff2b10d1b6d9d25b3e54506a1668b2f15185d6e19e1"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "98d9b2f1-4acf-421a-b3c1-038b50f1346e",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -369017,21 +369023,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
-+        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -369058,6 +369049,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-1\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"21dbad0d-e043-4c01-81fd-d02672dc6690\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-1\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-1\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "2e2d15903ecac4cb3321b9714992ed5dd9099c7689b9be488e784d7579f3d841"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
++        "request_id": "21dbad0d-e043-4c01-81fd-d02672dc6690",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -369267,21 +369273,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      }
 +    },
 +    {
-+      "type": "model_response",
-+      "uuid": "fixture",
-+      "session_id": "123e4567-e89b-12d3-a456-426614174000",
-+      "parent_tool_use_id": null,
-+      "response": {
-+        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
-+        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
-+        "sequence": 5,
-+        "event": {
-+          "kind": "history",
-+          "disposition": "accepted"
-+        }
-+      }
-+    },
-+    {
 +      "type": "model_normalization_seed",
 +      "uuid": "fixture-seed",
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
@@ -369308,6 +369299,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +        "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-0\",\"kv_scope\":\"123e4567-e89b-12d3-a456-426614174000\"},\"model\":\"fixture\",\"observations\":[{\"source_request_id\":\"406a8ae3-8ac4-4886-9950-8d7960adc163\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\" exact שלום 😀\\\\n \"},{\"functionCall\":{\"id\":\"call-attempt-0\",\"name\":\"inspect\",\"args\":{\"k\":\"value\"}}}]},\"finishReason\":\"STOP\"}],\"usageMetadata\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":1,\"normalized_id\":\"call-attempt-0\"}]}],\"usage\":{\"promptTokenCount\":5,\"candidatesTokenCount\":3,\"totalTokenCount\":8,\"cachedContentTokenCount\":1,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +        "generation_bytes": 870,
 +        "generation_sha256": "6f9b8f0bbefd182921cd14f4d49a9450f9d151b2845d2c591bba631c2dba8933"
++      }
++    },
++    {
++      "type": "model_response",
++      "uuid": "fixture",
++      "session_id": "123e4567-e89b-12d3-a456-426614174000",
++      "parent_tool_use_id": null,
++      "response": {
++        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
++        "request_id": "406a8ae3-8ac4-4886-9950-8d7960adc163",
++        "sequence": 5,
++        "event": {
++          "kind": "history",
++          "disposition": "accepted"
++        }
 +      }
 +    },
 +    {
@@ -385431,7 +385437,7 @@ diff --git a/packages/cli/src/serve/server/session-export-generation.test.ts b/p
 diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packages/core/src/core/model-generation-completion.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-completion.test.ts
-@@ -0,0 +1,480 @@
+@@ -0,0 +1,496 @@
 +import { describe, expect, it } from 'vitest';
 +import {
 +  FinishReason,
@@ -385468,6 +385474,22 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 +} from '../test-utils/model-generation-fixture.js';
 +
 +describe('logical generation completion admission', () => {
++  it('refuses accepted history before generation while allowing early abandonment', () => {
++    const accepted = new ModelGenerationReplay();
++    accepted.observeRequest(request('r1'));
++    accepted.observeSeed(normalizationSeed());
++    accepted.observeResponse(processingOutcome('r1'));
++    expect(() => accepted.observeResponse(settledResponse('r1'))).toThrow(
++      'accepted physical history precedes its generation',
++    );
++
++    const abandoned = new ModelGenerationReplay();
++    abandoned.observeRequest(request('r1'));
++    abandoned.observeResponse(processingOutcome('r1', 'failed'));
++    expect(() =>
++      abandoned.observeResponse(settledResponse('r1', 'abandoned')),
++    ).not.toThrow();
++  });
 +  it('retains failed and successful physical retry members in acquisition order', () => {
 +    const { replay, evidence, ids } = preparedReplay(['abandoned', 'accepted']);
 +    expect(
@@ -386486,7 +386508,7 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core/model-generation.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation.ts
-@@ -0,0 +1,1059 @@
+@@ -0,0 +1,1061 @@
 +import {
 +  restoreProviderToolCallId,
 +  collectToolCallIdsFromHistory,
@@ -387402,6 +387424,8 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +      attempt.settled.has(response.request_id)
 +    )
 +      return refuse('repeated, foreign or late physical history disposition');
++    if (response.event.disposition === 'accepted' && !attempt.generation)
++      return refuse('accepted physical history precedes its generation');
 +    attempt.settled.set(response.request_id, response.event.disposition);
 +  }
 +
@@ -392358,7 +392382,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidenceTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidenceTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/GenerationEvidenceTest.java
-@@ -0,0 +1,344 @@
+@@ -0,0 +1,357 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -392487,6 +392511,19 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +                }
 +            }
 +        }
++    }
++
++    @Test
++    void acceptedHistoryRequiresGenerationWhileEarlyAbandonmentRemainsValid() throws Exception {
++        List<JSONObject> rows = records();
++        JSONObject history = rows.stream()
++                .filter(value -> "model_response".equals(value.getString("type")))
++                .filter(value -> "history".equals(value.getJSONObject("response").getJSONObject("event").getString("kind")))
++                .findFirst().orElseThrow();
++        rows.remove(history);
++        rows.add(rows.indexOf(row(rows, "model_generation")), history);
++        assertTrue(refused(rows).getMessage().contains("accepted chat history precedes generation"));
++        admit(records("generation-evidence-v11.json", "root_abandoned"));
 +    }
 +
 +    @Test
@@ -392954,21 +392991,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -392997,6 +393019,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1206,
 +          "generation_sha256": "e505589d92c578af5423a4d50fd8ac57a9473370c3b25ee5182f7ca8a48454d8"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -393326,21 +393363,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -393369,6 +393391,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 780,
 +          "generation_sha256": "84d1cef768ff9d5b931756f9c27cf45c5aa2fe16a861f42b277332c8ff13639c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -393698,21 +393735,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -393741,6 +393763,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":0,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1034,
 +          "generation_sha256": "d438f53881eef0c679cb86cd06cdfef3cbcd2427156043a8fcd71f5e320f242c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -394070,21 +394107,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -394113,6 +394135,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":0,\"normalized_id\":\"provider-call__qwen_dup_2\"},{\"part_index\":1,\"normalized_id\":null}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1190,
 +          "generation_sha256": "53af12f2c82740d4d3b6eed7aded093b598a0f2086aceca0e1e63c26f5f2f0dc"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -394442,21 +394479,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -394485,6 +394507,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":\"child-tool\"},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"child-tool\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1215,
 +          "generation_sha256": "7e8345e40dd13352c7539ddf9f8b45bdca4ddcba88b3d865e007b5ec749d298c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -395020,21 +395057,6 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-1-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-2",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -395063,6 +395085,21 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-2\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1206,
 +          "generation_sha256": "bab49ccde16a741cd916d3a14f33bd802f0c3189deac3ed286da08a5f9492cb1"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-1-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-2",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -397513,21 +397550,6 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -397556,6 +397578,21 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1206,
 +          "generation_sha256": "e505589d92c578af5423a4d50fd8ac57a9473370c3b25ee5182f7ca8a48454d8"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -397885,21 +397922,6 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -397928,6 +397950,21 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 780,
 +          "generation_sha256": "84d1cef768ff9d5b931756f9c27cf45c5aa2fe16a861f42b277332c8ff13639c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -398257,21 +398294,6 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -398300,6 +398322,21 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":0,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1034,
 +          "generation_sha256": "d438f53881eef0c679cb86cd06cdfef3cbcd2427156043a8fcd71f5e320f242c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -398629,21 +398666,6 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -398672,6 +398694,21 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":0,\"normalized_id\":\"provider-call__qwen_dup_2\"},{\"part_index\":1,\"normalized_id\":null}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1190,
 +          "generation_sha256": "53af12f2c82740d4d3b6eed7aded093b598a0f2086aceca0e1e63c26f5f2f0dc"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -399001,21 +399038,6 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -399044,6 +399066,21 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":\"child-tool\"},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"child-tool\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1215,
 +          "generation_sha256": "7e8345e40dd13352c7539ddf9f8b45bdca4ddcba88b3d865e007b5ec749d298c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -399579,21 +399616,6 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-1-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-2",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -399622,6 +399644,21 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-2\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1206,
 +          "generation_sha256": "bab49ccde16a741cd916d3a14f33bd802f0c3189deac3ed286da08a5f9492cb1"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-1-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-2",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -403313,21 +403350,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -403356,6 +403378,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1206,
 +          "generation_sha256": "e505589d92c578af5423a4d50fd8ac57a9473370c3b25ee5182f7ca8a48454d8"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -403685,21 +403722,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -403728,6 +403750,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 780,
 +          "generation_sha256": "84d1cef768ff9d5b931756f9c27cf45c5aa2fe16a861f42b277332c8ff13639c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -404057,21 +404094,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -404100,6 +404122,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":0,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1034,
 +          "generation_sha256": "d438f53881eef0c679cb86cd06cdfef3cbcd2427156043a8fcd71f5e320f242c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -404429,21 +404466,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -404472,6 +404494,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":0,\"normalized_id\":\"provider-call__qwen_dup_2\"},{\"part_index\":1,\"normalized_id\":null}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1190,
 +          "generation_sha256": "53af12f2c82740d4d3b6eed7aded093b598a0f2086aceca0e1e63c26f5f2f0dc"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -404801,21 +404838,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-0-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-1",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -404844,6 +404866,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":\"child-tool\"},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"child-tool\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-1\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1215,
 +          "generation_sha256": "7e8345e40dd13352c7539ddf9f8b45bdca4ddcba88b3d865e007b5ec749d298c"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-0-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-1",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -405379,21 +405416,6 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        }
 +      },
 +      {
-+        "type": "model_response",
-+        "uuid": "model_response-1-4",
-+        "session_id": "session-a",
-+        "parent_tool_use_id": null,
-+        "response": {
-+          "journal_id": "journal-a",
-+          "request_id": "request-2",
-+          "sequence": 5,
-+          "event": {
-+            "kind": "history",
-+            "disposition": "accepted"
-+          }
-+        }
-+      },
-+      {
 +        "type": "model_normalization_seed",
 +        "uuid": "model_generation-0-seed",
 +        "session_id": "session-a",
@@ -405422,6 +405444,21 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +          "generation_json": "{\"output_scope\":{\"kind\":\"conversation\",\"parent_tool_use_id\":null},\"origin\":{\"kind\":\"model\",\"attempt_id\":\"attempt-a\",\"kv_scope\":\"session-a\"},\"model\":\"actual-model-override\",\"observations\":[{\"source_request_id\":\"request-2\",\"response\":{\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"Hello Ω\\n\"},{\"thought\":true,\"text\":\"  **Raw**\\n thought tail\",\"thoughtSignature\":\"sig-a\"},{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"AQID\"}},{\"fileData\":{\"mimeType\":\"application/pdf\",\"fileUri\":\"local-file\"}},{\"functionCall\":{\"id\":\"provider-call\",\"name\":\"audit_probe\",\"args\":{\"one\":1e0,\"escaped\":\"\\u0061\",\"line\":\"\\n\",\"nested\":[null,{\"false\":false,\"safe\":9007199254740991}]}}}]},\"finishReason\":\"STOP\",\"citationMetadata\":{\"citations\":[{\"uri\":\"retained-citation\",\"title\":\"Exact metadata\"}]}}],\"usageMetadata\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2}},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[],\"call_ids\":[{\"part_index\":4,\"normalized_id\":\"provider-call__qwen_dup_2\"}]}],\"usage\":{\"promptTokenCount\":12,\"candidatesTokenCount\":7,\"totalTokenCount\":19,\"cachedContentTokenCount\":4,\"thoughtsTokenCount\":2},\"finish_reason\":\"STOP\"}",
 +          "generation_bytes": 1206,
 +          "generation_sha256": "bab49ccde16a741cd916d3a14f33bd802f0c3189deac3ed286da08a5f9492cb1"
++        }
++      },
++      {
++        "type": "model_response",
++        "uuid": "model_response-1-4",
++        "session_id": "session-a",
++        "parent_tool_use_id": null,
++        "response": {
++          "journal_id": "journal-a",
++          "request_id": "request-2",
++          "sequence": 5,
++          "event": {
++            "kind": "history",
++            "disposition": "accepted"
++          }
 +        }
 +      },
 +      {
@@ -419678,7 +419715,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
-@@ -0,0 +1,761 @@
+@@ -0,0 +1,774 @@
 +from __future__ import annotations
 +
 +import base64
@@ -419896,6 +419933,19 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    wire = records("root_accepted")
 +    wire.remove(item(wire, "model_normalization_seed"))
 +    assert_refused(wire, "normalization seed")
++
++
++def test_accepted_history_requires_generation_but_early_abandonment_is_valid():
++    wire = records("root_accepted")
++    history = next(
++        row for row in wire
++        if row["type"] == "model_response"
++        and row["response"]["event"]["kind"] == "history"
++    )
++    wire.remove(history)
++    wire.insert(wire.index(item(wire, "model_generation")), history)
++    assert_refused(wire, "accepted history decision precedes generation")
++    admit(records("root_abandoned"))
 +
 +
 +@pytest.mark.parametrize(

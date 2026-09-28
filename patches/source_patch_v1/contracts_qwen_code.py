@@ -8556,6 +8556,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "observation.source_request_id !== finalRequest",
         "attempt.outcomes.get(id)?.pipeline_outputs_delivered !== 0",
         "a Chat attempt received decoded output before its final physical request",
+        "accepted physical history precedes its generation",
         "source_request_id: sourceRequestId",
         "the stream ends with an incomplete logical attempt",
     ), label=label)
@@ -8830,6 +8831,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'or consumed == final_outcome["pipeline_outputs_delivered"]',
         'observation["source_request_id"]',
         'a Chat attempt received decoded output before its final physical request',
+        "accepted history decision precedes generation",
         "completed processing has no successful HTTP transport completion",
         "generation has no recorded normalization seed",
         "not self.responses", "not self.group_open and not self.blocks",
@@ -8944,6 +8946,7 @@ def _validate_served_accounting_after(state: State) -> None:
         '(!isAccepted || consumed == finalOutcome.pipelineOutputs)',
         'object(item).get("source_request_id")',
         'a Chat attempt received decoded output before its final physical request',
+        "accepted chat history precedes generation",
         "completed processing has no successful HTTP transport completion",
         "generation has no recorded normalization seed",
     ), label=label)

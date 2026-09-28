@@ -505,11 +505,12 @@ impl ModelRequests {
                 if accepted {
                     if state.processing != Some(true)
                         || self.attempts.get(attempt).is_none_or(|attempt| {
-                            attempt.settled.values().any(|accepted| *accepted)
+                            attempt.generation.is_none()
+                                || attempt.settled.values().any(|accepted| *accepted)
                         })
                     {
                         return Err(refusal(
-                            "chat history acceptance is repeated or has no completed response",
+                            "chat history acceptance precedes generation, repeats acceptance or has no completed response",
                         ));
                     }
                 }
