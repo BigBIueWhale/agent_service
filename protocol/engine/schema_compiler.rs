@@ -979,6 +979,6 @@ mod tests {
         let mut reordered = source;
         reordered["oneOf"].as_array_mut().unwrap().reverse();
         let compiled = compile(&serde_json::to_vec(&reordered).unwrap()).unwrap();
-        assert_eq!(compiled.discriminators["SystemKind"].len(), 14);
+        assert_eq!(compiled.discriminators["SystemKind"].len(), 15);
     }
 }

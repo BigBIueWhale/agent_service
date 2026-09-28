@@ -466,14 +466,20 @@ mod tests {
             .iter()
             .position(|node| node.path == "/oneOf/4/allOf/0")
             .expect("the owned partial-event origin conditional");
-        for event in ["goal_state", "active_goal", "tool_progress", "message_start"] {
+        for event in [
+            "goal_state",
+            "active_goal",
+            "tool_progress",
+            "message_start",
+        ] {
             for parent in [serde_json::Value::Null, serde_json::json!("child")] {
                 for has_origin in [false, true] {
                     let mut value = serde_json::json!({
                         "event": {"type": event}, "parent_tool_use_id": parent,
                     });
                     if has_origin {
-                        value["origin"] = serde_json::json!({"kind":"runtime"});
+                        value["origin"] =
+                            serde_json::json!({"kind":"runtime","operation_id":"local-operation"});
                     }
                     let input = document(&value.to_string());
                     let expected = if event == "message_start" {

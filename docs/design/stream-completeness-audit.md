@@ -25,7 +25,7 @@ source contains no such literal requirement. This distinction and the unrun
 Rust tests are recorded in [the binding note](stream-contract-identity.md).
 
 Source inspection found explicit current cases for all seven native event
-kinds, thirteen system kinds, eight partial kinds, and 21 interactive
+kinds, fifteen system kinds, eight partial kinds, and 21 interactive
 GeminiEventType members, including AttemptStarted. The historical interactive
 omission does not remain in this checkpoint. This is a textual inventory, not
 an exhaustive compiler proof or a claim about unexamined switches.
@@ -91,7 +91,15 @@ was run:
   scope and a chat request after a complete runtime assistant row. Utility
   requests can still precede a local slash-command answer. Native adversarial
   tests are authored but unrun because the owner runs compiler and native gates.
-  An independent receipt for the local runtime operation remains open.
+  The v14 stream requires a `system/runtime_operation` receipt emitted after
+  the local headless operation settles and before its assistant presentation.
+  Its identity, scope, output byte length and SHA-256 must match the full row;
+  all five local completion branches use the same producer helper. The native
+  certifier and TypeScript, Python and Java readers refuse missing, repeated,
+  altered or unfinished receipts by source reading. This accounts for the
+  presentation inside the client's stream; it does not independently prove a
+  slash command's external effect. Python admission tests ran; native and Java
+  execution and owner gates remain unverified.
 - The allegation that an abandoned model partial can become an accepted round
   is contradicted by the current path. `validate_output_origin` checks attempt
   identity and scope, then `PartialStreamState` checks text, thinking and
@@ -860,8 +868,8 @@ the new wire path is unverified. Native and Java refusal tests were authored
 and read but not executed. A fresh pinned archive applied the sealed patch and
 matched all 1,141 final identities; the 13 edited authoring files matched that
 archive byte for byte. No compiler, native/Java test, build, image, release,
-deployment or push was run. Runtime operation identity itself, physical model
-output replay in the native/Python/Java readers, and input-rendering provenance
+deployment or push was run. Physical model output replay in the
+native/Python/Java readers and input-rendering provenance
 remain open. Canonical resume reads its separate runtime chat JSONL; this
 change only tightens stdout admission and does not rewrite or reorder that
 history by source reading. An end-to-end resumed run remains unverified.

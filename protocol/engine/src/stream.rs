@@ -264,7 +264,8 @@ mod tests {
             record["event"]["type"].as_str(),
             Some("tool_progress" | "active_goal" | "goal_state")
         ) {
-            record["origin"] = serde_json::json!({"kind":"runtime"});
+            record["origin"] =
+                serde_json::json!({"kind":"runtime","operation_id":"local-operation"});
         }
         let document = document(&record);
         let decoded = DecodedRecord::decode(
@@ -390,7 +391,7 @@ mod tests {
                     ""
                 };
                 let bytes = format!(
-                    r#"{{"type":"stream_event","origin":{{"kind":"runtime"}},"uuid":"fixture","session_id":"session","parent_tool_use_id":"tool","event":{{"type":"{kind}","index":{spelling}{block}}}}}"#
+                    r#"{{"type":"stream_event","origin":{{"kind":"runtime","operation_id":"local-operation"}},"uuid":"fixture","session_id":"session","parent_tool_use_id":"tool","event":{{"type":"{kind}","index":{spelling}{block}}}}}"#
                 );
                 let document = Document::decode(
                     bytes.as_bytes(),
@@ -441,7 +442,8 @@ mod tests {
                 .unwrap();
         for case in vectors["cases"].as_array().unwrap() {
             let mut owner = PartialStreamState::default();
-            let origin = document(&serde_json::json!({"kind":"runtime"}));
+            let origin =
+                document(&serde_json::json!({"kind":"runtime","operation_id":"local-operation"}));
             owner.observe_origin(origin.root(), 1).unwrap();
             let outcome = case["actions"]
                 .as_array()
@@ -453,10 +455,9 @@ mod tests {
                         action["event"].clone(),
                         case["root"].as_bool().unwrap(),
                     ),
-                    "message_complete" => owner.complete_message(
-                        action["text"].as_str().unwrap_or(""),
-                        1,
-                    ),
+                    "message_complete" => {
+                        owner.complete_message(action["text"].as_str().unwrap_or(""), 1)
+                    }
                     "scope_complete" => owner.finish(1),
                     other => panic!("unknown fixture action {other}"),
                 });

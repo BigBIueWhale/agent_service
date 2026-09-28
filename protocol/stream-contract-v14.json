@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:13",
+  "$id": "urn:agent-service:stream-contract:14",
   "type": "object",
   "required": [
     "type",
@@ -165,6 +165,51 @@
             "agents",
             "slash_commands",
             "mcp_servers"
+          ]
+        },
+        {
+          "properties": {
+            "subtype": {
+              "const": "runtime_operation"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "operation_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "enum": [
+                    "session_recovery",
+                    "compaction",
+                    "goal_control",
+                    "slash_message",
+                    "unsupported"
+                  ]
+                },
+                "output_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "output_bytes": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "operation_id",
+                "kind",
+                "output_sha256",
+                "output_bytes"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "data",
+            "parent_tool_use_id"
           ]
         },
         {
@@ -3026,10 +3071,15 @@
       "properties": {
         "kind": {
           "const": "runtime"
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
-        "kind"
+        "kind",
+        "operation_id"
       ],
       "additionalProperties": false
     },

@@ -8803,7 +8803,9 @@ def _validate_served_accounting_after(state: State) -> None:
                 "readonly summary?: string", label=label)
     _require_all(state, cli + "nonInteractiveCli.ts", (
         "errorMessage: ending.message,",
-        "emitFinalAssistantMessage(adapter, message);",
+        "recordRuntimeOperation(",
+        "emitFinalAssistantMessage(adapter, message, operationId);",
+        "adapter.emitSystemMessage('runtime_operation'",
     ), label=label)
     forbid_text(state, cli + "nonInteractiveCli.ts",
                 "summary: ending.message", label=label)
@@ -8817,6 +8819,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "partial.observeOrigin(origin)", "partial.completeMessage(text)",
         "partial.verifyTerminalResult(", "session.clear();",
         "completion.lastAssistantText = generationParts(",
+        "completion.runtimeOperations.get(scope)?.id",
+        "Runtime assistant text contradicts its local operation receipt",
         "Successful result contradicts accepted model text",
         "Structured result has no successful accepted structured_output submission",
         "Structured result contradicts the accepted tool submission or result text",
@@ -8962,7 +8966,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v13.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v14.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -9143,6 +9147,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "session.requests.finish()", "partial.finish()", "terminal record identity is repeated",
         "session.partials.clear()", "partial.completeMessage(rendered.toString())",
         "partial.verifyTerminalResult(",
+        "session.runtimeOperations.get(scope)",
+        "runtime assistant text contradicts its local operation receipt",
         "session.lastAssistantText = generation.displayText;",
         "successful result contradicts accepted model text",
         "structured result has no successful accepted structured_output submission",
@@ -9180,7 +9186,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation has no recorded normalization seed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v13.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v14.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (

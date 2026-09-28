@@ -453,6 +453,14 @@ struct ScopeState {
     runtime_text: Option<Arc<str>>,
     model_text: Option<Arc<str>>,
     structured_input: Option<Arc<str>>,
+    runtime_operation: Option<RuntimeOperation>,
+    completed_runtime_operation: Option<String>,
+}
+#[derive(Clone)]
+struct RuntimeOperation {
+    id: String,
+    output_sha256: String,
+    output_bytes: u64,
 }
 struct ToolUse {
     name: String,
@@ -473,6 +481,7 @@ struct AdmissionPlan {
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
     returns: BTreeSet<String>,
+    runtime_operation_id: Option<String>,
     prefix: u64,
 }
 struct PendingAdmission {
@@ -505,6 +514,7 @@ pub struct RuntimeContract {
     scope_states: Vec<ScopeState>,
     scope_rows: BTreeMap<String, usize>,
     tool_uses: BTreeMap<String, ToolUse>,
+    runtime_operation_ids: BTreeSet<String>,
     pending: Option<PendingAdmission>,
 }
 impl RuntimeContract {
@@ -527,6 +537,7 @@ impl RuntimeContract {
             scope_states: vec![ScopeState::default()],
             scope_rows: BTreeMap::new(),
             tool_uses: BTreeMap::new(),
+            runtime_operation_ids: BTreeSet::new(),
             pending: None,
         }
     }
@@ -812,6 +823,9 @@ impl RuntimeContract {
                 .expect("planned return names issued tool")
                 .returned = true;
         }
+        if let Some(id) = plan.runtime_operation_id {
+            self.runtime_operation_ids.insert(id);
+        }
         self.prefix = plan.prefix;
         token.sequence = None;
         Ok(())
@@ -882,14 +896,33 @@ impl RuntimeContract {
                 ..ScopeState::default()
             });
         if let Some(origin) = object.get("origin") {
-            if text(origin, "kind", line)? == "runtime"
-                && self
+            if text(origin, "kind", line)? == "runtime" {
+                if self
                     .requests
                     .has_chat_attempt_in_scope(scope.unwrap_or(text(object, "session_id", line)?))
-            {
-                return Err(ContractError::InvalidRecord(format!(
-                    "events.jsonl line {line} claims runtime assistant output after a chat attempt in the same scope; inspect the original generation and its output origin"
-                )));
+                {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} claims runtime assistant output after a chat attempt in the same scope; inspect the original generation and its output origin"
+                    )));
+                }
+                let operation_id = text(origin, "operation_id", line)?;
+                let pending = state
+                    .runtime_operation
+                    .as_ref()
+                    .map(|operation| operation.id.as_str())
+                    == Some(operation_id);
+                let closing = matches!(record.kind(), EventKind::StreamEvent)
+                    && object
+                        .get("event")
+                        .and_then(|event| event.get("type"))
+                        .and_then(Value::as_str)
+                        == Some("message_stop")
+                    && state.completed_runtime_operation.as_deref() == Some(operation_id);
+                if !pending && !closing {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} claims runtime output without its local operation receipt in the same scope; retain the complete original stream"
+                    )));
+                }
             }
             if text(origin, "kind", line)? == "model"
                 && text(origin, "kv_scope", line)?
@@ -919,6 +952,7 @@ impl RuntimeContract {
         let mut completion = None;
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
+        let mut runtime_operation_id = None;
         let mut runtime_initialized = self.runtime_initialized;
         match record.kind() {
             EventKind::ModelRequest => {
@@ -1011,6 +1045,20 @@ impl RuntimeContract {
                     }
                     rendered.push_str(text(block, "text", line)?);
                 }
+                let receipt = state.runtime_operation.take().ok_or_else(|| {
+                    ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} has runtime assistant output without a local operation receipt; retain the complete original stream"
+                    ))
+                })?;
+                if rendered.len() as u64 != receipt.output_bytes
+                    || crate::generation::sha256(rendered.as_bytes()) != receipt.output_sha256
+                {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} changes the output of local operation {:?}; inspect its receipt and assistant bytes",
+                        receipt.id
+                    )));
+                }
+                state.completed_runtime_operation = Some(receipt.id);
                 state.partial.complete_message(&rendered, line)?;
                 state.runtime_text = Some(Arc::from(rendered));
                 if scope.is_none() {
@@ -1050,6 +1098,9 @@ impl RuntimeContract {
                     line,
                 )?;
                 let event = field(object, "event", line)?;
+                if text(event, "type", line)? == "message_stop" {
+                    state.completed_runtime_operation = None;
+                }
                 if text(event, "type", line)? == "tool_progress" {
                     self.require_tool_owner(text(event, "tool_use_id", line)?, scope, line)?;
                 }
@@ -1065,6 +1116,23 @@ impl RuntimeContract {
                         runtime_initialized = true;
                     },
                     SystemKind::Compaction => validate_compaction_event(object, line, scope, self.limits.json)?,
+                    SystemKind::RuntimeOperation => {
+                        let data = field(object, "data", line)?;
+                        let id = text(data, "operation_id", line)?;
+                        if state.runtime_operation.is_some() || self.runtime_operation_ids.contains(id) {
+                            return Err(ContractError::InvalidRecord(format!(
+                                "events.jsonl line {line} repeats or leaves open a local operation receipt; inspect the original operation and assistant output"
+                            )));
+                        }
+                        let output_bytes = unsigned(field(data, "output_bytes", line)?, "local output bytes", SAFE_INTEGER)?;
+                        state.runtime_operation = Some(RuntimeOperation {
+                            id: id.to_string(),
+                            output_sha256: text(data, "output_sha256", line)?.to_string(),
+                            output_bytes,
+                        });
+                        state.completed_runtime_operation = None;
+                        runtime_operation_id = Some(id.to_string());
+                    },
                     SystemKind::SessionRecordingDegraded | SystemKind::TurnCleanupFailed | SystemKind::VisionBridgeFailed => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} reports operational failure {}: {}", subtype.wire(), field(object, "data", line)?.raw()))),
                     SystemKind::SessionStart | SystemKind::SessionEnd => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} declares transport ownership inside an already owned invocation"))),
                     SystemKind::TaskNotification => { if let Some(usage) = field(object, "data", line)?.get("usage") { GenerationUsageSummary::read(field(usage, "ownerUsage", line)?, line)?; } },
@@ -1072,7 +1140,13 @@ impl RuntimeContract {
                 }
             }
             EventKind::Result => {
+                if state.runtime_operation.is_some() {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} ends before the local operation's assistant output; retain the complete original stream"
+                    )));
+                }
                 state.partial.finish(line)?;
+                state.completed_runtime_operation = None;
                 state.terminal = Some(terminal(object, line, scope.is_none())?);
                 if let Some(structured) = object.get("structured_result") {
                     if scope.is_some() || state.terminal.as_ref().expect("parsed terminal").is_error
@@ -1170,6 +1244,7 @@ impl RuntimeContract {
             state,
             additions,
             returns,
+            runtime_operation_id,
             prefix: add(self.prefix, 1, "certified prefix")?,
         })
     }
@@ -1201,6 +1276,16 @@ impl RuntimeContract {
             return Err(ContractError::InvalidRecord(
                 "events.jsonl contains no events".into(),
             ));
+        }
+        if let Some(state) = self
+            .scope_states
+            .iter()
+            .find(|state| state.runtime_operation.is_some())
+        {
+            return Err(ContractError::InvalidRecord(format!(
+                "events.jsonl omits the assistant output of a local operation in {}; retain the complete original stream",
+                scope_display(state.id.as_deref())
+            )));
         }
         let main = &self.scope_states[0];
         let terminal = main.terminal.as_ref().ok_or_else(|| {
@@ -1400,7 +1485,7 @@ mod tests {
         ) {
             ""
         } else {
-            r#""origin":{"kind":"runtime"},"#
+            r#""origin":{"kind":"runtime","operation_id":"local-operation"},"#
         };
         format!(
             r#"{{"type":"stream_event",{origin}"uuid":"{id}","session_id":"session","parent_tool_use_id":null,"event":{event}}}"#
@@ -1408,8 +1493,20 @@ mod tests {
     }
     fn assistant(id: &str, scope: &str, content: &str) -> String {
         format!(
-            r#"{{"type":"assistant","origin":{{"kind":"runtime"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"id":"presentation-{id}","type":"message","role":"assistant","content":{content},"stop_reason":null,"usage":null}}}}"#
+            r#"{{"type":"assistant","origin":{{"kind":"runtime","operation_id":"local-operation"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"id":"presentation-{id}","type":"message","role":"assistant","content":{content},"stop_reason":null,"usage":null}}}}"#
         )
+    }
+    fn local_operation(scope: Option<&str>, text: &str) -> String {
+        serde_json::json!({
+            "type": "system", "subtype": "runtime_operation", "uuid": "local-operation-receipt",
+            "session_id": "session", "parent_tool_use_id": scope,
+            "data": {
+                "operation_id": "local-operation", "kind": "slash_message",
+                "output_sha256": crate::generation::sha256(text.as_bytes()),
+                "output_bytes": text.len(),
+            }
+        })
+        .to_string()
     }
     fn runtime_result(value: &str) -> String {
         serde_json::json!({
@@ -1860,6 +1957,7 @@ mod tests {
             r#"[{"type":"text","text":"answer"}]"#,
         );
         let mut accepted = initialized();
+        admit(&mut accepted, &local_operation(None, "answer")).unwrap();
         for (id, event) in parts {
             admit(&mut accepted, &partial(id, event)).unwrap();
         }
@@ -1873,6 +1971,7 @@ mod tests {
         assert_eq!(accepted.finish().unwrap().response, "answer");
 
         let mut changed_full = initialized();
+        admit(&mut changed_full, &local_operation(None, "other")).unwrap();
         for (id, event) in parts {
             admit(&mut changed_full, &partial(id, event)).unwrap();
         }
@@ -1887,6 +1986,7 @@ mod tests {
             .contains("runtime partial text"));
 
         let mut missing_full = initialized();
+        admit(&mut missing_full, &local_operation(None, "answer")).unwrap();
         for (id, event) in parts {
             admit(&mut missing_full, &partial(id, event)).unwrap();
         }
@@ -1899,11 +1999,40 @@ mod tests {
         .contains("no full assistant message"));
 
         let mut changed_result = initialized();
+        admit(&mut changed_result, &local_operation(None, "answer")).unwrap();
         admit(&mut changed_result, &full).unwrap();
         assert!(admit(&mut changed_result, &runtime_result("other"))
             .unwrap_err()
             .to_string()
             .contains("terminal result contradicts"));
+    }
+
+    #[test]
+    fn runtime_output_requires_its_local_operation_receipt() {
+        let full = assistant(
+            "local-answer",
+            "null",
+            r#"[{"type":"text","text":"local answer"}]"#,
+        );
+        let mut missing = initialized();
+        assert!(admit(&mut missing, &full)
+            .unwrap_err()
+            .to_string()
+            .contains("without its local operation receipt"));
+
+        let mut altered = initialized();
+        admit(&mut altered, &local_operation(None, "different")).unwrap();
+        assert!(admit(&mut altered, &full)
+            .unwrap_err()
+            .to_string()
+            .contains("changes the output of local operation"));
+
+        let mut unfinished = initialized();
+        admit(&mut unfinished, &local_operation(None, "local answer")).unwrap();
+        assert!(admit(&mut unfinished, &runtime_result("local answer"))
+            .unwrap_err()
+            .to_string()
+            .contains("ends before the local operation's assistant output"));
     }
 
     #[test]
@@ -1940,6 +2069,10 @@ mod tests {
         ))
         .unwrap();
         local["session_id"] = rows[0]["session_id"].clone();
+        let mut receipt: serde_json::Value =
+            serde_json::from_str(&local_operation(None, "local answer")).unwrap();
+        receipt["session_id"] = rows[0]["session_id"].clone();
+        admit(&mut reader, &receipt.to_string()).unwrap();
         admit(&mut reader, &local.to_string()).unwrap();
         assert!(admit(&mut reader, &rows[2].to_string())
             .unwrap_err()
@@ -1952,6 +2085,7 @@ mod tests {
         let mut reader = initialized();
         utility_transport(&mut reader, "served", 1, 0);
         admit(&mut reader, &outcome("served", "0")).unwrap();
+        admit(&mut reader, &local_operation(None, "local answer")).unwrap();
         admit(
             &mut reader,
             &assistant(
@@ -1986,6 +2120,7 @@ mod tests {
     #[test]
     fn runtime_presentation_cannot_issue_tools_or_clear_partial_state() {
         let mut owner = initialized();
+        admit(&mut owner, &local_operation(None, "")).unwrap();
         for (id, event) in [
             (
                 "start",
@@ -2022,6 +2157,7 @@ mod tests {
             "9007199254740991.00000000000000001",
         ] {
             let mut owner = initialized();
+            admit(&mut owner, &local_operation(None, "")).unwrap();
             admit(&mut owner, &partial("start", r#"{"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}"#)).unwrap();
             let prefix = owner.prefix;
             let raw = partial(
