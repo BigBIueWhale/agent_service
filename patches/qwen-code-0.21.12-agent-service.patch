@@ -343457,7 +343457,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,715 @@
+@@ -0,0 +1,749 @@
 +import { afterEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -343465,6 +343465,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  ModelRequestJournal,
 +  ModelRequestReplay,
 +  ModelRequestStreamReplay,
++  ModelEvidenceReplay,
 +  requireModelRequestEvidence,
 +  type ModelRequestEvidence,
 +} from './model-request-evidence.js';
@@ -343513,6 +343514,39 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  };
 +}
 +describe('mandatory model request evidence', () => {
++  it('refuses a closed child artifact with a normalization seed but no generation', () => {
++    const replay = new ModelEvidenceReplay();
++    const base = { isSidechain: true, sessionId: 'root-session' };
++    replay.observe({
++      ...base,
++      uuid: 'initial-history',
++      type: 'system',
++      subtype: 'runtime_history',
++      systemPayload: {
++        kind: 'checkpoint',
++        state: { history: [], imagePayloads: [] },
++      },
++    });
++    replay.observe({
++      ...base,
++      uuid: 'orphan-seed',
++      type: 'model_normalization_seed',
++      normalizationSeed: {
++        journal_id: 'root-journal',
++        origin: {
++          kind: 'model',
++          attempt_id: 'unfinished-child-attempt',
++          kv_scope: 'child-tool',
++        },
++        request_id: 'recorded-root-request',
++        history_call_ids: [],
++      },
++    });
++    expect(() => replay.finish()).toThrow(
++      'incomplete requests or logical generations',
++    );
++  });
++
 +  it('requires the selected decoder in every durable request', async () => {
 +    const f = fixture();
 +    await f.journal.capture(serialize([]), 'root', 'p', 's', null, TEST_POLICY);
@@ -344176,7 +344210,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1040 @@
+@@ -0,0 +1,1047 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -344824,7 +344858,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      this.responses.observe(record.response);
 +      this.generations.observeResponse(record.response);
 +    } else if (record.type === 'model_normalization_seed') {
-+      if (!this.generations.hasAttempt(record.normalization_seed.origin.attempt_id))
++      if (
++        !this.generations.hasAttempt(
++          record.normalization_seed.origin.attempt_id,
++        )
++      )
 +        return;
 +      this.generations.observeSeed(record.normalization_seed);
 +    } else if (record.type === 'model_generation') {
@@ -345126,7 +345164,9 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +          JSON.stringify(this.history.toolCallIds()) !==
 +            JSON.stringify(seed.history_call_ids))
 +      )
-+        return refusal('normalization seed contradicts canonical history or placement');
++        return refusal(
++          'normalization seed contradicts canonical history or placement',
++        );
 +      if (!sidechain) this.logical.observeSeed(seed);
 +      this.seeds.set(seed.origin.attempt_id, seed);
 +    }
@@ -345198,6 +345238,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      openRequests: this.responses.openRequestIds().length,
 +      openAttempts: new Set([
 +        ...this.logical.openAttemptIds(),
++        ...this.seeds.keys(),
 +        ...this.generations.keys(),
 +      ]).size,
 +    };

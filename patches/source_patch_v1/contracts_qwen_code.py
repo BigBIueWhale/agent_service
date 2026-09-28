@@ -9398,6 +9398,10 @@ def _validate_served_accounting_after(state: State) -> None:
         "canonicalGenerationOrigin(record)", "this.generations.has(origin.attempt_id)",
         "this.generationRecords.has(generation.generation_id)", "multiple canonical generations",
         "canonical completion has no unique matching generation", "requireCompleteModelEvidence(this.completionState())",
+        "...this.seeds.keys()",
+    ), label=label)
+    _require_all(state, core + "core/model-request-evidence.test.ts", (
+        "refuses a closed child artifact with a normalization seed but no generation",
     ), label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
         "subtype !== 'adopted_message'", "subtype !== 'realtime_message'",

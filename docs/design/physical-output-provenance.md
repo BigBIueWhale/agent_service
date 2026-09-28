@@ -178,6 +178,16 @@ required physical proof or is explicitly verified against its root artifact.
 Resume reads the canonical chat recording, not `output/events.jsonl`, so stdout
 admission alone cannot establish resume's output provenance.
 
+The child completion check also has to count a recorded normalization seed
+whose generation has not been committed. A source regression constructed a
+child checkpoint and seed with no generation or completion; the closed child
+artifact was accepted before the seed was counted and is refused afterward.
+The targeted request-evidence and canonical-I/O suites passed 39 tests after
+this correction. This proves only that an unfinished child attempt cannot pass
+that completion check. A separate executed probe still showed that a
+self-consistent child generation naming a nonexistent physical request passes
+standalone replay; joining it to verified root evidence remains necessary.
+
 An implementable single authority needs to freeze the effective response decoder
 context at dispatch and bind it to the selected runtime/provider configuration.
 A reader cannot let a mutable generation choose whichever valid profile makes
