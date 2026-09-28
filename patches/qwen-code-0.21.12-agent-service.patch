@@ -350338,7 +350338,7 @@ diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/
 diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-python/src/qwen_code_sdk/json_lines.py
 --- a/packages/sdk-python/src/qwen_code_sdk/json_lines.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/json_lines.py
-@@ -1,14 +1,123 @@
+@@ -1,14 +1,135 @@
  """JSON lines utilities."""
  
  from __future__ import annotations
@@ -350349,6 +350349,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-
 -from typing import Any
 +import math
 +from collections.abc import AsyncIterator
++from decimal import Decimal
 +from typing import Any, NoReturn
  
  
@@ -350405,12 +350406,24 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-
 +            raise ValueError("Value is not JSON")
 +
 +
- def parse_json_line(line: str) -> Any:
+-def parse_json_line(line: str) -> Any:
 -    return json.loads(line)
++def parse_json_line(line: str, *, exact_integer_floats: bool = False) -> Any:
++    def parse_float(value: str) -> float:
++        number = _parse_float(value)
++        if (
++            exact_integer_floats
++            and number.is_integer()
++            and abs(number) <= 2**53 - 1
++            and Decimal(value) != Decimal(int(number))
++        ):
++            raise ValueError("JSON decimal differs from its decoded integer")
++        return number
++
 +    value = json.loads(
 +        line,
 +        parse_constant=_reject_constant,
-+        parse_float=_parse_float,
++        parse_float=parse_float,
 +        parse_int=_parse_int,
 +        object_pairs_hook=_object,
 +    )
@@ -384071,7 +384084,7 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/core/src/core/model-generation-mapping.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-mapping.test.ts
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,365 @@
 +import { describe, expect, it } from 'vitest';
 +import type { GenerateContentResponse, Part } from '@google/genai';
 +import {
@@ -384095,7 +384108,26 @@ diff --git a/packages/core/src/core/model-generation-mapping.test.ts b/packages/
 +import {
 +  generationInput,
 +  observation,
++  sha256,
 +} from '../test-utils/model-generation-fixture.js';
++
++it('refuses a rehashed decimal that rounds into a different integer observation', () => {
++  const evidence = freezeModelGeneration('journal', generationInput());
++  const raw = evidence.generation_json.replace(
++    '"promptTokenCount":12',
++    '"promptTokenCount":12.00000000000000001',
++  );
++  expect(raw).not.toBe(evidence.generation_json);
++  expect(() =>
++    readModelGeneration({
++      ...evidence,
++      generation_json: raw,
++      generation_bytes: Buffer.byteLength(raw, 'utf8'),
++      generation_sha256: sha256(raw),
++    }),
++  ).toThrow('decoded integer differs');
++  expect(readModelGeneration(evidence).usage?.promptTokenCount).toBe(12);
++});
 +
 +const call = (id: string | undefined, value = 1): Part => ({
 +  functionCall: {
@@ -384623,7 +384655,7 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core/model-generation.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation.ts
-@@ -0,0 +1,950 @@
+@@ -0,0 +1,985 @@
 +import {
 +  restoreProviderToolCallId,
 +  collectToolCallIdsFromHistory,
@@ -384872,6 +384904,31 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +  return createHash('sha256').update(value, 'utf8').digest('hex');
 +}
 +
++/** A JSON decimal must equal the safe integer seen by the JavaScript reader. */
++function exactIntegerLexeme(source: string): boolean {
++  const match =
++    /^(-?)(0|[1-9][0-9]*)(?:\.([0-9]+))?(?:[eE]([+-]?[0-9]+))?$/.exec(source);
++  if (!match) return true;
++  const observed = Number(source);
++  if (!Number.isSafeInteger(observed)) return true;
++  const digits = `${match[2]}${match[3] ?? ''}`.replace(/^0+/, '') || '0';
++  if (digits === '0') return observed === 0;
++  const shift = Number(match[4] ?? 0) - (match[3]?.length ?? 0);
++  if (!Number.isSafeInteger(shift)) return false;
++  let integer: string;
++  if (shift < 0) {
++    const cut = digits.length + shift;
++    if (cut <= 0 || /[^0]/.test(digits.slice(cut))) return false;
++    integer = digits.slice(0, cut);
++  } else {
++    if (digits.length + shift > String(Number.MAX_SAFE_INTEGER).length)
++      return false;
++    integer = digits + '0'.repeat(shift);
++  }
++  integer = integer.replace(/^0+/, '') || '0';
++  return `${match[1]}${integer}` === String(observed);
++}
++
 +export function freezeModelGeneration(
 +  journalId: string,
 +  observed: Pick<
@@ -384953,10 +385010,20 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 +  )
 +    return refuse('missing, unknown or inconsistent envelope fields');
 +  let envelope: unknown;
++  let roundedInteger = false;
 +  try {
-+    envelope = parseStrictJson(input['generation_json']);
++    envelope = parseStrictJson(input['generation_json'], (_path, source) => {
++      if (!exactIntegerLexeme(source)) {
++        roundedInteger = true;
++        throw new Error('rounded integer');
++      }
++    });
 +  } catch {
-+    return refuse('the complete envelope is not JSON');
++    return refuse(
++      roundedInteger
++        ? 'a decoded integer differs from its recorded JSON spelling'
++        : 'the complete envelope is not JSON',
++    );
 +  }
 +  if (
 +    !object(envelope) ||
@@ -394664,7 +394731,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/model_generation.py b/package
 +            and hashlib.sha256(encoded).hexdigest() == evidence["generation_sha256"],
 +            "byte count or hash differs from the retained envelope",
 +        )
-+        envelope = parse_json_line(raw)
++        envelope = parse_json_line(raw, exact_integer_floats=True)
 +        GENERATION.validate(envelope)
 +        output_scope = envelope["output_scope"]
 +        require(
@@ -415700,21 +415767,22 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v10.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/packages/sdk-python/tests/unit/test_generation_completion_v10.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v10.py
-@@ -0,0 +1,725 @@
+@@ -0,0 +1,741 @@
 +from __future__ import annotations
 +
 +import base64
 +import copy
 +import hashlib
 +import json
++import re
 +from pathlib import Path
 +
 +import pytest
 +
++from qwen_code_sdk.model_generation import Generation
 +from qwen_code_sdk.record_admission import RecordAdmission, RecordContractError
 +from qwen_code_sdk.record_evidence import _split_request
-+from qwen_code_sdk.model_generation import Generation
-+from qwen_code_sdk.stream_schema import STREAM_CONTRACT_SHA256, STREAM
++from qwen_code_sdk.stream_schema import STREAM, STREAM_CONTRACT_SHA256
 +
 +FIXTURES = json.loads(
 +    (Path(__file__).parents[1] / "fixtures/generation-evidence-v10.json").read_text()
@@ -415842,7 +415910,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +            value["disposition"] = "abandoned"
 +    next_request = item(wire, "model_request")["request"]
 +    next_request["sequence"] = 2
-+    prefix, messages, suffix, _ = _split_request(
++    prefix, messages, suffix, _, _ = _split_request(
 +        next_request["body"]["json"], next_request["kv_scope"]
 +    )
 +    next_request["body"] = {
@@ -416323,6 +416391,21 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v10.py b/
 +        ][0]["response"]["metadata_integer"] == int("9" * digits)
 +    else:
 +        assert_refused(wire)
++
++
++def test_rehashed_decimal_cannot_round_into_an_integer_observation():
++    wire = records()
++    raw = item(wire, "model_generation")["generation"]["generation_json"]
++    changed = re.sub(
++        r'("promptTokenCount":)(\d+)',
++        lambda match: match.group(1) + match.group(2) + ".00000000000000001",
++        raw,
++        count=1,
++    )
++    assert changed != raw
++    replace_envelope(wire, changed)
++    with pytest.raises(ValueError, match="decimal differs"):
++        Generation.read(item(wire, "model_generation")["generation"])
 +
 +
 +def test_wire_physical_usage_is_closed_to_exact_five_counts():

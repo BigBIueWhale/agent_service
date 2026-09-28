@@ -7,6 +7,19 @@ the selected decoder and compare raw Chat observations before admission.
 The native, Python and Java readers still bind declared ownership and usage
 without independently establishing that byte-to-observation relation.
 
+Generation-envelope counters also require exact numeric interpretation. A
+rehashed envelope could spell an observed count as
+`12.00000000000000001`: Java and native source retain the nonzero fraction,
+while JavaScript and Python floating-point parsing round it to `12` before
+admission. The TypeScript generation reader and Python SDK now refuse a decimal
+whose exact value differs from the safe integer they decoded. A focused Python
+reproducer admitted the rehashed fixture with its prior numeric interpretation
+and refused it with the new one; focused TypeScript and Python source tests
+passed. Java and native behavior is established by reading their decimal
+parsers, not by executing their gates. This closes the numeric interpretation
+gap for safe integer envelope values; it does not prove a generation came from
+the retained physical response bytes.
+
 The v7 source reproducer at
 `/tmp/codex-output-disposition-review/baseline/REPORT.md` keeps every physical
 request, response byte, processing outcome, history decision and usage total

@@ -8533,6 +8533,8 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label, location="generation publication and complete physical population before logical completion")
     _require_all(state, core + "core/model-generation.ts", (
         "export class ModelGenerationReplay", "readModelGeneration(value)",
+        "exactIntegerLexeme(source)",
+        "a decoded integer differs from its recorded JSON spelling",
         "recordGenerationSource(", "takeGenerationSource(chunk)",
         "attempt.generation.evidence.generation_sha256 !==",
         "JSON.stringify(completion.request_ids)",
@@ -8717,7 +8719,8 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, python_sdk + "src/qwen_code_sdk/json_lines.py", (
         'frame.decode("utf-8")', "reader.read(io.DEFAULT_BUFFER_SIZE)",
         'chunk.find(b"\\n", start)', "parse_constant=_reject_constant",
-        "parse_float=_parse_float", "math.isfinite(number)",
+        "parse_float=parse_float", "math.isfinite(number)",
+        "Decimal(value) != Decimal(int(number))",
         "expected an object with a string type", "unterminated record at EOF",
         "invalid JSONL record at line {line}",
     ), label=label)
@@ -8768,6 +8771,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, python_sdk + "src/qwen_code_sdk/model_generation.py", (
         "def display_text(self) -> str:",
         'if not truthy(part.get("thought"))',
+        "parse_json_line(raw, exact_integer_floats=True)",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
         "parse_json_line(body)", "decoder.raw_decode(body, at)",
