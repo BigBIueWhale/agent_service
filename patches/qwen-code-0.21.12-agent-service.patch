@@ -239418,7 +239418,7 @@ diff --git a/packages/core/src/services/recorded-ui-telemetry.ts b/packages/core
 diff --git a/packages/core/src/services/session-api-history.ts b/packages/core/src/services/session-api-history.ts
 --- a/packages/core/src/services/session-api-history.ts
 +++ b/packages/core/src/services/session-api-history.ts
-@@ -1,130 +1,123 @@
+@@ -1,130 +1,125 @@
  /**
   * @license
   * Copyright 2026 Qwen Team
@@ -239435,6 +239435,7 @@ diff --git a/packages/core/src/services/session-api-history.ts b/packages/core/s
 +import {
 +  RuntimeHistoryReplay,
 +  requireRuntimeHistoryChange,
++  type RuntimeHistoryChange,
 +  type RuntimeHistoryCommit,
 +  type RuntimeHistoryState,
 +} from './runtime-history.js';
@@ -239456,37 +239457,38 @@ diff --git a/packages/core/src/services/session-api-history.ts b/packages/core/s
 -  const filteredParts = content.parts.filter((part) => !(part as Part).thought);
 -  if (filteredParts.length === 0) return null;
 -  return { ...content, parts: filteredParts };
++/** Project every stored history replacement through one interpretation. */
++export function projectRuntimeHistoryChange(record: {
++  readonly type: string;
++  readonly subtype?: string;
++  readonly systemPayload?: unknown;
++}): RuntimeHistoryChange | undefined {
++  if (record.type !== 'system') return undefined;
++  if (record.subtype === 'runtime_history')
++    return requireRuntimeHistoryChange(record.systemPayload);
++  if (record.subtype === 'rewind')
++    return {
++      kind: 'checkpoint',
++      state: (record.systemPayload as RewindRecordPayload).runtimeHistory,
++    };
++  if (record.subtype === 'chat_compression') {
++    const payload = record.systemPayload as ChatCompressionRecordPayload;
++    return {
++      kind: 'checkpoint',
++      state: {
++        history: payload.compressedHistory,
++        imagePayloads: payload.imagePayloads,
++      },
++    };
++  }
++  return undefined;
++}
++
 +export function projectRuntimeHistoryCommit(
 +  record: ChatRecord,
 +): RuntimeHistoryCommit | undefined {
-+  if (record.type === 'system' && record.subtype === 'runtime_history') {
-+    return {
-+      kind: 'change',
-+      change: requireRuntimeHistoryChange(record.systemPayload),
-+    };
-+  }
-+  if (record.type === 'system' && record.subtype === 'rewind') {
-+    return {
-+      kind: 'change',
-+      change: {
-+        kind: 'checkpoint',
-+        state: (record.systemPayload as RewindRecordPayload).runtimeHistory,
-+      },
-+    };
-+  }
-+  if (record.type === 'system' && record.subtype === 'chat_compression') {
-+    const payload = record.systemPayload as ChatCompressionRecordPayload;
-+    return {
-+      kind: 'change',
-+      change: {
-+        kind: 'checkpoint',
-+        state: {
-+          history: payload.compressedHistory,
-+          imagePayloads: payload.imagePayloads,
-+        },
-+      },
-+    };
-+  }
++  const change = projectRuntimeHistoryChange(record);
++  if (change) return { kind: 'change', change };
 +  if (record.type === 'assistant' && record.subtype === undefined) {
 +    return {
 +      kind: 'assistant',
@@ -242961,7 +242963,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    appendFileSync,
    constants as fsConstants,
    mkdirSync,
-@@ -21,20 +22,34 @@
+@@ -21,21 +22,37 @@
  import * as os from 'node:os';
  import * as path from 'node:path';
  import { fileURLToPath } from 'node:url';
@@ -242981,6 +242983,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +} from '../core/model-request-evidence.js';
 +import type { ModelResponseEvidence } from '../core/model-response-evidence.js';
 +import { generationUsage } from '../test-utils/model-generation-fixture.js';
++import { CompressionStatus } from '../core/turn.js';
  import {
    resetDebugLoggingState,
    setDebugLogSession,
@@ -242991,12 +242994,14 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  } from './chatRecordingService.js';
 +import { buildRuntimeHistoryFromConversation } from './session-api-history.js';
  import { SessionService } from './sessionService.js';
++import { SessionTranscriptReader } from './session-transcript-reader.js';
  import {
    getSessionWriterLockPath,
    SessionTranscriptChangedError,
    SessionTranscriptIdentityUnavailableError,
    SessionWriterConflictError,
-@@ -76,24 +91,42 @@
+   SessionWriterLease,
+@@ -76,24 +93,42 @@
  
  const restoreLinkFault = vi.hoisted(() => ({
    linkTo: undefined as string | undefined,
@@ -243039,7 +243044,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  }));
  
  const readFileFault = vi.hoisted(() => ({
-@@ -135,12 +168,21 @@
+@@ -135,12 +170,21 @@
        }
        return result;
      },
@@ -243061,7 +243066,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            writeFault.contains &&
            Buffer.isBuffer(data) &&
            data.toString('utf8').includes(writeFault.contains)
-@@ -175,13 +217,24 @@
+@@ -175,13 +219,24 @@
        ) {
          restoreLinkFault.remainingFailures--;
          throw Object.assign(new Error('injected restore link failure'), {
@@ -243087,7 +243092,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        if (
          existingPath === transitionFault.linkFrom &&
          newPath === transitionFault.linkTo
-@@ -337,33 +390,253 @@
+@@ -337,33 +392,313 @@
    // On Windows PIDs recycle aggressively, so a still-answerable signal 0
    // almost always means a reused PID, not a leaked child; do not turn that
    // teardown observation into a test failure.
@@ -243133,6 +243138,47 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +  };
 +}
 +
++function checkpointRecord(
++  uuid: string,
++  parentUuid: string | null,
++  sessionId: string,
++  cwd: string,
++  history: Array<import('@google/genai').Content>,
++): ChatRecord {
++  return {
++    ...baseRecord(uuid, parentUuid, sessionId, cwd),
++    type: 'system',
++    subtype: 'runtime_history',
++    systemPayload: {
++      kind: 'checkpoint',
++      state: { history, imagePayloads: [] },
++    },
++  };
++}
++
++function spliceRecord(
++  uuid: string,
++  parentUuid: string,
++  sessionId: string,
++  cwd: string,
++  beforeLength: number,
++  insert: Array<import('@google/genai').Content>,
++): ChatRecord {
++  return {
++    ...baseRecord(uuid, parentUuid, sessionId, cwd),
++    type: 'system',
++    subtype: 'runtime_history',
++    systemPayload: {
++      kind: 'splice',
++      beforeLength,
++      index: beforeLength,
++      deleteCount: 0,
++      insert,
++      imagePayloads: [],
++    },
++  };
++}
++
 +function acceptedTurnRecords(
 +  uuid: string,
 +  parentUuid: string,
@@ -243141,11 +243187,22 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +  text: string,
 +  historyLength: number,
 +  requestMessages: Array<{ role: 'user' | 'assistant'; content: string }>,
-+  previous?: { requestId: string; json: string },
++  previous?: {
++    requestId: string;
++    json: string;
++    sequence: number;
++    segmentId: string;
++  },
++  segmentId = 'writer-lease-fixture',
 +): {
 +  records: ChatRecord[];
 +  assistant: ChatRecord;
-+  request: { requestId: string; json: string };
++  request: {
++    requestId: string;
++    json: string;
++    sequence: number;
++    segmentId: string;
++  };
 +} {
 +  const attemptId = `${uuid}-attempt`;
 +  const requestId = `${uuid}-request`;
@@ -243161,7 +243218,10 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +    stream: true,
 +  });
 +  const split = splitModelRequest(json, sessionId);
-+  const prior = previous && splitModelRequest(previous.json, sessionId);
++  const prior =
++    previous?.segmentId === segmentId
++      ? splitModelRequest(previous.json, sessionId)
++      : undefined;
 +  let retained = 0;
 +  while (
 +    prior &&
@@ -243178,12 +243238,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +    exact_token_counting: false,
 +    tagged_thinking_tags: false,
 +  } as const;
++  const sequence = previous ? previous.sequence + 1 : 1;
 +  const request: ModelRequestEvidence = {
 +    journal_id: sessionId,
-+    sequence: previous ? 2 : 1,
++    sequence,
 +    request_id: requestId,
 +    kv_scope: sessionId,
-+    segment_id: 'writer-lease-fixture',
++    segment_id: segmentId,
 +    prompt_id: uuid,
 +    owner: { kind: 'chat', attempt_id: attemptId },
 +    decode_policy: decodePolicy,
@@ -243342,14 +243403,18 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +      completion,
 +    },
 +  ];
-+  return { records, assistant, request: { requestId, json } };
++  return {
++    records,
++    assistant,
++    request: { requestId, json, sequence, segmentId },
++  };
  }
  
  function positionalReadLength(args: unknown): number | undefined {
    const values = args as readonly unknown[];
    return typeof values[2] === 'number' ? values[2] : undefined;
  }
-@@ -405,18 +678,25 @@
+@@ -405,18 +740,25 @@
    transitionFault.linkFrom = undefined;
    transitionFault.linkTo = undefined;
    transitionFault.afterLink = undefined;
@@ -243375,7 +243440,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    readFileFault.triggerCall = 0;
    readFileFault.calls = 0;
    readFileFault.afterRead = undefined;
-@@ -439,48 +719,77 @@
+@@ -439,48 +781,77 @@
      const fixture = await createFixture('config-authoritative-session');
      const firstUser = record(
        'user-1',
@@ -243462,7 +243527,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.runtimeBaseDir,
        fixture.projectRoot,
        () =>
-@@ -488,15 +797,14 @@
+@@ -488,15 +859,14 @@
            sessionId: fixture.options.sessionId,
            sessionData: stalePreview,
            cwd: fixture.projectRoot,
@@ -243479,7 +243544,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -508,15 +816,24 @@
+@@ -508,15 +878,24 @@
        skipFileCheckpointing: true,
        lenientToolWarmup: true,
      });
@@ -243505,7 +243570,173 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        .trim()
        .split('\n')
        .map((line) => JSON.parse(line) as ChatRecord);
-@@ -548,15 +865,14 @@
+@@ -533,12 +912,165 @@
+         getSessionWriterLockPath(
+           fixture.runtimeBaseDir,
+           fixture.options.sessionId,
+         ),
+       ),
+     ).rejects.toMatchObject({ code: 'ENOENT' });
++  });
++
++  it('restores and forks exact canonical history after a compaction segment', async () => {
++    const sourceId = '550e8400-e29b-41d4-a716-446655440010';
++    const forkId = '550e8400-e29b-41d4-a716-446655440011';
++    const fixture = await createFixture(sourceId);
++    const first = record(
++      'first-user',
++      null,
++      sourceId,
++      fixture.projectRoot,
++      'First prompt.',
++    );
++    const initial: ChatRecord = {
++      ...checkpointRecord(
++        'initial-history',
++        first.uuid,
++        sourceId,
++        fixture.projectRoot,
++        [first.message!],
++      ),
++    };
++    const firstTurn = acceptedTurnRecords(
++      'first-answer',
++      initial.uuid,
++      sourceId,
++      fixture.projectRoot,
++      '  First answer.\n',
++      1,
++      [{ role: 'user', content: 'First prompt.' }],
++    );
++    const second = record(
++      'second-user',
++      firstTurn.assistant.uuid,
++      sourceId,
++      fixture.projectRoot,
++      'Second prompt.',
++    );
++    const secondHistory = spliceRecord(
++      'second-history',
++      second.uuid,
++      sourceId,
++      fixture.projectRoot,
++      2,
++      [second.message!],
++    );
++    const secondTurn = acceptedTurnRecords(
++      'second-answer',
++      secondHistory.uuid,
++      sourceId,
++      fixture.projectRoot,
++      '  Carried answer.\n',
++      3,
++      [
++        { role: 'user', content: 'First prompt.' },
++        { role: 'assistant', content: '  First answer.\n' },
++        { role: 'user', content: 'Second prompt.' },
++      ],
++      firstTurn.request,
++    );
++    const composed = [
++      { role: 'user' as const, parts: [{ text: 'Snapshot שלום.' }] },
++      { role: 'model' as const, parts: [{ text: '  Carried answer.\n' }] },
++    ];
++    const compression: ChatRecord = {
++      ...baseRecord(
++        'compression',
++        secondTurn.assistant.uuid,
++        sourceId,
++        fixture.projectRoot,
++      ),
++      type: 'system',
++      subtype: 'chat_compression',
++      systemPayload: {
++        info: {
++          compressionStatus: CompressionStatus.COMPRESSED,
++          originalTokenCount: 100,
++          newTokenCount: 20,
++          rejectedAttempts: [],
++          postCompactionHistory: composed,
++        },
++        compressedHistory: composed,
++        imagePayloads: [],
++      },
++    };
++    const third = record(
++      'third-user',
++      compression.uuid,
++      sourceId,
++      fixture.projectRoot,
++      'Continue exactly.',
++    );
++    const thirdHistory = spliceRecord(
++      'third-history',
++      third.uuid,
++      sourceId,
++      fixture.projectRoot,
++      2,
++      [third.message!],
++    );
++    const finalTurn = acceptedTurnRecords(
++      'final-answer',
++      thirdHistory.uuid,
++      sourceId,
++      fixture.projectRoot,
++      '  Final answer 雪.\n',
++      3,
++      [
++        { role: 'user', content: 'Snapshot שלום.' },
++        { role: 'assistant', content: '  Carried answer.\n' },
++        { role: 'user', content: 'Continue exactly.' },
++      ],
++      secondTurn.request,
++      'post-compaction',
++    );
++    const records = [
++      first,
++      initial,
++      ...firstTurn.records,
++      second,
++      secondHistory,
++      ...secondTurn.records,
++      compression,
++      third,
++      thirdHistory,
++      ...finalTurn.records,
++    ];
++    await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
++    await fs.writeFile(
++      fixture.transcriptPath,
++      records.map((entry) => JSON.stringify(entry)).join('\n') + '\n',
++    );
++    const service = new SessionService(fixture.projectRoot, {
++      runtimeBaseDir: fixture.runtimeBaseDir,
++    });
++    await service.forkSession(sourceId, forkId);
++    const expected = [
++      ...composed,
++      third.message!,
++      { role: 'model', parts: [{ text: '  Final answer 雪.\n' }] },
++    ];
++    for (const id of [sourceId, forkId]) {
++      const loaded = await service.loadSession(id);
++      const indexed = await new SessionTranscriptReader(
++        fixture.projectRoot,
++        undefined,
++        fixture.runtimeBaseDir,
++      ).readRestoreProjection(id, { replay: { kind: 'none' } });
++      expect(
++        buildRuntimeHistoryFromConversation(loaded!.conversation).history,
++      ).toEqual(expected);
++      expect(indexed?.runtime.apiHistory).toEqual(expected);
++    }
+   });
+ 
+   it('hands a real managed ACP Config to a certified replacement', async () => {
+     const fixture = await createFixture('managed-config-handoff-session');
+     const createConfig = () =>
+       Storage.runWithRuntimeBaseDir(
+@@ -548,15 +1080,14 @@
            new Config({
              sessionId: fixture.options.sessionId,
              cwd: fixture.projectRoot,
@@ -243522,7 +243753,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            }),
        );
      const initialize = (config: Config) =>
-@@ -570,13 +886,13 @@
+@@ -570,13 +1101,13 @@
        });
  
      const first = createConfig();
@@ -243537,7 +243768,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          await fs.readFile(
            getSessionWriterLockPath(
              fixture.runtimeBaseDir,
-@@ -600,23 +916,23 @@
+@@ -600,23 +1131,23 @@
        shutdownTelemetry: false,
        skipSessionWriter: true,
      });
@@ -243563,7 +243794,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        timestamp: '2026-01-01T00:00:01.000Z',
        type: 'system',
        subtype: 'custom_title',
-@@ -625,21 +941,25 @@
+@@ -625,21 +1156,25 @@
        systemPayload: {
          customTitle: 'operator-title',
          titleSource: 'manual',
@@ -243590,7 +243821,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.transcriptPath,
        `${JSON.stringify(firstUser)}\n${JSON.stringify(titleRecord)}\n${JSON.stringify(rewindRecord)}\n`,
        'utf8',
-@@ -665,15 +985,14 @@
+@@ -665,15 +1200,14 @@
            sessionId: fixture.options.sessionId,
            sessionData: preview,
            cwd: fixture.projectRoot,
@@ -243607,7 +243838,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -684,27 +1003,29 @@
+@@ -684,27 +1218,29 @@
        skipSkillManager: true,
        skipFileCheckpointing: true,
        lenientToolWarmup: true,
@@ -243644,7 +243875,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  
    it('preserves transcript-changed during Config activation cleanup', async () => {
      const fixture = await createFixture('config-truncated-session');
-@@ -717,15 +1038,14 @@
+@@ -717,15 +1253,14 @@
          new Config({
            sessionId: fixture.options.sessionId,
            cwd: fixture.projectRoot,
@@ -243661,7 +243892,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -948,33 +1268,39 @@
+@@ -948,33 +1483,39 @@
      );
      await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(
        '{"replacement":true}',
@@ -243721,7 +243952,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const lockPath = getSessionWriterLockPath(
        fixture.runtimeBaseDir,
        fixture.options.sessionId,
-@@ -2116,12 +2442,137 @@
+@@ -2116,12 +2657,137 @@
      );
      await expect(
        Promise.all([lease.release(), lease.release()]),
@@ -243859,7 +244090,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        const fixture = await createFixture();
        const lease = await SessionWriterLease.acquire(fixture.options);
  
-@@ -2230,13 +2681,13 @@
+@@ -2230,13 +2896,13 @@
        state: 'active',
        hostname: 'retired-foreign-host',
      });
@@ -243874,7 +244105,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.options.sessionId,
      );
      const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
-@@ -2759,19 +3210,136 @@
+@@ -2759,19 +3425,136 @@
      };
      const results = await Promise.all(
        contenders.map((child) =>
@@ -244012,7 +244243,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      );
      const first = await SessionWriterLease.acquire(fixture.options);
      await first.sealForHandoff();
-@@ -3180,27 +3748,42 @@
+@@ -3180,27 +3963,42 @@
      const fixture = await createFixture(sessionId);
      const firstUser = record(
        'user-1',
@@ -244060,7 +244291,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      expect(
        await requestChild(processA, {
          type: 'acquire',
-@@ -3208,56 +3791,91 @@
+@@ -3208,56 +4006,91 @@
        }),
      ).toMatchObject({ ok: true });
      await expect(
@@ -344905,7 +345136,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1192 @@
+@@ -0,0 +1,1190 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -344940,10 +345171,8 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  RECORDING_STALL_TIMEOUT_MS,
 +  withRecordingDeadline,
 +} from './recording-stall.js';
-+import {
-+  RuntimeHistoryReplay,
-+  requireRuntimeHistoryChange,
-+} from '../services/runtime-history.js';
++import { RuntimeHistoryReplay } from '../services/runtime-history.js';
++import { projectRuntimeHistoryChange } from '../services/session-api-history.js';
 +
 +export type ModelEvidence =
 +  | { readonly type: 'model_request'; readonly request: ModelRequestEvidence }
@@ -345872,8 +346101,8 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        );
 +      this.recordKinds.set(record.uuid, historyCommit);
 +    }
-+    if (record.type === 'system' && record.subtype === 'runtime_history')
-+      this.history.apply(requireRuntimeHistoryChange(record.systemPayload));
++    const historyChange = projectRuntimeHistoryChange(record);
++    if (historyChange) this.history.apply(historyChange);
 +    if (record.type === 'model_request') {
 +      if (sidechain)
 +        return refusal('child artifact contains root-owned physical requests');
@@ -377438,10 +377667,11 @@ diff --git a/packages/core/src/services/image-payload-references.test.ts b/packa
 diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/src/services/runtime-history.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/runtime-history.test.ts
-@@ -0,0 +1,251 @@
+@@ -0,0 +1,311 @@
 +import type { Content } from '@google/genai';
 +import { describe, expect, it } from 'vitest';
 +import { ModelEvidenceReplay } from '../core/model-request-evidence.js';
++import { CompressionStatus } from '../core/turn.js';
 +import { CHAT_RECORDING_VERSION } from '../utils/transcript-records.js';
 +import type { ChatRecord } from './chatRecordingService.js';
 +import { InMemoryImagePayloadStore } from './image-payload-references.js';
@@ -377682,11 +377912,70 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 +    ).toEqual({ history: [user], imagePayloads: [] });
 +  });
 +
++  it.each(['chat_compression', 'rewind'] as const)(
++    'keeps canonical evidence history aligned after a %s checkpoint',
++    (subtype) => {
++      const initial = checkpoint([user, assistant]);
++      const compressed = [
++        { role: 'user' as const, parts: [{ text: 'exact summary שלום' }] },
++      ];
++      const replacement: ChatRecord = {
++        ...checkpoint(),
++        uuid: 'replacement',
++        parentUuid: initial.uuid,
++        subtype,
++        systemPayload:
++          subtype === 'chat_compression'
++            ? {
++                compressedHistory: compressed,
++                imagePayloads: [],
++                info: {
++                  compressionStatus: CompressionStatus.COMPRESSED,
++                  originalTokenCount: 2,
++                  newTokenCount: 1,
++                  rejectedAttempts: [],
++                  postCompactionHistory: compressed,
++                },
++              }
++            : {
++                runtimeHistory: { history: compressed, imagePayloads: [] },
++                truncatedCount: 0,
++              },
++      };
++      const following: ChatRecord = {
++        ...checkpoint(),
++        uuid: 'following',
++        parentUuid: replacement.uuid,
++        systemPayload: {
++          kind: 'splice',
++          beforeLength: 1,
++          index: 1,
++          deleteCount: 0,
++          insert: [{ role: 'user', parts: [{ text: 'next turn' }] }],
++          imagePayloads: [],
++        },
++      };
++      const records = [initial, replacement, following];
++      const replay = new ModelEvidenceReplay();
++      for (const record of records) replay.observe(record);
++      expect(() => replay.finish()).not.toThrow();
++      expect(
++        buildRuntimeHistoryFromConversation({ messages: records }),
++      ).toEqual({
++        history: [
++          compressed[0],
++          { role: 'user', parts: [{ text: 'next turn' }] },
++        ],
++        imagePayloads: [],
++      });
++    },
++  );
++
 +  it('refuses duplicated atomic history UUIDs instead of merging their payloads', () => {
 +    const replay = new ModelEvidenceReplay();
 +    replay.observe(checkpoint([user]));
 +    expect(() => replay.observe(checkpoint([assistant]))).toThrow(
-+      /duplicate record identity/,
++      /canonical history commit repeats its record identity/,
 +    );
 +  });
 +});

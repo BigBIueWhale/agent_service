@@ -9326,7 +9326,17 @@ def _validate_served_accounting_after(state: State) -> None:
         "add(commit: RuntimeHistoryCommit)",
         "record.subtype === 'runtime_history'", "record.historyLength!",
         "buildRuntimeHistoryFromConversation", "finishState(): RuntimeHistoryState",
+        "export function projectRuntimeHistoryChange(",
+        "const change = projectRuntimeHistoryChange(record)",
     ), label=label)
+    _require_all(state, core + "core/model-request-evidence.ts", (
+        "projectRuntimeHistoryChange(record)",
+        "if (historyChange) this.history.apply(historyChange)",
+    ), label=label)
+    require_text(state, core + "services/runtime-history.test.ts",
+                 "keeps canonical evidence history aligned after a %s checkpoint", label=label)
+    require_text(state, core + "services/session-writer-lease.test.ts",
+                 "restores and forks exact canonical history after a compaction segment", label=label)
     _require_all(state, core + "services/session-transcript-reader.ts", (
         "runtimeHistoryPosition: runtimeHistoryPosition(historyCommit)",
         "historyCursor.apply(entry.runtimeHistoryPosition)",

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `6b98f4adc9f005b1487fd7bf2040c1a0227472d05490b00299d3769a288a943d`
+- Review-diff SHA-256: `2d32cb15d3b401f4547f497ac07c1be081579f20920ac1921f62b4fc85554ee3`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4ae8129690413a877b7b844850ac2ee9a91a82599a9327bd3cbacf677adaade9`
+- Transformer-manifest SHA-256: `722c82989861325b2c74a7d7eda0831ed80a7fb688524b3ec89c1196f0b43d47`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -373,6 +373,11 @@ boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
 new session. They are not promoted into complete version 14 histories.
+The complete-record evidence replay and the resume reader use the same
+projection for runtime checkpoints, compaction, and rewind. A focused source
+test passed for a compaction followed by another generation: full restore,
+indexed restore, and fork returned the same exact Content sequence. This is
+source-test evidence; owner build and release gates have not run.
 Adopted and realtime conversation records must carry content with the role
 declared by their record type; non-object parts and invalid image-reference
 identities are refused even on inactive branches. The same admission runs
