@@ -103,6 +103,13 @@ for a long session. The TypeScript source now implements the raw observation
 comparison for its root readers; the remaining readers and normalization
 mapping still need the same proof.
 
+A deterministic source differential test compared the retained-response SSE
+parser with the pinned OpenAI SDK on 1,041 combinations of complete, trailing,
+mixed-newline and malformed frames. Both cases passed; no parser divergence was
+observed in that bounded corpus. This supports the TypeScript frame boundary
+used by replay but does not prove converter equivalence for every provider
+value, physical output membership in native/Python/Java, or a deployed response.
+
 ## Executed event-attribution cases
 
 The focused source run at

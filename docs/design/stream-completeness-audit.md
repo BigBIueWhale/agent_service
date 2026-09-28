@@ -112,12 +112,19 @@ Charging served output from an abandoned draw is correct. Served work and
 history acceptance are distinct facts. The defect is missing disposition
 accounting, not the inclusion of served work in usage totals.
 
-The stdout adapter's `emitSubagentRound` consumes origin, reasoning, text,
-malformed calls and usage but drops the direct `historyDisposition` field.
-The whole stream retains response-history decisions and matching origins;
-independent journal/adapter tests confirmed the join in stream, partial-stream
-and batch modes. Direct labeling and per-attempt output reconciliation remain
-open. The canonical and ACP acceptance fixes are not invalidated by this gap.
+The stdout adapter's `emitSubagentRound` consumes origin, reasoning, text and
+malformed calls without copying the direct `historyDisposition` field onto its
+partial rows. Source reading contradicts the audit's description of an
+"ordinary assistant record": this path emits `stream_event` groups, no full
+assistant row. The same attempt has generation and completion records keyed by
+origin, and completion carries the accepted or abandoned decision. The partial
+reader requires that completion before closing a model origin and permits a
+tool claim only after accepted completion. Repeating the decision on every
+partial would create a second authority for the same fact. Per-attempt output
+reconciliation against physical response bytes remains open. The focused CLI
+test was attempted in the current source checkout but could not collect because
+the installed `@qwen-code/web-templates` package has no resolvable entry; this
+paragraph is source-reading evidence, not a newly executed CLI test.
 
 ## Canonical resume and listing (§4)
 

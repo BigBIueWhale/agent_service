@@ -416956,3 +416956,107 @@ diff --git a/packages/cli/src/utils/output-writer.test.ts b/packages/cli/src/uti
 +    );
 +  });
 +});
+diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
+--- /dev/null
++++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
+@@ -0,0 +1,100 @@
++import { describe, expect, it, vi } from 'vitest';
++// eslint-disable-next-line import/no-internal-modules
++import { Stream } from 'openai/streaming';
++import { parseRecordedOpenAIValues } from './recorded-response-replay.js';
++
++async function sdkValues(body: Uint8Array) {
++  const stream = Stream.fromSSEResponse<unknown>(
++    new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
++    new AbortController(),
++  );
++  const values: unknown[] = [];
++  let failed = false;
++  try {
++    for await (const value of stream) values.push(value);
++  } catch {
++    failed = true;
++  }
++  return { values, failed };
++}
++
++describe('retained SSE replay agrees with the pinned SDK on response frames', () => {
++  it('compares complete and trailing frames under varied line boundaries', async () => {
++    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
++    try {
++      const lines = [
++        'data: {"n":1}',
++        'data:{"n":2}',
++        'event: message',
++        ': comment',
++        'data: {"error":"failure"}',
++        'data: [DONE]',
++        'data: {"n":3}',
++      ];
++      const endings = ['\n', '\r', '\r\n'];
++      for (const first of lines) {
++        for (const second of lines) {
++          for (const ending of endings) {
++            for (const trailer of ['', ending, ending + ending]) {
++              const body = Buffer.from(
++                `${first}${ending}${ending}${second}${trailer}`,
++              );
++              const sdk = await sdkValues(body);
++              const replay = parseRecordedOpenAIValues(body, 'stream');
++              expect(
++                { values: replay.values, failed: replay.failure !== null },
++                `first=${JSON.stringify(first)} second=${JSON.stringify(second)} ending=${JSON.stringify(ending)} trailer=${JSON.stringify(trailer)}`,
++              ).toEqual(sdk);
++            }
++          }
++        }
++      }
++    } finally {
++      logged.mockRestore();
++    }
++  });
++
++  it('compares mixed line endings and binary prefixes', async () => {
++    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
++    try {
++      let seed = 4177;
++      const next = () => {
++        seed = (seed * 48271) % 2147483647;
++        return seed;
++      };
++      const fields = [
++        'data: {"n":1}',
++        'data: {"n":2}',
++        'data: [DONE]',
++        'event: thread.message',
++        'event: error',
++        'data: nope',
++        ': comment',
++        'id: 17',
++        '',
++      ];
++      const endings = ['\n', '\r', '\r\n'];
++      for (let caseId = 0; caseId < 600; caseId++) {
++        let body = '';
++        for (let line = 0; line < 7; line++)
++          body +=
++            fields[next() % fields.length] + endings[next() % endings.length];
++        const prefix =
++          caseId % 3 === 0
++            ? Buffer.from([0xef, 0xbb, 0xbf])
++            : caseId % 3 === 1
++              ? Buffer.from([0xff])
++              : Buffer.alloc(0);
++        const bytes = Buffer.concat([prefix, Buffer.from(body)]);
++        const sdk = await sdkValues(bytes);
++        const replay = parseRecordedOpenAIValues(bytes, 'stream');
++        expect(
++          { values: replay.values, failed: replay.failure !== null },
++          `case=${caseId} bytes=${bytes.toString('hex')}`,
++        ).toEqual(sdk);
++      }
++    } finally {
++      logged.mockRestore();
++    }
++  });
++});

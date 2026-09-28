@@ -8435,6 +8435,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "replays the malformed-tool diagnostic prefix",
         "does not invent a held terminal diagnostic",
     ), label=label)
+    _require_all(state, core + "core/openaiContentGenerator/recorded-response-replay.differential.test.ts", (
+        "Stream.fromSSEResponse<unknown>(",
+        "parseRecordedOpenAIValues(bytes, 'stream')",
+        "compares complete and trailing frames under varied line boundaries",
+        "compares mixed line endings and binary prefixes",
+    ), label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
         "for (const response of decoder.finish()) {",
