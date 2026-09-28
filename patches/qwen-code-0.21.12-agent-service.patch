@@ -13193,7 +13193,21 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      mockSessionServiceLoad({
        conversation: {
-@@ -10956,96 +10932,99 @@
+@@ -10928,12 +10904,13 @@
+     vi.mocked(loadCliConfig).mockResolvedValue(
+       transcriptConfig as unknown as Config,
+     );
+     const readPage = vi.fn().mockResolvedValue({
+       sessionId: VALID_SESSION_ID,
+       records: [{ uuid: 'u1' }],
++      modelEvidenceCompletion: { openRequests: 1, openAttempts: 0 },
+       hasMore: true,
+       nextCursorState: {
+         v: 1,
+         sessionId: VALID_SESSION_ID,
+         fileIdentity: { dev: 1, ino: 2 },
+         snapshotSize: 123,
+@@ -10956,318 +10933,347 @@
        async (context: { sendUpdate: (u: unknown) => Promise<void> }) => {
          await context.sendUpdate({
            sessionUpdate: 'user_message_chunk',
@@ -13234,6 +13248,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
 +        }>;
 +        nextCursor?: string;
 +        hasMore: boolean;
++        provisional?: true;
 +      };
 +      const second = (await agent.extMethod(
 +        SERVE_STATUS_EXT_METHODS.sessionTranscript,
@@ -13333,6 +13348,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
 +      ]);
 +      expect(result.events[0]).not.toHaveProperty('id');
 +      expect(result.hasMore).toBe(true);
++      expect(result.provisional).toBe(true);
 +      expect(second.hasMore).toBe(true);
 +      expect(result.nextCursor).toBeDefined();
 +      expect(mockHistoryReplayPage).toHaveBeenCalledWith(
@@ -13366,7 +13382,13 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const innerConfig = await setupSessionMocks(VALID_SESSION_ID);
      const recording = innerConfig.getChatRecordingService();
      const readPage = vi.fn().mockResolvedValue({
-@@ -11058,35 +11037,37 @@
+       sessionId: VALID_SESSION_ID,
+       records: [],
++      modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
+       hasMore: false,
+       startTime: 'start',
+       lastUpdated: 'end',
+     });
      vi.mocked(SessionTranscriptReader).mockImplementation(
        () =>
          ({
@@ -13424,7 +13446,13 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      await setupSessionMocks(VALID_SESSION_ID);
      const page = {
        sessionId: VALID_SESSION_ID,
-@@ -11099,72 +11080,79 @@
+       records: [],
++      modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
+       hasMore: false,
+       startTime: 'start',
+       lastUpdated: 'end',
+     };
+     const readPage = vi.fn().mockResolvedValue(page);
      vi.mocked(SessionTranscriptReader).mockImplementation(
        () =>
          ({
@@ -13546,7 +13574,11 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        .mockResolvedValueOnce(newConfig);
      vi.mocked(SessionTranscriptReader).mockImplementation(
        () =>
-@@ -11175,47 +11163,52 @@
+         ({
+           readPage: vi.fn().mockResolvedValue({
+             sessionId: VALID_SESSION_ID,
+             records: [],
++            modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
              hasMore: false,
              startTime: 'start',
              lastUpdated: 'end',
@@ -13622,7 +13654,8 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          ({
            readPage: vi.fn().mockResolvedValue({
              sessionId: VALID_SESSION_ID,
-@@ -11223,44 +11216,49 @@
+             records: [],
++            modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
              hasMore: false,
              startTime: 'start',
              lastUpdated: 'end',
@@ -13692,7 +13725,15 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          ({
            readPage: vi.fn().mockResolvedValue({
              sessionId: VALID_SESSION_ID,
-@@ -11276,20 +11274,34 @@
+             records: [],
++            modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
+             hasMore: false,
+             startTime: 'start',
+             lastUpdated: 'end',
+           }),
+         }) as unknown as InstanceType<typeof SessionTranscriptReader>,
+     );
+@@ -11276,20 +11282,34 @@
      const request = agent.extMethod(
        SERVE_STATUS_EXT_METHODS.sessionTranscript,
        { sessionId: VALID_SESSION_ID },
@@ -13734,7 +13775,21 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      const readPage = vi.fn();
      vi.mocked(SessionTranscriptReader).mockImplementation(
-@@ -11377,42 +11389,44 @@
+@@ -11352,12 +11372,13 @@
+       ...makeInnerConfig(),
+       enableFileCheckpointing: vi.fn(),
+     } as unknown as Config);
+     const readPage = vi.fn().mockResolvedValue({
+       sessionId: VALID_SESSION_ID,
+       records: [{ uuid: 'u1' }],
++      modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
+       hasMore: true,
+       nextCursorState: {
+         v: 1,
+         sessionId: VALID_SESSION_ID,
+         fileIdentity: { dev: 1, ino: 2 },
+         snapshotSize: 123,
+@@ -11377,42 +11398,44 @@
      );
      mockHistoryReplayPage.mockRejectedValue(new Error('replay boom'));
      mockHistoryPendingToolCalls.mockReturnValue([
@@ -13806,7 +13861,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      const readPage = vi
        .fn()
-@@ -11545,107 +11559,88 @@
+@@ -11545,118 +11568,102 @@
  
        mockConnectionState.resolve();
        await agentPromise;
@@ -13826,6 +13881,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            readPage: vi.fn().mockResolvedValue({
              sessionId: VALID_SESSION_ID,
              records: [],
++            modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
              replay: {
 +              v: 1,
                pendingToolCalls: [
@@ -13898,6 +13954,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
 -            // A cursor from an older or corrupted daemon can carry a non-object
 -            // replay field; parsing must fall back to empty replay state rather
 -            // than crash transcript paging.
++            modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
              replay: 'garbage',
              hasMore: false,
              startTime: 'start',
@@ -13949,7 +14006,19 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      vi.mocked(loadCliConfig).mockResolvedValue({
        ...makeInnerConfig(),
-@@ -11709,20 +11704,25 @@
+       enableFileCheckpointing: vi.fn(),
+     } as unknown as Config);
+     const readPage = vi.fn().mockResolvedValue({
+       sessionId: VALID_SESSION_ID,
+       records: [{ uuid: 'u1' }, { uuid: 'u2' }],
++      modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
+       hasMore: true,
+       nextCursorState: {
+         v: 1,
+         sessionId: VALID_SESSION_ID,
+         fileIdentity: { dev: 1, ino: 2 },
+         snapshotSize: 123,
+@@ -11709,23 +11716,29 @@
      expect(result.nextCursor).toBeUndefined();
  
      mockConnectionState.resolve();
@@ -13975,10 +14044,14 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const page1 = {
        sessionId: VALID_SESSION_ID,
        records: [{ uuid: 'u1' }],
++      modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
        hasMore: true,
        nextCursorState: {
          v: 1,
-@@ -11734,24 +11734,19 @@
+         sessionId: VALID_SESSION_ID,
+         fileIdentity: { dev: 1, ino: 2 },
+         snapshotSize: 123,
+@@ -11734,24 +11747,20 @@
          startTime: 'start',
          lastUpdated: 'end',
        },
@@ -13990,6 +14063,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const page2 = {
        sessionId: VALID_SESSION_ID,
        records: [{ uuid: 'u2' }],
++      modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
        replay: {
 -        pendingToolCalls: [],
 -        cumulativeUsage: {
@@ -14006,7 +14080,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        lastUpdated: 'end',
      };
      const readPage = vi
-@@ -11761,61 +11756,59 @@
+@@ -11761,61 +11770,59 @@
      vi.mocked(SessionTranscriptReader).mockImplementation(
        () =>
          ({
@@ -14110,7 +14184,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeSessionSettings();
      const agentPromise = runAcpAgent(mockConfig, settings, mockArgv);
  
-@@ -13890,40 +13883,12 @@
+@@ -13890,40 +13897,12 @@
      // [] is truthy and silently blocks all extension commands (#5216).
      expect(vi.mocked(loadCliConfig).mock.calls[0]?.[3]).toBeUndefined();
  
@@ -14151,7 +14225,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
  // bypassed any live ChatRecordingService. The disk-only path left the
  // recording service's in-memory `currentCustomTitle` stale, and the next
  // re-anchor (every 32KB) or finalize() silently reverted the rename by
-@@ -13989,12 +13954,18 @@
+@@ -13989,12 +13968,18 @@
        getDebugMode: vi.fn().mockReturnValue(false),
      } as unknown as Config;
    });
@@ -14170,7 +14244,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        flush: vi.fn().mockResolvedValue(undefined),
        runWithWriteBarrier: vi.fn(
          async <T>(operation: () => Promise<T>): Promise<T> => operation(),
-@@ -14452,14 +14423,15 @@
+@@ -14452,14 +14437,15 @@
      expect(SessionService).not.toHaveBeenCalled();
  
      mockConnectionState.resolve();
@@ -14187,7 +14261,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        renameSession: vi.fn().mockResolvedValue(true),
        removeSession: vi.fn().mockResolvedValue(undefined),
      };
-@@ -14480,16 +14452,17 @@
+@@ -14480,16 +14466,17 @@
        },
      );
  
@@ -14208,7 +14282,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        'manual',
      );
      expect(result).toMatchObject({
-@@ -14500,12 +14473,13 @@
+@@ -14500,12 +14487,13 @@
      mockConnectionState.resolve();
      await agentPromise;
    });
@@ -14222,7 +14296,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        removeSession: vi.fn().mockResolvedValue(undefined),
      };
      const innerConfig = makeLiveSessionInnerConfig(recording);
-@@ -14521,36 +14495,203 @@
+@@ -14521,36 +14509,203 @@
          cwd: '/tmp',
          sessionId: liveSessionId,
          name: 'Side task',
@@ -14438,7 +14512,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const recording = makeRecordingService();
      recording.flush.mockRejectedValue(new Error('flush failed'));
      const innerConfig = makeLiveSessionInnerConfig(recording);
-@@ -14863,12 +15004,14 @@
+@@ -14863,12 +15018,14 @@
        await agentPromise;
      }
    });
@@ -14453,7 +14527,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      vi.mocked(SessionService).mockImplementation(
        () =>
          ({
-@@ -14880,12 +15023,16 @@
+@@ -14880,12 +15037,16 @@
      try {
        for (const cursor of [undefined, null, '']) {
          listSessions.mockClear();
@@ -14470,7 +14544,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          expect(listSessions).toHaveBeenCalledWith({
            cursor: undefined,
            size: undefined,
-@@ -14896,12 +15043,14 @@
+@@ -14896,12 +15057,14 @@
        await agentPromise;
      }
    });
@@ -14485,7 +14559,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      vi.mocked(SessionService).mockImplementation(
        () =>
          ({
-@@ -14923,12 +15072,16 @@
+@@ -14923,12 +15086,16 @@
          await expect(
            agent.unstable_listSessions({
              cwd: '/tmp/project',
@@ -14502,7 +14576,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          expect(listSessions).toHaveBeenCalledWith({
            cursor: undefined,
            size: undefined,
-@@ -14939,12 +15092,14 @@
+@@ -14939,12 +15106,14 @@
        await agentPromise;
      }
    });
@@ -14517,7 +14591,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      vi.mocked(SessionService).mockImplementation(
        () =>
          ({
-@@ -14963,12 +15118,16 @@
+@@ -14963,12 +15132,16 @@
          await expect(
            agent.unstable_listSessions({
              cwd: '/tmp/project',
@@ -14534,7 +14608,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          expect(listSessions).toHaveBeenCalledWith({
            cursor: undefined,
            size: expected,
-@@ -14979,12 +15138,14 @@
+@@ -14979,12 +15152,14 @@
        await agentPromise;
      }
    });
@@ -14549,7 +14623,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            cwd: '/tmp/project',
            startTime: '2026-06-22T01:00:00.000Z',
            prompt: 'hello',
-@@ -15006,12 +15167,16 @@
+@@ -15006,12 +15181,16 @@
          agent.unstable_listSessions({
            cwd: '/tmp/project',
            cursor: '1797860000000.5',
@@ -14566,7 +14640,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
                createdAt: '2026-06-22T01:00:00.000Z',
                startTime: '2026-06-22T01:00:00.000Z',
                preview: 'hello',
-@@ -15064,18 +15229,12 @@
+@@ -15064,18 +15243,12 @@
          sendAvailableCommandsUpdate: ReturnType<typeof vi.fn>;
          replayHistory: ReturnType<typeof vi.fn>;
          primeTurnFromHistory: ReturnType<typeof vi.fn>;
@@ -14585,7 +14659,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          enableLiveScreenContext: ReturnType<typeof vi.fn>;
          assertCanStartTurn: ReturnType<typeof vi.fn>;
          beginClose: ReturnType<typeof vi.fn>;
-@@ -15426,18 +15585,12 @@
+@@ -15426,18 +15599,12 @@
              opts.replayHistoryImpl ?? (async () => undefined),
            ),
          primeTurnFromHistory: vi.fn(opts.primeTurnFromHistoryImpl),
@@ -14604,7 +14678,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          enableLiveScreenContext: vi.fn().mockResolvedValue(undefined),
          beginClose: vi.fn().mockReturnValue(releaseCloseGate),
          beginCloseIfAvailable: vi.fn().mockReturnValue(releaseCloseGate),
-@@ -15819,12 +15972,13 @@
+@@ -15819,12 +15986,13 @@
    it('leaves canonical Goal recovery to Config initialization', async () => {
      bindRestoreMocks({
        sessionExists: true,
@@ -14618,7 +14692,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
              timestamp: new Date(0).toISOString(),
              type: 'system',
              subtype: 'goal_state',
-@@ -15860,159 +16014,139 @@
+@@ -15860,159 +16028,139 @@
        sessionExists: true,
        resumedConversation: {
          messages,
@@ -14881,7 +14955,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
    // publication in `createAndStoreSession`. Left there, the web-shell's
    // primary load path replays the pre-migration `set` card as the newest goal
    // card and shows a phantom running goal. The card has to ride inside the
-@@ -16081,31 +16215,38 @@
+@@ -16081,31 +16229,38 @@
      bindRestoreMocks({
        sessionExists: true,
        resumedConversation: { messages },
@@ -14939,7 +15013,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const messages = [{ role: 'user', parts: [{ text: 'hi' }] }];
      bindRestoreMocks({
        sessionExists: true,
-@@ -16242,12 +16383,13 @@
+@@ -16242,12 +16397,13 @@
    it('loadSession limits bulk replay to complete recent turns', async () => {
      const makeMessage = (
        uuid: string,
@@ -14953,7 +15027,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16305,12 +16447,13 @@
+@@ -16305,12 +16461,13 @@
          createdAt: 1,
          updatedAt: 1,
        },
@@ -14967,7 +15041,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type: 'system',
        subtype: 'goal_state',
-@@ -16321,22 +16464,24 @@
+@@ -16321,22 +16478,24 @@
          cause: goalCause,
          snapshot: activeGoalState,
        },
@@ -14992,7 +15066,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          timestamp: '2026-07-16T00:00:02.000Z',
          type: 'assistant',
          cwd: '/tmp',
-@@ -16383,36 +16528,40 @@
+@@ -16383,36 +16542,40 @@
        },
      };
      innerConfig
@@ -15057,7 +15131,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const recentRecords = [
        { uuid: 'u2', role: 'user', parts: [{ text: 'latest' }] },
        { uuid: 'a2', role: 'model', parts: [{ text: 'answer' }] },
-@@ -16497,12 +16646,13 @@
+@@ -16497,12 +16660,13 @@
          'qwen.session.loadReplayPageSize': 2,
          'qwen.session.loadReplayHideInherited': true,
        },
@@ -15071,7 +15145,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            condition: 'visible goal',
            iterations: 0,
            setAt: 123,
-@@ -16578,33 +16728,34 @@
+@@ -16578,33 +16742,34 @@
          gaps: [],
          hasMore: false,
          goalRecoverySourceUuid: 'visible-goal',
@@ -15127,7 +15201,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const innerConfig = bindRestoreMocks({
        sessionExists: true,
        resumedConversation: {
-@@ -16684,12 +16835,13 @@
+@@ -16684,12 +16849,13 @@
    it('loadSession keeps one long turn complete', async () => {
      const makeMessage = (
        uuid: string,
@@ -15141,7 +15215,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16738,12 +16890,13 @@
+@@ -16738,12 +16904,13 @@
    it('loadSession bounds bulk replay expansion inside one long turn', async () => {
      const makeMessage = (
        uuid: string,
@@ -15155,7 +15229,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16789,12 +16942,13 @@
+@@ -16789,12 +16956,13 @@
    it('loadSession bulk replay extends a mid-pair window to the owning call', async () => {
      const makeMessage = (
        uuid: string,
@@ -15169,7 +15243,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16855,12 +17009,13 @@
+@@ -16855,12 +17023,13 @@
      const makeMessage = (
        uuid: string,
        parentUuid: string | null,
@@ -15183,7 +15257,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        ...(subtype !== undefined ? { subtype } : {}),
-@@ -16920,56 +17075,57 @@
+@@ -16920,56 +17089,57 @@
        resumedConversation: {
          messages,
        },
@@ -15281,7 +15355,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const messages = [{ role: 'user', parts: [{ text: 'hi' }] }];
      let primeCalls = 0;
      bindRestoreMocks({
-@@ -17375,102 +17531,66 @@
+@@ -17375,102 +17545,66 @@
      expect(firstSession.beginClose).not.toHaveBeenCalled();
  
      mockConnectionState.resolve();
@@ -15428,7 +15502,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const recentRecords = [
        { uuid: 'u2', role: 'user', parts: [{ text: 'latest' }] },
        { uuid: 'a2', role: 'model', parts: [{ text: 'answer' }] },
-@@ -17533,12 +17653,13 @@
+@@ -17533,12 +17667,13 @@
          'qwen.session.loadReplayMode': 'bulk',
          'qwen.session.loadReplayPageSize': 2,
        },
@@ -15442,7 +15516,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            condition: 'keep the live goal visible',
            iterations: 0,
          },
-@@ -17618,13 +17739,16 @@
+@@ -17618,13 +17753,16 @@
        _meta: {
          'qwen.session.loadReplayMode': 'bulk',
          'qwen.session.loadReplayPageSize': 2,
@@ -15460,7 +15534,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
    });
  
    it('does not bootstrap a filtered live Goal candidate without a visible source', async () => {
-@@ -17690,13 +17814,16 @@
+@@ -17690,13 +17828,16 @@
          'qwen.session.loadReplayMode': 'bulk',
          'qwen.session.loadReplayPageSize': 2,
          'qwen.session.loadReplayHideInherited': true,
@@ -15478,7 +15552,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
    });
  
    it('live resume refreshes artifacts without replaying UI history', async () => {
-@@ -17921,12 +18048,13 @@
+@@ -17921,12 +18062,13 @@
          },
        } as unknown as InstanceType<typeof AgentSideConnection>;
      });
@@ -15492,7 +15566,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getDisableAllHooks: vi.fn().mockReturnValue(false),
        hasHooksForEvent: vi.fn().mockReturnValue(false),
        getModel: vi.fn().mockReturnValue('test-model'),
-@@ -17999,13 +18127,15 @@
+@@ -17999,13 +18141,15 @@
          refusedServerNames: [],
        }),
        getMcpClientBudget: vi.fn().mockReturnValue(undefined),
@@ -15508,7 +15582,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getMcpServers: vi.fn().mockReturnValue({}),
        getTopTierMcpServers: vi.fn().mockReturnValue(undefined),
        getRuntimeMcpServers: vi.fn().mockReturnValue({}),
-@@ -18181,13 +18311,15 @@
+@@ -18181,13 +18325,15 @@
          refusedServerNames: [],
        }),
        getMcpClientBudget: vi.fn().mockReturnValue(undefined),
@@ -15524,7 +15598,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getMcpServers: vi.fn().mockReturnValue({}),
        getTopTierMcpServers: vi.fn().mockReturnValue(undefined),
        getRuntimeMcpServers: vi.fn().mockReturnValue({}),
-@@ -18267,13 +18399,15 @@
+@@ -18267,13 +18413,15 @@
          refusedServerNames: [],
        }),
        getMcpClientBudget: vi.fn().mockReturnValue(undefined),
@@ -15540,7 +15614,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getMcpServers: vi.fn().mockReturnValue({}),
        getTopTierMcpServers: vi.fn().mockReturnValue(undefined),
        getRuntimeMcpServers: vi.fn().mockReturnValue({}),
-@@ -18336,22 +18470,27 @@
+@@ -18336,22 +18484,27 @@
    });
  
    it('allows workspace MCP initialization to retry after a failure', async () => {
@@ -15569,7 +15643,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      } as unknown as Config;
      vi.mocked(loadSettings).mockReturnValue({
        merged: { mcpServers: {} },
-@@ -18448,13 +18587,15 @@
+@@ -18448,13 +18601,15 @@
      const discoveryManager = {
        discoverAllMcpToolsIncremental: vi.fn().mockResolvedValue(undefined),
        getDiscoveryState: vi.fn().mockReturnValue(MCPDiscoveryState.COMPLETED),
@@ -15585,7 +15659,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          user: userServer,
          project: projectServer,
          systemDefault: systemDefaultServer,
-@@ -18949,12 +19090,13 @@
+@@ -18949,12 +19104,13 @@
      stdoutDestroySpy.mockRestore();
    });
  
@@ -15599,7 +15673,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          getCurrentAuthType: vi.fn().mockReturnValue('api-key'),
          syncAfterAuthRefresh: vi.fn(),
        }),
-@@ -19985,12 +20127,13 @@
+@@ -19985,12 +20141,13 @@
        subtype: string;
        systemPayload: unknown;
        forkedFrom: { sessionId: string; messageUuid: string };
@@ -15638,7 +15712,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    preloadContentGenerator,
    MCPDiscoveryState,
    MCPServerStatus,
-@@ -55,12 +55,13 @@
+@@ -55,31 +55,31 @@
    updateSetting,
    SessionEndReason,
    WorkspaceMcpBudget,
@@ -15652,7 +15726,12 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    isGatedMcpScope,
    MCPOAuthProvider,
    MCPOAuthTokenStorage,
-@@ -72,14 +73,12 @@
+   InvalidSessionTranscriptCursorError,
+   SESSION_TRANSCRIPT_MAX_LIMIT,
+   SESSION_TRANSCRIPT_MAX_PAGE_BYTES,
++  SessionTranscriptEvidenceIncompleteError,
+   SessionTranscriptReader,
+   SessionTranscriptPageTooLargeError,
    SessionTranscriptSnapshotUnavailableError,
    SessionTranscriptTooLargeError,
    encodeSessionTranscriptCursor,
@@ -15667,7 +15746,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    runManagedRememberByAgent,
    matchesAnyServerPattern,
    mcpServerRequiresOAuth,
-@@ -92,15 +91,12 @@
+@@ -92,15 +92,12 @@
    refreshMemoryInstruction,
    applyReasoningEffort,
    REASONING_EFFORT_TIERS,
@@ -15683,7 +15762,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    type ConfigInitializeOptions,
    type DeviceAuthorizationData,
    type DiscoveredMCPPrompt,
-@@ -112,12 +108,13 @@
+@@ -112,12 +109,13 @@
    type McpTransportKind,
    type ProviderConfig,
    type ProviderModelConfig,
@@ -15697,7 +15776,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    type SessionRestoreProjection,
    type SessionArtifactEventRecordPayload,
    type SessionArtifactSnapshotRecordPayload,
-@@ -243,14 +240,12 @@
+@@ -243,14 +241,12 @@
    getModelConfiguration,
    type ModelReasoningConfiguration,
  } from './model-configuration.js';
@@ -15712,7 +15791,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
  import {
    buildAcpModelOptions,
    getCurrentAcpModelId,
-@@ -376,13 +371,12 @@
+@@ -376,13 +372,12 @@
  import { MAX_REMEMBER_CONTENT_BYTES } from '../runtime/workspace-memory-remember-constants.js';
  import { computeCpuPercent } from '../runtime/cpu-percent.js';
  import {
@@ -15726,7 +15805,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    findGoalToRestore,
  } from '../ui/utils/restoreGoal.js';
  import { writeStderrLineSafe } from '../utils/stdioHelpers.js';
-@@ -896,32 +890,12 @@
+@@ -896,32 +891,12 @@
        iterations: active.iterations,
        ...(active.setAt !== undefined ? { setAt: active.setAt } : {}),
      },
@@ -15759,7 +15838,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
  ): ChatRecord[] {
    const sourceBoundary = records.findIndex(
      (record) =>
-@@ -980,27 +954,12 @@
+@@ -980,27 +955,12 @@
      throw RequestError.invalidParams(
        undefined,
        `Invalid load replay page size; expected 1..${SESSION_TRANSCRIPT_MAX_LIMIT}`,
@@ -15787,7 +15866,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    const oneLine = directive.replace(/\s+/g, ' ').trim();
    return oneLine.length > maxLength
      ? `${oneLine.slice(0, maxLength - 3)}…`
-@@ -3193,19 +3152,12 @@
+@@ -3193,19 +3153,12 @@
    options?: {
      privateParentCapability?: string;
      externalToolGuardRequired?: boolean;
@@ -15807,7 +15886,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        : options.privateParentCapability;
    delete process.env[PRIVATE_ACP_CAPABILITY_ENV];
    delete process.env[PRIVATE_EXTERNAL_TOOL_GUARD_ENV];
-@@ -3348,13 +3300,12 @@
+@@ -3348,13 +3301,12 @@
        agentInstance = new QwenAgent(
          config,
          settings,
@@ -15821,7 +15900,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        return agentInstance;
      }, stream);
      markAcpStartup('transportSetupEnd');
-@@ -3964,13 +3915,17 @@
+@@ -3964,13 +3916,17 @@
      );
      for (const result of results) {
        if (result.status === 'rejected') failures.push(result.reason);
@@ -15840,7 +15919,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    }
  
    private getWorkspaceMcpConfig(serverName?: string): Config {
-@@ -4111,27 +4066,25 @@
+@@ -4111,27 +4067,25 @@
          settings.merged,
          {
            ...this.argv,
@@ -15869,7 +15948,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          skipMcpDiscovery: true,
          lenientToolWarmup: true,
        });
-@@ -4144,18 +4097,18 @@
+@@ -4144,18 +4098,18 @@
          throw new Error(
            'MCP discovery did not start. The workspace may not be trusted.',
          );
@@ -15894,7 +15973,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    private initializeWorkspaceMcpDiscovery(): { accepted: boolean } {
      if (this.workspaceMcpDiscoveryConfig || this.workspaceMcpDiscoveryPromise) {
        return { accepted: false };
-@@ -4393,15 +4346,13 @@
+@@ -4393,15 +4347,13 @@
        );
        const recorder = config.getChatRecordingService();
        const readProjection = () =>
@@ -15911,7 +15990,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        throw mapSessionRestoreRequestError(error, sessionId);
      } finally {
        releaseGate();
-@@ -4505,13 +4456,13 @@
+@@ -4505,13 +4457,13 @@
        return { closed: true, holds: [] };
      }
  
@@ -15926,7 +16005,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      const cancelClose = opts?.waitForCloseGate
        ? await beginSessionCloseAfterCurrentGate(session, drainTimeoutMs)
        : session.beginClose();
-@@ -4558,30 +4509,30 @@
+@@ -4558,30 +4510,30 @@
          const holds = session.collectActiveWorkHolds();
          if (holds.length > 0) {
            return { closed: false, holds };
@@ -15961,7 +16040,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        const cleanupErrors: unknown[] = [];
        if (flushError !== undefined) cleanupErrors.push(flushError);
        if (closeError !== undefined) cleanupErrors.push(closeError);
-@@ -4631,22 +4582,21 @@
+@@ -4631,22 +4583,21 @@
      );
      await Promise.allSettled(
        [...this.pendingConfigCleanup.values()]
@@ -15985,7 +16064,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      // Pool kill switch via env var so operators can A/B compare or
      // roll back without rebuilding. `run-qwen-serve.ts` sets this when
      // `--no-mcp-pool` is passed at daemon startup.
-@@ -5086,13 +5036,12 @@
+@@ -5086,13 +5037,12 @@
              const replay = await profiler.time('history_replay', () =>
                collectHistoryReplayUpdates({
                  sessionId,
@@ -15999,7 +16078,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                    ? {
                        limits: {
                          maxBytes: LOAD_REPLAY_MAX_BYTES,
-@@ -5193,24 +5142,22 @@
+@@ -5193,24 +5143,22 @@
            params.mcpServers ?? [],
            settings,
            sessionSource,
@@ -16024,7 +16103,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        let response: LoadSessionResponse | undefined;
        const buildResponse = () =>
          profiler.timeSync('response_build', () => ({
-@@ -5244,13 +5191,12 @@
+@@ -5244,13 +5192,12 @@
                  const replay = await profiler.time('history_replay', () =>
                    collectHistoryReplayUpdates({
                      sessionId,
@@ -16038,7 +16117,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                        ? {
                            limits: {
                              maxBytes: LOAD_REPLAY_MAX_BYTES,
-@@ -5337,46 +5283,32 @@
+@@ -5337,46 +5284,32 @@
                profiler.timeSync('runtime_initialize', () => {
                  if (!projection) return;
                  createdSession.primeTurnState(
@@ -16095,7 +16174,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                      await createdSession.sendUpdate(update);
                    }
                  } catch (error) {
-@@ -5502,13 +5434,12 @@
+@@ -5502,13 +5435,12 @@
            params.mcpServers ?? [],
            settings,
            sessionSource,
@@ -16109,7 +16188,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        const projection = config.consumeSessionRestoreProjection?.();
        let response: ResumeSessionResponse | undefined;
        try {
-@@ -5636,12 +5567,17 @@
+@@ -5636,12 +5568,17 @@
        sessionId: item.sessionId,
        title: item.customTitle || item.prompt || '(session)',
        updatedAt: new Date(item.mtime).toISOString(),
@@ -16127,7 +16206,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      };
    }
  
-@@ -5717,13 +5653,15 @@
+@@ -5717,13 +5654,15 @@
            if (!selected) {
              throw RequestError.invalidParams(
                undefined,
@@ -16144,7 +16223,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
              const current = generation.reasoning;
              generation.reasoning = {
                ...(current || {}),
-@@ -6981,13 +6919,15 @@
+@@ -6981,13 +6920,15 @@
            modelId,
            baseModelId: parseAcpBaseModelId(effectiveModelId),
            name: model.label,
@@ -16161,7 +16240,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            ...(model.baseUrl !== undefined
              ? { baseUrl: sanitizeProviderBaseUrl(model.baseUrl) }
              : {}),
-@@ -7460,62 +7400,19 @@
+@@ -7460,62 +7401,19 @@
    private async buildSessionContextUsageStatus(
      sessionId: string,
      showDetails: boolean,
@@ -16227,7 +16306,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
    private async buildSessionSupportedCommandsStatus(
      sessionId: string,
    ): Promise<ServeSessionSupportedCommandsStatus> {
-@@ -7568,17 +7465,17 @@
+@@ -7568,17 +7466,17 @@
      const session = this.sessionOrThrow(sessionId);
      const config = session.getConfig();
      const metrics = uiTelemetryService.getMetricsForSession(sessionId);
@@ -16247,7 +16326,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      const byName: ServeSessionStatsStatus['tools']['byName'] = {};
      for (const [name, t] of Object.entries(metrics.tools.byName)) {
        byName[name] = {
-@@ -7619,12 +7516,13 @@
+@@ -7619,12 +7517,13 @@
        v: STATUS_SCHEMA_VERSION,
        sessionId,
        workspaceCwd: this.workspaceCwd(config),
@@ -16261,7 +16340,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          totalSuccess: metrics.tools.totalSuccess,
          totalFail: metrics.tools.totalFail,
          totalDurationMs: metrics.tools.totalDurationMs,
-@@ -8296,17 +8194,14 @@
+@@ -8296,17 +8195,14 @@
            persistScope,
          );
          await applyProviderInstallPlan(plan, {
@@ -16281,7 +16360,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            plan.modelSelection?.modelId;
          const effectiveBaseUrl =
            (adapter.getValue('model.baseUrl') as string | undefined) ??
-@@ -8596,13 +8491,13 @@
+@@ -8596,13 +8492,13 @@
            return await runWithAcpRuntimeOutputDir(settings, cwd, async () => {
              if (rawDirection === 'backward') {
                await this.sessions
@@ -16296,7 +16375,40 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                this.activePromptCalls.has(sessionId);
              const page = await reader.readPage(sessionId, {
                ...(typeof rawCursor === 'string' ? { cursor: rawCursor } : {}),
-@@ -8911,13 +8806,13 @@
+@@ -8638,12 +8534,13 @@
+               ...(replay.nextCursor !== undefined
+                 ? { nextCursor: replay.nextCursor }
+                 : {}),
+               hasMore: replay.hasMore,
+               startTime: replay.startTime,
+               lastUpdated: replay.lastUpdated,
++              ...(replay.provisional ? { provisional: true } : {}),
+               ...(replay.replayError !== undefined
+                 ? { partial: true, replayError: replay.replayError }
+                 : {}),
+             } as Record<string, unknown>;
+           });
+         } catch (error) {
+@@ -8658,12 +8555,18 @@
+                 errorKind:
+                   error instanceof InvalidSessionTranscriptCursorError
+                     ? 'invalid_transcript_cursor'
+                     : 'invalid_transcript_limit',
+               },
+             );
++          }
++          if (error instanceof SessionTranscriptEvidenceIncompleteError) {
++            throw new RequestError(-32010, error.message, {
++              errorKind: 'transcript_evidence_incomplete',
++              sessionId,
++            });
+           }
+           if (error instanceof SessionTranscriptSnapshotUnavailableError) {
+             throw new RequestError(-32010, error.message, {
+               errorKind: 'transcript_snapshot_unavailable',
+               sessionId,
+             });
+@@ -8911,13 +8814,13 @@
          const childSignal = AbortSignal.timeout(
            WORKSPACE_MEMORY_REMEMBER_CHILD_TIMEOUT_MS,
          );
@@ -16311,7 +16423,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                config: hiddenConfig,
                abortSignal: childSignal,
              });
-@@ -8994,13 +8889,13 @@
+@@ -8994,13 +8897,13 @@
          let projectRoot = '<unknown>';
          try {
            projectRoot = this.config.getProjectRoot();
@@ -16326,7 +16438,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                recordMetadata: true,
                suppressChatRecording: true,
              },
-@@ -9683,18 +9578,12 @@
+@@ -9683,18 +9586,12 @@
              undefined,
              'Invalid or missing artifact persist payload',
            );
@@ -16345,7 +16457,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            );
          } else {
            await recording.recordSessionArtifactSnapshot(
-@@ -9719,18 +9608,12 @@
+@@ -9719,18 +9616,12 @@
              'Invalid user text elements payload',
            );
          }
@@ -16364,7 +16476,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        case SERVE_CONTROL_EXT_METHODS.sessionTitle: {
          const sessionId = params['sessionId'];
          const displayName = params['displayName'];
-@@ -9754,16 +9637,13 @@
+@@ -9754,16 +9645,13 @@
            );
          }
          const session = this.sessionOrThrow(sessionId);
@@ -16382,7 +16494,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          const sessionId = params['sessionId'];
          const parentSessionId = params['parentSessionId'];
          if (typeof sessionId !== 'string' || sessionId.length === 0) {
-@@ -9780,19 +9660,16 @@
+@@ -9780,19 +9668,16 @@
              undefined,
              'Invalid or missing parentSessionId',
            );
@@ -16406,7 +16518,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          const sessionId = params['sessionId'];
          const sourceType = params['sourceType'];
          const sourceId = params['sourceId'];
-@@ -9811,19 +9688,16 @@
+@@ -9811,19 +9696,16 @@
          }
          const session = this.sessionOrThrow(sessionId);
          if (isCompatibleLiveSessionSource(source)) {
@@ -16430,7 +16542,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            ...(source.sourceId !== undefined
              ? { sourceId: source.sourceId }
              : {}),
-@@ -10260,20 +10134,18 @@
+@@ -10260,20 +10142,18 @@
            await waitForSessionDrain(
              session.waitForActiveTurnsToSettle(),
              SESSION_DRAIN_TIMEOUT_MS,
@@ -16453,7 +16565,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                `Memory refresh failed: ${
                  relocation.memoryRefreshError instanceof Error
                    ? relocation.memoryRefreshError.message
-@@ -10843,30 +10715,13 @@
+@@ -10843,30 +10723,13 @@
              undefined,
              'Invalid or missing sessionId',
            );
@@ -16485,7 +16597,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            ? await runtime.dispatch({
                action: 'clear',
                expectedGoalId: goal.goalId,
-@@ -10888,25 +10743,15 @@
+@@ -10888,25 +10751,15 @@
            throw RequestError.invalidParams(
              undefined,
              'Invalid or missing sessionId',
@@ -16514,7 +16626,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            snapshot,
            active: activeGoal
              ? {
-@@ -11272,18 +11117,17 @@
+@@ -11272,18 +11125,17 @@
          }
          let artifactSnapshot: unknown;
          let artifactSnapshotUnavailable: string | undefined;
@@ -16537,7 +16649,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            } else if (sessionData.artifactSnapshot) {
              artifactSnapshot = sessionData.artifactSnapshot;
            } else {
-@@ -11328,48 +11172,45 @@
+@@ -11328,48 +11180,45 @@
              'Invalid or missing sessionId',
            );
          }
@@ -16591,7 +16703,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          return {
            updates: replay.updates,
            startTime: sessionData.conversation.startTime,
-@@ -11438,40 +11279,28 @@
+@@ -11438,40 +11287,28 @@
              sessionId,
            });
          }
@@ -16638,7 +16750,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
              if (stripped && stripped.length > 0) {
                baseName = stripped;
              } else {
-@@ -11491,19 +11320,21 @@
+@@ -11491,19 +11328,21 @@
              throw new RequestError(
                -32603,
                `Failed to set title on forked session ${newSessionId}`,
@@ -16667,7 +16779,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        }
        case 'qwen/settings/getCore': {
          const settings = loadSettings(cwd);
-@@ -12023,37 +11854,57 @@
+@@ -12023,37 +11862,57 @@
     */
    private buildClientMcpSender(sessionId?: string): SendSdkMcpMessage {
      return (serverName: string, message: JSONRPCMessage) =>
@@ -16749,7 +16861,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      cwd: string,
      settings: LoadedSettings,
    ): Promise<Config> {
-@@ -12064,43 +11915,56 @@
+@@ -12064,43 +11923,56 @@
          return cached.config;
        }
        if (cached.pending) {
@@ -16825,7 +16937,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          if (current?.pending) {
            return current.pending;
          }
-@@ -12124,13 +11988,12 @@
+@@ -12124,13 +11996,12 @@
      mcpServers: McpServer[],
      settings: LoadedSettings,
      sessionSource?: SessionSource,
@@ -16839,7 +16951,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        this.assertManagedSessionAdmission();
        return await this.runWithPinnedRuntimeBaseDir(settings, cwd, async () => {
          await this.retryPendingConfigCleanup(
-@@ -12142,13 +12005,12 @@
+@@ -12142,13 +12013,12 @@
            mcpServers,
            settings,
            sessionSource,
@@ -16853,7 +16965,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      } catch (error) {
        if (error instanceof SessionIdConflictError) {
          throw new RequestError(ACP_ERROR_CODES.INVALID_PARAMS, error.message, {
-@@ -12173,13 +12035,12 @@
+@@ -12173,13 +12043,12 @@
      mcpServers: McpServer[],
      settings: LoadedSettings,
      sessionSource?: SessionSource,
@@ -16867,7 +16979,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
      // `.mcp.json` and stay un-gated. Collect them separately and pass them as
      // `sessionMcpServers` (top precedence tier) rather than merging into
      // `settings.mcpServers`, where `assembleMcpServers` would demote them below
-@@ -12239,13 +12100,12 @@
+@@ -12239,13 +12108,12 @@
      }
  
      const mergedSettings = {
@@ -16881,7 +16993,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
  
      const sessionArg =
        resume === true
-@@ -12257,13 +12117,12 @@
+@@ -12257,13 +12125,12 @@
        // the ACP process argv. Without clearing it, every newSession()
        // inherits the same ID and the second session collides with the
        // first's writer lease (#7435).
@@ -16895,7 +17007,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        mergedSettings,
        argvForSession,
        cwd,
-@@ -12311,15 +12170,13 @@
+@@ -12311,15 +12178,13 @@
            }
          : undefined,
      );
@@ -16912,7 +17024,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          config.setSessionWriterReclaimPolicy('never');
          config.setSessionWriterTakeoverPolicy('certified');
        }
-@@ -12555,26 +12412,26 @@
+@@ -12555,26 +12420,26 @@
            .restoreFromSnapshots(sessionData.fileHistorySnapshots);
        }
  
@@ -16943,7 +17055,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
          try {
            await session.publishRecoveredGoalState(
              sessionData.conversation.messages,
-@@ -12650,15 +12507,17 @@
+@@ -12650,15 +12515,17 @@
      );
  
      const mappedAvailableModels = modelOptions.map(({ model, modelId }) => ({
@@ -16964,7 +17076,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
        currentModelId,
        availableModels: mappedAvailableModels,
      };
-@@ -12734,13 +12593,13 @@
+@@ -12734,13 +12601,13 @@
            id: 'reasoning_effort',
            name: 'Reasoning effort',
            description: `Thinking and reasoning effort for ${rawCurrentModelId}`,
@@ -16979,7 +17091,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
                  ) ?? modelReasoning.defaultEffort),
            options: [
              {
-@@ -12788,13 +12647,13 @@
+@@ -12788,13 +12655,13 @@
    private getModelReasoningConfiguration(
      config: Config,
    ): ModelReasoningConfiguration | undefined {
@@ -29119,7 +29231,7 @@ diff --git a/packages/cli/src/acp-integration/session/emitters/PlanEmitter.ts b/
 diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.ts b/packages/cli/src/acp-integration/session/history-replay-page.test.ts
 --- a/packages/cli/src/acp-integration/session/history-replay-page.test.ts
 +++ b/packages/cli/src/acp-integration/session/history-replay-page.test.ts
-@@ -1,34 +1,64 @@
+@@ -1,34 +1,62 @@
  /**
   * @license
   * Copyright 2026 Qwen Team
@@ -29132,19 +29244,24 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
 +  resolveTranscriptRecord,
 +  requireStoredTranscriptRecord,
 +  type ServedUsage,
++  type ChatRecord,
++  type GoalRecord,
++  type GoalSnapshotV2,
++  type SessionTranscriptCursorState,
++  type SessionTranscriptRecordPage,
 +} from '@qwen-code/qwen-code-core';
 +import {
 +  FinishReason,
 +  GenerateContentResponse,
 +  type Part,
 +} from '@google/genai';
- import type {
-   ChatRecord,
-   GoalRecord,
-   GoalSnapshotV2,
-   SessionTranscriptCursorState,
-   SessionTranscriptRecordPage,
- } from '@qwen-code/qwen-code-core';
+-import type {
+-  ChatRecord,
+-  GoalRecord,
+-  GoalSnapshotV2,
+-  SessionTranscriptCursorState,
+-  SessionTranscriptRecordPage,
+-} from '@qwen-code/qwen-code-core';
  import { Buffer } from 'node:buffer';
  import { afterEach, describe, expect, it, vi } from 'vitest';
 -import { projectAcpToolResultUpdate } from './acp-tool-result-text-projection.js';
@@ -29186,7 +29303,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
    goal: {
      goalId: 'goal-1',
      revision: 1,
-@@ -39,14 +69,15 @@
+@@ -39,14 +67,15 @@
      activeTimeMs: 1000,
      createdAt: 1,
      updatedAt: 2,
@@ -29203,7 +29320,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
      timestamp: TIMESTAMP,
      type: 'user',
      cwd: '/workspace',
-@@ -55,38 +86,79 @@
+@@ -55,38 +84,79 @@
        role: 'user',
        parts: [{ text: 'hello' }],
      },
@@ -29302,7 +29419,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
      timestamp: TIMESTAMP,
      type: 'tool_result',
      cwd: '/workspace',
-@@ -114,12 +186,13 @@
+@@ -114,12 +184,13 @@
  
  function largeToolResultRecord(
    textParts: string[],
@@ -29316,13 +29433,57 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
      timestamp: TIMESTAMP,
      type: 'tool_result',
      cwd: '/workspace',
-@@ -176,64 +249,295 @@
+@@ -164,76 +235,339 @@
+ ): SessionTranscriptRecordPage {
+   return {
+     sessionId: SESSION_ID,
+     filePath: '/workspace/chats/session.jsonl',
+     records: [],
+     gaps: [],
++    modelEvidenceCompletion: { openRequests: 0, openAttempts: 0 },
+     hasMore: false,
+     startTime: TIMESTAMP,
+     lastUpdated: TIMESTAMP,
+     ...overrides,
+   };
+ }
  
  afterEach(() => {
    vi.restoreAllMocks();
  });
  
  describe('history replay page', () => {
++  it('refuses a complete-page claim while its captured model request remains open', async () => {
++    const replay = vi.spyOn(HistoryReplayer.prototype, 'replayPage');
++    await expect(
++      replayTranscriptRecordPage({
++        sessionId: SESSION_ID,
++        page: recordPage({
++          modelEvidenceCompletion: { openRequests: 1, openAttempts: 0 },
++        }),
++        encodeCursor: () => 'cursor',
++      }),
++    ).rejects.toThrow(/open physical requests or logical generations/);
++    expect(replay).not.toHaveBeenCalled();
++  });
++
++  it('marks an active page with open model evidence as provisional', async () => {
++    const page = recordPage({
++      records: [userRecord()],
++      modelEvidenceCompletion: { openRequests: 1, openAttempts: 0 },
++    });
++    const result = await replayTranscriptRecordPage({
++      sessionId: SESSION_ID,
++      page,
++      encodeCursor: () => 'cursor',
++      finalizeDangling: false,
++    });
++    expect(result.provisional).toBe(true);
++    expect(result.partial).toBeUndefined();
++    expect(result.replayError).toBeUndefined();
++    expect(result.updates).not.toHaveLength(0);
++  });
++
 +  it.each([
 +    {
 +      promptTokenCount: 0,
@@ -29652,7 +29813,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
        expect.objectContaining({
          sessionUpdate: 'user_message_chunk',
          timestamp: Date.parse(TIMESTAMP),
-@@ -243,13 +547,12 @@
+@@ -243,13 +577,12 @@
  
    it('fails incrementally before collecting an update above the count limit', async () => {
      await expect(
@@ -29666,7 +29827,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
        name: 'HistoryReplayLimitError',
        reason: 'updates',
        observed: 1,
-@@ -259,218 +562,161 @@
+@@ -259,218 +592,161 @@
  
    it('fails incrementally before retaining serialized updates above the byte limit', async () => {
      await expect(
@@ -29970,7 +30131,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
      // Regression: the replay state carried across a page handoff must include
      // the last goal_state cause, or the next page's machine cannot tell a
      // shape-equal bookkeeping re-commit from a genuine rejection card.
-@@ -479,12 +725,13 @@
+@@ -479,12 +755,13 @@
      const goalRecord = (
        uuid: string,
        cause: string,
@@ -29984,7 +30145,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
          timestamp: TIMESTAMP,
          type: 'system',
          subtype: 'goal_state',
-@@ -555,12 +802,13 @@
+@@ -555,12 +832,13 @@
          activeTimeMs: 1234,
          createdAt: 10,
          updatedAt: 20,
@@ -29998,7 +30159,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
        timestamp: TIMESTAMP,
        type: 'system',
        subtype: 'goal_state',
-@@ -575,13 +823,13 @@
+@@ -575,13 +853,13 @@
  
      const result = await replayTranscriptRecordPage({
        sessionId: SESSION_ID,
@@ -30013,7 +30174,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
  
      const goalUpdate = result.updates.find((update) => {
        const meta = (update as { _meta?: Record<string, unknown> })._meta;
-@@ -611,14 +859,25 @@
+@@ -611,14 +889,25 @@
            ...(direction ? { direction } : {}),
          }),
          encodeCursor: vi.fn(),
@@ -30041,7 +30202,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
        });
      },
    );
-@@ -627,14 +886,25 @@
+@@ -627,14 +916,25 @@
      const result = await replayTranscriptRecordPage({
        sessionId: SESSION_ID,
        page: recordPage({ records: [toolCallRecord()] }),
@@ -30069,7 +30230,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
        content: [
          {
            type: 'content',
-@@ -657,23 +927,43 @@
+@@ -657,23 +957,43 @@
          records: [toolCallRecord(), toolResultRecord()],
        }),
        encodeCursor: vi.fn(),
@@ -30113,7 +30274,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
          toolCallId: 'call-1',
          status: 'completed',
        }),
-@@ -713,6 +1003,139 @@
+@@ -713,6 +1033,139 @@
          page: recordPage({ replay: { v: 2 } }),
          encodeCursor: vi.fn(),
        }),
@@ -30256,7 +30417,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.test.t
 diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/packages/cli/src/acp-integration/session/history-replay-page.ts
 --- a/packages/cli/src/acp-integration/session/history-replay-page.ts
 +++ b/packages/cli/src/acp-integration/session/history-replay-page.ts
-@@ -2,29 +2,26 @@
+@@ -2,29 +2,27 @@
   * @license
   * Copyright 2026 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
@@ -30272,6 +30433,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/p
    type HistoryGap,
    type SessionTranscriptCursorState,
    type SessionTranscriptRecordPage,
++  SessionTranscriptEvidenceIncompleteError,
  } from '@qwen-code/qwen-code-core';
  import type { SessionUpdate } from '@agentclientprotocol/sdk';
 -import type { TranscriptReplayStateV1 } from '@qwen-code/acp-bridge/transcriptReplay';
@@ -30291,7 +30453,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/p
  }
  
  export class HistoryReplayLimitError extends Error {
-@@ -43,161 +40,30 @@
+@@ -43,161 +41,30 @@
  
  export interface HistoryReplayLimits {
    maxBytes: number;
@@ -30455,7 +30617,7 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/p
            _meta: { ...meta, 'qwen.session.recordId': activeRecordId },
          } as unknown as SessionUpdate;
        })();
-@@ -225,51 +91,47 @@
+@@ -225,51 +92,47 @@
        }
        updates.push(updateWithRecordId);
      },
@@ -30511,7 +30673,21 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/p
        updates.length,
        error,
      );
-@@ -313,30 +175,29 @@
+@@ -294,12 +157,13 @@
+ export interface ReplayedTranscriptPage {
+   updates: SessionUpdate[];
+   nextCursor?: string;
+   hasMore: boolean;
+   startTime: string;
+   lastUpdated: string;
++  provisional?: true;
+   partial?: true;
+   replayError?: string;
+ }
+ 
+ export async function replayTranscriptRecordPage({
+   sessionId,
+@@ -313,30 +177,34 @@
    page: SessionTranscriptRecordPage;
    config?: Config;
    encodeCursor: (state: SessionTranscriptCursorState) => string;
@@ -30519,6 +30695,11 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/p
    finalizeDangling?: boolean;
  }): Promise<ReplayedTranscriptPage> {
 -  const state = parseTranscriptReplayState(page.replay, logger);
++  const openEvidence =
++    page.modelEvidenceCompletion.openRequests !== 0 ||
++    page.modelEvidenceCompletion.openAttempts !== 0;
++  if (openEvidence && finalizeDangling && !page.hasMore)
++    throw new SessionTranscriptEvidenceIncompleteError(page.filePath);
 +  const state = parseTranscriptReplayState(page.replay);
    const updates: SessionUpdate[] = [];
    const replayer = new HistoryReplayer(
@@ -30549,6 +30730,17 @@ diff --git a/packages/cli/src/acp-integration/session/history-replay-page.ts b/p
        sessionId,
        updates.length,
        error,
+@@ -356,9 +224,10 @@
+   return {
+     updates: liftSessionUpdateTimestamps(updates),
+     ...(nextCursor ? { nextCursor } : {}),
+     hasMore: replayError === undefined && page.hasMore,
+     startTime: page.startTime,
+     lastUpdated: page.lastUpdated,
++    ...(openEvidence ? { provisional: true as const } : {}),
+     ...(replayError ? { partial: true, replayError } : {}),
+   };
+ }
 diff --git a/packages/cli/src/acp-integration/session/history-replayer.conformance.test.ts b/packages/cli/src/acp-integration/session/history-replayer.conformance.test.ts
 --- a/packages/cli/src/acp-integration/session/history-replayer.conformance.test.ts
 +++ b/packages/cli/src/acp-integration/session/history-replayer.conformance.test.ts
@@ -63489,7 +63681,23 @@ diff --git a/packages/cli/src/serve/acp-http/dispatch.ts b/packages/cli/src/serv
 diff --git a/packages/cli/src/serve/capabilities.ts b/packages/cli/src/serve/capabilities.ts
 --- a/packages/cli/src/serve/capabilities.ts
 +++ b/packages/cli/src/serve/capabilities.ts
-@@ -444,13 +444,12 @@
+@@ -116,12 +116,15 @@
+   session_archive: { since: 'v1' },
+   session_metadata: { since: 'v1' },
+   session_organization: { since: 'v1' },
+   session_export: { since: 'v1' },
+   session_transcript: { since: 'v1' },
+   session_transcript_pagination: { since: 'v1' },
++  // Transcript pages expose provisional model evidence while an active writer
++  // has not completed its physical requests and generation decisions.
++  session_transcript_provisional_evidence: { since: 'v1' },
+   // Daemon supports the MCP client guardrail surface: an in-process
+   // counter exposed on `GET /workspace/mcp`, a `--mcp-client-budget=N`
+   // flag with `--mcp-budget-mode={enforce, warn, off}`, and a
+   // `disabledReason: 'budget'` tag on per-server cells when refused at
+   // discovery. `modes` enumerates the implemented behaviors.
+   mcp_guardrails: { since: 'v1', modes: ['warn', 'enforce'] },
+@@ -444,13 +447,12 @@
    allowOriginActive?: boolean;
    promptDeadlineMs?: number;
    writerIdleTimeoutMs?: number;
@@ -63503,7 +63711,7 @@ diff --git a/packages/cli/src/serve/capabilities.ts b/packages/cli/src/serve/cap
    reloadAvailable?: boolean;
    /**
     * Whether the daemon exposes the channel worker reload route
-@@ -553,16 +552,12 @@
+@@ -553,16 +555,12 @@
    ],
    [
      'session_shell_command',
@@ -63823,7 +64031,21 @@ diff --git a/packages/cli/src/serve/routes/session.ts b/packages/cli/src/serve/r
      handler: (
        req: Request,
        res: Response,
-@@ -3802,13 +3790,15 @@
+@@ -2965,12 +2953,13 @@
+               ...(replay.nextCursor && !cursorTooLarge
+                 ? { nextCursor: replay.nextCursor }
+                 : {}),
+               hasMore: cursorTooLarge ? false : replay.hasMore,
+               startTime: replay.startTime,
+               lastUpdated: replay.lastUpdated,
++              ...(replay.provisional ? { provisional: true as const } : {}),
+               ...(replay.partial || cursorTooLarge
+                 ? {
+                     partial: true as const,
+                     replayError: cursorTooLarge
+                       ? TRANSCRIPT_CURSOR_TOO_LARGE_REPLAY_ERROR
+                       : replay.replayError,
+@@ -3802,13 +3791,15 @@
              }),
            ),
        );
@@ -63840,7 +64062,7 @@ diff --git a/packages/cli/src/serve/routes/session.ts b/packages/cli/src/serve/r
    });
  
    app.post('/sessions/archive', mutate(), async (req, res) => {
-@@ -3911,13 +3901,15 @@
+@@ -3911,13 +3902,15 @@
                }),
              ),
          );
@@ -63857,7 +64079,7 @@ diff --git a/packages/cli/src/serve/routes/session.ts b/packages/cli/src/serve/r
      },
    );
  
-@@ -4508,12 +4500,13 @@
+@@ -4508,12 +4501,13 @@
                  options,
                );
            controller.signal.throwIfAborted();
@@ -64757,7 +64979,21 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
    'client_identity',
    'client_heartbeat',
    'session_permission_vote',
-@@ -573,15 +575,12 @@
+@@ -483,12 +485,13 @@
+   'session_archive',
+   'session_metadata',
+   'session_organization',
+   'session_export',
+   'session_transcript',
+   'session_transcript_pagination',
++  'session_transcript_provisional_evidence',
+   // Issue #4175 PR 14. Always-on. Daemon supports the MCP client
+   // guardrail surface (`--mcp-client-budget`, `clientCount` /
+   // `budgets[]` on `/workspace/mcp`, `disabledReason: 'budget'` on
+   // refused per-server cells).
+   'mcp_guardrails',
+   'workspace_mcp_manage',
+@@ -573,15 +576,12 @@
    // workspace_mcp_restart), then conditional `require_auth`, then
    // `auth_device_flow`, then F3 `permission_mediation` (latest).
    // All four conditional tags filtered from the stage1 baseline so
@@ -64773,7 +65009,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
      return [feature];
    }).filter(
      (f) =>
-@@ -2693,30 +2692,12 @@
+@@ -2693,30 +2693,12 @@
            ).toContain(feature);
            expect(getAdvertisedServeFeatures(undefined, {})).not.toContain(
              feature,
@@ -64804,7 +65040,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
            expect(predicate({})).toBe(false);
            expect(
              getAdvertisedServeFeatures(undefined, {
-@@ -3768,13 +3749,12 @@
+@@ -3768,13 +3750,12 @@
          // pool surface by default). Voice transcription is conditional on
          // a usable batch ASR model, so the isolated test settings do not
          // advertise it.
@@ -64818,7 +65054,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
            }),
          );
          expect(res.body.modelServices).toEqual([]);
-@@ -3785,21 +3765,19 @@
+@@ -3785,21 +3766,19 @@
          await fsp.rm(tempHome, { recursive: true, force: true });
          restoreEnv('QWEN_HOME', previousQwenHome);
          resetHomeEnvBootstrapForTesting();
@@ -64843,7 +65079,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
        const primaryBridge = fakeBridge();
        const registry = createWorkspaceRegistry([
          makeWorkspaceRuntimeForTest({
-@@ -12989,12 +12967,13 @@
+@@ -12989,12 +12968,13 @@
          'chats',
          ...(input.state === 'archived' ? ['archive'] : []),
        );
@@ -64857,7 +65093,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          timestamp: input.timestamp,
          type: 'user',
          message: { role: 'user', parts: [{ text: input.prompt }] },
-@@ -13003,12 +12982,13 @@
+@@ -13003,12 +12983,13 @@
        const lines = [JSON.stringify(record)];
        if (input.parentSessionId !== undefined) {
          // Mirror ChatRecordingService.recordParentSession: a single
@@ -64871,7 +65107,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
            timestamp: input.timestamp,
            type: 'system',
            subtype: 'parent_session',
-@@ -13016,12 +12996,13 @@
+@@ -13016,12 +12997,13 @@
            cwd: input.cwd,
          };
          lines.push(JSON.stringify(parentRecord));
@@ -64885,7 +65121,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
                ? `${input.sessionId}-user-1`
                : `${input.sessionId}-parent-1`,
            sessionId: input.sessionId,
-@@ -13241,13 +13222,18 @@
+@@ -13241,13 +13223,18 @@
              options.signal?.addEventListener(
                'abort',
                () => reject(options.signal?.reason),
@@ -64905,7 +65141,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          undefined,
          { workspaceRegistry: registry },
        );
-@@ -13425,13 +13411,13 @@
+@@ -13425,13 +13412,13 @@
          { bridge, boundWorkspace: WS_BOUND },
        );
        const res = await request(app)
@@ -64920,7 +65156,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
        const pageSize = 3;
        const total = 5;
        for (let i = 0; i < total; i++) {
-@@ -13699,12 +13685,13 @@
+@@ -13699,12 +13686,13 @@
      });
  
      it('passes fractional cursor values to SessionService without truncating', async () => {
@@ -64934,7 +65170,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          });
  
        try {
-@@ -13891,12 +13878,13 @@
+@@ -13891,12 +13879,13 @@
          mockWt.readSidecar = undefined;
        }
      });
@@ -64948,7 +65184,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
        }>();
        let loadSignal: AbortSignal | undefined;
        const listSessionsSpy = vi
-@@ -13928,40 +13916,60 @@
+@@ -13928,40 +13917,60 @@
  
          controller.abort(reason);
          await expect(leader).rejects.toBe(reason);
@@ -65013,7 +65249,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
        const firstReason = new Error('first waiter disconnected');
        const secondReason = new Error('last waiter disconnected');
        const readOptions = {
-@@ -14009,12 +14017,13 @@
+@@ -14009,12 +14018,13 @@
        const controller = new AbortController();
        const reason = new Error('cancelled during worktree enrichment');
        let sidecarSignal: AbortSignal | undefined;
@@ -65027,7 +65263,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
                cwd: WS_BOUND,
                startTime: '2026-05-17T12:00:00.000Z',
                mtime: Date.parse('2026-05-17T12:00:00.000Z'),
-@@ -14068,13 +14077,18 @@
+@@ -14068,13 +14078,18 @@
        const listSessionsSpy = vi
          .spyOn(SessionService.prototype, 'listSessions')
          .mockImplementation(async (options) => {
@@ -65047,7 +65283,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          await expect(
            listWorkspaceSessionsForResponse(fakeBridge(), WS_BOUND, undefined, {
              runtimeBaseDir: runtimeDir,
-@@ -14130,13 +14144,18 @@
+@@ -14130,13 +14145,18 @@
              options.signal?.addEventListener(
                'abort',
                () => reject(options.signal?.reason),
@@ -65067,7 +65303,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          undefined,
          { bridge: fakeBridge(), boundWorkspace: workspaceCwd },
        );
-@@ -14157,12 +14176,13 @@
+@@ -14157,12 +14177,13 @@
        }
      });
  
@@ -65081,7 +65317,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
        }>();
        let loadSignal: AbortSignal | undefined;
        const listSessionsSpy = vi
-@@ -14193,13 +14213,18 @@
+@@ -14193,13 +14214,18 @@
          expect(loadSignal?.aborted).toBe(false);
  
          secondRequest.abort();
@@ -65101,7 +65337,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
  
      it('invalidates a warm catalog on metadata update while keeping persistence asynchronous', async () => {
        const sessionId = '550e8400-e29b-41d4-a716-446655440015';
-@@ -14296,14 +14321,19 @@
+@@ -14296,14 +14322,19 @@
        const first = makeItem('catalog-page-1', 0);
        const second = makeItem('catalog-page-2', 1);
        const listSessionsSpy = vi
@@ -65123,7 +65359,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
  
        try {
          const bridge = fakeBridge();
-@@ -14406,12 +14436,13 @@
+@@ -14406,12 +14437,13 @@
      it('records leader and waiter cache status before a persisted catalog scan fails', async () => {
        const error = new Error('catalog failed');
        const listSessionsSpy = vi
@@ -65137,7 +65373,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          });
        const setAttribute = vi.fn();
        const getSpanSpy = vi.spyOn(trace, 'getSpan').mockReturnValue({
-@@ -15027,12 +15058,13 @@
+@@ -15027,12 +15059,13 @@
            };
          },
        );
@@ -65151,7 +65387,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          });
        // 50,001 rows would otherwise trigger 50,001 real readWorktreeSession
        // sidecar reads; this test only exercises the truncation contract.
-@@ -15057,16 +15089,17 @@
+@@ -15057,16 +15090,17 @@
        } finally {
          listSessionsSpy.mockRestore();
          mockWt.readSidecar = undefined;
@@ -65170,7 +65406,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          });
  
        try {
-@@ -15081,13 +15114,14 @@
+@@ -15081,13 +15115,14 @@
              `/workspace/${encodeURIComponent(WS_BOUND)}/sessions?view=organized`,
            )
            .set('Host', `127.0.0.1:${baseOpts.port}`);
@@ -65186,7 +65422,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
      });
  
      it('allows session organization mutations on loopback without a token', async () => {
-@@ -15880,12 +15914,13 @@
+@@ -15880,12 +15915,13 @@
          'chats',
          ...(input.state === 'archived' ? ['archive'] : []),
        );
@@ -65200,7 +65436,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          timestamp: input.timestamp,
          type: 'user',
          message: { role: 'user', parts: [{ text: input.prompt }] },
-@@ -17253,12 +17288,13 @@
+@@ -17253,12 +17289,13 @@
            'chats',
          );
          await fsp.mkdir(chatsDir, { recursive: true });
@@ -65214,7 +65450,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
              timestamp: '2026-07-29T00:00:00.000Z',
              type: 'user',
              message: { role: 'user', parts: [{ text: 'hello' }] },
-@@ -17310,13 +17346,16 @@
+@@ -17310,13 +17347,16 @@
            expect(res.body.code).toBe('workspace_runtime_unavailable');
            expect(killSpy).toHaveBeenCalledWith(staleBranchId, {
              requireZeroAttaches: true,
@@ -65232,7 +65468,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
            removeSpy.mockRestore();
            await fsp.rm(runtimeDir, { recursive: true, force: true });
          }
-@@ -20675,24 +20714,26 @@
+@@ -20675,24 +20715,26 @@
          'chats',
          ...(state === 'archived' ? ['archive'] : []),
        );
@@ -65259,7 +65495,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
            timestamp: '2026-05-28T12:00:01.000Z',
            type: 'assistant',
            message: {
-@@ -20700,13 +20741,15 @@
+@@ -20700,13 +20742,15 @@
              parts: [{ text: 'export response' }],
            },
            cwd: wsDir,
@@ -65276,7 +65512,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
      function createExportApp() {
        return createServeApp({ ...baseOpts, workspace: wsDir }, undefined, {
          bridge: fakeBridge(),
-@@ -20895,12 +20938,13 @@
+@@ -20895,12 +20939,13 @@
          ...(state === 'archived' ? ['archive'] : []),
        );
        await fsp.mkdir(chatsDir, { recursive: true });
@@ -65290,7 +65526,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
            timestamp: '2026-05-28T12:00:00.000Z',
            type: 'user',
            message: { role: 'user', parts: [{ text: 'hello transcript' }] },
-@@ -21498,12 +21542,13 @@
+@@ -21498,12 +21543,13 @@
          'chats',
          ...(state === 'archived' ? ['archive'] : []),
        );
@@ -65304,7 +65540,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
          timestamp: '2026-05-28T12:00:00.000Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'hello' }] },
-@@ -21649,16 +21694,18 @@
+@@ -21649,16 +21695,18 @@
          bridge,
          boundWorkspace: wsDir,
        });
@@ -65325,7 +65561,7 @@ diff --git a/packages/cli/src/serve/server.test.ts b/packages/cli/src/serve/serv
        const bridge = fakeBridge({
          closeImpl: async () => {
            throw new Error('bridge exploded');
-@@ -22021,12 +22068,13 @@
+@@ -22021,12 +22069,13 @@
        sessionId: string,
        state: 'active' | 'archived' = 'active',
      ): Promise<void> {
@@ -68508,7 +68744,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
    private subscribers = 0;
    private retentionTimer: NodeJS.Timeout | undefined;
  
-@@ -335,226 +300,167 @@
+@@ -335,235 +300,177 @@
    }
  
    private rememberEvent(event: BridgeEvent | undefined): void {
@@ -68874,7 +69110,17 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        records[records.length - 1]?.timestamp ?? new Date().toISOString();
      const page: SessionTranscriptRecordPage = {
        sessionId: this.sessionId,
-@@ -579,91 +485,292 @@
+       filePath: this.task.outputFile,
+       records,
+       gaps: [],
++      modelEvidenceCompletion: this.requestReplay.completionState(),
+       hasMore: true,
+       replay: this.replayState,
+       startTime,
+       lastUpdated,
+       nextCursorState: replayCursorState(
+         this.sessionId,
+@@ -579,91 +486,292 @@
        page,
        encodeCursor: (state) => {
          nextReplayState = state.replay;
@@ -69202,7 +69448,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
      events: BridgeEvent[];
      lastEventId: number;
    }> {
-@@ -673,12 +780,13 @@
+@@ -673,12 +781,13 @@
        () => undefined,
      );
      return snapshot;
@@ -69216,7 +69462,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        sessionId: this.sessionId,
        workspaceCwd: this.workspaceCwd,
        attached: true,
-@@ -693,16 +801,13 @@
+@@ -693,16 +802,13 @@
      };
    }
  
@@ -69234,7 +69480,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
        if (!this.snapshotDelivered) {
          this.events.length = 0;
          this.snapshotDelivered = true;
-@@ -727,16 +832,38 @@
+@@ -727,16 +833,38 @@
    subscribe(opts: VirtualSubagentSubscribeOptions): AsyncIterable<BridgeEvent> {
      return {
        [Symbol.asyncIterator]: () => this.iterate(opts),
@@ -69276,7 +69522,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
  export class VirtualSubagentSessions {
    private readonly targets = new Map<string, VirtualSubagentTarget>();
  
-@@ -748,12 +875,15 @@
+@@ -748,12 +876,15 @@
        id: string;
        outputFile?: string;
        toolUseId?: string;
@@ -69292,7 +69538,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
          typeof candidate.outputFile === 'string' &&
          predicate(candidate),
      );
-@@ -766,13 +896,15 @@
+@@ -766,13 +897,15 @@
          startTime: task.startTime,
          durationMs:
            task.stats?.durationMs ??
@@ -69309,7 +69555,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
      const projectDir = Storage.runWithResolvedRuntimeBaseDir(
        runtime.sessionRuntimeBaseDir,
        () => new Storage(runtime.workspaceCwd).getProjectDir(),
-@@ -786,12 +918,17 @@
+@@ -786,12 +919,17 @@
        throw error;
      }
      for (const name of names) {
@@ -69327,7 +69573,7 @@ diff --git a/packages/cli/src/serve/virtual-subagent-sessions.ts b/packages/cli/
            kind: 'agent',
            id: meta.agentId,
            toolUseId: meta.toolUseId,
-@@ -811,188 +948,85 @@
+@@ -811,188 +949,85 @@
          durationMs: durationBetween(meta.createdAt, meta.lastUpdatedAt),
        };
      }
@@ -211697,7 +211943,21 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './services/visionBridge/image-part-utils.js';
  export * from './services/visionBridge/image-capability.js';
  export * from './services/sessionRecap.js';
-@@ -333,20 +350,19 @@
+@@ -313,12 +330,13 @@
+   SESSION_TRANSCRIPT_MAX_LIMIT,
+   SESSION_TRANSCRIPT_MAX_PAGE_BYTES,
+   SessionTranscriptCursorCodec,
+   SessionTranscriptReader,
+   SessionTranscriptPageTooLargeError,
+   SessionTranscriptSnapshotUnavailableError,
++  SessionTranscriptEvidenceIncompleteError,
+   SessionTranscriptTooLargeError,
+ } from './services/session-transcript-reader.js';
+ export type {
+   SelectiveSessionRestoreOptions,
+   SessionLiveRestoreProjection,
+   SessionRestoreProjection,
+@@ -333,20 +351,19 @@
  export * from './utils/transcript-records.js';
  export * from './utils/conversation-branches.js';
  export * from './services/sessionTitle.js';
@@ -211720,7 +211980,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +616,25 @@
+@@ -600,24 +617,25 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -211747,7 +212007,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +721,67 @@
+@@ -704,6 +722,67 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -239415,7 +239675,7 @@ diff --git a/packages/core/src/services/session-resume-usage.ts b/packages/core/
 diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/packages/core/src/services/session-transcript-reader.test.ts
 --- a/packages/core/src/services/session-transcript-reader.test.ts
 +++ b/packages/core/src/services/session-transcript-reader.test.ts
-@@ -1,13 +1,17 @@
+@@ -1,13 +1,18 @@
  /**
   * @license
   * Copyright 2025 Qwen Team
@@ -239423,6 +239683,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
   */
  
 +import type { Content, Part } from '@google/genai';
++import { createHash } from 'node:crypto';
 +import { CHAT_RECORDING_VERSION } from '../utils/transcript-records.js';
 +import { CompressionStatus } from '../core/turn.js';
  import * as fs from 'node:fs/promises';
@@ -239433,7 +239694,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
  const { mockDebugLogger, mockAddDaemonRequestAttribute } = vi.hoisted(() => ({
    mockDebugLogger: {
-@@ -41,16 +45,22 @@
+@@ -41,16 +46,22 @@
        return result;
      },
    };
@@ -239458,7 +239719,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  import { recoverGoalFromRecords } from '../goals/goal-persistence.js';
  import type { GoalStateRecordPayloadV2 } from '../goals/goal-protocol.js';
  import { buildGoalEvidenceCheckpointWindow } from '../goals/goal-evidence.js';
-@@ -97,24 +107,24 @@
+@@ -97,24 +108,24 @@
      resetSessionTranscriptIndexCacheForTest();
      Storage.setRuntimeBaseDir(null);
      await fs.rm(runtimeDir, { recursive: true, force: true });
@@ -239466,7 +239727,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
    async function writeRecords(
 -    records: ChatRecord[],
-+    records: import('./chatRecordingService.js').ChatRecord[],
++    records: Array<import('./chatRecordingService.js').ChatRecord>,
      targetSessionId = sessionId,
    ): Promise<string> {
      const chatsDir = path.join(
@@ -239485,7 +239746,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    }
  
    async function writeRawTranscript(content: string): Promise<string> {
-@@ -124,12 +134,107 @@
+@@ -124,12 +135,107 @@
      );
      await fs.mkdir(chatsDir, { recursive: true });
      const filePath = path.join(chatsDir, `${sessionId}.jsonl`);
@@ -239593,7 +239854,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    // once a record's text reached 10+ chars; a base + per-record offset keeps
    // every timestamp valid and strictly increasing regardless of count.
    const RECORD_BASE_MS = Date.UTC(2026, 0, 1, 0, 0, 0);
-@@ -138,25 +243,156 @@
+@@ -138,25 +244,156 @@
      uuid: string,
      parentUuid: string | null,
      text: string,
@@ -239750,7 +240011,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      parentUuid: string,
      callId: string,
    ): ChatRecord {
-@@ -189,12 +425,13 @@
+@@ -189,12 +426,13 @@
                response: { output: 'ok' },
              },
            },
@@ -239764,7 +240025,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    function encodeCursor(
      state: Parameters<typeof encodeSessionTranscriptCursor>[0],
    ): string {
-@@ -225,34 +462,264 @@
+@@ -225,34 +463,264 @@
      expect(page.filePath).toBe(filePath);
      const ISO_8601 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
      expect(page.startTime).toMatch(ISO_8601);
@@ -240040,7 +240301,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const page = await new SessionTranscriptReader(workspaceDir).readPage(
        sessionId,
      );
-@@ -433,23 +900,25 @@
+@@ -433,23 +901,25 @@
              activeTimeMs: 0,
              createdAt: 1,
              updatedAt: 1,
@@ -240066,7 +240327,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'goal-state', 'first prompt'),
        record('a1', 'u1', 'first answer'),
        record('u2', 'a1', 'second prompt'),
-@@ -500,12 +969,13 @@
+@@ -500,12 +970,13 @@
              activeTimeMs: 0,
              createdAt: 1,
              updatedAt: 1,
@@ -240080,7 +240341,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'goal_state',
        message: undefined,
-@@ -528,12 +998,13 @@
+@@ -528,12 +999,13 @@
              activeTimeMs: 0,
              createdAt: 1,
              updatedAt: 1,
@@ -240094,7 +240355,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'goal-state', 'first prompt'),
        record('a1', 'u1', 'first answer'),
        malformedGoalState,
-@@ -553,12 +1024,13 @@
+@@ -553,12 +1025,13 @@
  
    it('includes leading session metadata with the first backward page', async () => {
      const sessionSource = {
@@ -240108,7 +240369,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'source', 'first prompt'),
        record('a1', 'u1', 'first answer'),
      ]);
-@@ -597,12 +1069,13 @@
+@@ -597,12 +1070,13 @@
        type: 'system' as const,
        subtype: 'session_source' as const,
        systemPayload: {
@@ -240122,7 +240383,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        inheritedUser,
        inheritedAssistant,
        record('side-u1', 'parent-a1', 'side prompt'),
-@@ -628,12 +1101,13 @@
+@@ -628,12 +1102,13 @@
        type: 'system' as const,
        subtype: 'session_source' as const,
        systemPayload: {
@@ -240136,7 +240397,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        forkedFrom: {
          sessionId: 'parent-session',
          messageUuid: 'parent-u1',
-@@ -644,12 +1118,13 @@
+@@ -644,12 +1119,13 @@
        type: 'system' as const,
        subtype: 'session_source' as const,
        systemPayload: {
@@ -240150,7 +240411,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        inheritedUser,
        record('side-u1', 'parent-u1', 'side prompt'),
        deadBranchSource,
-@@ -672,12 +1147,13 @@
+@@ -672,12 +1148,13 @@
      const source: ChatRecord = {
        ...record('source', null, ''),
        type: 'system',
@@ -240164,7 +240425,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        systemPayload: { sourceType: 'side_task', sourceId: 'parent-session' },
      };
      const inherited = {
-@@ -709,55 +1185,67 @@
+@@ -709,55 +1186,67 @@
      const source: ChatRecord = {
        ...record('source', null, 'source'),
        type: 'system',
@@ -240233,7 +240494,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'file_history_snapshot',
        message: undefined,
-@@ -767,12 +1255,13 @@
+@@ -767,12 +1256,13 @@
              promptId: `${sessionId}########3`,
              timestamp: '2026-01-01T00:00:00.000Z',
              trackedFileBackups: {},
@@ -240247,7 +240508,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        cause: 'create',
        snapshot: {
          v: 2,
-@@ -793,12 +1282,13 @@
+@@ -793,12 +1283,13 @@
      const goal: ChatRecord = {
        ...record('goal', 'files', ''),
        type: 'system',
@@ -240261,7 +240522,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        subtype: 'notification',
        systemPayload: {
          backgroundTask: { taskId: 'task-1' },
-@@ -836,31 +1326,41 @@
+@@ -836,31 +1327,41 @@
                updatedAt: '2026-01-01T00:00:01.000Z',
                persistedAt: '2026-01-01T00:00:01.000Z',
              },
@@ -240303,7 +240564,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const service = new SessionService(workspaceDir, {
-@@ -876,14 +1376,14 @@
+@@ -876,14 +1377,14 @@
      expect(loaded).toBeDefined();
      expect(projection).toBeDefined();
      expect(projection?.replay).toBeUndefined();
@@ -240320,7 +240581,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      );
      expect(projection?.runtime.artifactSnapshot).toEqual(
        loaded?.artifactSnapshot,
-@@ -952,37 +1452,43 @@
+@@ -952,37 +1453,43 @@
      expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
        'qwen-code.daemon.session_restore.compression_selected',
        expect.any(Boolean),
@@ -240371,7 +240632,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const activeArtifactId = stableSessionArtifactId(
        sessionId,
        'url:https://example.com/active',
-@@ -1025,17 +1531,21 @@
+@@ -1025,17 +1532,21 @@
                updatedAt: '2026-01-01T00:00:00.000Z',
                persistedAt: '2026-01-01T00:00:00.000Z',
              },
@@ -240396,7 +240657,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          2,
          abandonedArtifactId,
          'https://example.com/abandoned',
-@@ -1044,14 +1554,15 @@
+@@ -1044,14 +1555,15 @@
          'active-artifact',
          'a1',
          1,
@@ -240414,7 +240675,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        runtimeBaseDir: runtimeDir,
      });
      const [loaded, projection] = await Promise.all([
-@@ -1104,14 +1615,20 @@
+@@ -1104,14 +1616,20 @@
                updatedAt: leadingTimestamp,
                persistedAt: leadingTimestamp,
              },
@@ -240436,7 +240697,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      });
      const [loaded, projection] = await Promise.all([
        service.loadSession(sessionId),
-@@ -1157,19 +1674,30 @@
+@@ -1157,19 +1675,30 @@
                updatedAt: '2026-01-01T00:00:00.000Z',
                persistedAt: '2026-01-01T00:00:00.000Z',
              },
@@ -240467,7 +240728,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        runtimeBaseDir: runtimeDir,
      });
      const [loaded, projection] = await Promise.all([
-@@ -1204,26 +1732,35 @@
+@@ -1204,26 +1733,35 @@
            activeTimeMs: 0,
            createdAt: 1,
            updatedAt: 1,
@@ -240507,7 +240768,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        workspaceDir,
      ).readRestoreProjection(sessionId, {
        replay: {
-@@ -1233,12 +1770,13 @@
+@@ -1233,12 +1771,13 @@
        },
      });
  
@@ -240521,7 +240782,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        anchorRecordId: 'u3',
        replay: {
          goalState: goalPayload.snapshot,
-@@ -1250,13 +1788,14 @@
+@@ -1250,13 +1789,14 @@
    it('applies inherited-history filtering only to replay', async () => {
      const inheritedUser = {
        ...record('u1', null, 'inherited prompt'),
@@ -240537,7 +240798,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        ...record('goal', 'a1', ''),
        type: 'system',
        subtype: 'slash_command',
-@@ -1270,38 +1809,49 @@
+@@ -1270,38 +1810,49 @@
              type: 'goal_status',
              kind: 'set',
              condition: 'inherited goal',
@@ -240588,7 +240849,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(visible?.runtime.goalRecoverySourceUuid).toBe('goal');
      expect(hidden?.runtime.goalRecoverySourceUuid).toBe('goal');
      expect(hidden?.replay?.goalRecoverySourceUuid).toBeUndefined();
-@@ -1311,12 +1861,13 @@
+@@ -1311,12 +1862,13 @@
  
      const hiddenLive = await reader.readLiveRestoreProjection(sessionId, {
        replay: { kind: 'all', hideInheritedHistory: true },
@@ -240602,7 +240863,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(hiddenLive?.goalRecords).toBeUndefined();
    });
  
-@@ -1330,12 +1881,13 @@
+@@ -1330,12 +1882,13 @@
          rawCommand: '/goal visible goal',
          phase: 'result',
          outputHistoryItems: [
@@ -240616,7 +240877,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'slash_command',
        message: undefined,
-@@ -1344,22 +1896,32 @@
+@@ -1344,22 +1897,32 @@
          rawCommand: '/goal hidden goal',
          phase: 'result',
          outputHistoryItems: [
@@ -240652,7 +240913,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        replay: {
          kind: 'recent' as const,
          limit: 2,
-@@ -1369,12 +1931,13 @@
+@@ -1369,12 +1932,13 @@
  
      const cold = await reader.readRestoreProjection(sessionId, options);
      const live = await reader.readLiveRestoreProjection(sessionId, options);
@@ -240666,7 +240927,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(cold?.replay?.goalRecoverySourceUuid).toBe('visible-goal');
      expect(cold?.replay?.goalBootstrapRecords).toEqual([
        expect.objectContaining({ uuid: 'visible-goal' }),
-@@ -1382,52 +1945,59 @@
+@@ -1382,52 +1946,59 @@
      expect(live?.goalRecoverySourceUuid).toBe('visible-goal');
      expect(live?.goalRecords?.map((record) => record.uuid)).toEqual([
        'visible-goal',
@@ -240739,7 +241000,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    it('ignores a later non-snapshot attribution record like the full loader', async () => {
      const snapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1435,50 +2005,59 @@
+@@ -1435,50 +2006,59 @@
        surface: 'cli',
        fileStates: {},
        promptCount: 2,
@@ -240803,7 +241064,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
      await expect(
        new SessionTranscriptReader(workspaceDir).readRestoreProjection(
-@@ -1529,13 +2108,13 @@
+@@ -1529,13 +2109,13 @@
          },
        ),
      ).rejects.toBeInstanceOf(RangeError);
@@ -240818,7 +241079,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
        }),
-@@ -1543,13 +2122,13 @@
+@@ -1543,13 +2123,13 @@
  
      await writeRawTranscript('{not-json}\n');
      await expect(
@@ -240833,7 +241094,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        reader.readRestoreProjection(
          sessionId,
          { replay: { kind: 'none' } },
-@@ -1579,14 +2158,25 @@
+@@ -1579,14 +2159,25 @@
      const source: ChatRecord = {
        ...record('source', null, ''),
        type: 'system',
@@ -240859,7 +241120,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
  
      expect(projection?.runtime.apiHistory).toEqual([]);
-@@ -1603,30 +2193,31 @@
+@@ -1603,30 +2194,31 @@
        {
          ...record('compression', 'u1', ''),
          type: 'system',
@@ -240898,7 +241159,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const validGoal: GoalStateRecordPayloadV2 = {
        v: 2,
        cause: 'create',
-@@ -1643,50 +2234,56 @@
+@@ -1643,50 +2235,56 @@
            activeTimeMs: 0,
            createdAt: 1,
            updatedAt: 1,
@@ -240962,7 +241223,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        workspaceDir,
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
  
-@@ -1694,53 +2291,43 @@
+@@ -1694,53 +2292,43 @@
        kind: 'v2',
        payload: validGoal,
      });
@@ -241024,7 +241285,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const artifactId = stableSessionArtifactId(
        sessionId,
        'url:https://example.com/live',
-@@ -1775,12 +2362,13 @@
+@@ -1775,12 +2363,13 @@
                  updatedAt: '2026-01-01T00:00:01.000Z',
                  persistedAt: '2026-01-01T00:00:01.000Z',
                },
@@ -241038,7 +241299,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a2', 'u2', 'two answer'),
      ]);
      const reader = new SessionTranscriptReader(workspaceDir);
-@@ -1811,14 +2399,14 @@
+@@ -1811,14 +2400,14 @@
      expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
        'qwen-code.daemon.session_restore.index_cache_state',
        'hit',
@@ -241055,7 +241316,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        message: undefined,
        systemPayload: {
          rawCommand: '/goal keep the live goal visible',
-@@ -1829,15 +2417,16 @@
+@@ -1829,15 +2418,16 @@
              kind: 'set',
              condition: 'keep the live goal visible',
              iterations: 0,
@@ -241073,7 +241334,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a2', 'u2', 'two answer'),
      ]);
  
-@@ -1865,37 +2454,44 @@
+@@ -1865,37 +2455,44 @@
      const permit = { goalId: 'goal-1', revision: 1, turnId: 'turn-1' };
      const cursor: ChatRecord = {
        ...record('cursor', null, ''),
@@ -241123,7 +241384,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        cause: 'turn_finished',
        snapshot: {
          v: 2,
-@@ -1920,17 +2516,18 @@
+@@ -1920,17 +2517,18 @@
      const goalState: ChatRecord = {
        ...record('goal-state', 'compression', ''),
        type: 'system',
@@ -241143,7 +241404,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
      let buildCount = 0;
      setSessionTranscriptIndexBuildCompleteHookForTest((builtPath) => {
-@@ -1969,13 +2566,13 @@
+@@ -1969,13 +2567,13 @@
      const evidence = {
        ...record('evidence', null, 'result'),
        provenance: 'assistant_output' as const,
@@ -241158,7 +241419,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        systemPayload: {
          v: 2,
          cause: 'turn_finished',
-@@ -1993,14 +2590,19 @@
+@@ -1993,14 +2591,19 @@
              createdAt: 1,
              updatedAt: 2,
            },
@@ -241179,7 +241440,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ).readRestoreProjection(sessionId, { replay: { kind: 'none' } });
  
      expect(projection?.runtime.goalCheckpointWindow).toBeUndefined();
-@@ -2010,12 +2612,13 @@
+@@ -2010,12 +2613,13 @@
  
    it('keeps backward pages within a normal user turn boundary', async () => {
      const toolCall = record('a-tool', 'u1', 'call tool');
@@ -241193,7 +241454,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        toolCall,
        toolResult,
        record('a1', 't1', 'first answer'),
-@@ -2038,12 +2641,13 @@
+@@ -2038,12 +2642,13 @@
  
    it('keeps a long user turn complete when it exceeds the record limit', async () => {
      const toolCall = record('a-tool', 'u1', 'call tool');
@@ -241207,7 +241468,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        toolCall,
        toolResult,
        record('a-final', 't1', 'final answer'),
-@@ -2067,12 +2671,13 @@
+@@ -2067,12 +2672,13 @@
    it('returns a backward turn that exceeds maxBytes after alignment', async () => {
      const prompt = record('u1', null, 'prompt');
      const toolCall = record('a-tool', 'u1', 'call tool');
@@ -241221,7 +241482,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        ...turnRecords,
        record('u2', 'a-final', 'next prompt'),
-@@ -2323,23 +2928,22 @@
+@@ -2323,23 +2929,22 @@
            position: 999,
          }),
        }),
@@ -241251,7 +241512,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('u1', null, ' world'),
-@@ -2355,36 +2959,25 @@
+@@ -2355,36 +2960,25 @@
        { text: 'hello' },
        { text: ' world' },
      ]);
@@ -241295,7 +241556,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRecords([
        record('u1', null, 'hello'),
        record('a1', 'u1', 'reply'),
-@@ -2506,61 +3099,60 @@
+@@ -2506,63 +3100,111 @@
  
      await expect(
        otherReader.readPage(sessionId, { cursor }),
@@ -241384,11 +241645,62 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +    ).rejects.toThrow('Cannot read canonical recording version');
    });
  
++  it('reports open physical evidence even when its visible page ends at the snapshot tail', async () => {
++    const body = JSON.stringify({
++      model: 'test-model',
++      stream: false,
++      messages: [],
++      kv_scope: sessionId,
++    });
++    await writeRawTranscript(
++      [
++        record('u1', null, 'hello'),
++        {
++          ...record('request', 'u1', ''),
++          type: 'model_request',
++          message: undefined,
++          modelRequest: {
++            journal_id: 'journal',
++            sequence: 1,
++            request_id: 'request',
++            kv_scope: sessionId,
++            segment_id: 'segment',
++            prompt_id: 'prompt',
++            owner: { kind: 'utility' },
++            decode_policy: {
++              mode: 'nonstream',
++              model: 'test-model',
++              strict_tool_calling: false,
++              named_tool_choice: null,
++              exact_token_counting: false,
++              tagged_thinking_tags: false,
++            },
++            body_sha256: createHash('sha256').update(body).digest('hex'),
++            body_bytes: Buffer.byteLength(body),
++            body: { kind: 'full', json: body },
++          },
++        },
++      ]
++        .map((item) => JSON.stringify(item))
++        .join('\n') + '\n',
++    );
++    const page = await new SessionTranscriptReader(workspaceDir).readPage(
++      sessionId,
++    );
++    expect(page.hasMore).toBe(false);
++    expect(page.modelEvidenceCompletion).toEqual({
++      openRequests: 1,
++      openAttempts: 0,
++    });
++  });
++
    it('raises snapshot-unavailable when a same-size in-place rewrite reuses a cached segment', async () => {
      const initial = `${JSON.stringify(record('u1', null, 'hello'))}\n`;
      const filePath = await writeRawTranscript(initial);
      const fixed = new Date('2026-02-02T02:02:02.000Z');
-@@ -2643,33 +3235,42 @@
+     await fs.utimes(filePath, fixed, fixed);
+     const reader = new SessionTranscriptReader(workspaceDir);
+@@ -2643,33 +3285,42 @@
  
      expect(page.records.map((item) => item.uuid)).toEqual(['u1', 'a1', 'u2']);
      expect(yielded.length).toBeGreaterThanOrEqual(6);
@@ -241440,7 +241752,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const filePath = await writeRecords([record('u1', null, 'hello')]);
      await fs.truncate(filePath, SESSION_TRANSCRIPT_MAX_INDEX_BYTES + 1);
  
-@@ -2836,13 +3437,16 @@
+@@ -2836,13 +3487,16 @@
      });
    });
  
@@ -241458,7 +241770,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const cachedBuildBlocked = new Promise<void>((resolve) => {
        releaseCachedBuild = resolve;
      });
-@@ -2866,12 +3470,13 @@
+@@ -2866,12 +3520,13 @@
      });
  
      releaseCachedBuild?.();
@@ -241472,7 +241784,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      expect(
        getSessionTranscriptIndexCacheStatsForTest().byteSize,
      ).toBeGreaterThan(0);
-@@ -2925,13 +3530,17 @@
+@@ -2925,13 +3580,17 @@
      const foreignSessionId = '660e8400-e29b-41d4-a716-446655440000';
      const foreignMetadata: ChatRecord = {
        ...record('metadata', 'u1', '', foreignSessionId),
@@ -241491,7 +241803,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('a1', 'u1', 'local reply'),
        foreignMetadata,
        record('u2', 'a1', 'next local prompt'),
-@@ -2973,12 +3582,13 @@
+@@ -2973,12 +3632,13 @@
    });
  
    // Regression: an in-place rewrite that keeps the inode AND byte length must
@@ -241505,7 +241817,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        timestamp: '2026-01-01T00:00:01.000Z',
        type: 'user',
        cwd: workspaceDir,
-@@ -3367,12 +3977,13 @@
+@@ -3367,12 +4027,13 @@
        }
        records.push({
          ...record('sys1', 'a9', 'goal state'),
@@ -241519,7 +241831,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        await writeRecords(records);
  
        const page = await new SessionTranscriptReader(workspaceDir).readPage(
-@@ -3401,16 +4012,18 @@
+@@ -3401,16 +4062,18 @@
        }
        let parent = 'af9';
        for (let i = 0; i < 3; i++) {
@@ -241538,7 +241850,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        await writeRecords(records);
  
        const page = await new SessionTranscriptReader(workspaceDir).readPage(
-@@ -3436,12 +4049,13 @@
+@@ -3436,12 +4099,13 @@
        for (let i = 0; i < 200; i++) {
          records.push({
            ...record(`sys${i}`, i === 0 ? null : `sys${i - 1}`, `event ${i}`),
@@ -241552,7 +241864,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        let parent = 'u1';
        for (let i = 1; i <= 5; i++) {
          records.push(record(`a${i}`, parent, `step ${i}`));
-@@ -3514,13 +4128,15 @@
+@@ -3514,13 +4178,15 @@
          resultsByCall.set(callUuid, resultUuids);
          parent = resultUuids[resultUuids.length - 1]!;
        }
@@ -241569,7 +241881,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        });
        for (;;) {
          pages.push(page.records);
-@@ -3645,12 +4261,13 @@
+@@ -3645,12 +4311,13 @@
        records.push(record('af0', 'u1', 'filler'));
        records.push(toolCallRecord('ac1', 'af0', 'call-1'));
        records.push(toolResultRecord('ar0', 'ac1', 'call-1'));
@@ -241670,7 +241982,44 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
  export const SESSION_TRANSCRIPT_DEFAULT_LIMIT = 100;
  export const SESSION_TRANSCRIPT_MAX_LIMIT = 500;
  export const SESSION_TRANSCRIPT_CURSOR_VERSION = 1 as const;
-@@ -189,13 +203,14 @@
+@@ -99,12 +113,21 @@
+   constructor(sessionId: string) {
+     super(`Transcript snapshot is unavailable for session ${sessionId}`);
+     this.name = 'SessionTranscriptSnapshotUnavailableError';
+   }
+ }
+ 
++export class SessionTranscriptEvidenceIncompleteError extends Error {
++  constructor(readonly filePath: string) {
++    super(
++      `Cannot present complete transcript ${filePath}: the recording has open physical requests or logical generations. Wait for the writer to finish, inspect the original recording with its matching client, or start a new session.`,
++    );
++    this.name = 'SessionTranscriptEvidenceIncompleteError';
++  }
++}
++
+ class EmptySessionTranscriptError extends SessionTranscriptSnapshotUnavailableError {}
+ 
+ export class SessionTranscriptTooLargeError extends Error {
+   constructor(
+     readonly sessionId: string,
+     readonly snapshotSize: number,
+@@ -156,12 +179,14 @@
+ 
+ export interface SessionTranscriptRecordPage {
+   sessionId: string;
+   filePath: string;
+   records: ChatRecord[];
+   gaps: HistoryGap[];
++  /** Open work in the captured file snapshot; a live page is provisional. */
++  modelEvidenceCompletion: ModelEvidenceCompletionState;
+   hasMore: boolean;
+   direction?: 'backward';
+   nextCursorState?: SessionTranscriptCursorState;
+   replay?: unknown;
+   startTime: string;
+   lastUpdated: string;
+@@ -189,13 +214,14 @@
    goalRecoverySourceUuid?: string;
    goalBootstrapRecords?: GoalRecoveryRecord[];
  }
@@ -241686,7 +242035,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
    recording: {
      lastCompletedUuid: string;
      turnParentUuids: Array<string | null>;
-@@ -243,22 +258,22 @@
+@@ -243,22 +269,22 @@
  }
  
  interface RecordSegment {
@@ -241711,7 +242060,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
    subtype?: TranscriptRecordInput['subtype'];
  }
  
-@@ -267,28 +282,30 @@
+@@ -267,28 +293,30 @@
    scheduler: CooperativeReadScheduler;
    lineCache: { value?: CachedPhysicalLine };
    preloadedRecords?: Map<string, ChatRecord>;
@@ -241743,7 +242092,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
    leafUuid: string;
    firstRecordUuid: string;
    physicalRecords: PhysicalRecordHint[];
-@@ -1157,12 +1174,27 @@
+@@ -1157,12 +1185,27 @@
      total +=
        INDEX_ENTRY_BASE_BYTES +
        estimateStringBytes(gap.childUuid) +
@@ -241771,7 +242120,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        (entry.goalEvidenceHint.parsedGoalContext ? INDEX_HINT_BASE_BYTES : 0) +
        INDEX_MAP_ENTRY_BYTES +
        INDEX_CONTAINER_BASE_BYTES +
-@@ -1235,15 +1267,12 @@
+@@ -1235,15 +1278,12 @@
    const stream = fs.createReadStream(filePath, {
      start: 0,
      end: snapshotSize - 1,
@@ -241787,7 +242136,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
      while (lineStart < buffer.length) {
        const lineEnd = buffer.indexOf(0x0a, lineStart);
        if (lineEnd === -1) break;
-@@ -1277,67 +1306,54 @@
+@@ -1277,67 +1317,54 @@
        pendingLength += tail.length;
      }
      streamOffset += buffer.length;
@@ -241879,7 +242228,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
          `expected=${uuid} actual=${record.uuid} offset=${segment.offset}`,
      );
      throw new SessionTranscriptSnapshotUnavailableError(anomalySessionId);
-@@ -1346,13 +1362,13 @@
+@@ -1346,13 +1373,13 @@
      debugLogger.warn(
        `segment read anomaly: session mismatch session=${anomalySessionId} ` +
          `recordSession=${record.sessionId} uuid=${uuid} offset=${segment.offset}`,
@@ -241894,7 +242243,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
    index: TranscriptIndex,
    uuids: string[],
    onRecord: (record: ChatRecord) => void | Promise<void>,
-@@ -1373,19 +1389,19 @@
+@@ -1373,19 +1400,19 @@
        await onRecord(preloadedRecord);
        continue;
      }
@@ -241916,7 +242265,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        await onRecord(aggregateTranscriptRecordFragments(physicalRecords));
      }
      await context.scheduler.afterUnit(
-@@ -1473,12 +1489,13 @@
+@@ -1473,12 +1500,13 @@
      );
    }
    debugLogger.debug(
@@ -241930,7 +242279,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
    >();
    let sequence = 0;
    const physicalRecords: PhysicalRecordHint[] = [];
-@@ -1489,99 +1506,102 @@
+@@ -1489,99 +1517,102 @@
  
    try {
      await forEachLineInSnapshot(
@@ -242111,7 +242460,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
    } catch (error) {
      if (isFileMissingError(error)) {
        throw new SessionTranscriptSnapshotUnavailableError(sessionId);
-@@ -1612,54 +1632,60 @@
+@@ -1612,54 +1643,60 @@
    const restoreStartTime = firstRecordTimestamp ?? startTime;
  
    const chain = walkTranscriptUuidChain(leafUuid, (uuid) => {
@@ -242176,7 +242525,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
      leafUuid,
      firstRecordUuid,
      physicalRecords,
-@@ -1975,12 +2001,20 @@
+@@ -1975,12 +2012,20 @@
          }
        }
        throw error;
@@ -242197,7 +242546,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
      try {
        replaySelection = selectRestoreReplayUuids(
          index,
-@@ -1989,25 +2023,29 @@
+@@ -1989,25 +2034,29 @@
        );
      } finally {
        recordRestoreStage('resume_state_select', selectionStartedAt);
@@ -242228,7 +242577,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        }
      }
      addDaemonRequestAttribute(
-@@ -2018,13 +2056,13 @@
+@@ -2018,13 +2067,13 @@
        'qwen-code.daemon.session_restore.legacy_full_model_history',
        compressionPosition < 0,
      );
@@ -242243,7 +242592,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        (entry) => entry.attributionSnapshotCandidate,
      );
      const parentSessionUuid = lastUuidMatching(
-@@ -2066,13 +2104,13 @@
+@@ -2066,13 +2115,13 @@
      const metadataSet = new Set(
        [parentSessionUuid, sessionSourceUuid].filter(
          (uuid): uuid is string => uuid !== undefined,
@@ -242258,7 +242607,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        if (hint) turnState.addHint(hint);
      }
      const uiTelemetryEvents: UiEvent[] = [];
-@@ -2093,14 +2131,17 @@
+@@ -2093,14 +2142,17 @@
      let goalCheckpointAccumulator:
        | GoalEvidenceCheckpointAccumulator
        | undefined;
@@ -242278,7 +242627,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
          )?.uiEvent;
          if (uiEvent) uiTelemetryEvents.push(uiEvent);
        }
-@@ -2255,13 +2296,13 @@
+@@ -2255,13 +2307,13 @@
                replaySet.has(uuid) ||
                goalEvidenceSet.has(uuid),
            );
@@ -242293,7 +242642,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
            for (const uuid of remainingUuids) selectedReadSet.add(uuid);
            await forEachAggregatedRecord(
              index,
-@@ -2300,15 +2341,18 @@
+@@ -2300,15 +2352,18 @@
      }
      const customTitle = persistedTitle.title;
      const titleSource = persistedTitle.source;
@@ -242315,7 +242664,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        : [];
      const replayGoalRecoverySourceUuid = replaySelection
        ? selectGoalRecoveryFromRecords(replayGoalRecords).sourceUuid
-@@ -2348,19 +2392,21 @@
+@@ -2348,19 +2403,21 @@
                },
              }
            : {}),
@@ -242341,7 +242690,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        ...(index.gaps.length > 0 ? { historyGaps: index.gaps } : {}),
        recording: {
          lastCompletedUuid: index.leafUuid,
-@@ -2484,23 +2530,24 @@
+@@ -2484,23 +2541,24 @@
        (uuid) =>
          replaySet.has(uuid) || goalStateSet.has(uuid) || goalSet.has(uuid),
      );
@@ -242367,7 +242716,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
      try {
        await forEachAggregatedRecord(
          index,
-@@ -2510,13 +2557,14 @@
+@@ -2510,13 +2568,14 @@
              record.uuid === index.firstRecordUuid &&
              readOptions.validateFirstRecord &&
              !(await readOptions.validateFirstRecord(record))
@@ -242383,7 +242732,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
                parseGoalStateRecordPayloadV2(record.systemPayload),
              );
            }
-@@ -2531,12 +2579,18 @@
+@@ -2531,12 +2590,18 @@
        recordRestoreStage('selected_record_read', selectedReadsStartedAt);
      }
      recordRestoreSelectionAttributes(index, selectedReadSet, replaySet);
@@ -242402,6 +242751,20 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        replay = {
          records: replayRecords,
          gaps: index.gaps,
+@@ -2695,12 +2760,13 @@
+ 
+     return {
+       sessionId,
+       filePath,
+       records,
+       gaps: index.gaps,
++      modelEvidenceCompletion: index.completion,
+       hasMore,
+       ...(direction === 'backward' ? { direction: 'backward' as const } : {}),
+       ...(nextCursorState ? { nextCursorState } : {}),
+       ...(backwardGoalState
+         ? {
+             replay: {
 diff --git a/packages/core/src/services/session-usage-retention.test.ts b/packages/core/src/services/session-usage-retention.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/session-usage-retention.test.ts
@@ -323086,7 +323449,18 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -1143,16 +1144,13 @@
+@@ -1133,26 +1134,24 @@
+   sessionId: string;
+   events: DaemonEvent[];
+   nextCursor?: string;
+   hasMore: boolean;
+   startTime?: string;
+   lastUpdated?: string;
++  provisional?: true;
+   partial?: true;
+   replayError?: string;
+ }
+ 
  export interface DaemonSubagentSessionResolution {
    sessionId: string;
    taskId: string;
@@ -323104,7 +323478,7 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
  
  export type DaemonSessionGroupPresetColor =
    | 'red'
-@@ -1234,13 +1232,21 @@
+@@ -1234,13 +1233,21 @@
    /** Restrict the page to sessions attributed to this source type. */
    sourceType?: string;
    /** Restrict the page to this source identifier. Requires `sourceType`. */
@@ -323126,7 +323500,7 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
    truncated?: boolean;
  }
  
-@@ -2232,60 +2238,16 @@
+@@ -2232,60 +2239,16 @@
    v: 1;
    sessionId: string;
    workspaceCwd: string;
@@ -323191,7 +323565,7 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
    description?: string;
    input: { hint: string } | null;
    _meta?: Record<string, unknown> | null;
-@@ -2322,13 +2284,17 @@
+@@ -2322,13 +2285,17 @@
    runtimeMs: number;
    outputFile?: string;
    subagentType?: string;
@@ -323210,7 +323584,7 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
    toolUseId?: string;
    /**
     * `id` of the agent task that spawned this one. Absent for agents
-@@ -2418,23 +2384,16 @@
+@@ -2418,23 +2385,16 @@
    statusUnavailable?: true;
    initializationError?: string;
    servers: DaemonLspServerStatus[];
@@ -323235,7 +323609,7 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
  export interface DaemonSessionStatsToolByName {
    count: number;
    success: number;
-@@ -2459,12 +2418,13 @@
+@@ -2459,12 +2419,13 @@
    v: 1;
    sessionId: string;
    workspaceCwd: string;
@@ -323249,7 +323623,7 @@ diff --git a/packages/sdk-typescript/src/daemon/types.ts b/packages/sdk-typescri
      totalSuccess: number;
      totalFail: number;
      totalDurationMs: number;
-@@ -2486,59 +2446,42 @@
+@@ -2486,59 +2447,42 @@
   * Summary window the usage dashboard aggregates over (UI: Today / 7D / 30D).
   * `week` = trailing 7 days, `month` = trailing 30 days. Mirrors the subset of
   * core's `TimeRange` the route accepts.
@@ -423415,3 +423789,106 @@ diff --git a/packages/core/src/utils/function-response-content.ts b/packages/cor
 +    return String(response);
 +  }
 +}
+diff --git a/packages/cli/src/serve/server/error-response.ts b/packages/cli/src/serve/server/error-response.ts
+--- a/packages/cli/src/serve/server/error-response.ts
++++ b/packages/cli/src/serve/server/error-response.ts
+@@ -6,12 +6,13 @@
+ 
+ import {
+   emitDaemonLog,
+   InvalidSessionTranscriptCursorError,
+   recordDaemonBridgeError,
+   recordDaemonError,
++  SessionTranscriptEvidenceIncompleteError,
+   SessionTranscriptPageTooLargeError,
+   SessionTranscriptSnapshotUnavailableError,
+   SessionTranscriptTooLargeError,
+   SessionWriterError,
+   TrustGateError,
+ } from '@qwen-code/qwen-code-core';
+@@ -251,12 +252,20 @@
+     return;
+   }
+   if (err instanceof InvalidSessionTranscriptCursorError) {
+     res.status(400).json({
+       error: err.message,
+       code: 'invalid_transcript_cursor',
++      ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {}),
++    });
++    return;
++  }
++  if (err instanceof SessionTranscriptEvidenceIncompleteError) {
++    res.status(409).json({
++      error: err.message,
++      code: 'transcript_evidence_incomplete',
+       ...(ctx?.sessionId ? { sessionId: ctx.sessionId } : {}),
+     });
+     return;
+   }
+   if (err instanceof SessionTranscriptSnapshotUnavailableError) {
+     res.status(409).json({
+diff --git a/packages/cli/src/serve/server/error-response.test.ts b/packages/cli/src/serve/server/error-response.test.ts
+--- a/packages/cli/src/serve/server/error-response.test.ts
++++ b/packages/cli/src/serve/server/error-response.test.ts
+@@ -5,12 +5,13 @@
+  */
+ 
+ import type { Response } from 'express';
+ import { describe, expect, it, vi } from 'vitest';
+ import { SessionNotFoundError } from '@qwen-code/acp-bridge/bridgeErrors';
+ import {
++  SessionTranscriptEvidenceIncompleteError,
+   SessionTranscriptChangedError,
+   SessionWriterConflictError,
+   SessionWriterLostError,
+   SessionWriterUnavailableError,
+ } from '@qwen-code/qwen-code-core';
+ import { sendBridgeError } from './error-response.js';
+@@ -27,12 +28,30 @@
+   status.mockReturnValue(response);
+   json.mockReturnValue(response);
+   return { response: response as unknown as Response, status, json };
+ }
+ 
+ describe('sendBridgeError session writer errors', () => {
++  it('reports an idle transcript with open model evidence as incomplete', () => {
++    const { response, status, json } = responseMock();
++    const filePath = '/workspace/chats/session.jsonl';
++
++    sendBridgeError(
++      response,
++      new SessionTranscriptEvidenceIncompleteError(filePath),
++      { sessionId: 'session-1' },
++    );
++
++    expect(status).toHaveBeenCalledWith(409);
++    expect(json).toHaveBeenCalledWith({
++      error: expect.stringContaining(filePath),
++      code: 'transcript_evidence_incomplete',
++      sessionId: 'session-1',
++    });
++  });
++
+   it('serializes the structured session-closing code', () => {
+     const { response, status, json } = responseMock();
+ 
+     sendBridgeError(
+       response,
+       new SessionNotFoundError(
+diff --git a/packages/acp-bridge/src/bridgeTypes.ts b/packages/acp-bridge/src/bridgeTypes.ts
+--- a/packages/acp-bridge/src/bridgeTypes.ts
++++ b/packages/acp-bridge/src/bridgeTypes.ts
+@@ -418,12 +418,13 @@
+   sessionId: string;
+   events: BridgeEvent[];
+   nextCursor?: string;
+   hasMore: boolean;
+   startTime?: string;
+   lastUpdated?: string;
++  provisional?: true;
+   partial?: true;
+   replayError?: string;
+ }
+ 
+ export interface BridgeBranchSessionRequest {
+   name?: string;

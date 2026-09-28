@@ -9273,7 +9273,35 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "services/session-transcript-reader.ts", (
         "runtimeHistoryPosition: runtimeHistoryPosition(historyCommit)",
         "historyCursor.apply(entry.runtimeHistoryPosition)",
+        "modelEvidenceCompletion: index.completion",
+        "export class SessionTranscriptEvidenceIncompleteError extends Error",
     ), label=label)
+    require_text(state, core + "services/session-transcript-reader.test.ts",
+                 "reports open physical evidence even when its visible page ends at the snapshot tail", label=label)
+    _require_all(state, cli + "acp-integration/session/history-replay-page.ts", (
+        "page.modelEvidenceCompletion.openRequests !== 0",
+        "page.modelEvidenceCompletion.openAttempts !== 0",
+        "openEvidence && finalizeDangling && !page.hasMore",
+        "throw new SessionTranscriptEvidenceIncompleteError(page.filePath)",
+        "...(openEvidence ? { provisional: true as const } : {})",
+    ), label=label)
+    _require_all(state, cli + "acp-integration/session/history-replay-page.test.ts", (
+        "refuses a complete-page claim while its captured model request remains open",
+        "marks an active page with open model evidence as provisional",
+    ), label=label)
+    _require_all(state, cli + "acp-integration/acpAgent.ts", (
+        "...(replay.provisional ? { provisional: true } : {})",
+        "errorKind: 'transcript_evidence_incomplete'",
+    ), label=label)
+    _require_all(state, cli + "serve/routes/session.ts", (
+        "...(replay.provisional ? { provisional: true as const } : {})",
+    ), label=label)
+    _require_all(state, cli + "serve/server/error-response.ts", (
+        "err instanceof SessionTranscriptEvidenceIncompleteError",
+        "code: 'transcript_evidence_incomplete'",
+    ), label=label)
+    for path in ("packages/acp-bridge/src/bridgeTypes.ts", "packages/sdk-typescript/src/daemon/types.ts"):
+        require_text(state, path, "provisional?: true;", label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
         "readModelGeneration(value['generation'])", "export function resolveTranscriptRecord(",
         "generationHistory(envelope)", "Stored generation records cannot contain derived history or presentation fields",
@@ -9374,6 +9402,7 @@ def _validate_served_accounting_after(state: State) -> None:
         cli + "serve/virtual-subagent-sessions.ts",
         ("decodeChatRecord(", "if (this.readFailure) throw this.readFailure;",
          "type: 'stream_error'", "this.bus.close()", "this.requestReplay.observe(record)",
+         "modelEvidenceCompletion: this.requestReplay.completionState()",
          "if (this.readFailure) return this.readFailure;", "throw this.failRead(error);"),
         label=label,
     )

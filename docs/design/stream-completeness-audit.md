@@ -430,6 +430,19 @@ contains a valid open utility request and checks that only the complete read
 refuses it. This is source implementation and an authored test, not an executed
 client or native gate; Desktop's direct parsers remain a separate gap.
 
+The indexed `SessionTranscriptReader.readPage` path also built a complete
+snapshot index but returned its page without the index's open model-evidence
+state. Source now returns that state to the shared page replayer. An idle page
+at the snapshot tail refuses an open physical request or logical generation
+before projecting updates; an active page carries `provisional: true`, through
+both ACP and workspace HTTP, so live transcript viewing remains available.
+The SDK and bridge page types expose that marker. Focused Core, CLI replay and
+HTTP error-mapping source tests passed. The ACP transcript suite could not
+start from this source checkout because `@qwen-code/channel-base` has no
+resolvable package entry without the owner's build. Its marker propagation is
+established by source reading and an authored assertion, not by a running ACP
+test. Compilation, full client behavior and the owner's gates remain unverified.
+
 The blanket retry allegation is also too strong. `BaseLlmClient.generateText`
 and `generateJson` use `retryWithBackoff`; compaction and title paths route
 through that owner. Prompt hooks directly race `generateContent` against
