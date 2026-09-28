@@ -387876,17 +387876,72 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 diff --git a/packages/core/src/services/session-generation-view.test.ts b/packages/core/src/services/session-generation-view.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/session-generation-view.test.ts
-@@ -0,0 +1,110 @@
+@@ -0,0 +1,165 @@
 +import { expect, it } from 'vitest';
 +import { randomUUID } from 'node:crypto';
 +import fs from 'node:fs/promises';
 +import path from 'node:path';
 +import { createRecordedGenerationFixture } from '../test-utils/recorded-generation-fixture.js';
++import { CompressionStatus } from '../core/turn.js';
++import { composePostCompactHistory } from './postCompactAttachments.js';
++import {
++  STATE_SNAPSHOT_SECTIONS,
++  type StateSnapshot,
++} from './state-snapshot.js';
 +import { prepareTranscriptRecords } from '../utils/transcript-records.js';
 +import { readCompleteStoredCanonicalChatRecords } from './chat-recording-io.js';
 +import { buildRuntimeHistoryFromConversation } from './session-api-history.js';
 +
 +const replay = { kind: 'all' as const, hideInheritedHistory: false };
++
++it('restores and forks a post-compaction carried turn from a physical generation', async () => {
++  const fixture = await createRecordedGenerationFixture();
++  try {
++    const generated = await fixture.run('accepted');
++    expect(generated.disposition).toBe('accepted');
++    const before = fixture.chat.getHistory();
++    const carried = before.at(-1)!;
++    expect(carried.parts?.some((part) => part.thought && part.text)).toBe(true);
++    expect(carried.parts?.some((part) => part.functionCall)).toBe(true);
++    const snapshot = Object.fromEntries(
++      STATE_SNAPSHOT_SECTIONS.map((section) => [section, 'Recorded state.']),
++    ) as StateSnapshot;
++    const composed = composePostCompactHistory(before, snapshot, {
++      turn: [carried],
++    });
++    expect(composed).toHaveLength(2);
++    expect(composed.at(-1)).toEqual(carried);
++    await fixture.root.recordChatCompression({
++      compressedHistory: composed,
++      imagePayloads: [],
++      info: {
++        originalTokenCount: 1000,
++        newTokenCount: 200,
++        compressionStatus: CompressionStatus.COMPRESSED,
++        rejectedAttempts: [],
++        postCompactionHistory: composed,
++      },
++    });
++    await fixture.root.flush();
++    const fork = randomUUID();
++    await fixture.service.forkSession(fixture.session, fork, {
++      sourceLease: fixture.lease,
++    });
++    for (const session of [fixture.session, fork]) {
++      const loaded = await fixture.service.loadSession(session);
++      const indexed = await fixture.reader.readRestoreProjection(session, {
++        replay: { kind: 'none' },
++      });
++      expect(
++        buildRuntimeHistoryFromConversation(loaded!.conversation).history,
++      ).toEqual(composed);
++      expect(indexed!.runtime.apiHistory).toEqual(composed);
++      expect(indexed!.runtime.apiHistory.at(-1)).toEqual(carried);
++    }
++  } finally {
++    await fixture.cleanup();
++  }
++});
 +
 +it('includes local abandoned evidence once in both ordered indexed restore replay arrays', async () => {
 +  const fixture = await createRecordedGenerationFixture();

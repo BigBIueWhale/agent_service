@@ -8484,6 +8484,12 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "services/session-generation-view.test.ts", (
         "result.rootSequence.indexOf('history')",
         "result.rootSequence.indexOf('model_generation')",
+        "restores and forks a post-compaction carried turn from a physical generation",
+        "expect(carried.parts?.some((part) => part.thought && part.text)).toBe(true);",
+        "expect(carried.parts?.some((part) => part.functionCall)).toBe(true);",
+        "expect(composed).toHaveLength(2);",
+        "await fixture.service.forkSession(fixture.session, fork, {",
+        "expect(indexed!.runtime.apiHistory.at(-1)).toEqual(carried);",
     ), label=label)
     forbid_text(state, core + "core/model-response-evidence.ts",
                 "policy?: OpenAIResponseDecodePolicy", label=label)
