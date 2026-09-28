@@ -77,17 +77,27 @@ Two narrower defects are real by source reading:
 
 ## Native certification and output disposition (§3)
 
-The following control-flow gaps were confirmed by reading
-`protocol/engine/src/model_requests.rs`; the transport correction below closes
-one of them. No native adversarial test was run:
+The following control-flow questions were checked against current native source.
+The transport correction below closes one real gap. No native adversarial test
+was run:
 
 - `validate_output_origin` returns immediately for runtime origins. Runtime
   output is legitimate, but that label alone does not establish which runtime
   operation accounts for it. Inventing a model attempt for runtime output would
   be wrong; the runtime owner needs explicit accounting.
-- Model output checks the attempt's identity and scope without binding that
-  output to its final history disposition. Aggregate request/response counts
-  in `validate_summary` do not provide that per-attempt association.
+- The allegation that an abandoned model partial can become an accepted round
+  is contradicted by the current path. `validate_output_origin` checks attempt
+  identity and scope, then `PartialStreamState` checks text, thinking and
+  incomplete-call prefixes against that attempt's generation. Its
+  `observe_completion` requires the same origin and retains the accepted or
+  abandoned decision;
+  `finish` refuses a model partial without that completion. A `tool_use`
+  partial requires accepted completion, and `RuntimeContract` adds tool uses
+  and root model text only for accepted completion. Abandoned output remains
+  visible and billed as served work, with its abandoned decision retained.
+  This is a source-reading conclusion, not an executed native refusal. The
+  separate native physical-byte replay and runtime-origin ownership questions
+  remain open.
 - The baseline response completion validated byte counts, digests and some
   termination conditions without linking processing success to transport.
   The shared writer and readers now require observed 2xx HTTP and an EOF or
