@@ -385540,7 +385540,7 @@ diff --git a/packages/cli/src/serve/server/session-export-generation.test.ts b/p
 diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packages/core/src/core/model-generation-completion.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-generation-completion.test.ts
-@@ -0,0 +1,496 @@
+@@ -0,0 +1,497 @@
 +import { describe, expect, it } from 'vitest';
 +import {
 +  FinishReason,
@@ -385751,7 +385751,8 @@ diff --git a/packages/core/src/core/model-generation-completion.test.ts b/packag
 +  it('refuses EOF before generation', () => {
 +    const replay = new ModelGenerationReplay();
 +    replay.observeRequest(request('r1'));
-+    replay.observeResponse(settledResponse('r1'));
++    replay.observeResponse(processingOutcome('r1', 'failed', 0));
++    replay.observeResponse(settledResponse('r1', 'abandoned'));
 +    expect(() => replay.finish()).toThrow(/incomplete/);
 +  });
 +  it('refuses EOF before completion', () => {

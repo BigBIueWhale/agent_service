@@ -431,7 +431,10 @@ standalone child proof remain open. The earlier local rehashed replacement of
 a preparation's normalized ID and its matching call mapping exposed the
 TypeScript logical reader's missing seed derivation. The current source uses
 the live normalizer for that check and has authored prepared and generated-ID
-forgery tests; Node was unavailable, so those tests remain unexecuted. This
+forgery tests. Its focused TypeScript suite passed 17 cases with the official
+prebuilt Node 22.16.0 runtime; the adjacent logical completion and retained
+response replay suites passed 68 more cases after a stale EOF fixture was
+corrected to use a failed outcome and abandoned history. This
 does not establish the byte-to-observation relation for readers without
 physical response replay. No compiler, native certifier, deployed provider or
 release gate has verified the full repair.
