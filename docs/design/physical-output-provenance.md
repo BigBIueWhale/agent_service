@@ -23,10 +23,14 @@ Rust tests were authored but not run. Neither source tests nor code reading
 prove a deployed provider or native execution; those remain unverified pending
 the owner's gates. The Python
 reader's focused generation and retry suite passed 70 cases after its count
-check was added. The full Python unit run still has 64 failures with exactly
-the same test identities in the untouched baseline and current source. Those
-stale fixture failures are not presented as successful Python suite
-qualification.
+check was added. The 64 previously failing Python unit cases were traced to
+three stale authored fixtures: an accepted history decision before its
+generation and a missing normalization seed, a Chat seed copied into a utility
+request, and a stale normalized-call ID and generation hash. The fixture owners
+now construct producer-valid evidence while retaining their original usage,
+projection and refusal assertions. All 761 Python unit cases passed in the
+authoring source. This does not qualify the SDK's packaged execution, the
+native certifier, or deployed output.
 
 Generation-envelope counters also require exact numeric interpretation. A
 rehashed envelope could spell an observed count as

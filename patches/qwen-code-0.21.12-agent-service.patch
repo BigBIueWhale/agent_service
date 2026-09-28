@@ -353218,7 +353218,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,682 @@
+@@ -0,0 +1,700 @@
 +from __future__ import annotations
 +
 +import copy
@@ -353329,7 +353329,9 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +
 +def structured_records() -> list[dict[str, Any]]:
 +    wire = records("chat_request_response_history")
-+    evidence = next(row["generation"] for row in wire if row["type"] == "model_generation")
++    evidence = next(
++        row["generation"] for row in wire if row["type"] == "model_generation"
++    )
 +    envelope = json.loads(evidence["generation_json"])
 +    observation = envelope["observations"][0]
 +    call = next(
@@ -353344,9 +353346,9 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    evidence["generation_json"] = raw
 +    evidence["generation_bytes"] = len(raw.encode())
 +    evidence["generation_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
-+    next(row["completion"] for row in wire if row["type"] == "model_attempt_completion")[
-+        "generation_sha256"
-+    ] = evidence["generation_sha256"]
++    next(
++        row["completion"] for row in wire if row["type"] == "model_attempt_completion"
++    )["generation_sha256"] = evidence["generation_sha256"]
 +    wire.insert(
 +        -1,
 +        {
@@ -353377,15 +353379,26 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    admit_all(structured_records()).finish()
 +
 +    for mutation, expected in (
-+        (lambda wire: wire.pop(-2), "no successful accepted structured_output submission"),
-+        (lambda wire: wire[-2]["message"]["content"][0].update(is_error=True),
-+         "no successful accepted structured_output submission"),
-+        (lambda wire: wire[-1].update(structured_result={"ok": 1, "count": 1}),
-+         "structured result contradicts"),
-+        (lambda wire: wire[-1].update(result='{"ok":false,"count":1}'),
-+         "structured result contradicts"),
-+        (lambda wire: wire[-1].pop("structured_result"),
-+         "omits the structured_output submission"),
++        (
++            lambda wire: wire.pop(-2),
++            "no successful accepted structured_output submission",
++        ),
++        (
++            lambda wire: wire[-2]["message"]["content"][0].update(is_error=True),
++            "no successful accepted structured_output submission",
++        ),
++        (
++            lambda wire: wire[-1].update(structured_result={"ok": 1, "count": 1}),
++            "structured result contradicts",
++        ),
++        (
++            lambda wire: wire[-1].update(result='{"ok":false,"count":1}'),
++            "structured result contradicts",
++        ),
++        (
++            lambda wire: wire[-1].pop("structured_result"),
++            "omits the structured_output submission",
++        ),
 +    ):
 +        wire = structured_records()
 +        mutation(wire)
@@ -353723,7 +353736,12 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    wire = [
 +        row
 +        for row in records()
-+        if row["type"] not in ("model_generation", "model_attempt_completion")
++        if row["type"]
++        not in (
++            "model_normalization_seed",
++            "model_generation",
++            "model_attempt_completion",
++        )
 +        and row.get("response", {}).get("event", {}).get("kind") != "history"
 +    ]
 +    request(wire)["owner"] = {"kind": "utility"}
@@ -401720,14 +401738,14 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-output-scope.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/packages/sdk-python/tests/unit/test_accepted_generation_view.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_accepted_generation_view.py
-@@ -0,0 +1,805 @@
+@@ -0,0 +1,818 @@
 +from __future__ import annotations
 +
 +import copy
 +import hashlib
 +import json
-+from pathlib import Path
 +import unittest
++from pathlib import Path
 +from typing import Any, cast
 +
 +from qwen_code_sdk.generation_view import accepted_generation_view
@@ -401742,10 +401760,18 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +        Path(__file__).parents[1] / "fixtures" / "accepted-generation-view.json"
 +    ).read_text()
 +)
++EXPECTED_CALL_ID = "provider-call__qwen_dup_2"
 +
 +
 +def fixture(name: str = "rich") -> dict[str, Any]:
 +    result = copy.deepcopy(FIXTURES[name])
++    result["generation"] = copy.deepcopy(
++        next(
++            row["generation"]
++            for row in result["records"]
++            if row["type"] == "model_generation"
++        )
++    )
 +    result["completionRecord"] = next(
 +        row for row in result["records"] if row["type"] == "model_attempt_completion"
 +    )
@@ -401853,7 +401879,7 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +                    {"type": "text", "text": "Hello Ω\n"},
 +                    {
 +                        "type": "tool_use",
-+                        "id": "normalized-call",
++                        "id": EXPECTED_CALL_ID,
 +                        "name": "audit_probe",
 +                        "input": f["expectedArgs"],
 +                    },
@@ -401904,7 +401930,7 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +            [
 +                {
 +                    "type": "tool_use",
-+                    "id": "normalized-call",
++                    "id": EXPECTED_CALL_ID,
 +                    "name": "audit_probe",
 +                    "input": f["expectedArgs"],
 +                }
@@ -401968,7 +401994,7 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +        self.assertEqual(view, before)
 +        self.assertEqual(
 +            view["projection"]["generation_sha256"],
-+            FIXTURES["rich"]["generation"]["generation_sha256"],
++            f["generation"]["generation_sha256"],
 +        )
 +        self.assertEqual(view["message"]["content"][-1]["input"], f["expectedArgs"])
 +
@@ -402104,7 +402130,7 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +                "index": 0,
 +                "content_block": {
 +                    "type": "tool_use",
-+                    "id": "normalized-call",
++                    "id": EXPECTED_CALL_ID,
 +                    "name": "audit_probe",
 +                    "input": {},
 +                },
@@ -402259,6 +402285,11 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +            )
 +        elif row["type"] == "model_response":
 +            row["response"]["request_id"] = "request-internal"
++        elif row["type"] == "model_normalization_seed":
++            row["normalization_seed"].update(
++                origin=copy.deepcopy(origin),
++                request_id="request-internal",
++            )
 +        elif row["type"] == "model_generation":
 +            row["generation"]["generation_id"] = "generation-internal"
 +        elif row["type"] == "model_attempt_completion":
@@ -402284,7 +402315,7 @@ diff --git a/packages/sdk-python/tests/unit/test_accepted_generation_view.py b/p
 +        for row in rows:
 +            await q._route_message(row)
 +
-+    async def test_accepted_internal_preserves_raw_generation_and_completion_without_assistant(
++    async def test_accepted_internal_retains_generation_without_assistant(
 +        self,
 +    ) -> None:
 +        f = internal_fixture()
@@ -402581,7 +402612,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_output_scope.py b/pa
 diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packages/sdk-python/tests/unit/test_root_physical_usage.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_root_physical_usage.py
-@@ -0,0 +1,560 @@
+@@ -0,0 +1,579 @@
 +from __future__ import annotations
 +
 +import asyncio
@@ -402791,6 +402822,22 @@ diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packag
 +    parent = "child-tool" if scope_kind == "child" else None
 +    scope = "internal-owner" if scope_kind == "internal" else parent or "session-a"
 +    origin = {"kind": "model", "attempt_id": f"{prefix}-attempt", "kv_scope": scope}
++    seed_row = copy.deepcopy(
++        next(
++            r
++            for r in FIXTURES["text"]["records"]
++            if r["type"] == "model_normalization_seed"
++        )
++    )
++    seed_row.update(
++        uuid=f"{prefix}-seed-record",
++        parent_tool_use_id=None,
++    )
++    seed_row["normalization_seed"].update(
++        journal_id=journal,
++        request_id=prefix,
++        origin=origin,
++    )
 +    generation_row = copy.deepcopy(
 +        next(r for r in FIXTURES["text"]["records"] if r["type"] == "model_generation")
 +    )
@@ -402832,10 +402879,13 @@ diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packag
 +            "consumer_observations": len(envelope["observations"]),
 +        },
 +    }
++    responses = response_rows(prefix, usage, journal=journal)
 +    return [
 +        request(prefix, sequence, scope, journal=journal),
-+        *response_rows(prefix, usage, journal=journal),
++        *responses[:-1],
++        seed_row,
 +        generation_row,
++        responses[-1],
 +        completion,
 +    ]
 +

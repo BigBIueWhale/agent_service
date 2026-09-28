@@ -8884,11 +8884,25 @@ def _validate_served_accounting_after(state: State) -> None:
                  "object_pairs_hook=_object", label=label)
     _require_all(state, python_sdk + "tests/unit/test_record_admission.py", (
         "test_authoritative_request_response_streams", "test_shared_goal_vectors",
+        "test_physical_usage_is_explicit_and_valid",
+        '"model_normalization_seed",',
         "test_full_body_requires_a_new_segment_for_its_scope",
         "test_shared_partial_vectors", "test_request_replay_preserves_raw_json_spelling",
         "test_delivered_record_mutation_cannot_change_response_owner",
         "test_duplicate_terminal_cannot_settle_queued_input",
         "test_structured_result_binds_to_successful_accepted_submission",
+    ), label=label)
+    _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
+        "seed_row[\"normalization_seed\"].update(",
+        "*responses[:-1]",
+        "responses[-1]",
+        "test_accepts_exact_cumulative_physical_usage",
+    ), label=label)
+    _require_all(state, python_sdk + "tests/unit/test_accepted_generation_view.py", (
+        "EXPECTED_CALL_ID = \"provider-call__qwen_dup_2\"",
+        'result["generation"] = copy.deepcopy(',
+        'row["normalization_seed"].update(',
+        "test_accepted_internal_retains_generation_without_assistant",
     ), label=label)
     require_text(state, core + "utils/runtime-contract-admission.ts",
                  "Terminal record identity is repeated", label=label)

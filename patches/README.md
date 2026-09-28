@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `37d8b7af86e15200386c3a5fe9b6b2b4cf193eca27f986faf2d28301f1143662`
+- Review-diff SHA-256: `1f356f5078c78db980b564a5aba9d52f18864bc1f8d2f3d04e3a679ff890f0ca`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `da3966d6e9518c6a37815d2c880bb066ccfaa405276ed2f81d77587ef2f45a12`
+- Transformer-manifest SHA-256: `435164b49015288b5ace1ef1cf2ec6df6c73f209dd1371aa0b387dbcfbc0f2da`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
