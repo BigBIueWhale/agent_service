@@ -44,6 +44,22 @@ envelope. Native source has the same missing comparison; native code was not
 executed. This is a certifier and reader defect, not evidence that the backend
 omitted bytes in an ordinary response.
 
+A current v11 Python admission probe at
+`/tmp/codex-stream-probes/current-v11-physical-forgery.py` uses the complete
+`root_accepted` fixture (SHA-256
+`85cfacbb9bbdbc8b8d19813bd801daca2fbbb0659d5e2afe76eb5346a544c319`).
+The original and two rehashed variants all passed the Python reader. One
+variant changed an accepted thought; the other changed visible text and the
+terminal result. Both updated the generation and completion hashes while
+leaving the 827-byte SSE response body and every physical response record
+unchanged (body SHA-256
+`59afe7bb2f0442c4ebcc4c3611e79f69e2e3b799a06fe19025659bc34ed9b2c1`).
+The exact output is retained at
+`/tmp/codex-current-v11-physical-forgery-report.json`. This executed probe
+establishes that the current Python reader still admits this particular
+byte-to-observation contradiction; it does not execute the native or Java
+readers or a deployed provider.
+
 The repair must make physical response decoding and generation construction one
 verifiable chain. A verifier must reconstruct provider events from each exact
 recorded body, including SSE frame boundaries and nonstreaming JSON; identify
