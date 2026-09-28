@@ -823,14 +823,22 @@ and its replay order are unchanged by source reading.
 Source reading found a producer inconsistency after ordinary successful
 results acquired an accepted-model-text admission rule: the shared
 `BaseJsonOutputAdapter.buildResultMessage` still let a caller's optional
-`summary` replace that text. The production noninteractive session does not
-pass a summary, so this was a capability of the shared adapter, not an
-observed production regression. The adapter now refuses a supplied summary,
+`summary` replace that text. The adapter now refuses a supplied summary,
 including a present property whose value is `undefined`, and directs a caller
 to emit a runtime assistant message for local text or use `structuredResult`
 for structured output. An ordinary success therefore uses the last accepted
 assistant text; runtime and structured results retain their distinct sources.
 vLLM does not construct this client-owned terminal record.
+
+A later source read found that `runNonInteractive` still supplied
+`summary: ending.message` on every terminal result. That property made the
+adapter refuse ordinary results, even when `ending.message` was `undefined`.
+The caller now supplies `errorMessage` for errors and leaves successful local
+text in the runtime assistant message it already emits. Its JSON result test
+checks the successful exit code and accepted model text. The targeted source
+test was attempted but stopped before collection because the installed
+`@qwen-code/web-templates` package has no `dist/index.js`; execution of this
+caller change, compilation, and owner gates remain unverified.
 
 The source fixture for physical JSON output was also brought into line with
 the existing request and response evidence protocol: it supplies the selected

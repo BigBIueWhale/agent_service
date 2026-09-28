@@ -8603,6 +8603,12 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     forbid_text(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts",
                 "readonly summary?: string", label=label)
+    _require_all(state, cli + "nonInteractiveCli.ts", (
+        "errorMessage: ending.message,",
+        "emitFinalAssistantMessage(adapter, message);",
+    ), label=label)
+    forbid_text(state, cli + "nonInteractiveCli.ts",
+                "summary: ending.message", label=label)
     _require_all(state, cli + "nonInteractive/io/terminal-summary-refusal.test.ts", (
         "it.each(['replacement', undefined])",
         "before reading terminal evidence",
