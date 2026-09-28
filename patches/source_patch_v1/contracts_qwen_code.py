@@ -3216,6 +3216,7 @@ def _validate_literal_response_after(state: State) -> None:
         "packages/core/src/core/model-generation.ts",
         (
             "export class GenerationObservationNormalizer",
+            "'source_request_id' | 'tool_call_preparations' | 'call_ids'",
             "const snapshot = structuredClone(observed)",
             "normalizeModelToolCallIds(",
             "provider_call_id: observed.tool_call_preparations[index]!.callId",
