@@ -359,7 +359,12 @@ fn orphan_and_future_child_owners_are_refused_at_their_first_reference() {
     for future in [false, true] {
         let mut trace = Trace::new();
         trace.presentation(Some("child"));
-        let orphan_line = trace.rows.len();
+        let orphan_line = trace
+            .rows
+            .iter()
+            .position(|row| row["subtype"] == "runtime_operation")
+            .unwrap()
+            + 1;
         if future {
             trace.chat(None, "child");
         }
@@ -552,7 +557,11 @@ fn unreadable_outcome_usage_stays_pending_between_usable_reports() {
     let mut complete = Trace::new();
     complete.utility("a", ordinary_usage());
     complete.utility("a", ordinary_usage());
-    let middle = complete.rows.len() - 1;
+    let middle = complete
+        .rows
+        .iter()
+        .rposition(|row| row["response"]["event"]["kind"] == "outcome")
+        .unwrap();
     complete.utility("a", ordinary_usage());
     complete.terminal(None, 1, None);
     complete.certify();
@@ -585,7 +594,11 @@ fn invalid_outer_identity_cannot_attribute_an_outcome_or_a_child_scope() {
     let mut complete = Trace::new();
     complete.utility("a", ordinary_usage());
     complete.utility("a", ordinary_usage());
-    let middle = complete.rows.len() - 1;
+    let middle = complete
+        .rows
+        .iter()
+        .rposition(|row| row["response"]["event"]["kind"] == "outcome")
+        .unwrap();
     complete.utility("a", ordinary_usage());
     complete.terminal(None, 1, None);
     complete.certify();

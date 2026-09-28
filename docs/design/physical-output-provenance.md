@@ -32,6 +32,20 @@ projection and refusal assertions. All 761 Python unit cases passed in the
 authoring source. This does not qualify the SDK's packaged execution, the
 native certifier, or deployed output.
 
+An additional executed probe of the installed OpenAI SDK 5.11 returned a
+JavaScript string for a successful HTTP `text/plain` completion. Source reading
+shows the nonstreaming pipeline records that value after usage inspection and
+before Core conversion; conversion can then fail while `ProviderOutput` retains
+the JSON string in a compaction draw. The native compaction validator formerly
+required every `sdkValuesJson` member to decode to an object, although the v14
+schema requires only a string holding JSON and the SDK can yield a scalar.
+It now checks that each member is decodable JSON without imposing the object
+shape. The authored native fixture pairs the string with a `text/plain`
+physical response and a failed, zero-delivery outcome. That native test has
+not been executed. This removes a false refusal of a truthful failed draw;
+it does not link the draw's declared value to the physical body, which remains
+the larger provenance requirement.
+
 An executed probe of the installed OpenAI SDK 5.11 yielded one JSON value for
 an SSE `data:` line beginning with a UTF-8 byte order mark, including when that
 line followed a completed earlier event. Two consecutive marks at one line's

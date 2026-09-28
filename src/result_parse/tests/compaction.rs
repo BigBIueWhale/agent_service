@@ -140,7 +140,7 @@ fn unknown_retained_counts_require_unsuccessful_compaction() {
 }
 
 #[test]
-fn compaction_draws_require_content_measurements_and_provider_objects() {
+fn compaction_draws_require_content_measurements_and_decodable_provider_values() {
     let complete = trace_with(record(output(), json!([])), false);
     complete.certify();
     for field in [
@@ -168,8 +168,7 @@ fn compaction_draws_require_content_measurements_and_provider_objects() {
     }
     for (responses, expected) in [
         (json!([]), "schema rule /oneOf"),
-        (json!(["not JSON"]), "undecodable raw response"),
-        (json!(["null"]), "non-object raw response"),
+        (json!(["not JSON"]), "undecodable SDK value JSON"),
     ] {
         let mut trace = complete.clone();
         data(&mut trace)["output"]["sdkValuesJson"] = responses;
@@ -178,6 +177,24 @@ fn compaction_draws_require_content_measurements_and_provider_objects() {
     let mut trace = complete;
     data(&mut trace)["output"]["unknown_evidence"] = json!(true);
     assert_compaction_refusal(&trace, "violates stream contract");
+}
+
+#[test]
+fn compaction_retains_a_non_json_sdk_value_when_conversion_fails() {
+    let value = "provider spoke plain text";
+    let mut trace = Trace::new();
+    trace.utility_text_failure("a", value);
+    let mut draw = output();
+    draw["requestAttempts"] = json!(1);
+    draw["sdkValuesJson"] = json!([serde_json::to_string(value).unwrap()]);
+    draw["usage"] = Value::Null;
+    draw["text"] = json!("");
+    draw["reasoning"] = json!("");
+    draw["incompleteToolCalls"] = json!([]);
+    draw["finishReason"] = Value::Null;
+    trace.push(record(draw, json!([])));
+    trace.terminal(None, 0, None);
+    trace.certify();
 }
 
 #[test]

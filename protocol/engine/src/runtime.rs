@@ -172,14 +172,11 @@ fn validate_compaction_event(
             let raw = response.as_str().ok_or_else(|| {
                 refuse("with a non-string SDK value; inspect the compaction producer")
             })?;
-            let decoded = Document::decode(raw.as_bytes(), json_limits).map_err(|cause| refuse(
-                &format!("with undecodable SDK value JSON ({cause:?}); inspect the captured provider object"),
-            ))?;
-            if decoded.root().as_object().is_none() {
-                return Err(refuse(
-                    "with a non-object SDK value; inspect the captured provider object",
-                ));
-            }
+            Document::decode(raw.as_bytes(), json_limits).map_err(|cause| {
+                refuse(&format!(
+                    "with undecodable SDK value JSON ({cause:?}); inspect the captured provider value"
+                ))
+            })?;
         }
         // What a draw its ceiling stopped had written of a call, as served:
         // always present, a name or null and the arguments text, and nothing

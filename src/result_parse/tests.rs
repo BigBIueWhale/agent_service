@@ -113,7 +113,7 @@ impl Trace {
         .to_string();
         self.push(json!({"type":"model_request","request":{
             "journal_id":"fixture","sequence":sequence,"request_id":id,
-            "owner":{"kind":"utility"},"kv_scope":scope,
+            "owner":{"kind":"utility","operation_id":format!("operation-{sequence}")},"kv_scope":scope,
             "segment_id":format!("segment-{sequence}"),"prompt_id":"fixture",
             "decode_policy":{"mode":"nonstream","model":"fixture",
                 "strict_tool_calling":false,"named_tool_choice":null,
@@ -147,7 +147,36 @@ impl Trace {
             json!({"kind":"outcome","status":"completed","error":null,"served_usage":usage,
                 "sdk_values_seen":1,"pipeline_outputs_delivered":1}),
         );
+        self.response(&id, 5, json!({"kind":"delivery","outputs_delivered":1}));
         self.requests.last_mut().unwrap().1 = Some(usage);
+    }
+
+    fn utility_text_failure(&mut self, scope: &str, text: &str) {
+        let id = self.pending(scope, None);
+        for row in &mut self.rows {
+            if row["response"]["request_id"].as_str() != Some(id.as_str()) {
+                continue;
+            }
+            let event = &mut row["response"]["event"];
+            let kind = event["kind"].as_str().map(str::to_string);
+            match kind.as_deref() {
+                Some("http") => event["content_type"] = json!("text/plain"),
+                Some("body") => event["base64"] = json!(STANDARD.encode(text)),
+                Some("end") => {
+                    event["body_bytes"] = json!(text.len());
+                    event["body_sha256"] = json!(hash(text.as_bytes()));
+                }
+                _ => {}
+            }
+        }
+        self.response(
+            &id,
+            4,
+            json!({"kind":"outcome","status":"failed","error":"conversion failed",
+                "served_usage":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+        );
+        self.response(&id, 5, json!({"kind":"delivery","outputs_delivered":0}));
+        self.requests.last_mut().unwrap().1 = Some(Value::Null);
     }
 
     /// Rebind the captured request, seed, physical tool ID, generation and
@@ -291,10 +320,18 @@ impl Trace {
     }
 
     fn presentation(&mut self, parent: Option<&str>) {
+        let text = "Runtime status.";
+        let id = format!("local-operation-{}", self.rows.len());
+        self.push(json!({"type":"system","subtype":"runtime_operation",
+            "parent_tool_use_id":parent,"data":{"operation_id":id.clone(),
+                "kind":"slash_message","output_sha256":hash(text.as_bytes()),
+                "output_bytes":text.len()}}));
         self.push(json!({"type":"assistant","parent_tool_use_id":parent,
-            "origin":{"kind":"runtime"},"message":{"id":format!("notice-{}", self.rows.len()),
+            "origin":{"kind":"runtime","operation_id":id},"message":{"id":format!("notice-{}", self.rows.len()),
                 "type":"message","role":"assistant","stop_reason":null,
-                "content":[{"type":"text","text":"Runtime status."}],"usage":null}}));
+                "content":[{"type":"text","text":text}],"usage":null}}));
+        self.last_model_text
+            .insert(parent.map(str::to_string), text.into());
     }
 
     fn summary(&self, scope: Option<&str>) -> Value {
