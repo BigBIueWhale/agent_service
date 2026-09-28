@@ -361,6 +361,18 @@ One concrete source consumer omission remains:
   errors and do not validate canonical recording versions. This is a source
   consumer gap regardless of whether the image ships that application.
 
+The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
+while the current patched Qwen source requires canonical recording version 12.
+Hard-coding that version into Desktop's local JSONL loops would bind them to a
+different runtime source and could reject an ordinary session from its pinned
+runtime. The patched ACP `qwen/session/loadUpdates` path already asks the
+runtime to produce validated history; the remaining local text, telemetry,
+slash-command and text-element projections still read the file independently.
+They need a runtime-owned validated projection, with an explicit compatibility
+decision for the older vendored runtime, before the direct loops can be removed.
+This is a source ownership conclusion, not an implemented repair or a measured
+runtime compatibility result.
+
 Desktop's separate ACP history path also ignored the server's explicit
 `partial` and `replayError` reply after a replay failure, filtering malformed
 updates out and treating the remaining prefix as complete. Source reading now

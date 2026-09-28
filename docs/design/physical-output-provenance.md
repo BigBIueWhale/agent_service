@@ -238,6 +238,22 @@ admission checks but has not been compiled or executed here. A utility consumer
 still has no corresponding receipt, and these counts do not themselves prove
 that any decoded value came from the retained body bytes.
 
+The utility owner is wider than `BaseLlmClient`. Source call-site inspection
+found `generateText` and `generateJson` there, a direct generator call in
+`PromptHookRunner`, a direct streamed call in the ACP generation service, and
+`GeminiClient.generateContent` (also used by the goal judge). These pass through
+`GenerationClient.generateContent` or `generateContentStream` with a null Chat
+attempt. `ModelRequestJournal.capture` labels every such physical request
+`{kind:'utility'}`, without a call identity; `ModelResponseReplay` closes it at
+the pipeline outcome. A receipt added only to `BaseLlmClient`, compaction, or a
+side-query call site would leave other utility responses without consumer
+accounting. The shared generation-client delivery boundary needs a per-call
+identity and a durable receipt tied to each physical request, including a
+zero-output failure. If a claim also describes how a caller incorporated an
+output, that additional claim must be recorded by the caller that made the
+decision. The source census establishes these ownership paths; no receipt has
+been implemented or executed by this note.
+
 ## Decoder proof required at admission
 
 The dispatch owner must bind the selected provider and every effective option
