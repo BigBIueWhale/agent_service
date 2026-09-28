@@ -399,6 +399,42 @@ invented from the old outcome count. No such migration was executed in this
 review, and the existing production process readers' separate physical gates
 do not supply this missing downstream decision.
 
+The logical-call boundary is outside the current `GenerationClient` methods.
+`BaseLlmClient.generateText` and `generateJson`, and `GeminiClient`'s side
+generation, call those methods from inside `retryWithBackoff`; each retry is a
+new invocation of the method. `RetryAttemptContext` carries an attempt number
+and timing but no stable call identity. Allocating an identity inside
+`GenerationClient.generateContent` would therefore label physical attempts
+individually while leaving their shared logical operation unknown. The direct
+hook and ACP callers need the same operation abstraction even though they do
+not use that outer retry. This is established by source reading, not an
+executed retry trace.
+
+A single utility-operation owner must be opened before the outer retry or
+direct call and passed through the shared generation client to every physical
+attempt. The physical request journal can attach its request ID to that owner;
+the pipeline already tags each decoded output with its physical request ID.
+The shared client can then account for the values it actually returns or
+yields, including a zero-value failure, and durably settle each admitted
+physical request after its response outcome. The admission readers must
+require one settlement per utility request and compare its delivered prefix
+with that request's physically replayed pipeline output count. The current
+`ModelResponseReplay` deletes a utility request at `outcome`, so it would have
+to retain that request until its receipt is admitted. A receipt at this seam
+proves delivery across that seam only. A content-retry decision, compaction
+acceptance, hook judgement or other later incorporation remains the
+responsibility of the caller that makes it.
+
+`PromptHookRunner` races its provider call against timeout and cancellation;
+the losing provider promise can still settle afterward. Its utility owner
+cannot honestly declare the physical call finished just because the race
+returned. Source also shows that `LoggingContentGenerator` wraps all configured
+auth types while the present byte journal and output source tag live in the
+OpenAI pipeline. A mandatory physical receipt for another provider needs
+equivalent evidence at that provider's shared physical boundary; an invented
+client-side request ID would not establish response-byte provenance. No code
+or test in this note claims this migration is implemented.
+
 ## Decoder proof required at admission
 
 The dispatch owner must bind the selected provider and every effective option
