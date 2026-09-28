@@ -452,9 +452,11 @@ struct ScopeState {
     partial: PartialStreamState,
     runtime_text: Option<Arc<str>>,
     model_text: Option<Arc<str>>,
+    structured_input: Option<Arc<str>>,
 }
 struct ToolUse {
     name: String,
+    structured_input: Option<Arc<str>>,
     line: usize,
     scope: Option<String>,
     returned: bool,
@@ -954,6 +956,13 @@ impl RuntimeContract {
                                 call.id.clone(),
                                 ToolUse {
                                     name: call.name.clone().expect("accepted generation call name"),
+                                    structured_input: if call.name.as_deref()
+                                        == Some("structured_output")
+                                    {
+                                        call.arguments.as_deref().map(Arc::from)
+                                    } else {
+                                        None
+                                    },
                                     line,
                                     scope: scope.map(str::to_string),
                                     returned: false,
@@ -996,6 +1005,13 @@ impl RuntimeContract {
                         }
                         let id = text(block, "tool_use_id", line)?;
                         self.require_tool_owner(id, scope, line)?;
+                        if block.get("is_error").and_then(Value::as_bool) == Some(false) {
+                            let tool = self.tool_uses.get(id).expect("checked tool owner");
+                            if tool.name == "structured_output" && state.structured_input.is_none()
+                            {
+                                state.structured_input = tool.structured_input.clone();
+                            }
+                        }
                         if !returns.insert(id.to_string()) {
                             return Err(ContractError::InvalidRecord(format!(
                                 "events.jsonl line {line} repeats tool result {id:?}"
@@ -1035,6 +1051,42 @@ impl RuntimeContract {
             EventKind::Result => {
                 state.partial.finish(line)?;
                 state.terminal = Some(terminal(object, line, scope.is_none())?);
+                if let Some(structured) = object.get("structured_result") {
+                    if scope.is_some() || state.terminal.as_ref().expect("parsed terminal").is_error
+                    {
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} claims structured output outside a successful root result"
+                        )));
+                    }
+                    let input = state.structured_input.as_deref().ok_or_else(|| {
+                        ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} has no successful accepted structured_output submission"
+                        ))
+                    })?;
+                    let submitted = Document::decode(input.as_bytes(), self.limits.json)
+                        .map_err(|cause| decode_failure(cause, line))?;
+                    let response = state
+                        .terminal
+                        .as_ref()
+                        .expect("parsed terminal")
+                        .response
+                        .as_deref()
+                        .expect("successful root result has text");
+                    let rendered = Document::decode(response.as_bytes(), self.limits.json)
+                        .map_err(|cause| decode_failure(cause, line))?;
+                    if structured != submitted.root() || structured != rendered.root() {
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} structured result contradicts the accepted tool submission or result text"
+                        )));
+                    }
+                } else if scope.is_none()
+                    && !state.terminal.as_ref().expect("parsed terminal").is_error
+                    && state.structured_input.is_some()
+                {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} omits the successful structured_output submission"
+                    )));
+                }
                 if state.runtime_text.as_deref().is_some_and(|rendered| {
                     state
                         .terminal
@@ -1367,6 +1419,36 @@ mod tests {
         }
         assert!(owner.tool_uses.contains_key("provider__qwen_dup_2"));
         owner
+    }
+    #[test]
+    fn structured_result_requires_the_returned_accepted_tool_arguments() {
+        let mut owner = issued_owner();
+        let issued = owner.tool_uses.get_mut("provider__qwen_dup_2").unwrap();
+        issued.name = "structured_output".into();
+        issued.structured_input = Some(Arc::from(r#"{"value":1e0}"#));
+        let returned = serde_json::json!({
+            "type":"user", "uuid":"structured-return", "session_id":fixture()[0]["session_id"],
+            "parent_tool_use_id":null,
+            "message":{"role":"user","content":[{"type":"tool_result",
+                "tool_use_id":"provider__qwen_dup_2","is_error":false,
+                "content":"Structured output accepted."}]}
+        });
+        admit(&mut owner, &returned.to_string()).unwrap();
+        let mut terminal = fixture().last().unwrap().clone();
+        terminal["result"] = serde_json::json!(r#"{"value":1.0}"#);
+        terminal["structured_result"] = serde_json::json!({"value":1});
+        admit(&mut owner, &terminal.to_string()).unwrap();
+
+        let mut forged = issued_owner();
+        let issued = forged.tool_uses.get_mut("provider__qwen_dup_2").unwrap();
+        issued.name = "structured_output".into();
+        issued.structured_input = Some(Arc::from(r#"{"value":1e0}"#));
+        admit(&mut forged, &returned.to_string()).unwrap();
+        terminal["structured_result"] = serde_json::json!({"value":false});
+        assert!(admit(&mut forged, &terminal.to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("structured result contradicts"));
     }
     fn incomplete_owner(
         name: serde_json::Value,

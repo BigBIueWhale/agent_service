@@ -308761,8 +308761,10 @@ diff --git a/packages/core/src/utils/retryErrorClassification.ts b/packages/core
 diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packages/core/src/utils/runtime-contract-admission.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.test.ts
-@@ -0,0 +1,290 @@
+@@ -0,0 +1,348 @@
 +import { describe, expect, it } from 'vitest';
++import { createHash } from 'node:crypto';
++import { readFileSync } from 'node:fs';
 +import {
 +  RuntimeContractAdmission,
 +  RuntimeContractViolation,
@@ -308796,6 +308798,62 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +});
 +
 +describe('required runtime admission', () => {
++  it('binds structured results to successful accepted tool submissions', () => {
++    const fixture = JSON.parse(
++      readFileSync(
++        new URL(
++          '../../../sdk-typescript/test/fixtures/record-evidence.json',
++          import.meta.url,
++        ),
++        'utf8',
++      ),
++    ) as { chat_request_response_history: Array<Record<string, unknown>> };
++    const rows = structuredClone(fixture.chat_request_response_history);
++    const generation = rows.find((row) => row['type'] === 'model_generation')![
++      'generation'
++    ] as Record<string, unknown>;
++    const raw = (generation['generation_json'] as string).replace(
++      '"name":"inspect"',
++      '"name":"structured_output"',
++    );
++    const hash = createHash('sha256').update(raw, 'utf8').digest('hex');
++    generation['generation_json'] = raw;
++    generation['generation_bytes'] = Buffer.byteLength(raw, 'utf8');
++    generation['generation_sha256'] = hash;
++    const completion = rows.find(
++      (row) => row['type'] === 'model_attempt_completion',
++    )!['completion'] as Record<string, unknown>;
++    completion['generation_sha256'] = hash;
++    rows.splice(-1, 0, {
++      type: 'user',
++      uuid: 'structured-return',
++      session_id: rows[0]!['session_id'],
++      parent_tool_use_id: null,
++      message: {
++        role: 'user',
++        content: [
++          {
++            type: 'tool_result',
++            tool_use_id: 'call-attempt-0',
++            is_error: false,
++            content: 'Structured output accepted.',
++          },
++        ],
++      },
++    });
++    const terminal = rows[rows.length - 1]!;
++    terminal['structured_result'] = { k: 'value' };
++    terminal['result'] = '{"k":"value"}';
++    const valid = new RuntimeContractAdmission();
++    for (const row of rows) valid.admit(row);
++    valid.finish();
++
++    terminal['structured_result'] = { k: 'forged' };
++    const forged = new RuntimeContractAdmission();
++    expect(() => {
++      for (const row of rows) forged.admit(row);
++    }).toThrow(/Structured result contradicts/);
++  });
 +  it('requires complete compaction evidence and keeps raw arguments and committed parts intact', () => {
 +    const raw = JSON.stringify({
 +      choices: [
@@ -309055,7 +309113,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/core/src/utils/runtime-contract-admission.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.ts
-@@ -0,0 +1,467 @@
+@@ -0,0 +1,553 @@
 +import { ModelRequestStreamReplay } from '../core/model-request-evidence.js';
 +import {
 +  generationHistory,
@@ -309068,6 +309126,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +  validateRuntimeControlRecord,
 +} from './runtime-stream-contract.js';
 +import { RuntimePartialStream } from './runtime-partial-stream.js';
++import { parseStrictJson } from './strict-json.js';
 +import type {
 +  GenerationEnvelope,
 +  ModelGenerationEvidence,
@@ -309089,6 +309148,38 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +    generation.origin.kv_scope !== (parent ?? session)
 +  )
 +    throw new Error('Generation belongs to another stream scope');
++  return true;
++}
++
++function sameJson(left: unknown, right: unknown): boolean {
++  const pending: Array<[unknown, unknown]> = [[left, right]];
++  while (pending.length > 0) {
++    const [a, b] = pending.pop()!;
++    if (a === b) continue;
++    if (Array.isArray(a) && Array.isArray(b)) {
++      if (a.length !== b.length) return false;
++      for (let i = 0; i < a.length; i++) pending.push([a[i], b[i]]);
++    } else if (
++      a !== null &&
++      b !== null &&
++      typeof a === 'object' &&
++      typeof b === 'object' &&
++      !Array.isArray(a) &&
++      !Array.isArray(b)
++    ) {
++      const leftObject = a as Record<string, unknown>;
++      const rightObject = b as Record<string, unknown>;
++      const keys = Object.keys(leftObject);
++      if (
++        keys.length !== Object.keys(rightObject).length ||
++        keys.some((key) => !Object.hasOwn(rightObject, key))
++      )
++        return false;
++      for (const key of keys) pending.push([leftObject[key], rightObject[key]]);
++    } else {
++      return false;
++    }
++  }
 +  return true;
 +}
 +
@@ -309131,8 +309222,14 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +      started: boolean;
 +      needsResult: boolean;
 +      channel: 'undecided' | 'query' | 'dual' | 'ended';
-+      issuedTools: Map<string, { scope: string | null; returned: boolean }>;
++      issuedTools: Map<string, {
++        scope: string | null;
++        returned: boolean;
++        name: string;
++        structuredInput?: Record<string, unknown>;
++      }>;
 +      lastAssistantText?: string;
++      structuredInput?: Record<string, unknown>;
 +    }
 +  >();
 +  private pendingInputs = 0;
@@ -309259,6 +309356,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +            completion.needsResult = true;
 +            completion.channel = 'undecided';
 +            completion.lastAssistantText = undefined;
++            completion.structuredInput = undefined;
 +          } else if (!completion.started) {
 +            throw new Error(
 +              'Record precedes stream_start; retain the complete original stdout',
@@ -309342,11 +309440,50 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +                    throw new Error(
 +                      'Accepted generation repeats a tool use identity',
 +                    );
-+                  completion.issuedTools.set(id, { scope, returned: false });
++                  const call = part.functionCall!;
++                  completion.issuedTools.set(id, {
++                    scope,
++                    returned: false,
++                    name: call.name ?? '',
++                    ...(call.name === 'structured_output' && {
++                      structuredInput: structuredClone(
++                        call.args as Record<string, unknown>,
++                      ),
++                    }),
++                  });
 +                }
 +              }
 +            }
 +            completedGeneration = admitted;
++          }
++          if (wire.type === 'result' && 'structured_result' in envelope) {
++            if (scope !== null || envelope['is_error'] !== false)
++              throw new Error(
++                'Structured output belongs to a successful root result',
++              );
++            if (completion.structuredInput === undefined)
++              throw new Error(
++                'Structured result has no successful accepted structured_output submission',
++              );
++            if (
++              !sameJson(envelope['structured_result'], completion.structuredInput) ||
++              !sameJson(
++                parseStrictJson(envelope['result'] as string),
++                envelope['structured_result'],
++              )
++            )
++              throw new Error(
++                'Structured result contradicts the accepted tool submission or result text',
++              );
++          } else if (
++            wire.type === 'result' &&
++            scope === null &&
++            envelope['is_error'] === false &&
++            completion.structuredInput !== undefined
++          ) {
++            throw new Error(
++              'Successful result omits the structured_output submission',
++            );
 +          }
 +          if (wire.type === 'result' && scope === null) {
 +            if (
@@ -309393,6 +309530,13 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.ts b/packages/co
 +                  throw new Error(
 +                    'Tool result has no accepted, open tool use in its scope',
 +                  );
++                if (
++                  scope === null &&
++                  (item as Record<string, unknown>)['is_error'] === false &&
++                  issued.name === 'structured_output' &&
++                  completion.structuredInput === undefined
++                )
++                  completion.structuredInput = issued.structuredInput;
 +                issued.returned = true;
 +              }
 +            }
@@ -351389,7 +351533,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/__init__.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
-@@ -0,0 +1,345 @@
+@@ -0,0 +1,407 @@
 +"""Admission of the shared versioned CLI stream before SDK interpretation."""
 +
 +from __future__ import annotations
@@ -351399,6 +351543,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +from typing import Any, Literal
 +
 +from .json_lines import require_json_values
++from .json_lines import parse_json_line
 +from .model_generation import Generation
 +from .record_evidence import PartialOutput, RequestEvidence, _require, _served_usage
 +from .stream_schema import (
@@ -351431,12 +351576,38 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +    terminal_ids: set[str] = field(default_factory=set)
 +    issued_tools: dict[str, _IssuedTool] = field(default_factory=dict)
 +    last_assistant_text: str | None = None
++    structured_input: dict[str, Any] | None = None
 +
 +
 +@dataclass
 +class _IssuedTool:
 +    scope: str | None
++    name: str
++    structured_input: dict[str, Any] | None = None
 +    returned: bool = False
++
++
++def _same_json(left: Any, right: Any) -> bool:
++    pending = [(left, right)]
++    while pending:
++        a, b = pending.pop()
++        if isinstance(a, bool) or isinstance(b, bool):
++            if type(a) is not type(b) or a != b:
++                return False
++        elif isinstance(a, (int, float)) or isinstance(b, (int, float)):
++            if not isinstance(a, (int, float)) or not isinstance(b, (int, float)) or a != b:
++                return False
++        elif isinstance(a, dict) and isinstance(b, dict):
++            if a.keys() != b.keys():
++                return False
++            pending.extend((a[key], b[key]) for key in a)
++        elif isinstance(a, list) and isinstance(b, list):
++            if len(a) != len(b):
++                return False
++            pending.extend(zip(a, b))
++        elif type(a) is not type(b) or a != b:
++            return False
++    return True
 +
 +
 +@dataclass(frozen=True)
@@ -351548,6 +351719,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                    previous.finish()
 +                session.partials.clear()
 +                session.issued_tools.clear()
++                session.structured_input = None
 +            session.requests.begin(record["request_evidence_origin"])
 +            session.started = True
 +            session.needs_result = True
@@ -351604,7 +351776,12 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                            identity not in session.issued_tools,
 +                            "accepted generation repeats a tool use identity",
 +                        )
-+                        session.issued_tools[identity] = _IssuedTool(scope)
++                        name = call["name"]
++                        session.issued_tools[identity] = _IssuedTool(
++                            scope,
++                            name,
++                            copy.deepcopy(call["input"]) if name == "structured_output" else None,
++                        )
 +            session.needs_result = True
 +            completed = CompletedGeneration(copy.deepcopy(record), generation)
 +        elif kind == "result":
@@ -351613,6 +351790,28 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                "terminal record identity is repeated",
 +            )
 +            session.terminal_ids.add(record["uuid"])
++            if "structured_result" in record:
++                _require(
++                    scope is None and not record["is_error"],
++                    "structured output belongs to a successful root result",
++                )
++                _require(
++                    session.structured_input is not None,
++                    "structured result has no successful accepted structured_output submission",
++                )
++                _require(
++                    _same_json(record["structured_result"], session.structured_input)
++                    and _same_json(
++                        parse_json_line(record["result"], exact_integer_floats=True),
++                        record["structured_result"],
++                    ),
++                    "structured result contradicts the accepted tool submission or result text",
++                )
++            elif scope is None and not record["is_error"]:
++                _require(
++                    session.structured_input is None,
++                    "successful result omits the structured_output submission",
++                )
 +            if scope is None:
 +                _require(
 +                    record["is_error"]
@@ -351655,6 +351854,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +                        and not issued.returned,
 +                        "tool result has no accepted, open tool use in its scope",
 +                    )
++                    if (
++                        scope is None
++                        and block.get("is_error") is False
++                        and issued.name == "structured_output"
++                        and session.structured_input is None
++                    ):
++                        session.structured_input = issued.structured_input
 +                    issued.returned = True
 +        if "origin" in record:
 +            origin = record["origin"]
@@ -352450,7 +352656,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,613 @@
+@@ -0,0 +1,682 @@
 +from __future__ import annotations
 +
 +import copy
@@ -352545,13 +352751,7 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        admit_all(wire).finish()
 +
 +
-+def test_explicit_structured_or_runtime_result_can_follow_model_text() -> None:
-+    structured = records("chat_request_response_history")
-+    terminal = next(row for row in structured if row["type"] == "result")
-+    terminal["structured_result"] = {"ok": True}
-+    terminal["result"] = '{"ok":true}'
-+    admit_all(structured).finish()
-+
++def test_runtime_result_can_follow_model_text() -> None:
 +    runtime = records("chat_request_response_history")
 +    local = next(
 +        row
@@ -352563,6 +352763,81 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    runtime.insert(-1, local)
 +    runtime[-1]["result"] = local["message"]["content"][0]["text"]
 +    admit_all(runtime).finish()
++
++
++def structured_records() -> list[dict[str, Any]]:
++    wire = records("chat_request_response_history")
++    evidence = next(row["generation"] for row in wire if row["type"] == "model_generation")
++    envelope = json.loads(evidence["generation_json"])
++    observation = envelope["observations"][0]
++    call = next(
++        part["functionCall"]
++        for candidate in observation["response"]["candidates"]
++        for part in candidate["content"]["parts"]
++        if "functionCall" in part
++    )
++    call["name"] = "structured_output"
++    call["args"] = {"ok": True, "count": 1}
++    raw = json.dumps(envelope, ensure_ascii=False, separators=(",", ":"))
++    evidence["generation_json"] = raw
++    evidence["generation_bytes"] = len(raw.encode())
++    evidence["generation_sha256"] = hashlib.sha256(raw.encode()).hexdigest()
++    next(row["completion"] for row in wire if row["type"] == "model_attempt_completion")[
++        "generation_sha256"
++    ] = evidence["generation_sha256"]
++    wire.insert(
++        -1,
++        {
++            "type": "user",
++            "uuid": "structured-return",
++            "session_id": wire[0]["session_id"],
++            "parent_tool_use_id": None,
++            "message": {
++                "role": "user",
++                "content": [
++                    {
++                        "type": "tool_result",
++                        "tool_use_id": observation["call_ids"][0]["normalized_id"],
++                        "is_error": False,
++                        "content": "Structured output accepted.",
++                    }
++                ],
++            },
++        },
++    )
++    terminal = wire[-1]
++    terminal["structured_result"] = copy.deepcopy(call["args"])
++    terminal["result"] = json.dumps(call["args"], separators=(",", ":"))
++    return wire
++
++
++def test_structured_result_binds_to_successful_accepted_submission() -> None:
++    admit_all(structured_records()).finish()
++
++    for mutation, expected in (
++        (lambda wire: wire.pop(-2), "no successful accepted structured_output submission"),
++        (lambda wire: wire[-2]["message"]["content"][0].update(is_error=True),
++         "no successful accepted structured_output submission"),
++        (lambda wire: wire[-1].update(structured_result={"ok": 1, "count": 1}),
++         "structured result contradicts"),
++        (lambda wire: wire[-1].update(result='{"ok":false,"count":1}'),
++         "structured result contradicts"),
++        (lambda wire: wire[-1].pop("structured_result"),
++         "omits the structured_output submission"),
++    ):
++        wire = structured_records()
++        mutation(wire)
++        with pytest.raises(RecordContractError, match=expected):
++            admit_all(wire).finish()
++
++    forged = records("chat_request_response_history")
++    forged[-1]["structured_result"] = {"ok": True}
++    forged[-1]["result"] = '{"ok":true}'
++    with pytest.raises(
++        RecordContractError,
++        match="no successful accepted structured_output submission",
++    ):
++        admit_all(forged).finish()
 +
 +
 +@pytest.mark.parametrize(
@@ -357295,11 +357570,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
-@@ -0,0 +1,276 @@
+@@ -0,0 +1,329 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
 +import java.nio.charset.StandardCharsets;
++import java.math.BigDecimal;
++import java.util.ArrayDeque;
++import java.util.Deque;
 +import java.util.HashMap;
 +import java.util.HashSet;
 +import java.util.List;
@@ -357315,6 +357593,32 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private RecordContractException failure;
 +    private final Map<String, SessionState> sessions = new HashMap<>();
 +    private long pendingInputs;
++
++    private static boolean sameJson(Object left, Object right) {
++        Deque<Object[]> pending = new ArrayDeque<>();
++        pending.push(new Object[] {left, right});
++        while (!pending.isEmpty()) {
++            Object[] pair = pending.pop();
++            Object a = pair[0];
++            Object b = pair[1];
++            if (a instanceof Number && b instanceof Number) {
++                if (new BigDecimal(a.toString()).compareTo(new BigDecimal(b.toString())) != 0) return false;
++            } else if (a instanceof Map<?, ?> && b instanceof Map<?, ?>) {
++                Map<String, Object> first = object(a);
++                Map<String, Object> second = object(b);
++                if (!first.keySet().equals(second.keySet())) return false;
++                for (String key : first.keySet()) pending.push(new Object[] {first.get(key), second.get(key)});
++            } else if (a instanceof List<?> && b instanceof List<?>) {
++                List<Object> first = array(a);
++                List<Object> second = array(b);
++                if (first.size() != second.size()) return false;
++                for (int i = 0; i < first.size(); i++) pending.push(new Object[] {first.get(i), second.get(i)});
++            } else if (!Objects.equals(a, b)) {
++                return false;
++            }
++        }
++        return true;
++    }
 +
 +    public synchronized void submittedInput() {
 +        checkAvailable();
@@ -357387,6 +357691,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                }
 +                session.partials.clear();
 +                session.issuedTools.clear();
++                session.structuredInput = null;
 +            }
 +            session.requests.begin(object(record.get("request_evidence_origin")));
 +            session.started = true;
@@ -357442,7 +357747,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                        for (GenerationEvidence.Call call : generation.calls) {
 +                            require(!session.issuedTools.containsKey(call.id),
 +                                    "accepted generation repeats a tool use identity");
-+                            session.issuedTools.put(call.id, new IssuedTool(scope));
++                            session.issuedTools.put(call.id, new IssuedTool(scope, (String) call.name,
++                                    "structured_output".equals(call.name) ? object(call.input) : null));
 +                        }
 +                    }
 +                }
@@ -357450,6 +357756,19 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                break;
 +            case "result":
 +                require(session.terminals.add((String) record.get("uuid")), "terminal record identity is repeated");
++                if (record.containsKey("structured_result")) {
++                    require(scope == null && !Boolean.TRUE.equals(record.get("is_error")),
++                            "structured output belongs to a successful root result");
++                    require(session.structuredInput != null,
++                            "structured result has no successful accepted structured_output submission");
++                    require(sameJson(record.get("structured_result"), session.structuredInput)
++                            && sameJson(StrictJson.parse((String) record.get("result"), "structured result text"),
++                                    record.get("structured_result")),
++                            "structured result contradicts the accepted tool submission or result text");
++                } else if (scope == null && !Boolean.TRUE.equals(record.get("is_error"))) {
++                    require(session.structuredInput == null,
++                            "successful result omits the structured_output submission");
++                }
 +                if (scope == null) {
 +                    require(Boolean.TRUE.equals(record.get("is_error")) || record.containsKey("structured_result")
 +                            || session.lastAssistantText == null
@@ -357487,6 +357806,10 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                            IssuedTool issued = session.issuedTools.get(identity);
 +                            require(issued != null && Objects.equals(issued.scope, scope) && !issued.returned,
 +                                    "tool result has no accepted, open tool use in its scope");
++                            if (scope == null && Boolean.FALSE.equals(block.get("is_error"))
++                                    && "structured_output".equals(issued.name) && session.structuredInput == null) {
++                                session.structuredInput = issued.structuredInput;
++                            }
 +                            issued.returned = true;
 +                        }
 +                    }
@@ -357561,14 +357884,19 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        private boolean needsResult;
 +        private String channel = "undecided";
 +        private String lastAssistantText;
++        private Map<String, Object> structuredInput;
 +    }
 +
 +    private static final class IssuedTool {
 +        private final String scope;
++        private final String name;
++        private final Map<String, Object> structuredInput;
 +        private boolean returned;
 +
-+        private IssuedTool(String scope) {
++        private IssuedTool(String scope, String name, Map<String, Object> structuredInput) {
 +            this.scope = scope;
++            this.name = name;
++            this.structuredInput = structuredInput;
 +        }
 +    }
 +}
@@ -360693,12 +361021,16 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,504 @@
+@@ -0,0 +1,557 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
 +import com.alibaba.fastjson2.JSONObject;
 +import com.alibaba.fastjson2.JSONWriter;
++import java.math.BigInteger;
++import java.nio.charset.StandardCharsets;
++import java.security.MessageDigest;
++import java.util.ArrayList;
 +import java.util.List;
 +import java.util.Map;
 +import org.junit.jupiter.api.Test;
@@ -360755,6 +361087,55 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        RecordContractException failure = assertThrows(RecordContractException.class,
 +                () -> admission.admit(terminal.toJSONString(JSONWriter.Feature.WriteNulls), null));
 +        assertTrue(failure.getMessage().contains("successful result contradicts accepted model text"));
++    }
++
++    @Test
++    void structuredResultRequiresTheSuccessfulAcceptedSubmission() throws Exception {
++        List<JSONObject> records = new ArrayList<>();
++        for (String line : EvidenceFixtures.records("chat_request_response_history")) {
++            records.add(JSON.parseObject(line));
++        }
++        JSONObject generation = records.stream()
++                .filter(row -> "model_generation".equals(row.getString("type")))
++                .findFirst().orElseThrow().getJSONObject("generation");
++        String raw = generation.getString("generation_json")
++                .replace("\"name\":\"inspect\"", "\"name\":\"structured_output\"");
++        byte[] bytes = raw.getBytes(StandardCharsets.UTF_8);
++        String hash = String.format("%064x",
++                new BigInteger(1, MessageDigest.getInstance("SHA-256").digest(bytes)));
++        generation.put("generation_json", raw);
++        generation.put("generation_bytes", bytes.length);
++        generation.put("generation_sha256", hash);
++        records.stream().filter(row -> "model_attempt_completion".equals(row.getString("type")))
++                .findFirst().orElseThrow().getJSONObject("completion").put("generation_sha256", hash);
++        JSONObject block = new JSONObject();
++        block.put("type", "tool_result");
++        block.put("tool_use_id", "call-attempt-0");
++        block.put("is_error", false);
++        block.put("content", "Structured output accepted.");
++        JSONObject message = new JSONObject();
++        message.put("role", "user");
++        message.put("content", List.of(block));
++        JSONObject returned = new JSONObject();
++        returned.put("type", "user");
++        returned.put("uuid", "structured-return");
++        returned.put("parent_tool_use_id", null);
++        returned.put("message", message);
++        returned.put("session_id", records.get(0).getString("session_id"));
++        records.add(records.size() - 1, returned);
++        JSONObject terminal = records.get(records.size() - 1);
++        terminal.put("structured_result", Map.of("k", "value"));
++        terminal.put("result", "{\"k\":\"value\"}");
++        RecordAdmission accepted = new RecordAdmission();
++        for (JSONObject row : records) accepted.admit(row.toJSONString(JSONWriter.Feature.WriteNulls), null);
++        accepted.finish();
++
++        terminal.put("structured_result", Map.of("k", "forged"));
++        RecordAdmission forged = new RecordAdmission();
++        RecordContractException failure = assertThrows(RecordContractException.class, () -> {
++            for (JSONObject row : records) forged.admit(row.toJSONString(JSONWriter.Feature.WriteNulls), null);
++        });
++        assertTrue(failure.getMessage().contains("structured result contradicts"));
 +    }
 +
 +    @Test

@@ -20,6 +20,19 @@ parsers, not by executing their gates. This closes the numeric interpretation
 gap for safe integer envelope values; it does not prove a generation came from
 the retained physical response bytes.
 
+A successful `structured_result` is an exception to matching the terminal
+`result` against visible model text: the headless producer takes the first
+successful `structured_output` tool submission as the terminal value. The
+native certifier and the TypeScript, Python and Java readers now require that
+the terminal value equal the accepted generation's arguments for that returned
+tool call, and that the terminal `result` decode to the same JSON value. An
+executed Python source probe admitted the valid authored stream and refused a
+missing return, failed return, changed value, changed result text and omitted
+structured field. The native, Java and TypeScript code and tests have been
+reviewed as source only; their gates remain unrun. This tightens admission of
+the existing v10 record shape; the producer and resume recording format do not
+change.
+
 The v7 source reproducer at
 `/tmp/codex-output-disposition-review/baseline/REPORT.md` keeps every physical
 request, response byte, processing outcome, history decision and usage total

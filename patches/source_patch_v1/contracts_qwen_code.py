@@ -8620,6 +8620,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "partial.verifyTerminalResult(", "session.clear();",
         "completion.lastAssistantText = generationParts(",
         "Successful result contradicts accepted model text",
+        "Structured result has no successful accepted structured_output submission",
+        "Structured result contradicts the accepted tool submission or result text",
     ), label=label)
     _require_all(state, core + "utils/runtime-partial-stream.ts", (
         "runtime partial group has no full assistant message",
@@ -8773,6 +8775,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "partial.verify_terminal_result(",
         "session.last_assistant_text = generation.display_text()",
         "successful result contradicts accepted model text",
+        "structured result has no successful accepted structured_output submission",
+        "structured result contradicts the accepted tool submission or result text",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/model_generation.py", (
         "def display_text(self) -> str:",
@@ -8814,6 +8818,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_shared_partial_vectors", "test_request_replay_preserves_raw_json_spelling",
         "test_delivered_record_mutation_cannot_change_response_owner",
         "test_duplicate_terminal_cannot_settle_queued_input",
+        "test_structured_result_binds_to_successful_accepted_submission",
     ), label=label)
     require_text(state, core + "utils/runtime-contract-admission.ts",
                  "Terminal record identity is repeated", label=label)
@@ -8884,6 +8889,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "partial.verifyTerminalResult(",
         "session.lastAssistantText = generation.displayText;",
         "successful result contradicts accepted model text",
+        "structured result has no successful accepted structured_output submission",
+        "structured result contradicts the accepted tool submission or result text",
     ), label=label)
     _require_all(state, java_cli + "protocol/GenerationEvidence.java", (
         "final String displayText;", "displayText = display.toString();",
@@ -8933,6 +8940,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, java_tests + "protocol/RecordAdmissionTest.java", (
         "replaysAuthoredEvidenceIncludingResumedAndLiveWindows", "refusesEveryIncompletePrefixAtEof",
         "fullBodyRequiresANewSegmentForItsScope",
+        "structuredResultRequiresTheSuccessfulAcceptedSubmission",
         "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
     ), label=label)
     _require_all(state, java_tests + "session/SessionRecordTest.java", (
