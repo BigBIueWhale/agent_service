@@ -3,8 +3,8 @@
 The Java CLI transport owns stdout byte interpretation for every single-response
 and multi-response caller. Records are committed by LF and decoded with strict
 UTF-8 after framing. A buffered I/O read is not a record-size limit. Terminated
-ASCII blank lines and CRLF are accepted; any nonempty EOF suffix and malformed
-UTF-8 are refused with the physical line and a diagnostic action. Stdin uses an
+CRLF is accepted; every blank physical line, nonempty EOF suffix and malformed
+UTF-8 is refused with the physical line and a diagnostic action. Stdin uses an
 explicit UTF-8 encoder so host defaults cannot change prompts.
 
 The shared concurrency helper must propagate callback, timeout and interruption
@@ -48,3 +48,7 @@ records, malformed middle records with preserved prefix, every nonempty EOF
 suffix, callback failure propagation, timeout/interruption and ordinary multiple
 successful operations. Two clean final self-review passes and independent
 verification are required before committing.
+
+The blank-line refusal is established by source inspection and an authored Java
+test. No Java compile or test was run for that change; the owner's gates must
+verify its execution.

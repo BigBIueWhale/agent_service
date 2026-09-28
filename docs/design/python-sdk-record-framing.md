@@ -5,7 +5,7 @@ the synchronous wrapper. It must preserve valid record values and refuse malform
 bytes before they can disappear from the record sequence. A transport read buffer
 is not a record-size limit: full prompts and tool results can exceed it in ordinary
 sessions. Read fixed I/O chunks and accumulate each LF-committed record without a
-line-length cap. Accept terminated ASCII blank lines and CRLF; refuse invalid UTF-8,
+line-length cap. Accept CRLF; refuse every blank LF-committed record, invalid UTF-8,
 JSON constants outside finite numbers, non-record roots and every nonempty EOF
 suffix. Refusals name the physical line and an available diagnostic action.
 
@@ -48,3 +48,8 @@ startup, cancellation and cleanup-error ordering. Independent admission fixtures
 also cover unknown types, invalid recognized records and preserved model evidence;
 their scope and remaining causal-completeness limit are recorded in the admission
 design. Byte-framing tests do not establish complete version 5 admission.
+
+The blank-line refusal passed the focused Python framing suite and the full
+Python unit suite on the authored source. It closes a silent skip at the same
+physical boundary used by ordinary and long sessions; it does not prove a
+generation's decoded observations came from its response bytes.

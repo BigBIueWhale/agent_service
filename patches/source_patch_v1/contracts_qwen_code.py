@@ -8789,6 +8789,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "chunks: AsyncIterable<Uint8Array>", "fatal: true, ignoreBOM: true",
         "chunk.indexOf(0x0a, start)", "Buffer.concat(fragments, length)",
         "expected an object with a string type", "invalid UTF-8", "invalid JSON",
+        "refuseFrame(context, physicalLine, 'blank record')",
         "unterminated record at EOF", "invalid JSONL record at line ${line}",
     ), label=label)
     forbid_text(state, sdk + "src/utils/jsonLines.ts", "parseJsonLineSafe", label=label)
@@ -8805,7 +8806,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, sdk + "test/unit/jsonLines.test.ts", (
         "preserves Unicode and CRLF across every split and single-byte chunks",
-        "accepts terminated ASCII blank lines and preserves physical line numbers",
+        "refuses a blank physical record %j before the next message",
         "refuses invalid record %j without reading the next chunk",
         "refuses an uncommitted EOF suffix %j",
         "keeps a large inline result exact across fragmented input",
@@ -8817,6 +8818,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "parse_float=parse_float", "math.isfinite(number)",
         "Decimal(value) != Decimal(int(number))",
         "expected an object with a string type", "unterminated record at EOF",
+        '"blank record"',
         "invalid JSONL record at line {line}",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/transport.py", (
@@ -8958,6 +8960,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, python_sdk + "tests/unit/test_transport.py", (
         "test_read_messages_refuses_malformed_json_after_valid_prefix",
         "test_byte_framing_retains_prefix_and_refuses_invalid_record",
+        "test_byte_framing_refuses_blank_records",
         "test_byte_framing_refuses_every_nonempty_eof_suffix",
         "test_byte_framing_preserves_unicode_across_every_read_boundary",
         "test_transport_preserves_records_larger_than_reader_buffer",
@@ -8977,6 +8980,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "new BufferedInputStream(input)", "value != '\\n'", "frame.size() != 0",
         "StandardCharsets.UTF_8.newDecoder()", "CodingErrorAction.REPORT",
         "unterminated record at EOF", "Capture the CLI stdout", "throw failure;",
+        'throw refusal("blank record", null)',
     ), label=label)
     _require_all(state, java_cli + "transport/process/ProcessTransport.java", (
         "protected JsonLineReader processOutput", "StandardCharsets.UTF_8.newEncoder()",
@@ -9077,6 +9081,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, java_tests + "transport/process/JsonLineReaderTest.java", (
         "preservesLargeUnicodeRecordsAcrossEveryFragmentSize", "preservesPrefixThenLatchesMalformedUtf8",
+        "refusesBlankRecordsBetweenValidLines",
         "refusesEveryNonemptyEofSuffix", "bareCarriageReturnDoesNotCommitARecord",
     ), label=label)
     _require_all(state, java_tests + "transport/process/ProcessTransportRecordTest.java", (
