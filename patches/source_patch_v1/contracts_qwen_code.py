@@ -8858,6 +8858,10 @@ def _validate_served_accounting_after(state: State) -> None:
         'state.termination = event["termination"]',
         'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
         'event["sdk_values_seen"]', 'event["pipeline_outputs_delivered"]',
+        'state.values.require_prefix(',
+        'state.content_type = event["content_type"]',
+        'state.values.push(raw)',
+        'SDK value count claims an impossible physical response prefix',
         'completion["consumer_observations"]',
         'or consumed == final_outcome["pipeline_outputs_delivered"]',
         'observation["source_request_id"]',
@@ -8869,6 +8873,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "runtime partial group has no full assistant message",
         "runtime partial text has no matching full assistant message",
         "terminal result contradicts runtime assistant text",
+    ), label=label)
+    _require_all(state, python_sdk + "tests/unit/test_generation_completion_v11.py", (
+        "test_physical_stream_bounds_declared_sdk_progress",
+        "test_streamed_sdk_values_follow_complete_sse_frames_and_error_boundary",
+        "test_nonstream_sdk_value_count_follows_http_status_and_media_type",
+        "test_nonstream_json_parse_failure_has_no_sdk_value",
     ), label=label)
     require_text(state, python_sdk + "src/qwen_code_sdk/json_lines.py",
                  "object_pairs_hook=_object", label=label)

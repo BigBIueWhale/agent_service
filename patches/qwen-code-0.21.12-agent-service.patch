@@ -352325,7 +352325,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,746 @@
+@@ -0,0 +1,889 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -352338,7 +352338,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +from typing import Any
 +
 +from .json_lines import parse_json_line
-+from .model_generation import Generation, USAGE_FIELDS, USAGE_LIMITS
++from .model_generation import USAGE_FIELDS, USAGE_LIMITS, Generation
 +from .stream_schema import SCHEMA
 +
 +_REQUEST_LIMIT = SCHEMA["definitions"]["generationUsage"]["properties"]["requests"][
@@ -352359,6 +352359,138 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        and usage["thoughtsTokenCount"] <= usage["candidatesTokenCount"],
 +        "inconsistent served token counts",
 +    )
++
++
++def _parse_sdk_json(text: str) -> Any:
++    def reject_constant(value: str) -> Any:
++        raise ValueError(f"invalid JSON constant {value}")
++
++    return json.loads(text, parse_constant=reject_constant)
++
++
++def _js_truthy(value: Any) -> bool:
++    if value is None or value is False:
++        return False
++    if isinstance(value, int | float):
++        return value != 0
++    if isinstance(value, str):
++        return bool(value)
++    return True
++
++
++@dataclass
++class _SseValues:
++    line: bytearray = field(default_factory=bytearray)
++    event: str | None = None
++    data: list[str] = field(default_factory=list)
++    count: int = 0
++    failed: bool = False
++    done: bool = False
++    after_cr: bool = False
++    first_line: bool = True
++
++    def push(self, chunk: bytes) -> None:
++        for byte in chunk:
++            if self.failed or self.done:
++                return
++            if self.after_cr:
++                self.after_cr = False
++                if byte == 10:
++                    continue
++            if byte == 13:
++                self._finish_line()
++                self.after_cr = True
++            elif byte == 10:
++                self._finish_line()
++            else:
++                self.line.append(byte)
++
++    def _finish_line(self) -> None:
++        line = self.line.decode("utf-8-sig" if self.first_line else "utf-8", "replace")
++        self.first_line = False
++        self.line.clear()
++        if not line:
++            self._finish_event()
++            return
++        if line.startswith(":"):
++            return
++        name, _, value = line.partition(":")
++        if value.startswith(" "):
++            value = value[1:]
++        if name == "event":
++            self.event = value
++        elif name == "data":
++            self.data.append(value)
++
++    def _finish_event(self) -> None:
++        if not self.event and not self.data:
++            self.event = None
++            return
++        name = self.event
++        payload = "\n".join(self.data)
++        self.event = None
++        self.data.clear()
++        if payload.startswith("[DONE]"):
++            self.done = True
++            return
++        try:
++            value = _parse_sdk_json(payload)
++        except ValueError:
++            self.failed = True
++            return
++        if not (name and name.startswith("thread.")) and isinstance(value, dict):
++            if _js_truthy(value.get("error")):
++                self.failed = True
++                return
++        self.count += 1
++        if self.count > 2**53 - 1:
++            self.failed = True
++
++
++@dataclass
++class _ResponseValues:
++    stream: bool
++    sse: _SseValues = field(default_factory=_SseValues)
++    body: bytearray = field(default_factory=bytearray)
++
++    def push(self, chunk: bytes) -> None:
++        if self.stream:
++            self.sse.push(chunk)
++        else:
++            self.body.extend(chunk)
++
++    def require_prefix(
++        self,
++        seen: int,
++        completed: bool,
++        status: int | None,
++        content_type: str | None,
++    ) -> None:
++        if status is None or not 200 <= status < 300:
++            available, failed = 0, False
++        elif self.stream:
++            available, failed = self.sse.count, self.sse.failed
++        elif status == 204:
++            available, failed = 1, False
++        else:
++            media_type = content_type.split(";", 1)[0].strip() if content_type else None
++            is_json = bool(
++                media_type
++                and ("application/json" in media_type or media_type.endswith("+json"))
++            )
++            if is_json:
++                try:
++                    _parse_sdk_json(self.body.decode("utf-8-sig", "replace"))
++                except ValueError:
++                    available, failed = 0, True
++                else:
++                    available, failed = 1, False
++            else:
++                available, failed = 1, False
++        _require(
++            seen <= available and (not completed or (not failed and seen == available)),
++            "SDK value count claims an impossible physical response prefix",
++        )
 +
 +
 +def _split_request(body: str, scope: str) -> tuple[str, list[str], str, bool, str]:
@@ -352432,8 +352564,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +class _Response:
 +    owner_kind: str
 +    attempt_id: str | None
++    values: _ResponseValues
 +    sequence: int = 0
 +    http_status: int | None = None
++    content_type: str | None = None
 +    termination: str | None = None
 +    size: int = 0
 +    digest: Any = field(default_factory=hashlib.sha256)
@@ -352547,7 +352681,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        request_id = request["request_id"]
 +        self.ids.add(request_id)
 +        self.scopes[scope] = _RequestBody(request_id, request["segment_id"], messages)
-+        self.responses[request_id] = _Response(owner["kind"], owner.get("attempt_id"))
++        self.responses[request_id] = _Response(
++            owner["kind"], owner.get("attempt_id"), _ResponseValues(stream)
++        )
 +        self.count += 1
 +
 +    def observe_origin(self, origin: dict[str, Any], scope: str | None) -> None:
@@ -352754,6 +352890,12 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                ),
 +                "completed processing has no successful HTTP transport completion",
 +            )
++            state.values.require_prefix(
++                sdk_values,
++                event["status"] == "completed",
++                state.http_status,
++                state.content_type,
++            )
 +            if event["served_usage"] is not None:
 +                _served_usage(event["served_usage"])
 +            served_usage = self.served_usage
@@ -352792,6 +352934,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                "repeated or late HTTP headers",
 +            )
 +            state.http_status = event["status"]
++            state.content_type = event["content_type"]
 +        elif kind == "body":
 +            _require(
 +                state.http_status is not None and event["offset"] == state.size,
@@ -352803,6 +352946,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                "noncanonical response base64",
 +            )
 +            state.digest.update(raw)
++            state.values.push(raw)
 +            state.size += len(raw)
 +        else:
 +            _require(
@@ -353067,8 +353211,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        _require(
 +            self.origin is None
 +            or self.origin["kind"] != "model"
-+            or self.generation is not None
-+            and self.disposition is not None,
++            or (self.generation is not None and self.disposition is not None),
 +            "model partials have no completed generation authority",
 +        )
 +        self.reconcile()
@@ -420147,7 +420290,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
-@@ -0,0 +1,774 @@
+@@ -0,0 +1,848 @@
 +from __future__ import annotations
 +
 +import base64
@@ -420161,7 +420304,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +
 +from qwen_code_sdk.model_generation import Generation
 +from qwen_code_sdk.record_admission import RecordAdmission, RecordContractError
-+from qwen_code_sdk.record_evidence import _split_request
++from qwen_code_sdk.record_evidence import _ResponseValues, _split_request
 +from qwen_code_sdk.stream_schema import STREAM, STREAM_CONTRACT_SHA256
 +
 +FIXTURES = json.loads(
@@ -420357,7 +420500,8 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +
 +def test_generation_identity_requires_the_recorded_history_seed():
 +    wire = records("root_accepted")
-+    item(wire, "model_normalization_seed")["normalization_seed"]["history_call_ids"] = []
++    seed = item(wire, "model_normalization_seed")["normalization_seed"]
++    seed["history_call_ids"] = []
 +    assert_refused(wire, "recorded history seed")
 +
 +
@@ -420370,7 +420514,8 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +def test_accepted_history_requires_generation_but_early_abandonment_is_valid():
 +    wire = records("root_accepted")
 +    history = next(
-+        row for row in wire
++        row
++        for row in wire
 +        if row["type"] == "model_response"
 +        and row["response"]["event"]["kind"] == "history"
 +    )
@@ -420403,6 +420548,65 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    assert_refused(wire, pattern)
 +
 +
++def test_physical_stream_bounds_declared_sdk_progress():
++    wire = records("root_accepted")
++    outcome = next(
++        row["response"]["event"]
++        for row in wire
++        if row["type"] == "model_response"
++        and row["response"]["event"]["kind"] == "outcome"
++    )
++    outcome["sdk_values_seen"] += 1
++    assert_refused(wire, "impossible physical response prefix")
++
++
++def test_streamed_sdk_values_follow_complete_sse_frames_and_error_boundary():
++    values = _ResponseValues(True)
++    for chunk in (
++        b'data: {"id":1}\r',
++        b'\n\r\ndata: {"id":2}\n\n',
++        b"data: [DONE]\n\n",
++    ):
++        values.push(chunk)
++    values.require_prefix(2, True, 200, "text/event-stream")
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        values.require_prefix(3, False, 200, "text/event-stream")
++
++    failed = _ResponseValues(True)
++    failed.push(b'data: {"id":1}\n\ndata: {"error":{"message":"stop"}}\n\n')
++    failed.require_prefix(1, False, 200, "text/event-stream")
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        failed.require_prefix(1, True, 200, "text/event-stream")
++
++
++@pytest.mark.parametrize(
++    "status, content_type, body, seen, completed",
++    [
++        (200, "application/json; charset=utf-8", b'{"choices":[]}', 1, True),
++        (200, "text/plain", b"{not JSON}", 1, True),
++        (200, None, b"", 1, True),
++        (204, "application/json", b"", 1, False),
++        (503, "application/json", b'{"error":"retry"}', 0, False),
++    ],
++)
++def test_nonstream_sdk_value_count_follows_http_status_and_media_type(
++    status, content_type, body, seen, completed
++):
++    values = _ResponseValues(False)
++    values.push(body)
++    values.require_prefix(seen, completed, status, content_type)
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        values.require_prefix(seen + 1, False, status, content_type)
++
++
++def test_nonstream_json_parse_failure_has_no_sdk_value():
++    values = _ResponseValues(False)
++    values.push(b"{not JSON}")
++    values.require_prefix(0, False, 200, "application/json")
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        values.require_prefix(0, True, 200, "application/json")
++
++
 +def test_accepted_completion_cannot_leave_a_delivered_output_unobserved():
 +    wire = records()
 +    outcome = next(
@@ -420429,13 +420633,26 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    assert_refused(wire, "final physical request")
 +
 +
-+@pytest.mark.parametrize("mode", ["earlier_source", "mixed_sources", "unclaimed_earlier_output"])
++@pytest.mark.parametrize(
++    "mode", ["earlier_source", "mixed_sources", "unclaimed_earlier_output"]
++)
 +def test_retry_cannot_mix_or_hide_output(mode):
 +    wire = retry_wire()
 +    first = item(wire, "model_attempt_completion")["completion"]["request_ids"][0]
++    observed_body = b'data: {"id":1}\n\ndata: {"id":2}\n\ndata: {"id":3}\n\n'
 +    for row in wire:
 +        if row["type"] == "model_response" and row["response"]["request_id"] == first:
 +            event = row["response"]["event"]
++            if mode != "mixed_sources":
++                if event["kind"] == "http":
++                    event.update(status=200, content_type="text/event-stream")
++                elif event["kind"] == "body":
++                    event["base64"] = base64.b64encode(observed_body).decode("ascii")
++                elif event["kind"] == "end":
++                    event.update(
++                        body_bytes=len(observed_body),
++                        body_sha256=hashlib.sha256(observed_body).hexdigest(),
++                    )
 +            if event["kind"] == "outcome" and mode != "mixed_sources":
 +                event["sdk_values_seen"] = 3
 +                event["pipeline_outputs_delivered"] = 3
@@ -420799,9 +421016,9 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +    replace_envelope(wire, raw)
 +    if valid:
 +        admit(wire)
-+        assert decoded_generation(wire).envelope[
-+            "observations"
-+        ][0]["response"]["metadata_integer"] == int("9" * digits)
++        assert decoded_generation(wire).envelope["observations"][0]["response"][
++            "metadata_integer"
++        ] == int("9" * digits)
 +    else:
 +        assert_refused(wire)
 +

@@ -6,8 +6,8 @@ authorities. TypeScript root readers now replay OpenAI response bytes through
 the selected decoder and compare raw Chat observations before admission.
 The native, Python and Java readers still bind declared ownership and usage
 without independently establishing that byte-to-observation relation. Native
-source now also counts the SDK values available from each retained physical
-response: complete outcomes must claim the exact count, and failed or
+and Python source now also count the SDK values available from each retained
+physical response: complete outcomes must claim the exact count, and failed or
 cancelled outcomes cannot claim a value beyond the available prefix. This
 narrows impossible processing claims but does not prove that a particular
 decoded observation, tool argument or usage report came from those values.
@@ -16,11 +16,17 @@ pinned OpenAI SDK rejects a non-2xx response before parsing, returns `null`
 for nonstreaming HTTP 204, parses JSON only for its JSON media types, and
 otherwise returns response text as one value, even when empty. A local probe
 executed that installed SDK against JSON, text, absent media type, 204 and
-malformed-JSON responses. The TypeScript replay owner and native count source
-now use those transport facts. Focused TypeScript parser, pipeline, response
-replay and writer-lease source tests passed; the native Rust tests were authored
-but not run. Neither source tests nor code reading prove a deployed provider or
-native execution; those remain unverified pending the owner's gates.
+malformed-JSON responses. The TypeScript replay owner and native and Python
+count sources now use those transport facts. Focused TypeScript parser,
+pipeline, response replay and writer-lease source tests passed; the native
+Rust tests were authored but not run. Neither source tests nor code reading
+prove a deployed provider or native execution; those remain unverified pending
+the owner's gates. The Python
+reader's focused generation and retry suite passed 70 cases after its count
+check was added. The full Python unit run still has 64 failures with exactly
+the same test identities in the untouched baseline and current source. Those
+stale fixture failures are not presented as successful Python suite
+qualification.
 
 Generation-envelope counters also require exact numeric interpretation. A
 rehashed envelope could spell an observed count as
