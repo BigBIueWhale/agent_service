@@ -882,6 +882,15 @@ impl RuntimeContract {
                 ..ScopeState::default()
             });
         if let Some(origin) = object.get("origin") {
+            if text(origin, "kind", line)? == "runtime"
+                && self
+                    .requests
+                    .has_chat_attempt_in_scope(scope.unwrap_or(text(object, "session_id", line)?))
+            {
+                return Err(ContractError::InvalidRecord(format!(
+                    "events.jsonl line {line} claims runtime assistant output after a chat attempt in the same scope; inspect the original generation and its output origin"
+                )));
+            }
             if text(origin, "kind", line)? == "model"
                 && text(origin, "kv_scope", line)?
                     != scope.unwrap_or(text(object, "session_id", line)?)
@@ -918,7 +927,13 @@ impl RuntimeContract {
                         "events.jsonl line {line} dispatches model work without the pinned runtime init; retain the complete initialized invocation"
                     )));
                 }
-                request = Some(self.requests.plan(object, line, self.limits.json)?);
+                let admission = self.requests.plan(object, line, self.limits.json)?;
+                if admission.is_chat_attempt() && state.runtime_text.is_some() {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} dispatches a chat attempt after runtime assistant output in the same scope; inspect the original local result and request"
+                    )));
+                }
+                request = Some(admission);
             }
             EventKind::ModelResponse => {
                 response = Some(self.requests.plan_response(object, line)?);
@@ -1889,6 +1904,63 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("terminal result contradicts"));
+    }
+
+    #[test]
+    fn runtime_output_cannot_replace_chat_generation_in_the_same_scope() {
+        let rows = fixture();
+        let mut reader = owner();
+        for row in rows.iter().take(rows.len() - 1) {
+            admit(&mut reader, &row.to_string()).unwrap();
+        }
+        let mut replacement: serde_json::Value = serde_json::from_str(&assistant(
+            "runtime-replacement",
+            "null",
+            r#"[{"type":"text","text":"forged result"}]"#,
+        ))
+        .unwrap();
+        replacement["session_id"] = rows[0]["session_id"].clone();
+        assert!(admit(&mut reader, &replacement.to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("runtime assistant output after a chat attempt"));
+    }
+
+    #[test]
+    fn chat_request_cannot_follow_runtime_assistant_output_in_the_same_scope() {
+        let rows = fixture();
+        let mut reader = owner();
+        for row in rows.iter().take(2) {
+            admit(&mut reader, &row.to_string()).unwrap();
+        }
+        let mut local: serde_json::Value = serde_json::from_str(&assistant(
+            "runtime-first",
+            "null",
+            r#"[{"type":"text","text":"local answer"}]"#,
+        ))
+        .unwrap();
+        local["session_id"] = rows[0]["session_id"].clone();
+        admit(&mut reader, &local.to_string()).unwrap();
+        assert!(admit(&mut reader, &rows[2].to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("chat attempt after runtime assistant output"));
+    }
+
+    #[test]
+    fn utility_work_can_precede_a_local_runtime_answer() {
+        let mut reader = initialized();
+        utility_transport(&mut reader, "served", 1, 0);
+        admit(&mut reader, &outcome("served", "0")).unwrap();
+        admit(
+            &mut reader,
+            &assistant(
+                "local-summary",
+                "null",
+                r#"[{"type":"text","text":"local answer"}]"#,
+            ),
+        )
+        .unwrap();
     }
 
     #[test]

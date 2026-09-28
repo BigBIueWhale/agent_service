@@ -313,6 +313,12 @@ pub(crate) struct RequestAdmission {
     all_usage: GenerationUsageSummary,
 }
 
+impl RequestAdmission {
+    pub(crate) fn is_chat_attempt(&self) -> bool {
+        self.attempt.is_some()
+    }
+}
+
 #[derive(Clone, Default)]
 struct ResponseState {
     scope: String,
@@ -856,6 +862,10 @@ impl ModelRequests {
             return Err(refusal("assistant output has no matching chat request"));
         }
         Ok(Some(id.to_string()))
+    }
+
+    pub(crate) fn has_chat_attempt_in_scope(&self, scope: &str) -> bool {
+        self.attempts.values().any(|attempt| attempt.scope == scope)
     }
 
     pub(crate) fn plan_seed(
@@ -1533,11 +1543,15 @@ mod tests {
                         "journal_id": "j", "request_id": "r",
                         "sequence": events.len() + 1,
                         "event": {"kind": "delivery", "outputs_delivered": 0}
-                    }}).to_string();
+                    }})
+                    .to_string();
                     let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                     let admission = state.plan_response(doc.root(), 1).unwrap();
                     state.commit_response(admission);
-                    assert!(state.responses.is_empty(), "{http_status:?}/{termination}/{status}");
+                    assert!(
+                        state.responses.is_empty(),
+                        "{http_status:?}/{termination}/{status}"
+                    );
                 }
             }
         }

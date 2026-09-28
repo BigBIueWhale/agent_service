@@ -84,7 +84,14 @@ was run:
 - `validate_output_origin` returns immediately for runtime origins. Runtime
   output is legitimate, but that label alone does not establish which runtime
   operation accounts for it. Inventing a model attempt for runtime output would
-  be wrong; the runtime owner needs explicit accounting.
+  be wrong; the runtime owner needs explicit accounting. Source inspection later
+  found a narrower admission error: a runtime assistant row after a chat attempt
+  could clear the accepted model text and replace the terminal answer. The
+  certifier now refuses runtime-origin output after any chat attempt in that
+  scope and a chat request after a complete runtime assistant row. Utility
+  requests can still precede a local slash-command answer. Native adversarial
+  tests are authored but unrun because the owner runs compiler and native gates.
+  An independent receipt for the local runtime operation remains open.
 - The allegation that an abandoned model partial can become an accepted round
   is contradicted by the current path. `validate_output_origin` checks attempt
   identity and scope, then `PartialStreamState` checks text, thinking and
