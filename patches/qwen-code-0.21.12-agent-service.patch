@@ -342512,8 +342512,14 @@ diff --git a/packages/sdk-typescript/src/daemon/ui/chat-record-transcript.ts b/p
 diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts b/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts
 --- a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts
 +++ b/packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts
-@@ -6,12 +6,13 @@
+@@ -1,17 +1,19 @@
+ /**
+  * @license
+  * Copyright 2026 Qwen Team
+  * SPDX-License-Identifier: Apache-2.0
+  */
  
++import { createHash } from 'node:crypto';
  import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
  import { tmpdir } from 'node:os';
  import { join } from 'node:path';
@@ -342526,7 +342532,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.t
  let runtimeDir: string;
  
  beforeEach(() => {
-@@ -28,22 +29,50 @@
+@@ -28,22 +30,50 @@
    }
    resetEnvBootstrapForTesting();
    rmSync(runtimeDir, { recursive: true, force: true });
@@ -342577,10 +342583,103 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.test.t
          message: {
            role: 'user',
            parts: [{ text: 'expanded model prompt' }, { text: taggedContext }],
+@@ -63,7 +93,92 @@
+     expect(summaries[0]?.firstUserText).toBe('raw @file prompt');
+     expect(hydrated?.messages).toMatchObject([
+       { type: 'user', content: 'raw @file prompt' },
+     ]);
+     expect(hydrated?.messages[0]?.content).not.toContain('hook-only context');
+   });
++
++  it('refuses full history with an open physical request while keeping live metadata visible', async () => {
++    const sessionId = '11111111-1111-1111-1111-111111111111';
++    const chatsDir = join(runtimeDir, 'tmp', 'project-hash', 'chats');
++    mkdirSync(chatsDir, { recursive: true });
++    const body = JSON.stringify({
++      model: 'test-model',
++      stream: false,
++      messages: [],
++      kv_scope: sessionId,
++    });
++    const records = [
++      {
++        recordingVersion: CHAT_RECORDING_VERSION,
++        uuid: 'user-1',
++        parentUuid: null,
++        sessionId,
++        type: 'user',
++        message: { role: 'user', parts: [{ text: 'waiting' }] },
++      },
++      {
++        recordingVersion: CHAT_RECORDING_VERSION,
++        uuid: 'request-1',
++        parentUuid: 'user-1',
++        sessionId,
++        type: 'model_request',
++        modelRequest: {
++          journal_id: 'journal',
++          sequence: 1,
++          request_id: 'physical-1',
++          kv_scope: sessionId,
++          segment_id: 'segment',
++          prompt_id: 'prompt',
++          owner: { kind: 'utility' },
++          decode_policy: {
++            mode: 'nonstream',
++            model: 'test-model',
++            strict_tool_calling: false,
++            named_tool_choice: null,
++            exact_token_counting: false,
++            tagged_thinking_tags: false,
++          },
++          body_sha256: createHash('sha256').update(body).digest('hex'),
++          body_bytes: Buffer.byteLength(body),
++          body: { kind: 'full', json: body },
++        },
++      },
++    ];
++    writeFileSync(
++      join(chatsDir, `${sessionId}.jsonl`),
++      records.map((record) => JSON.stringify(record)).join('\n') + '\n',
++    );
++
++    const reader = new QwenSessionReader();
++    expect(await reader.getAllSessions(undefined, true)).toHaveLength(1);
++    await expect(reader.getSession(sessionId)).rejects.toThrow(
++      /incomplete requests or logical generations/,
++    );
++  });
++
++  it('hydrates only the active canonical conversation chain', async () => {
++    const sessionId = '11111111-1111-1111-1111-111111111111';
++    const chatsDir = join(runtimeDir, 'tmp', 'project-hash', 'chats');
++    mkdirSync(chatsDir, { recursive: true });
++    const record = (uuid: string, parentUuid: string | null) => ({
++      recordingVersion: CHAT_RECORDING_VERSION,
++      uuid,
++      parentUuid,
++      sessionId,
++      type: 'user',
++      message: { role: 'user', parts: [{ text: uuid }] },
++    });
++    writeFileSync(
++      join(chatsDir, `${sessionId}.jsonl`),
++      [record('root', null), record('inactive', 'root'), record('active', 'root')]
++        .map((value) => JSON.stringify(value))
++        .join('\n') + '\n',
++    );
++
++    const session = await new QwenSessionReader().getSession(sessionId);
++    expect(session?.messages.map((message) => message.content)).toEqual([
++      'root',
++      'active',
++    ]);
++  });
+ });
 diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/packages/vscode-ide-companion/src/services/qwenSessionReader.ts
 --- a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts
 +++ b/packages/vscode-ide-companion/src/services/qwenSessionReader.ts
-@@ -1,18 +1,23 @@
+@@ -1,18 +1,24 @@
  /**
   * @license
   * Copyright 2025 Qwen Team
@@ -342599,6 +342698,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 +  getProjectHash,
 +  readCanonicalChatRecords,
 +  readCanonicalChatRecordsSync,
++  readCompleteCanonicalConversation,
 +} from '@qwen-code/qwen-code-core';
  import { getRuntimeBaseDir } from '../utils/paths.js';
  import { truncatePanelTitle } from '../webview/utils/panelTitleUtils.js';
@@ -342606,7 +342706,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
  
  export interface QwenMessage {
    id: string;
-@@ -91,13 +96,13 @@
+@@ -91,13 +97,13 @@
            new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime(),
        );
  
@@ -342621,7 +342721,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
    /**
     * Read all sessions from specified directory
     */
-@@ -145,12 +150,13 @@
+@@ -145,12 +151,13 @@
        } catch (error) {
          logger.error(
            '[QwenSessionReader] Failed to read JSONL session file:',
@@ -342635,7 +342735,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
      return sessions;
    }
  
-@@ -215,39 +221,21 @@
+@@ -215,39 +222,24 @@
      try {
        if (!fs.existsSync(filePath)) {
          return null;
@@ -342669,14 +342769,17 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 -          continue;
 -        }
 -
-+      for (const obj of await readCanonicalChatRecords(filePath)) {
++      const records = includeMessages
++        ? await readCompleteCanonicalConversation(filePath)
++        : await readCanonicalChatRecords(filePath);
++      for (const obj of records) {
          if (!sessionId && typeof obj.sessionId === 'string') {
            sessionId = obj.sessionId;
          }
          if (!startTime && typeof obj.timestamp === 'string') {
            startTime = obj.timestamp;
          }
-@@ -284,21 +272,18 @@
+@@ -284,21 +276,18 @@
          if (
            type === 'system' &&
            obj.subtype === 'custom_title' &&
@@ -342699,7 +342802,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
        }
  
        const projectHash = cwd
-@@ -316,54 +301,18 @@
+@@ -316,54 +305,18 @@
          firstUserText,
          customTitle,
          cwd,
@@ -342756,7 +342859,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
     * Delete session file
     */
    async deleteSession(sessionId: string, workingDir: string): Promise<boolean> {
-@@ -407,12 +356,13 @@
+@@ -407,12 +360,13 @@
        // Read the last record's UUID so the custom_title record is properly
        // chained into the parent history (reconstructHistory walks from tail).
        const lastUuid = this.readLastRecordUuid(session.filePath);

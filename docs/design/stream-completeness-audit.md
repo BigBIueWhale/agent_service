@@ -394,6 +394,17 @@ are unavailable. The reviewed patch applied to a fresh pinned archive and the
 bridge source and test files matched the authored source byte for byte. This
 proves the source splice, not application behavior.
 
+A later VS Code offline-reader check found a narrower completeness gap:
+`QwenSessionReader.getSession` hydrated explicit full history through
+`readCanonicalChatRecords`, which validates each row but does not require
+closed model evidence or select the active conversation chain. It now uses
+`readCompleteCanonicalConversation` for full hydration. Lightweight catalog
+metadata keeps its live-prefix read, so an active session can remain visible
+without claiming its history is complete. Source tests describe refusal of an
+open physical request and exclusion of an inactive branch; Node was unavailable,
+so those tests have not been executed here. The complete-reader source path and
+the authored tests are the evidence for this change, not a packaged VS Code run.
+
 Desktop's separate ACP history path also ignored the server's explicit
 `partial` and `replayError` reply after a replay failure, filtering malformed
 updates out and treating the remaining prefix as complete. Source reading now

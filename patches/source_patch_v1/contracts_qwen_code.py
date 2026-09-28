@@ -9308,7 +9308,17 @@ def _validate_served_accounting_after(state: State) -> None:
         require_text(state, path, "readCompleteCanonicalChatRecordsSync(file)", label=label)
         forbid_text(state, path, "readCanonicalChatRecordsSync(file)", label=label)
     forbid_text(state, cli + "commands/review/lib/transcripts.ts", "JSON.parse(line)", label=label)
-    require_text(state, "packages/vscode-ide-companion/src/services/qwenSessionReader.ts", "readCanonicalChatRecords(filePath)", label=label)
+    vscode_reader = "packages/vscode-ide-companion/src/services/qwenSessionReader.ts"
+    _require_ordered(
+        _source(state, vscode_reader, label=label).split("private async readJsonlSession(", 1)[1],
+        ("const records = includeMessages", "readCompleteCanonicalConversation(filePath)",
+         "readCanonicalChatRecords(filePath)", "for (const obj of records)"),
+        label=label, location="complete VS Code history and live-prefix metadata",
+    )
+    _require_all(state, "packages/vscode-ide-companion/src/services/qwenSessionReader.test.ts", (
+        "refuses full history with an open physical request while keeping live metadata visible",
+        "hydrates only the active canonical conversation chain",
+    ), label=label)
     _require_all(state, core + "services/chat-recording-io.ts", (
         "readCompleteCanonicalConversation(", "readCompleteStoredCanonicalChatRecords(filePath)",
         "prepareResolvedTranscriptRecords(records)", "entry.affectsCompleteness",
