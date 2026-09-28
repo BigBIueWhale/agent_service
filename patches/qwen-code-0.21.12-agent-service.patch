@@ -371672,9 +371672,10 @@ diff --git a/packages/core/src/agents/backends/types.ts b/packages/core/src/agen
 diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages/core/src/core/runtime-history-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/runtime-history-recording.test.ts
-@@ -0,0 +1,575 @@
+@@ -0,0 +1,675 @@
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
++import OpenAI from 'openai';
 +import { tmpdir } from 'node:os';
 +import type { Content, Part, GenerateContentParameters } from '@google/genai';
 +import type { Config } from '../config/config.js';
@@ -371682,8 +371683,14 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +import type { ServerGeminiStreamEvent } from './turn.js';
 +import { afterEach, expect, it, vi } from 'vitest';
 +import { Storage } from '../config/storage.js';
-+import { AuthType } from '../core/contentGenerator.js';
++import {
++  AuthType,
++  type ContentGeneratorConfig,
++} from '../core/contentGenerator.js';
 +import { GenerationContext } from '../core/generation-context.js';
++import { ContentGenerationPipeline } from '../core/openaiContentGenerator/pipeline.js';
++import { DefaultOpenAICompatibleProvider } from '../core/openaiContentGenerator/provider/default.js';
++import { EnhancedErrorHandler } from '../core/openaiContentGenerator/errorHandler.js';
 +import { GeminiChat, repairOrphanedToolUseTurns } from '../core/geminiChat.js';
 +import { GeminiClient, SendMessageType } from '../core/client.js';
 +import { ChatCompressionService } from '../services/chatCompressionService.js';
@@ -371700,6 +371707,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  SessionTranscriptReader,
 +  resetSessionTranscriptIndexCacheForTest,
 +} from '../services/session-transcript-reader.js';
++import { readCompleteStoredCanonicalChatRecords } from '../services/chat-recording-io.js';
 +vi.mock('../services/sleepInhibitor.ts', () => ({
 +  acquireSleepInhibitor: () => ({ release() {} }),
 +}));
@@ -371736,34 +371744,30 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    parent_tool_use_id: null,
 +  });
 +  const window = 262144;
-+  const profile = {
++  const profile: ContentGeneratorConfig = {
 +    authType: AuthType.USE_OPENAI,
 +    baseUrl: 'http://fixture.invalid/v1',
 +    model: 'fixture',
 +    contextWindowSize: window,
 +    exactTokenCounting: 'vllm',
 +    maxRetries: 0,
++    samplingParams: { max_tokens: 1000 },
 +  };
 +  const outputs: Part[][] = [[{ text: 'accepted answer 雪🧪\n' }]];
 +  const requests: unknown[] = [];
-+  const provider = {
-+    generateContentStream: vi.fn(async function* (
-+      params: GenerateContentParameters,
-+    ) {
-+      requests.push(structuredClone(params.contents));
-+      yield {
-+        candidates: [
-+          {
-+            content: {
-+              role: 'model',
-+              parts: outputs.shift() ?? [{ text: 'next answer' }],
-+            },
-+            finishReason: 'STOP',
-+          },
-+        ],
-+        usageMetadata: usage,
-+      };
-+    }),
++  const provider: Partial<ContentGenerator> & {
++    countTextTokens: () => Promise<{
++      totalTokens: number;
++      maxModelLen: number;
++    }>;
++    useSummarizedThinking: () => boolean;
++  } = {
++    generateContentStream: vi.fn(
++      (params: GenerateContentParameters, userPromptId: string) => {
++        requests.push(structuredClone(params.contents));
++        return pipeline.executeStream(params, userPromptId);
++      },
++    ),
 +    countRequestTokens: vi.fn(async () => ({
 +      totalTokens: 10,
 +      maxModelLen: window,
@@ -371832,16 +371836,95 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +      reclaimPolicy: 'never',
 +    }),
 +  );
++  const clientTransport = new OpenAI({
++    apiKey: 'fixture',
++    baseURL: profile.baseUrl,
++    maxRetries: 0,
++    fetch: async () => {
++      const parts = outputs.shift() ?? [{ text: 'next answer' }];
++      const content = parts
++        .filter((part) => !part.thought)
++        .map((part) => part.text ?? '')
++        .join('');
++      const reasoning = parts
++        .filter((part) => part.thought)
++        .map((part) => part.text ?? '')
++        .join('');
++      let callIndex = 0;
++      const calls = parts.flatMap((part) =>
++        part.functionCall
++          ? [
++              {
++                index: callIndex++,
++                id: part.functionCall.id,
++                type: 'function',
++                function: {
++                  name: part.functionCall.name,
++                  arguments: JSON.stringify(part.functionCall.args ?? {}),
++                },
++              },
++            ]
++          : [],
++      );
++      const frame = (
++        delta: Record<string, unknown>,
++        finish: string | null,
++        wireUsage: Record<string, unknown> | null,
++      ) =>
++        `data: ${JSON.stringify({
++          id: 'fixture-response',
++          object: 'chat.completion.chunk',
++          created: 1,
++          model: 'fixture',
++          choices: [{ index: 0, delta, finish_reason: finish }],
++          usage: wireUsage,
++        })}\n\n`;
++      const body =
++        frame(
++          {
++            content,
++            ...(reasoning ? { reasoning_content: reasoning } : {}),
++            ...(calls.length ? { tool_calls: calls } : {}),
++          },
++          null,
++          null,
++        ) +
++        frame({}, calls.length ? 'tool_calls' : 'stop', {
++          prompt_tokens: usage.promptTokenCount,
++          completion_tokens: usage.candidatesTokenCount,
++          total_tokens: usage.totalTokenCount,
++          prompt_tokens_details: {
++            cached_tokens: usage.cachedContentTokenCount,
++          },
++          completion_tokens_details: {
++            reasoning_tokens: usage.thoughtsTokenCount,
++          },
++        }) +
++        'data: [DONE]\n\n';
++      return new Response(body, {
++        headers: { 'content-type': 'text/event-stream' },
++      });
++    },
++  });
++  const wireProvider = new DefaultOpenAICompatibleProvider(profile, config);
++  wireProvider.buildClient = () => clientTransport;
++  const pipeline = new ContentGenerationPipeline({
++    cliConfig: config,
++    contentGeneratorConfig: profile,
++    provider: wireProvider,
++    errorHandler: new EnhancedErrorHandler(() => true),
++  });
 +  const chat = new GeminiChat(config, context, {}, [], recorder);
 +  const client = new GeminiClient(config);
 +  Object.assign(client, { chat });
 +  async function chatSend(parts: Part[], id = 'prompt') {
 +    await recorder.recordUserMessage(parts);
-+    for await (const _ of await chat.sendMessageStream(
++    for await (const event of await chat.sendMessageStream(
 +      'fixture',
 +      { message: parts },
 +      id,
 +    )) {
++      void event;
 +    }
 +  }
 +  async function clientSend(
@@ -371886,6 +371969,12 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    };
 +    return observation;
 +  }
++  async function readEvidence() {
++    const file = new SessionTranscriptReader(workspace).getSessionFilePath(
++      sessionId,
++    );
++    return readCompleteStoredCanonicalChatRecords(file);
++  }
 +  return {
 +    directory,
 +    properties,
@@ -371896,6 +371985,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    chatSend,
 +    clientSend,
 +    observe,
++    readEvidence,
 +    outputs,
 +  };
 +}
@@ -371903,6 +371993,15 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  const f = await setup('ordinary');
 +  await f.chatSend([{ text: 'ordinary question' }]);
 +  const o = await f.observe();
++  const records = await f.readEvidence();
++  expect(records.map((record) => record.type)).toContain('model_request');
++  expect(records.map((record) => record.type)).toContain('model_response');
++  expect(records.map((record) => record.type)).toContain(
++    'model_attempt_completion',
++  );
++  expect(
++    records.some((record) => record.type === 'assistant' && record.generation),
++  ).toBe(true);
 +  expect.soft(JSON.stringify(o.resumed)).toBe(JSON.stringify(o.live));
 +  expect.soft(JSON.stringify(o.indexed)).toBe(JSON.stringify(o.live));
 +});
@@ -371979,11 +372078,12 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  ];
 +  f.recorder.recordToolResult(result);
 +  await f.recorder.flush();
-+  for await (const _ of await f.chat.sendMessageStream(
++  for await (const event of await f.chat.sendMessageStream(
 +    'fixture',
 +    { message: result },
 +    'second',
 +  )) {
++    void event;
 +  }
 +  const o = await f.observe();
 +  expect(JSON.stringify(o.resumed)).toBe(JSON.stringify(o.live));

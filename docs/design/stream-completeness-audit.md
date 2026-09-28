@@ -153,6 +153,18 @@ The independent frozen-candidate run passed 50 cases; two later cache-copy
 checks passed separately. See the transformed source design note
 `docs/design/runtime-history-recording.md` for scope and unrun gates.
 
+The current 14-case runtime-history source suite exposed a stale fake generator:
+11 cases failed because it emitted decoded Parts without an admitted physical
+request or response. Its fixture now serves in-memory OpenAI SSE through the
+actual SDK and shared pipeline, retaining the same ordinary, tool-result,
+compaction and post-compaction history comparisons. All 14 cases then passed.
+The ordinary case checks that the canonical file contains request, response,
+accepted generation and attempt-completion evidence before comparing live
+history with both resume readers. This proves those tested source paths with a
+local fake response; it does not run the packaged `--resume` command, a deployed
+provider, compilation or the owner's gates. Full end-to-end resume remains
+unverified.
+
 ## Recording stalls (§5)
 
 The source risk is real. The stream deadline clock pauses during evidence

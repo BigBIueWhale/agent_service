@@ -8441,6 +8441,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "compares complete and trailing frames under varied line boundaries",
         "compares mixed line endings and binary prefixes",
     ), label=label)
+    _require_all(state, core + "core/runtime-history-recording.test.ts", (
+        "new OpenAI({",
+        "new ContentGenerationPipeline({",
+        "readCompleteStoredCanonicalChatRecords(file)",
+        "accepted turn after actual compaction commit retains later runtime reminder",
+    ), label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
         "for (const response of decoder.finish()) {",
@@ -11101,7 +11107,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Required diagnostics survive cached daemon/ACP pages, SDKs and visible client selectors; "
             "array conveniences refuse discarded diagnostics and Desktop reconciles absence only "
             "after a complete scan without refusals. Catalog admission is not full resume certification. "
-            "Canonical version 9 binds complete generation bytes and their completion to the real "
+            "Canonical version 12 binds complete generation bytes and their completion to the real "
             "chat attempt and its full physical request population; abandoned output cannot become "
             "resume history. Stored generation evidence excludes derived message fields. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
