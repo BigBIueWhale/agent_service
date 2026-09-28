@@ -505,8 +505,9 @@ TypeScript physical verifier accepted the rebased Chat bytes and observations.
 These cross-checks exercise the intended vector, not the Rust test helper; no
 native test or build was run, and this fixture repair does not add native
 byte-to-observation admission.
-The native certifier, Python and Java readers, utility consumer receipts,
-standalone child proof remain open. The earlier local rehashed replacement of
+At this point in the source sequence, the native certifier, Python and Java
+readers, utility consumer receipts and standalone child proof remained open.
+The earlier local rehashed replacement of
 a preparation's normalized ID and its matching call mapping exposed the
 TypeScript logical reader's missing seed derivation. The current source uses
 the live normalizer for that check and has authored prepared and generated-ID
@@ -596,6 +597,40 @@ with a stale digest. The adjacent response replay tests passed. The Rust
 integration refusal case is authored but unexecuted, and the bundle, Docker
 stage, native binary and service image remain unverified pending the owner's
 gates. This service repair applies to every session through the same snapshot
-reader; it does not change model requests or responses. Python and Java SDK
-readers still require equivalent physical replay before they can claim full
-generation certification.
+reader; it does not change model requests or responses.
+
+## SDK physical generation verification
+
+Python and Java SDK process transports now send each exact LF-committed stdout
+record to the matching CLI's stream verifier before returning that record. The verifier
+reuses the Core request/response converter and normalizer through
+`ModelRequestStreamReplay`, acknowledges the line number and SHA-256 of the
+original bytes, and requires stream completion at EOF. Python and Java require
+the same contract digest in the verifier handshake and refuse absent, changed
+or refusing acknowledgments. The ordinary CLI entry point and the service's
+bundled `cli.js` both route this mode to the same source implementation. The
+model request and response are not altered. This applies to ordinary and long
+SDK process sessions alike; no vLLM backend change belongs to this reader
+boundary. A dead Java CLI process cannot be replaced on the same transport
+until its prior record stream completed, so restart cannot discard unread
+evidence.
+
+The streaming Core verifier's six focused source tests passed, including an
+accepted and an abandoned child generation and a rehashed thought that the
+physical response did not produce. The full Python unit suite passed 768
+cases; its transport tests check exact byte acknowledgments before delivery.
+The CLI source suite passed 54 tests after its bundle-entry assertion was
+updated to describe the actual separate CLI and file-verifier entries.
+The Java byte-reader verification hook and its test are established by reading
+only. Java compilation and tests, the CLI bundle, the process-to-process
+integration, native execution and owner gates have not run. Direct construction
+of the Python and Java admission classes outside their SDK process transports
+still lacks this physical verifier and cannot be described as full generation
+certification. Utility consumer receipts and standalone child proof remain
+separate work.
+
+The standalone `event_certifier` imports the service's `read_event_snapshot`,
+which now calls physical response replay for a structurally certified result.
+Thus the earlier source-level claim that this certifier was independent of the
+physical gate is false. Its executable behavior remains unverified under the
+no-build rule.

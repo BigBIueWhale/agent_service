@@ -31695,7 +31695,7 @@ diff --git a/packages/cli/src/acp-integration/session/types.ts b/packages/cli/sr
 diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
 --- a/packages/cli/src/cli.test.ts
 +++ b/packages/cli/src/cli.test.ts
-@@ -20,24 +20,32 @@
+@@ -20,25 +20,33 @@
    writeFileSync,
  } from 'node:fs';
  import { execFileSync } from 'node:child_process';
@@ -31715,7 +31715,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
    runCliEntryPoint,
    stampCliEntryEnv,
  } from './cli.js';
-+
+ 
 +// Sources this suite reads are located from the test file, so the assertions
 +// hold under every runner and working directory. `import.meta.url` is the one
 +// self-location a bundler leaves intact: the `new URL(<literal>, import.meta.url)`
@@ -31723,12 +31723,13 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
 +const CLI_SRC_DIR = path.dirname(fileURLToPath(import.meta.url));
 +const REPO_ROOT = path.resolve(CLI_SRC_DIR, '..', '..', '..');
 +const CLI_ENTRY_SCRIPT = path.join(REPO_ROOT, 'scripts', 'cli-entry.js');
- 
++
  const mocks = vi.hoisted(() => ({
    main: vi.fn(),
    tryRunServeFastPath: vi.fn(),
    initStartupProfiler: vi.fn(),
    initializeAcpStartupProfiler: vi.fn(),
+   markAcpStartup: vi.fn(),
 @@ -149,13 +157,13 @@
      QWEN_CODE_MANAGED_NPM_UPDATE_VERSION:
        process.env['QWEN_CODE_MANAGED_NPM_UPDATE_VERSION'],
@@ -31785,20 +31786,26 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
      );
      expect(source).toContain(
        "import { initCpuProfiler } from './utils/cpuProfiler.js'",
-@@ -533,19 +541,22 @@
+@@ -532,20 +540,26 @@
+     );
      expect(source.indexOf('initCpuProfiler();')).toBeLessThan(
        source.indexOf('export async function runCliEntry('),
      );
    });
  
-   it('uses the bootstrap file as the production bundle entry', () => {
+-  it('uses the bootstrap file as the production bundle entry', () => {
 -    const source = readFileSync('../../esbuild.config.js', 'utf8');
++  it('bundles the bootstrap and physical verifier as separate production entries', () => {
 +    const source = readFileSync(
 +      path.join(REPO_ROOT, 'esbuild.config.js'),
 +      'utf8',
 +    );
  
-     expect(source).toContain("entryPoints: { cli: 'packages/cli/src/cli.ts' }");
+-    expect(source).toContain("entryPoints: { cli: 'packages/cli/src/cli.ts' }");
++    expect(source).toContain("cli: 'packages/cli/src/cli.ts'");
++    expect(source).toContain(
++      "'record-verifier': 'packages/core/src/core/record-verifier.ts'",
++    );
    });
  
    it('keeps bootstrap fast paths in-process in the npm bin wrapper', () => {
@@ -31810,7 +31817,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
      expect(source).toContain("first === 'mcp'");
      expect(source).toContain("hasFlag('--help', '-h')");
      expect(source).toContain("hasFlag('--version', '-v')");
-@@ -558,16 +569,16 @@
+@@ -558,16 +572,16 @@
      const unsupportedEntryPath = path.join(
        tempDir,
        'unsupported-cli-entry.mjs',
@@ -31829,7 +31836,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
        );
        writeFileSync(
          probeEntryPath,
-@@ -647,20 +658,14 @@
+@@ -647,20 +661,14 @@
        const oldDir = path.join(tempDir, 'old');
        const newDir = path.join(tempDir, 'new');
        const binPath = path.join(tempDir, 'qwen');
@@ -31852,7 +31859,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
          );
          writeFileSync(
            path.join(newDir, 'cli.js'),
-@@ -699,13 +704,13 @@
+@@ -699,13 +707,13 @@
  
    it('does not pass the standalone launcher hint to child processes', () => {
      const tempDir = mkdtempSync(path.join(tmpdir(), 'qwen-cli-launcher-env-'));
@@ -31867,13 +31874,18 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
        );
        writeFileSync(launcherPath, '#!/bin/sh\n');
        chmodSync(launcherPath, 0o755);
-@@ -721,65 +726,68 @@
+@@ -721,65 +729,68 @@
        expect(JSON.parse(output)).toEqual({});
      } finally {
        rmSync(tempDir, { recursive: true, force: true });
      }
    });
  
+-  it('ignores malformed relaunch args in the npm bin wrapper', () => {
+-    const output = execFileSync(
+-      process.execPath,
+-      ['../../scripts/cli-entry.js', '--version'],
+-      {
 +  function runVersionWrapper(env: NodeJS.ProcessEnv = {}): string {
 +    const tempDir = mkdtempSync(path.join(tmpdir(), 'qwen-version-wrapper-'));
 +    const entryPath = path.join(tempDir, 'cli-entry.mjs');
@@ -31888,7 +31900,10 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
 +        "throw new Error('Version shortcut must not load the CLI payload');\n",
 +      );
 +      return execFileSync(process.execPath, [entryPath, '--version'], {
-+        encoding: 'utf8',
+         encoding: 'utf8',
+-        env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: 'not-json' },
+-      },
+-    );
 +        env: {
 +          ...process.env,
 +          HOME: tempDir,
@@ -31905,18 +31920,9 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
 +      rmSync(tempDir, { recursive: true, force: true });
 +    }
 +  }
-+
-   it('ignores malformed relaunch args in the npm bin wrapper', () => {
--    const output = execFileSync(
--      process.execPath,
--      ['../../scripts/cli-entry.js', '--version'],
--      {
--        encoding: 'utf8',
--        env: { ...process.env, QWEN_CODE_RELAUNCH_ARGS: 'not-json' },
--      },
--    );
--
+ 
 -    expect(output.trim()).toMatch(/^\d+\.\d+\.\d+/);
++  it('ignores malformed relaunch args in the npm bin wrapper', () => {
 +    expect(runVersionWrapper({ QWEN_CODE_RELAUNCH_ARGS: 'not-json' })).toBe(
 +      '6.5.4-test\n',
 +    );
@@ -31930,12 +31936,11 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
 -        encoding: 'utf8',
 -        env: { ...process.env, CLI_VERSION: '7.7.7-test' },
 -      },
--    );
--
--    expect(output).toBe('7.7.7-test\n');
 +    expect(runVersionWrapper({ CLI_VERSION: '7.7.7-test' })).toBe(
 +      '7.7.7-test\n',
-+    );
+     );
+-
+-    expect(output).toBe('7.7.7-test\n');
    });
  
    it('reads package.json from the npm bin wrapper version shortcut', () => {
@@ -31973,7 +31978,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
          .slice(0, 16);
        const launcherRoot = path.join(qwenHome, 'updates', 'npm', bootstrapId);
        const packageRoot = path.join(
-@@ -1019,16 +1027,13 @@
+@@ -1019,16 +1030,13 @@
  
    it('falls through to cli.js when wrapper package.json lookup fails', () => {
      const tempDir = mkdtempSync(path.join(tmpdir(), 'qwen-cli-entry-'));
@@ -31991,7 +31996,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
        );
        const env = { ...process.env };
        delete env['CLI_VERSION'];
-@@ -1046,22 +1051,28 @@
+@@ -1046,22 +1054,28 @@
      } finally {
        rmSync(tempDir, { recursive: true, force: true });
      }
@@ -32022,7 +32027,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
        ['extensionsCommand', 'extensions'],
        ['hooksCommand', 'hooks'],
        ['mcpCommand', 'mcp'],
-@@ -1083,13 +1094,16 @@
+@@ -1083,13 +1097,16 @@
        expect(commandName, `missing mapping for ${identifier}`).toBeDefined();
        expect(bootstrapCommands).toContain(commandName);
      }
@@ -32040,7 +32045,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
        ['listCommand', 'list'],
        ['reconnectCommand', 'reconnect'],
        ['approveCommand', 'approve'],
-@@ -1157,20 +1171,12 @@
+@@ -1157,20 +1174,12 @@
        handleCriticalError(new FatalError('fatal color', 42)),
      ).rejects.toThrow('process.exit:42');
  
@@ -32061,7 +32066,7 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
      ).rejects.toThrow('process.exit:1');
  
      const output = stderr.join('');
-@@ -1242,13 +1248,13 @@
+@@ -1242,13 +1251,13 @@
      expect(output).toContain('run failed');
      expect(output).toContain('Error handler failed:');
      expect(output).toContain('handler failed');
@@ -32079,13 +32084,14 @@ diff --git a/packages/cli/src/cli.test.ts b/packages/cli/src/cli.test.ts
 diff --git a/packages/cli/src/cli.ts b/packages/cli/src/cli.ts
 --- a/packages/cli/src/cli.ts
 +++ b/packages/cli/src/cli.ts
-@@ -56,20 +56,12 @@
+@@ -55,20 +55,12 @@
+   ['approve [name]', 'Approve a pending MCP server'],
    ['reject [name]', 'Reject a pending MCP server'],
  ] as const;
  
  const TOP_LEVEL_HELP_OPTIONS = [
    ['model', { alias: 'm', type: 'string', description: 'Model' }],
-   [
+-  [
 -    'fallback-model',
 -    {
 -      type: 'array',
@@ -32093,13 +32099,12 @@ diff --git a/packages/cli/src/cli.ts b/packages/cli/src/cli.ts
 -        'Fallback model(s) for capacity errors, repeatable or comma-separated (max 3)',
 -    },
 -  ],
--  [
+   [
      'prompt',
      {
        alias: 'p',
        type: 'string',
        description: 'Prompt. Appended to input on stdin (if any).',
-     },
 @@ -127,13 +119,12 @@
    ],
  ] as const satisfies ReadonlyArray<readonly [string, Options]>;
@@ -32114,7 +32119,7 @@ diff --git a/packages/cli/src/cli.ts b/packages/cli/src/cli.ts
    '-i',
    '--output-format',
    '-o',
-@@ -401,26 +392,20 @@
+@@ -401,28 +392,22 @@
    const { main } = await import('./gemini.js');
    acpStartupProfiler?.markAcpStartup('geminiImportEnd');
    await main();
@@ -32133,15 +32138,58 @@ diff --git a/packages/cli/src/cli.ts b/packages/cli/src/cli.ts
        errorMessage = `\x1b[31m${errorMessage}\x1b[0m`;
      }
      writeStderrLine(errorMessage);
--    process.exit(error.exitCode);
--  }
--  if (error instanceof AlreadyReportedError) {
      process.exit(error.exitCode);
    }
+-  if (error instanceof AlreadyReportedError) {
+-    process.exit(error.exitCode);
+-  }
    writeStderrLine('An unexpected critical error occurred:');
    if (error instanceof Error) {
      writeStderrLine(error.stack ?? error.message);
    } else {
+     writeStderrLine(String(error));
+   }
+@@ -547,20 +532,39 @@
+       }
+       process.exit(1);
+     }
+   }
+ }
+ 
++/** A matching SDK uses this entry point to replay recorded provider bytes. */
++export async function runCliOrVerifierEntryPoint(): Promise<void> {
++  if (process.argv[2] === '--verify-record-stream') {
++    if (process.argv.length !== 3) {
++      writeStderrLine(
++        'Record verifier accepts no additional arguments. Use the matching CLI and SDK.',
++      );
++      process.exitCode = 2;
++      return;
++    }
++    const { runRecordStreamVerifier } = await import(
++      '@qwen-code/qwen-code-core/recordVerifierStream'
++    );
++    await runRecordStreamVerifier();
++    return;
++  }
++  await runCliEntryPoint();
++}
++
+ let isMain = false;
+ if (process.argv[1] !== undefined) {
+   try {
+     const argvRealHref = pathToFileURL(realpathSync(process.argv[1])).href;
+     const argvHref = pathToFileURL(process.argv[1]).href;
+     isMain = import.meta.url === argvHref || import.meta.url === argvRealHref;
+   } catch {
+     isMain = import.meta.url === pathToFileURL(process.argv[1]).href;
+   }
+ }
+ 
+ if (isMain) {
+-  void runCliEntryPoint();
++  void runCliOrVerifierEntryPoint();
+ }
 diff --git a/packages/cli/src/commands/mcp/reconnect.test.ts b/packages/cli/src/commands/mcp/reconnect.test.ts
 --- a/packages/cli/src/commands/mcp/reconnect.test.ts
 +++ b/packages/cli/src/commands/mcp/reconnect.test.ts
@@ -108434,7 +108482,24 @@ diff --git a/packages/cli/vitest.config.ts b/packages/cli/vitest.config.ts
        ),
        '@qwen-code/qwen-code-core/transcriptRecords': path.resolve(
          __dirname,
-@@ -102,12 +134,16 @@
+@@ -28,12 +60,16 @@
+         '../core/src/memory/scopes.ts',
+       ),
+       '@qwen-code/qwen-code-core/toolWriteOrigin': path.resolve(
+         __dirname,
+         '../core/src/services/tool-write-origin.ts',
+       ),
++      '@qwen-code/qwen-code-core/recordVerifierStream': path.resolve(
++        __dirname,
++        '../core/src/core/record-verifier-stream.ts',
++      ),
+       '@qwen-code/qwen-code-core': path.resolve(__dirname, '../core/index.ts'),
+       // cli's daemon-status-provider.test.ts imports `FakeAgent` /
+       // `makeChannel` from acp-bridge's package-private
+       // `internal/testUtils` module. This alias overrides the runtime
+       // resolution so vitest reads the .ts source directly instead of
+       // the build-then-stale `dist/` copy.
+@@ -102,12 +138,16 @@
          '../acp-bridge/src/eventBus.ts',
        ),
        '@qwen-code/acp-bridge/replayWindowLimits': path.resolve(
@@ -108451,7 +108516,7 @@ diff --git a/packages/cli/vitest.config.ts b/packages/cli/vitest.config.ts
        ),
        '@qwen-code/acp-bridge/workspacePaths': path.resolve(
          __dirname,
-@@ -122,20 +158,12 @@
+@@ -122,20 +162,12 @@
          '../audio-capture/src/index.ts',
        ),
        '@qwen-code/sdk/daemon/transcript': path.resolve(
@@ -108475,7 +108540,7 @@ diff --git a/packages/cli/vitest.config.ts b/packages/cli/vitest.config.ts
 diff --git a/packages/core/package.json b/packages/core/package.json
 --- a/packages/core/package.json
 +++ b/packages/core/package.json
-@@ -32,13 +32,25 @@
+@@ -32,13 +32,29 @@
      "./userPromptSubmitContext": {
        "types": "./dist/src/hooks/user-prompt-submit-context.d.ts",
        "import": "./dist/src/hooks/user-prompt-submit-context.js"
@@ -108491,6 +108556,10 @@ diff --git a/packages/core/package.json b/packages/core/package.json
 +    "./servedUsage": {
 +      "types": "./dist/src/core/served-usage.d.ts",
 +      "import": "./dist/src/core/served-usage.js"
++    },
++    "./recordVerifierStream": {
++      "types": "./dist/src/core/record-verifier-stream.d.ts",
++      "import": "./dist/src/core/record-verifier-stream.js"
 +    },
 +    "./generationUsageTypes": {
 +      "types": "./dist/src/telemetry/generation-usage-types.d.ts",
@@ -320442,13 +320511,14 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/protocol.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-python/src/qwen_code_sdk/transport.py
 --- a/packages/sdk-python/src/qwen_code_sdk/transport.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/transport.py
-@@ -1,22 +1,21 @@
+@@ -1,22 +1,23 @@
  """Process transport for qwen CLI stream-json protocol."""
  
  from __future__ import annotations
  
  import asyncio
 -import json
++import hashlib
  import os
  import subprocess
  import sys
@@ -320459,25 +320529,86 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-p
  
  from .errors import ProcessExitError
 -from .json_lines import parse_json_line
-+from .json_lines import read_json_lines
++from .json_lines import parse_json_line, read_json_lines
++from .stream_schema import STREAM_CONTRACT_SHA256
  from .types import QueryOptions
  
  
  @dataclass(frozen=True)
  class SpawnInfo:
      command: str
-@@ -129,24 +128,14 @@
+@@ -49,12 +50,15 @@
+         self._options = options
+         self._process: asyncio.subprocess.Process | None = None
+         self._stderr_task: asyncio.Task[None] | None = None
+         self._closed = False
+         self._input_closed = False
+         self._exit_error: Exception | None = None
++        self._verifier: asyncio.subprocess.Process | None = None
++        self._verified_lines = 0
++        self._verified_bytes = 0
+ 
+     @property
+     def exit_error(self) -> Exception | None:
+         return self._exit_error
+ 
+     @property
+@@ -128,27 +132,124 @@
+         self._process.stdin.close()
          self._input_closed = True
  
      async def read_messages(self) -> AsyncIterator[Any]:
          if self._process is None or self._process.stdout is None:
              raise RuntimeError("Transport is not started")
++        await self._start_verifier()
++        async for record in read_json_lines(
++            self._process.stdout, "ProcessTransport", self._verify_frame
++        ):
++            yield record
++        await self._finish_verifier()
++        await self._finalize_exit()
  
 -        while True:
 -            line = await self._process.stdout.readline()
 -            if not line:
 -                break
--
++    async def _verifier_ack(self, timeout: float) -> dict[str, Any]:
++        verifier = self._verifier
++        if verifier is None or verifier.stdout is None:
++            raise RuntimeError(
++                "Physical record verifier is unavailable; use a matching CLI and SDK"
++            )
++        try:
++            raw = await asyncio.wait_for(verifier.stdout.readline(), timeout)
++        except asyncio.TimeoutError as exc:
++            raise RuntimeError(
++                "Physical record verification did not respond; inspect the CLI "
++                "process and retained stdout, then retry"
++            ) from exc
++        if not raw:
++            raise RuntimeError(
++                "Physical record verifier ended without admitting the record; "
++                "inspect the CLI stdout and use a matching CLI and SDK"
++            )
++        try:
++            ack = parse_json_line(raw.decode("utf-8"))
++        except (UnicodeDecodeError, ValueError) as exc:
++            raise RuntimeError(
++                "Physical record verifier sent an invalid acknowledgment; "
++                "use a matching CLI and SDK"
++            ) from exc
++        if not isinstance(ack, dict):
++            raise RuntimeError(
++                "Physical record verifier sent a non-object acknowledgment; "
++                "use a matching CLI and SDK"
++            )
++        if ack.get("status") == "refused":
++            raise RuntimeError(
++                f"Physical record verifier refused the stream: {ack.get('reason')}. "
++                "Retain the complete CLI stdout and inspect the first refusal"
++            )
++        return ack
+ 
 -            raw = line.decode("utf-8", errors="replace").strip()
 -            if not raw:
 -                continue
@@ -320485,15 +320616,105 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-p
 -                yield parse_json_line(raw)
 -            except json.JSONDecodeError:
 -                continue
-+        async for record in read_json_lines(self._process.stdout, "ProcessTransport"):
-+            yield record
++    async def _start_verifier(self) -> None:
++        if self._verifier is not None:
++            return
++        info = prepare_spawn_info(self._options.path_to_qwen_executable)
++        try:
++            self._verifier = await asyncio.create_subprocess_exec(
++                info.command,
++                *info.args,
++                "--verify-record-stream",
++                cwd=self._options.cwd,
++                env={**os.environ, **(self._options.env or {})},
++                stdin=asyncio.subprocess.PIPE,
++                stdout=asyncio.subprocess.PIPE,
++                stderr=subprocess.DEVNULL,
++            )
++        except OSError as exc:
++            raise RuntimeError(
++                "Cannot start the matching CLI physical record verifier; "
++                "install the matching CLI and SDK, then retry"
++            ) from exc
++        ack = await self._verifier_ack(60.0)
++        if ack != {"status": "ready", "contract": STREAM_CONTRACT_SHA256}:
++            raise RuntimeError(
++                "Physical record verifier has a different stream contract; "
++                "use a matching CLI and SDK"
++            )
  
-         await self._finalize_exit()
+-        await self._finalize_exit()
++    async def _verify_frame(self, raw: bytes) -> None:
++        verifier = self._verifier
++        if verifier is None or verifier.stdin is None:
++            raise RuntimeError(
++                "Physical record verifier is unavailable; use a matching CLI and SDK"
++            )
++        verifier.stdin.write(raw)
++        await verifier.stdin.drain()
++        self._verified_lines += 1
++        self._verified_bytes += len(raw)
++        # A generation may replay response bytes sent in earlier records.
++        ack = await self._verifier_ack(60.0 + self._verified_bytes / (1024 * 1024))
++        if ack != {
++            "status": "record",
++            "line": self._verified_lines,
++            "sha256": hashlib.sha256(raw).hexdigest(),
++        }:
++            raise RuntimeError(
++                "Physical record verifier acknowledged different stdout bytes; "
++                "retain the original stream and use a matching CLI and SDK"
++            )
++
++    async def _finish_verifier(self) -> None:
++        verifier = self._verifier
++        if verifier is None or verifier.stdin is None:
++            raise RuntimeError(
++                "Physical record verifier is unavailable; use a matching CLI and SDK"
++            )
++        verifier.stdin.close()
++        ack = await self._verifier_ack(60.0)
++        if ack != {"status": "complete", "records": self._verified_lines}:
++            raise RuntimeError(
++                "Physical record verifier did not finish the exact stdout stream; "
++                "retain the original stream and retry"
++            )
++        if await asyncio.wait_for(verifier.wait(), 60.0) != 0:
++            raise RuntimeError(
++                "Physical record verifier failed after stream completion; "
++                "inspect the retained stdout and retry"
++            )
  
      async def wait_for_exit(self) -> None:
          if self._process is None:
              return
-@@ -243,9 +232,6 @@
+         await self._finalize_exit()
+ 
+@@ -173,12 +274,20 @@
+     async def close(self) -> None:
+         if self._closed:
+             return
+ 
+         self._closed = True
+ 
++        if self._verifier is not None and self._verifier.returncode is None:
++            self._verifier.terminate()
++            try:
++                await asyncio.wait_for(self._verifier.wait(), timeout=5.0)
++            except asyncio.TimeoutError:
++                self._verifier.kill()
++                await self._verifier.wait()
++
+         if self._process is None:
+             return
+ 
+         if self._process.stdin is not None and not self._input_closed:
+             self._process.stdin.close()
+             self._input_closed = True
+@@ -240,15 +349,12 @@
+     elif options.session_id:
+         args.extend(["--session-id", options.session_id])
+ 
      if options.fork_session:
          args.append("--fork-session")
  
@@ -320503,7 +320724,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-p
      if options.max_subagent_depth is not None:
          args.extend(["--max-subagent-depth", str(options.max_subagent_depth)])
  
-@@ -260,15 +246,12 @@
+     if options.include_directories:
+         args.extend(["--include-directories", ",".join(options.include_directories)])
+ 
+@@ -260,15 +366,12 @@
              [
                  "--allowed-mcp-server-names",
                  ",".join(options.allowed_mcp_server_names),
@@ -321746,7 +321970,12 @@ diff --git a/packages/sdk-python/tests/unit/test_query_core.py b/packages/sdk-py
 diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-python/tests/unit/test_transport.py
 --- a/packages/sdk-python/tests/unit/test_transport.py
 +++ b/packages/sdk-python/tests/unit/test_transport.py
-@@ -4,12 +4,13 @@
+@@ -1,15 +1,19 @@
+ from __future__ import annotations
+ 
+ import asyncio
++import hashlib
++import json
  import subprocess
  import sys
  from pathlib import Path
@@ -321754,13 +321983,68 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
  
  import pytest
 +
++from qwen_code_sdk.stream_schema import STREAM_CONTRACT_SHA256
  from qwen_code_sdk.transport import build_cli_arguments, prepare_spawn_info
  from qwen_code_sdk.types import QueryOptions, TimeoutOptions
  
  VALID_UUID = "123e4567-e89b-12d3-a456-426614174000"
  
  
-@@ -83,41 +84,35 @@
+@@ -18,12 +22,53 @@
+         self.stdin = None
+         self.stdout = None
+         self.stderr = None
+         self.returncode = 0
+ 
+ 
++class DummyVerifier:
++    def __init__(self, *, matching_digest: bool = True) -> None:
++        self.stdout = asyncio.StreamReader()
++        self.stdout.feed_data(
++            (
++                json.dumps({"status": "ready", "contract": STREAM_CONTRACT_SHA256})
++                + "\n"
++            ).encode()
++        )
++        self.returncode = 0
++        self.frames: list[bytes] = []
++        self.matching_digest = matching_digest
++        self.stdin = self
++
++    def write(self, raw: bytes) -> None:
++        self.frames.append(raw)
++        digest = hashlib.sha256(raw).hexdigest() if self.matching_digest else "0" * 64
++        self.stdout.feed_data(
++            (
++                json.dumps(
++                    {"status": "record", "line": len(self.frames), "sha256": digest}
++                )
++                + "\n"
++            ).encode()
++        )
++
++    async def drain(self) -> None:
++        pass
++
++    def close(self) -> None:
++        self.stdout.feed_data(
++            (
++                json.dumps({"status": "complete", "records": len(self.frames)}) + "\n"
++            ).encode()
++        )
++        self.stdout.feed_eof()
++
++    async def wait(self) -> int:
++        return 0
++
++
+ def test_build_cli_arguments_maps_supported_options() -> None:
+     args = build_cli_arguments(
+         QueryOptions(
+             model="qwen3-coder",
+             system_prompt="system prompt",
+             append_system_prompt="append prompt",
+@@ -83,41 +128,35 @@
  
  
  def test_build_cli_arguments_maps_all_consolidated_options() -> None:
@@ -321802,7 +322086,7 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
      assert "--safe-mode" in args
      assert "--insecure" in args
      assert "--worktree" in args
-@@ -235,56 +230,29 @@
+@@ -235,56 +274,80 @@
  
      with pytest.raises(RuntimeError, match="Transport is closed"):
          await transport.start()
@@ -321811,14 +322095,26 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
  @pytest.mark.asyncio
 -async def test_read_messages_skips_malformed_json_lines() -> None:
 -    """Malformed JSON lines should be skipped, not crash the stream."""
--
++async def test_read_messages_refuses_malformed_json_after_valid_prefix() -> None:
++    from qwen_code_sdk.json_lines import read_json_lines
+ 
 -    class FakeStdout:
 -        def __init__(self, lines: list[bytes]) -> None:
 -            self._lines = iter(lines)
--
++    stdout = asyncio.StreamReader()
++    stdout.feed_data(b'{"type":"system"}\n{"type":\n{"type":"result"}\n')
++    stdout.feed_eof()
++    records: list[Any] = []
++    with pytest.raises(
++        ValueError, match="line 2: invalid JSON.*Capture the CLI stdout"
++    ):
++        async for record in read_json_lines(stdout, "ProcessTransport"):
++            records.append(record)
++    assert records == [{"type": "system"}]
+ 
 -        async def readline(self) -> bytes:
 -            return next(self._lines, b"")
--
+ 
 -    transport_module = __import__(
 -        "qwen_code_sdk.transport",
 -        fromlist=["ProcessTransport"],
@@ -321831,7 +322127,34 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
 -        returncode = 0
 -        stdin = None
 -        stderr = None
--
++@pytest.mark.asyncio
++async def test_transport_delivers_only_bytes_acknowledged_by_matching_verifier(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    from qwen_code_sdk.transport import ProcessTransport
++
++    verifier = DummyVerifier()
++    calls: list[tuple[Any, ...]] = []
++
++    async def spawn(*args: Any, **_kwargs: Any) -> DummyVerifier:
++        calls.append(args)
++        return verifier
++
++    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
++    stdout = asyncio.StreamReader()
++    stdout.feed_data(b'{"type":"before"}\n{"type":"after"}\n')
++    stdout.feed_eof()
++    process = DummyProcess()
++    process.stdout = stdout
++    transport = ProcessTransport(QueryOptions(path_to_qwen_executable="qwen-test"))
++    transport._process = process
++    assert [row async for row in transport.read_messages()] == [
++        {"type": "before"},
++        {"type": "after"},
++    ]
++    assert calls[0] == ("qwen-test", "--verify-record-stream")
++    assert verifier.frames == [b'{"type":"before"}\n', b'{"type":"after"}\n']
+ 
 -        def __init__(self) -> None:
 -            self.stdout = FakeStdout(
 -                [
@@ -321841,42 +322164,46 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
 -                    b"",
 -                ]
 -            )
--
+ 
 -        async def wait(self) -> int:
 -            return 0
--
++@pytest.mark.asyncio
++async def test_transport_refuses_a_verifier_acknowledging_different_bytes(
++    monkeypatch: pytest.MonkeyPatch,
++) -> None:
++    from qwen_code_sdk.transport import ProcessTransport
+ 
 -    transport._process = FakeProcess()
--
++    verifier = DummyVerifier(matching_digest=False)
+ 
 -    messages: list[Any] = []
 -    async for msg in transport.read_messages():
 -        messages.append(msg)
--
++    async def spawn(*_args: Any, **_kwargs: Any) -> DummyVerifier:
++        return verifier
+ 
 -    assert len(messages) == 1
 -    assert messages[0]["type"] == "system"
-+async def test_read_messages_refuses_malformed_json_after_valid_prefix() -> None:
-+    from qwen_code_sdk.transport import ProcessTransport
-+
++    monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
 +    stdout = asyncio.StreamReader()
-+    stdout.feed_data(b'{"type":"system"}\n{"type":\n{"type":"result"}\n')
++    stdout.feed_data(b'{"type":"before"}\n')
 +    stdout.feed_eof()
 +    process = DummyProcess()
 +    process.stdout = stdout
 +    transport = ProcessTransport(QueryOptions())
 +    transport._process = process
-+    records: list[Any] = []
-+    with pytest.raises(
-+        ValueError, match="line 2: invalid JSON.*Capture the CLI stdout"
-+    ):
-+        async for record in transport.read_messages():
-+            records.append(record)
-+    assert records == [{"type": "system"}]
++    delivered: list[Any] = []
++    with pytest.raises(RuntimeError, match="different stdout bytes"):
++        async for row in transport.read_messages():
++            delivered.append(row)
++    assert delivered == []
  
  
  @pytest.mark.asyncio
  async def test_stderr_callback_exceptions_do_not_fail_transport() -> None:
      class FakeStdout:
          async def readline(self) -> bytes:
-@@ -331,6 +299,112 @@
+@@ -331,6 +394,108 @@
      transport._process = FakeProcess()
      transport._stderr_task = asyncio.create_task(transport._forward_stderr())
  
@@ -321976,19 +322303,15 @@ diff --git a/packages/sdk-python/tests/unit/test_transport.py b/packages/sdk-pyt
 +async def test_transport_preserves_records_larger_than_reader_buffer(
 +    record_type: str,
 +) -> None:
-+    from qwen_code_sdk.json_lines import serialize_json_line
-+    from qwen_code_sdk.transport import ProcessTransport
++    from qwen_code_sdk.json_lines import read_json_lines, serialize_json_line
 +
 +    # A full request or tool result must be able to span many default read buffers.
 +    record = {"type": record_type, "content": '\\"שלום\n' * (2**17)}
 +    stdout = asyncio.StreamReader()
 +    stdout.feed_data(serialize_json_line(record).encode())
 +    stdout.feed_eof()
-+    process = DummyProcess()
-+    process.stdout = stdout
-+    transport = ProcessTransport(QueryOptions())
-+    transport._process = process
-+    assert [item async for item in transport.read_messages()] == [record]
++    parsed = [item async for item in read_json_lines(stdout, "ProcessTransport")]
++    assert parsed == [record]
 diff --git a/packages/sdk-python/tests/unit/test_validation.py b/packages/sdk-python/tests/unit/test_validation.py
 --- a/packages/sdk-python/tests/unit/test_validation.py
 +++ b/packages/sdk-python/tests/unit/test_validation.py
@@ -351353,7 +351676,7 @@ diff --git a/packages/sdk-typescript/test/unit/recordFraming.test.ts b/packages/
 diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-python/src/qwen_code_sdk/json_lines.py
 --- a/packages/sdk-python/src/qwen_code_sdk/json_lines.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/json_lines.py
-@@ -1,14 +1,134 @@
+@@ -1,14 +1,138 @@
  """JSON lines utilities."""
  
  from __future__ import annotations
@@ -351363,7 +351686,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-
  import json
 -from typing import Any
 +import math
-+from collections.abc import AsyncIterator
++from collections.abc import AsyncIterator, Awaitable, Callable
 +from decimal import Decimal
 +from typing import Any, NoReturn
  
@@ -351468,7 +351791,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-
 +
 +
 +async def read_json_lines(
-+    reader: asyncio.StreamReader, context: str = "JsonLines"
++    reader: asyncio.StreamReader,
++    context: str = "JsonLines",
++    verify_frame: Callable[[bytes], Awaitable[None]] | None = None,
 +) -> AsyncIterator[dict[str, Any]]:
 +    frame = bytearray()
 +    line = 1
@@ -351486,6 +351811,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/json_lines.py b/packages/sdk-
 +            if not any(byte not in b" \t\f\r" for byte in frame):
 +                _refuse_frame(context, physical_line, "blank record")
 +            record = _parse_record(frame, context, physical_line)
++            if verify_frame is not None:
++                await verify_frame(bytes(frame) + b"\n")
 +            frame.clear()
 +            yield record
 +            start = newline + 1
@@ -357074,7 +357401,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReader.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReader.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReader.java
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,101 @@
 +package com.alibaba.qwen.code.cli.transport.process;
 +
 +import java.io.BufferedInputStream;
@@ -357090,11 +357417,18 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +/** Frames LF-committed stdout records before strict UTF-8 decoding. */
 +public final class JsonLineReader implements Closeable {
 +    private final InputStream input;
++    private final FrameVerifier verifier;
 +    private long line = 1;
 +    private IOException failure;
++    private boolean ended;
 +
 +    public JsonLineReader(InputStream input) {
++        this(input, null);
++    }
++
++    JsonLineReader(InputStream input, FrameVerifier verifier) {
 +        this.input = new BufferedInputStream(input);
++        this.verifier = verifier;
 +    }
 +
 +    public String readLine() throws IOException {
@@ -357114,6 +357448,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    if (frame.size() != 0) {
 +                        throw refusal("unterminated record at EOF", null);
 +                    }
++                    if (!ended && verifier != null) {
++                        try {
++                            verifier.finish();
++                        } catch (IOException e) {
++                            throw refusal("physical response verification failed: " + e.getMessage(), e);
++                        }
++                    }
++                    ended = true;
 +                    return null;
 +                }
 +                if (blank) {
@@ -357127,6 +357469,17 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                            .decode(ByteBuffer.wrap(frame.toByteArray())).toString();
 +                } catch (CharacterCodingException e) {
 +                    throw refusal("invalid UTF-8", e);
++                }
++                if (verifier != null) {
++                    byte[] raw = frame.toByteArray();
++                    byte[] committed = new byte[raw.length + 1];
++                    System.arraycopy(raw, 0, committed, 0, raw.length);
++                    committed[raw.length] = '\n';
++                    try {
++                        verifier.verify(committed);
++                    } catch (IOException e) {
++                        throw refusal("physical response verification failed: " + e.getMessage(), e);
++                    }
 +                }
 +                line++;
 +                return record;
@@ -357194,7 +357547,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
   *
   * @author skyfire
   * @version $Id: 0.0.1
-@@ -34,17 +43,21 @@
+@@ -34,17 +43,23 @@
      private final TransportOptions transportOptions;
      protected Timeout turnTimeout;
      protected Timeout messageTimeout;
@@ -357204,6 +357557,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 -    protected BufferedReader processOutput;
 +    protected JsonLineReader processOutput;
      protected BufferedReader processError;
++    private RecordVerifier recordVerifier;
      protected final Consumer<String> errorHandler;
  
      private final AtomicBoolean reading = new AtomicBoolean(false);
@@ -357211,13 +357565,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private final AtomicBoolean closed = new AtomicBoolean(false);
 +    private final AtomicBoolean inputEnded = new AtomicBoolean(false);
 +    private final Object inputLock = new Object();
++    private volatile boolean recordStreamFinished;
  
      /**
       * Constructs a new ProcessTransport with default options.
       *
       * @throws java.io.IOException if starting the process fails
       */
-@@ -86,13 +99,20 @@
+@@ -86,13 +101,24 @@
      public boolean isReading() {
          return reading.get();
      }
@@ -357233,13 +357588,17 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        if (process != null && process.isAlive()) {
 +            throw new IllegalStateException("CLI process is already running; close it before starting another process");
 +        }
++        if (process != null && !recordStreamFinished) {
++            throw new IllegalStateException("Previous CLI record stream was not completed; "
++                    + "retain its stdout and create a new transport before retrying.");
++        }
          TransportOptionsAdapter transportOptionsAdapter = new TransportOptionsAdapter(transportOptions);
          this.turnTimeout = transportOptionsAdapter.getHandledTransportOptions().getTurnTimeout();
          this.messageTimeout = transportOptionsAdapter.getHandledTransportOptions().getMessageTimeout();
  
          String[] commandArgs = transportOptionsAdapter.buildCommandArgs();
          log.debug("trans to command args: {}", transportOptionsAdapter);
-@@ -109,62 +129,119 @@
+@@ -109,62 +135,140 @@
              Map<String, String> processEnv = processBuilder.environment();
              processEnv.clear();
              processEnv.putAll(env);
@@ -357250,14 +357609,34 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 -        processOutput = new BufferedReader(new InputStreamReader(process.getInputStream()));
 -        processError = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 -        startErrorReading();
++        ProcessBuilder verifierBuilder = new ProcessBuilder(
++                transportOptionsAdapter.getHandledTransportOptions().getPathToQwenExecutable(),
++                "--verify-record-stream")
++                .redirectOutput(Redirect.PIPE)
++                .redirectInput(Redirect.PIPE)
++                .redirectError(Redirect.DISCARD)
++                .directory(new File(transportOptionsAdapter.getCwd()));
++        if (env != null) {
++            Map<String, String> verifierEnv = verifierBuilder.environment();
++            verifierEnv.clear();
++            verifierEnv.putAll(env);
++        }
++        try {
++            recordVerifier = new RecordVerifier(verifierBuilder.start());
++        } catch (IOException e) {
++            process.destroyForcibly();
++            throw new IOException("Cannot start the matching CLI physical record verifier; "
++                    + "install the matching CLI and SDK, then retry.", e);
++        }
 +        processInput = new BufferedWriter(new OutputStreamWriter(process.getOutputStream(),
 +                StandardCharsets.UTF_8.newEncoder()
 +                        .onMalformedInput(CodingErrorAction.REPORT)
 +                        .onUnmappableCharacter(CodingErrorAction.REPORT)));
-+        processOutput = new JsonLineReader(process.getInputStream());
++        processOutput = new JsonLineReader(process.getInputStream(), recordVerifier);
 +        processError = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8));
 +        closed.set(false);
 +        inputEnded.set(false);
++        recordStreamFinished = false;
 +        try {
 +            startErrorReading();
 +        } catch (RuntimeException | Error e) {
@@ -357281,9 +357660,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        closed.set(true);
          if (process != null) {
              process.destroy();
-+        }
+         }
 +        IOException closeError = null;
-+        for (Closeable resource : new Closeable[] {processInput, processOutput, processError}) {
++        for (Closeable resource : new Closeable[] {processInput, processOutput, processError, recordVerifier}) {
 +            if (resource != null) {
 +                try {
 +                    resource.close();
@@ -357302,7 +357681,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                throw primaryFailure();
 +            }
 +            throw closeError;
-         }
++        }
      }
  
      /** {@inheritDoc} */
@@ -357344,6 +357723,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    throw new IllegalStateException("CLI shutdown interrupted; retain stdout and inspect caller cancellation.", e);
 +                }
 +            }, turnTimeout.getUnit().toNanos(turnTimeout.getValue()));
++            recordStreamFinished = true;
 +            close();
 +        } catch (Exception | Error e) {
 +            throw fail(e);
@@ -357384,7 +357764,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
      }
  
      /** {@inheritDoc} */
-@@ -172,23 +249,45 @@
+@@ -172,23 +276,45 @@
      public void inputWaitForMultiLine(String message, Function<String, Boolean> callBackFunction) throws IOException {
          inputWaitForMultiLine(message, callBackFunction, turnTimeout);
      }
@@ -357436,7 +357816,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
          MyConcurrentUtils.asyncRun(() -> {
              try {
                  for (;;) {
-@@ -204,29 +303,117 @@
+@@ -204,29 +330,117 @@
                          }
                      }
                  }
@@ -357452,7 +357832,25 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
      }
  
      private void iterateOutput(Function<String, Boolean> callBackFunction) {
--        try {
++        for (;;) {
++            String line = readRecord();
++            checkOpen();
++            log.debug("read a message from process {}", line);
++            if (callBackFunction.apply(line)) {
++                return;
++            }
++        }
++    }
++
++    private <T> T waitForRead(Supplier<T> action, long timeoutNanos) {
++        FutureTask<T> task = new FutureTask<>(() -> {
++            try {
++                return action.get();
++            } catch (Exception | Error e) {
++                throw fail(e);
++            }
++        });
+         try {
 -            reading.set(true);
 -            MyConcurrentUtils.runAndWait(() -> {
 -                try {
@@ -357466,27 +357864,6 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 -                    throw new RuntimeException("read process output error", e);
 -                }
 -            }, messageTimeout);
--        } finally {
--            reading.set(false);
-+        for (;;) {
-+            String line = readRecord();
-+            checkOpen();
-+            log.debug("read a message from process {}", line);
-+            if (callBackFunction.apply(line)) {
-+                return;
-+            }
-         }
-     }
-+
-+    private <T> T waitForRead(Supplier<T> action, long timeoutNanos) {
-+        FutureTask<T> task = new FutureTask<>(() -> {
-+            try {
-+                return action.get();
-+            } catch (Exception | Error e) {
-+                throw fail(e);
-+            }
-+        });
-+        try {
 +            ThreadPoolConfig.execute(task);
 +            return task.get(timeoutNanos, TimeUnit.NANOSECONDS);
 +        } catch (InterruptedException e) {
@@ -357496,7 +357873,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            throw fail(e.getCause());
 +        } catch (Exception | Error e) {
 +            throw fail(e);
-+        } finally {
+         } finally {
+-            reading.set(false);
 +            if (!task.isDone()) {
 +                task.cancel(true);
 +            }
@@ -357567,9 +357945,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    error.addSuppressed(cleanupError);
 +                }
 +            }
-+        }
+         }
 +        return primaryFailure();
-+    }
+     }
  }
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java
 --- a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/utils/MyConcurrentUtils.java
@@ -357748,18 +358126,56 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReaderTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReaderTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/JsonLineReaderTest.java
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,144 @@
 +package com.alibaba.qwen.code.cli.transport.process;
 +
 +import java.io.ByteArrayInputStream;
 +import java.io.IOException;
 +import java.io.InputStream;
 +import java.nio.charset.StandardCharsets;
++import java.util.ArrayList;
 +import java.util.Arrays;
++import java.util.List;
 +import org.junit.jupiter.api.Test;
 +import static org.junit.jupiter.api.Assertions.*;
 +
 +class JsonLineReaderTest {
++    @Test
++    void verifiesExactCommittedBytesBeforeReturningEachLineAndFinishesAtEof() throws Exception {
++        List<String> admitted = new ArrayList<>();
++        FrameVerifier verifier = new FrameVerifier() {
++            @Override
++            public void verify(byte[] committed) throws IOException {
++                String row = new String(committed, StandardCharsets.UTF_8);
++                if (row.contains("forged")) {
++                    throw new IOException("physical response does not produce this row");
++                }
++                admitted.add(row);
++            }
++
++            @Override
++            public void finish() {
++                admitted.add("EOF");
++            }
++        };
++        byte[] bytes = "before\r\nforged\nafter\n".getBytes(StandardCharsets.UTF_8);
++        try (JsonLineReader reader = new JsonLineReader(new ByteArrayInputStream(bytes), verifier)) {
++            assertEquals("before\r", reader.readLine());
++            assertEquals(List.of("before\r\n"), admitted);
++            IOException first = assertThrows(IOException.class, reader::readLine);
++            assertTrue(first.getMessage().contains("physical response"));
++            assertSame(first, assertThrows(IOException.class, reader::readLine));
++            assertEquals(List.of("before\r\n"), admitted);
++        }
++        try (JsonLineReader reader = new JsonLineReader(
++                new ByteArrayInputStream("valid\n".getBytes(StandardCharsets.UTF_8)), verifier)) {
++            assertEquals("valid", reader.readLine());
++            assertNull(reader.readLine());
++            assertNull(reader.readLine());
++        }
++        assertEquals(List.of("before\r\n", "valid\n", "EOF"), admitted);
++    }
++
 +    @Test
 +    void preservesLargeUnicodeRecordsAcrossEveryFragmentSize() throws Exception {
 +        String record = "{\"type\":\"model_request\",\"body\":\"" + "אב😀".repeat(32769) + "\"}";
@@ -357858,7 +358274,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransportRecordTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransportRecordTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/transport/process/ProcessTransportRecordTest.java
-@@ -0,0 +1,202 @@
+@@ -0,0 +1,214 @@
 +package com.alibaba.qwen.code.cli.transport.process;
 +
 +import com.alibaba.qwen.code.cli.transport.TransportOptions;
@@ -357938,6 +358354,18 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        }
 +        assertFalse(transport.isAvailable());
 +        assertThrows(IllegalStateException.class, () -> transport.inputNoWaitResponse("late"));
++    }
++
++    @Test
++    void deadProcessCannotReplaceAnUndrainedRecordStream() throws Exception {
++        MemoryTransport transport = new MemoryTransport("unread\n".getBytes(StandardCharsets.UTF_8));
++        try {
++            transport.child.alive = false;
++            IllegalStateException refusal = assertThrows(IllegalStateException.class, transport::restart);
++            assertTrue(refusal.getMessage().contains("not completed"));
++        } finally {
++            transport.close();
++        }
 +    }
 +
 +    @Test
@@ -421903,4 +422331,477 @@ diff --git a/packages/core/src/core/record-verifier.ts b/packages/core/src/core/
 +    );
 +    process.exitCode = 1;
 +  }
++}
+diff --git a/packages/core/src/core/record-verifier-stream.ts b/packages/core/src/core/record-verifier-stream.ts
+--- /dev/null
++++ b/packages/core/src/core/record-verifier-stream.ts
+@@ -0,0 +1,186 @@
++import { createHash } from 'node:crypto';
++import { once } from 'node:events';
++import { ModelRequestStreamReplay } from './model-request-evidence.js';
++import { STREAM_CONTRACT_SHA256 } from '../generated/stream-contract.js';
++import { parseStrictJson } from '../utils/strict-json.js';
++
++export type RecordVerifierAcknowledgment =
++  | { readonly status: 'ready'; readonly contract: string }
++  | {
++      readonly status: 'record';
++      readonly line: number;
++      readonly sha256: string;
++    }
++  | { readonly status: 'complete'; readonly records: number }
++  | {
++      readonly status: 'refused';
++      readonly line: number;
++      readonly reason: string;
++    };
++
++type Acknowledge = (value: RecordVerifierAcknowledgment) => Promise<void>;
++
++/** Admit the exact stdout bytes before a foreign-language SDK delivers a row. */
++export async function verifyRecordStream(
++  chunks: AsyncIterable<Uint8Array>,
++  acknowledge: Acknowledge,
++): Promise<void> {
++  const sessions = new Map<
++    string,
++    { replay: ModelRequestStreamReplay; terminal: boolean; dual: boolean }
++  >();
++  const observe = (value: unknown): void => {
++    if (value === null || typeof value !== 'object' || Array.isArray(value))
++      throw new Error('record is not an object');
++    const record = value as Record<string, unknown>;
++    if (
++      record['type'] === 'control_request' ||
++      record['type'] === 'control_response' ||
++      record['type'] === 'control_cancel_request'
++    )
++      return;
++    const sessionId = record['session_id'];
++    if (typeof sessionId !== 'string' || !sessionId)
++      throw new Error('record has no session identity');
++    let state = sessions.get(sessionId);
++    if (record['type'] === 'system' && record['subtype'] === 'stream_start') {
++      if (state) {
++        if (!state.terminal)
++          throw new Error('stream_start replaces an unfinished output window');
++        state.replay.finishStream();
++      }
++      state = {
++        replay: new ModelRequestStreamReplay(),
++        terminal: false,
++        dual: false,
++      };
++      state.replay.begin(record['request_evidence_origin']);
++      sessions.set(sessionId, state);
++      return;
++    }
++    if (!state || state.terminal)
++      throw new Error('record has no open stream_start');
++    switch (record['type']) {
++      case 'model_request':
++        state.replay.observe(record['request']);
++        break;
++      case 'model_response':
++        state.replay.observeResponse(record['response']);
++        break;
++      case 'model_normalization_seed':
++        state.replay.observeNormalizationSeed(record['normalization_seed']);
++        break;
++      case 'model_generation':
++        state.replay.observeGeneration(record['generation']);
++        break;
++      case 'model_attempt_completion':
++        state.replay.observeCompletion(record['completion']);
++        break;
++      case 'result':
++        if (record['parent_tool_use_id'] !== null) break;
++        state.replay.finish(record['request_evidence']);
++        state.replay.requireUsage(record['usage']);
++        state.terminal = !state.dual;
++        break;
++      case 'system':
++        if (record['subtype'] === 'session_start') {
++          state.dual = true;
++          break;
++        }
++        if (record['subtype'] !== 'session_end') break;
++        state.replay.finish(record['request_evidence']);
++        state.replay.requireUsage(record['usage']);
++        state.terminal = true;
++        break;
++      default:
++        break;
++    }
++  };
++  let fragments: Buffer[] = [];
++  let length = 0;
++  let line = 0;
++  for await (const chunk of chunks) {
++    let start = 0;
++    for (
++      let newline = chunk.indexOf(0x0a, start);
++      newline >= 0;
++      newline = chunk.indexOf(0x0a, start)
++    ) {
++      const tail = chunk.subarray(start, newline);
++      const raw =
++        fragments.length > 0
++          ? Buffer.concat([...fragments, tail], length + tail.length)
++          : Buffer.from(tail);
++      fragments = [];
++      length = 0;
++      line++;
++      if (
++        raw.every(
++          (byte) =>
++            byte === 0x09 || byte === 0x0c || byte === 0x0d || byte === 0x20,
++        )
++      )
++        throw new Error(`line ${line} is a blank physical record`);
++      let record: unknown;
++      try {
++        record = parseStrictJson(
++          new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
++            raw,
++          ),
++        );
++      } catch (cause) {
++        throw new Error(
++          `line ${line} is not strict UTF-8 JSON: ${String(cause)}`,
++        );
++      }
++      try {
++        observe(record);
++      } catch (cause) {
++        throw new Error(`line ${line} cannot be admitted: ${String(cause)}`);
++      }
++      await acknowledge({
++        status: 'record',
++        line,
++        sha256: createHash('sha256').update(raw).update('\n').digest('hex'),
++      });
++      start = newline + 1;
++    }
++    if (start < chunk.length) {
++      const remainder = chunk.subarray(start);
++      fragments.push(Buffer.from(remainder));
++      length += remainder.length;
++    }
++  }
++  if (length !== 0)
++    throw new Error(`line ${line + 1} has an unterminated suffix`);
++  for (const state of sessions.values()) {
++    if (!state.terminal) throw new Error('EOF omits a stream terminal');
++    state.replay.finishStream();
++  }
++  await acknowledge({ status: 'complete', records: line });
++}
++
++async function writeAcknowledgment(
++  value: RecordVerifierAcknowledgment,
++): Promise<void> {
++  if (!process.stdout.write(`${JSON.stringify(value)}\n`))
++    await once(process.stdout, 'drain');
++}
++
++/** The CLI's verifier mode is a separate process with no model credentials. */
++export async function runRecordStreamVerifier(): Promise<void> {
++  await writeAcknowledgment({
++    status: 'ready',
++    contract: STREAM_CONTRACT_SHA256,
++  });
++  try {
++    await verifyRecordStream(process.stdin, writeAcknowledgment);
++  } catch (cause) {
++    await writeAcknowledgment({
++      status: 'refused',
++      line: 0,
++      reason: String(cause),
++    });
++    process.exitCode = 1;
++  }
++}
+diff --git a/packages/core/src/core/record-verifier-stream.test.ts b/packages/core/src/core/record-verifier-stream.test.ts
+--- /dev/null
++++ b/packages/core/src/core/record-verifier-stream.test.ts
+@@ -0,0 +1,118 @@
++import { createHash } from 'node:crypto';
++import { readFileSync } from 'node:fs';
++import { expect, it } from 'vitest';
++import {
++  verifyRecordStream,
++  type RecordVerifierAcknowledgment,
++} from './record-verifier-stream.js';
++
++type WireRow = Record<string, unknown>;
++const fixture = JSON.parse(
++  readFileSync(
++    new URL('../utils/__fixtures__/ordinary-tool-wire.json', import.meta.url),
++    'utf8',
++  ),
++) as WireRow[];
++const childFixture = JSON.parse(
++  readFileSync(
++    new URL(
++      '../../../sdk-python/tests/fixtures/generation-evidence-v11.json',
++      import.meta.url,
++    ),
++    'utf8',
++  ),
++) as { child_accepted: WireRow[]; child_abandoned: WireRow[] };
++
++async function* split(bytes: Buffer, size: number): AsyncIterable<Uint8Array> {
++  for (let at = 0; at < bytes.length; at += size)
++    yield bytes.subarray(at, at + size);
++}
++
++async function verify(rows: WireRow[], size = 17) {
++  const raw = rows.map((row) => Buffer.from(`${JSON.stringify(row)}\n`));
++  const acknowledgments: RecordVerifierAcknowledgment[] = [];
++  await verifyRecordStream(split(Buffer.concat(raw), size), async (ack) => {
++    acknowledgments.push(ack);
++  });
++  return { raw, acknowledgments };
++}
++
++it('acknowledges exact physical records through fragmented input before completion', async () => {
++  const { raw, acknowledgments } = await verify(structuredClone(fixture));
++  expect(acknowledgments).toEqual([
++    ...raw.map((line, index) => ({
++      status: 'record',
++      line: index + 1,
++      sha256: createHash('sha256').update(line).digest('hex'),
++    })),
++    { status: 'complete', records: raw.length },
++  ]);
++});
++
++it.each(['child_accepted', 'child_abandoned'] as const)(
++  'keeps a %s generation tied to its response through both terminals',
++  async (kind) => {
++    const rows = structuredClone(childFixture[kind]);
++    const { acknowledgments } = await verify(rows);
++    expect(acknowledgments.at(-1)).toEqual({
++      status: 'complete',
++      records: rows.length,
++    });
++  },
++);
++
++it('keeps a dual output window open until session_end after a root result', async () => {
++  const rows = structuredClone(fixture);
++  const first = rows[0]!;
++  const result = rows.at(-1)!;
++  rows.splice(1, 0, {
++    type: 'system',
++    subtype: 'session_start',
++    session_id: first['session_id'],
++  });
++  rows.push({
++    type: 'system',
++    subtype: 'session_end',
++    session_id: first['session_id'],
++    request_evidence: result['request_evidence'],
++    usage: result['usage'],
++  });
++  const { acknowledgments } = await verify(rows);
++  expect(acknowledgments.at(-1)).toEqual({
++    status: 'complete',
++    records: rows.length,
++  });
++});
++
++it('refuses a rehashed generation whose thought differs from its response bytes', async () => {
++  const rows = structuredClone(fixture);
++  const generation = rows.find((row) => row['type'] === 'model_generation')![
++    'generation'
++  ] as Record<string, unknown>;
++  const envelope = JSON.parse(generation['generation_json'] as string);
++  envelope.observations[0].response.candidates[0].content.parts[0].text =
++    'forged thought';
++  const text = JSON.stringify(envelope);
++  generation['generation_json'] = text;
++  generation['generation_bytes'] = Buffer.byteLength(text);
++  generation['generation_sha256'] = createHash('sha256')
++    .update(text)
++    .digest('hex');
++  const completion = rows.find(
++    (row) => row['type'] === 'model_attempt_completion',
++  )!['completion'] as Record<string, unknown>;
++  completion['generation_sha256'] = generation['generation_sha256'];
++  await expect(verify(rows)).rejects.toThrow(/physical response/);
++});
++
++it('never acknowledges blank records or unterminated suffixes', async () => {
++  for (const bytes of [Buffer.from('\n'), Buffer.from('{"type":"user"}')]) {
++    const acknowledgments: RecordVerifierAcknowledgment[] = [];
++    await expect(
++      verifyRecordStream(split(bytes, 1), async (ack) => {
++        acknowledgments.push(ack);
++      }),
++    ).rejects.toThrow(/blank physical record|unterminated suffix/);
++    expect(acknowledgments).toEqual([]);
++  }
++});
+diff --git a/packages/cli/index.ts b/packages/cli/index.ts
+--- a/packages/cli/index.ts
++++ b/packages/cli/index.ts
+@@ -3,11 +3,9 @@
+ /**
+  * @license
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+-import { runCliEntryPoint } from './src/cli.js';
++import { runCliOrVerifierEntryPoint } from './src/cli.js';
+ 
+-// --- Global Entry Point ---
+-
+-void runCliEntryPoint();
++void runCliOrVerifierEntryPoint();
+diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/FrameVerifier.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/FrameVerifier.java
+--- /dev/null
++++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/FrameVerifier.java
+@@ -0,0 +1,10 @@
++package com.alibaba.qwen.code.cli.transport.process;
++
++import java.io.IOException;
++
++/** Exact LF-committed byte admission before a decoded CLI row is returned. */
++interface FrameVerifier {
++    void verify(byte[] committed) throws IOException;
++
++    void finish() throws IOException;
++}
+diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/RecordVerifier.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/RecordVerifier.java
+--- /dev/null
++++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/transport/process/RecordVerifier.java
+@@ -0,0 +1,126 @@
++package com.alibaba.qwen.code.cli.transport.process;
++
++import com.alibaba.qwen.code.cli.protocol.StreamSchema;
++import com.alibaba.qwen.code.shared.StrictJson;
++import java.io.Closeable;
++import java.io.IOException;
++import java.io.OutputStream;
++import java.security.MessageDigest;
++import java.security.NoSuchAlgorithmException;
++import java.util.Map;
++import java.util.concurrent.TimeUnit;
++
++/** A matching CLI process replays provider bytes before this transport delivers a record. */
++final class RecordVerifier implements FrameVerifier, Closeable {
++    private final Process process;
++    private final OutputStream input;
++    private final JsonLineReader output;
++    private long line;
++    private boolean ready;
++    private boolean complete;
++
++    RecordVerifier(Process process) {
++        this.process = process;
++        this.input = process.getOutputStream();
++        this.output = new JsonLineReader(process.getInputStream());
++    }
++
++    private Map<String, Object> acknowledgment() throws IOException {
++        String json = output.readLine();
++        if (json == null) {
++            throw new IOException("Physical record verifier ended without admitting the CLI stdout; "
++                    + "retain the original stream and use a matching CLI and SDK.");
++        }
++        final Map<String, Object> ack;
++        try {
++            ack = StrictJson.parseObject(json, "physical verifier acknowledgment");
++        } catch (IllegalArgumentException e) {
++            throw new IOException("Physical record verifier sent invalid JSON; use a matching CLI and SDK.", e);
++        }
++        if ("refused".equals(ack.get("status"))) {
++            throw new IOException("Physical record verifier refused the stream: " + ack.get("reason")
++                    + ". Retain the complete CLI stdout and inspect the first refusal.");
++        }
++        return ack;
++    }
++
++    private void ready() throws IOException {
++        if (ready) {
++            return;
++        }
++        Map<String, Object> ack = acknowledgment();
++        if (ack.size() != 2 || !"ready".equals(ack.get("status"))
++                || !StreamSchema.SHA256.equals(ack.get("contract"))) {
++            throw new IOException("Physical record verifier has a different stream contract; "
++                    + "use a matching CLI and SDK.");
++        }
++        ready = true;
++    }
++
++    @Override
++    public void verify(byte[] committed) throws IOException {
++        if (complete) {
++            throw new IOException("Physical record verifier already ended; retain one complete CLI stdout stream.");
++        }
++        ready();
++        input.write(committed);
++        input.flush();
++        line++;
++        Map<String, Object> ack = acknowledgment();
++        if (ack.size() != 3 || !"record".equals(ack.get("status"))
++                || !(ack.get("line") instanceof Number)
++                || !Long.toString(line).equals(ack.get("line").toString())
++                || !sha256(committed).equals(ack.get("sha256"))) {
++            throw new IOException("Physical record verifier acknowledged different CLI stdout bytes; "
++                    + "retain the original stream and use a matching CLI and SDK.");
++        }
++    }
++
++    @Override
++    public void finish() throws IOException {
++        if (complete) {
++            return;
++        }
++        ready();
++        input.close();
++        Map<String, Object> ack = acknowledgment();
++        if (ack.size() != 2 || !"complete".equals(ack.get("status"))
++                || !(ack.get("records") instanceof Number)
++                || !Long.toString(line).equals(ack.get("records").toString())) {
++            throw new IOException("Physical record verifier did not finish the exact CLI stdout stream; "
++                    + "retain the original stream and retry.");
++        }
++        try {
++            if (!process.waitFor(60, TimeUnit.SECONDS) || process.exitValue() != 0) {
++                throw new IOException("Physical record verifier failed after stream completion; "
++                        + "inspect the retained stdout and retry.");
++            }
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++            throw new IOException("Physical record verification was interrupted; retain stdout and retry.", e);
++        }
++        complete = true;
++    }
++
++    private static String sha256(byte[] bytes) {
++        final byte[] digest;
++        try {
++            digest = MessageDigest.getInstance("SHA-256").digest(bytes);
++        } catch (NoSuchAlgorithmException e) {
++            throw new IllegalStateException("JVM lacks SHA-256; use a supported Java runtime.", e);
++        }
++        StringBuilder text = new StringBuilder(digest.length * 2);
++        for (byte value : digest) {
++            text.append(Character.forDigit((value >>> 4) & 15, 16));
++            text.append(Character.forDigit(value & 15, 16));
++        }
++        return text.toString();
++    }
++
++    @Override
++    public void close() throws IOException {
++        process.destroyForcibly();
++        input.close();
++        output.close();
++    }
 +}

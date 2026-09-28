@@ -8483,6 +8483,35 @@ def _validate_served_accounting_after(state: State) -> None:
         "STREAM_CONTRACT_SHA256",
         "await verifyPhysicalModelRecords({",
     ), label=label)
+    _require_all(state, core + "core/record-verifier-stream.ts", (
+        "export async function verifyRecordStream(",
+        "new ModelRequestStreamReplay()",
+        "state.replay.observeResponse(record['response'])",
+        "state.replay.observeGeneration(record['generation'])",
+        "state.replay.finishStream()",
+        "sha256: createHash('sha256').update(raw).update('\\n').digest('hex')",
+        "export async function runRecordStreamVerifier(): Promise<void>",
+    ), label=label)
+    _require_all(state, core + "core/record-verifier-stream.test.ts", (
+        "acknowledges exact physical records through fragmented input before completion",
+        "refuses a rehashed generation whose thought differs from its response bytes",
+        "keeps a %s generation tied to its response through both terminals",
+        "keeps a dual output window open until session_end after a root result",
+        "never acknowledges blank records or unterminated suffixes",
+    ), label=label)
+    require_text(state, "packages/core/package.json", '"./recordVerifierStream"', label=label)
+    require_text(state, "packages/cli/index.ts", "void runCliOrVerifierEntryPoint();", label=label)
+    _require_all(state, "packages/cli/src/cli.ts", (
+        "export async function runCliOrVerifierEntryPoint()",
+        "process.argv[2] === '--verify-record-stream'",
+        "await runRecordStreamVerifier();",
+    ), label=label)
+    require_text(state, "packages/cli/vitest.config.ts",
+                 "'@qwen-code/qwen-code-core/recordVerifierStream'", label=label)
+    _require_all(state, "packages/cli/src/cli.test.ts", (
+        "bundles the bootstrap and physical verifier as separate production entries",
+        "'record-verifier': 'packages/core/src/core/record-verifier.ts'",
+    ), label=label)
     require_text(state, "esbuild.config.js",
                  "'record-verifier': 'packages/core/src/core/record-verifier.ts'",
                  label=label)
@@ -8818,11 +8847,14 @@ def _validate_served_accounting_after(state: State) -> None:
         "parse_float=parse_float", "math.isfinite(number)",
         "Decimal(value) != Decimal(int(number))",
         "expected an object with a string type", "unterminated record at EOF",
-        '"blank record"',
+        '"blank record"', 'await verify_frame(bytes(frame) + b"\\n")',
         "invalid JSONL record at line {line}",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/transport.py", (
-        'read_json_lines(self._process.stdout, "ProcessTransport")', "yield record",
+        'self._process.stdout, "ProcessTransport", self._verify_frame',
+        '"--verify-record-stream"', 'await self._start_verifier()',
+        'await self._finish_verifier()', 'hashlib.sha256(raw).hexdigest()',
+        '"contract": STREAM_CONTRACT_SHA256', 'yield record',
     ), label=label)
     forbid_text(state, python_sdk + "src/qwen_code_sdk/transport.py",
                 "self._process.stdout.readline()", label=label)
@@ -8964,6 +8996,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_byte_framing_refuses_every_nonempty_eof_suffix",
         "test_byte_framing_preserves_unicode_across_every_read_boundary",
         "test_transport_preserves_records_larger_than_reader_buffer",
+        "test_transport_delivers_only_bytes_acknowledged_by_matching_verifier",
+        "test_transport_refuses_a_verifier_acknowledging_different_bytes",
     ), label=label)
     _require_all(state, python_sdk + "tests/unit/test_query_core.py", (
         "test_slow_reader_keeps_prefix_and_first_error_through_cleanup",
@@ -8980,7 +9014,16 @@ def _validate_served_accounting_after(state: State) -> None:
         "new BufferedInputStream(input)", "value != '\\n'", "frame.size() != 0",
         "StandardCharsets.UTF_8.newDecoder()", "CodingErrorAction.REPORT",
         "unterminated record at EOF", "Capture the CLI stdout", "throw failure;",
-        'throw refusal("blank record", null)',
+        'throw refusal("blank record", null)', "verifier.verify(committed)",
+        "verifier.finish()",
+    ), label=label)
+    _require_all(state, java_cli + "transport/process/FrameVerifier.java", (
+        "interface FrameVerifier", "void verify(byte[] committed)", "void finish()",
+    ), label=label)
+    _require_all(state, java_cli + "transport/process/RecordVerifier.java", (
+        "final class RecordVerifier implements FrameVerifier, Closeable",
+        "StreamSchema.SHA256", "sha256(committed)",
+        '"complete".equals(ack.get("status"))',
     ), label=label)
     _require_all(state, java_cli + "transport/process/ProcessTransport.java", (
         "protected JsonLineReader processOutput", "StandardCharsets.UTF_8.newEncoder()",
@@ -8989,6 +9032,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "ThreadPoolConfig.execute(task)", "failure.compareAndSet(null, error)",
         "process.destroyForcibly()", "return primaryFailure()",
         "CLI stdout ended before the requested response completed",
+        '"--verify-record-stream"', "new JsonLineReader(process.getInputStream(), recordVerifier)",
+        "recordStreamFinished = true;",
+        "Previous CLI record stream was not completed",
     ), label=label)
     java_wait = _source(state, java_cli + "transport/process/ProcessTransport.java", label=label).split(
         "private <T> T waitForRead", 1
@@ -9082,8 +9128,11 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, java_tests + "transport/process/JsonLineReaderTest.java", (
         "preservesLargeUnicodeRecordsAcrossEveryFragmentSize", "preservesPrefixThenLatchesMalformedUtf8",
         "refusesBlankRecordsBetweenValidLines",
+        "verifiesExactCommittedBytesBeforeReturningEachLineAndFinishesAtEof",
         "refusesEveryNonemptyEofSuffix", "bareCarriageReturnDoesNotCommitARecord",
     ), label=label)
+    require_text(state, java_tests + "transport/process/ProcessTransportRecordTest.java",
+                 "deadProcessCannotReplaceAnUndrainedRecordStream", label=label)
     _require_all(state, java_tests + "transport/process/ProcessTransportRecordTest.java", (
         "successfulTurnBoundaryKeepsNextTurnAvailable", "callbackFailureClosesAdmissionAndKeepsOriginalFailure",
         "corruptRecordRetainsPrefixAndRefusesSuccess", "timedOutCallbackCannotConsumeNextRecordAfterInterruption",
