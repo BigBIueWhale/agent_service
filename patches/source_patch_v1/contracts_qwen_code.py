@@ -8472,6 +8472,18 @@ def _validate_served_accounting_after(state: State) -> None:
         "replayRecordedOpenAIObservations(",
         "verifyRecordedOpenAIGeneration(",
         "Buffer.concat(state.bodyChunks)",
+        "this.settledAwaitingGeneration.set(record.request_id, state)",
+        "this.settledAwaitingGeneration.get(requestId)",
+        "this.settledAwaitingGeneration.delete(requestId)",
+        "this.settledAwaitingGeneration.size > 0",
+    ), label=label)
+    _require_all(state, core + "core/model-response-evidence.test.ts", (
+        "checks an abandoned response before the same Chat attempt retries",
+        "impossible byte prefix",
+    ), label=label)
+    _require_all(state, core + "services/session-generation-view.test.ts", (
+        "result.rootSequence.indexOf('history')",
+        "result.rootSequence.indexOf('model_generation')",
     ), label=label)
     forbid_text(state, core + "core/model-response-evidence.ts",
                 "policy?: OpenAIResponseDecodePolicy", label=label)

@@ -426,6 +426,17 @@ The TypeScript verifier passed focused source tests for streamed and nonstreamed
 responses, early cancellation, malformed-call diagnostics and rehashed text or
 body substitutions. A deterministic 600-body local parser probe matched the
 pinned SDK's SSE value boundaries; it is not a proof for every transport shape.
+The real failed-Chat fixture writes abandoned physical history before its
+generation. The canonical TypeScript reader had discarded the response body at
+that history record, so its later physical replay refused a valid session.
+It now retains that closed response until generation verification, or checks and
+releases it when the same attempt issues a retry. The two real session-view
+source tests and the 63 response-evidence source tests passed with this order;
+the retry test also refused a forged decoded count against the retained body.
+These tests do not establish complete resume behavior across every session
+shape. A broader transcript-reader run still has synthetic assistant fixtures
+that omit the required generation envelope and must be brought into the
+canonical format before they can serve as resume evidence.
 The native certifier, Python and Java readers, utility consumer receipts,
 standalone child proof remain open. The earlier local rehashed replacement of
 a preparation's normalized ID and its matching call mapping exposed the

@@ -345897,7 +345897,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,1063 @@
+@@ -0,0 +1,1109 @@
 +import { createHash } from 'node:crypto';
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -346858,6 +346858,52 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    expect(() => replay.finish()).not.toThrow();
 +    expect(() => replay.observe(f.records.at(-1))).toThrow();
 +  });
++  it('checks an abandoned response before the same Chat attempt retries', async () => {
++    const records: ModelResponseEvidence[] = [];
++    const owner = { kind: 'chat', attempt_id: 'attempt' } as const;
++    const recorder = new ModelResponseRecorder(
++      'journal',
++      'first',
++      async (record) => {
++        records.push(structuredClone(record));
++      },
++      owner,
++    );
++    recorder.dispatched();
++    await (
++      await recorder.capture(
++        new Response('data: {"value":1}\n\n', {
++          headers: { 'content-type': 'text/event-stream' },
++        }),
++      )
++    ).text();
++    await recorder.finish({ status: 'failed', error: 'processing failed' });
++    expect(records.at(-1)?.event).toEqual({
++      kind: 'history',
++      disposition: 'abandoned',
++    });
++    const replay = (evidence: ModelResponseEvidence[]) => {
++      const reader = new ModelResponseReplay();
++      reader.begin('journal', 'first', owner, 'scope', TEST_POLICY);
++      evidence.forEach((record) => reader.observe(record));
++      return reader;
++    };
++    const valid = replay(records);
++    expect(valid.openRequestIds()).toEqual([]);
++    expect(() => valid.finish()).toThrow('response completion');
++    expect(() =>
++      valid.begin('journal', 'second', owner, 'scope', TEST_POLICY),
++    ).not.toThrow();
++
++    const forged = records.map((record) =>
++      record.event.kind === 'outcome'
++        ? { ...record, event: { ...record.event, sdk_values_seen: 2 } }
++        : record,
++    );
++    expect(() =>
++      replay(forged).begin('journal', 'second', owner, 'scope', TEST_POLICY),
++    ).toThrow('impossible byte prefix');
++  });
 +  it.each([
 +    'early',
 +    'duplicate',
@@ -346964,7 +347010,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,862 @@
+@@ -0,0 +1,890 @@
 +import { createHash } from 'node:crypto';
 +import type { GenerateContentResponse } from '@google/genai';
 +import { recordGenerationSource } from './model-generation.js';
@@ -347597,7 +347643,24 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  return input as unknown as ModelResponseEvidence;
 +}
 +
-+/** Retain hashes and counters, never entire response bodies. Prefixes stay open. */
++type ResponseReplayState = {
++  journalId: string;
++  owner: ModelRequestOwner;
++  processing: Extract<
++    ModelResponseEvidence['event'],
++    { kind: 'outcome' }
++  > | null;
++  policy: OpenAIResponseDecodePolicy;
++  bodyChunks: Buffer[];
++  sequence: number;
++  httpStatus: number | undefined;
++  termination: ModelResponseTermination | undefined;
++  bytes: number;
++  digest: ReturnType<typeof createHash> | null;
++  generationVerified: boolean;
++};
++
++/** Retain only the response awaiting its generation's physical verification. */
 +export class ModelResponseReplay {
 +  private requestCount = 0;
 +  private finalizedUsage = combineGenerationUsage([]);
@@ -347623,23 +347686,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    attempt.outputScope = outputScope;
 +  }
 +  private readonly ended = new Set<string>();
-+  private readonly requests = new Map<
++  private readonly requests = new Map<string, ResponseReplayState>();
++  private readonly settledAwaitingGeneration = new Map<
 +    string,
-+    {
-+      journalId: string;
-+      owner: ModelRequestOwner;
-+      processing: Extract<
-+        ModelResponseEvidence['event'],
-+        { kind: 'outcome' }
-+      > | null;
-+      policy: OpenAIResponseDecodePolicy;
-+      bodyChunks: Buffer[];
-+      sequence: number;
-+      httpStatus: number | undefined;
-+      termination: ModelResponseTermination | undefined;
-+      bytes: number;
-+      digest: ReturnType<typeof createHash> | null;
-+    }
++    ResponseReplayState
 +  >();
 +  begin(
 +    journalId: string,
@@ -347658,6 +347708,18 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        failure(
 +          'chat attempt changes scope or issues a request after acceptance',
 +        );
++      const previousId = previous?.latestRequestId;
++      const settled = previousId
++        ? this.settledAwaitingGeneration.get(previousId)
++        : undefined;
++      if (settled) {
++        replayRecordedOpenAIObservations(
++          Buffer.concat(settled.bodyChunks),
++          settled.policy,
++          settled.processing!,
++        );
++        this.settledAwaitingGeneration.delete(previousId!);
++      }
 +      if (!previous)
 +        this.attempts.set(owner.attempt_id, { scope, accepted: false });
 +      this.attempts.get(owner.attempt_id)!.latestRequestId = requestId;
@@ -347673,6 +347735,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      termination: undefined,
 +      bytes: 0,
 +      digest: createHash('sha256'),
++      generationVerified: false,
 +    });
 +    this.requestCount++;
 +  }
@@ -347704,6 +347767,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      }
 +      this.requests.delete(record.request_id);
 +      this.ended.add(record.request_id);
++      if (!state.generationVerified)
++        this.settledAwaitingGeneration.set(record.request_id, state);
 +      return;
 +    }
 +    if (state.processing !== null)
@@ -347784,11 +347849,15 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    const requestId = this.attempts.get(
 +      envelope.origin.attempt_id,
 +    )?.latestRequestId;
-+    const state = requestId ? this.requests.get(requestId) : undefined;
++    const state = requestId
++      ? (this.requests.get(requestId) ??
++        this.settledAwaitingGeneration.get(requestId))
++      : undefined;
 +    if (
 +      !requestId ||
 +      !state ||
 +      !state.processing ||
++      state.generationVerified ||
 +      seed.request_id !== requestId ||
 +      seed.origin.attempt_id !== envelope.origin.attempt_id ||
 +      seed.origin.kv_scope !== envelope.origin.kv_scope
@@ -347807,7 +347876,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      envelope,
 +      seed,
 +    );
++    state.generationVerified = true;
 +    state.bodyChunks.length = 0;
++    this.settledAwaitingGeneration.delete(requestId);
 +  }
 +  usageSummary(): GenerationUsageSummary {
 +    const unfinalized = this.requestCount - this.finalizedUsage.requests;
@@ -347823,7 +347894,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    ]);
 +  }
 +  finish(): void {
-+    if (this.openRequestIds().length > 0)
++    if (
++      this.openRequestIds().length > 0 ||
++      this.settledAwaitingGeneration.size > 0
++    )
 +      failure('terminal omits a response completion');
 +  }
 +}
@@ -387772,7 +387846,7 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 diff --git a/packages/core/src/services/session-generation-view.test.ts b/packages/core/src/services/session-generation-view.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/session-generation-view.test.ts
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,110 @@
 +import { expect, it } from 'vitest';
 +import { randomUUID } from 'node:crypto';
 +import fs from 'node:fs/promises';
@@ -387788,6 +387862,9 @@ diff --git a/packages/core/src/services/session-generation-view.test.ts b/packag
 +  const fixture = await createRecordedGenerationFixture();
 +  try {
 +    const result = await fixture.run('invalid_usage');
++    expect(result.rootSequence.indexOf('history')).toBeLessThan(
++      result.rootSequence.indexOf('model_generation'),
++    );
 +    const raw = await readCompleteStoredCanonicalChatRecords(fixture.rootPath);
 +    const expected = prepareTranscriptRecords(raw).presentationRecords.map(
 +      (record) => record.uuid,
