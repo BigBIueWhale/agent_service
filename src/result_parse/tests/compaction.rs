@@ -3,7 +3,7 @@ use super::*;
 fn output() -> Value {
     json!({"maxOutputTokens":49152,"requestAttempts":2,
         "text":"  partial snapshot","reasoning":"Observed reasoning.  ",
-        "rawResponses":["{\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"name\":\"state_snapshot\",\"arguments\":\"{\\\"intent\\\":\"}}]}}]}"],
+        "sdkValuesJson":["{\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"name\":\"state_snapshot\",\"arguments\":\"{\\\"intent\\\":\"}}]}}]}"],
         "newTokenCount":null,"snapshotBytes":null,
         "incompleteToolCalls":[{"name":"state_snapshot","arguments":"{\"intent\": \"Summarise the corpus \\u2014 cut"}],
         "finishReason":"MAX_TOKENS","usage":served(233926, 49152, 49152, 100)})
@@ -12,7 +12,7 @@ fn output() -> Value {
 fn rejected() -> Value {
     json!({"status":"COMPRESSION_FAILED_EMPTY_SUMMARY","requestAttempts":1,
         "text":"","reasoning":"Reasoning that produced nothing.",
-        "rawResponses":["{\"choices\":[{\"delta\":{\"reasoning_content\":\"Reasoning that produced nothing.\"}}]}"],
+        "sdkValuesJson":["{\"choices\":[{\"delta\":{\"reasoning_content\":\"Reasoning that produced nothing.\"}}]}"],
         "newTokenCount":null,"snapshotBytes":null,"incompleteToolCalls":[],
         "finishReason":"STOP","usage":served(233926, 40, 40, 100)})
 }
@@ -94,7 +94,7 @@ fn commit_history(trace: &mut Trace, history: Value) {
     data["output"]["finishReason"] = json!("STOP");
     data["output"]["incompleteToolCalls"] = json!([]);
     data["output"]["text"] = json!("accepted snapshot");
-    data["output"]["rawResponses"] = json!(["{\"choices\":[{\"message\":{\"content\":\"accepted snapshot\"},\"finish_reason\":\"stop\"}]}"]);
+    data["output"]["sdkValuesJson"] = json!(["{\"choices\":[{\"message\":{\"content\":\"accepted snapshot\"},\"finish_reason\":\"stop\"}]}"]);
     data["postCompactionHistory"] = history;
 }
 
@@ -144,7 +144,7 @@ fn compaction_draws_require_content_measurements_and_provider_objects() {
     let complete = trace_with(record(output(), json!([])), false);
     complete.certify();
     for field in [
-        "rawResponses",
+        "sdkValuesJson",
         "text",
         "newTokenCount",
         "snapshotBytes",
@@ -159,7 +159,7 @@ fn compaction_draws_require_content_measurements_and_provider_objects() {
             .remove(field);
         assert_compaction_refusal(
             &trace,
-            if ["rawResponses", "text", "newTokenCount", "snapshotBytes"].contains(&field) {
+            if ["sdkValuesJson", "text", "newTokenCount", "snapshotBytes"].contains(&field) {
                 "schema rule /oneOf"
             } else {
                 field
@@ -172,7 +172,7 @@ fn compaction_draws_require_content_measurements_and_provider_objects() {
         (json!(["null"]), "non-object raw response"),
     ] {
         let mut trace = complete.clone();
-        data(&mut trace)["output"]["rawResponses"] = responses;
+        data(&mut trace)["output"]["sdkValuesJson"] = responses;
         assert_compaction_refusal(&trace, expected);
     }
     let mut trace = complete;

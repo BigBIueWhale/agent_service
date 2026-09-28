@@ -1952,7 +1952,7 @@ def _validate_compaction_event_after(state: State) -> None:
             "succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,",
             "ServerGeminiChatCompactionEvent",
             "postCompactionHistory: info.postCompactionHistory ?? null,",
-            "rawResponses: readonly string[];",
+            "sdkValuesJson: readonly string[];",
             "newTokenCount: number | null;",
             "snapshotBytes: number | null;",
         ),
@@ -1967,8 +1967,8 @@ def _validate_compaction_event_after(state: State) -> None:
     service = "packages/core/src/services/chatCompressionService.ts"
     _require_all(state, service, (
         "text: summaryResult.text,",
-        "rawResponses: summaryResult.rawResponses,",
-        "rawResponses: partial.rawResponses,",
+        "sdkValuesJson: summaryResult.sdkValuesJson,",
+        "sdkValuesJson: partial.sdkValuesJson,",
         "accounting.newTokenCount = newTokenCount;",
         "snapshotBytes: acceptance.snapshot",
         "afterCommit: async () =>",
@@ -2015,7 +2015,7 @@ def _validate_compaction_event_after(state: State) -> None:
         "OpenAIContentConverter.convertOpenAIChunkToGemini(",
     ), label=label)
     require_text(state, "packages/core/src/core/baseLlmClient.ts",
-                 "rawResponses: providerOutput.responses,", count=5, label=label)
+                 "sdkValuesJson: providerOutput.valuesJson,", count=5, label=label)
     _require_all(
         state,
         "packages/cli/src/ui/hooks/useGeminiStream.ts",
@@ -5562,7 +5562,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "  incomplete: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,",
             "  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,",
             "status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],",
-            "rawResponses: summaryResult.rawResponses,",
+            "sdkValuesJson: summaryResult.sdkValuesJson,",
             "          : acceptance.refused === 'over_bound'\n            ? acceptance.bytes",
         ),
         label=label,
@@ -8302,7 +8302,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 14;",
+            "export const CHAT_RECORDING_VERSION = 15;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8962,7 +8962,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v12.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v13.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -9180,7 +9180,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation has no recorded normalization seed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v12.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v13.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (

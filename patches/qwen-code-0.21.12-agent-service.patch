@@ -42984,7 +42984,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +            requestAttempts: 1,
 +            reasoning: 'Let me first list every file the user touched...',
 +            text: '',
-+            rawResponses: ['{"choices":[]}'],
++            sdkValuesJson: ['{"choices":[]}'],
 +            newTokenCount: null,
 +            snapshotBytes: null,
 +            incompleteToolCalls: [
@@ -43013,7 +43013,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +            requestAttempts: 1,
 +            reasoning: 'Let me first list every file the user touched...',
 +            text: '',
-+            rawResponses: ['{"choices":[]}'],
++            sdkValuesJson: ['{"choices":[]}'],
 +            newTokenCount: null,
 +            snapshotBytes: null,
 +            // What the draw had written of its snapshot call when the
@@ -52838,7 +52838,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        requestAttempts: 1,
 +        text: 'Exact draw',
 +        reasoning: '',
-+        rawResponses: ['{"choices":[]}'],
++        sdkValuesJson: ['{"choices":[]}'],
 +        newTokenCount: 100,
 +        snapshotBytes: 23,
 +        incompleteToolCalls: [],
@@ -110463,7 +110463,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +          output: {
 +            maxOutputTokens: 64,
 +            usage,
-+            rawResponses: [],
++            sdkValuesJson: [],
 +            newTokenCount: null,
 +            snapshotBytes: null,
 +            text: 'derived summary',
@@ -121694,7 +121694,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +        triggerReason: 'token_limit',
 +        rejectedAttempts: [],
 +        output: {
-+          rawResponses: [],
++          sdkValuesJson: [],
 +          newTokenCount: null,
 +          snapshotBytes: null,
 +          text: 'partial summary',
@@ -122382,7 +122382,7 @@ diff --git a/packages/core/src/agents/runtime/agent-core.test.ts b/packages/core
 +      triggerReason: 'token_limit',
 +      rejectedAttempts: [],
 +      output: {
-+        rawResponses: [],
++        sdkValuesJson: [],
 +        newTokenCount: null,
 +        snapshotBytes: null,
 +        text: 'partial summary',
@@ -142413,7 +142413,7 @@ diff --git a/packages/core/src/core/authored-instructions.test.ts b/packages/cor
 +      ];
 +      const before = structuredClone(history);
 +      const result: GenerateTextResult = {
-+        rawResponses: [],
++        sdkValuesJson: [],
 +        text: '',
 +        thoughtText: '',
 +        incompleteToolCalls: [],
@@ -144539,7 +144539,7 @@ diff --git a/packages/core/src/core/baseLlmClient.test.ts b/packages/core/src/co
 +              }
 +            : undefined;
 +        expect(error.partial).toEqual({
-+          rawResponses: [JSON.stringify(response)],
++          sdkValuesJson: [JSON.stringify(response)],
 +          text: '  raw batch text\n',
 +          thoughtText: '  raw reasoning\n',
 +          usage: knownUsage,
@@ -144847,8 +144847,8 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
   * Result of a generateText call.
   */
  export interface GenerateTextResult {
-+  /** Complete provider response objects, serialized before conversion. */
-+  rawResponses: string[];
++  /** SDK-parsed provider values serialized before Core conversion. */
++  sdkValuesJson: string[];
 +  /** Provider calls attempted, including establishments that returned no body. */
 +  requestAttempts: number;
    text: string;
@@ -145091,7 +145091,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +    let requestAttempts = 0;
 +    const providerOutput = new ProviderOutput();
 +    let partial: GenerateTextResult = {
-+      rawResponses: providerOutput.responses,
++      sdkValuesJson: providerOutput.valuesJson,
 +      text: '',
 +      thoughtText: '',
 +      usage: undefined,
@@ -145118,7 +145118,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          ? async () => {
 +            requestAttempts++;
 +            partial = {
-+              rawResponses: providerOutput.responses,
++              sdkValuesJson: providerOutput.valuesJson,
 +              text: '',
 +              thoughtText: '',
 +              usage: undefined,
@@ -145169,7 +145169,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
          : async () => {
 +            requestAttempts++;
 +            partial = {
-+              rawResponses: providerOutput.responses,
++              sdkValuesJson: providerOutput.valuesJson,
 +              text: '',
 +              thoughtText: '',
 +              usage: undefined,
@@ -145183,7 +145183,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
              );
 -            return {
 +            partial = {
-+              rawResponses: providerOutput.responses,
++              sdkValuesJson: providerOutput.valuesJson,
 +              requestAttempts,
                text: getResponseText(result) ?? '',
 +              thoughtText: getResponseThoughtText(result) ?? '',
@@ -145263,7 +145263,7 @@ diff --git a/packages/core/src/core/baseLlmClient.ts b/packages/core/src/core/ba
 +
        return {
 -        text: result.text.trim(),
-+        rawResponses: providerOutput.responses,
++        sdkValuesJson: providerOutput.valuesJson,
 +        requestAttempts,
 +        text: result.text,
 +        thoughtText: result.thoughtText,
@@ -193986,7 +193986,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +        provider_extension: { preserve: true },
 +      };
 +      const refuse = () => {
-+        expect(output.responses).toEqual([JSON.stringify(served)]);
++        expect(output.valuesJson).toEqual([JSON.stringify(served)]);
 +        throw new Error('malformed call');
 +      };
 +      vi.mocked(mockConverter.convertGeminiRequestToOpenAI).mockReturnValue([]);
@@ -194045,9 +194045,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.test.ts b/pa
 +        exact_token_counting: false,
 +        tagged_thinking_tags: false,
 +      });
-+      expect(output.responses).toEqual([JSON.stringify(served)]);
++      expect(output.valuesJson).toEqual([JSON.stringify(served)]);
 +      expect(
-+        JSON.parse(output.responses[0]).choices[0].delta.tool_calls[0].function
++        JSON.parse(output.valuesJson[0]).choices[0].delta.tool_calls[0].function
 +          .arguments,
 +      ).toBe(argumentsText);
 +    },
@@ -206210,11 +206210,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  status: CompressionStatus;
 +  /** Validated backend counts, or null when none were served before failure. */
 +  usage: ServedUsage | null;
-+  /** Converted text and reasoning; rawResponses retains the provider objects. */
++  /** Converted text and reasoning; sdkValuesJson retains SDK-parsed objects as JSON. */
 +  text: string;
 +  reasoning: string;
-+  /** Provider output before validation or argument parsing, in arrival order. */
-+  rawResponses: readonly string[];
++  /** SDK-parsed provider values as JSON before Core conversion, in arrival order. */
++  sdkValuesJson: readonly string[];
 +  /** Rendered candidate request size, or null when no count was obtained. */
 +  newTokenCount: number | null;
 +  /** Measured snapshot bytes, or null when no complete snapshot was declared. */
@@ -206234,11 +206234,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  maxOutputTokens: number;
 +  /** Validated backend counts, or null when none were served before failure. */
 +  usage: ServedUsage | null;
-+  /** Converted text and reasoning; rawResponses retains the provider objects. */
++  /** Converted text and reasoning; sdkValuesJson retains SDK-parsed objects as JSON. */
 +  text: string;
 +  reasoning: string;
-+  /** Provider output before validation or argument parsing, in arrival order. */
-+  rawResponses: readonly string[];
++  /** SDK-parsed provider values as JSON before Core conversion, in arrival order. */
++  sdkValuesJson: readonly string[];
 +  /** Rendered candidate request size, or null when no count was obtained. */
 +  newTokenCount: number | null;
 +  /** Measured snapshot bytes, or null when no complete snapshot was declared. */
@@ -216754,7 +216754,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +  overrides: Partial<GenerateTextResult> = {},
 +): GenerateTextResult {
 +  return {
-+    rawResponses: [
++    sdkValuesJson: [
 +      JSON.stringify({
 +        choices: [
 +          {
@@ -220130,7 +220130,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        usage: refused.usage,
 +        text: refused.text,
 +        reasoning: '',
-+        rawResponses: refused.rawResponses,
++        sdkValuesJson: refused.sdkValuesJson,
 +        newTokenCount: null,
 +        snapshotBytes: null,
 +        incompleteToolCalls: [],
@@ -220161,7 +220161,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        usage: refused.usage,
 +        text: refused.text,
 +        reasoning: '',
-+        rawResponses: refused.rawResponses,
++        sdkValuesJson: refused.sdkValuesJson,
 +        newTokenCount: null,
 +        snapshotBytes: Buffer.byteLength(snapshot(long)),
 +        incompleteToolCalls: [],
@@ -220566,7 +220566,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +          new GenerationTextFailure(
 +            'stream died',
 +            {
-+              rawResponses: [],
++              sdkValuesJson: [],
 +              text: '',
 +              thoughtText: '',
 +              usage: undefined,
@@ -221354,10 +221354,10 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      requestAttempts: 1,
 +      reasoning: 'Let me first list every file the user touched...',
 +      text: '',
-+      rawResponses: summaryResult({
++      sdkValuesJson: summaryResult({
 +        functionCalls: [],
 +        thoughtText: 'Let me first list every file the user touched...',
-+      }).rawResponses,
++      }).sdkValuesJson,
 +      newTokenCount: null,
 +      snapshotBytes: null,
 +      incompleteToolCalls: [],
@@ -222510,7 +222510,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -          status: 'running',
 -          startTime: 7,
 -          isBackgrounded: true,
-+          rawResponses: [],
++          sdkValuesJson: [],
 +          requestAttempts: 1,
 +          text: 'partial',
 +          thoughtText: 'reasoning',
@@ -224141,7 +224141,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      usage: attempt.usage,
 +      text: attempt.text,
 +      reasoning: attempt.reasoning,
-+      rawResponses: attempt.rawResponses,
++      sdkValuesJson: attempt.sdkValuesJson,
 +      newTokenCount: attempt.newTokenCount,
 +      snapshotBytes: attempt.snapshotBytes,
 +      incompleteToolCalls: attempt.incompleteToolCalls,
@@ -224199,7 +224199,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +            usage,
 +            text: partial.text,
 +            reasoning: partial.thoughtText,
-+            rawResponses: partial.rawResponses,
++            sdkValuesJson: partial.sdkValuesJson,
 +            newTokenCount: null,
 +            snapshotBytes: null,
 +            incompleteToolCalls: partial.incompleteToolCalls,
@@ -224227,7 +224227,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        usage: summaryUsage,
 +        text: summaryResult.text,
 +        reasoning: summaryResult.thoughtText,
-+        rawResponses: summaryResult.rawResponses,
++        sdkValuesJson: summaryResult.sdkValuesJson,
 +        newTokenCount: null,
 +        snapshotBytes: acceptance.snapshot
 +          ? tokenizerText(stateSnapshotText(acceptance.snapshot)).bytes
@@ -239889,7 +239889,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +            output: {
 +              text: 'Evidence only; never append this as a conversation turn.',
 +              reasoning: 'Verbatim reasoning.',
-+              rawResponses: [
++              sdkValuesJson: [
 +                '{"choices":[{"message":{"content":"evidence only"}}]}',
 +              ],
 +              newTokenCount: 200,
@@ -310025,7 +310025,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +    const draw = {
 +      text: '  visible narration\n',
 +      reasoning: ' reasoning ',
-+      rawResponses: [raw],
++      sdkValuesJson: [raw],
 +      newTokenCount: 12,
 +      snapshotBytes: 8,
 +      requestAttempts: 1,
@@ -310076,7 +310076,7 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +    );
 +    for (const key of [
 +      'text',
-+      'rawResponses',
++      'sdkValuesJson',
 +      'newTokenCount',
 +      'snapshotBytes',
 +    ]) {
@@ -315766,7 +315766,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
 +            ok: true,
 +          });
 +          vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({
-+            rawResponses: [],
++            sdkValuesJson: [],
 +            text: 'answer',
 +            thoughtText: 'full reasoning',
 +            requestAttempts: 1,
@@ -315928,7 +315928,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
    describe('text mode (no schema)', () => {
      function mockTextResult(text: string, withUsage = true) {
        vi.mocked(mockBaseLlmClient.generateText).mockResolvedValue({
-+        rawResponses: [],
++        sdkValuesJson: [],
          text,
 +        thoughtText: '',
 +        requestAttempts: 1,
@@ -315953,7 +315953,7 @@ diff --git a/packages/core/src/utils/sideQuery.test.ts b/packages/core/src/utils
        });
  
        expect(result).toEqual({
-+        rawResponses: [],
++        sdkValuesJson: [],
          text: 'hello world',
 +        thoughtText: '',
 +        requestAttempts: 1,
@@ -318201,7 +318201,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +  type ModelGenerationOrigin,
 +} from '../core/model-output-origin.js';
 +
-+export const CHAT_RECORDING_VERSION = 14;
++export const CHAT_RECORDING_VERSION = 15;
  
  export type TranscriptRecordType =
    | 'user'
@@ -338553,7 +338553,7 @@ diff --git a/packages/cli/src/nonInteractive/io/headless-tool-result-text-projec
 diff --git a/packages/core/src/core/provider-output.ts b/packages/core/src/core/provider-output.ts
 --- /dev/null
 +++ b/packages/core/src/core/provider-output.ts
-@@ -0,0 +1,19 @@
+@@ -0,0 +1,20 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -338562,12 +338562,13 @@ diff --git a/packages/core/src/core/provider-output.ts b/packages/core/src/core/
 +
 +import { AsyncLocalStorage } from 'node:async_hooks';
 +
-+/** Provider objects before validation, including the exact argument strings. */
++/** JSON serializations of SDK-parsed provider values before Core conversion. */
 +export class ProviderOutput {
-+  readonly responses: string[] = [];
++  /** These are decoded objects, not the HTTP response bytes in the journal. */
++  readonly valuesJson: string[] = [];
 +
 +  observe(response: unknown): void {
-+    this.responses.push(JSON.stringify(response));
++    this.valuesJson.push(JSON.stringify(response));
 +  }
 +}
 +
@@ -355269,7 +355270,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,745 @@
+@@ -0,0 +1,755 @@
 +from __future__ import annotations
 +
 +import copy
@@ -355840,7 +355841,7 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        )
 +        and row.get("response", {}).get("event", {}).get("kind") != "history"
 +    ]
-+    request(wire)["owner"] = {"kind": "utility"}
++    request(wire)["owner"] = {"kind": "utility", "operation_id": "usage-test"}
 +    usage = dict(
 +        promptTokenCount=5,
 +        candidatesTokenCount=3,
@@ -355884,6 +355885,16 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        "unreportedUsageRequests": int(report is None),
 +        "usage": copy.deepcopy(report),
 +    }
++    delivery = copy.deepcopy(next(
++        row for row in wire
++        if row["type"] == "model_response" and row["response"]["event"]["kind"] == "outcome"
++    ))
++    delivery["response"]["sequence"] += 1
++    delivery["response"]["event"] = {
++        "kind": "delivery",
++        "outputs_delivered": 1,
++    }
++    wire.insert(-1, delivery)
 +    expected = copy.deepcopy(wire)
 +    if defect in (None, "null", "zero"):
 +        admit_all(wire).finish()
@@ -356027,7 +356038,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
 +        "first_sequence": 1
@@ -356246,7 +356257,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
 +        "first_sequence": 1
@@ -356643,7 +356654,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -356948,7 +356959,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
 +        "first_sequence": 1
@@ -357253,7 +357264,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
 +        "first_sequence": 7
@@ -357650,7 +357661,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
 +        "first_sequence": 1
@@ -357869,7 +357880,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -358008,7 +358019,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -358272,7 +358283,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
 +        "first_sequence": 1
@@ -358702,7 +358713,7 @@ diff --git a/packages/sdk-python/tests/fixtures/record-evidence.json b/packages/
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
 +        "first_sequence": 1
@@ -361568,7 +361579,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    }
 +
 +    private static byte[] readSchema() {
-+        try (InputStream input = StreamSchema.class.getResourceAsStream("/stream-contract-v12.json")) {
++        try (InputStream input = StreamSchema.class.getResourceAsStream("/stream-contract-v13.json")) {
 +            if (input == null) {
 +                throw new IllegalStateException("Packaged stream contract is missing; reinstall the complete matching Java SDK.");
 +            }
@@ -365393,7 +365404,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
 +        "first_sequence": 1
@@ -365612,7 +365623,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
 +        "first_sequence": 1
@@ -366009,7 +366020,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -366314,7 +366325,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
 +        "first_sequence": 1
@@ -366619,7 +366630,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
 +        "first_sequence": 7
@@ -367016,7 +367027,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
 +        "first_sequence": 1
@@ -367235,7 +367246,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -367374,7 +367385,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -367638,7 +367649,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
 +        "first_sequence": 1
@@ -368068,7 +368079,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/record-evidence.json 
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
 +        "first_sequence": 1
@@ -369007,7 +369018,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
 +        "first_sequence": 1
@@ -369226,7 +369237,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
 +        "first_sequence": 1
@@ -369623,7 +369634,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -369928,7 +369939,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "5aceb681-f0fa-42a1-99a7-f0389783703a",
 +        "first_sequence": 1
@@ -370233,7 +370244,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "d615f735-51df-4ec4-a8b5-7ff1a7f26373",
 +        "first_sequence": 7
@@ -370630,7 +370641,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "42cf4738-3012-48a7-b0e4-2823b16fa570",
 +        "first_sequence": 1
@@ -370849,7 +370860,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -370988,7 +370999,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "f251ae8d-5cb2-4bdf-a6ea-79dd16a5624f",
 +        "first_sequence": 1
@@ -371252,7 +371263,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "e4493a91-235f-4733-9ef8-acedbeec19c5",
 +        "first_sequence": 1
@@ -371682,7 +371693,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/record-evidence.json b/packag
 +      "session_id": "123e4567-e89b-12d3-a456-426614174000",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "7bcd1921-9687-4da5-b7ee-9be571a60a83",
 +        "first_sequence": 1
@@ -376498,7 +376509,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +      usage: null,
 +      text: '  literal generated draw\n',
 +      reasoning: 'literal reasoning',
-+      rawResponses: ['{"text":"  literal generated draw\\n"}'],
++      sdkValuesJson: ['{"text":"  literal generated draw\\n"}'],
 +      newTokenCount: 200,
 +      snapshotBytes: 30,
 +      incompleteToolCalls: [],
@@ -391538,7 +391549,7 @@ diff --git a/packages/core/src/utils/__fixtures__/ordinary-tool-wire.json b/pack
 +    "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
 +    "parent_tool_use_id": null,
 +    "subtype": "stream_start",
-+    "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++    "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +    "request_evidence_origin": {
 +      "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
 +      "first_sequence": 1
@@ -393490,7 +393501,7 @@ diff --git a/packages/core/src/utils/__fixtures__/thought-call-wire.json b/packa
 +    "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
 +    "parent_tool_use_id": null,
 +    "subtype": "stream_start",
-+    "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++    "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +    "request_evidence_origin": {
 +      "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
 +      "first_sequence": 1
@@ -395751,7 +395762,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -396123,7 +396134,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -396495,7 +396506,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -396867,7 +396878,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -397239,7 +397250,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -397691,7 +397702,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -398190,7 +398201,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -398444,7 +398455,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-output-sco
 +      "uuid": "6b8202cb-2835-49f4-91d0-9a2b04a9ec8a",
 +      "session_id": "4847920e-0797-4595-940d-ccdbf870acf8",
 +      "parent_tool_use_id": null,
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "2ddb3c8b-5814-465f-8512-c37246a64c4d",
 +        "first_sequence": 1
@@ -399127,7 +399138,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-output-sco
 +      "uuid": "4133f821-7618-4978-92fd-480d814441a5",
 +      "session_id": "9136fb03-2630-42ed-9294-38559de8f54b",
 +      "parent_tool_use_id": null,
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "94d8893c-1108-4e03-94aa-14239345cd0e",
 +        "first_sequence": 1
@@ -399361,7 +399372,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-output-sco
 +      "uuid": "cf39b753-c2bd-4aa4-a453-3fac6c6ce297",
 +      "session_id": "9414e000-79e5-4d52-b2de-9ee034588a28",
 +      "parent_tool_use_id": null,
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "6cf546c2-065c-4b57-a70b-2ae7b185e499",
 +        "first_sequence": 1
@@ -400154,7 +400165,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream_schema.py b/packages/s
 +
 +from jsonschema import Draft7Validator
 +
-+SCHEMA_BYTES = files(__package__).joinpath("stream-contract-v12.json").read_bytes()
++SCHEMA_BYTES = files(__package__).joinpath("stream-contract-v13.json").read_bytes()
 +STREAM_CONTRACT_SHA256 = hashlib.sha256(SCHEMA_BYTES).hexdigest()
 +SCHEMA = json.loads(SCHEMA_BYTES)
 +Draft7Validator.check_schema(SCHEMA)
@@ -400310,7 +400321,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -400682,7 +400693,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -401054,7 +401065,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -401426,7 +401437,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -401798,7 +401809,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -402250,7 +402261,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -402749,7 +402760,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -403003,7 +403014,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-output-scope.json b/p
 +      "uuid": "6b8202cb-2835-49f4-91d0-9a2b04a9ec8a",
 +      "session_id": "4847920e-0797-4595-940d-ccdbf870acf8",
 +      "parent_tool_use_id": null,
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "2ddb3c8b-5814-465f-8512-c37246a64c4d",
 +        "first_sequence": 1
@@ -403686,7 +403697,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-output-scope.json b/p
 +      "uuid": "4133f821-7618-4978-92fd-480d814441a5",
 +      "session_id": "9136fb03-2630-42ed-9294-38559de8f54b",
 +      "parent_tool_use_id": null,
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "94d8893c-1108-4e03-94aa-14239345cd0e",
 +        "first_sequence": 1
@@ -403920,7 +403931,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-output-scope.json b/p
 +      "uuid": "cf39b753-c2bd-4aa4-a453-3fac6c6ce297",
 +      "session_id": "9414e000-79e5-4d52-b2de-9ee034588a28",
 +      "parent_tool_use_id": null,
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "6cf546c2-065c-4b57-a70b-2ae7b185e499",
 +        "first_sequence": 1
@@ -405025,7 +405036,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_output_scope.py b/pa
 diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packages/sdk-python/tests/unit/test_root_physical_usage.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_root_physical_usage.py
-@@ -0,0 +1,579 @@
+@@ -0,0 +1,581 @@
 +from __future__ import annotations
 +
 +import asyncio
@@ -405163,6 +405174,8 @@ diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packag
 +    ]
 +    if chat:
 +        events.append({"kind": "history", "disposition": "accepted"})
++    else:
++        events.append({"kind": "delivery", "outputs_delivered": 1})
 +    return [
 +        {
 +            "type": "model_response",
@@ -405209,7 +405222,7 @@ diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packag
 +            "prompt_id": "prompt-a",
 +            "owner": {"kind": "chat", "attempt_id": f"{prefix}-attempt"}
 +            if chat
-+            else {"kind": "utility"},
++            else {"kind": "utility", "operation_id": f"{prefix}-operation"},
 +            "decode_policy": {
 +                "mode": "nonstream",
 +                "model": "actual-model-override",
@@ -406142,7 +406155,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -406514,7 +406527,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -406886,7 +406899,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -407258,7 +407271,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -407630,7 +407643,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -408082,7 +408095,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -408581,7 +408594,7 @@ diff --git a/packages/sdk-typescript/test/fixtures/accepted-generation-view.json
 +        "subtype": "stream_start",
 +        "uuid": "init-a",
 +        "session_id": "session-a",
-+        "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++        "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +        "request_evidence_origin": {
 +          "journal_id": "journal-a",
 +          "first_sequence": 1
@@ -414311,7 +414324,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v
 +      "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
 +        "first_sequence": 1
@@ -414532,7 +414545,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v
 +      "session_id": "47d3fc72-cf80-4e98-9de9-f1912f291eb4",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "6fe9ef9d-e775-47ea-87be-7685fbffec12",
 +        "first_sequence": 1
@@ -414752,7 +414765,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v
 +      "session_id": "2843ebed-5988-40af-a79d-29297f2456dc",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "1eca8eec-990e-4106-bcc7-b66ed738bc6b",
 +        "first_sequence": 1
@@ -414985,7 +414998,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/generation-evidence-v
 +      "session_id": "128ef8a9-e725-45d9-9b52-660f61e4d2a0",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "6920a841-53fe-4b94-b0b8-bdc6c6e0b965",
 +        "first_sequence": 1
@@ -415224,7 +415237,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 +      "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
 +        "first_sequence": 1
@@ -415445,7 +415458,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 +      "session_id": "47d3fc72-cf80-4e98-9de9-f1912f291eb4",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "6fe9ef9d-e775-47ea-87be-7685fbffec12",
 +        "first_sequence": 1
@@ -415665,7 +415678,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 +      "session_id": "2843ebed-5988-40af-a79d-29297f2456dc",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "1eca8eec-990e-4106-bcc7-b66ed738bc6b",
 +        "first_sequence": 1
@@ -415898,7 +415911,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 +      "session_id": "128ef8a9-e725-45d9-9b52-660f61e4d2a0",
 +      "parent_tool_use_id": null,
 +      "subtype": "stream_start",
-+      "stream_contract_sha256": "0b40379a3fca3bca5be74ad07ab5ae24f3b72d54c3fffa52039ca4731ad75278",
++      "stream_contract_sha256": "603b6dcbfb1e400914f45ad6ff41eb49337f4f2951bd28087533531a744358e1",
 +      "request_evidence_origin": {
 +        "journal_id": "6920a841-53fe-4b94-b0b8-bdc6c6e0b965",
 +        "first_sequence": 1
@@ -418158,13 +418171,13 @@ diff --git a/packages/core/src/core/utility-delivery.test.ts b/packages/core/src
 +    expect(physical.recordUtilityDelivery).toHaveBeenCalledExactlyOnceWith(1);
 +  });
 +});
-diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v12.json b/packages/sdk-python/src/qwen_code_sdk/stream-contract-v12.json
+diff --git a/packages/sdk-java/qwencode/src/main/resources/stream-contract-v13.json b/packages/sdk-java/qwencode/src/main/resources/stream-contract-v13.json
 --- /dev/null
-+++ b/packages/sdk-python/src/qwen_code_sdk/stream-contract-v12.json
++++ b/packages/sdk-java/qwencode/src/main/resources/stream-contract-v13.json
 @@ -0,0 +1,3400 @@
 +{
 +  "$schema": "http://json-schema.org/draft-07/schema#",
-+  "$id": "urn:agent-service:stream-contract:12",
++  "$id": "urn:agent-service:stream-contract:13",
 +  "type": "object",
 +  "required": [
 +    "type",
@@ -420558,13 +420571,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v12.json b/pa
 +    },
 +    "compactionDrawEvidence": {
 +      "required": [
-+        "rawResponses",
++        "sdkValuesJson",
 +        "newTokenCount",
 +        "snapshotBytes",
 +        "text"
 +      ],
 +      "properties": {
-+        "rawResponses": {
++        "sdkValuesJson": {
 +          "type": "array",
 +          "items": {
 +            "type": "string"
@@ -420600,7 +420613,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v12.json b/pa
 +          },
 +          "then": {
 +            "properties": {
-+              "rawResponses": {
++              "sdkValuesJson": {
 +                "minItems": 1
 +              }
 +            }
@@ -421562,13 +421575,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v12.json b/pa
 +    }
 +  }
 +}
-diff --git a/packages/sdk-java/qwencode/src/main/resources/stream-contract-v12.json b/packages/sdk-java/qwencode/src/main/resources/stream-contract-v12.json
+diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v13.json b/packages/sdk-python/src/qwen_code_sdk/stream-contract-v13.json
 --- /dev/null
-+++ b/packages/sdk-java/qwencode/src/main/resources/stream-contract-v12.json
++++ b/packages/sdk-python/src/qwen_code_sdk/stream-contract-v13.json
 @@ -0,0 +1,3400 @@
 +{
 +  "$schema": "http://json-schema.org/draft-07/schema#",
-+  "$id": "urn:agent-service:stream-contract:12",
++  "$id": "urn:agent-service:stream-contract:13",
 +  "type": "object",
 +  "required": [
 +    "type",
@@ -423962,13 +423975,13 @@ diff --git a/packages/sdk-java/qwencode/src/main/resources/stream-contract-v12.j
 +    },
 +    "compactionDrawEvidence": {
 +      "required": [
-+        "rawResponses",
++        "sdkValuesJson",
 +        "newTokenCount",
 +        "snapshotBytes",
 +        "text"
 +      ],
 +      "properties": {
-+        "rawResponses": {
++        "sdkValuesJson": {
 +          "type": "array",
 +          "items": {
 +            "type": "string"
@@ -424004,7 +424017,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/resources/stream-contract-v12.j
 +          },
 +          "then": {
 +            "properties": {
-+              "rawResponses": {
++              "sdkValuesJson": {
 +                "minItems": 1
 +              }
 +            }

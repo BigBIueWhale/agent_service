@@ -279,10 +279,11 @@ These questions identify real source facts. Corrections are marked below;
 the other items remain open:
 
 - `ProviderOutput.observe` uses `JSON.stringify` on decoded provider objects.
-  The resulting `rawResponses` fields are not response-byte evidence. They
-  coexist with the actual byte journal. Remove redundant recording or give a
-  necessary decoded projection a distinct, truthful meaning; do not call
-  reserialization raw wire bytes.
+  The resulting compaction field is now `sdkValuesJson`: it preserves the SDK's
+  pre-conversion values, including partial tool-call arguments, as JSON text.
+  It is distinct from the response-byte journal and makes no claim about HTTP
+  wire bytes. A physical binding between a compaction draw and its provider
+  response bytes remains open.
 - `ModelRequestJournal.capture` emits a full body when two requests in one
   segment share no message prefix at the audited checkpoint. This question was
   confirmed and the producer fallback is removed in the current authoritative
@@ -379,7 +380,7 @@ One concrete source consumer omission remains:
   consumer gap regardless of whether the image ships that application.
 
 The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
-while the current patched Qwen source requires canonical recording version 14.
+while the current patched Qwen source requires canonical recording version 15.
 Hard-coding that version into Desktop's local JSONL loops would bind them to a
 different runtime source and could reject an ordinary session from its pinned
 runtime. The patched ACP `qwen/session/loadUpdates` path already asks the

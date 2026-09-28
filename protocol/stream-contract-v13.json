@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:12",
+  "$id": "urn:agent-service:stream-contract:13",
   "type": "object",
   "required": [
     "type",
@@ -2394,13 +2394,13 @@
     },
     "compactionDrawEvidence": {
       "required": [
-        "rawResponses",
+        "sdkValuesJson",
         "newTokenCount",
         "snapshotBytes",
         "text"
       ],
       "properties": {
-        "rawResponses": {
+        "sdkValuesJson": {
           "type": "array",
           "items": {
             "type": "string"
@@ -2436,7 +2436,7 @@
           },
           "then": {
             "properties": {
-              "rawResponses": {
+              "sdkValuesJson": {
                 "minItems": 1
               }
             }

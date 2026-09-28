@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `4efdaa4f72a9ff13d531d7bb2dffc749bd723813d015049566f4f2f27b14058c`
+- Review-diff SHA-256: `6eafdec59b448a2d33eae2f794c6d5c8ccb9569b3e3a2368790fc3cbfe1cd9e2`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `a25762654940e299f84d2ae0580a6c75c9903ee09c2c719e27971b1fb663aab0`
+- Transformer-manifest SHA-256: `c251bd88c89e1a25b0e820cedb57599e167fe22e9ec8dbbf0d6c3d01702f5b3e`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -271,9 +271,12 @@ what the model can quote, not what it has seen: it disarms every file-read
 entry's history residency and leaves the read and write evidence in place, so a
 file this session wrote itself is still one it is allowed to overwrite.
 
-Each compaction draw records converted text and reasoning alongside complete
-provider response objects captured before conversion. Argument strings remain verbatim even when
-they are malformed or cut off. Every draw states its measured candidate token
+Each compaction draw records converted text and reasoning alongside
+`sdkValuesJson`: JSON serializations of SDK-parsed provider values captured
+before Core conversion. These values preserve argument strings even when they
+are malformed or cut off; they are not the provider's HTTP response bytes.
+The physical byte journal is separate, and compaction draws do not yet carry a
+binding to those bytes. Every draw states its measured candidate token
 count and snapshot byte count, using null when that measurement was not reached.
 Rejected draws retain these fields alongside the final draw. The committed
 post-compaction history is a separate field with exact part boundaries and
@@ -346,7 +349,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 14`, independently
+Every physical canonical chat record carries `recordingVersion: 15`, independently
 of the client release string. Missing or unknown versions, unknown record kinds
 or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
@@ -372,7 +375,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 14 histories.
+new session. They are not promoted into complete version 15 histories.
 The complete-record evidence replay and the resume reader use the same
 projection for runtime checkpoints, compaction, and rewind. A focused source
 test passed for a compaction followed by another generation: full restore,
@@ -387,11 +390,11 @@ indexed resume select served usage only from committed local model generations;
 the canonical reader refuses an adopted or realtime assistant with a fabricated
 usage report. Source tests exercise that refusal and compare full and indexed
 served usage after a physically recorded generation. Owner gates remain pending.
-The SessionService and transcript-preparation source fixtures now use version 14
+The SessionService and transcript-preparation source fixtures now use version 15
 stored record shapes. Fork cases read their temporary JSONL files through the
 complete canonical reader; unit projection cases supply already admitted rows.
-The three affected suites passed 194 source tests, including refusal of a
-legacy assistant without generation evidence and refusal of an obsolete
+Four focused source suites passed 224 tests, including refusal of a legacy
+assistant without generation evidence and refusal of an obsolete
 generation-failure subtype. These tests do not qualify a packaged resume run.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.

@@ -10,7 +10,7 @@ mod number;
 mod schema_compiler;
 
 fn main() {
-    let path = "../stream-contract-v12.json";
+    let path = "../stream-contract-v13.json";
     println!("cargo:rerun-if-changed={path}");
     println!(
         "cargo:rustc-env=STREAM_CONTRACT_PATH={}",

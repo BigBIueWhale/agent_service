@@ -163,21 +163,21 @@ fn validate_compaction_event(
                 count(holder, key)?;
             }
         }
-        let responses = field(holder, "rawResponses", line)?
+        let responses = field(holder, "sdkValuesJson", line)?
             .elements()
             .ok_or_else(|| {
-                refuse("without raw response objects; capture this run with the current client")
+                refuse("without SDK value JSON; capture this run with the current client")
             })?;
         for response in responses {
             let raw = response.as_str().ok_or_else(|| {
-                refuse("with a non-string raw response; inspect the compaction producer")
+                refuse("with a non-string SDK value; inspect the compaction producer")
             })?;
             let decoded = Document::decode(raw.as_bytes(), json_limits).map_err(|cause| refuse(
-                &format!("with an undecodable raw response ({cause:?}); inspect the captured provider object"),
+                &format!("with undecodable SDK value JSON ({cause:?}); inspect the captured provider object"),
             ))?;
             if decoded.root().as_object().is_none() {
                 return Err(refuse(
-                    "with a non-object raw response; inspect the captured provider object",
+                    "with a non-object SDK value; inspect the captured provider object",
                 ));
             }
         }
