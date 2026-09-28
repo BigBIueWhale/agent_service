@@ -57,13 +57,34 @@ impl ResponseValues {
         completed: bool,
         status: Option<u64>,
         content_type: Option<&str>,
+        transport_eof: bool,
     ) -> ContractResult<()> {
         let (available, failed) = if status.is_none_or(|status| !(200..300).contains(&status)) {
             // The SDK rejects an unsuccessful HTTP response before decoding it.
             (0, false)
         } else {
             match self {
-                Self::Stream(values) => (values.count, values.failed),
+                Self::Stream(values) => {
+                    if transport_eof
+                        && (!values.pending.is_empty()
+                            || values.after_cr
+                            || !values.line.is_empty())
+                        && !values.failed
+                        && !values.done
+                    {
+                        // The SDK yields its final incomplete SSE chunk at EOF.
+                        let mut flushed = values.clone();
+                        let pending = std::mem::take(&mut flushed.pending);
+                        flushed.feed(&pending);
+                        if flushed.after_cr || !flushed.line.is_empty() {
+                            flushed.after_cr = false;
+                            flushed.finish_line();
+                        }
+                        (flushed.count, flushed.failed)
+                    } else {
+                        (values.count, values.failed)
+                    }
+                }
                 Self::Nonstream(_) if status == Some(204) => (1, false),
                 Self::Nonstream(body) => {
                     let media_type = content_type
@@ -98,8 +119,9 @@ impl ResponseValues {
     }
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct SseValues {
+    pending: Vec<u8>,
     line: Vec<u8>,
     event: Option<String>,
     data: Vec<String>,
@@ -115,17 +137,32 @@ impl SseValues {
             if self.failed || self.done {
                 return;
             }
+            self.pending.push(byte);
+            let len = self.pending.len();
+            let complete_chunk = (len >= 2
+                && (&self.pending[len - 2..] == b"\n\n" || &self.pending[len - 2..] == b"\r\r"))
+                || (len >= 4 && &self.pending[len - 4..] == b"\r\n\r\n");
+            if complete_chunk {
+                let chunk = std::mem::take(&mut self.pending);
+                self.feed(&chunk);
+            }
+        }
+    }
+
+    fn feed(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            if self.failed || self.done {
+                return;
+            }
             if self.after_cr {
                 self.after_cr = false;
+                self.finish_line();
                 if byte == b'\n' {
                     continue;
                 }
             }
             match byte {
-                b'\r' => {
-                    self.finish_line();
-                    self.after_cr = true;
-                }
+                b'\r' => self.after_cr = true,
                 b'\n' => self.finish_line(),
                 _ => self.line.push(byte),
             }
@@ -685,6 +722,7 @@ impl ModelRequests {
                         completed,
                         state.http_status,
                         state.content_type.as_deref(),
+                        state.termination.as_deref() == Some("eof"),
                     )?;
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
@@ -1105,33 +1143,33 @@ mod tests {
             stream.push(chunk);
         }
         stream
-            .require_prefix(2, true, Some(200), Some("text/event-stream"))
+            .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
         assert!(stream
-            .require_prefix(3, false, Some(200), Some("text/event-stream"))
+            .require_prefix(3, false, Some(200), Some("text/event-stream"), true)
             .is_err());
         stream.push(b"data: [DONE]\n\ndata: {\"id\":3}\n\n");
         stream
-            .require_prefix(2, true, Some(200), Some("text/event-stream"))
+            .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
 
         let mut stopped = ResponseValues::new(true);
         stopped.push(b"data: {\"id\":1}\n\ndata: {\"error\":{\"message\":\"stop\"}}\n\n");
         stopped
-            .require_prefix(1, false, Some(200), Some("text/event-stream"))
+            .require_prefix(1, false, Some(200), Some("text/event-stream"), true)
             .unwrap();
         assert!(stopped
-            .require_prefix(1, true, Some(200), Some("text/event-stream"))
+            .require_prefix(1, true, Some(200), Some("text/event-stream"), true)
             .is_err());
         assert!(stopped
-            .require_prefix(2, false, Some(200), Some("text/event-stream"))
+            .require_prefix(2, false, Some(200), Some("text/event-stream"), true)
             .is_err());
 
         let mut nonstream = ResponseValues::new(false);
         nonstream.push(b"{");
         nonstream.push(b"}");
         nonstream
-            .require_prefix(1, true, Some(200), Some("application/json"))
+            .require_prefix(1, true, Some(200), Some("application/json"), true)
             .unwrap();
         for count in 1..=3 {
             let mut with_bom = ResponseValues::new(false);
@@ -1146,34 +1184,35 @@ mod tests {
                         true,
                         Some(200),
                         Some("application/json"),
+                        true
                     )
                     .is_ok(),
                 count <= 2,
             );
         }
         assert!(nonstream
-            .require_prefix(0, true, Some(200), Some("application/json"))
+            .require_prefix(0, true, Some(200), Some("application/json"), true)
             .is_err());
         assert!(nonstream
-            .require_prefix(2, false, Some(200), Some("application/json"))
+            .require_prefix(2, false, Some(200), Some("application/json"), true)
             .is_err());
         assert!(nonstream
-            .require_prefix(1, false, Some(503), Some("application/json"))
+            .require_prefix(1, false, Some(503), Some("application/json"), true)
             .is_err());
 
         let mut plain = ResponseValues::new(false);
         plain.push(b"{not JSON}");
         plain
-            .require_prefix(1, true, Some(200), Some("text/plain"))
+            .require_prefix(1, true, Some(200), Some("text/plain"), true)
             .unwrap();
         assert!(plain
-            .require_prefix(1, true, Some(200), Some("application/json"))
+            .require_prefix(1, true, Some(200), Some("application/json"), true)
             .is_err());
         let empty = ResponseValues::new(false);
         empty
-            .require_prefix(1, false, Some(204), Some("application/json"))
+            .require_prefix(1, false, Some(204), Some("application/json"), true)
             .unwrap();
-        assert!(empty.require_prefix(1, false, None, None).is_err());
+        assert!(empty.require_prefix(1, false, None, None, true).is_err());
     }
     #[test]
     fn physical_value_reader_decodes_each_sse_line_like_the_sdk() {
@@ -1181,14 +1220,44 @@ mod tests {
         stream.push(&[0xef]);
         stream.push(b"\xbb\xbfdata: {\"id\":1}\n\n\xef\xbb\xbfdata: {\"id\":2}\n\n");
         stream
-            .require_prefix(2, true, Some(200), Some("text/event-stream"))
+            .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
 
         let mut double_bom = ResponseValues::new(true);
         double_bom.push(b"\xef\xbb\xbf\xef\xbb\xbfdata: {\"id\":1}\n\n");
         double_bom
-            .require_prefix(0, true, Some(200), Some("text/event-stream"))
+            .require_prefix(0, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
+    }
+    #[test]
+    fn physical_value_reader_flushes_an_unterminated_line_only_at_eof() {
+        let mut stream = ResponseValues::new(true);
+        stream.push(b"data: {\"id\":1}\n\xef");
+        stream.push(b"\xbb\xbf");
+        stream
+            .require_prefix(1, true, Some(200), Some("text/event-stream"), true)
+            .unwrap();
+        assert!(stream
+            .require_prefix(1, false, Some(200), Some("text/event-stream"), false)
+            .is_err());
+
+        let mut mixed = ResponseValues::new(true);
+        mixed.push(b"data: {\"id\":1}\n\r");
+        mixed
+            .require_prefix(1, true, Some(200), Some("text/event-stream"), true)
+            .unwrap();
+        assert!(mixed
+            .require_prefix(1, false, Some(200), Some("text/event-stream"), false)
+            .is_err());
+
+        let mut delayed_cr = ResponseValues::new(true);
+        delayed_cr.push(b"data: {\"id\":1}\r\r");
+        delayed_cr
+            .require_prefix(1, true, Some(200), Some("text/event-stream"), true)
+            .unwrap();
+        assert!(delayed_cr
+            .require_prefix(1, false, Some(200), Some("text/event-stream"), false)
+            .is_err());
     }
     #[test]
     fn selected_decoder_mode_must_match_the_request_body() {

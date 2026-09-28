@@ -242239,7 +242239,10 @@ diff --git a/packages/core/src/services/session-usage-retention.test.ts b/packag
 diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/core/src/services/session-writer-lease.test.ts
 --- a/packages/core/src/services/session-writer-lease.test.ts
 +++ b/packages/core/src/services/session-writer-lease.test.ts
-@@ -4,6 +4,7 @@
+@@ -1,12 +1,13 @@
+ /**
+  * @license
+  * Copyright 2025 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
   */
  
@@ -242247,10 +242250,17 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  import { execFileSync, fork, type ChildProcess } from 'node:child_process';
  import { createHash } from 'node:crypto';
  import {
-@@ -25,6 +26,19 @@
+   appendFileSync,
+   constants as fsConstants,
+   mkdirSync,
+@@ -21,20 +22,34 @@
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import { fileURLToPath } from 'node:url';
+ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
  import { Config } from '../config/config.js';
  import { Storage } from '../config/storage.js';
- import {
++import {
 +  freezeModelGeneration,
 +  GenerationObservationNormalizer,
 +  type ModelAttemptCompletion,
@@ -242263,11 +242273,11 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +} from '../core/model-request-evidence.js';
 +import type { ModelResponseEvidence } from '../core/model-response-evidence.js';
 +import { generationUsage } from '../test-utils/model-generation-fixture.js';
-+import {
+ import {
    resetDebugLoggingState,
    setDebugLogSession,
  } from '../utils/debugLogger.js';
-@@ -32,6 +46,7 @@
+ import {
    ChatRecordingService,
    type ChatRecord,
  } from './chatRecordingService.js';
@@ -242275,7 +242285,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  import { SessionService } from './sessionService.js';
  import {
    getSessionWriterLockPath,
-@@ -79,6 +94,17 @@
+   SessionTranscriptChangedError,
+   SessionTranscriptIdentityUnavailableError,
+   SessionWriterConflictError,
+@@ -76,24 +91,42 @@
+ 
+ const restoreLinkFault = vi.hoisted(() => ({
+   linkTo: undefined as string | undefined,
    remainingFailures: 0,
  }));
  
@@ -242293,21 +242309,32 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  const unlinkFault = vi.hoisted(() => ({
    path: undefined as string | undefined,
    afterUnlink: undefined as (() => Promise<void> | void) | undefined,
-@@ -89,6 +115,13 @@
+   throwAfterUnlink: false,
+ }));
+ 
+ const writeFault = vi.hoisted(() => ({
    contains: undefined as string | undefined,
    onEntered: undefined as (() => void) | undefined,
    wait: undefined as Promise<void> | undefined,
-+}));
-+
+ }));
+ 
 +const fileSyncFault = vi.hoisted(() => ({
 +  path: undefined as string | undefined,
 +  entered: undefined as (() => void) | undefined,
 +  wait: undefined as Promise<void> | undefined,
 +  failure: undefined as Error | undefined,
++}));
++
+ const claimInstallFault = vi.hoisted(() => ({
+   path: undefined as string | undefined,
+   afterInstall: undefined as (() => Promise<void> | void) | undefined,
  }));
  
- const claimInstallFault = vi.hoisted(() => ({
-@@ -138,6 +171,15 @@
+ const readFileFault = vi.hoisted(() => ({
+@@ -135,12 +168,21 @@
+       }
+       return result;
+     },
      open: async (filePath: PathLike, flags: string | number, mode?: Mode) => {
        await fsOpenTestHook.beforeOpen?.(filePath, flags);
        const handle = await actual.open(filePath, flags, mode);
@@ -242323,7 +242350,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        const writeFile = handle.writeFile.bind(handle);
        handle.writeFile = async (data, options) => {
          if (
-@@ -178,7 +220,18 @@
+           writeFault.contains &&
+           Buffer.isBuffer(data) &&
+           data.toString('utf8').includes(writeFault.contains)
+@@ -175,13 +217,24 @@
+       ) {
+         restoreLinkFault.remainingFailures--;
+         throw Object.assign(new Error('injected restore link failure'), {
            code: 'EIO',
          });
        }
@@ -242343,46 +242376,49 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        if (newPath === claimInstallFault.path) {
          await claimInstallFault.afterInstall?.();
        }
-@@ -340,27 +393,247 @@
+       if (
+         existingPath === transitionFault.linkFrom &&
+         newPath === transitionFault.linkTo
+@@ -337,33 +390,253 @@
+   // On Windows PIDs recycle aggressively, so a still-answerable signal 0
+   // almost always means a reused PID, not a leaked child; do not turn that
+   // teardown observation into a test failure.
    console.warn(`Process ${pid} remained live after close`);
  }
  
+-function record(
 +function baseRecord(
-+  uuid: string,
-+  parentUuid: string | null,
-+  sessionId: string,
-+  cwd: string,
-+) {
-+  return {
-+    recordingVersion: CHAT_RECORDING_VERSION,
-+    uuid,
-+    parentUuid,
-+    sessionId,
-+    timestamp: '2026-01-01T00:00:00.000Z',
-+    cwd,
-+    version: 'test',
-+  };
-+}
-+
- function record(
    uuid: string,
    parentUuid: string | null,
    sessionId: string,
    cwd: string,
 -  type: 'user' | 'assistant',
-   text: string,
- ): ChatRecord {
+-  text: string,
+-): ChatRecord {
++) {
    return {
--    uuid,
--    parentUuid,
--    sessionId,
--    timestamp: '2026-01-01T00:00:00.000Z',
++    recordingVersion: CHAT_RECORDING_VERSION,
+     uuid,
+     parentUuid,
+     sessionId,
+     timestamp: '2026-01-01T00:00:00.000Z',
 -    type,
--    cwd,
--    version: 'test',
+     cwd,
+     version: 'test',
 -    message: {
 -      role: type === 'user' ? 'user' : 'model',
 -      parts: [{ text }],
++  };
++}
++
++function record(
++  uuid: string,
++  parentUuid: string | null,
++  sessionId: string,
++  cwd: string,
++  text: string,
++): ChatRecord {
++  return {
 +    ...baseRecord(uuid, parentUuid, sessionId, cwd),
 +    type: 'user',
 +    message: { role: 'user', parts: [{ text }] },
@@ -242496,7 +242532,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +      body,
 +      decodePolicy,
 +      processing,
-+      { status: 200, content_type: 'text/event-stream' },
++      { status: 200, content_type: 'text/event-stream', termination: 'eof' },
 +    ).map((observed) => ({
 +      source_request_id: requestId,
 +      ...normalizer.normalizeObservation(structuredClone(observed)),
@@ -242508,7 +242544,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +      request_id: requestId,
 +      sequence: 1,
 +      event: { kind: 'http', status: 200, content_type: 'text/event-stream' },
-     },
++    },
 +    {
 +      journal_id: sessionId,
 +      request_id: requestId,
@@ -242532,7 +242568,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +      request_id: requestId,
 +      sequence: 4,
 +      event: processing,
-+    },
+     },
 +    {
 +      journal_id: sessionId,
 +      request_id: requestId,
@@ -242545,13 +242581,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +    type: 'assistant',
 +    historyLength,
 +    generation,
-   };
++  };
 +  const normalizationSeed: ModelNormalizationSeed = {
 +    journal_id: sessionId,
 +    origin,
 +    request_id: requestId,
 +    history_call_ids: [],
-+  };
+   };
 +  const completion: ModelAttemptCompletion = {
 +    journal_id: sessionId,
 +    origin,
@@ -242602,7 +242638,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  }
  
  function positionalReadLength(args: unknown): number | undefined {
-@@ -408,12 +681,19 @@
+   const values = args as readonly unknown[];
+   return typeof values[2] === 'number' ? values[2] : undefined;
+ }
+@@ -405,18 +678,25 @@
+   transitionFault.linkFrom = undefined;
+   transitionFault.linkTo = undefined;
+   transitionFault.afterLink = undefined;
    transitionFault.throwAfterLink = false;
    restoreLinkFault.linkTo = undefined;
    restoreLinkFault.remainingFailures = 0;
@@ -242622,7 +242664,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    claimInstallFault.path = undefined;
    claimInstallFault.afterInstall = undefined;
    readFileFault.path = undefined;
-@@ -442,21 +722,36 @@
+   readFileFault.triggerCall = 0;
+   readFileFault.calls = 0;
+   readFileFault.afterRead = undefined;
+@@ -439,48 +719,77 @@
+     const fixture = await createFixture('config-authoritative-session');
+     const firstUser = record(
+       'user-1',
        null,
        fixture.options.sessionId,
        fixture.projectRoot,
@@ -242650,10 +242698,9 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.projectRoot,
 -      'assistant',
        'tool result',
--    );
 +      1,
 +      [{ role: 'user', content: 'start' }],
-+    );
+     );
 +    const previewTail = previewTurn.assistant;
      await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
      await fs.writeFile(
@@ -242665,19 +242712,20 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        'utf8',
      );
      const sessionService = new SessionService(fixture.projectRoot, {
-@@ -466,18 +761,32 @@
+       runtimeBaseDir: fixture.runtimeBaseDir,
+     });
+     const stalePreview = await sessionService.loadSession(
        fixture.options.sessionId,
      );
      expect(stalePreview?.lastCompletedUuid).toBe(previewTail.uuid);
--
--    const physicalFinal = record(
 +    expect(
 +      buildRuntimeHistoryFromConversation(stalePreview!.conversation).history,
 +    ).toEqual([
 +      firstUser.message,
 +      { role: 'model', parts: [{ text: 'tool result' }] },
 +    ]);
-+
+ 
+-    const physicalFinal = record(
 +    const finalTurn = acceptedTurnRecords(
        'physical-final',
        previewTail.uuid,
@@ -242703,7 +242751,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        'utf8',
      );
      const config = Storage.runWithRuntimeBaseDir(
-@@ -491,9 +800,8 @@
+       fixture.runtimeBaseDir,
+       fixture.projectRoot,
+       () =>
+@@ -488,15 +797,14 @@
+           sessionId: fixture.options.sessionId,
+           sessionData: stalePreview,
+           cwd: fixture.projectRoot,
            targetDir: fixture.projectRoot,
            debugMode: false,
            model: 'test-model',
@@ -242714,7 +242768,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            bareMode: true,
            telemetry: { enabled: false },
            usageStatisticsEnabled: false,
-@@ -511,9 +819,18 @@
+         }),
+     );
+ 
+@@ -508,15 +816,24 @@
+       skipFileCheckpointing: true,
+       lenientToolWarmup: true,
+     });
      expect(config.getResumedSessionData()?.lastCompletedUuid).toBe(
        physicalFinal.uuid,
      );
@@ -242734,7 +242794,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      await recorder?.flush();
  
      const written = (await fs.readFile(fixture.transcriptPath, 'utf8'))
-@@ -551,9 +868,8 @@
+       .trim()
+       .split('\n')
+       .map((line) => JSON.parse(line) as ChatRecord);
+@@ -548,15 +865,14 @@
+           new Config({
+             sessionId: fixture.options.sessionId,
+             cwd: fixture.projectRoot,
              targetDir: fixture.projectRoot,
              debugMode: false,
              model: 'test-model',
@@ -242745,7 +242811,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
              bareMode: true,
              telemetry: { enabled: false },
              usageStatisticsEnabled: false,
-@@ -573,7 +889,7 @@
+           }),
+       );
+     const initialize = (config: Config) =>
+@@ -570,13 +886,13 @@
+       });
+ 
+     const first = createConfig();
      first.setSessionWriterReclaimPolicy('never');
      first.setSessionWriterTakeoverPolicy('certified');
      await initialize(first);
@@ -242754,7 +242826,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      await first.closeSessionWriter({ handoff: true });
      expect(
        JSON.parse(
-@@ -603,17 +919,17 @@
+         await fs.readFile(
+           getSessionWriterLockPath(
+             fixture.runtimeBaseDir,
+@@ -600,23 +916,23 @@
+       shutdownTelemetry: false,
+       skipSessionWriter: true,
+     });
      await replacement.shutdown({ shutdownTelemetry: false });
    });
  
@@ -242774,7 +242852,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        uuid: 'title-1',
        parentUuid: firstUser.uuid,
        sessionId: fixture.options.sessionId,
-@@ -628,6 +944,7 @@
+       timestamp: '2026-01-01T00:00:01.000Z',
+       type: 'system',
+       subtype: 'custom_title',
+@@ -625,21 +941,25 @@
+       systemPayload: {
+         customTitle: 'operator-title',
+         titleSource: 'manual',
        },
      };
      const rewindRecord: ChatRecord = {
@@ -242782,7 +242866,8 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        uuid: 'rewind-1',
        parentUuid: firstUser.uuid,
        sessionId: fixture.options.sessionId,
-@@ -636,7 +953,10 @@
+       timestamp: '2026-01-01T00:00:02.000Z',
+       type: 'system',
        subtype: 'rewind',
        cwd: fixture.projectRoot,
        version: 'test',
@@ -242794,7 +242879,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      };
      await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
      await fs.writeFile(
-@@ -668,9 +988,8 @@
+       fixture.transcriptPath,
+       `${JSON.stringify(firstUser)}\n${JSON.stringify(titleRecord)}\n${JSON.stringify(rewindRecord)}\n`,
+       'utf8',
+@@ -665,15 +985,14 @@
+           sessionId: fixture.options.sessionId,
+           sessionData: preview,
+           cwd: fixture.projectRoot,
            targetDir: fixture.projectRoot,
            debugMode: false,
            model: 'test-model',
@@ -242805,7 +242896,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            bareMode: true,
            telemetry: { enabled: false },
            usageStatisticsEnabled: false,
-@@ -687,21 +1006,23 @@
+         }),
+     );
+ 
+@@ -684,27 +1003,29 @@
+       skipSkillManager: true,
+       skipFileCheckpointing: true,
+       lenientToolWarmup: true,
      });
      const recorder = config.getChatRecordingService();
      expect(recorder?.getCurrentCustomTitle()).toBe('operator-title');
@@ -242827,17 +242924,22 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 -        customTitle: 'operator-title',
 -        titleSource: 'manual',
 -      },
--    });
 +      type: 'user',
 +      parentUuid: rewindRecord.uuid,
-+    });
+     });
 +    expect(
 +      sessionService.getSessionTitleInfo(fixture.options.sessionId),
 +    ).toEqual({ title: 'operator-title', source: 'manual' });
  
      await config.shutdown({ shutdownTelemetry: false });
    });
-@@ -720,9 +1041,8 @@
+ 
+   it('preserves transcript-changed during Config activation cleanup', async () => {
+     const fixture = await createFixture('config-truncated-session');
+@@ -717,15 +1038,14 @@
+         new Config({
+           sessionId: fixture.options.sessionId,
+           cwd: fixture.projectRoot,
            targetDir: fixture.projectRoot,
            debugMode: false,
            model: 'test-model',
@@ -242848,7 +242950,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
            bareMode: true,
            telemetry: { enabled: false },
            usageStatisticsEnabled: false,
-@@ -951,27 +1271,33 @@
+         }),
+     );
+ 
+@@ -948,33 +1268,39 @@
+     );
+     await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(
+       '{"replacement":true}',
      );
    });
  
@@ -242902,7 +243010,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  
    it('fails closed on a malformed lock', async () => {
      const fixture = await createFixture();
-@@ -2119,6 +2445,131 @@
+     const lockPath = getSessionWriterLockPath(
+       fixture.runtimeBaseDir,
+       fixture.options.sessionId,
+@@ -2116,12 +2442,137 @@
+     );
+     await expect(
+       Promise.all([lease.release(), lease.release()]),
      ).resolves.toEqual([undefined, undefined]);
    });
  
@@ -243034,7 +243148,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
    it.runIf(process.platform !== 'win32')(
      'creates the transcript directory with owner-only permissions',
      async () => {
-@@ -2233,7 +2684,7 @@
+       const fixture = await createFixture();
+       const lease = await SessionWriterLease.acquire(fixture.options);
+ 
+@@ -2230,13 +2681,13 @@
+       state: 'active',
+       hostname: 'retired-foreign-host',
+     });
    });
  
    it('keeps schema v1 records on the active-owner path', async () => {
@@ -243043,7 +243163,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const first = await SessionWriterLease.acquire(fixture.options);
      const lockPath = getSessionWriterLockPath(
        fixture.runtimeBaseDir,
-@@ -2762,11 +3213,128 @@
+       fixture.options.sessionId,
+     );
+     const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
+@@ -2759,19 +3210,136 @@
+     };
+     const results = await Promise.all(
+       contenders.map((child) =>
          requestChild(child, { type: 'acquire', options }),
        ),
      );
@@ -243064,8 +243190,8 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      expect(await requestChild(winner, { type: 'release' })).toMatchObject({
        ok: true,
      });
-+  });
-+
+   });
+ 
 +  it('takes over a sealed session when a racing candidate leaves the path between the failed link and the inspection', async () => {
 +    const fixture = await createFixture('takeover-vanishing-candidate-session');
 +    const first = await SessionWriterLease.acquire(fixture.options);
@@ -243170,10 +243296,18 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
 +      SessionWriterUnavailableError,
 +    );
 +    await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(activeRaw);
-   });
- 
++  });
++
    it('releases a losing takeover claim before its transition starts', async () => {
-@@ -3183,21 +3751,36 @@
+     const fixture = await createFixture(
+       'takeover-pre-transition-loser-session',
+     );
+     const first = await SessionWriterLease.acquire(fixture.options);
+     await first.sealForHandoff();
+@@ -3180,27 +3748,42 @@
+     const fixture = await createFixture(sessionId);
+     const firstUser = record(
+       'user-1',
        null,
        sessionId,
        fixture.projectRoot,
@@ -243201,10 +243335,9 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.projectRoot,
 -      'assistant',
        'first tool result',
--    );
 +      1,
 +      [{ role: 'user', content: '看下调度的 wiki' }],
-+    );
+     );
 +    const firstToolTail = firstTurn.assistant;
      await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
      await fs.writeFile(
@@ -243216,7 +243349,13 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      );
  
      const processA = startLeaseProcess();
-@@ -3211,17 +3794,25 @@
+     expect(
+       await requestChild(processA, {
+         type: 'acquire',
+@@ -3208,56 +3791,91 @@
+       }),
+     ).toMatchObject({ ok: true });
+     await expect(
        SessionWriterLease.acquire(fixture.options),
      ).rejects.toBeInstanceOf(SessionWriterConflictError);
  
@@ -243248,17 +243387,21 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      expect(await requestChild(processA, { type: 'release' })).toMatchObject({
        ok: true,
      });
-@@ -3233,8 +3824,20 @@
+ 
+     const processBLease = await SessionWriterLease.acquire(fixture.options);
+     const sessionService = new SessionService(fixture.projectRoot, {
+       runtimeBaseDir: fixture.runtimeBaseDir,
+     });
      const authoritative = await sessionService.loadSession(sessionId);
      expect(authoritative?.lastCompletedUuid).toBe(finalAnswer.uuid);
-     expect(
++    expect(
 +      buildRuntimeHistoryFromConversation(authoritative!.conversation).history,
 +    ).toEqual([
 +      firstUser.message,
 +      { role: 'model', parts: [{ text: 'first tool result' }] },
 +      { role: 'model', parts: [{ text: '完整调度 Wiki 回答' }] },
 +    ]);
-+    expect(
+     expect(
        authoritative?.conversation.messages.map((message) => message.uuid),
 -    ).toEqual([firstUser.uuid, firstToolTail.uuid, finalAnswer.uuid]);
 +    ).toEqual([
@@ -243270,7 +243413,11 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
  
      const config = {
        getSessionId: () => sessionId,
-@@ -3246,7 +3849,7 @@
+       getResumedSessionData: () => authoritative,
+       getProjectRoot: () => fixture.projectRoot,
+       getCliVersion: () => 'test',
+       getFastModel: () => undefined,
+       isInteractive: () => false,
      } as unknown as Config;
      const recorder = new ChatRecordingService(config);
      recorder.activate(processBLease, authoritative);
@@ -243279,7 +243426,11 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      await recorder.flush();
      await recorder.close();
  
-@@ -3258,6 +3861,21 @@
+     const physicalRecords = (await fs.readFile(fixture.transcriptPath, 'utf8'))
+       .trim()
+       .split('\n')
+       .map((line) => JSON.parse(line) as ChatRecord);
+     expect(physicalRecords.at(-1)?.parentUuid).toBe(finalAnswer.uuid);
      const reloaded = await sessionService.loadSession(sessionId);
      expect(
        reloaded?.conversation.messages.map((message) => message.uuid),
@@ -346959,7 +347110,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,896 @@
+@@ -0,0 +1,911 @@
 +import { createHash } from 'node:crypto';
 +import type { GenerateContentResponse } from '@google/genai';
 +import { recordGenerationSource } from './model-generation.js';
@@ -347667,7 +347818,12 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          Buffer.concat(settled.bodyChunks),
 +          settled.policy,
 +          settled.processing!,
-+          { status: settled.httpStatus, content_type: settled.contentType },
++          {
++            status: settled.httpStatus,
++            content_type: settled.contentType,
++            termination:
++              settled.termination ?? failure('response has no transport end'),
++          },
 +        );
 +        this.settledAwaitingGeneration.delete(previousId!);
 +      }
@@ -347739,7 +347895,12 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          Buffer.concat(state.bodyChunks),
 +          state.policy,
 +          event,
-+          { status: state.httpStatus, content_type: state.contentType },
++          {
++            status: state.httpStatus,
++            content_type: state.contentType,
++            termination:
++              state.termination ?? failure('response has no transport end'),
++          },
 +        );
 +        state.bodyChunks.length = 0;
 +      }
@@ -347829,7 +347990,12 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      state.processing,
 +      envelope,
 +      seed,
-+      { status: state.httpStatus, content_type: state.contentType },
++      {
++        status: state.httpStatus,
++        content_type: state.contentType,
++        termination:
++          state.termination ?? failure('response has no transport end'),
++      },
 +    );
 +    state.generationVerified = true;
 +    state.bodyChunks.length = 0;
@@ -347859,7 +348025,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,812 @@
+@@ -0,0 +1,820 @@
 +import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
 +// eslint-disable-next-line import/no-internal-modules
@@ -347966,6 +348132,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +        : [],
 +    ),
 +  );
++}
++function transportEnd(records: readonly ModelResponseEvidence[]) {
++  const end = records.find((record) => record.event.kind === 'end');
++  if (!end || end.event.kind !== 'end')
++    throw new Error('Missing transport end');
++  return end.event.termination;
 +}
 +function validate(f: ReturnType<typeof fixture>) {
 +  const requests = new ModelRequestReplay();
@@ -348160,6 +348332,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +              content_type: streaming
 +                ? 'text/event-stream'
 +                : 'application/json',
++              termination: transportEnd(f.responses),
 +            }),
 +          ),
 +        ),
@@ -348220,6 +348393,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +          replayRecordedOpenAIObservations(raw(f.responses), policy, outcome, {
 +            status: 200,
 +            content_type: 'text/event-stream',
++            termination: transportEnd(f.responses),
 +          }),
 +        ),
 +      ),
@@ -352325,7 +352499,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,890 @@
+@@ -0,0 +1,918 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -352380,6 +352554,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +
 +@dataclass
 +class _SseValues:
++    pending: bytearray = field(default_factory=bytearray)
 +    line: bytearray = field(default_factory=bytearray)
 +    event: str | None = None
 +    data: list[str] = field(default_factory=list)
@@ -352392,12 +352567,22 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        for byte in chunk:
 +            if self.failed or self.done:
 +                return
++            self.pending.append(byte)
++            if self.pending.endswith((b"\n\n", b"\r\r", b"\r\n\r\n")):
++                complete = bytes(self.pending)
++                self.pending.clear()
++                self._feed(complete)
++
++    def _feed(self, chunk: bytes) -> None:
++        for byte in chunk:
++            if self.failed or self.done:
++                return
 +            if self.after_cr:
 +                self.after_cr = False
++                self._finish_line()
 +                if byte == 10:
 +                    continue
 +            if byte == 13:
-+                self._finish_line()
 +                self.after_cr = True
 +            elif byte == 10:
 +                self._finish_line()
@@ -352464,11 +352649,27 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        completed: bool,
 +        status: int | None,
 +        content_type: str | None,
++        transport_eof: bool,
 +    ) -> None:
 +        if status is None or not 200 <= status < 300:
 +            available, failed = 0, False
 +        elif self.stream:
-+            available, failed = self.sse.count, self.sse.failed
++            values = self.sse
++            if (
++                transport_eof
++                and (values.pending or values.after_cr or values.line)
++                and not values.failed
++                and not values.done
++            ):
++                # The SDK yields its last incomplete SSE chunk only at EOF.
++                values = copy.deepcopy(values)
++                pending = bytes(values.pending)
++                values.pending.clear()
++                values._feed(pending)
++                if values.after_cr or values.line:
++                    values.after_cr = False
++                    values._finish_line()
++            available, failed = values.count, values.failed
 +        elif status == 204:
 +            available, failed = 1, False
 +        else:
@@ -352896,6 +353097,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                event["status"] == "completed",
 +                state.http_status,
 +                state.content_type,
++                state.termination == "eof",
 +            )
 +            if event["served_usage"] is not None:
 +                _served_usage(event["served_usage"])
@@ -410542,7 +410744,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/responseDecoder.test.
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.ts
-@@ -0,0 +1,258 @@
+@@ -0,0 +1,286 @@
 +import { isDeepStrictEqual } from 'node:util';
 +import type OpenAI from 'openai';
 +import {
@@ -410552,7 +410754,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  type ModelNormalizationSeed,
 +  type UnnormalizedGenerationObservation,
 +} from '../model-generation.js';
-+import type { ModelResponseEvidence } from '../model-response-evidence.js';
++import type {
++  ModelResponseEvidence,
++  ModelResponseTermination,
++} from '../model-response-evidence.js';
 +import { SERVED_USAGE_FIELDS, type ServedUsage } from '../served-usage.js';
 +import {
 +  createOpenAIResponseDecodeContext,
@@ -410582,6 +410787,27 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +export interface RecordedOpenAITransport {
 +  readonly status: number | undefined;
 +  readonly content_type: string | null;
++  readonly termination: ModelResponseTermination;
++}
++
++/** The SDK yields complete SSE chunks before a transport failure. */
++function completedSsePrefix(body: Uint8Array): Uint8Array {
++  let complete = 0;
++  for (let at = 1; at < body.length; at++) {
++    if (
++      (body[at - 1] === 0x0a && body[at] === 0x0a) ||
++      (body[at - 1] === 0x0d && body[at] === 0x0d) ||
++      (at >= 3 &&
++        body[at - 3] === 0x0d &&
++        body[at - 2] === 0x0a &&
++        body[at - 1] === 0x0d &&
++        body[at] === 0x0a)
++    )
++      complete = at + 1;
++  }
++  // The SDK's LineDecoder waits for a byte after a final CR before emitting it.
++  if (complete > 0 && body[complete - 1] === 0x0d) complete--;
++  return body.subarray(0, complete);
 +}
 +
 +export function parseRecordedOpenAIValues(
@@ -410595,10 +410821,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +    transport.status >= 300
 +  )
 +    return { values: [], failure: null };
++  const decodedBody =
++    mode === 'stream' && transport.termination !== 'eof'
++      ? completedSsePrefix(body)
++      : body;
 +  const text =
 +    mode === 'stream'
-+      ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(body)
-+      : new TextDecoder().decode(body).replace(/^\uFEFF/, '');
++      ? new TextDecoder('utf-8', { ignoreBOM: true }).decode(decodedBody)
++      : new TextDecoder().decode(decodedBody).replace(/^\uFEFF/, '');
 +  if (mode === 'nonstream') {
 +    if (transport.status === 204) return { values: [null], failure: null };
 +    const mediaType = transport.content_type?.split(';')[0]?.trim();
@@ -410804,7 +411034,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.test.ts
-@@ -0,0 +1,437 @@
+@@ -0,0 +1,445 @@
 +import { describe, expect, it } from 'vitest';
 +import OpenAI from 'openai';
 +// The pinned SDK's public streaming export is the byte-parser oracle.
@@ -410819,7 +411049,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +  verifyRecordedOpenAIGeneration,
 +} from './recorded-response-replay.js';
 +
-+const SSE_TRANSPORT = { status: 200, content_type: 'text/event-stream' };
++const SSE_TRANSPORT = {
++  status: 200,
++  content_type: 'text/event-stream',
++  termination: 'eof' as const,
++};
++const CANCELLED_SSE_TRANSPORT = {
++  ...SSE_TRANSPORT,
++  termination: 'cancelled' as const,
++};
 +
 +async function pinnedSdkValues(body: Uint8Array) {
 +  const stream = Stream.fromSSEResponse<unknown>(
@@ -410893,7 +411131,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +      const replay = parseRecordedOpenAIValues(
 +        Buffer.from(body ?? ''),
 +        'nonstream',
-+        { status, content_type },
++        { status, content_type, termination: 'eof' },
 +      );
 +      expect(replay.values).toEqual(failed ? [] : [sdkValue]);
 +      expect(replay.failure !== null).toBe(failed);
@@ -410922,7 +411160,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        Buffer.from('plain response'),
 +        policy,
 +        completed,
-+        { status: 200, content_type: 'text/plain' },
++        { status: 200, content_type: 'text/plain', termination: 'eof' },
 +      ),
 +    ).toHaveLength(1);
 +    expect(
@@ -410935,7 +411173,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +          error: 'No completion object',
 +          pipeline_outputs_delivered: 0,
 +        },
-+        { status: 204, content_type: 'application/json' },
++        { status: 204, content_type: 'application/json', termination: 'eof' },
 +      ),
 +    ).toEqual([]);
 +    expect(() =>
@@ -410943,7 +411181,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        Buffer.from('{"choices":[]}'),
 +        policy,
 +        { ...completed, status: 'failed', error: 'HTTP failure' },
-+        { status: 503, content_type: 'application/json' },
++        { status: 503, content_type: 'application/json', termination: 'eof' },
 +      ),
 +    ).toThrow('impossible byte prefix');
 +  });
@@ -410971,7 +411209,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +          sdk_values_seen: 1,
 +          pipeline_outputs_delivered: 1,
 +        },
-+        SSE_TRANSPORT,
++        CANCELLED_SSE_TRANSPORT,
 +      ),
 +    ).toThrow('decoded delivery count');
 +  });
@@ -411125,7 +411363,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        Buffer.from(fixture.body),
 +        policy,
 +        outcome,
-+        SSE_TRANSPORT,
++        CANCELLED_SSE_TRANSPORT,
 +      );
 +      const expected =
 +        delivered === 2
@@ -411190,7 +411428,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        outcome,
 +        envelope,
 +        seed,
-+        SSE_TRANSPORT,
++        CANCELLED_SSE_TRANSPORT,
 +      ),
 +    ).not.toThrow();
 +    const forged = structuredClone(envelope);
@@ -411203,7 +411441,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        outcome,
 +        forged,
 +        seed,
-+        SSE_TRANSPORT,
++        CANCELLED_SSE_TRANSPORT,
 +      ),
 +    ).toThrow('differs from its physical response');
 +    expect(() =>
@@ -411213,7 +411451,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        { ...outcome, sdk_values_seen: 3 },
 +        envelope,
 +        seed,
-+        SSE_TRANSPORT,
++        CANCELLED_SSE_TRANSPORT,
 +      ),
 +    ).toThrow('first conversion failure');
 +  });
@@ -411596,15 +411834,33 @@ diff --git a/packages/cli/src/utils/output-writer.test.ts b/packages/cli/src/uti
 diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/recorded-response-replay.differential.test.ts
-@@ -0,0 +1,145 @@
+@@ -0,0 +1,198 @@
 +import { describe, expect, it, vi } from 'vitest';
 +// eslint-disable-next-line import/no-internal-modules
 +import { Stream } from 'openai/streaming';
 +import { parseRecordedOpenAIValues } from './recorded-response-replay.js';
 +
-+async function sdkValues(body: Uint8Array) {
++async function sdkValues(body: Uint8Array, interrupted = false) {
++  let sent = false;
++  const response = interrupted
++    ? new Response(
++        new ReadableStream<Uint8Array>({
++          pull(controller) {
++            if (!sent) {
++              sent = true;
++              controller.enqueue(body);
++            } else {
++              controller.error(new Error('transport failed'));
++            }
++          },
++        }),
++        { headers: { 'content-type': 'text/event-stream' } },
++      )
++    : new Response(body, {
++        headers: { 'content-type': 'text/event-stream' },
++      });
 +  const stream = Stream.fromSSEResponse<unknown>(
-+    new Response(body, { headers: { 'content-type': 'text/event-stream' } }),
++    response,
 +    new AbortController(),
 +  );
 +  const values: unknown[] = [];
@@ -411618,6 +411874,38 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +}
 +
 +describe('retained SSE replay agrees with the pinned SDK on response frames', () => {
++  it('keeps incomplete SSE chunks unavailable when transport fails', async () => {
++    const trailingBom = Buffer.concat([
++      Buffer.from('data: {"n":1}\n'),
++      Buffer.from([0xef, 0xbb, 0xbf]),
++    ]);
++    for (const [bytes, expected] of [
++      [trailingBom, []],
++      [Buffer.from('data: {"n":1}\n\r'), []],
++      [Buffer.from('data: {"n":1}\r\r'), []],
++      [Buffer.from('data: {"n":1}\n\n'), [{ n: 1 }]],
++      [Buffer.from('data: {"n":1}\r\n\r\n'), [{ n: 1 }]],
++    ] as const) {
++      const sdk = await sdkValues(bytes, true);
++      const replay = parseRecordedOpenAIValues(bytes, 'stream', {
++        status: 200,
++        content_type: 'text/event-stream',
++        termination: 'failed',
++      });
++      expect(sdk).toEqual({ values: expected, failed: true });
++      expect(replay.values).toEqual(sdk.values);
++      expect(replay.failure).toBeNull();
++    }
++    expect((await sdkValues(trailingBom)).values).toEqual([{ n: 1 }]);
++    expect(
++      parseRecordedOpenAIValues(trailingBom, 'stream', {
++        status: 200,
++        content_type: 'text/event-stream',
++        termination: 'eof',
++      }).values,
++    ).toEqual([{ n: 1 }]);
++  });
++
 +  it('decodes one leading byte order mark on every SSE line', async () => {
 +    const cases = [
 +      {
@@ -411648,6 +411936,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +      const replay = parseRecordedOpenAIValues(body, 'stream', {
 +        status: 200,
 +        content_type: 'text/event-stream',
++        termination: 'eof',
 +      });
 +      expect(sdk).toEqual({ values, failed: false });
 +      expect({
@@ -411681,6 +411970,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +              const replay = parseRecordedOpenAIValues(body, 'stream', {
 +                status: 200,
 +                content_type: 'text/event-stream',
++                termination: 'eof',
 +              });
 +              expect(
 +                { values: replay.values, failed: replay.failure !== null },
@@ -411731,6 +412021,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/recorded-response-rep
 +        const replay = parseRecordedOpenAIValues(bytes, 'stream', {
 +          status: 200,
 +          content_type: 'text/event-stream',
++          termination: 'eof',
 +        });
 +        expect(
 +          { values: replay.values, failed: replay.failure !== null },
@@ -420389,7 +420680,7 @@ diff --git a/packages/sdk-python/tests/fixtures/generation-evidence-v11.json b/p
 diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_generation_completion_v11.py
-@@ -0,0 +1,864 @@
+@@ -0,0 +1,889 @@
 +from __future__ import annotations
 +
 +import base64
@@ -420667,24 +420958,49 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +        b"data: [DONE]\n\n",
 +    ):
 +        values.push(chunk)
-+    values.require_prefix(2, True, 200, "text/event-stream")
++    values.require_prefix(2, True, 200, "text/event-stream", True)
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
-+        values.require_prefix(3, False, 200, "text/event-stream")
++        values.require_prefix(3, False, 200, "text/event-stream", True)
 +
 +    failed = _ResponseValues(True)
 +    failed.push(b'data: {"id":1}\n\ndata: {"error":{"message":"stop"}}\n\n')
-+    failed.require_prefix(1, False, 200, "text/event-stream")
++    failed.require_prefix(1, False, 200, "text/event-stream", True)
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
-+        failed.require_prefix(1, True, 200, "text/event-stream")
++        failed.require_prefix(1, True, 200, "text/event-stream", True)
 +
 +    bom = _ResponseValues(True)
 +    bom.push(b"\xef")
 +    bom.push(b'\xbb\xbfdata: {"id":1}\n\n\xef\xbb\xbfdata: {"id":2}\n\n')
-+    bom.require_prefix(2, True, 200, "text/event-stream")
++    bom.require_prefix(2, True, 200, "text/event-stream", True)
 +
 +    double_bom = _ResponseValues(True)
 +    double_bom.push(b'\xef\xbb\xbf\xef\xbb\xbfdata: {"id":1}\n\n')
-+    double_bom.require_prefix(0, True, 200, "text/event-stream")
++    double_bom.require_prefix(0, True, 200, "text/event-stream", True)
++
++
++def test_sse_unterminated_line_flushes_only_after_transport_eof():
++    values = _ResponseValues(True)
++    values.push(b'data: {"id":1}\n\xef')
++    values.push(b"\xbb\xbf")
++    values.require_prefix(1, True, 200, "text/event-stream", True)
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        values.require_prefix(1, False, 200, "text/event-stream", False)
++
++    mixed = _ResponseValues(True)
++    mixed.push(b'data: {"id":1}\n\r')
++    mixed.require_prefix(1, True, 200, "text/event-stream", True)
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        mixed.require_prefix(1, False, 200, "text/event-stream", False)
++
++    complete = _ResponseValues(True)
++    complete.push(b'data: {"id":1}\n\n')
++    complete.require_prefix(1, False, 200, "text/event-stream", False)
++
++    delayed_cr = _ResponseValues(True)
++    delayed_cr.push(b'data: {"id":1}\r\r')
++    delayed_cr.require_prefix(1, True, 200, "text/event-stream", True)
++    with pytest.raises(ValueError, match="impossible physical response prefix"):
++        delayed_cr.require_prefix(1, False, 200, "text/event-stream", False)
 +
 +
 +@pytest.mark.parametrize(
@@ -420704,22 +421020,22 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_completion_v11.py b/
 +):
 +    values = _ResponseValues(False)
 +    values.push(body)
-+    values.require_prefix(seen, completed, status, content_type)
++    values.require_prefix(seen, completed, status, content_type, True)
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
-+        values.require_prefix(seen + 1, False, status, content_type)
++        values.require_prefix(seen + 1, False, status, content_type, True)
 +
 +
 +def test_nonstream_json_parse_failure_has_no_sdk_value():
 +    values = _ResponseValues(False)
 +    values.push(b"{not JSON}")
-+    values.require_prefix(0, False, 200, "application/json")
++    values.require_prefix(0, False, 200, "application/json", True)
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
-+        values.require_prefix(0, True, 200, "application/json")
++        values.require_prefix(0, True, 200, "application/json", True)
 +
 +    triple_bom = _ResponseValues(False)
 +    triple_bom.push(b'\xef\xbb\xbf\xef\xbb\xbf\xef\xbb\xbf{"choices":[]}')
 +    with pytest.raises(ValueError, match="impossible physical response prefix"):
-+        triple_bom.require_prefix(0, True, 200, "application/json")
++        triple_bom.require_prefix(0, True, 200, "application/json", True)
 +
 +
 +def test_accepted_completion_cannot_leave_a_delivered_output_unobserved():

@@ -557,3 +557,22 @@ for OpenAI SSE is necessary for the vLLM deployment but cannot be described as
 end-to-end proof for Anthropic, Gemini or Vertex. No provider transport was
 called and no build or test was run to establish this section; its claims are
 from the current client and installed SDK source.
+
+## SSE transport-end admission
+
+The pinned OpenAI SDK yields SSE chunks only after `\n\n`, `\r\r`, or
+`\r\n\r\n`. At transport EOF it also yields the remaining bytes and flushes
+its line decoder. If transport fails before EOF, that residual chunk is not
+delivered. A final carriage return in a yielded chunk remains pending until
+another byte or EOF reaches the line decoder. TypeScript replay, the Python
+reader, and native admission now use the recorded termination to apply these
+same boundaries. This is a common record interpretation rule for ordinary and
+long sessions; it does not change provider bytes or model behavior.
+
+Source tests for the authored TypeScript and Python readers passed. A
+deterministic 1,800-body corpus compared their EOF and failed-transport value
+counts with the installed SDK and found zero differences; the corpus includes
+mixed line endings, byte order marks, malformed bytes, and unfinished frames.
+This is evidence for those specific cases, not a proof of all possible byte
+streams or of which values a caller consumed before cancellation. The native
+case is authored and formatted but unexecuted; no build or release gate ran.
