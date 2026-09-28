@@ -426050,3 +426050,65 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v14.json b/pa
 +    }
 +  }
 +}
+diff --git a/packages/core/src/utils/retryContext.ts b/packages/core/src/utils/retryContext.ts
+--- a/packages/core/src/utils/retryContext.ts
++++ b/packages/core/src/utils/retryContext.ts
+@@ -12,12 +12,14 @@
+  * `qwen-code.llm_request` span carry meaningful `attempt` / `request_setup_ms`
+  * / `retry_total_delay_ms` attributes without changing the LLM API surface.
+  *
+  * See docs/design/telemetry-llm-request-timing-design.md (Phase 4b, D4).
+  */
+ export interface RetryAttemptContext {
++  /** One identity shared by every physical generation attempted by this retry. */
++  readonly operationId: string;
+   /**
+    * 1-based monotonic iteration counter for the current `retryWithBackoff`
+    * execution. Always reflects "this is the Nth time fn was called",
+    * regardless of normal vs persistent retry mode. Unaffected by the
+    * `attempt = maxAttempts - 1` clamping that keeps the persistent-mode loop
+    * alive.
+diff --git a/packages/core/src/utils/retry.test.ts b/packages/core/src/utils/retry.test.ts
+--- a/packages/core/src/utils/retry.test.ts
++++ b/packages/core/src/utils/retry.test.ts
+@@ -1618,12 +1618,40 @@
+ 
+     await vi.runAllTimersAsync();
+     await expect(promise).resolves.toBe('ok');
+     expect(seenAttempts).toEqual([1, 2, 3]);
+   });
+ 
++  it('keeps one operation identity across retries and starts a new identity for a separate call', async () => {
++    const identities: string[] = [];
++    let attempts = 0;
++    const promise = retryWithBackoff(
++      async () => {
++        identities.push(retryContext.getStore()!.operationId);
++        if (++attempts === 1) {
++          const error: HttpError = new Error('transient');
++          error.status = 500;
++          throw error;
++        }
++        return 'ok';
++      },
++      { maxAttempts: 2, initialDelayMs: 1, maxDelayMs: 5 },
++    );
++    await vi.runAllTimersAsync();
++    await expect(promise).resolves.toBe('ok');
++    expect(identities).toHaveLength(2);
++    expect(identities[0]).toBeTruthy();
++    expect(identities[1]).toBe(identities[0]);
++
++    const next = await retryWithBackoff(
++      async () => retryContext.getStore()!.operationId,
++      { maxAttempts: 1 },
++    );
++    expect(next).not.toBe(identities[0]);
++  });
++
+   it('exposes retryContext.requestSetupMs / retryTotalDelayMs (== 0 for attempt 1, > 0 for retries)', async () => {
+     const snapshots: Array<{ setupMs: number; totalDelayMs: number }> = [];
+     let attempts = 0;
+     const fn = vi.fn(async () => {
+       attempts++;
+       const ctx = retryContext.getStore();

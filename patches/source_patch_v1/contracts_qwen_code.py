@@ -8404,6 +8404,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "const operationId = randomUUID()",
         "operationId,",
     ), label=label)
+    _require_all(state, core + "utils/retryContext.ts", (
+        "readonly operationId: string;",
+    ), label=label)
     _require_all(state, core + "core/utility-delivery.test.ts", (
         "keeps one logical identity across physical retry invocations",
         "settles only the stream prefix returned before caller cancellation",
