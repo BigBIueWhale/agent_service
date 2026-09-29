@@ -9712,6 +9712,25 @@ def _validate_served_accounting_after(state: State) -> None:
         "record = structuredClone(record)", "recordRuntimeHistory(change: RuntimeHistoryChange)",
         "subtype: 'runtime_history'", "runtimeHistory: RuntimeHistoryState",
     ), label=label)
+    recorder_admission = _source(state, core + "services/chatRecordingService.ts", label=label).split(
+        "private enqueueRecordWrite(", 1)[1].split("const pendingWrite =", 1)[0]
+    _require_ordered(recorder_admission, (
+        "try {", "requireStoredTranscriptRecord(record)", "record = structuredClone(record)",
+        "this.enterWriteFailure(cause, this.getSessionId(), 'record_admission')",
+    ), label=label, location="root canonical record admission")
+    require_text(state, core + "services/chatRecordingService.test.ts",
+                 "latches a rejected canonical record before another history write can pass", label=label)
+    require_text(state, core + "services/chatRecordingService.test.ts",
+                 "latches an uncloneable adopted message before another history write", label=label)
+    require_text(state, core + "services/chatRecordingService.test.ts",
+                 "latches a rejected runtime history checkpoint before a later turn", label=label)
+    runtime_history_writer = _source(state, core + "services/chatRecordingService.ts", label=label).split(
+        "recordRuntimeHistory(change: RuntimeHistoryChange): void {", 1)[1].split(
+        "/**\n   * Records a chat compression", 1)[0]
+    _require_ordered(runtime_history_writer, (
+        "try {", "requireRuntimeHistoryChange(change)",
+        "this.enterWriteFailure(cause, this.getSessionId(), 'runtime_history')",
+    ), label=label, location="root runtime history admission")
     _require_ordered(_source(state, core + "services/chatRecordingService.ts", label=label), (
         "async rewindRecording(",
         "const survivingSnapshots = survivingFileHistorySnapshots?.length",
@@ -9900,6 +9919,15 @@ def _validate_served_accounting_after(state: State) -> None:
         "fs.fsyncSync(streamFd)", "writeFailure ??= { error }", "streamAttempts.finish()",
         "stat.dev !== streamIdentity.dev", "stat.ino !== streamIdentity.ino",
     ), label=label)
+    child_admission = writer.split("const append =", 1)[1].split("const clearStreamTimer", 1)[0]
+    _require_ordered(child_admission, (
+        "assertOpen();", "try {", "const record = create()", "requireStoredTranscriptRecord(record)",
+        "const descriptor = ensureOpen()", "writeFailure = { error }",
+    ), label=label, location="child canonical record admission")
+    require_text(state, core + "agents/agent-transcript.test.ts",
+                 "latches a rejected child history record and preserves the durable prefix", label=label)
+    require_text(state, core + "agents/agent-transcript.test.ts",
+                 "latches an uncloneable child history checkpoint before another write", label=label)
     _require_ordered(writer.split("const commitAttempt =", 1)[1], (
         "flushStreamText();", "streamAttempts.settle(origin,", "write();",
     ), label=label, location=writer_path)
@@ -11928,6 +11956,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "zero, missing usage, and absent finalization remain distinct. The same accumulator "
             "supplies owner-scoped live, resumed, child, ledger, export, and UI projections. All "
             "generating chats require canonical recording under shared session write ownership. "
+            "Root record validation and clone failures, and child record preparation and validation failures, "
+            "latch before any later history commit can proceed. "
             "Durable request admission attaches its physical response before stdout publication. "
             "Exhausted acquisition records one empty abandoned generation for an admitted chat "
             "attempt, preserves provider and recording failures, and leaves unadmitted preflight "

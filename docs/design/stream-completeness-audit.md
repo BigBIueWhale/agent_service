@@ -1653,3 +1653,28 @@ producer's lowercase SHA-256 form or the intentional empty legacy marker and
 refuses other strings before restore can silently reset attribution on a later
 edit. The authored malformed-hash source test was not run. Patch mechanics and
 owner gates remain separate from TypeScript execution.
+
+## Canonical writer admission failure ownership
+
+Source reading found that both canonical writer paths validated records before
+entering their failure-latching block. The root writer also cloned the record
+outside that block. If either step threw and the caller caught the error, the
+writer could accept a later history record while the rejected record remained
+absent. A resume would then read a durable prefix followed by a later commit
+without the intervening input or history change.
+
+Root validation and cloning now run inside the shared recorder's admission
+failure owner. The adopted-message path gives that owner the original message
+to clone. Root runtime-history validation also latches its failure before a
+later turn can commit. Child record construction, cloning, and validation run
+inside its synchronous append failure owner; generation envelope preparation
+has the same failure ownership. These failures retain their first cause and
+refuse later writes or closure, while preserving already durable prefix bytes.
+Source cases were authored for malformed and uncloneable root and child
+records, followed by valid writes. They were not run because Node and Bun are
+unavailable and compilation is prohibited. The authoritative patch plan
+reproduced all four edited Qwen files, including the tests. This applies to
+ordinary and long Qwen sessions alike; vLLM does not own the client's
+canonical history file. It closes the checked admission paths, while the
+separate provenance relationship between runtime history and provider request
+bodies remains to be examined. Owner gates remain unverified.
