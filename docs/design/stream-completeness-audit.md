@@ -1722,3 +1722,28 @@ reattaches and slims images, adds reminders, and converts to the OpenAI shape.
 The assertion does not independently prove that those transformations yielded
 the recorded body. A text comparison would reject valid ordinary sessions;
 that remaining relation needs an explicit renderer proof.
+
+Source tracing narrows that proof boundary. `getRequestHistoryForRoute` first
+curates adjacent turns, can replace inline images with durable references and
+reattach selected image bytes, removes reference metadata, then slims media the
+selected route cannot accept. The assertion is written after those operations
+have updated canonical history, but it does not retain the rendered `Content[]`
+or the route's modality selection. `countExactRequestTokens` may then await a
+separate `/tokenize` operation before Chat creates an attempt. The attempt
+binding correctly names that earlier render even if another history commit
+arrives during the wait.
+
+The OpenAI generator subsequently converts that `Content[]` with the request's
+system instruction and input-affecting context (`splitToolMedia` and
+`toolResultContentFormat`), builds tools and sampling settings, and lets the
+selected provider change the request. It serializes the final body and checks
+the SDK's dispatched bytes against that serialization. Those source checks
+establish the final-body identity, but neither the canonical assertion nor the
+physical request currently carries enough independent renderer selection to
+reproduce the intermediate `Content[]` or provider conversion from the record.
+An additional self-declared hash of the body or of the rendered contents would
+not establish that relation. A complete reader needs a deterministic replay of
+the selected curation, media and provider transformations against the canonical
+state and the captured body, with ordinary text, tool-result and image turns
+covered. This is a source-reading requirement for the remaining implementation;
+no renderer replay or owner gate has verified it yet.
