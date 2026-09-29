@@ -167,6 +167,17 @@ was run:
   model-facing response Parts and later reminders. Neither proof is supplied
   by the direct Python probe, and no deployed end-to-end failure was executed.
 
+  The current canonical version 18 source records a history assertion when
+  Chat renders each request. A complete reader compares its SHA-256 with the
+  replayed root or child history and requires its scope and prompt identity
+  before the physical request. Child assertions are also mirrored into the
+  root file and compared during complete child verification. These are
+  source-reading conclusions with authored, unrun TypeScript tests. The
+  assertion binds canonical state to the request identity at rendering; it
+  does not independently prove that every rendering transformation yielded
+  the recorded provider body, or authenticate a display row's provenance.
+  Those distinct relations remain open.
+
 Charging served output from an abandoned draw is correct. Served work and
 history acceptance are distinct facts. The defect is missing disposition
 accounting, not the inclusion of served work in usage totals.
@@ -431,7 +442,7 @@ The audited checkpoint also had a concrete source consumer omission:
 
 The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
 while the patched Qwen source at that checkpoint required canonical recording
-version 16 (the current contract is version 17).
+version 16 (the current contract is version 18).
 Hard-coding that version into Desktop's local JSONL loops would bind them to a
 different runtime source and could reject an ordinary session from its pinned
 runtime. The patched ACP `qwen/session/loadUpdates` path already asks the
@@ -1345,7 +1356,7 @@ operation journal remain unimplemented and unverified.
 ## Physical utility operation journal after `c1f0815`
 
 The preceding utility sections describe the earlier source checkpoint. The
-current v17 authoring source records the serialized SDK body before each
+version 17 source introduced recording the serialized SDK body before each
 physical `/tokenize` or `/embeddings` send, then the response bytes, transport
 ending, processing outcome, zero-output delivery and a completion naming every
 retry. This path serves ordinary token counts, compaction counts and embeddings
