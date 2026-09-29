@@ -9699,6 +9699,23 @@ def _validate_served_accounting_after(state: State) -> None:
         "record = structuredClone(record)", "recordRuntimeHistory(change: RuntimeHistoryChange)",
         "subtype: 'runtime_history'", "runtimeHistory: RuntimeHistoryState",
     ), label=label)
+    _require_ordered(_source(state, core + "services/chatRecordingService.ts", label=label), (
+        "async rewindRecording(",
+        "const survivingSnapshots = survivingFileHistorySnapshots?.length",
+        "await this.appendRecordStrict(record)",
+        "this.createFileHistorySnapshotBatchRecord(survivingSnapshots)",
+        "const failure = this.enterWriteFailure(",
+        "Cannot persist the rewind for session",
+    ), label=label, location=core + "services/chatRecordingService.ts")
+    _require_all(state, "packages/cli/src/ui/AppContainer.tsx", (
+        "await config.getChatRecordingService().rewindRecording(",
+    ), label=label)
+    _require_all(state, "packages/cli/src/acp-integration/session/Session.ts", (
+        "async rewindToTurn(", "await this.config", ".rewindRecording(",
+    ), label=label)
+    _require_all(state, "packages/cli/src/acp-integration/acpAgent.ts", (
+        "rewindResult = await session.rewindToTurn(",
+    ), label=label)
     _require_all(state, core + "services/image-payload-references.ts", (
         "restore(payloads: readonly StoredImagePayload[])", "snapshot(): StoredImagePayload[]",
         "payload.id !== expected.id || payload.bytes !== expected.bytes",

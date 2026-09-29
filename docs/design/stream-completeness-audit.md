@@ -1393,3 +1393,25 @@ The source patch plan reproduced both edited files byte-for-byte from the
 pinned upstream archive; the 38 patch-framework tests, manifest hash check
 and 35-concern identifier check passed. Packaged recording, owner gates and
 end-to-end resume remain unverified.
+
+## Rewind branch recording
+
+Source reading found that `rewindRecording` changed the canonical recorder's
+active parent and turn boundaries, then used a fire-and-forget append for the
+branch record. That append can return without writing when the writer is
+inactive, and the method only logged a synchronous failure. Both interactive
+and ACP rewind could report success while resume would still see the original
+branch. This affects ordinary rewinds, regardless of session length; vLLM does
+not own the client's branch recording.
+
+The recorder now requires an active writer and awaits the canonical rewind
+record and any surviving file-history snapshot record. The shared snapshot
+record constructor keeps the existing record shape. A write failure is latched
+and returned to the caller with the original cause and a recovery action.
+Interactive and ACP rewind wait for this result, and interactive success text
+appears only after it settles. Source tests were added for a failed write, an
+inactive writer and ACP propagation; existing rewind tests now await the write.
+Those TypeScript tests were **not run** because this checkout has no Node or
+Bun executable. The patch plan reproduced all seven edited source files from
+the pinned archive, and the 38 patch-framework tests passed. Packaged rewind,
+resume behavior, compilation and owner gates remain unverified.

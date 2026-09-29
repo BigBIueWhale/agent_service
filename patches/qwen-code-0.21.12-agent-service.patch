@@ -16626,6 +16626,21 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
            snapshot,
            active: activeGoal
              ? {
+@@ -11231,13 +11084,13 @@
+         }
+ 
+         const rewindFiles = params['rewindFiles'] !== false;
+         const historyBeforeRewind = session.captureHistorySnapshot();
+         let rewindResult;
+         try {
+-          rewindResult = session.rewindToTurn(turnIndex as number, {
++          rewindResult = await session.rewindToTurn(turnIndex as number, {
+             rewindFiles,
+           });
+         } catch (err) {
+           if (err instanceof RequestError) {
+             const msg = err.message;
+             if (msg.includes('Cannot rewind while a prompt is running')) {
 @@ -11272,18 +11125,17 @@
          }
          let artifactSnapshot: unknown;
@@ -18101,7 +18116,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        mockChat.sendMessageStream = vi
          .fn()
          .mockRejectedValue(new Error('send blew up'));
-@@ -2873,22 +3175,49 @@
+@@ -2873,101 +3175,152 @@
            legacyFrameSent: false,
          }),
        );
@@ -18153,7 +18168,18 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          entries: [{ content: 'old', priority: 'medium', status: 'pending' }],
          _meta: {
            qwenTodoPlan: { id: 'old-plan' },
-@@ -2906,26 +3235,28 @@
+           qwenTranscript: { planToolCallId: 'old-call' },
+         },
+       });
+ 
+-      const result = session.rewindToTurn(1);
++      const result = await session.rewindToTurn(1);
+ 
+       expect(result).toEqual({ targetTurnIndex: 1, apiTruncateIndex: 2 });
+       expect(mockChat.truncateHistory).toHaveBeenCalledWith(2);
+       expect(mockChat.stripThoughtsFromHistory).toHaveBeenCalled();
+       const request = await runExitPlanModeApprovalPrompt();
+       expect(request.toolCall._meta).toEqual(
          expect.not.objectContaining({
            qwenTodoApproval: expect.anything(),
          }),
@@ -18169,7 +18195,8 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        );
      });
  
-     it('can rewind the conversation without restoring file history', () => {
+-    it('can rewind the conversation without restoring file history', () => {
++    it('can rewind the conversation without restoring file history', async () => {
        const history: Content[] = [
          { role: 'user', parts: [{ text: 'first' }] },
          { role: 'model', parts: [{ text: 'first reply' }] },
@@ -18185,7 +18212,12 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            timestamp: new Date('2026-06-13T00:00:00.000Z'),
            trackedFileBackups: {},
          },
-@@ -2937,13 +3268,16 @@
+       ]);
+ 
+-      const result = session.rewindToTurn(1, { rewindFiles: false });
++      const result = await session.rewindToTurn(1, { rewindFiles: false });
+ 
+       expect(result).toEqual({ targetTurnIndex: 1, apiTruncateIndex: 2 });
        expect(mockChat.truncateHistory).toHaveBeenCalledWith(2);
        expect(
          mockFileHistoryService.restoreFromSnapshots,
@@ -18201,9 +18233,26 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        );
      });
  
-     it('preserves startup context when rewinding to the first user turn', () => {
+-    it('preserves startup context when rewinding to the first user turn', () => {
++    it('refuses the rewind when its canonical branch record fails', async () => {
++      const history: Content[] = [
++        { role: 'user', parts: [{ text: 'first' }] },
++        { role: 'model', parts: [{ text: 'first reply' }] },
++      ];
++      installRewindHistory(history);
++      const writeError = new Error('rewind disk failure');
++      mockChatRecordingService.rewindRecording.mockRejectedValueOnce(writeError);
++
++      await expect(session.rewindToTurn(0)).rejects.toBe(writeError);
++    });
++
++    it('preserves startup context when rewinding to the first user turn', async () => {
        const history: Content[] = [
-@@ -2955,19 +3289,26 @@
+         {
+           role: 'user',
+           parts: [
+             {
+               text: `${SYSTEM_REMINDER_OPEN}\nstartup context\n${SYSTEM_REMINDER_CLOSE}`,
              },
            ],
          },
@@ -18214,7 +18263,8 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -      vi.mocked(mockChat.getHistoryShallow).mockReturnValue(history);
 +      installRewindHistory(history);
  
-       const result = session.rewindToTurn(0);
+-      const result = session.rewindToTurn(0);
++      const result = await session.rewindToTurn(0);
  
        expect(result).toEqual({ targetTurnIndex: 0, apiTruncateIndex: 1 });
        expect(mockChat.truncateHistory).toHaveBeenCalledWith(1);
@@ -18232,7 +18282,22 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const history: Content[] = [
          {
            role: 'user',
-@@ -3017,21 +3358,28 @@
+@@ -2991,13 +3344,13 @@
+       ];
+       vi.mocked(mockChat.getHistoryShallow).mockReturnValue(history);
+ 
+       expect(session.getRewindableUserTurnCount()).toBe(2);
+     });
+ 
+-    it('does not count a mid-history MCP added-tool reminder as a user turn', () => {
++    it('does not count a mid-history MCP added-tool reminder as a user turn', async () => {
+       // drainPendingAddedMcpToolsReminder injects a pure <system-reminder>
+       // user entry mid-history. Counting it as a real turn would land the
+       // rewind one entry early, dropping the reminder plus a turn's context.
+       const history: Content[] = [
+         {
+           role: 'user',
+@@ -3017,24 +3370,31 @@
              },
            ],
          },
@@ -18243,7 +18308,8 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -      vi.mocked(mockChat.getHistoryShallow).mockReturnValue(history);
 +      installRewindHistory(history);
  
-       const result = session.rewindToTurn(1);
+-      const result = session.rewindToTurn(1);
++      const result = await session.rewindToTurn(1);
  
        // Keep startup + turn 1 + the MCP reminder (indices 0–3); truncate at
        // the second prompt (index 4). Counting the reminder would return 3.
@@ -18259,11 +18325,15 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +      );
      });
  
-     it('does not count Todo Stop Guard continuations as user turns', () => {
+-    it('does not count Todo Stop Guard continuations as user turns', () => {
++    it('does not count Todo Stop Guard continuations as user turns', async () => {
        const guardPrompt =
          '[Todo Stop Guard] 1 todo item(s) are still pending or in progress. Continue executing the current task now. Do not ask the user whether to continue. If progress requires user input, use the structured question or permission flow. If progress depends on external state, report the blocker explicitly.';
        const history: Content[] = [
-@@ -3048,21 +3396,28 @@
+         { role: 'user', parts: [{ text: 'first' }] },
+         { role: 'model', parts: [{ text: 'first reply' }] },
+         { role: 'user', parts: [{ text: guardPrompt }] },
+@@ -3048,21 +3408,28 @@
            ],
          },
          { role: 'model', parts: [{ text: 'guard reply 2' }] },
@@ -18275,7 +18345,8 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +      installRewindHistory(history);
  
        expect(session.getRewindableUserTurnCount()).toBe(2);
-       expect(session.rewindToTurn(1)).toEqual({
+-      expect(session.rewindToTurn(1)).toEqual({
++      expect(await session.rewindToTurn(1)).toEqual({
          targetTurnIndex: 1,
          apiTruncateIndex: 6,
        });
@@ -18294,7 +18365,132 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const history: Content[] = [
          {
            role: 'user',
-@@ -4404,14 +4759,24 @@
+@@ -3075,106 +3442,106 @@
+       ];
+       vi.mocked(mockChat.getHistoryShallow).mockReturnValue(history);
+ 
+       expect(session.getRewindableUserTurnCount()).toBe(1);
+     });
+ 
+-    it('rejects unreachable user turns', () => {
++    it('rejects unreachable user turns', async () => {
+       const history: Content[] = [{ role: 'user', parts: [{ text: 'first' }] }];
+       vi.mocked(mockChat.getHistory).mockReturnValue(history);
+       vi.mocked(mockChat.getHistoryShallow).mockReturnValue(history);
+ 
+-      expect(() => session.rewindToTurn(2)).toThrow(
++      await expect(session.rewindToTurn(2)).rejects.toThrow(
+         'Cannot rewind to the requested turn',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects rewinds while a cron prompt is mutating history', () => {
++    it('rejects rewinds while a cron prompt is mutating history', async () => {
+       (session as unknown as { cronProcessing: boolean }).cronProcessing = true;
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects invalid target turn indexes', () => {
+-      expect(() => session.rewindToTurn(-1)).toThrow(
++    it('rejects invalid target turn indexes', async () => {
++      await expect(session.rewindToTurn(-1)).rejects.toThrow(
+         'targetTurnIndex must be a non-negative integer',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects rewinds while a prompt is running', () => {
++    it('rejects rewinds while a prompt is running', async () => {
+       (session as unknown as { pendingPrompt: AbortController }).pendingPrompt =
+         new AbortController();
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects history mutation until an aborted prompt actually settles', () => {
++    it('rejects history mutation until an aborted prompt actually settles', async () => {
+       (
+         session as unknown as {
+           pendingPromptCompletion: Promise<void> | null;
+         }
+       ).pendingPromptCompletion = new Promise<void>(() => {});
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(() => session.restoreHistory([])).toThrow(
+         'Cannot restore history while a prompt is running',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+       expect(mockChat.setHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects history mutation while close is in progress', () => {
++    it('rejects history mutation while close is in progress', async () => {
+       const releaseClose = session.beginClose();
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(() => session.restoreHistory([])).toThrow(
+         'Cannot restore history while a prompt is running',
+       );
+       releaseClose();
+     });
+ 
+-    it('rejects rewinds while a cron abort is active', () => {
++    it('rejects rewinds while a cron abort is active', async () => {
+       (
+         session as unknown as { cronAbortController: AbortController }
+       ).cronAbortController = new AbortController();
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects rewinds while a notification prompt is processing', () => {
++    it('rejects rewinds while a notification prompt is processing', async () => {
+       (
+         session as unknown as { notificationProcessing: boolean }
+       ).notificationProcessing = true;
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+-    it('rejects rewinds while a notification abort controller is active', () => {
++    it('rejects rewinds while a notification abort controller is active', async () => {
+       (
+         session as unknown as { notificationAbortController: AbortController }
+       ).notificationAbortController = new AbortController();
+ 
+-      expect(() => session.rewindToTurn(0)).toThrow(
++      await expect(session.rewindToTurn(0)).rejects.toThrow(
+         'Cannot rewind while a prompt is running',
+       );
+       expect(mockChat.truncateHistory).not.toHaveBeenCalled();
+     });
+ 
+     it('restores a captured history snapshot', () => {
+@@ -4404,14 +4771,24 @@
          trustedContext,
          undefined,
          '<realtime_delegation>trusted model input</realtime_delegation>',
@@ -18320,7 +18516,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      });
  
      it('rejects model-only prompts without trusted invocation context', async () => {
-@@ -5362,41 +5727,35 @@
+@@ -5362,41 +5739,35 @@
            request.eventName === 'MessageDisplay' && request.input.is_final,
        );
        expect(finals).toHaveLength(0);
@@ -18382,7 +18578,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          prompt: [{ type: 'text', text: 'start background work' }],
        });
  
-@@ -5410,18 +5769,18 @@
+@@ -5410,18 +5781,18 @@
        callback('done', '<task-notification />', {
          agentId: 'agent-1',
          status: 'completed',
@@ -18403,7 +18599,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            {
              sessionId: 'test-session-id',
              reason: 'cancelled',
-@@ -5429,36 +5788,36 @@
+@@ -5429,36 +5800,36 @@
            },
          );
        });
@@ -18460,7 +18656,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          prompt: [{ type: 'text', text: 'start background work' }],
        });
  
-@@ -5486,35 +5845,35 @@
+@@ -5486,35 +5857,35 @@
        ).resolves.toEqual({ stopReason: 'end_turn' });
  
        expect(notificationSignal?.aborted).toBe(true);
@@ -18515,7 +18711,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            displayText: 'Worker completed.',
            modelText: '<task-notification />',
            taskId: 'worker-race',
-@@ -5751,12 +6110,13 @@
+@@ -5751,12 +6122,13 @@
        ).toHaveLength(0);
      });
  
@@ -18529,7 +18725,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            timestamp: new Date(0).toISOString(),
            type: 'user',
            subtype: 'notification',
-@@ -6053,12 +6413,13 @@
+@@ -6053,12 +6425,13 @@
          chatRecord({
            uuid: 'user-1',
            promptId: 'test-session-id########1',
@@ -18543,7 +18739,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            promptId: 'test-session-id########1',
            message: { parts: [{ text: 'answer 1' }] },
          }),
-@@ -6074,19 +6435,31 @@
+@@ -6074,19 +6447,31 @@
          session.prompt({
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: '3' }],
@@ -18581,7 +18777,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      it('records daemon prompt display text separately from model context', async () => {
        agentTelemetry.getActiveInteractionSpan.mockReturnValue(
          agentTelemetry.span,
-@@ -6101,16 +6474,23 @@
+@@ -6101,16 +6486,23 @@
            { type: 'text', text: 'internal channel instructions\n\nhello' },
          ],
          _meta: { 'qwen.daemon.promptDisplayText': 'hello' },
@@ -18606,7 +18802,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(
          agentTelemetry.addAgentInputMessageAttributes,
        ).not.toHaveBeenCalledWith(
-@@ -6495,13 +6875,17 @@
+@@ -6495,13 +6887,17 @@
                    },
                  ],
                },
@@ -18625,7 +18821,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          prompt: [
            { type: 'text', text: 'look at this' },
            {
-@@ -6527,33 +6911,30 @@
+@@ -6527,33 +6923,30 @@
          'vision-agent\0https://vision.example.com/v1\0',
          expect.any(Object),
          expect.any(String),
@@ -18659,7 +18855,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const ENV_KEY = 'QWEN_CODE_MAX_INLINE_MEDIA_BYTES';
        const original = process.env[ENV_KEY];
        process.env[ENV_KEY] = '8';
-@@ -7498,7 +7879,6 @@
+@@ -7498,7 +7891,6 @@
            { id: 'write_3', name: 'write_file', args: {} },
          ];
          const toolLoopState = {
@@ -18667,7 +18863,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -7561,7 +7941,6 @@
+@@ -7561,7 +7953,6 @@
            },
          ];
          const toolLoopState = {
@@ -18675,7 +18871,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -7627,7 +8006,6 @@
+@@ -7627,7 +8018,6 @@
            { id: 'missing_3', name: 'missing_tool', args: {} },
          ];
          const toolLoopState = {
@@ -18683,7 +18879,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -7670,113 +8048,9 @@
+@@ -7670,113 +8060,9 @@
          );
        });
  
@@ -18798,7 +18994,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          let fireCron!: (job: { prompt: string; cronExpr: string }) => void;
          const scheduler = {
            hasPendingWork: true,
-@@ -7796,28 +8070,30 @@
+@@ -7796,28 +8082,30 @@
          await vi.waitFor(() => expect(scheduler.start).toHaveBeenCalled());
  
          // Gate the model stream so the cron fires while the foreground turn
@@ -18838,7 +19034,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            .mockResolvedValue(createEmptyStream());
  
          const prompt = session.prompt({
-@@ -7843,80 +8119,9 @@
+@@ -7843,80 +8131,9 @@
          expect(internals.cronQueue).toHaveLength(0);
        });
  
@@ -18920,7 +19116,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -7977,15 +8182,10 @@
+@@ -7977,15 +8194,10 @@
          expect(result.parts).toHaveLength(6);
        });
  
@@ -18937,7 +19133,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -8058,13 +8258,8 @@
+@@ -8058,13 +8270,8 @@
  
        it('accumulates repeat counts across responses against the same loop state', async () => {
          mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
@@ -18951,7 +19147,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -8153,13 +8348,8 @@
+@@ -8153,13 +8360,8 @@
  
        it('does not count provider-duplicate copies toward the repeat counters', async () => {
          mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
@@ -18965,7 +19161,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -8238,7 +8428,6 @@
+@@ -8238,7 +8440,6 @@
  
          expect(result.loopDetected ?? false).toBe(false);
          expect(execute).toHaveBeenCalledTimes(3);
@@ -18973,7 +19169,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(toolLoopState.maxToolCallKeyRepeat).toBe(3);
          expect(result.parts).toHaveLength(6);
          expect(
-@@ -8248,264 +8437,6 @@
+@@ -8248,264 +8449,6 @@
          ).toEqual(
            Array.from({ length: 3 }, () =>
              expect.stringContaining('Duplicate provider tool call id'),
@@ -19238,7 +19434,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            ),
          );
        });
-@@ -8548,7 +8479,6 @@
+@@ -8548,7 +8491,6 @@
              args: { file_path: 'after-loop.ts' },
            });
            const toolLoopState = {
@@ -19246,7 +19442,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              invalidToolParamErrors: new Map<string, number>(),
              toolCallKeyCounts: new Map<string, number>(),
              maxToolCallKeyRepeat: 0,
-@@ -8640,7 +8570,6 @@
+@@ -8640,7 +8582,6 @@
            }),
          );
          const toolLoopState = {
@@ -19254,7 +19450,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map<string, number>(),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -8727,7 +8656,6 @@
+@@ -8727,7 +8668,6 @@
              })),
            ];
            const toolLoopState = {
@@ -19262,7 +19458,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              invalidToolParamErrors: new Map<string, number>(),
              toolCallKeyCounts: new Map<string, number>(),
              maxToolCallKeyRepeat: 0,
-@@ -9313,10 +9241,29 @@
+@@ -9313,10 +9253,29 @@
                loop_type: core.LoopType.REPEATED_TOOL_EXECUTION_FAILURE,
              }),
            );
@@ -19293,7 +19489,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          } finally {
            restoreGuardMode();
          }
-@@ -9391,7 +9338,6 @@
+@@ -9391,7 +9350,6 @@
                promptId: string,
                calls: FunctionCall[],
                loopState: {
@@ -19301,7 +19497,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  invalidToolParamErrors: Map<string, number>;
                  toolCallKeyCounts: Map<string, number>;
                  maxToolCallKeyRepeat: number;
-@@ -9404,7 +9350,6 @@
+@@ -9404,7 +9362,6 @@
            'prompt-heartbeat',
            [{ id: 'shell_hb_1', name: 'run_shell_command', args: {} }],
            {
@@ -19309,7 +19505,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              invalidToolParamErrors: new Map(),
              toolCallKeyCounts: new Map<string, number>(),
              maxToolCallKeyRepeat: 0,
-@@ -9628,84 +9573,100 @@
+@@ -9628,84 +9585,100 @@
            }),
          );
        });
@@ -19438,7 +19634,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            prompt: [{ type: 'text', text: 'hello' }],
          });
  
-@@ -9719,31 +9680,1 @@
+@@ -9719,31 +9692,1 @@
                  'IMPORTANT: This conversation approached the input token limit for qwen3-code-plus. ' +
 -                'A compressed context will be sent for future messages (compressed from: 1200 to 450 tokens).',
 -            },
@@ -19470,7 +19666,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -              type: 'text',
 -              text:
 -                'IMPORTANT: This conversation accumulated enough tool screenshots to trigger compaction for qwen3-code-plus. ' +
-@@ -9750,319 +9681,188 @@
+@@ -9750,319 +9693,188 @@
                  'A compressed context will be sent for future messages (compressed from: 1200 to 450 tokens).',
              },
            },
@@ -19882,7 +20078,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              sessionId: 'test-session-id',
              prompt: [{ type: 'text', text: 'before clear' }],
            }),
-@@ -10077,108 +9877,52 @@
+@@ -10077,108 +9889,52 @@
            }),
          ).resolves.toEqual({ stopReason: 'end_turn' });
  
@@ -20021,7 +20217,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          });
          const tool = {
            name: 'read_file',
-@@ -10209,53 +9953,54 @@
+@@ -10209,53 +9965,54 @@
                      },
                    ],
                  },
@@ -20108,7 +20304,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +            llmContent: 'file contents',
 +            returnDisplay: 'file contents',
 +          };
-@@ -10307,16 +10052,17 @@
+@@ -10307,16 +10064,17 @@
            {
              sessionId: 'test-session-id',
              todoStopGuardWatchQueuedPrompt: true,
@@ -20132,7 +20328,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -        const reminderIndex = nextMessage.findIndex(
 -          (part) => part.text === todoReminder,
 -        );
-@@ -10418,15 +10164,19 @@
+@@ -10418,15 +10176,19 @@
          });
  
          const audioFallbackPart = {
@@ -20155,7 +20351,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                data: 'iVBORw0KGgo=',
              },
            },
-@@ -10534,21 +10284,23 @@
+@@ -10534,21 +10296,23 @@
            debugLoggerWarnSpy.mockClear();
            await session.prompt({
              sessionId: 'test-session-id',
@@ -20185,7 +20381,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              expect.arrayContaining([
                fallbackPart,
                attachmentFailurePart,
-@@ -10634,15 +10386,16 @@
+@@ -10634,15 +10398,16 @@
            debugLoggerWarnSpy.mockClear();
            await session.prompt({
              sessionId: 'test-session-id',
@@ -20205,7 +20401,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            const secondCall = vi.mocked(mockChat.sendMessageStream).mock
              .calls[1];
  
-@@ -10714,25 +10467,27 @@
+@@ -10714,25 +10479,27 @@
            prompt: [{ type: 'text', text: 'read file' }],
          });
  
@@ -20241,7 +20437,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockChatRecordingService.recordMidTurnUserMessage,
          ).toHaveBeenCalledTimes(10);
          expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
-@@ -10814,21 +10569,22 @@
+@@ -10814,21 +10581,22 @@
          try {
            await session.prompt({
              sessionId: 'test-session-id',
@@ -20271,7 +20467,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            expect(promptSignalAborted).toBe(true);
            expect(clampSpy).toHaveBeenCalledTimes(1);
            expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
-@@ -10985,18 +10741,20 @@
+@@ -10985,18 +10753,20 @@
          try {
            await session.prompt({
              sessionId: 'test-session-id',
@@ -20298,7 +20494,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              expect.arrayContaining([mixedMidTurnPart, midTurnPart]),
            );
            expect(readManyFilesSpy).not.toHaveBeenCalled();
-@@ -11108,39 +10866,41 @@
+@@ -11108,39 +10878,41 @@
            prompt: [{ type: 'text', text: 'read file' }],
          });
  
@@ -20356,7 +20552,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
            'Dropped 1 invalid mid-turn content block(s): "huge resource"',
          );
-@@ -11407,15 +11167,16 @@
+@@ -11407,15 +11179,16 @@
          resolveLate({ messages: ['please also check tests'] });
          await new Promise((r) => setTimeout(r, 0));
  
@@ -20376,7 +20572,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(calls[1]?.[1].message).not.toEqual(
            expect.arrayContaining([midTurnPart]),
          );
-@@ -11554,105 +11315,13 @@
+@@ -11554,105 +11327,13 @@
            );
          } finally {
            acquireSpy.mockRestore();
@@ -20483,7 +20679,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              .mockResolvedValueOnce({
                success: true,
                output: {
-@@ -11660,13 +11329,16 @@
+@@ -11660,13 +11341,16 @@
                  reason: 'Continue after Stop hook',
                },
              })
@@ -20501,7 +20697,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockConfig.hasHooksForEvent = vi
            .fn()
            .mockImplementation((eventName: string) => eventName === 'Stop');
-@@ -11677,39 +11349,49 @@
+@@ -11677,39 +11361,49 @@
            ]);
          mockChat.getLastModelMessageText = vi
            .fn()
@@ -20564,7 +20760,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              .mockResolvedValueOnce({
                success: true,
                output: {
-@@ -11724,13 +11406,16 @@
+@@ -11724,13 +11418,16 @@
                  reason: 'Continue after second Stop hook',
                },
              })
@@ -20582,7 +20778,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockConfig.hasHooksForEvent = vi
            .fn()
            .mockImplementation((eventName: string) => eventName === 'Stop');
-@@ -11741,136 +11426,47 @@
+@@ -11741,136 +11438,47 @@
            ]);
          mockChat.getLastModelMessageText = vi
            .fn()
@@ -20738,7 +20934,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            start: vi.fn((callback: (job: { prompt: string }) => void) => {
              callback({ prompt: 'scheduled prompt' });
            }),
-@@ -11879,44 +11475,40 @@
+@@ -11879,44 +11487,40 @@
          };
          mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
          mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
@@ -20796,7 +20992,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        it('captures a successful prompt without channel delivery metadata', async () => {
          agentTelemetry.getActiveInteractionSpan.mockReturnValue(
            agentTelemetry.span,
-@@ -12020,13 +11612,13 @@
+@@ -12020,13 +11624,13 @@
                text: 'final answer',
                promptId: 'prompt-1',
              },
@@ -20811,7 +21007,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        it('delivers only the final tool-free response block for a prompt', async () => {
          agentTelemetry.getActiveInteractionSpan.mockReturnValue(
            agentTelemetry.span,
-@@ -12152,27 +11744,17 @@
+@@ -12152,27 +11756,17 @@
          // instead of resolving end_turn, and the failed turn schedules no
          // delivery.
          mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
@@ -20845,7 +21041,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                },
              },
            ]),
-@@ -12196,14 +11778,14 @@
+@@ -12196,14 +11790,14 @@
          ).rejects.toMatchObject({
            data: expect.objectContaining({
              code: 'LOOP_DETECTED',
@@ -20862,7 +21058,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            }),
            {},
          );
-@@ -12220,27 +11802,17 @@
+@@ -12220,27 +11814,17 @@
          // collected response text instead of the rejection failing the
          // non-interactive task.
          mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
@@ -20896,7 +21092,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                },
              },
            ]),
-@@ -12257,7 +11829,7 @@
+@@ -12257,7 +11841,7 @@
          expect(logLoopDetectedSpy).toHaveBeenCalledWith(
            mockConfig,
            expect.objectContaining({
@@ -20905,7 +21101,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            }),
            {},
          );
-@@ -12296,25 +11868,25 @@
+@@ -12296,25 +11880,25 @@
          mockChat.getLastModelMessageText = vi
            .fn()
            .mockReturnValue('initial answer');
@@ -20933,7 +21129,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                    candidates: [
                      {
                        content: { parts: [{ text: 'continued final' }] },
-@@ -12356,26 +11928,25 @@
+@@ -12356,26 +11940,25 @@
            ['initial answer'],
            ['continued final'],
          ]);
@@ -20962,7 +21158,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  candidates: [
                    { content: { parts: [{ text: ' second half' }] } },
                  ],
-@@ -12386,13 +11957,13 @@
+@@ -12386,13 +11969,13 @@
  
          await session.prompt({
            sessionId: 'test-session-id',
@@ -20977,7 +21173,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  id: 'user-1',
                },
              },
-@@ -12400,17 +11971,20 @@
+@@ -12400,17 +11983,20 @@
          });
  
          await vi.waitFor(() => {
@@ -21000,7 +21196,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockChat.sendMessageStream = vi
            .fn()
            .mockResolvedValue(createEmptyStream());
-@@ -12529,34 +12103,2 @@
+@@ -12529,34 +12115,2 @@
            );
          });
 -      });
@@ -21035,7 +21231,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -          'qwen/control/channel-delivery',
 -          expect.anything(),
 -        );
-@@ -14686,269 +14228,367 @@
+@@ -14686,269 +14240,367 @@
              .map((p: { text?: string }) => p.text ?? '')
              .join('');
          await vi.waitFor(() => {
@@ -21566,7 +21762,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        });
  
        it('emits canonical Goal state for an ACP /goal status query', async () => {
-@@ -15096,25 +14736,20 @@
+@@ -15096,25 +14748,20 @@
        it('publishes nothing when no Goal was recovered', async () => {
          mockGoalRuntime.getRecoveryCause.mockReturnValue(undefined);
          await session.publishRecoveredGoalState([]);
@@ -21593,7 +21789,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              timestamp: new Date(0).toISOString(),
              type: 'system',
              subtype: 'slash_command',
-@@ -15286,12 +14921,13 @@
+@@ -15286,12 +14933,13 @@
            vi.mocked(mockConfig.getGoalRuntimeReady).mockRejectedValueOnce(
              new core.GoalPersistenceUnavailableError('unsupported record'),
            );
@@ -21607,7 +21803,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                timestamp: new Date(0).toISOString(),
                type: 'system',
                subtype: 'slash_command',
-@@ -15442,13 +15078,90 @@
+@@ -15442,13 +15090,90 @@
          await vi.waitFor(() => {
            expect(mockClient.sessionUpdate).toHaveBeenCalledTimes(2);
          });
@@ -21699,7 +21895,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'turn-1',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -15468,13 +15181,16 @@
+@@ -15468,13 +15193,16 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((turnKey: string) =>
            turnKey === 'goal-runtime:turn-1' ? permit : undefined,
@@ -21717,7 +21913,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            permit,
            continuationContext: 'check weather',
          });
-@@ -15502,12 +15218,13 @@
+@@ -15502,12 +15230,13 @@
          expect(
            mockChatRecordingService.recordUserMessage,
          ).not.toHaveBeenCalled();
@@ -21731,7 +21927,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // shifted off `goalQueue` by then, so unless the drain's own catch
          // settles it the runtime keeps `currentPermit` and stays 'running'
          // forever: no continuation is ever scheduled again, and every later
-@@ -15535,13 +15252,13 @@
+@@ -15535,13 +15264,13 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((key: string) =>
            key === turnKey ? permit : undefined,
@@ -21746,7 +21942,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
          expect(boundGoalHost).toBeDefined();
          await boundGoalHost!.startGoalTurn({
-@@ -15556,15 +15273,13 @@
+@@ -15556,15 +15285,13 @@
          });
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
@@ -21764,7 +21960,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -          .fn()
 -          .mockReturnValue(true);
 +        mockConfig.getSkipLoopDetection = vi.fn().mockReturnValue(false);
-@@ -15589,33 +15304,33 @@
+@@ -15589,33 +15316,33 @@
              updatedAt: 1234,
            },
          });
@@ -21818,7 +22014,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            permit,
            continuationContext: 'check weather',
          });
-@@ -15624,7 +15339,7 @@
+@@ -15624,7 +15351,7 @@
            expect(logLoopDetectedSpy).toHaveBeenCalledWith(
              mockConfig,
              expect.objectContaining({
@@ -21827,7 +22023,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              }),
              {},
            );
-@@ -15634,12 +15349,13 @@
+@@ -15634,12 +15361,13 @@
            expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(permit);
          });
          expect(mockGoalRuntime.dispatch).not.toHaveBeenCalled();
@@ -21841,7 +22037,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // settlement plus the transcript stop message, never a rejection
          // that would pause the goal without a published turn_error.
          const guardModeEnv = 'QWEN_CODE_ACP_REPEATED_TOOL_FAILURE_GUARD';
-@@ -15691,16 +15407,19 @@
+@@ -15691,16 +15419,19 @@
                    })),
                  },
                },
@@ -21865,7 +22061,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              revision: 1,
              turnId: 'turn-guard-stop',
            };
-@@ -15763,13 +15482,14 @@
+@@ -15763,13 +15494,14 @@
              process.env[guardModeEnv] = previousGuardMode;
            }
          }
@@ -21881,7 +22077,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // and the send — prompt assembly, transcript writes, the abort check
          // itself — count as model work, so a cancel landing in that window
          // paused the Goal and charged it a turn it never took.
-@@ -15796,13 +15516,13 @@
+@@ -15796,13 +15528,13 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((key: string) =>
            key === turnKey ? permit : undefined,
@@ -21896,7 +22092,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockChatRecordingService.recordGoalRuntimeMessage.mockImplementation(
            () => {
              void session.cancelPendingPrompt();
-@@ -15824,12 +15544,13 @@
+@@ -15824,12 +15556,13 @@
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
          expect(mockGoalRuntime.releaseTurn).not.toHaveBeenCalledWith(turnKey);
@@ -21910,7 +22106,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // gated on `!goalTurn`, so on exactly that path the permit stayed
          // with a turn that returns `cancelled` without running — the runtime
          // never leaves `running` and every later Goal turn blocks on it.
-@@ -15861,13 +15582,13 @@
+@@ -15861,13 +15594,13 @@
          mockGoalRuntime.getVerifierFeedback.mockImplementation(() => {
            void session.cancelPendingPrompt();
            return undefined;
@@ -21925,7 +22121,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            prompt: [{ type: 'text', text: 'user input' }],
          });
  
-@@ -15876,12 +15597,16 @@
+@@ -15876,12 +15609,16 @@
            expect.stringMatching(/^goal-user:/),
          );
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
@@ -21942,7 +22138,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            goal: {
              goalId: 'goal-1',
              revision: 1,
-@@ -15927,12 +15652,13 @@
+@@ -15927,12 +15664,13 @@
          await expect(session.cancelPendingPrompt()).rejects.toThrow(
            'Not currently generating',
          );
@@ -21956,7 +22152,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // current permit: `activity` stays 'running', `queueContinuation`
          // never flushes, and every later prompt hangs in `claimGoalTurn`.
          const permit: core.GoalTurnPermit = {
-@@ -15957,13 +15683,16 @@
+@@ -15957,13 +15695,16 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((turnKey: string) =>
            turnKey === 'goal-runtime:turn-flush-fails' ? permit : undefined,
@@ -21974,7 +22170,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
          expect(boundGoalHost).toBeDefined();
          await boundGoalHost!.startGoalTurn({
-@@ -15975,12 +15704,13 @@
+@@ -15975,12 +15716,13 @@
            expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(permit);
          });
          expect(mockChatRecordingService.flush).toHaveBeenCalled();
@@ -21988,7 +22184,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // 'running' forever and every later goal prompt hangs behind it.
          const permit: core.GoalTurnPermit = {
            goalId: 'goal-1',
-@@ -16004,13 +15734,13 @@
+@@ -16004,13 +15746,13 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((turnKey: string) =>
            turnKey === 'goal-runtime:turn-rejected' ? permit : undefined,
@@ -22003,7 +22199,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
          expect(boundGoalHost).toBeDefined();
          await boundGoalHost!.startGoalTurn({
-@@ -16026,12 +15756,13 @@
+@@ -16026,12 +15768,13 @@
          // The model never ran, so this is a release, not a completed turn.
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
@@ -22017,7 +22213,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'turn-after-notification',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -16053,19 +15784,24 @@
+@@ -16053,19 +15796,24 @@
          let releaseNotification!: () => void;
          const notificationGate = new Promise<void>((resolve) => {
            releaseNotification = resolve;
@@ -22048,7 +22244,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
-@@ -16097,12 +15833,13 @@
+@@ -16097,12 +15845,13 @@
            expect.any(String),
            permit,
          );
@@ -22062,7 +22258,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'turn-cancelled-behind-notification',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -16124,19 +15861,24 @@
+@@ -16124,19 +15873,24 @@
          let releaseNotification!: () => void;
          const notificationGate = new Promise<void>((resolve) => {
            releaseNotification = resolve;
@@ -22093,7 +22289,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
-@@ -16167,12 +15909,13 @@
+@@ -16167,12 +15921,13 @@
          });
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
@@ -22107,7 +22303,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'user-turn-1',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -16191,13 +15934,16 @@
+@@ -16191,13 +15946,16 @@
            },
          });
          mockGoalRuntime.beginTurn.mockReturnValue(permit);
@@ -22125,7 +22321,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            prompt: [{ type: 'text', text: 'hello' }],
          });
  
-@@ -16208,19 +15954,32 @@
+@@ -16208,19 +15966,32 @@
            currentModel,
            expect.any(Object),
            expect.any(String),
@@ -22159,7 +22355,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            revision: 1,
            turnId: 'automatic-turn',
          };
-@@ -16271,28 +16030,37 @@
+@@ -16271,28 +16042,37 @@
              queuedTurnKey = undefined;
              for (const listener of [...listeners]) listener();
            }
@@ -22211,7 +22407,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockClient,
            mockSettings,
          );
-@@ -16300,12 +16068,21 @@
+@@ -16300,12 +16080,21 @@
          await boundGoalHost!.startGoalTurn({
            permit: automaticPermit,
            continuationContext: 'check weather',
@@ -22233,7 +22429,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'user input' }],
          });
-@@ -16324,12 +16101,13 @@
+@@ -16324,12 +16113,13 @@
            automaticPermit,
          );
          expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(userPermit);
@@ -22247,7 +22443,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // pure timing, so both spellings have to settle the same way: a
          // handoff via finishTurn, never a pause. Pausing here would persist
          // the goal as paused and silently stop the autonomous loop.
-@@ -16386,35 +16164,41 @@
+@@ -16386,35 +16176,41 @@
              queuedTurnKey = undefined;
              for (const listener of [...listeners]) listener();
            }
@@ -22308,7 +22504,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockClient,
            mockSettings,
          );
-@@ -16422,12 +16206,21 @@
+@@ -16422,12 +16218,21 @@
          await boundGoalHost!.startGoalTurn({
            permit: automaticPermit,
            continuationContext: 'check weather',
@@ -22330,7 +22526,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'user input' }],
          });
-@@ -16438,12 +16231,13 @@
+@@ -16438,12 +16243,13 @@
          expect(mockGoalRuntime.dispatch).not.toHaveBeenCalledWith(
            expect.objectContaining({ action: 'pause' }),
          );
@@ -22344,7 +22540,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // unwinds reserves a turn key behind the continuation's permit --
          // and the drain cannot start the continuation until this prompt
          // finishes, while this prompt cannot start until the continuation
-@@ -16505,28 +16299,37 @@
+@@ -16505,28 +16311,37 @@
              queuedTurnKey = undefined;
              return true;
            },
@@ -22396,7 +22592,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockClient,
            mockSettings,
          );
-@@ -16534,12 +16337,21 @@
+@@ -16534,12 +16349,21 @@
          const activating = session.prompt({
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'set a goal to check weather' }],
@@ -22418,7 +22614,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // runtime hands the session a continuation it cannot drain yet.
          goalActive = true;
          currentTurnKey = 'goal-runtime:continuation-turn';
-@@ -16570,12 +16382,13 @@
+@@ -16570,12 +16394,13 @@
            userPermit,
          );
          expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(userPermit);
@@ -22432,7 +22628,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // no continuation is ever scheduled again and every later prompt
          // hangs in `claimGoalTurn`.
          const permit: core.GoalTurnPermit = {
-@@ -16603,13 +16416,16 @@
+@@ -16603,13 +16428,16 @@
          );
          mockGoalRuntime.finishTurn.mockRejectedValue(
            new Error('transcript write failed'),
@@ -22450,7 +22646,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            continuationContext: 'check weather',
          });
  
-@@ -16791,16 +16607,13 @@
+@@ -16791,16 +16619,13 @@
                preparationDiscarded: true,
              }),
            }),
@@ -22468,7 +22664,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            const currentExecute = vi.fn().mockResolvedValue({
              llmContent: 'current result',
              returnDisplay: 'current result',
-@@ -16880,16 +16693,13 @@
+@@ -16880,16 +16705,13 @@
                }),
              }),
            });
@@ -22486,7 +22682,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            const execute = vi.fn().mockResolvedValue({
              llmContent: 'current result',
              returnDisplay: 'current result',
-@@ -17266,13 +17076,17 @@
+@@ -17266,13 +17088,17 @@
                uri: `file://${outsidePath}`,
              },
            ],
@@ -22505,7 +22701,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          await fs.rm(outsideDir, { recursive: true, force: true });
        }
      });
-@@ -17295,13 +17109,17 @@
+@@ -17295,13 +17121,17 @@
          await session.prompt({
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'Use @ext:browser now' }],
@@ -22524,7 +22720,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          );
          expect(sentText).toContain('Browser automation');
          expect(sentText).toContain(
-@@ -17330,13 +17148,17 @@
+@@ -17330,13 +17160,17 @@
        await session.prompt({
          sessionId: 'test-session-id',
          prompt: [{ type: 'text', text: 'Use @mcp:demo now' }],
@@ -22543,7 +22739,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(sentText).toContain('- Prompts: 1');
      });
  
-@@ -18050,24 +17872,26 @@
+@@ -18050,24 +17884,26 @@
            expect.objectContaining({
              functionResponse: expect.objectContaining({
                id: 'call-plan-approval-cancelled',
@@ -22576,7 +22772,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      });
  
      it('rejects permission-hook rewrites of unknown Plan shell commands', async () => {
-@@ -19308,12 +19132,13 @@
+@@ -19308,12 +19144,13 @@
  
        await session.prompt({
          sessionId: 'test-session-id',
@@ -22590,7 +22786,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              expect.objectContaining({
                optionId: core.ToolConfirmationOutcome.ProceedOnce,
              }),
-@@ -19883,12 +19708,112 @@
+@@ -19883,12 +19720,112 @@
                }),
              }),
              expect.anything(),
@@ -22703,7 +22899,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                .fn()
                .mockResolvedValueOnce({
                  success: true,
-@@ -20034,12 +19959,13 @@
+@@ -20034,12 +19971,13 @@
                },
              },
            });
@@ -22717,7 +22913,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            // the runtime mints the next continuation, and a Stop hook that
            // always blocks loops the session forever.
            const permit: core.GoalTurnPermit = {
-@@ -20062,19 +19988,31 @@
+@@ -20062,19 +20000,31 @@
                updatedAt: 1234,
              },
            });
@@ -22756,7 +22952,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockConfig.hasHooksForEvent = vi
              .fn()
              .mockImplementation((eventName: string) => eventName === 'Stop');
-@@ -20086,13 +20024,17 @@
+@@ -20086,13 +20036,17 @@
              ]);
            mockChat.getLastModelMessageText = vi
              .fn()
@@ -22775,7 +22971,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              prompt: [{ type: 'text', text: 'hello' }],
            });
  
-@@ -21346,12 +21288,15 @@
+@@ -21346,12 +21300,15 @@
            {
              type: core.StreamEventType.CHUNK,
              value: {
@@ -22791,7 +22987,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                    id: 'ask-user-question-call',
                    name: core.ToolNames.ASK_USER_QUESTION,
                    args: {
-@@ -21423,24 +21368,26 @@
+@@ -21423,24 +21380,26 @@
              expect.objectContaining({
                functionResponse: expect.objectContaining({
                  id: 'ask-user-question-call',
@@ -22824,7 +23020,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        });
  
        it('waits for pending rewrites before cron stops after cancelled ask_user_question', async () => {
-@@ -21803,12 +21750,118 @@
+@@ -21803,12 +21762,118 @@
          });
        });
      });
@@ -22943,7 +23139,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          promptId: string,
          functionCalls: FunctionCall[],
          toolLoopState?: DaemonToolLoopState,
-@@ -23327,15 +23380,13 @@
+@@ -23327,15 +23392,13 @@
          prompt: [{ type: 'text', text: 'capture screens until done' }],
        });
  
@@ -22960,7 +23156,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const execute = vi.fn().mockResolvedValue({
          llmContent: 'read',
          returnDisplay: 'read',
-@@ -24190,7 +24241,6 @@
+@@ -24190,7 +24253,6 @@
          outcome: { outcome: 'cancelled' },
        });
        const toolLoopState: DaemonToolLoopState = {
@@ -22968,7 +23164,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          invalidToolParamErrors: new Map<string, number>(),
          toolCallKeyCounts: new Map<string, number>(),
          maxToolCallKeyRepeat: 0,
-@@ -24931,7 +24981,6 @@
+@@ -24931,7 +24993,6 @@
            isOutputMarkdown: true,
          });
          const toolLoopState: DaemonToolLoopState = {
@@ -22976,7 +23172,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map([[core.ToolNames.AGENT, 2]]),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -25027,7 +25076,6 @@
+@@ -25027,7 +25088,6 @@
            isOutputMarkdown: true,
          });
          const toolLoopState: DaemonToolLoopState = {
@@ -22984,7 +23180,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            // Two prior invalid-param errors: the first failure in this batch
            // trips the threshold of three while the sibling shares the
            // concurrency window, forcing the capped race branch.
-@@ -25867,16 +25915,15 @@
+@@ -25867,16 +25927,15 @@
          'dup_id_0001',
        ]);
        expect(result.stopAfterPermissionCancel).toBe(false);
@@ -23003,7 +23199,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        mockToolRegistry.getTool.mockReturnValue({
          name: 'read_file',
          kind: core.Kind.Read,
-@@ -25889,13 +25936,12 @@
+@@ -25889,13 +25948,12 @@
            getDescription: vi.fn().mockReturnValue('Read file'),
            toolLocations: vi.fn().mockReturnValue([]),
          }),
@@ -23017,7 +23213,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          session as unknown as ToolCallInternals
        ).runToolCalls(new AbortController().signal, 'prompt-budget', [
          { name: 'read_file', args: { file_path: 'a.ts' } },
-@@ -25904,13 +25950,13 @@
+@@ -25904,13 +25962,13 @@
  
        const textLength = (parts: Part[]) =>
          parts.reduce((sum, part) => {
@@ -23032,7 +23228,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          );
        expect(textLength(recordedParts)).toBe(textLength(result.parts));
        expect(recordedParts).toEqual(result.parts);
-@@ -26432,17 +26478,25 @@
+@@ -26432,17 +26490,25 @@
          canUpdateOutput: false,
          isOutputMarkdown: true,
        });
@@ -23059,7 +23255,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-1',
-@@ -26451,13 +26505,13 @@
+@@ -26451,13 +26517,13 @@
                    },
                  ],
                },
@@ -23074,7 +23270,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        lastGuardPromptId = `test-session-id########guard-${++guardPromptCounter}`;
        return session.prompt(
          {
-@@ -26518,12 +26572,189 @@
+@@ -26518,12 +26584,189 @@
        mockGuardBridge(async () => {
          const next = responses[Math.min(index++, responses.length - 1)];
          return typeof next === 'function' ? next() : next;
@@ -23264,7 +23460,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const previousTurn = new Promise<void>((resolve) => {
          releasePreviousTurn = resolve;
        });
-@@ -26576,12 +26807,13 @@
+@@ -26576,12 +26819,13 @@
        });
        let rejectStream!: (reason?: unknown) => void;
        const gate = new Promise<never>((_resolve, reject) => {
@@ -23278,7 +23474,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        return {
          responseStream: stream(),
          started,
-@@ -26590,58 +26822,73 @@
+@@ -26590,58 +26834,73 @@
            error.name = errorName;
            rejectStream(error);
          },
@@ -23389,7 +23585,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        await expect(runGuardPrompt()).rejects.toThrow(
          'provider aborted unexpectedly',
-@@ -26686,65 +26933,3 @@
+@@ -26686,65 +26945,3 @@
        ).toBe(false);
      });
  
@@ -23455,7 +23651,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -      );
 -    });
 -
-@@ -26763,13 +26948,13 @@
+@@ -26763,13 +26960,13 @@
            enterWait();
            await waitGate;
          }),
@@ -23470,7 +23666,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        await session.cancelPendingPrompt();
        releaseWait();
  
-@@ -26778,16 +26963,16 @@
+@@ -26778,16 +26975,16 @@
  
      it('lets cancellation win while a loop-detected Stop continuation is preserved', async () => {
 -      mockConfig.getMaxToolCallsPerTurn = vi.fn().mockReturnValue(1);
@@ -23495,7 +23691,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +                  name: 'read_file',
 +                  args: { path: 'a' },
 +                })),
-@@ -26831,16 +27016,16 @@
+@@ -26831,16 +27028,16 @@
        // Pins rejectOnLoopDetected=true at the foreground #handleStopHookLoop
        // call site: without it this turn would resolve end_turn.
 -      mockConfig.getMaxToolCallsPerTurn = vi.fn().mockReturnValue(1);
@@ -23520,7 +23716,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +                  name: 'read_file',
 +                  args: { path: 'a' },
 +                })),
-@@ -26864,13 +27049,13 @@
+@@ -26864,13 +27061,13 @@
          message: LOOP_DETECTED_TURN_ERROR_MESSAGE,
          data: expect.objectContaining({
            code: 'LOOP_DETECTED',
@@ -23536,7 +23732,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          }),
          {},
        );
-@@ -26954,17 +27139,19 @@
+@@ -26954,17 +27151,19 @@
        ).toBe(false);
      });
  
@@ -23558,7 +23754,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-stream-error',
-@@ -26973,15 +27160,15 @@
+@@ -26973,15 +27172,15 @@
                    },
                  ],
                },
@@ -23576,7 +23772,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          .mocked(mockClient.sessionUpdate)
          .mock.calls.map(([params]) => params.update)
          .filter(
-@@ -27020,13 +27207,13 @@
+@@ -27020,13 +27219,13 @@
            -1,
          )?.[0] as (
            displayText: string,
@@ -23591,7 +23787,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              {
                id: 'related-after-api-error',
                description: 'related-after-api-error',
-@@ -27041,13 +27228,13 @@
+@@ -27041,13 +27240,13 @@
            });
          },
        );
@@ -23606,7 +23802,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-related-result',
-@@ -27056,15 +27243,15 @@
+@@ -27056,15 +27255,15 @@
                    },
                  ],
                },
@@ -23624,7 +23820,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        );
  
        await vi.waitFor(() => {
-@@ -27089,18 +27276,21 @@
+@@ -27089,18 +27288,21 @@
            -1,
          )?.[0] as (
            displayText: string,
@@ -23652,7 +23848,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        const internals = session as unknown as {
          notificationProcessing: boolean;
-@@ -27113,17 +27303,19 @@
+@@ -27113,17 +27315,19 @@
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
      });
  
@@ -23674,7 +23870,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-new-prompt',
-@@ -27132,15 +27324,15 @@
+@@ -27132,15 +27336,15 @@
                    },
                  ],
                },
@@ -23692,7 +23888,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          sessionId: 'test-session-id',
          prompt: [{ type: 'text', text: 'unrelated ordinary prompt' }],
        });
-@@ -27226,13 +27418,13 @@
+@@ -27226,13 +27430,13 @@
          todoStopGuardQueuedPromptOwnerPromptId?: string;
        };
        internals.todoStopGuardQueuedPromptPriority = true;
@@ -23707,7 +23903,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(internals.todoStopGuardQueuedPromptPriority).toBe(false);
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
      });
-@@ -27304,18 +27496,18 @@
+@@ -27304,18 +27508,18 @@
        installPendingTodoTool();
        let guardSendStarted!: () => void;
        const guardSendStart = new Promise<void>((resolve) => {
@@ -23728,7 +23924,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'arm-before-trust-clear',
-@@ -27324,27 +27516,27 @@
+@@ -27324,27 +27528,27 @@
                    },
                  ],
                },
@@ -23759,7 +23955,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                functionCalls: [
                  {
                    id: 'tool-after-trust-clear',
-@@ -27386,18 +27578,18 @@
+@@ -27386,18 +27590,18 @@
        installPendingTodoTool();
        let guardSendStarted!: () => void;
        const guardSendStart = new Promise<void>((resolve) => {
@@ -23780,7 +23976,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-invalidation-error',
-@@ -27406,21 +27598,21 @@
+@@ -27406,21 +27610,21 @@
                    },
                  ],
                },
@@ -23804,7 +24000,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        mockBackgroundTaskRegistry.getAll.mockReturnValue([
          {
            id: 'old-before-invalidation-error',
-@@ -27441,13 +27633,13 @@
+@@ -27441,13 +27645,13 @@
        callback('old background done', '<old-after-invalidation-error />', {
          agentId: 'old-before-invalidation-error',
          status: 'completed',
@@ -23819,7 +24015,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        await vi.waitFor(() => {
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(4);
        });
-@@ -27468,77 +27660,7 @@
+@@ -27468,77 +27672,7 @@
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(4);
 -    });
 -
@@ -23897,7 +24093,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        rebuildSessionWithGuard();
        installPendingTodoTool();
        queuePendingTodoThenNaturalStops();
-@@ -27554,15 +27676,16 @@
+@@ -27554,15 +27688,16 @@
        await runGuardPrompt();
  
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -23917,7 +24113,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          vi
            .mocked(mockClient.sessionUpdate)
            .mock.calls.some(
-@@ -27917,99 +28040,79 @@
+@@ -27917,99 +28052,79 @@
        );
      });
  
@@ -24061,7 +24257,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  {
                    content: [
                      { type: 'text', text: 'inspect this image too' },
-@@ -28029,280 +28132,192 @@
+@@ -28029,280 +28144,192 @@
          },
          async () => {
            events.push('claim');
@@ -24465,7 +24661,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      it('counts every Guard-attributable tool follow-up as a model call', async () => {
        rebuildSessionWithGuard();
        installPendingTodoTool();
-@@ -28325,13 +28340,13 @@
+@@ -28325,13 +28352,13 @@
        mockToolRegistry.getTool.mockImplementation((name: string) =>
          name === core.ToolNames.TODO_WRITE ? todoTool : readTool,
        );
@@ -24480,7 +24676,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-guard-tools',
-@@ -28340,15 +28355,15 @@
+@@ -28340,15 +28367,15 @@
                    },
                  ],
                },
@@ -24498,7 +24694,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'guard-read-1',
-@@ -28358,13 +28373,13 @@
+@@ -28358,13 +28385,13 @@
                  ],
                },
              },
@@ -24513,7 +24709,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'guard-read-2',
-@@ -28407,19 +28422,19 @@
+@@ -28407,19 +28434,19 @@
        [
          'does not duplicate a successful Guard tool response after history advances',
          true,
@@ -24536,7 +24732,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          const readExecute = vi.fn().mockResolvedValue({
            llmContent: 'file contents',
            returnDisplay: 'file contents',
-@@ -28443,113 +28458,77 @@
+@@ -28443,113 +28470,77 @@
            messages:
              ++drainCount === 4
                ? ['user direction before the failed follow-up']
@@ -24704,7 +24900,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      it('closes Guard tools with the remaining attempt after Todo completion', async () => {
        rebuildSessionWithGuard();
        const execute = installPendingTodoTool();
-@@ -28574,13 +28553,13 @@
+@@ -28574,13 +28565,13 @@
              changes: {},
            },
          });
@@ -24719,7 +24915,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-guard-completion',
-@@ -28589,15 +28568,15 @@
+@@ -28589,15 +28580,15 @@
                    },
                  ],
                },
@@ -24737,7 +24933,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-by-guard',
-@@ -28606,13 +28585,13 @@
+@@ -28606,13 +28597,13 @@
                    },
                  ],
                },
@@ -24752,7 +24948,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(execute).toHaveBeenCalledTimes(2);
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(4);
        const toolClosure = vi.mocked(mockChat.sendMessageStream).mock
-@@ -28675,13 +28654,13 @@
+@@ -28675,13 +28666,13 @@
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
@@ -24767,7 +24963,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-failed-closure',
-@@ -28690,15 +28669,15 @@
+@@ -28690,15 +28681,15 @@
                    },
                  ],
                },
@@ -24785,7 +24981,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-failed-closure',
-@@ -28708,20 +28687,20 @@
+@@ -28708,20 +28699,20 @@
                  ],
                },
              },
@@ -24808,7 +25004,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        );
        await vi.waitFor(() => {
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(5);
-@@ -28756,13 +28735,13 @@
+@@ -28756,13 +28747,13 @@
            changes: {},
          },
        });
@@ -24823,7 +25019,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-completed-midturn',
-@@ -28771,15 +28750,15 @@
+@@ -28771,15 +28762,15 @@
                    },
                  ],
                },
@@ -24841,7 +25037,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-midturn',
-@@ -28788,13 +28767,13 @@
+@@ -28788,13 +28779,13 @@
                    },
                  ],
                },
@@ -24856,7 +25052,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              ? ['user direction after completion']
              : [],
          hasQueuedPrompt: false,
-@@ -28847,13 +28826,13 @@
+@@ -28847,13 +28838,13 @@
              changes: {},
            },
          });
@@ -24871,7 +25067,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-post-hook-stop',
-@@ -28862,15 +28841,15 @@
+@@ -28862,15 +28853,15 @@
                    },
                  ],
                },
@@ -24889,7 +25085,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-post-hook-stop',
-@@ -28879,13 +28858,13 @@
+@@ -28879,13 +28870,13 @@
                    },
                  ],
                },
@@ -24904,7 +25100,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'PostToolUse') {
              return { success: true, output: {} };
            }
-@@ -28947,13 +28926,13 @@
+@@ -28947,13 +28938,13 @@
              changes: {},
            },
          });
@@ -24919,7 +25115,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-queued-tool-closure',
-@@ -28962,15 +28941,15 @@
+@@ -28962,15 +28953,15 @@
                    },
                  ],
                },
@@ -24937,7 +25133,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-queued-tool-closure',
-@@ -28979,13 +28958,13 @@
+@@ -28979,13 +28970,13 @@
                    },
                  ],
                },
@@ -24952,7 +25148,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            vi.mocked(mockChat.sendMessageStream).mock.calls.length === 3,
        }));
  
-@@ -29030,13 +29009,13 @@
+@@ -29030,13 +29021,13 @@
          },
          { messages: [], hasQueuedPrompt: false },
        );
@@ -24967,7 +25163,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-nested-midturn',
-@@ -29045,15 +29024,15 @@
+@@ -29045,15 +29036,15 @@
                    },
                  ],
                },
@@ -24985,7 +25181,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'read-before-nested-midturn',
-@@ -29062,13 +29041,13 @@
+@@ -29062,13 +29053,13 @@
                    },
                  ],
                },
@@ -25000,7 +25196,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const nestedUserCall = vi.mocked(mockChat.sendMessageStream).mock
          .calls[3]?.[1] as { message: Part[] };
        expect(
-@@ -29114,13 +29093,13 @@
+@@ -29114,13 +29105,13 @@
          },
          { messages: [], hasQueuedPrompt: false },
        );
@@ -25015,7 +25211,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-nested-combined-midturn',
-@@ -29129,15 +29108,15 @@
+@@ -29129,15 +29120,15 @@
                    },
                  ],
                },
@@ -25033,7 +25229,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'read-before-nested-combined-midturn',
-@@ -29146,13 +29125,13 @@
+@@ -29146,13 +29137,13 @@
                    },
                  ],
                },
@@ -25048,7 +25244,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -29268,13 +29247,13 @@
+@@ -29268,13 +29259,13 @@
            status: 'completed',
            notified: true,
          },
@@ -25063,7 +25259,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -29328,15 +29307,16 @@
+@@ -29328,15 +29319,16 @@
            ),
        ).toBe(false);
        expect(core.generatePromptSuggestion).not.toHaveBeenCalled();
@@ -25083,7 +25279,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
      it('releases FIFO priority when the queued prompt is a trusted retry', async () => {
        rebuildSessionWithGuard();
-@@ -29461,13 +29441,13 @@
+@@ -29461,13 +29453,13 @@
              changes: {},
            },
          });
@@ -25098,7 +25294,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'pending-before-combined-priority',
-@@ -29476,15 +29456,15 @@
+@@ -29476,15 +29468,15 @@
                    },
                  ],
                },
@@ -25116,7 +25312,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'complete-after-mid-turn',
-@@ -29501,13 +29481,13 @@
+@@ -29501,13 +29493,13 @@
                    },
                  ],
                },
@@ -25131,7 +25327,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            messages: ['mid-turn direction before queued prompt'],
            hasQueuedPrompt: true,
          },
-@@ -29535,15 +29515,16 @@
+@@ -29535,15 +29527,16 @@
            ([request]) => request.eventName === 'Stop',
          ),
        ).toBe(false);
@@ -25151,7 +25347,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        await session.prompt({
          sessionId: 'test-session-id',
-@@ -29589,13 +29570,13 @@
+@@ -29589,13 +29582,13 @@
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
@@ -25166,7 +25362,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-after-queued-prompt-cancel',
-@@ -29604,13 +29585,13 @@
+@@ -29604,13 +29597,13 @@
                    },
                  ],
                },
@@ -25181,7 +25377,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        });
  
        await vi.waitFor(() => {
-@@ -29674,14 +29655,14 @@
+@@ -29674,14 +29667,14 @@
        callback('background done', '<deferred-before-fifo-error />', {
          agentId: 'deferred-before-fifo-error',
          status: 'completed',
@@ -25198,7 +25394,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'queued FIFO work' }],
          }),
-@@ -29707,13 +29688,13 @@
+@@ -29707,13 +29700,13 @@
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
@@ -25213,7 +25409,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-midturn-fifo-cancel',
-@@ -29722,14 +29703,14 @@
+@@ -29722,14 +29715,14 @@
                    },
                  ],
                },
@@ -25230,7 +25426,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            messages: ['mid-turn before queued prompt cancellation'],
            hasQueuedPrompt: true,
          },
-@@ -29738,15 +29719,16 @@
+@@ -29738,15 +29731,16 @@
  
        await runGuardPrompt();
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -25250,7 +25446,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          agentId: 'after-midturn-fifo-cancel',
          status: 'completed',
        });
-@@ -30131,13 +30113,13 @@
+@@ -30131,13 +30125,13 @@
              secondToolStarted();
              await secondToolGate;
            }
@@ -25265,7 +25461,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id,
-@@ -30148,17 +30130,17 @@
+@@ -30148,17 +30142,17 @@
                },
              },
            ]);
@@ -25285,7 +25481,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              if (request.eventName !== 'Stop') {
                return { success: true, output: {} };
              }
-@@ -30245,17 +30227,17 @@
+@@ -30245,17 +30239,17 @@
        let releaseSecondSend!: () => void;
        const secondSendGate = new Promise<void>((resolve) => {
          releaseSecondSend = resolve;
@@ -25305,7 +25501,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'second-prompt-todo',
-@@ -30264,13 +30246,13 @@
+@@ -30264,13 +30258,13 @@
                    },
                  ],
                },
@@ -25320,7 +25516,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const secondPrompt = session.prompt({
          sessionId: 'test-session-id',
          prompt: [{ type: 'text', text: 'new work chain' }],
-@@ -30561,13 +30543,13 @@
+@@ -30561,13 +30555,13 @@
            status: 'completed',
            notified: true,
          },
@@ -25335,7 +25531,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -30925,13 +30907,13 @@
+@@ -30925,13 +30919,13 @@
        });
        await new Promise((resolve) => setTimeout(resolve, 0));
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -25350,7 +25546,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
        });
      });
-@@ -30963,14 +30945,22 @@
+@@ -30963,14 +30957,22 @@
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
  
        const history: Content[] = [
@@ -25359,7 +25555,8 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        ];
 -      vi.mocked(mockChat.getHistoryShallow).mockReturnValue(history);
 +      installRewindHistory(history);
-       session.rewindToTurn(0);
+-      session.rewindToTurn(0);
++      await session.rewindToTurn(0);
 +      expect(mockChatRecordingService.rewindRecording).toHaveBeenCalledWith(
 +        0,
 +        {
@@ -25374,7 +25571,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            id: 'pre-rewind-agent',
            description: 'pre-rewind-agent',
            isBackgrounded: true,
-@@ -30978,13 +30968,13 @@
+@@ -30978,13 +30980,13 @@
            notified: true,
          },
        ]);
@@ -25389,7 +25586,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-after-rewind',
-@@ -30993,13 +30983,13 @@
+@@ -30993,13 +30995,13 @@
                    },
                  ],
                },
@@ -25404,7 +25601,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31061,13 +31051,13 @@
+@@ -31061,13 +31063,13 @@
            notified: true,
          },
        ]);
@@ -25419,7 +25616,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'related-notification-todo-after-hard-stop',
-@@ -31076,13 +31066,13 @@
+@@ -31076,13 +31078,13 @@
                    },
                  ],
                },
@@ -25434,7 +25631,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31129,13 +31119,13 @@
+@@ -31129,13 +31131,13 @@
          },
        ]);
        installPendingTodoTool();
@@ -25449,7 +25646,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'unrelated-notification-todo-after-hard-stop',
-@@ -31144,13 +31134,13 @@
+@@ -31144,13 +31146,13 @@
                    },
                  ],
                },
@@ -25464,7 +25661,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31182,13 +31172,13 @@
+@@ -31182,13 +31184,13 @@
      it('retains an already-used attempt when a related background task completes', async () => {
        rebuildSessionWithGuard();
        installPendingTodoTool();
@@ -25479,7 +25676,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-background',
-@@ -31197,26 +31187,26 @@
+@@ -31197,26 +31199,26 @@
                    },
                  ],
                },
@@ -25509,7 +25706,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        mockBackgroundTaskRegistry.getAll.mockReturnValue([
          {
-@@ -31280,13 +31270,13 @@
+@@ -31280,13 +31282,13 @@
            notified: true,
          },
        ]);
@@ -25524,7 +25721,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'notification-todo',
-@@ -31295,13 +31285,13 @@
+@@ -31295,13 +31297,13 @@
                    },
                  ],
                },
@@ -25539,7 +25736,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31375,13 +31365,13 @@
+@@ -31375,13 +31377,13 @@
          }),
        };
        mockToolRegistry.getTool.mockImplementation((name: string) =>
@@ -25554,7 +25751,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                functionCalls: [
                  {
                    id,
-@@ -31392,13 +31382,13 @@
+@@ -31392,13 +31394,13 @@
              },
            },
          ]);
@@ -25569,7 +25766,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-coalesced-tool-loop',
-@@ -31407,16 +31397,16 @@
+@@ -31407,16 +31409,16 @@
                    },
                  ],
                },
@@ -25588,7 +25785,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -31484,13 +31474,13 @@
+@@ -31484,13 +31486,13 @@
        mockToolRegistry.getTool.mockImplementation((name: string) =>
          name === core.ToolNames.TODO_WRITE ? todoTool : readTool,
        );
@@ -25603,7 +25800,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-coalesced-background-race',
-@@ -31499,15 +31489,15 @@
+@@ -31499,15 +31501,15 @@
                    },
                  ],
                },
@@ -25621,7 +25818,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'coalesced-read-before-background-race',
-@@ -31516,13 +31506,13 @@
+@@ -31516,13 +31518,13 @@
                    },
                  ],
                },
@@ -25636,7 +25833,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -31598,13 +31588,13 @@
+@@ -31598,13 +31600,13 @@
        mockToolRegistry.getTool.mockImplementation((name: string) =>
          name === core.ToolNames.TODO_WRITE ? todoTool : readTool,
        );
@@ -25651,7 +25848,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-unavailable-nested-claim',
-@@ -31613,15 +31603,15 @@
+@@ -31613,15 +31615,15 @@
                    },
                  ],
                },
@@ -25669,7 +25866,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'coalesced-read-before-unavailable-nested-claim',
-@@ -31630,13 +31620,13 @@
+@@ -31630,13 +31632,13 @@
                    },
                  ],
                },
@@ -25684,7 +25881,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -31762,94 +31752,5 @@
+@@ -31762,94 +31764,5 @@
  
 -    it('preserves a coalesced Stop-loop event when token rejection skips the final send', async () => {
 -      rebuildSessionWithGuard();
@@ -25779,7 +25976,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        rebuildSessionWithGuard();
        installPendingTodoTool();
        queuePendingTodoThenNaturalStops();
-@@ -32253,13 +32154,13 @@
+@@ -32253,13 +32166,13 @@
  
      it('suspends an armed guard when a background notification stream aborts', async () => {
        rebuildSessionWithGuard();
@@ -25794,7 +25991,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const callback =
          mockBackgroundTaskRegistry.setNotificationCallback.mock.calls.at(
            -1,
-@@ -32323,15 +32224,15 @@
+@@ -32323,15 +32236,15 @@
        mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
        mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
        rebuildSessionWithGuard();
@@ -25812,7 +26009,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'cron-todo',
-@@ -32340,13 +32241,13 @@
+@@ -32340,13 +32253,13 @@
                    },
                  ],
                },
@@ -25827,7 +26024,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          request: vi.fn().mockImplementation(async (request) => ({
            success: true,
            output:
-@@ -32409,15 +32310,15 @@
+@@ -32409,15 +32322,15 @@
        mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
        mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
        rebuildSessionWithGuard();
@@ -25845,7 +26042,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'cron-todo',
-@@ -32426,37 +32327,29 @@
+@@ -32426,37 +32339,29 @@
                    },
                  ],
                },
@@ -25896,7 +26093,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +      // #runStopContinuation, the shared path cron and background-notification
 +      // turns reach through #handleStopHookLoop.
 +      mockConfig.getSkipLoopDetection = vi.fn().mockReturnValue(false);
-@@ -32468,7 +32361,7 @@
+@@ -32468,7 +32373,7 @@
        expect(logLoopDetectedSpy).toHaveBeenCalledWith(
          mockConfig,
          expect.objectContaining({
@@ -25905,7 +26102,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          }),
          {},
        );
-@@ -32486,15 +32379,15 @@
+@@ -32486,15 +32391,15 @@
  
      it('keeps a background-notification turn graceful when its Stop continuation trips loop protection', async () => {
        rebuildSessionWithGuard();
@@ -25923,7 +26120,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'notification-todo',
-@@ -32503,35 +32396,28 @@
+@@ -32503,35 +32408,28 @@
                    },
                  ],
                },
@@ -25969,14 +26166,14 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +      // the duplicate threshold and trips loop protection inside
        // #runStopContinuation, pinning the graceful default at the
        // background-notification #handleStopHookLoop call site.
-@@ -32538,5 +32424,4 @@
+@@ -32538,5 +32436,4 @@
 -      mockConfig.getMaxToolCallsPerTurn = vi.fn().mockReturnValue(1);
 -      mockConfig.isMaxToolCallsPerTurnExplicit = vi.fn().mockReturnValue(true);
 +      mockConfig.getSkipLoopDetection = vi.fn().mockReturnValue(false);
        const callback =
          mockBackgroundTaskRegistry.setNotificationCallback.mock.calls.at(
            -1,
-@@ -32557,7 +32442,7 @@
+@@ -32557,7 +32454,7 @@
        expect(logLoopDetectedSpy).toHaveBeenCalledWith(
          mockConfig,
          expect.objectContaining({
@@ -25985,7 +26182,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          }),
          {},
        );
-@@ -32603,13 +32488,13 @@
+@@ -32603,13 +32500,13 @@
        mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
        mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
        rebuildSessionWithGuard();
@@ -26000,7 +26197,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        await aborting.started;
        const internals = session as unknown as {
          cronAbortController: AbortController | null;
-@@ -33179,6 +33064,11 @@
+@@ -33179,6 +33076,11 @@
  
        await session.cancelPendingPrompt();
        expect(capturedSignal!.aborted).toBe(true);
@@ -26583,12 +26780,38 @@ diff --git a/packages/cli/src/acp-integration/session/Session.ts b/packages/cli/
      this.primeTurnFromHistory(records);
      try {
        await this.historyReplayer.replay(records, gaps, options);
-@@ -3228,15 +3166,18 @@
+@@ -3171,19 +3109,19 @@
+       // exit_plan_mode approval, so a replayed session starts text-only —
+       // even when the replay fails part-way.
+       this.activeTodoPlanRevision = undefined;
+     }
+   }
+ 
+-  rewindToTurn(
++  async rewindToTurn(
+     targetTurnIndex: number,
+     opts?: { rewindFiles?: boolean },
+-  ): {
++  ): Promise<{
+     targetTurnIndex: number;
+     apiTruncateIndex: number;
+-  } {
++  }> {
+     if (!Number.isInteger(targetTurnIndex) || targetTurnIndex < 0) {
+       throw RequestError.invalidParams(
+         undefined,
+         'targetTurnIndex must be a non-negative integer',
+       );
+     }
+@@ -3226,17 +3164,20 @@
+       : undefined;
+ 
      if (survivingSnapshots) {
        fileHistoryService.restoreFromSnapshots(survivingSnapshots);
      }
  
-     this.config
+-    this.config
++    await this.config
        .getChatRecordingService()
 -      ?.rewindRecording(
 +      .rewindRecording(
@@ -71792,15 +72015,25 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
          // the conversation stays at the newer state.
          const needsConversation =
            option === 'conversation' || option === 'both';
-@@ -3683,15 +3646,18 @@
-                 'Conversation rewound. Edit your prompt and press Enter to continue.',
-               ),
-             },
-             Date.now(),
-           );
+@@ -3673,31 +3636,34 @@
+           if (userItem.type === 'user' && userItem.text) {
+             restoredSubmissionRef.current = null;
+             submittedPromptProvenanceUnavailableRef.current = true;
+             buffer.setText(userItem.text);
+           }
  
+-          historyManager.addItem(
+-            {
+-              type: 'info',
+-              text: t(
+-                'Conversation rewound. Edit your prompt and press Enter to continue.',
+-              ),
+-            },
+-            Date.now(),
+-          );
+-
 -          config.getChatRecordingService()?.rewindRecording(
-+          config.getChatRecordingService().rewindRecording(
++          await config.getChatRecordingService().rewindRecording(
              targetTurnIndex,
 -            { truncatedCount: effectiveLength - truncatedUi.length },
 +            {
@@ -71813,6 +72046,22 @@ diff --git a/packages/cli/src/ui/AppContainer.tsx b/packages/cli/src/ui/AppConta
                    .getSnapshots()
                    .slice(0, targetTurnIndex + 1)
                : undefined,
++          );
++
++          historyManager.addItem(
++            {
++              type: 'info',
++              text: t(
++                'Conversation rewound. Edit your prompt and press Enter to continue.',
++              ),
++            },
++            Date.now(),
+           );
+         }
+ 
+         // Show file restore result after conversation truncation so the
+         // message isn't immediately removed by loadHistory.
+         if (fileRestoreMessage) {
 @@ -3734,13 +3700,20 @@
            Date.now(),
          );
@@ -227507,7 +227756,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        });
  
 -      chatRecordingService.rewindRecording(0, { truncatedCount: 2 });
-+      chatRecordingService.rewindRecording(0, {
++      await chatRecordingService.rewindRecording(0, {
 +        runtimeHistory: { history: [], imagePayloads: [] },
 +        truncatedCount: 2,
 +      });
@@ -227531,12 +227780,38 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            timestamp: '2026-07-21T00:00:00.000Z',
            type: 'user' as const,
            provenance: 'real_user' as const,
-@@ -645,31 +758,34 @@
+@@ -644,32 +757,60 @@
+       ).rejects.toMatchObject({ name: 'SessionWriterUnavailableError' });
        expect(jsonl.writeLine).not.toHaveBeenCalled();
      });
    });
  
    describe('rewindRecording', () => {
++    it('refuses a rewind whose canonical branch record cannot be written', async () => {
++      const writeError = new Error('rewind disk failure');
++      vi.mocked(jsonl.writeLine).mockRejectedValueOnce(writeError);
++
++      await expect(
++        chatRecordingService.rewindRecording(0, {
++          runtimeHistory: { history: [], imagePayloads: [] },
++          truncatedCount: 1,
++        }),
++      ).rejects.toMatchObject({ cause: writeError });
++      await expect(chatRecordingService.flush()).rejects.toBe(writeError);
++    });
++
++    it('refuses a rewind when no active canonical writer can accept it', async () => {
++      chatRecordingService.beginClose();
++
++      await expect(
++        chatRecordingService.rewindRecording(0, {
++          runtimeHistory: { history: [], imagePayloads: [] },
++          truncatedCount: 1,
++        }),
++      ).rejects.toMatchObject({ cause: expect.any(SessionWriterUnavailableError) });
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
++    });
++
      it('drops display projections from rewound user turns', async () => {
 -      chatRecordingService.recordUserMessage(
 +      await chatRecordingService.recordUserMessage(
@@ -227559,7 +227834,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
  
 -      chatRecordingService.rewindRecording(1, { truncatedCount: 1 });
 -      chatRecordingService.recordUserMessage(
-+      chatRecordingService.rewindRecording(1, {
++      await chatRecordingService.rewindRecording(1, {
 +        runtimeHistory: { history: [], imagePayloads: [] },
 +        truncatedCount: 1,
 +      });
@@ -227570,7 +227845,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            displayText: 'C',
            hookContext: '',
          },
-@@ -684,13 +800,13 @@
+@@ -684,13 +825,13 @@
      });
  
      it('compensates the rewind splice for the display-text cap window', async () => {
@@ -227585,7 +227860,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
              displayText: `visible ${index}`,
              hookContext: '',
            },
-@@ -699,13 +815,16 @@
+@@ -699,13 +840,16 @@
        expect(chatRecordingService.getUserDisplayTextsForTitle()).toHaveLength(
          20,
        );
@@ -227593,7 +227868,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        // Rewind to turn 22 keeps turns 0..21; the retained window covers turns
        // 5..24, so projections for turns 5..21 (entries 0..16) must survive.
 -      chatRecordingService.rewindRecording(22, { truncatedCount: 3 });
-+      chatRecordingService.rewindRecording(22, {
++      await chatRecordingService.rewindRecording(22, {
 +        runtimeHistory: { history: [], imagePayloads: [] },
 +        truncatedCount: 3,
 +      });
@@ -227603,7 +227878,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
        await chatRecordingService.flush();
        vi.mocked(jsonl.writeLine).mockClear();
-@@ -718,90 +837,103 @@
+@@ -718,90 +862,103 @@
        chatRecordingService = activateRecording(
          new ChatRecordingService(mockConfig),
        );
@@ -227636,7 +227911,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        ]);
  
 -      chatRecordingService.rewindRecording(0, { truncatedCount: 2 });
-+      chatRecordingService.rewindRecording(0, {
++      await chatRecordingService.rewindRecording(0, {
 +        runtimeHistory: { history: [], imagePayloads: [] },
 +        truncatedCount: 2,
 +      });
@@ -227708,7 +227983,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            timestamp: '2026-06-27T00:00:04.000Z',
            type: 'user',
            cwd: '/test/project/root',
-@@ -810,25 +942,30 @@
+@@ -810,25 +967,30 @@
          },
        ]);
  
@@ -227716,7 +227991,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        // is the second REAL user turn (user-2), re-rooting at assistant-2. Were
        // the continuation counted, index 1 would re-root at assistant-1.
 -      chatRecordingService.rewindRecording(1, { truncatedCount: 3 });
-+      chatRecordingService.rewindRecording(1, {
++      await chatRecordingService.rewindRecording(1, {
 +        runtimeHistory: { history: [], imagePayloads: [] },
 +        truncatedCount: 3,
 +      });
@@ -227740,7 +228015,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            timestamp: '2026-06-27T00:00:00.000Z',
            type: 'assistant',
            cwd: '/test/project/root',
-@@ -836,13 +973,15 @@
+@@ -836,13 +998,15 @@
            message: { role: 'model', parts: [{ text: 'persisted response' }] },
            model: 'gemini-pro',
          },
@@ -227757,7 +228032,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          recordId: 'persisted-tail',
        });
      });
-@@ -872,13 +1011,13 @@
+@@ -872,13 +1036,13 @@
          filesRead: ['foo.txt'],
          status: 'success',
          message: 'Success',
@@ -227772,7 +228047,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(jsonl.writeLine).toHaveBeenCalledTimes(2);
        const userRecord = vi.mocked(jsonl.writeLine).mock
          .calls[0][1] as ChatRecord;
-@@ -1103,15 +1242,20 @@
+@@ -1103,15 +1267,20 @@
          ]),
        ).toEqual([failedSnapshot]);
      });
@@ -227782,7 +228057,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
 -      chatRecordingService.rewindRecording(0, { truncatedCount: 1 }, [
 -        oldSnapshot,
 -      ]);
-+      chatRecordingService.rewindRecording(
++      await chatRecordingService.rewindRecording(
 +        0,
 +        {
 +          runtimeHistory: { history: [], imagePayloads: [] },
@@ -227796,7 +228071,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const staleSnapshot = vi.mocked(jsonl.writeLine).mock
          .calls[0][1] as ChatRecord;
        const rewind = vi.mocked(jsonl.writeLine).mock.calls[1][1] as ChatRecord;
-@@ -1135,76 +1279,307 @@
+@@ -1135,76 +1304,307 @@
          ],
        });
      });
@@ -228115,7 +228390,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          [
            { role: 'user', text: '你好' },
            { role: 'assistant', text: '你好！' },
-@@ -1233,14 +1608,18 @@
+@@ -1233,14 +1633,18 @@
      });
    });
  
@@ -228136,7 +228411,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
  
        // Now record the tool result (Parts with functionResponse)
        const toolResultParts: Part[] = [
-@@ -1330,13 +1709,26 @@
+@@ -1330,13 +1734,26 @@
  
        chatRecordingService.recordToolResult(toolResultParts, metadata);
        await chatRecordingService.flush();
@@ -228164,7 +228439,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      });
  
      it('compacts large resultDisplay metadata before recording', async () => {
-@@ -1412,13 +1804,26 @@
+@@ -1412,13 +1829,26 @@
  
        chatRecordingService.recordToolResult(toolResultParts, metadata);
        await chatRecordingService.flush();
@@ -228192,7 +228467,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      });
  
      it('should shrink large file diff resultDisplay without mutating input', async () => {
-@@ -1513,12 +1918,17 @@
+@@ -1513,12 +1943,17 @@
            taskDescription: 'Run task',
            taskPrompt: 'Run task',
            status: 'completed' as const,
@@ -228210,7 +228485,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
                args: {},
                result: 'nested result',
              },
-@@ -1537,14 +1947,18 @@
+@@ -1537,14 +1972,18 @@
          type: 'task_execution',
          toolCalls: [],
        });
@@ -228231,7 +228506,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const toolResultParts: Part[] = [
          {
            functionResponse: {
-@@ -1567,13 +1981,93 @@
+@@ -1567,13 +2006,93 @@
        expect(userRecord.parentUuid).toBeNull();
        expect(assistantRecord.parentUuid).toBe(userRecord.uuid);
        expect(toolResultRecord.parentUuid).toBe(assistantRecord.uuid);
@@ -228325,7 +228600,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          rawCommand: '/about',
        });
        await chatRecordingService.flush();
-@@ -1587,13 +2081,13 @@
+@@ -1587,13 +2106,13 @@
          phase: 'invocation',
          rawCommand: '/about',
        });
@@ -228340,7 +228615,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        });
        await chatRecordingService.flush();
  
-@@ -1617,50 +2111,63 @@
+@@ -1617,50 +2136,63 @@
        expect(jsonl.writeLine).not.toHaveBeenCalled();
      });
  
@@ -228414,7 +228689,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(firstFailure).toEqual(new Error('disk full'));
        await expect(chatRecordingService.flush()).rejects.toBe(firstFailure);
      });
-@@ -1674,20 +2181,27 @@
+@@ -1674,20 +2206,27 @@
        );
        const listener = vi.fn();
        const service = activateRecording(
@@ -228445,7 +228720,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(listener).toHaveBeenCalledWith({
          sessionId: 'test-session-id',
          error: writeError,
-@@ -1701,19 +2215,23 @@
+@@ -1701,19 +2240,23 @@
          .mockRejectedValueOnce(new Error('first failure'))
          .mockRejectedValueOnce(new Error('second failure'));
  
@@ -228471,7 +228746,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(secondListener).toHaveBeenCalledOnce();
      });
  
-@@ -1727,169 +2245,373 @@
+@@ -1727,169 +2270,373 @@
              throw new Error('listener threw');
            }),
          );
@@ -228940,7 +229215,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
    describe('recordAttributionSnapshot', () => {
      const baseSnapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1916,13 +2638,13 @@
+@@ -1916,13 +2663,13 @@
  
      it('refreshes the cached git branch at the attribution turn boundary', async () => {
        vi.mocked(execSync)
@@ -228955,7 +229230,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          promptCount: 1,
        });
        await chatRecordingService.flush();
-@@ -1950,18 +2672,21 @@
+@@ -1950,18 +2697,21 @@
  
      // After rewindRecording, the previous attribution snapshot lives on
      // the abandoned branch, so the dedup key has to clear — otherwise
@@ -228969,7 +229244,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const beforeRewind = vi.mocked(jsonl.writeLine).mock.calls.length;
  
 -      chatRecordingService.rewindRecording(0, { truncatedCount: 0 });
-+      chatRecordingService.rewindRecording(0, {
++      await chatRecordingService.rewindRecording(0, {
 +        runtimeHistory: { history: [], imagePayloads: [] },
 +        truncatedCount: 0,
 +      });
@@ -228979,7 +229254,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        // 1 rewind record + 1 fresh snapshot = 2 more writes after rewind.
        expect(vi.mocked(jsonl.writeLine).mock.calls.length).toBe(
          beforeRewind + 2,
-@@ -1976,19 +2701,21 @@
+@@ -1976,19 +2726,21 @@
  
        chatRecordingService.recordAttributionSnapshot(baseSnapshot);
        await expect(chatRecordingService.flush()).rejects.toBe(writeError);
@@ -229003,7 +229278,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        } finally {
          process.off('unhandledRejection', handler);
        }
-@@ -2007,20 +2734,27 @@
+@@ -2007,20 +2759,27 @@
          v: 2,
          sessionId: 'test-session-id',
          sequence: 1,
@@ -229034,7 +229309,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            sessionId: 'test-session-id',
            sequence: 2,
            recordedAt: '2026-07-04T00:00:01.000Z',
-@@ -2088,24 +2822,28 @@
+@@ -2088,24 +2847,28 @@
          chatRecordingService.recordSessionArtifactEvent(payload),
        ).resolves.toBeUndefined();
        expect(jsonl.writeLine).toHaveBeenCalledOnce();
@@ -229065,7 +229340,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const artifact = vi.mocked(jsonl.writeLine).mock
          .calls[1][1] as ChatRecord;
        const after = vi.mocked(jsonl.writeLine).mock.calls[2][1] as ChatRecord;
-@@ -2114,26 +2852,31 @@
+@@ -2114,26 +2877,31 @@
        expect(after.parentUuid).not.toBe(artifact.uuid);
      });
    });
@@ -229099,7 +229374,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
        expect(mockLease.sealForHandoff).not.toHaveBeenCalled();
        expect(mockLease.release).not.toHaveBeenCalled();
-@@ -2141,13 +2884,15 @@
+@@ -2141,13 +2909,15 @@
      });
  
      it('releases the writer lease before reporting a flush failure', async () => {
@@ -229116,7 +229391,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
      });
  
-@@ -2156,19 +2901,24 @@
+@@ -2156,19 +2926,24 @@
        vi.mocked(mockLease.appendJsonLine).mockImplementationOnce(
          () =>
            new Promise<void>((resolve) => {
@@ -229143,7 +229418,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          undefined,
        ]);
        expect(mockLease.appendJsonLine).toHaveBeenCalledTimes(1);
-@@ -2197,10 +2947,141 @@
+@@ -2197,10 +2972,141 @@
  
        await expect(chatRecordingService.close()).rejects.toBe(cleanupFailure);
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
@@ -230718,7 +230993,37 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1837,7 +1896,7 @@
+@@ -1811,18 +1870,27 @@
+    *
+    * @param targetTurnIndex 0-based index of the user turn to rewind to.
+    *   For example, 0 means rewind to the very first user message (keeping
+    *   nothing before it), 1 means keep the first user turn, etc.
+    * @param payload Additional metadata to persist with the rewind record.
+    */
+-  rewindRecording(
++  async rewindRecording(
+     targetTurnIndex: number,
+     payload: RewindRecordPayload,
+     survivingFileHistorySnapshots?: FileHistorySnapshot[],
+-  ): void {
++  ): Promise<void> {
+     try {
++      if (this.writeFailure) throw this.writeFailure;
++      if (!this.acceptingWrites || this.state !== 'active') {
++        throw new SessionWriterUnavailableError({
++          message: 'No active session writer can record this rewind.',
++        });
++      }
++      const survivingSnapshots = survivingFileHistorySnapshots?.length
++        ? survivingFileHistorySnapshots.map(serializeSnapshot)
++        : undefined;
+       // Re-root: point back to the record just before the target user turn.
+       this.lastRecordUuid = this.turnParentUuids[targetTurnIndex] ?? null;
+       const projectionStart = Math.max(
+         0,
+         this.turnParentUuids.length - this.userDisplayTextsForTitle.length,
+       );
+@@ -1837,36 +1905,46 @@
        // post-rewind identical snapshot would be skipped and the rewound
        // session would lose all attribution state on restore.
        this.lastAttributionSnapshotJson = undefined;
@@ -230727,7 +231032,36 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'rewind',
-@@ -1860,13 +1919,13 @@
+         systemPayload: payload,
+       };
+ 
+-      this.appendRecord(record);
++      await this.appendRecordStrict(record);
+ 
+       // Re-record surviving file history snapshots on the active branch so
+       // they are visible to reconstructHistory on resume.
+-      if (survivingFileHistorySnapshots?.length) {
+-        this.recordFileHistorySnapshotBatch(survivingFileHistorySnapshots);
++      if (survivingSnapshots) {
++        await this.appendRecordStrict(
++          this.createFileHistorySnapshotBatchRecord(survivingSnapshots),
++        );
+       }
+     } catch (error) {
+-      debugLogger.error('Error saving rewind record:', error);
++      const failure = this.enterWriteFailure(
++        error,
++        this.getSessionId(),
++        'rewind',
++      );
++      throw new Error(
++        `Cannot persist the rewind for session ${this.getSessionId()}: ${failure.message}. Close this session, inspect and repair its original recording, then reopen it with the matching client before retrying.`,
++        { cause: failure },
++      );
+     }
+   }
+ 
+   /**
     * Rebuilds `turnParentUuids` from a reconstructed message list.
     *
     * Call this after resuming a session so that subsequent rewinds within
@@ -230742,7 +231076,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        const record = messages[i];
        if (
          record.type === 'user' &&
-@@ -1954,10 +2013,8 @@
+@@ -1954,10 +2032,8 @@
      customTitle: string,
      titleSource: TitleSource,
    ): Promise<boolean> {
@@ -230754,7 +231088,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'custom_title',
-@@ -1976,23 +2033,12 @@
+@@ -1976,23 +2052,12 @@
        } catch {
          // Observer errors must never break title recording.
        }
@@ -230778,7 +231112,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      }
    }
  
-@@ -2015,7 +2061,7 @@
+@@ -2015,7 +2080,7 @@
      // record — the session would then carry two `parent_session` entries.
      if (this.currentParentSessionId === parentSessionId) return true;
      try {
@@ -230787,7 +231121,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'parent_session',
-@@ -2044,7 +2090,7 @@
+@@ -2044,7 +2109,7 @@
        );
      }
      try {
@@ -230796,7 +231130,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'session_source',
-@@ -2065,54 +2111,10 @@
+@@ -2065,54 +2130,10 @@
      }
    }
  
@@ -230855,7 +231189,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -2120,7 +2122,7 @@
+@@ -2120,7 +2141,7 @@
     */
    recordAtCommand(payload: AtCommandRecordPayload): void {
      try {
@@ -230864,7 +231198,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'at_command',
-@@ -2157,7 +2159,7 @@
+@@ -2157,7 +2178,7 @@
        if (json === this.lastAttributionSnapshotJson) {
          return;
        }
@@ -230873,7 +231207,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'attribution_snapshot',
-@@ -2200,7 +2202,7 @@
+@@ -2200,7 +2221,7 @@
    async recordUserTextElements(
      payload: UserTextElementsRecordPayload,
    ): Promise<void> {
@@ -230882,16 +231216,37 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        ...this.createBaseRecord('system'),
        type: 'system',
        subtype: 'user_text_elements',
-@@ -2213,7 +2215,7 @@
+@@ -2210,25 +2231,30 @@
+   }
+ 
+   private appendSerializedFileHistorySnapshotBatch(
      snapshots: SerializedFileHistorySnapshot[],
    ): void {
      try {
 -      const record: ChatRecord = {
-+      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
-         type: 'system',
-         subtype: 'file_history_snapshot',
-@@ -2228,7 +2230,7 @@
+-        ...this.createBaseRecord('system'),
+-        type: 'system',
+-        subtype: 'file_history_snapshot',
+-        systemPayload: { snapshots },
+-      };
+-      this.appendRecord(record);
++      this.appendRecord(this.createFileHistorySnapshotBatchRecord(snapshots));
+     } catch (error) {
+       debugLogger.error('Error saving file history snapshot batch:', error);
+     }
++  }
++
++  private createFileHistorySnapshotBatchRecord(
++    snapshots: SerializedFileHistorySnapshot[],
++  ): StoredChatRecord {
++    return {
++      ...this.createBaseRecord('system'),
++      type: 'system',
++      subtype: 'file_history_snapshot',
++      systemPayload: { snapshots },
++    };
+   }
+ 
    async recordSessionArtifactEvent(
      payload: SessionArtifactEventRecordPayload,
    ): Promise<void> {
@@ -230900,7 +231255,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        ...this.createBaseRecord('system'),
        type: 'system',
        subtype: 'session_artifact_event',
-@@ -2240,7 +2242,7 @@
+@@ -2240,7 +2266,7 @@
    async recordSessionArtifactSnapshot(
      payload: SessionArtifactSnapshotRecordPayload,
    ): Promise<void> {
@@ -414821,7 +415176,7 @@ diff --git a/packages/sdk-typescript/test/unit/model-generation-presentation.tes
 +  const f = await fixture(false);
 +  try {
 +    await f.run('invalid_usage');
-+    f.root.rewindRecording(0, {
++    await f.root.rewindRecording(0, {
 +      runtimeHistory: { history: [], imagePayloads: [] },
 +      truncatedCount: 1,
 +    });
@@ -414912,7 +415267,7 @@ diff --git a/packages/sdk-typescript/test/unit/model-generation-presentation.tes
 +  const f = await fixture(false);
 +  try {
 +    await f.run('accepted');
-+    f.root.rewindRecording(0, {
++    await f.root.rewindRecording(0, {
 +      runtimeHistory: { history: [], imagePayloads: [] },
 +      truncatedCount: 1,
 +    });
