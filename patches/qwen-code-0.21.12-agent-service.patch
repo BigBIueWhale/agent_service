@@ -354659,7 +354659,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1379 @@
+@@ -0,0 +1,1383 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -354882,7 +354882,11 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                if usage is not None:
 +                    self.usage_reports.append((self.count, usage))
 +            if self.retain_values:
-+                self.values.append(_sdk_json_value(value))
++                self.values.append(
++                    {"event": name, "data": _sdk_json_value(value)}
++                    if name and name.startswith("thread.")
++                    else _sdk_json_value(value)
++                )
 +
 +
 +@dataclass
@@ -362019,7 +362023,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,966 @@
+@@ -0,0 +1,976 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -362929,7 +362933,17 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                Map<String, Long> usage = openaiServedUsage(value);
 +                if (usage != null) usageReports.add(new UsageObservation(count, usage));
 +            }
-+            if (retainValues) values.add(sdkJsonValue(value));
++            if (retainValues) {
++                Object sdkValue = sdkJsonValue(value);
++                if (name != null && name.startsWith("thread.")) {
++                    Map<String, Object> wrapped = new LinkedHashMap<>();
++                    wrapped.put("event", name);
++                    wrapped.put("data", sdkValue);
++                    values.add(wrapped);
++                } else {
++                    values.add(sdkValue);
++                }
++            }
 +        }
 +
 +        private static boolean truthy(Object value) {
@@ -365615,7 +365629,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,938 @@
+@@ -0,0 +1,950 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -365738,10 +365752,15 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +    }
 +
 +    private static List<JSONObject> streamedCompaction(String payload) {
++        return streamedCompaction(payload, null);
++    }
++
++    private static List<JSONObject> streamedCompaction(String payload, String eventName) {
 +        List<JSONObject> rows = settledCompaction();
 +        String session = rows.get(0).getString("session_id");
 +        String journal = rows.get(0).getJSONObject("request_evidence_origin").getString("journal_id");
-+        byte[] body = ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
++        String header = eventName == null ? "" : "event: " + eventName + "\n";
++        byte[] body = (header + "data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
 +        rows.get(2).getJSONObject("response").getJSONObject("event").put("status", 200);
 +        rows.get(2).getJSONObject("response").getJSONObject("event").put("content_type", "text/event-stream");
 +        rows.add(3, compactionResponse(session, journal, 2, JSON.parseObject("{\"kind\":\"body\",\"offset\":0}")));
@@ -365758,7 +365777,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        outcome.put("status", "completed");
 +        outcome.put("error", null);
 +        outcome.put("sdk_values_seen", 1);
-+        rows.get(7).getJSONObject("data").getJSONObject("output").put("sdkValuesJson", List.of(payload));
++        String sdkValue = eventName == null ? payload : "{\"event\":\"" + eventName + "\",\"data\":" + payload + "}";
++        rows.get(7).getJSONObject("data").getJSONObject("output").put("sdkValuesJson", List.of(sdkValue));
 +        return rows;
 +    }
 +
@@ -365801,6 +365821,12 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +    @Test
 +    void compactionSdkValuesMustComeFromRecordedSseBytes() {
 +        admitCompaction(streamedCompaction("{\"choices\":[]}"));
++        List<JSONObject> thread = streamedCompaction("{\"choices\":[]}", "thread.message");
++        admitCompaction(thread);
++        thread.get(7).getJSONObject("data").getJSONObject("output")
++                .put("sdkValuesJson", List.of("{\"choices\":[]}"));
++        assertThrows(RecordContractException.class, () -> admitCompaction(thread));
++        admitCompaction(streamedCompaction("null", "thread.message"));
 +        List<JSONObject> repeatedProviderMember = streamedCompaction("{\"choices\":[],\"choices\":[{}]}");
 +        repeatedProviderMember.get(7).getJSONObject("data").getJSONObject("output")
 +                .put("sdkValuesJson", List.of("{\"choices\":[{}]}"));
@@ -428547,7 +428573,7 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
-@@ -0,0 +1,408 @@
+@@ -0,0 +1,416 @@
 +"""Compaction claims must account for the physical work in the same stream."""
 +
 +from __future__ import annotations
@@ -428822,22 +428848,30 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +
 +
 +@pytest.mark.parametrize(
-+    ("wire_value", "claimed_value", "forged_value"),
++    ("wire_value", "claimed_value", "forged_value", "event_name"),
 +    [
 +        (
 +            _json({"choices": []}),
 +            _json({"choices": []}),
 +            _json({"choices": [{"text": "forged"}]}),
++            None,
 +        ),
-+        ('"literal"', '"literal"', '"forged"'),
-+        ("1e0", "1", "2"),
++        ('"literal"', '"literal"', '"forged"', None),
++        ("1e0", "1", "2", None),
++        (
++            _json({"choices": []}),
++            _json({"event": "thread.message", "data": {"choices": []}}),
++            _json({"choices": []}),
++            "thread.message",
++        ),
 +    ],
 +)
 +def test_compaction_sdk_value_must_match_recorded_response_bytes(
-+    wire_value: str, claimed_value: str, forged_value: str
++    wire_value: str, claimed_value: str, forged_value: str, event_name: str | None
 +) -> None:
 +    rows = _rows()
-+    body = f"data: {wire_value}\n\n".encode()
++    event_header = f"event: {event_name}\n" if event_name else ""
++    body = f"{event_header}data: {wire_value}\n\n".encode()
 +    rows[1 + 1]["response"]["event"] = {
 +        "kind": "http",
 +        "status": 200,

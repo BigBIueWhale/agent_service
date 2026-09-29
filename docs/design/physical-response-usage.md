@@ -103,6 +103,16 @@ release inputs were checked. These are patch/source identity checks, not a build
 
 ## Physical response bytes determine served usage
 
+For compaction evidence, the physical SSE reader retains the value that the
+pinned OpenAI SDK yields. A `thread.*` event yields an object with `event` and
+`data`, even when the JSON data is null; an ordinary event yields its JSON data
+directly. The native, Python and Java readers compare that SDK-shaped value
+with `sdkValuesJson`, so the inner JSON alone cannot be passed off as what the
+client consumed. A `thread.*` event does not contribute a served-usage report.
+The pinned SDK behavior was observed in a source-level Node probe, and the
+Python regression failed before the change and passed after it. Native and
+Java execution remain unverified pending the owner's gates.
+
 The producer observes the last complete, valid OpenAI usage report among SDK
 values it processed. It makes that observation before attempting to convert
 each value, so a failed conversion can still carry a real served-usage report.

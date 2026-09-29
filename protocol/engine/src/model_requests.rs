@@ -385,7 +385,12 @@ impl SseValues {
                     }
                 }
                 if self.retain_values {
-                    self.values.push(value);
+                    self.values.push(match name {
+                        Some(event) if event.starts_with("thread.") => {
+                            serde_json::json!({"event": event, "data": value})
+                        }
+                        _ => value,
+                    });
                 }
             }
             None => self.failed = true,
@@ -1503,7 +1508,7 @@ mod tests {
     }
     #[test]
     fn physical_value_reader_follows_sdk_sse_boundaries_and_errors() {
-        let mut stream = ResponseValues::new(true, false);
+        let mut stream = ResponseValues::new(true, true);
         for chunk in [
             ": keepalive\r".as_bytes(),
             "\ndata: {\"id\":1}\r".as_bytes(),
@@ -1515,6 +1520,13 @@ mod tests {
         stream
             .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
+        assert_eq!(
+            stream.stream_values(true).unwrap(),
+            vec![
+                json!({"id": 1}),
+                json!({"event": "thread.message", "data": {"error": {"message": "ordinary only"}}}),
+            ]
+        );
         assert!(stream
             .require_prefix(3, false, Some(200), Some("text/event-stream"), true)
             .is_err());
