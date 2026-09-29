@@ -1761,3 +1761,12 @@ only when its root mirror confirms that sequence. Authored cases cover these
 orders and an omitted child binding; they are unrun TypeScript source tests.
 This closes the checked child render/attempt relation by source reading, while
 provider-body renderer replay and owner gates remain open.
+
+It does not yet detect deletion of an entire child render, binding and
+generation from the child file. With no local render marker, the reader does
+not open root proof. The child file carries `agentId`, but that is not always
+the request's `kvScope`: AgentTool derives the scope from its spawning tool-call
+ID, while the child path uses the agent ID. A complete cross-file omission
+check needs a durable child scope identity that the reader can compare with
+root child requests even when the child file contains no attempt rows. That
+identity and comparison remain unimplemented and unverified.
