@@ -1468,3 +1468,32 @@ reader. The TypeScript tests were authored but not run because Node and Bun
 are unavailable; compilation, packaged behavior and owner gates remain
 unverified. The source patch plan, patch-framework tests, manifest and
 identifier checks are recorded with the corresponding commit.
+
+## File-history snapshot write admission
+
+Source reading found a remaining writer-side loss: ordinary file-history
+updates used a fire-and-forget append that returned without writing for an
+inactive recorder, while synchronous snapshot serialization failures were
+only logged. A later resume or rewind could therefore read a valid canonical
+file whose retained file-history state omitted an update. The owner is the
+client's shared recorder, so this affects ordinary file edits as well as long
+sessions; vLLM does not own this file or the update.
+
+Both single and batch snapshot writes now check writer activity and latch
+synchronous failures through the recorder's existing failure state. Queued
+write failures were already latched. The file edit path still enqueues its
+record without waiting for disk I/O; a later recorder barrier refuses a
+failed write rather than presenting the session as complete. Source tests
+were added for serialization failure, inactive recording and asynchronous
+write failure. Those TypeScript tests were authored but not run because Node
+and Bun are unavailable. Compilation, packaged resume and owner gates remain
+unverified.
+
+This investigation also checked the intervention note's physical-generation
+claim against the current service path. `event_certifier` uses
+`read_event_snapshot`, which runs the pinned Qwen response verifier after
+native admission, binding the second pass to the first pass's byte count and
+SHA-256. That source path contradicts the claim that the standalone service
+certifier currently accepts a rehashed generation with unchanged response
+bytes. The executable behavior remains unverified pending the owner's gates;
+direct construction of lower-level admission classes is a separate limit.

@@ -9707,6 +9707,21 @@ def _validate_served_accounting_after(state: State) -> None:
         "const failure = this.enterWriteFailure(",
         "Cannot persist the rewind for session",
     ), label=label, location=core + "services/chatRecordingService.ts")
+    _require_all(state, core + "services/chatRecordingService.ts", (
+        "this.queueFileHistorySnapshots(() => [serializeSnapshot(snapshot)])",
+        "this.queueFileHistorySnapshots(() => snapshots.map(serializeSnapshot))",
+        "private queueFileHistorySnapshots(",
+        "if (!this.acceptingWrites || this.state !== 'active')",
+        "No active session writer can record this file-history snapshot. Reopen the session",
+        "this.enterWriteFailure(cause, this.getSessionId(), 'file_history_snapshot')",
+    ), label=label)
+    forbid_text(state, core + "services/chatRecordingService.ts",
+                "appendSerializedFileHistorySnapshotBatch", label=label)
+    _require_all(state, core + "services/chatRecordingService.test.ts", (
+        "latches a snapshot serialization failure before any record is queued",
+        "refuses an inactive snapshot recorder instead of dropping the update",
+        "latches an asynchronous snapshot write failure for the next barrier",
+    ), label=label)
     _require_all(state, "packages/cli/src/ui/AppContainer.tsx", (
         "await config.getChatRecordingService().rewindRecording(",
     ), label=label)
