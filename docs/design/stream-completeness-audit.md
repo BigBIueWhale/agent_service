@@ -1770,3 +1770,18 @@ ID, while the child path uses the agent ID. A complete cross-file omission
 check needs a durable child scope identity that the reader can compare with
 root child requests even when the child file contains no attempt rows. That
 identity and comparison remain unimplemented and unverified.
+
+The attach paths confirm how to supply that identity. AgentTool and background
+resume use a `GenerationContext` built from the spawning tool-call ID; forked,
+workflow and in-process agents construct their own explicit invocation scope.
+Every attach caller can pass that `kvScope` before execution. The writer must
+commit one child scope declaration locally and mirror it into the root before
+the child may run, including a child that produces no model attempt. Complete
+child admission must require that declaration, refuse an empty child file,
+compare the root mirror, and inspect every root child render and physical Chat
+request in the declared scope for a corresponding local record. Merely adding
+an optional scope field, or deriving it from the child file name, would leave
+the whole-render omission admissible. The root mirror also needs a durability
+barrier at each attach site so a valid child cannot be declared complete ahead
+of its scope record. These are source-derived implementation requirements,
+not yet an implemented or executed proof.
