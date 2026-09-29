@@ -742,7 +742,9 @@ print(json.dumps(found))
         records = [json.loads(line) for line in events.splitlines()]
         require(not any(record.get("type", "").startswith("control_") for record in records),
                 "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
-        request_evidence = require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        client_requests = [request for request in self.stub.requests if "raw_body" in request
+                           and request["body"].get("prompt") != "agent-service-tokenizer-preflight"]
+        request_evidence = require_request_evidence(records, client_requests)
         require_output_ownership(records)
         seeds = [record["normalization_seed"] for record in records
                  if record["type"] == "model_normalization_seed"]
@@ -759,7 +761,7 @@ print(json.dumps(found))
                              and record["origin"]["kind"] == "model"}
         require(observed_attempts == expected_attempts,
                 "a generation disappeared or changed attempt identity in the published record; inspect shared output publication")
-        responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        responses = require_response_evidence(records, client_requests)
         require(all(response["event"]["status"] == "completed" for response in responses if response["event"]["kind"] == "outcome"),
                 "ordinary provider responses did not complete decoding; inspect processing outcomes")
         require(all(all(field not in record for field in
@@ -769,7 +771,7 @@ print(json.dumps(found))
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v16.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v17.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")
@@ -1306,7 +1308,9 @@ print(json.dumps(found))
         require(events.endswith(b"\n") and b"PROVIDER_FAILURE_PREFIX" in events,
                 "the refused generation's observed prefix was lost")
         records = [json.loads(line) for line in events.splitlines()]
-        request_evidence = require_request_evidence(records, [request["raw_body"] for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        client_requests = [request for request in self.stub.requests if "raw_body" in request
+                           and request["body"].get("prompt") != "agent-service-tokenizer-preflight"]
+        request_evidence = require_request_evidence(records, client_requests)
         require_output_ownership(records)
         expected_attempts = {(evidence["kv_scope"], evidence["owner"]["attempt_id"])
                              for evidence in request_evidence if evidence["owner"]["kind"] == "chat"}
@@ -1315,7 +1319,7 @@ print(json.dumps(found))
                              and record["origin"]["kind"] == "model"}
         require(observed_attempts == expected_attempts,
                 "a generation disappeared or changed attempt identity in the published record; inspect shared output publication")
-        responses = require_response_evidence(records, [request for request in self.stub.requests if request["path"] == "/v1/chat/completions"])
+        responses = require_response_evidence(records, client_requests)
         require([response["event"]["status"] for response in responses if response["event"]["kind"] == "outcome"] == ["failed"],
                 "provider refusal lost its processing failure; inspect the pipeline outcome")
         terminal = records[-1]

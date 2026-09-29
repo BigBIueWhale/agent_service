@@ -1500,10 +1500,12 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "function embeddingText(content: unknown): string",
             "const inputs = contents.map(embeddingText);",
             "model: request.model,",
-            "input: inputs.length === 1 ? inputs[0]! : inputs,",
+            "const expectedInput = inputs.length === 1 ? inputs[0]! : inputs;",
+            "kind: 'embedding',",
+            "input: expectedInput,",
             "const ordered = [...embedding.data].sort(",
             "ordered.length !== inputs.length",
-            "embeddings: ordered.map((entry) => ({ values: entry.embedding }))",
+            "embeddings: vectors.map((values) => ({ values }))",
         ),
         label=label,
     )
@@ -5752,44 +5754,54 @@ def _validate_compaction_accounting_after(state: State) -> None:
         and source.count("output: outputAccounting,") == 1,
         f"{label}: all post-generation outcomes must retain the same served evidence",
     )
-    # The count used to accept a replacement has a physical tokenizer request
-    # and raw response. The same replay is applied when the record is read, so
-    # a count cannot be changed independently of the bytes that supplied it.
+    # The count used to accept a replacement names the completed tokenizer
+    # operation whose physical request and response supplied it. The reader
+    # replays those bytes and consumes the operation once in its own scope.
     _require_all(state, service, (
         "const result = await count();",
+        "if (!result.evidence || !result.operationId)",
         "const served = replayVllmTokenCount(",
         "const sessionModel = config.getModel();",
         "model: sessionModel,",
-        "tokenMeasurements.push({ role, evidence: result.evidence });",
+        "tokenMeasurements.push({ role, operationId: result.operationId });",
         "await measured('original',",
         "await measured('summary_request',",
         "await measured('prompt_only',",
         "await measured('candidate',",
     ), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.ts", (
-        "tokenCountWireObservationContext.getStore()?.observe(args[0], args[1]);",
         "return this.countVllmTokens(",
-        "const observation = new TokenCountWireObservation(url, requestJson);",
+        "return this.runPhysicalUtility(",
+        "return journal.captureUtility(identity, url, init);",
+        "await journal.completeUtility({",
         "requestKind: 'chat' | 'text'",
         "const response = await call.asResponse();",
         "const raw = Buffer.from(await response.clone().arrayBuffer());",
         "const served = replayVllmTokenCount(",
-        "throw observation.mismatch ?? error;",
+        "value: { ...served, evidence, operationId },",
     ), label=label)
     forbid_text(state, "packages/core/src/core/token-count-evidence.ts",
                 "compactionTokenEvidenceContext", label=label)
     _require_all(state, "packages/core/src/core/model-response-evidence.ts", (
-        "claimCompactionRecord(record: CompactionRecord, scope: string): void {",
-        "replayVllmTokenCount(measurement.evidence, window)",
+        "claimCompactionRecord(",
+        "claimTokenCount(measurement.operationId, scope)",
+        "count.firstSequence <= counts[index - 1]!.lastSequence",
+        "compaction candidate count precedes its physical draw",
         "compaction tokenizer measurements use different models",
         "compaction tokenizer model differs from physical draw model",
         "compaction candidate count differs from tokenizer response bytes",
         "compaction has an unclaimed tokenizer measurement",
         "compaction replacement count differs from its accepted draw",
     ), label=label)
+    _require_all(state, "packages/core/src/core/model-utility-replay.ts", (
+        "replayModelUtilityResult(final.request,",
+        "this.completedTokenCounts.set(completion.operation_id,",
+        "claimTokenCount(operationId: string, scope: string): CompletedTokenizerCount",
+        "this.claimedTokenCounts.add(operationId);",
+    ), label=label)
     _require_all(state, "packages/core/src/core/token-count-evidence.ts", (
         "expectedModel?: string", "Token count evidence belongs to another model",
-        "init.body !== this.expectedBody", "'messages' in requestShape",
+        "requestKind: 'chat' | 'text' = 'chat'", "'messages' in requestShape",
     ), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.test.ts", (
         "refuses a parsed count that differs from the physical response",
@@ -8407,7 +8419,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 16;",
+            "export const CHAT_RECORDING_VERSION = 17;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8437,7 +8449,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "if (!attempt && !utilityDelivery)",
         "claimCompactionSystemRecord(record: Record<string, unknown>): void",
         "refusal('compaction system record has no scope or object data')",
-        "this.responses.claimCompactionRecord(data as CompactionRecord, scope)",
+        "this.claimCompaction(data as CompactionRecord, scope);",
+        "this.utilities.claimTokenCount(id, owner)",
     ), label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",
                 "retained > 0 || previous.body.messages.length === 0", label=label)
@@ -8982,7 +8995,7 @@ def _validate_served_accounting_after(state: State) -> None:
              f"{label}: request evidence must not become the canonical history tail")
     _require_all(state, core + "services/chatRecordingService.ts", (
         "private autoTitleTask: Promise<void> | undefined;",
-        "'model_response',\n          'model_generation',\n          'model_attempt_completion',",
+        "'model_response',\n          'model_utility_completion',\n          'model_generation',\n          'model_attempt_completion',",
         "].includes(record.type) && this.state === 'closing'",
         "await this.modelRequests.flush();", "await this.finalize();",
         "this.enterWriteFailure(cause, this.getSessionId(), 'model_evidence');",
@@ -9112,7 +9125,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v16.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v17.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -9389,11 +9402,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "state.values.values.subList(0, (int) sdkValues)",
         "compaction tokenizer measurements use different models",
         "compaction tokenizer model differs from physical draw model",
-        "tokenizer measurement has no canonical response bytes",
+        "tokenizer result differs from physical bytes or selected context limit",
         "terminal leaves physical compaction draws unclaimed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v16.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v17.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java", (

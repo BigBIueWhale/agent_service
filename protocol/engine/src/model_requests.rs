@@ -22,6 +22,17 @@ fn sha256(json: &str) -> String {
         .collect()
 }
 
+fn utility_url_path(url: &str) -> Option<&str> {
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"))?;
+    let slash = rest.find('/')?;
+    if slash == 0 {
+        return None;
+    }
+    rest[slash..].split(['?', '#']).next()
+}
+
 fn refusal(detail: &str) -> ContractError {
     ContractError::InvalidRecord(format!(
         "model request evidence {detail}; inspect the complete original recording with its matching client"
@@ -623,7 +634,12 @@ fn js_truthy(value: &serde_json::Value) -> bool {
 pub(crate) struct ModelRequests {
     journal_id: Option<String>,
     first_sequence: Option<u64>,
+    physical_count: u64,
     ids: BTreeSet<String>,
+    utilities: BTreeMap<String, UtilityOperation>,
+    completed_utilities: BTreeSet<String>,
+    completed_token_counts: BTreeMap<String, CompletedTokenCount>,
+    claimed_token_counts: BTreeSet<String>,
     scopes: BTreeMap<String, RequestBody>,
     responses: BTreeMap<String, ResponseState>,
     response_values: BTreeMap<String, ResponseValues>,
@@ -649,6 +665,59 @@ struct CompactionOperation {
     deliveries: BTreeMap<String, u64>,
     observations: BTreeMap<String, Vec<serde_json::Value>>,
     failures: BTreeMap<String, Option<serde_json::Value>>,
+}
+
+#[derive(Default)]
+struct UtilityOperation {
+    first_sequence: u64,
+    last_sequence: u64,
+    journal_id: String,
+    scope: String,
+    kind: String,
+    model: String,
+    input_count: Option<u64>,
+    expected_max_model_len: Option<u64>,
+    url: String,
+    body: String,
+    requests: Vec<String>,
+    physical: BTreeMap<String, UtilityPhysical>,
+}
+
+struct UtilityPhysical {
+    status: Option<u64>,
+    content_type: Option<String>,
+    termination: Option<String>,
+    completed: bool,
+    delivered: bool,
+}
+
+struct CompletedTokenCount {
+    scope: String,
+    first_sequence: u64,
+    last_sequence: u64,
+    count: u64,
+    window: u64,
+    model: String,
+}
+
+pub(crate) struct UtilityRequestAdmission {
+    sequence: u64,
+    journal_id: String,
+    request_id: String,
+    operation_id: String,
+    scope: String,
+    kind: String,
+    model: String,
+    input_count: Option<u64>,
+    expected_max_model_len: Option<u64>,
+    url: String,
+    body: String,
+}
+
+pub(crate) struct UtilityCompletionAdmission {
+    operation_id: String,
+    request_ids: Vec<String>,
+    token_count: Option<CompletedTokenCount>,
 }
 
 #[derive(Clone)]
@@ -739,6 +808,7 @@ struct ResponseState {
     scope: String,
     attempt: Option<String>,
     compaction: Option<String>,
+    utility: Option<String>,
     processing: Option<bool>,
     pipeline_outputs: Option<u64>,
     sequence: u64,
@@ -757,6 +827,7 @@ pub(crate) struct ResponseAdmission {
     attempt: Option<String>,
     settlement: Option<bool>,
     compaction: Option<String>,
+    utility: Option<String>,
     delivery: Option<u64>,
     decoded_values: Option<Vec<serde_json::Value>>,
     decoded_observations: Option<Vec<serde_json::Value>>,
@@ -767,6 +838,483 @@ pub(crate) struct ResponseAdmission {
 }
 
 impl ModelRequests {
+    pub(crate) fn plan_utility_request(
+        &self,
+        record: Value<'_>,
+        line: usize,
+        limits: Limits,
+    ) -> ContractResult<UtilityRequestAdmission> {
+        let request = field(record, "utility_request", line)?;
+        let journal_id = text(request, "journal_id", line)?;
+        let sequence = unsigned(
+            field(request, "sequence", line)?,
+            "utility request sequence",
+            SAFE_INTEGER,
+        )?;
+        if self.journal_id.as_deref() != Some(journal_id)
+            || self
+                .first_sequence
+                .and_then(|first| first.checked_add(self.physical_count))
+                != Some(sequence)
+        {
+            return Err(refusal("utility request is missing, reordered or foreign"));
+        }
+        let request_id = text(request, "request_id", line)?;
+        if self.ids.contains(request_id) {
+            return Err(refusal("utility request reuses a physical identity"));
+        }
+        let operation_id = text(request, "operation_id", line)?;
+        if self.completed_utilities.contains(operation_id) {
+            return Err(refusal("utility request follows its completed operation"));
+        }
+        let scope = text(request, "kv_scope", line)?;
+        let kind = text(request, "kind", line)?;
+        let model = text(request, "requested_model", line)?;
+        if model.trim().is_empty() {
+            return Err(refusal("utility request has no selected model"));
+        }
+        let input_count = field(request, "requested_input_count", line)?;
+        let expected_max = field(request, "expected_max_model_len", line)?;
+        let (input_count, expected_max_model_len) = if kind == "embedding" {
+            if !expected_max.is_null() {
+                return Err(refusal("embedding carries a tokenizer context limit"));
+            }
+            let count = unsigned(input_count, "embedding input count", SAFE_INTEGER)?;
+            if count == 0 {
+                return Err(refusal("embedding has no separate input"));
+            }
+            (Some(count), None)
+        } else if matches!(kind, "tokenize_chat" | "tokenize_text") {
+            if !input_count.is_null() {
+                return Err(refusal(
+                    "tokenizer request carries an embedding input count",
+                ));
+            }
+            let limit = unsigned(
+                expected_max,
+                "selected tokenizer context limit",
+                SAFE_INTEGER,
+            )?;
+            if limit == 0 {
+                return Err(refusal("tokenizer has no selected context limit"));
+            }
+            (None, Some(limit))
+        } else {
+            return Err(refusal("utility request has an unknown kind"));
+        };
+        let url = text(request, "request_url", line)?;
+        let path =
+            utility_url_path(url).ok_or_else(|| refusal("utility request has no HTTP endpoint"))?;
+        if (kind == "embedding" && !path.ends_with("/embeddings"))
+            || (kind != "embedding" && !path.ends_with("/tokenize"))
+        {
+            return Err(refusal("utility request uses the wrong endpoint"));
+        }
+        let body = text(request, "body_json", line)?;
+        let bytes = unsigned(
+            field(request, "body_bytes", line)?,
+            "utility body bytes",
+            SAFE_INTEGER,
+        )?;
+        if u64::try_from(body.len()).ok() != Some(bytes)
+            || sha256(body) != text(request, "body_sha256", line)?
+        {
+            return Err(refusal(
+                "utility request differs from its body size or SHA-256",
+            ));
+        }
+        let document = Document::decode(body.as_bytes(), limits)
+            .map_err(|_| refusal("utility request body is not JSON"))?;
+        let root = document.root();
+        if text(root, "model", line)? != model {
+            return Err(refusal("utility body changes the selected model"));
+        }
+        match kind {
+            "tokenize_chat" => {
+                if root.get("prompt").is_some()
+                    || field(root, "messages", line)?.elements().is_none()
+                    || field(root, "add_generation_prompt", line)?.as_bool() != Some(true)
+                {
+                    return Err(refusal("chat tokenizer has no rendered message input"));
+                }
+            }
+            "tokenize_text" => {
+                if root.get("messages").is_some()
+                    || field(root, "prompt", line)?.as_str().is_none()
+                    || field(root, "add_special_tokens", line)?.as_bool() != Some(false)
+                {
+                    return Err(refusal("text tokenizer has no rendered text input"));
+                }
+            }
+            "embedding" => {
+                if text(root, "encoding_format", line)? != "base64" {
+                    return Err(refusal("embedding request has no SDK base64 encoding"));
+                }
+                let input = field(root, "input", line)?;
+                let separate = if input.as_str().is_some() {
+                    1
+                } else {
+                    let values = input
+                        .elements()
+                        .ok_or_else(|| refusal("embedding input is not separate text"))?;
+                    let mut count = 0;
+                    for value in values {
+                        if value.as_str().is_none() {
+                            return Err(refusal("embedding input contains non-text"));
+                        }
+                        count += 1;
+                    }
+                    count
+                };
+                if Some(separate) != input_count {
+                    return Err(refusal("embedding input count differs from separate texts"));
+                }
+            }
+            _ => unreachable!("checked utility kind"),
+        }
+        if let Some(previous) = self.utilities.get(operation_id) {
+            if previous.journal_id != journal_id
+                || previous.scope != scope
+                || previous.kind != kind
+                || previous.model != model
+                || previous.input_count != input_count
+                || previous.expected_max_model_len != expected_max_model_len
+                || previous.url != url
+                || previous.body != body
+            {
+                return Err(refusal("utility retry changes its request or owner"));
+            }
+        }
+        Ok(UtilityRequestAdmission {
+            sequence,
+            journal_id: journal_id.to_string(),
+            request_id: request_id.to_string(),
+            operation_id: operation_id.to_string(),
+            scope: scope.to_string(),
+            kind: kind.to_string(),
+            model: model.to_string(),
+            input_count,
+            expected_max_model_len,
+            url: url.to_string(),
+            body: body.to_string(),
+        })
+    }
+
+    pub(crate) fn commit_utility_request(&mut self, admission: UtilityRequestAdmission) {
+        let operation = self
+            .utilities
+            .entry(admission.operation_id.clone())
+            .or_insert_with(|| UtilityOperation {
+                first_sequence: admission.sequence,
+                last_sequence: admission.sequence,
+                journal_id: admission.journal_id.clone(),
+                scope: admission.scope.clone(),
+                kind: admission.kind.clone(),
+                model: admission.model.clone(),
+                input_count: admission.input_count,
+                expected_max_model_len: admission.expected_max_model_len,
+                url: admission.url.clone(),
+                body: admission.body.clone(),
+                ..UtilityOperation::default()
+            });
+        operation.last_sequence = admission.sequence;
+        operation.requests.push(admission.request_id.clone());
+        self.ids.insert(admission.request_id.clone());
+        self.response_values.insert(
+            admission.request_id.clone(),
+            ResponseValues::new(false, false),
+        );
+        self.responses.insert(
+            admission.request_id,
+            ResponseState {
+                scope: admission.scope,
+                utility: Some(admission.operation_id),
+                digest: Some(Sha256::default()),
+                ..ResponseState::default()
+            },
+        );
+        self.physical_count += 1;
+    }
+
+    pub(crate) fn plan_utility_completion(
+        &self,
+        record: Value<'_>,
+        line: usize,
+    ) -> ContractResult<UtilityCompletionAdmission> {
+        let completion = field(record, "utility_completion", line)?;
+        let operation_id = text(completion, "operation_id", line)?;
+        if self.completed_utilities.contains(operation_id)
+            || self.journal_id.as_deref() != Some(text(completion, "journal_id", line)?)
+        {
+            return Err(refusal("utility completion is repeated or foreign"));
+        }
+        let mut ids = Vec::new();
+        let mut unique = BTreeSet::new();
+        for value in field(completion, "request_ids", line)?
+            .elements()
+            .ok_or_else(|| refusal("utility completion has no request list"))?
+        {
+            let id = value
+                .as_str()
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| refusal("utility completion has an invalid request identity"))?;
+            if !unique.insert(id) {
+                return Err(refusal("utility completion repeats a request"));
+            }
+            ids.push(id.to_string());
+        }
+        let result = field(completion, "result", line)?;
+        let error = field(completion, "error", line)?;
+        if result.is_null() == error.is_null()
+            || (!error.is_null() && error.as_str().is_none_or(str::is_empty))
+        {
+            return Err(refusal("utility completion has no unique result or error"));
+        }
+        let operation = self.utilities.get(operation_id);
+        if operation.is_none() {
+            if !ids.is_empty() || !result.is_null() {
+                return Err(refusal(
+                    "utility completion names unrecorded physical attempts",
+                ));
+            }
+            return Ok(UtilityCompletionAdmission {
+                operation_id: operation_id.to_string(),
+                request_ids: ids,
+                token_count: None,
+            });
+        }
+        let operation = operation.expect("checked operation");
+        if operation.journal_id != text(completion, "journal_id", line)?
+            || operation.scope != text(completion, "kv_scope", line)?
+            || operation.kind != text(completion, "kind", line)?
+            || operation.model != text(completion, "requested_model", line)?
+            || operation.requests != ids
+        {
+            return Err(refusal(
+                "utility completion changes its owner or omits a physical retry",
+            ));
+        }
+        let input = field(completion, "requested_input_count", line)?;
+        let limit = field(completion, "expected_max_model_len", line)?;
+        if operation.input_count
+            != if input.is_null() {
+                None
+            } else {
+                Some(unsigned(input, "embedding count", SAFE_INTEGER)?)
+            }
+            || operation.expected_max_model_len
+                != if limit.is_null() {
+                    None
+                } else {
+                    Some(unsigned(limit, "selected context limit", SAFE_INTEGER)?)
+                }
+        {
+            return Err(refusal(
+                "utility completion changes its selected input count or context limit",
+            ));
+        }
+        if operation.physical.len() != ids.len()
+            || ids.iter().any(|id| {
+                operation
+                    .physical
+                    .get(id)
+                    .is_none_or(|physical| !physical.delivered)
+            })
+            || ids[..ids.len().saturating_sub(1)]
+                .iter()
+                .any(|id| operation.physical[id].completed)
+        {
+            return Err(refusal(
+                "utility completion omits a physical response or successful retry",
+            ));
+        }
+        if !result.is_null() {
+            let final_id = ids
+                .last()
+                .ok_or_else(|| refusal("utility result has no physical response"))?;
+            let final_response = &operation.physical[final_id];
+            if !final_response.completed
+                || !final_response
+                    .status
+                    .is_some_and(|status| (200..300).contains(&status))
+                || !matches!(
+                    final_response.termination.as_deref(),
+                    Some("eof" | "cancelled")
+                )
+                || !final_response
+                    .content_type
+                    .as_deref()
+                    .and_then(|value| value.split(';').next())
+                    .map(str::trim)
+                    .is_some_and(|value| value == "application/json" || value.ends_with("+json"))
+            {
+                return Err(refusal("utility result has no complete JSON HTTP response"));
+            }
+            let body = match self.response_values.get(final_id) {
+                Some(ResponseValues::Nonstream(body)) => body,
+                _ => {
+                    return Err(refusal(
+                        "utility result has no final physical response bytes",
+                    ))
+                }
+            };
+            let parsed = nonstream_json_value(body)
+                .ok_or_else(|| refusal("utility result has invalid physical JSON"))?;
+            if operation.kind == "embedding" {
+                if text(result, "kind", line)? != "embedding" {
+                    return Err(refusal("embedding completion claims a tokenizer result"));
+                }
+                let data = parsed
+                    .get("data")
+                    .and_then(serde_json::Value::as_array)
+                    .ok_or_else(|| refusal("physical embedding response has no data"))?;
+                let vectors = field(result, "vectors", line)?
+                    .elements()
+                    .ok_or_else(|| refusal("embedding result has no vectors"))?
+                    .collect::<Vec<_>>();
+                if Some(data.len() as u64) != operation.input_count || vectors.len() != data.len() {
+                    return Err(refusal(
+                        "embedding result count differs from separate inputs",
+                    ));
+                }
+                let mut ordered = data.iter().collect::<Vec<_>>();
+                ordered.sort_by_key(|entry| {
+                    entry
+                        .get("index")
+                        .and_then(serde_json::Value::as_u64)
+                        .unwrap_or(u64::MAX)
+                });
+                for (index, entry) in ordered.into_iter().enumerate() {
+                    let at = entry.get("index").and_then(serde_json::Value::as_u64);
+                    let encoded = entry
+                        .get("embedding")
+                        .and_then(serde_json::Value::as_str)
+                        .ok_or_else(|| refusal("physical embedding is not base64"))?;
+                    let bytes = STANDARD
+                        .decode(encoded)
+                        .map_err(|_| refusal("physical embedding has invalid base64"))?;
+                    let values = vectors[index]
+                        .elements()
+                        .ok_or_else(|| refusal("embedding result vector is not an array"))?
+                        .collect::<Vec<_>>();
+                    if at != Some(index as u64)
+                        || bytes.is_empty()
+                        || bytes.len() % 4 != 0
+                        || STANDARD.encode(&bytes) != encoded
+                        || values.len() != bytes.len() / 4
+                    {
+                        return Err(refusal("physical embedding vector differs from its result"));
+                    }
+                    for (position, chunk) in bytes.chunks_exact(4).enumerate() {
+                        let decoded =
+                            f32::from_le_bytes(chunk.try_into().expect("four-byte chunk"));
+                        if !decoded.is_finite()
+                            || values[position].as_f64() != Some(f64::from(decoded))
+                        {
+                            return Err(refusal(
+                                "embedding result differs from physical float32 bytes",
+                            ));
+                        }
+                    }
+                }
+            } else {
+                if text(result, "kind", line)? != "token_count" {
+                    return Err(refusal("tokenizer completion claims an embedding result"));
+                }
+                let count = parsed
+                    .get("count")
+                    .and_then(serde_json::Value::as_u64)
+                    .filter(|value| *value <= SAFE_INTEGER)
+                    .ok_or_else(|| refusal("physical tokenizer has no valid count"))?;
+                let max = parsed
+                    .get("max_model_len")
+                    .and_then(serde_json::Value::as_u64)
+                    .filter(|value| *value > 0 && *value <= SAFE_INTEGER)
+                    .ok_or_else(|| refusal("physical tokenizer has no valid context limit"))?;
+                if Some(max) != operation.expected_max_model_len
+                    || count
+                        != unsigned(
+                            field(result, "total_tokens", line)?,
+                            "recorded token count",
+                            SAFE_INTEGER,
+                        )?
+                    || max
+                        != unsigned(
+                            field(result, "max_model_len", line)?,
+                            "recorded context limit",
+                            SAFE_INTEGER,
+                        )?
+                {
+                    return Err(refusal(
+                        "tokenizer result differs from physical count or selected context limit",
+                    ));
+                }
+            }
+        }
+        Ok(UtilityCompletionAdmission {
+            operation_id: operation_id.to_string(),
+            request_ids: ids,
+            token_count: if operation.kind == "tokenize_chat" && !result.is_null() {
+                Some(CompletedTokenCount {
+                    scope: operation.scope.clone(),
+                    first_sequence: operation.first_sequence,
+                    last_sequence: operation.last_sequence,
+                    count: unsigned(
+                        field(result, "total_tokens", line)?,
+                        "token count",
+                        SAFE_INTEGER,
+                    )?,
+                    window: unsigned(
+                        field(result, "max_model_len", line)?,
+                        "context limit",
+                        SAFE_INTEGER,
+                    )?,
+                    model: operation.model.clone(),
+                })
+            } else {
+                None
+            },
+        })
+    }
+
+    pub(crate) fn commit_utility_completion(&mut self, admission: UtilityCompletionAdmission) {
+        self.utilities.remove(&admission.operation_id);
+        for id in admission.request_ids {
+            self.response_values.remove(&id);
+        }
+        if let Some(count) = admission.token_count {
+            self.completed_token_counts
+                .insert(admission.operation_id.clone(), count);
+        }
+        self.completed_utilities.insert(admission.operation_id);
+    }
+
+    pub(crate) fn check_token_measurement(
+        &self,
+        operation_id: &str,
+        scope: &str,
+    ) -> ContractResult<(u64, u64, String, u64, u64)> {
+        let count = self.completed_token_counts.get(operation_id)
+            .filter(|count| count.scope == scope && !self.claimed_token_counts.contains(operation_id))
+            .ok_or_else(|| refusal("compaction measurement has no unclaimed completed chat tokenizer operation in its scope"))?;
+        Ok((
+            count.count,
+            count.window,
+            count.model.clone(),
+            count.first_sequence,
+            count.last_sequence,
+        ))
+    }
+
+    pub(crate) fn commit_token_measurement_claims(&mut self, ids: Vec<String>) {
+        for id in ids {
+            self.completed_token_counts
+                .remove(&id)
+                .expect("planned completed token measurement");
+            self.claimed_token_counts.insert(id);
+        }
+    }
+
     pub(crate) fn plan_origin(
         &self,
         origin: Value<'_>,
@@ -807,7 +1355,7 @@ impl ModelRequests {
             if id != journal_id
                 || self
                     .first_sequence
-                    .and_then(|first| first.checked_add(self.all_usage.requests))
+                    .and_then(|first| first.checked_add(self.physical_count))
                     != Some(sequence)
             {
                 return Err(refusal(
@@ -1010,6 +1558,7 @@ impl ModelRequests {
     pub(crate) fn commit(&mut self, admission: RequestAdmission) {
         self.journal_id.get_or_insert(admission.journal_id);
         self.first_sequence.get_or_insert(admission.sequence);
+        self.physical_count += 1;
         if let Some((id, budget, model)) = &admission.compaction {
             let operation =
                 self.compactions
@@ -1087,6 +1636,11 @@ impl ModelRequests {
         let mut outcome = None;
         let mut body = None;
         let kind = text(event, "kind", line)?;
+        if state.utility.is_some() && matches!(kind, "decoded_body" | "decoded_end" | "history") {
+            return Err(refusal(
+                "physical utility response contains chat output evidence",
+            ));
+        }
         if matches!(kind, "history" | "delivery") != state.processing.is_some()
             || (kind == "outcome" && state.digest.is_some())
             || (matches!(kind, "http" | "body" | "end") && state.digest.is_none())
@@ -1316,6 +1870,15 @@ impl ModelRequests {
                     "pipeline outputs delivered",
                     SAFE_INTEGER,
                 )?;
+                if state.utility.is_some()
+                    && (!usage.is_null()
+                        || pipeline_outputs_delivered != 0
+                        || (completed && sdk_values_seen != 1))
+                {
+                    return Err(refusal(
+                        "physical utility response claims chat usage or output",
+                    ));
+                }
                 if state.decoded_pending.is_some()
                     || state.decoded_utility.len() as u64
                         != if state.attempt.is_some() {
@@ -1383,6 +1946,7 @@ impl ModelRequests {
                     || state
                         .pipeline_outputs
                         .is_none_or(|pipeline_outputs| delivered > pipeline_outputs)
+                    || (state.utility.is_some() && delivered != 0)
                 {
                     return Err(refusal(
                         "utility delivery has no matching physical output prefix",
@@ -1435,6 +1999,7 @@ impl ModelRequests {
             request_id: id.to_string(),
             attempt: state.attempt.clone(),
             compaction: state.compaction.clone(),
+            utility: state.utility.clone(),
             settlement,
             delivery,
             decoded_values,
@@ -1450,6 +2015,7 @@ impl ModelRequests {
             },
             usage: outcome
                 .as_ref()
+                .filter(|_| state.utility.is_none())
                 .map(|outcome| -> ContractResult<_> {
                     Ok((
                         self.scope_usage(&outcome.scope).finalize(outcome.usage)?,
@@ -1464,6 +2030,35 @@ impl ModelRequests {
     }
 
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
+        if let Some(operation_id) = &admission.utility {
+            let operation = self
+                .utilities
+                .get_mut(operation_id)
+                .expect("planned utility operation");
+            if let Some(outcome) = &admission.outcome {
+                let state = admission
+                    .state
+                    .as_ref()
+                    .expect("outcome retains response state");
+                operation.physical.insert(
+                    admission.request_id.clone(),
+                    UtilityPhysical {
+                        status: state.http_status,
+                        content_type: state.content_type.clone(),
+                        termination: state.termination.clone(),
+                        completed: outcome.completed,
+                        delivered: false,
+                    },
+                );
+            }
+            if admission.delivery.is_some() {
+                operation
+                    .physical
+                    .get_mut(&admission.request_id)
+                    .expect("planned utility physical outcome")
+                    .delivered = true;
+            }
+        }
         if let Some(id) = &admission.compaction {
             let operation = self
                 .compactions
@@ -1502,7 +2097,13 @@ impl ModelRequests {
                 .expect("planned physical value reader")
                 .push(body);
         }
-        if admission.outcome.is_some() {
+        if admission.outcome.is_some()
+            && (admission.utility.is_none()
+                || admission
+                    .outcome
+                    .as_ref()
+                    .is_some_and(|outcome| !outcome.completed))
+        {
             self.response_values.remove(&admission.request_id);
         }
         if let Some((usage, all_usage)) = admission.usage {
@@ -1955,6 +2556,11 @@ impl ModelRequests {
                 "terminal leaves physical compaction draws unclaimed",
             ));
         }
+        if !self.utilities.is_empty() {
+            return Err(refusal(
+                "terminal leaves physical utility operations incomplete",
+            ));
+        }
         let summary = field(record, "request_evidence", line)?;
         let count = unsigned(
             field(summary, "request_count", line)?,
@@ -1978,7 +2584,7 @@ impl ModelRequests {
                 .next()
                 .is_some()
             || self.attempts.values().any(|attempt| !attempt.completed)
-            || count != self.all_usage.requests
+            || count != self.physical_count
             || self
                 .first_sequence
                 .is_some_and(|sequence| sequence != first)
@@ -2013,6 +2619,59 @@ mod tests {
         let admission = state.plan(document.root(), 1, LIMITS)?;
         state.commit(admission);
         Ok(())
+    }
+    #[test]
+    fn utility_count_requires_its_physical_bytes_and_operation_completion() {
+        let mut state = ModelRequests::default();
+        state.commit_origin(RequestOrigin {
+            journal_id: "j".into(),
+            first_sequence: 1,
+        });
+        let body =
+            json!({"model":"selected","prompt":"text","add_special_tokens":false}).to_string();
+        let request = json!({"utility_request":{
+            "journal_id":"j","sequence":1,"request_id":"physical-1",
+            "operation_id":"count-1","kv_scope":"root","kind":"tokenize_text",
+            "requested_model":"selected","requested_input_count":null,
+            "expected_max_model_len":4096,"request_url":"https://fixture.invalid/tokenize",
+            "body_json":body,"body_bytes":body.len(),"body_sha256":sha256(&body)
+        }})
+        .to_string();
+        let document = Document::decode(request.as_bytes(), LIMITS).unwrap();
+        let admission = state
+            .plan_utility_request(document.root(), 1, LIMITS)
+            .unwrap();
+        state.commit_utility_request(admission);
+        let raw = json!({"count":2,"max_model_len":4096}).to_string();
+        for (position, event) in [
+            json!({"kind":"http","status":200,"content_type":"application/json"}),
+            json!({"kind":"body","offset":0,"base64":STANDARD.encode(raw.as_bytes())}),
+            json!({"kind":"end","termination":"eof","body_bytes":raw.len(),"body_sha256":sha256(&raw),"error":null}),
+            json!({"kind":"outcome","status":"completed","error":null,"served_usage":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+            json!({"kind":"delivery","outputs_delivered":0}),
+        ].into_iter().enumerate() {
+            let response = json!({"response":{"journal_id":"j","request_id":"physical-1","sequence":position+1,"event":event}}).to_string();
+            let document = Document::decode(response.as_bytes(), LIMITS).unwrap();
+            let admission = state.plan_response(document.root(), 1).unwrap();
+            state.commit_response(admission);
+        }
+        let terminal = br#"{"request_evidence":{"journal_id":"j","first_sequence":1,"request_count":1,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":0,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":0,"usage":null}}"#;
+        let document = Document::decode(terminal, LIMITS).unwrap();
+        assert!(state.validate_summary(document.root(), 1).is_err());
+        let completion = json!({"utility_completion":{
+            "journal_id":"j","operation_id":"count-1","kv_scope":"root",
+            "kind":"tokenize_text","requested_model":"selected",
+            "requested_input_count":null,"expected_max_model_len":4096,
+            "request_ids":["physical-1"],
+            "result":{"kind":"token_count","total_tokens":2,"max_model_len":4096},
+            "error":null
+        }})
+        .to_string();
+        let document = Document::decode(completion.as_bytes(), LIMITS).unwrap();
+        let admission = state.plan_utility_completion(document.root(), 1).unwrap();
+        state.commit_utility_completion(admission);
+        let terminal = Document::decode(terminal, LIMITS).unwrap();
+        state.validate_summary(terminal.root(), 1).unwrap();
     }
     #[test]
     fn physical_value_reader_follows_sdk_sse_boundaries_and_errors() {

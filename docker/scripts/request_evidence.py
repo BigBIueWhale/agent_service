@@ -3,6 +3,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import math
+import struct
+from urllib.parse import urlsplit
 
 
 def message_bytes(body: str) -> list[str]:
@@ -33,22 +36,69 @@ def message_bytes(body: str) -> list[str]:
     raise ValueError("request body has no top-level messages")
 
 
-def require_request_evidence(events: list[dict], received: list[str]) -> list[dict]:
+def require_request_evidence(events: list[dict], received: list[dict]) -> list[dict]:
     if not events or events[0].get("type") != "system" or events[0].get("subtype") != "stream_start":
         raise ValueError("request evidence has no stream_start header; retain the complete stdout")
     requests = [event["request"] for event in events if event.get("type") == "model_request"]
+    physical = [event for event in events if event.get("type") in ("model_request", "model_utility_request")]
     terminal = events[-1]["request_evidence"]
     origin = events[0]["request_evidence_origin"]
     if origin != {"journal_id": terminal["journal_id"], "first_sequence": terminal["first_sequence"]}:
         raise ValueError("request capture origin differs from terminal accounting")
-    if terminal["request_count"] != len(requests) or len(requests) != len(received):
+    if terminal["request_count"] != len(physical) or len(physical) != len(received):
         raise ValueError("request capture omitted an actual provider call; inspect pipeline admission")
     scopes: dict[str, tuple[str, str, list[str]]] = {}
+    operations: dict[str, dict] = {}
     seen = set()
-    for offset, (request, actual) in enumerate(zip(requests, received)):
+    for offset, (envelope, actual) in enumerate(zip(physical, received)):
+        request = envelope["request"] if envelope["type"] == "model_request" else envelope["utility_request"]
         if request["journal_id"] != terminal["journal_id"] or request["sequence"] != terminal["first_sequence"] + offset or request["request_id"] in seen:
             raise ValueError("request capture identity or sequence is incomplete")
         seen.add(request["request_id"])
+        if envelope["type"] == "model_utility_request":
+            body = request["body_json"]
+            encoded = body.encode("utf-8")
+            url = urlsplit(request["request_url"])
+            kind = request["kind"]
+            if (actual.get("path") != url.path or url.scheme not in ("http", "https") or not url.netloc
+                    or body != actual.get("raw_body") or len(encoded) != request["body_bytes"]
+                    or hashlib.sha256(encoded).hexdigest() != request["body_sha256"]):
+                raise ValueError("utility request differs from bytes received by provider")
+            parsed = json.loads(body)
+            if not isinstance(parsed, dict) or parsed != actual.get("body") or parsed.get("model") != request["requested_model"]:
+                raise ValueError("utility request body changes the selected model or provider input")
+            if kind == "embedding":
+                inputs = parsed.get("input")
+                count = 1 if isinstance(inputs, str) else len(inputs) if isinstance(inputs, list) and all(isinstance(item, str) for item in inputs) else 0
+                if (not url.path.endswith("/embeddings") or parsed.get("encoding_format") != "base64"
+                        or request["expected_max_model_len"] is not None
+                        or type(request["requested_input_count"]) is not int
+                        or request["requested_input_count"] != count or count == 0):
+                    raise ValueError("embedding request lost its separate text inputs")
+            elif kind == "tokenize_chat":
+                if (not url.path.endswith("/tokenize") or not isinstance(parsed.get("messages"), list)
+                        or parsed.get("add_generation_prompt") is not True or "prompt" in parsed
+                        or request["requested_input_count"] is not None
+                        or type(request["expected_max_model_len"]) is not int
+                        or request["expected_max_model_len"] <= 0):
+                    raise ValueError("chat tokenizer request lost its rendered input or selected context limit")
+            elif kind == "tokenize_text":
+                if (not url.path.endswith("/tokenize") or not isinstance(parsed.get("prompt"), str)
+                        or parsed.get("add_special_tokens") is not False or "messages" in parsed
+                        or request["requested_input_count"] is not None
+                        or type(request["expected_max_model_len"]) is not int
+                        or request["expected_max_model_len"] <= 0):
+                    raise ValueError("text tokenizer request lost its rendered input or selected context limit")
+            else:
+                raise ValueError("unknown physical utility request kind; use the matching harness")
+            identity = {key: value for key, value in request.items() if key not in ("sequence", "request_id")}
+            old = operations.setdefault(request["operation_id"], identity)
+            if old != identity:
+                raise ValueError("utility retry changed its serialized request or owner")
+            continue
+        if actual.get("path") != "/v1/chat/completions":
+            raise ValueError("Chat request reached another provider route")
+        actual_body = actual.get("raw_body")
         owner = request["owner"]
         if not ((set(owner) == {"kind", "operation_id"} and owner["kind"] == "utility" and isinstance(owner["operation_id"], str) and owner["operation_id"])
                 or (set(owner) == {"kind", "attempt_id"} and owner["kind"] == "chat" and isinstance(owner["attempt_id"], str) and owner["attempt_id"])):
@@ -70,7 +120,7 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
         else:
             raise ValueError("unknown request representation; use the matching harness")
         encoded = body.encode("utf-8")
-        if body != actual or len(encoded) != request["body_bytes"] or hashlib.sha256(encoded).hexdigest() != request["body_sha256"]:
+        if body != actual_body or len(encoded) != request["body_bytes"] or hashlib.sha256(encoded).hexdigest() != request["body_sha256"]:
             raise ValueError("replayed request differs from bytes received by provider")
         parsed = json.loads(body)
         if parsed["kv_scope"] != request["kv_scope"]:
@@ -88,30 +138,34 @@ def require_request_evidence(events: list[dict], received: list[str]) -> list[di
 
 def require_response_evidence(events: list[dict], served: list[dict]) -> list[dict]:
     """Verify every observed byte against the fake provider, including failed prefixes."""
-    requests = [event["request"] for event in events if event.get("type") == "model_request"]
+    physical = [event for event in events if event.get("type") in ("model_request", "model_utility_request")]
+    requests = [event["request"] if event["type"] == "model_request" else event["utility_request"]
+                for event in physical]
     if len(requests) != len(served) or events[-1]["request_evidence"]["open_response_ids"] != []:
         raise ValueError("response recording is incomplete; inspect the provider and recorder")
     states = {request["request_id"]: {"journal": request["journal_id"], "actual": actual,
-              "sequence": 0, "http": False, "termination": None, "ended": False, "outcome": None, "closed": False, "owner": request["owner"], "bytes": bytearray(),
+              "sequence": 0, "http": False, "termination": None, "ended": False, "outcome": None, "closed": False,
+              "owner": request["owner"] if envelope["type"] == "model_request" else {"kind": "physical_utility"}, "bytes": bytearray(),
               "decoded_outputs": [], "decoded_failure": None, "decoded_pending": None}
-              for request, actual in zip(requests, served)}
+              for envelope, request, actual in zip(physical, requests, served)}
     if len(states) != len(requests):
         raise ValueError("response requests reuse an identity; inspect the original stream")
     admitted = set()
     responses = []
     for envelope in events:
-        if envelope.get("type") == "model_request":
-            admitted.add(envelope["request"]["request_id"])
+        if envelope.get("type") in ("model_request", "model_utility_request"):
+            admitted.add((envelope["request"] if envelope["type"] == "model_request" else envelope["utility_request"])["request_id"])
         if envelope.get("type") != "model_response":
             continue
         response = envelope["response"]
-        responses.append(response)
         state = states.get(response["request_id"])
         if response["request_id"] not in admitted or state is None or state["closed"] or state["journal"] != response["journal_id"] or response["sequence"] != state["sequence"] + 1:
             raise ValueError("response identity or sequence is incomplete")
         event = response["event"]
         actual = state["actual"]
         kind = event["kind"]
+        if state["owner"]["kind"] != "physical_utility":
+            responses.append(response)
         if ((kind in ("history", "delivery")) != (state["outcome"] is not None)
                 or (kind == "outcome" and not state["ended"])
                 or (kind in ("http", "body", "end") and state["ended"])):
@@ -219,12 +273,17 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             if (state["decoded_pending"] is not None
                     or len(state["decoded_outputs"]) != (progress[1] if state["owner"]["kind"] == "utility" else 0)):
                 raise ValueError("response outcome omits decoded outputs; inspect the original stream")
+            if state["owner"]["kind"] == "physical_utility" and (usage is not None or progress[1] != 0
+                    or (event["status"] == "completed" and progress[0] != 1)):
+                raise ValueError("physical utility processing claims Chat usage or decoded output")
             state["outcome"] = event["status"]
             state["pipeline_outputs"] = progress[1]
         elif kind == "delivery":
             delivered = event.get("outputs_delivered")
-            if (set(event) != {"kind", "outputs_delivered"} or state["owner"]["kind"] != "utility"
-                    or type(delivered) is not int or not 0 <= delivered <= state["pipeline_outputs"]):
+            if (set(event) != {"kind", "outputs_delivered"}
+                    or state["owner"]["kind"] not in ("utility", "physical_utility")
+                    or type(delivered) is not int or not 0 <= delivered <= state["pipeline_outputs"]
+                    or (state["owner"]["kind"] == "physical_utility" and delivered != 0)):
                 raise ValueError("utility delivery has no matching physical output prefix")
             state["closed"] = True
         elif kind == "history":
@@ -236,7 +295,100 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
         state["sequence"] += 1
     if any(not state["closed"] for state in states.values()):
         raise ValueError("response completion is missing; inspect the original stream")
+    require_utility_completions(events, states)
     return responses
+
+
+def require_utility_completions(events: list[dict], states: dict[str, dict]) -> None:
+    """Bind every utility result to all attempts and the final observed provider bytes."""
+    if not any(envelope.get("type") in ("model_utility_request", "model_utility_completion")
+               for envelope in events):
+        return
+    operations: dict[str, dict] = {}
+    completed: set[str] = set()
+    journal = events[0]["request_evidence_origin"]["journal_id"]
+    fields = ("journal_id", "operation_id", "kv_scope", "kind", "requested_model",
+              "requested_input_count", "expected_max_model_len")
+    for envelope in events:
+        if envelope.get("type") == "model_utility_request":
+            request = envelope["utility_request"]
+            operation_id = request["operation_id"]
+            if operation_id in completed:
+                raise ValueError("physical utility request follows its operation completion")
+            identity = {field: request[field] for field in fields}
+            operation = operations.setdefault(operation_id, {"identity": identity, "ids": []})
+            if operation["identity"] != identity:
+                raise ValueError("physical utility retry changes operation identity")
+            operation["ids"].append(request["request_id"])
+        elif envelope.get("type") == "model_utility_completion":
+            completion = envelope["utility_completion"]
+            operation_id = completion["operation_id"]
+            if operation_id in completed or completion["journal_id"] != journal:
+                raise ValueError("physical utility operation repeats its completion")
+            operation = operations.get(operation_id)
+            request_ids = completion["request_ids"]
+            result = completion["result"]
+            error = completion["error"]
+            if not ((result is None and isinstance(error, str) and error)
+                    or (isinstance(result, dict) and error is None and request_ids)):
+                raise ValueError("physical utility completion has no unique result or failure")
+            if operation is None:
+                if request_ids or result is not None:
+                    raise ValueError("physical utility completion names unrecorded attempts")
+                completed.add(operation_id)
+                continue
+            if ({field: completion[field] for field in fields} != operation["identity"]
+                    or request_ids != operation["ids"]
+                    or any(request_id not in states or not states[request_id]["closed"]
+                           for request_id in request_ids)
+                    or any(states[request_id]["outcome"] == "completed" for request_id in request_ids[:-1])):
+                raise ValueError("physical utility completion omits or misattributes a retry")
+            if result is not None:
+                final = states[request_ids[-1]]
+                actual = final["actual"]
+                media_type = (actual.get("response_content_type") or "").split(";", 1)[0].strip().lower()
+                if (final["outcome"] != "completed" or final["termination"] not in ("eof", "cancelled")
+                        or not 200 <= actual["response_status"] < 300
+                        or not (media_type == "application/json" or media_type.endswith("+json"))):
+                    raise ValueError("physical utility result has no complete JSON response")
+                try:
+                    physical = json.loads(bytes(final["bytes"]).decode("utf-8-sig"))
+                except (UnicodeDecodeError, ValueError) as cause:
+                    raise ValueError("physical utility result has no UTF-8 JSON response") from cause
+                if not isinstance(physical, dict):
+                    raise ValueError("physical utility result has no JSON object response")
+                if completion["kind"] == "embedding":
+                    data = physical.get("data")
+                    vectors = result.get("vectors")
+                    if (result.get("kind") != "embedding" or not isinstance(data, list)
+                            or not isinstance(vectors, list)
+                            or len(data) != len(vectors) or len(data) != completion["requested_input_count"]):
+                        raise ValueError("embedding result does not match separate provider inputs")
+                    try:
+                        ordered = sorted(data, key=lambda item: item["index"])
+                        for index, item in enumerate(ordered):
+                            encoded = item["embedding"]
+                            raw = base64.b64decode(encoded, validate=True)
+                            if (type(item["index"]) is not int or item["index"] != index
+                                    or not raw or len(raw) % 4 or base64.b64encode(raw).decode() != encoded):
+                                raise ValueError("embedding response has invalid ordered float32 bytes")
+                            decoded = [value[0] for value in struct.iter_unpack("<f", raw)]
+                            if not all(math.isfinite(value) for value in decoded) or decoded != vectors[index]:
+                                raise ValueError("embedding result differs from provider float32 bytes")
+                    except (KeyError, TypeError, IndexError) as cause:
+                        raise ValueError("embedding response has invalid vector fields") from cause
+                else:
+                    count = physical.get("count")
+                    maximum = physical.get("max_model_len")
+                    if (result.get("kind") != "token_count" or type(count) is not int
+                            or type(maximum) is not int or not 0 <= count <= 2**53 - 1
+                            or maximum != completion["expected_max_model_len"]
+                            or result.get("total_tokens") != count or result.get("max_model_len") != maximum):
+                        raise ValueError("tokenizer result differs from provider bytes or selected context limit")
+            del operations[operation_id]
+            completed.add(operation_id)
+    if operations:
+        raise ValueError("physical utility operation has no completion; retain the complete stream")
 
 
 def require_output_ownership(events: list[dict]) -> None:

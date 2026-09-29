@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:16",
+  "$id": "urn:agent-service:stream-contract:17",
   "type": "object",
   "required": [
     "type",
@@ -909,6 +909,66 @@
         "parent_tool_use_id",
         "request"
       ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "model_utility_request"
+        },
+        "uuid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_tool_use_id": {
+          "type": "null"
+        },
+        "utility_request": {
+          "$ref": "#/definitions/modelUtilityRequestEvidence"
+        }
+      },
+      "required": [
+        "type",
+        "uuid",
+        "session_id",
+        "parent_tool_use_id",
+        "utility_request"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "model_utility_completion"
+        },
+        "uuid": {
+          "type": "string",
+          "minLength": 1
+        },
+        "session_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_tool_use_id": {
+          "type": "null"
+        },
+        "utility_completion": {
+          "$ref": "#/definitions/modelUtilityCompletionEvidence"
+        }
+      },
+      "required": [
+        "type",
+        "uuid",
+        "session_id",
+        "parent_tool_use_id",
+        "utility_completion"
+      ],
+      "additionalProperties": false
     },
     {
       "properties": {
@@ -3583,46 +3643,8 @@
         }
       ]
     },
-    "tokenMeasurementEvidence": {
-      "type": "object",
-      "required": [
-        "requestUrl",
-        "requestJson",
-        "responseStatus",
-        "responseContentType",
-        "responseBase64"
-      ],
-      "properties": {
-        "requestUrl": {
-          "type": "string",
-          "pattern": "^https?://.+/tokenize$"
-        },
-        "requestJson": {
-          "type": "string",
-          "minLength": 1
-        },
-        "responseStatus": {
-          "type": "integer",
-          "minimum": 200,
-          "maximum": 299
-        },
-        "responseContentType": {
-          "type": "string",
-          "minLength": 1
-        },
-        "responseBase64": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": false
-    },
     "compactionTokenMeasurement": {
       "type": "object",
-      "required": [
-        "role",
-        "evidence"
-      ],
       "properties": {
         "role": {
           "enum": [
@@ -3632,11 +3654,397 @@
             "candidate"
           ]
         },
-        "evidence": {
-          "$ref": "#/definitions/tokenMeasurementEvidence"
+        "operationId": {
+          "type": "string",
+          "minLength": 1
         }
       },
+      "required": [
+        "role",
+        "operationId"
+      ],
       "additionalProperties": false
+    },
+    "modelUtilityRequestEvidence": {
+      "type": "object",
+      "properties": {
+        "journal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kv_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "tokenize_chat",
+            "tokenize_text",
+            "embedding"
+          ]
+        },
+        "requested_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requested_input_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_max_model_len": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body_json": {
+          "type": "string",
+          "minLength": 1
+        },
+        "body_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "body_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "journal_id",
+        "sequence",
+        "request_id",
+        "operation_id",
+        "kv_scope",
+        "kind",
+        "requested_model",
+        "requested_input_count",
+        "expected_max_model_len",
+        "request_url",
+        "body_json",
+        "body_bytes",
+        "body_sha256"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "embedding"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requested_input_count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "expected_max_model_len": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "requested_input_count": {
+                "type": "null"
+              },
+              "expected_max_model_len": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        }
+      ]
+    },
+    "modelUtilityCompletionEvidence": {
+      "type": "object",
+      "properties": {
+        "journal_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kv_scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "tokenize_chat",
+            "tokenize_text",
+            "embedding"
+          ]
+        },
+        "requested_model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requested_input_count": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_max_model_len": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "result": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "token_count"
+                },
+                "total_tokens": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "max_model_len": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "kind",
+                "total_tokens",
+                "max_model_len"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "embedding"
+                },
+                "vectors": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "kind",
+                "vectors"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "journal_id",
+        "operation_id",
+        "kv_scope",
+        "kind",
+        "requested_model",
+        "requested_input_count",
+        "expected_max_model_len",
+        "request_ids",
+        "result",
+        "error"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "embedding"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "requested_input_count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "expected_max_model_len": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "requested_input_count": {
+                "type": "null"
+              },
+              "expected_max_model_len": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "embedding"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "properties": {
+                      "kind": {
+                        "const": "embedding"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "result": {
+                "anyOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "properties": {
+                      "kind": {
+                        "const": "token_count"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "result": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "error": {
+                "type": "null"
+              },
+              "request_ids": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
     }
   }
 }

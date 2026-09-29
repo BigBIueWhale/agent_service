@@ -220,7 +220,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     events = [json.loads(line) for line in stdout.splitlines()]
     require(not any(event.get("type", "").startswith("control_") for event in events),
             "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
-    request_evidence = require_request_evidence(events, [request["raw_body"] for request in requests if request["path"] == "/v1/chat/completions"])
+    request_evidence = require_request_evidence(events, requests)
     require_output_ownership(events)
     normalization_seeds = [event["normalization_seed"] for event in events
                            if event["type"] == "model_normalization_seed"]
@@ -230,7 +230,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             normalization_seeds[0]["history_call_ids"] == [] and
             "smoke_read" in normalization_seeds[1]["history_call_ids"],
             "the two Chat generations lost their request-bound history seeds")
-    response_evidence = require_response_evidence(events, [request for request in requests if request["path"] == "/v1/chat/completions"])
+    response_evidence = require_response_evidence(events, requests)
     require(all(response["event"]["status"] == "completed" for response in response_evidence if response["event"]["kind"] == "outcome"),
             "ordinary provider responses did not complete decoding; inspect the processing outcomes")
     require(not any(e.get("subtype") == "compaction" for e in events),
@@ -338,7 +338,14 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
             "the successful two-generation fixture recorded an abandoned attempt; inspect canonical disposition")
     require([r["modelRequest"] for r in records if r["type"] == "model_request"] == request_evidence,
             "canonical and stdout request evidence differ")
-    require([r["modelResponse"] for r in records if r["type"] == "model_response"] == response_evidence,
+    require([r["modelUtilityRequest"] for r in records if r["type"] == "model_utility_request"] ==
+            [e["utility_request"] for e in events if e["type"] == "model_utility_request"],
+            "canonical and stdout physical utility requests differ")
+    require([r["modelUtilityCompletion"] for r in records if r["type"] == "model_utility_completion"] ==
+            [e["utility_completion"] for e in events if e["type"] == "model_utility_completion"],
+            "canonical and stdout physical utility completions differ")
+    require([r["modelResponse"] for r in records if r["type"] == "model_response"] ==
+            [e["response"] for e in events if e["type"] == "model_response"],
             "canonical and stdout response evidence differ")
     require([r["normalizationSeed"] for r in records if r["type"] == "model_normalization_seed"] ==
             [e["normalization_seed"] for e in events if e["type"] == "model_normalization_seed"],
@@ -346,7 +353,8 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     parent = None
     for record in records:
         require(record["parentUuid"] == parent, "canonical transcript chain is incomplete")
-        if record["type"] in ("model_request", "model_response", "model_normalization_seed",
+        if record["type"] in ("model_request", "model_utility_request", "model_response",
+                              "model_utility_completion", "model_normalization_seed",
                               "model_generation", "model_attempt_completion"):
             require("message" not in record, "request evidence entered replayable history")
         else:

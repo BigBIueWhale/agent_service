@@ -11,6 +11,10 @@ from request_evidence import require_request_evidence
 
 
 class RequestEvidenceTests(unittest.TestCase):
+    def check(self, events, bodies):
+        receipts = [{"path": "/v1/chat/completions", "raw_body": body} for body in bodies]
+        return require_request_evidence(events, receipts)
+
     def fixture(self):
         messages = [{"role": "user", "content": "שלום 🌈 \n \""}]
         serialize = lambda value: json.dumps(value, ensure_ascii=False, separators=(",", ":"))
@@ -38,16 +42,16 @@ class RequestEvidenceTests(unittest.TestCase):
 
     def test_replays_exact_received_bytes_with_unicode_and_delta(self):
         events, bodies = self.fixture()
-        self.assertEqual(len(require_request_evidence(events, bodies)), 2)
+        self.assertEqual(len(self.check(events, bodies)), 2)
 
     def test_full_body_requires_a_new_segment_for_its_scope(self):
         events, bodies = self.fixture()
         second = events[2]["request"]
         second["body"] = {"kind": "full", "json": bodies[1]}
         with self.assertRaisesRegex(ValueError, "full request body repeats an active invocation segment"):
-            require_request_evidence(events, bodies)
+            self.check(events, bodies)
         second["segment_id"] = "next-segment"
-        self.assertEqual(len(require_request_evidence(events, bodies)), 2)
+        self.assertEqual(len(self.check(events, bodies)), 2)
 
     def test_selected_decoder_uses_the_dispatched_model(self):
         for mode, model in (("nonstream", "another-model"), ("unknown", "fixture-model")):
@@ -55,7 +59,7 @@ class RequestEvidenceTests(unittest.TestCase):
                 events, bodies = self.fixture()
                 events[1]["request"]["decode_policy"].update(mode=mode, model=model)
                 with self.assertRaisesRegex(ValueError, "selected decoder contradicts the dispatched request"):
-                    require_request_evidence(events, bodies)
+                    self.check(events, bodies)
 
     def test_zero_retained_messages_replace_or_remove_the_whole_message_list(self):
         for messages in ([], [{"role": "user", "content": "replacement שלום 🧪\n"}]):
@@ -66,14 +70,14 @@ class RequestEvidenceTests(unittest.TestCase):
                 request = events[2]["request"]
                 request["body"].update(retain_messages=0, added_messages=[serialize(message) for message in messages])
                 request.update(body_bytes=len(bodies[1].encode()), body_sha256=hashlib.sha256(bodies[1].encode()).hexdigest())
-                self.assertEqual(len(require_request_evidence(events, bodies)), 2)
+                self.assertEqual(len(self.check(events, bodies)), 2)
                 for defect in ("base", "segment", "scope"):
                     broken = copy.deepcopy(events)
                     if defect == "base": broken[2]["request"]["body"]["base_request_id"] = "unissued"
                     if defect == "segment": broken[2]["request"]["segment_id"] = "other"
                     if defect == "scope": broken[2]["request"]["kv_scope"] = "child"
                     with self.assertRaisesRegex(ValueError, "delta"):
-                        require_request_evidence(broken, bodies)
+                        self.check(broken, bodies)
 
     def test_refuses_missing_changed_or_foreign_evidence(self):
         for defect in ["omission", "hash", "bytes", "origin", "segment", "kind", "header"]:
@@ -95,7 +99,109 @@ class RequestEvidenceTests(unittest.TestCase):
                 elif defect == "kind":
                     events[2]["request"]["body"]["kind"] = "unknown"
                 with self.assertRaises(ValueError):
-                    require_request_evidence(events, bodies)
+                    self.check(events, bodies)
+
+
+class PhysicalUtilityEvidenceTests(unittest.TestCase):
+    def fixture(self):
+        import base64
+        body_value = {"model": "fixture-model", "prompt": "hello", "add_special_tokens": False}
+        body = json.dumps(body_value, separators=(",", ":"))
+        origin = {"journal_id": "journal", "first_sequence": 1}
+        events = [{"type": "system", "subtype": "stream_start", "request_evidence_origin": origin}]
+        receipts = []
+        for index, (status, raw) in enumerate(((500, b""), (200, b'{"count":5,"max_model_len":100}')), 1):
+            request_id = f"tokenize-{index}"
+            request = {"journal_id": "journal", "sequence": index, "request_id": request_id,
+                       "operation_id": "count-text", "kv_scope": "session", "kind": "tokenize_text",
+                       "requested_model": "fixture-model", "requested_input_count": None,
+                       "expected_max_model_len": 100, "request_url": "http://fixture.invalid/tokenize",
+                       "body_json": body, "body_bytes": len(body.encode()),
+                       "body_sha256": hashlib.sha256(body.encode()).hexdigest()}
+            events.append({"type": "model_utility_request", "utility_request": request})
+            receipt = {"path": "/tokenize", "raw_body": body, "body": body_value,
+                       "response_status": status, "response_content_type": "application/json",
+                       "response_chunks": [base64.b64encode(raw).decode()] if raw else []}
+            receipts.append(receipt)
+            response = lambda sequence, event: {"type": "model_response", "response": {
+                "journal_id": "journal", "request_id": request_id, "sequence": sequence, "event": event}}
+            events.append(response(1, {"kind": "http", "status": status,
+                                       "content_type": "application/json"}))
+            next_sequence = 2
+            if raw:
+                events.append(response(next_sequence, {"kind": "body", "offset": 0,
+                                                       "base64": base64.b64encode(raw).decode()}))
+                next_sequence += 1
+            events.append(response(next_sequence, {"kind": "end", "termination": "eof",
+                                                   "body_bytes": len(raw),
+                                                   "body_sha256": hashlib.sha256(raw).hexdigest(),
+                                                   "error": None}))
+            events.append(response(next_sequence + 1, {"kind": "outcome",
+                                                       "status": "completed" if raw else "failed",
+                                                       "error": None if raw else "HTTP 500",
+                                                       "served_usage": None,
+                                                       "sdk_values_seen": 1 if raw else 0,
+                                                       "pipeline_outputs_delivered": 0}))
+            events.append(response(next_sequence + 2, {"kind": "delivery", "outputs_delivered": 0}))
+        events.append({"type": "model_utility_completion", "utility_completion": {
+            "journal_id": "journal", "operation_id": "count-text", "kv_scope": "session",
+            "kind": "tokenize_text", "requested_model": "fixture-model",
+            "requested_input_count": None, "expected_max_model_len": 100,
+            "request_ids": ["tokenize-1", "tokenize-2"],
+            "result": {"kind": "token_count", "total_tokens": 5, "max_model_len": 100},
+            "error": None}})
+        events.append({"type": "result", "request_evidence": {**origin,
+                                                                   "request_count": 2,
+                                                                   "open_response_ids": []}})
+        return events, receipts
+
+    def test_retry_request_and_response_bytes_are_all_accounted(self):
+        from request_evidence import require_response_evidence
+        events, receipts = self.fixture()
+        self.assertEqual(require_request_evidence(events, receipts), [])
+        self.assertEqual(require_response_evidence(events, receipts), [])
+        omitted = copy.deepcopy(events)
+        del omitted[1]
+        with self.assertRaises(ValueError):
+            require_request_evidence(omitted, receipts)
+        changed = copy.deepcopy(receipts)
+        changed[1]["raw_body"] += " "
+        with self.assertRaisesRegex(ValueError, "utility request differs"):
+            require_request_evidence(events, changed)
+        missing_bytes = copy.deepcopy(events)
+        del missing_bytes[8]
+        with self.assertRaises(ValueError):
+            require_response_evidence(missing_bytes, receipts)
+        false_output = copy.deepcopy(events)
+        outcome = next(event["response"]["event"] for event in false_output
+                       if event.get("type") == "model_response"
+                       and event["response"]["request_id"] == "tokenize-2"
+                       and event["response"]["event"]["kind"] == "outcome")
+        outcome["pipeline_outputs_delivered"] = 1
+        with self.assertRaises(ValueError):
+            require_response_evidence(false_output, receipts)
+        missing_completion = copy.deepcopy(events)
+        del missing_completion[-2]
+        with self.assertRaisesRegex(ValueError, "no completion"):
+            require_response_evidence(missing_completion, receipts)
+        wrong_result = copy.deepcopy(events)
+        wrong_result[-2]["utility_completion"]["result"]["total_tokens"] = 6
+        with self.assertRaisesRegex(ValueError, "differs from provider bytes"):
+            require_response_evidence(wrong_result, receipts)
+
+    def test_chat_and_utility_requests_share_one_physical_sequence(self):
+        events, receipts = self.fixture()
+        chat_events, bodies = RequestEvidenceTests().fixture()
+        chat = copy.deepcopy(chat_events[1])
+        chat["request"].update(journal_id="journal", sequence=3)
+        events.insert(-1, chat)
+        events[-1]["request_evidence"]["request_count"] = 3
+        receipts.append({"path": "/v1/chat/completions", "raw_body": bodies[0]})
+        self.assertEqual(require_request_evidence(events, receipts), [chat["request"]])
+        repeated = copy.deepcopy(events)
+        repeated[-2]["request"]["sequence"] = 2
+        with self.assertRaisesRegex(ValueError, "identity or sequence"):
+            require_request_evidence(repeated, receipts)
 
 
 class ResponseEvidenceTests(unittest.TestCase):

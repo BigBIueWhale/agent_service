@@ -9,7 +9,6 @@ use crate::{
     ContractError, ContractResult, DecodedRecord, EventKind, PartialStreamState, SystemKind,
     SAFE_INTEGER, STREAM_CONTRACT_SHA256,
 };
-use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -94,74 +93,6 @@ pub struct RequestScope {
 /// `output` is: a draw that was refused and billed must not disappear behind a
 /// later draw that never generated. Each carries the accounting `output`
 /// carries, minus the transition-wide budget, plus the rule it failed.
-fn read_token_measurement(
-    value: Value<'_>,
-    line: usize,
-    limits: Limits,
-) -> ContractResult<(u64, u64, String)> {
-    let refuse = |detail: &str| {
-        ContractError::InvalidRecord(format!(
-        "events.jsonl line {line} has invalid physical tokenizer evidence: {detail}; inspect the complete compaction record and served /tokenize response"
-    ))
-    };
-    let request_url = text(value, "requestUrl", line)?;
-    if !(request_url.starts_with("http://") || request_url.starts_with("https://"))
-        || !request_url.ends_with("/tokenize")
-    {
-        return Err(refuse("request URL is not a served /tokenize endpoint"));
-    }
-    let request_json = text(value, "requestJson", line)?;
-    let request_doc = Document::decode(request_json.as_bytes(), limits)
-        .map_err(|cause| refuse(&format!("request JSON: {cause:?}")))?;
-    let request = request_doc.root();
-    if text(request, "model", line)?.is_empty()
-        || field(request, "messages", line)?.elements().is_none()
-        || field(request, "add_generation_prompt", line)?.as_bool() != Some(true)
-    {
-        return Err(refuse("request is not a rendered chat-tokenizer request"));
-    }
-    let status = unsigned(
-        field(value, "responseStatus", line)?,
-        "tokenizer HTTP status",
-        599,
-    )?;
-    let media_type = text(value, "responseContentType", line)?
-        .split(';')
-        .next()
-        .unwrap_or("")
-        .trim()
-        .to_ascii_lowercase();
-    if !(200..300).contains(&status)
-        || !(media_type == "application/json" || media_type.ends_with("+json"))
-    {
-        return Err(refuse("response is not successful JSON"));
-    }
-    let encoded = text(value, "responseBase64", line)?;
-    let bytes = STANDARD
-        .decode(encoded)
-        .map_err(|_| refuse("response is not base64"))?;
-    if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
-        return Err(refuse("response base64 is empty or noncanonical"));
-    }
-    let response_doc = Document::decode(&bytes, limits)
-        .map_err(|cause| refuse(&format!("response JSON: {cause:?}")))?;
-    let response = response_doc.root();
-    let count = unsigned(
-        field(response, "count", line)?,
-        "served token count",
-        SAFE_INTEGER,
-    )?;
-    let window = unsigned(
-        field(response, "max_model_len", line)?,
-        "served model window",
-        SAFE_INTEGER,
-    )?;
-    if window == 0 {
-        return Err(refuse("served model window is zero"));
-    }
-    Ok((count, window, text(request, "model", line)?.to_string()))
-}
-
 fn validate_compaction_event(
     object: Value<'_>,
     line: usize,
@@ -169,7 +100,7 @@ fn validate_compaction_event(
     json_limits: Limits,
     requests: &crate::model_requests::ModelRequests,
     kv_scope: &str,
-) -> ContractResult<Vec<String>> {
+) -> ContractResult<(Vec<String>, Vec<String>)> {
     let refuse = |what: &str| {
         ContractError::InvalidRecord(format!(
             "events.jsonl line {line} carries a compaction record in {} {what}",
@@ -241,16 +172,28 @@ fn validate_compaction_event(
             "with an unknown compaction trigger reason; retain the original stream and recapture with a corrected compaction producer",
         ));
     }
+    let mut token_claims = Vec::new();
+    let mut unique_tokens = BTreeSet::new();
     let measurements = field(record, "tokenMeasurements", line)?
         .elements()
         .ok_or_else(|| refuse("without a tokenMeasurements array"))?
         .map(|measurement| {
             let role = text(measurement, "role", line)?.to_string();
-            let evidence = field(measurement, "evidence", line)?;
-            let (count, window, model) = read_token_measurement(evidence, line, json_limits)?;
-            Ok((role, count, window, model))
+            let id = text(measurement, "operationId", line)?;
+            if !unique_tokens.insert(id.to_string()) {
+                return Err(refuse("whose tokenizer measurements repeat an operation"));
+            }
+            let (count, window, model, first_sequence, last_sequence) =
+                requests.check_token_measurement(id, kv_scope)?;
+            token_claims.push(id.to_string());
+            Ok((role, count, window, model, first_sequence, last_sequence))
         })
         .collect::<ContractResult<Vec<_>>>()?;
+    if measurements.windows(2).any(|pair| pair[1].4 <= pair[0].5) {
+        return Err(refuse(
+            "whose tokenizer measurements reorder physical operations",
+        ));
+    }
     if measurements
         .first()
         .is_some_and(|first| measurements.iter().any(|value| value.2 != first.2))
@@ -463,7 +406,7 @@ fn validate_compaction_event(
             ));
         }
         let mut next = 3;
-        for measured in draw_counts {
+        for measured in draw_counts.iter().copied() {
             if let Some(measured) = measured {
                 if !measurements
                     .get(next)
@@ -507,6 +450,7 @@ fn validate_compaction_event(
         .chain(record.get("output").filter(|value| !value.is_null()));
     let mut physical_budget = None;
     let mut previous_last_sequence = None;
+    let mut draw_ranges = Vec::new();
     for draw in draws {
         let id = text(draw, "operationId", line)?;
         if !unique.insert(id.to_string()) {
@@ -539,9 +483,28 @@ fn validate_compaction_event(
         }
         physical_budget = Some(issued);
         previous_last_sequence = Some(last_sequence);
+        draw_ranges.push((first_sequence, last_sequence));
         claims.push(id.to_string());
     }
-    Ok(claims)
+    if !draw_ranges.is_empty() {
+        let mut previous = measurements[2].5;
+        let mut next_candidate = 3;
+        for (index, (first, last)) in draw_ranges.into_iter().enumerate() {
+            if first <= previous {
+                return Err(refuse("whose preflight or draw reorders physical requests"));
+            }
+            previous = last;
+            if draw_counts[index].is_some() {
+                let candidate = &measurements[next_candidate];
+                next_candidate += 1;
+                if candidate.4 <= previous {
+                    return Err(refuse("whose candidate count precedes its physical draw"));
+                }
+                previous = candidate.5;
+            }
+        }
+    }
+    Ok((claims, token_claims))
 }
 
 /// Every emitted event names its scope: `null` and an absent field both mean
@@ -726,11 +689,14 @@ struct AdmissionPlan {
     runtime_initialized: bool,
     request_origin: Option<crate::model_requests::RequestOrigin>,
     request: Option<crate::model_requests::RequestAdmission>,
+    utility_request: Option<crate::model_requests::UtilityRequestAdmission>,
+    utility_completion: Option<crate::model_requests::UtilityCompletionAdmission>,
     response: Option<crate::model_requests::ResponseAdmission>,
     seed: Option<crate::model_requests::SeedAdmission>,
     generation: Option<crate::model_requests::GenerationAdmission>,
     completion: Option<crate::model_requests::CompletionAdmission>,
     compaction_claims: Vec<String>,
+    token_measurement_claims: Vec<String>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -761,6 +727,7 @@ pub struct RuntimeContract {
     observed_scopes: BTreeSet<String>,
     observed_journal: Option<String>,
     observed_requests: BTreeMap<String, bool>,
+    observed_utility_requests: BTreeSet<String>,
     records_seen: u64,
     prefix: u64,
     first_refusal: Option<ContractError>,
@@ -784,6 +751,7 @@ impl RuntimeContract {
             observed_scopes: BTreeSet::new(),
             observed_journal: None,
             observed_requests: BTreeMap::new(),
+            observed_utility_requests: BTreeSet::new(),
             records_seen: 0,
             prefix: 0,
             first_refusal: None,
@@ -809,6 +777,7 @@ impl RuntimeContract {
         let scope = required_scope(object, line)?;
         let mut journal = None;
         let mut request = None;
+        let mut utility_request = None;
         let mut outcome = None;
         let refuse = |detail: &str| {
             ContractError::InvalidRecord(format!(
@@ -840,6 +809,19 @@ impl RuntimeContract {
                 observations.observed_usage = observations.observed_usage.admit_request()?;
                 request = Some(id.to_string());
             }
+            "model_utility_request" => {
+                let evidence = field(object, "utility_request", line)?;
+                let id = text(evidence, "request_id", line)?;
+                if self.observed_journal.as_deref() != Some(text(evidence, "journal_id", line)?)
+                    || self.observed_requests.contains_key(id)
+                {
+                    return Err(refuse(
+                        "utility request has a foreign journal or repeated identity",
+                    ));
+                }
+                request = Some(id.to_string());
+                utility_request = Some(id.to_string());
+            }
             "model_response" => {
                 let evidence = field(object, "response", line)?;
                 let id = text(evidence, "request_id", line)?;
@@ -854,12 +836,14 @@ impl RuntimeContract {
                         return Err(refuse("request has a repeated processing outcome"));
                     }
                     let usage = field(event, "served_usage", line)?;
-                    observations.observed_usage =
-                        observations.observed_usage.finalize(if usage.is_null() {
-                            None
-                        } else {
-                            Some(ServedUsage::read(usage, line)?)
-                        })?;
+                    if !self.observed_utility_requests.contains(id) {
+                        observations.observed_usage =
+                            observations.observed_usage.finalize(if usage.is_null() {
+                                None
+                            } else {
+                                Some(ServedUsage::read(usage, line)?)
+                            })?;
+                    }
                     outcome = Some(id.to_string());
                 }
             }
@@ -890,6 +874,9 @@ impl RuntimeContract {
         }
         if let Some(id) = request {
             self.observed_requests.insert(id, false);
+        }
+        if let Some(id) = utility_request {
+            self.observed_utility_requests.insert(id);
         }
         if let Some(id) = outcome {
             self.observed_requests.insert(id, true);
@@ -1046,6 +1033,9 @@ impl RuntimeContract {
         if let Some(response) = plan.response {
             self.requests.commit_response(response);
         }
+        if let Some(completion) = plan.utility_completion {
+            self.requests.commit_utility_completion(completion);
+        }
         if let Some(seed) = plan.seed {
             self.requests.commit_seed(seed);
         }
@@ -1057,6 +1047,8 @@ impl RuntimeContract {
         }
         self.requests
             .commit_compaction_claims(plan.compaction_claims);
+        self.requests
+            .commit_token_measurement_claims(plan.token_measurement_claims);
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -1071,6 +1063,9 @@ impl RuntimeContract {
         }
         if let Some(request) = plan.request {
             self.requests.commit(request);
+        }
+        if let Some(request) = plan.utility_request {
+            self.requests.commit_utility_request(request);
         }
         self.tool_uses.extend(plan.additions);
         for id in plan.returns {
@@ -1202,11 +1197,14 @@ impl RuntimeContract {
             state.partial.observe_origin(origin, line)?;
         }
         let mut request = None;
+        let mut utility_request = None;
+        let mut utility_completion = None;
         let mut response = None;
         let mut seed = None;
         let mut generation = None;
         let mut completion = None;
         let mut compaction_claims = Vec::new();
+        let mut token_measurement_claims = Vec::new();
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         let mut runtime_operation_id = None;
@@ -1225,6 +1223,21 @@ impl RuntimeContract {
                     )));
                 }
                 request = Some(admission);
+            }
+            EventKind::ModelUtilityRequest => {
+                if !runtime_initialized {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} dispatches utility work without runtime init"
+                    )));
+                }
+                utility_request = Some(self.requests.plan_utility_request(
+                    object,
+                    line,
+                    self.limits.json,
+                )?);
+            }
+            EventKind::ModelUtilityCompletion => {
+                utility_completion = Some(self.requests.plan_utility_completion(object, line)?);
             }
             EventKind::ModelResponse => {
                 response = Some(self.requests.plan_response(object, line)?);
@@ -1376,7 +1389,7 @@ impl RuntimeContract {
                         let kv_scope = scope.or(self.session_id.as_deref()).ok_or_else(|| {
                             ContractError::InvalidRecord(format!("events.jsonl line {line} has no compaction request scope; retain the complete stream_start and request evidence"))
                         })?;
-                        compaction_claims = validate_compaction_event(
+                        (compaction_claims, token_measurement_claims) = validate_compaction_event(
                             object, line, scope, self.limits.json, &self.requests, kv_scope,
                         )?;
                     },
@@ -1500,11 +1513,14 @@ impl RuntimeContract {
                 None
             },
             request,
+            utility_request,
+            utility_completion,
             response,
             seed,
             generation,
             completion,
             compaction_claims,
+            token_measurement_claims,
             row,
             state,
             additions,
@@ -1774,6 +1790,50 @@ mod tests {
             "tool_call_preparations":[{"callId":"snapshot-call","toolName":"state_snapshot"}]
         })
     }
+    fn record_compaction_tokenizer(
+        owner: &mut RuntimeContract,
+        role: &str,
+        sequence: u64,
+        count: u64,
+        model: &str,
+    ) {
+        let operation_id = format!("token-{role}");
+        let request_id = format!("token-request-{role}");
+        let body = serde_json::json!({"model":model,"messages":[],"add_generation_prompt":true})
+            .to_string();
+        let request = serde_json::json!({"type":"model_utility_request","uuid":format!("{operation_id}-request"),
+            "session_id":"session","parent_tool_use_id":null,
+            "utility_request":{"journal_id":"fixture","sequence":sequence,"request_id":request_id,
+                "operation_id":operation_id,"kv_scope":"session","kind":"tokenize_chat",
+                "requested_model":model,"requested_input_count":null,"expected_max_model_len":100,
+                "request_url":"http://fixture.invalid/tokenize","body_json":body,
+                "body_bytes":body.len(),"body_sha256":crate::generation::sha256(body.as_bytes())}});
+        admit(owner, &request.to_string()).unwrap();
+        let result = serde_json::json!({"count":count,"max_model_len":100}).to_string();
+        let events = [
+            serde_json::json!({"kind":"http","status":200,"content_type":"application/json"}),
+            serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(result.as_bytes())}),
+            serde_json::json!({"kind":"end","termination":"eof","body_bytes":result.len(),
+                "body_sha256":crate::generation::sha256(result.as_bytes()),"error":null}),
+            serde_json::json!({"kind":"outcome","status":"completed","error":null,
+                "served_usage":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+            serde_json::json!({"kind":"delivery","outputs_delivered":0}),
+        ];
+        for (index, event) in events.iter().enumerate() {
+            admit(
+                owner,
+                &response(&request_id, (index + 1) as u64, &event.to_string()),
+            )
+            .unwrap();
+        }
+        let completion = serde_json::json!({"type":"model_utility_completion",
+            "uuid":format!("{operation_id}-completion"),"session_id":"session","parent_tool_use_id":null,
+            "utility_completion":{"journal_id":"fixture","operation_id":operation_id,
+                "kv_scope":"session","kind":"tokenize_chat","requested_model":model,
+                "requested_input_count":null,"expected_max_model_len":100,"request_ids":[request_id],
+                "result":{"kind":"token_count","total_tokens":count,"max_model_len":100},"error":null}});
+        admit(owner, &completion.to_string()).unwrap();
+    }
     fn with_compaction_transport() -> RuntimeContract {
         let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
         with_compaction_transport_response(bytes.as_bytes(), 1, true)
@@ -1791,7 +1851,25 @@ mod tests {
         completed: bool,
         delivered: u64,
     ) -> RuntimeContract {
+        with_compaction_transport_delivery_models(
+            bytes,
+            sdk_values_seen,
+            completed,
+            delivered,
+            ["fixture-model"; 4],
+        )
+    }
+    fn with_compaction_transport_delivery_models(
+        bytes: &[u8],
+        sdk_values_seen: u64,
+        completed: bool,
+        delivered: u64,
+        models: [&str; 4],
+    ) -> RuntimeContract {
         let mut owner = initialized();
+        record_compaction_tokenizer(&mut owner, "original", 1, 24, models[0]);
+        record_compaction_tokenizer(&mut owner, "summary_request", 2, 20, models[1]);
+        record_compaction_tokenizer(&mut owner, "prompt_only", 3, 18, models[2]);
         let body = serde_json::json!({
             "kv_scope":"session", "model":"fixture-model", "stream":true,
             "max_tokens":8,
@@ -1803,7 +1881,7 @@ mod tests {
         let request = serde_json::json!({
             "type":"model_request", "uuid":"compaction-request", "session_id":"session", "parent_tool_use_id":null,
             "request":{
-                "journal_id":"fixture", "request_id":"compaction-physical", "sequence":1,
+                "journal_id":"fixture", "request_id":"compaction-physical", "sequence":4,
                 "kv_scope":"session", "segment_id":"compaction-segment", "prompt_id":"compaction-prompt",
                 "owner":{"kind":"utility","operation_id":"compaction-operation","purpose":"compaction"},
                 "body":{"kind":"full","json":body},
@@ -1883,27 +1961,16 @@ mod tests {
             ),
         )
         .unwrap();
+        if completed {
+            record_compaction_tokenizer(&mut owner, "candidate", 5, 12, models[3]);
+        }
         owner
     }
     #[test]
     fn compaction_status_and_retained_count_agree_with_the_history_decision() {
-        let measurement = |role: &str, count: u64| {
-            let response = serde_json::json!({
-                "count": count, "max_model_len": 100
-            })
-            .to_string();
+        let measurement = |role: &str| {
             serde_json::json!({
-                "role": role,
-                "evidence": {
-                    "requestUrl": "http://fixture.invalid/tokenize",
-                    "requestJson": serde_json::json!({
-                        "model": "fixture-model", "messages": [],
-                        "add_generation_prompt": true
-                    }).to_string(),
-                    "responseStatus": 200,
-                    "responseContentType": "application/json",
-                    "responseBase64": STANDARD.encode(response.as_bytes())
-                }
+                "role": role, "operationId": format!("token-{role}")
             })
         };
         let failed = serde_json::json!({
@@ -1926,10 +1993,10 @@ mod tests {
             {"role":"user", "parts":[{"text":"retained input"}]}
         ]);
         success["data"]["tokenMeasurements"] = serde_json::json!([
-            measurement("original", 24),
-            measurement("summary_request", 20),
-            measurement("prompt_only", 18),
-            measurement("candidate", 12)
+            measurement("original"),
+            measurement("summary_request"),
+            measurement("prompt_only"),
+            measurement("candidate")
         ]);
         success["data"]["output"] = serde_json::json!({
             "maxOutputTokens":8, "physicalRequests":1,
@@ -1962,30 +2029,37 @@ mod tests {
         assert!(error
             .to_string()
             .contains("completed candidate without delivered output"));
-        let mut mixed_models = success.clone();
-        let request = mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"]
-            .as_str()
-            .unwrap();
-        let mut request: serde_json::Value = serde_json::from_str(request).unwrap();
-        request["model"] = serde_json::json!("another-model");
-        mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"] =
-            serde_json::json!(request.to_string());
-        let error = admit(&mut with_compaction_transport(), &mixed_models.to_string()).unwrap_err();
+        let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
+        let error = admit(
+            &mut with_compaction_transport_delivery_models(
+                bytes.as_bytes(),
+                1,
+                true,
+                1,
+                [
+                    "another-model",
+                    "fixture-model",
+                    "fixture-model",
+                    "fixture-model",
+                ],
+            ),
+            &success.to_string(),
+        )
+        .unwrap_err();
         assert!(error
             .to_string()
             .contains("tokenizer measurements use different models"));
-        let mut foreign_model = success.clone();
-        for measurement in foreign_model["data"]["tokenMeasurements"]
-            .as_array_mut()
-            .unwrap()
-        {
-            let request = measurement["evidence"]["requestJson"].as_str().unwrap();
-            let mut request: serde_json::Value = serde_json::from_str(request).unwrap();
-            request["model"] = serde_json::json!("another-model");
-            measurement["evidence"]["requestJson"] = serde_json::json!(request.to_string());
-        }
-        let error =
-            admit(&mut with_compaction_transport(), &foreign_model.to_string()).unwrap_err();
+        let error = admit(
+            &mut with_compaction_transport_delivery_models(
+                bytes.as_bytes(),
+                1,
+                true,
+                1,
+                ["another-model"; 4],
+            ),
+            &success.to_string(),
+        )
+        .unwrap_err();
         assert!(error
             .to_string()
             .contains("tokenizer model differs from physical draw model"));
