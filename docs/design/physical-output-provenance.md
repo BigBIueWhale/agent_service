@@ -374,84 +374,49 @@ and canonical recording version 13 also require each generation observation to
 name its physical request. The TypeScript and Python source tests exercised the
 counts and per-request attribution, including early cancellation and a conversion
 failure that emits several diagnostics. Native and Java source includes the same
-admission checks but has not been compiled or executed here. A utility consumer
-still has no corresponding receipt, and these counts do not themselves prove
-that any decoded value came from the retained body bytes.
+admission checks but has not been compiled or executed here. At this v11
+checkpoint, a utility consumer still had no corresponding receipt, and these
+counts did not themselves prove that decoded values came from retained bytes.
 
-The utility owner is wider than `BaseLlmClient`. Source call-site inspection
-found `generateText` and `generateJson` there, a direct generator call in
-`PromptHookRunner`, a direct streamed call in the ACP generation service, and
-`GeminiClient.generateContent` (also used by the goal judge). These pass through
-`GenerationClient.generateContent` or `generateContentStream` with a null Chat
-attempt. `ModelRequestJournal.capture` labels every such physical request
-`{kind:'utility'}`, without a call identity; `ModelResponseReplay` closes it at
-the pipeline outcome. A receipt added only to `BaseLlmClient`, compaction, or a
-side-query call site would leave other utility responses without consumer
-accounting. The shared generation-client delivery boundary needs a per-call
-identity and a durable receipt tied to each physical request, including a
-zero-output failure. If a claim also describes how a caller incorporated an
-output, that additional claim must be recorded by the caller that made the
-decision. The source census establishes these ownership paths; no receipt has
-been implemented or executed by this note.
+The utility boundary now has that receipt. `GenerationClient` wraps each
+non-Chat call in `UtilityDelivery`; `ModelRequestJournal.capture` attaches
+every physical OpenAI request with an operation ID and a `utility` owner.
+The pipeline tags each decoded output with its physical request ID. The
+wrapper counts a value only when it crosses its return or iterator boundary,
+then `ModelResponseRecorder.recordUtilityDelivery` persists that count after
+the response outcome. An attached request that returns no output gets a
+zero delivery. The admitting readers require a receipt and refuse a count
+larger than the recorded pipeline output prefix. The service's Qwen verifier
+separately replays that prefix from captured response bytes; a direct
+structural reader alone does not establish conversion from those bytes.
 
-Current-source review after the child-root proof checked this boundary again.
-`GenerationClient` forwards each utility call into the provider; the OpenAI
-pipeline records `pipeline_outputs_delivered` before its nonstreaming result
-returns or while its stream yields. `LoggingContentGenerator` then forwards the
-result or each chunk without recording a caller receipt. Its logging and
-telemetry are not physical response evidence. `BaseLlmClient`,
-`PromptHookRunner`, ACP generation, and `GeminiClient` consume those forwarded
-values differently. The existing outcome count, checked against response-byte
-replay by the TypeScript reader, establishes the pipeline's output prefix. The
-exact request and response bodies establish what crossed the HTTP boundary;
-none of those facts establishes what a utility caller incorporated. An
-implementation must allocate one utility-call identity across
-its physical retries and durably settle the forwarded prefix at the shared
-delivery boundary. Claims about a later caller decision require that caller's
-own record. This needs a versioned producer and reader change, not a receipt
-invented from the old outcome count. No such migration was executed in this
-review, and the existing production process readers' separate physical gates
-do not supply this missing downstream decision.
+`retryWithBackoff` creates one operation ID before its attempt loop and
+carries it in `RetryAttemptContext`. `UtilityDelivery` uses that ID for each
+physical attempt in the loop; a direct call gets its own ID. This is a
+source-reading conclusion about the current producer and readers, not an
+executed retry or packaged-provider test. It supersedes the earlier
+checkpoint's claim that delivery and a stable retry identity were absent.
 
-The logical-call boundary is outside the current `GenerationClient` methods.
-`BaseLlmClient.generateText` and `generateJson`, and `GeminiClient`'s side
-generation, call those methods from inside `retryWithBackoff`; each retry is a
-new invocation of the method. `RetryAttemptContext` carries an attempt number
-and timing but no stable call identity. Allocating an identity inside
-`GenerationClient.generateContent` would therefore label physical attempts
-individually while leaving their shared logical operation unknown. The direct
-hook and ACP callers need the same operation abstraction even though they do
-not use that outer retry. This is established by source reading, not an
-executed retry trace.
+The receipt proves delivery across the shared generation-client boundary.
+It does not prove that `BaseLlmClient`, `PromptHookRunner`, ACP generation or
+`GeminiClient` incorporated a returned value into a later decision. For
+example, `PromptHookRunner` races its provider promise against timeout and
+cancellation; a losing request can finish after the hook has returned. A
+content-retry choice, hook judgement or other downstream use needs evidence
+from the caller that makes that choice if the record claims it. Compaction
+has its own draw and acceptance records. The general caller-decision
+relation remains open; it must not be inferred from a response or receipt.
 
-A single utility-operation owner must be opened before the outer retry or
-direct call and passed through the shared generation client to every physical
-attempt. The physical request journal can attach its request ID to that owner;
-the pipeline already tags each decoded output with its physical request ID.
-The shared client can then account for the values it actually returns or
-yields, including a zero-value failure, and durably settle each admitted
-physical request after its response outcome. The admission readers must
-require one settlement per utility request and compare its delivered prefix
-with that request's physically replayed pipeline output count. The current
-`ModelResponseReplay` deletes a utility request at `outcome`, so it would have
-to retain that request until its receipt is admitted. A receipt at this seam
-proves delivery across that seam only. A content-retry decision, compaction
-acceptance, hook judgement or other later incorporation remains the
-responsibility of the caller that makes it.
-
-`PromptHookRunner` races its provider call against timeout and cancellation;
-the losing provider promise can still settle afterward. Its utility owner
-cannot honestly declare the physical call finished just because the race
-returned. `createContentGenerator` retains constructors for several upstream
-auth types, but its shared `validateModelConfig` currently refuses every
-generation route except the OpenAI-compatible vLLM contract before those
-constructors run. The present byte journal and output source tag in the OpenAI
-pipeline therefore serve every admitted generation route, including ordinary
-sessions. If another route is admitted later, it needs equivalent evidence at
-its physical boundary before a receipt can claim response-byte provenance; a
-client-side invented request ID would not establish it. This qualification is
-from source reading, not a provider test. No code or test in this note claims
-the receipt migration is implemented.
+The deployed agent's pinned settings select the OpenAI-compatible local
+vLLM generator, and its network-none runtime admits only the local model
+path. The Qwen package also contains an opt-in `WebSearchTool` that directly
+calls a DashScope Responses endpoint, outside `GenerationClient` and the
+model request journal. That tool is neither enabled by the pinned settings
+nor reachable from the agent's network-none namespace. This source
+inventory does not claim that a standalone Qwen session using WebSearch
+records that side model call. The vLLM backend never receives that DashScope
+request. Other provider generators likewise need evidence at their own
+physical boundaries before wider Qwen coverage can be claimed.
 
 ## Decoder proof required at admission
 
