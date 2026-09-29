@@ -1236,8 +1236,9 @@ for an acquired stream. The resulting abandoned generation remains admissible
 to the canonical reader and both resume paths; neither reader replays evidence
 as a turn. Source tests exercised the unmodified SDK body, an SDK-altered body,
 and acquisition failure after an earlier tool call. The three targeted
-TypeScript source suites passed 114 tests. Broader Chat and concurrent-pipeline
-suites also fail on an untouched baseline because their fake providers lack
-the required physical request owner or shape; those failures do not verify this
-change. Compilation, packaged behavior, live provider behavior and owner gates
-remain unverified under the no-build instruction.
+TypeScript source suites passed 114 tests. A representative broader Chat-suite
+failure and both concurrent-pipeline cases reproduced on an untouched baseline
+with fake providers lacking the required physical request owner or shape; the
+remaining broader Chat-suite failures were not triaged. Those failures do not
+verify this change. Compilation, packaged behavior, live provider behavior and
+owner gates remain unverified under the no-build instruction.
