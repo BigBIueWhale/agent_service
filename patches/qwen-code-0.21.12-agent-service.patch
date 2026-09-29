@@ -346613,7 +346613,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,770 @@
+@@ -0,0 +1,807 @@
 +import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -346675,6 +346675,43 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  };
 +}
 +describe('mandatory model request evidence', () => {
++  it('refuses a chat request before its runtime history checkpoint', async () => {
++    const f = fixture();
++    await f.journal.capture(serialize([]), 'root', 'p', 's', null, TEST_POLICY);
++    const request = {
++      ...f.records[0],
++      owner: { kind: 'chat' as const, attempt_id: 'attempt' },
++    };
++    const replay = new ModelEvidenceReplay();
++    expect(() =>
++      replay.observe({
++        type: 'model_request',
++        modelRequest: request,
++      }),
++    ).toThrow('no initial history checkpoint');
++
++    const initialized = new ModelEvidenceReplay();
++    initialized.observe({
++      type: 'system',
++      subtype: 'runtime_history',
++      systemPayload: {
++        kind: 'checkpoint',
++        state: { history: [], imagePayloads: [] },
++      },
++    });
++    expect(() =>
++      initialized.observe({ type: 'model_request', modelRequest: request }),
++    ).not.toThrow();
++
++    const utility = new ModelEvidenceReplay();
++    expect(() =>
++      utility.observe({
++        type: 'model_request',
++        modelRequest: f.records[0],
++      }),
++    ).not.toThrow();
++  });
++
 +  it('refuses a closed child artifact with a normalization seed but no generation', () => {
 +    const replay = new ModelEvidenceReplay();
 +    const base = { isSidechain: true, sessionId: 'root-session' };
@@ -347387,7 +347424,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1518 @@
+@@ -0,0 +1,1519 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -348645,6 +348682,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      if (sidechain)
 +        return refusal('child artifact contains root-owned physical requests');
 +      const request = requireModelRequestEvidence(record.modelRequest);
++      if (request.owner.kind === 'chat') this.history.assertInitialized();
 +      const body = this.requests.observe(request);
 +      this.responses.begin(
 +        request.journal_id,
@@ -384746,7 +384784,7 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 diff --git a/packages/core/src/services/runtime-history.ts b/packages/core/src/services/runtime-history.ts
 --- /dev/null
 +++ b/packages/core/src/services/runtime-history.ts
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,341 @@
 +import type { Content } from '@google/genai';
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
@@ -385026,6 +385064,10 @@ diff --git a/packages/core/src/services/runtime-history.ts b/packages/core/src/s
 +  private readonly cursor = new RuntimeHistoryCursor();
 +  private history: Content[] | undefined;
 +  private images = new InMemoryImagePayloadStore();
++
++  assertInitialized(): void {
++    this.requireInitialized();
++  }
 +
 +  apply(change: RuntimeHistoryChange): void {
 +    this.cursor.apply(runtimeHistoryPosition({ kind: 'change', change }));

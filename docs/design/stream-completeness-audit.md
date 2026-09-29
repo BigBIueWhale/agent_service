@@ -1395,6 +1395,18 @@ reminders, media rendering, cancellations and retries.
 
 ## Model-bound canonical input admission
 
+Canonical model-evidence replay now refuses a chat `model_request` before its
+first `runtime_history` checkpoint. `GeminiChat` writes the checkpoint when it
+is constructed, before it can issue a chat request. Utility requests remain
+independent of that conversation history. An authored TypeScript regression
+case covers the refused order, the valid checkpoint-first order and a utility
+request without a checkpoint; the case was not run because this checkout has
+no Node or Bun executable and compilation is prohibited. The pinned-source
+plan reproduced the three edited files, the 38 patch-framework tests passed,
+and the manifest and 35-concern identifier checks passed. This establishes a
+read-order invariant by source inspection; it does not yet bind the checkpoint
+contents or displayed user and tool-result rows to the provider request body.
+
 Source tracing found that the canonical recorder's fire-and-forget writes for
 tool results, Goal continuations, cron prompts and in-process notifications
 caught synchronous errors and only logged them. They also used `appendRecord`,
