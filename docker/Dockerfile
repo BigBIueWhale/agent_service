@@ -461,6 +461,8 @@ RUN test -n "${SOURCE_COMMIT}" \
  && test -f /opt/qwen-code/dist/record-verifier.js \
  && test -d /opt/qwen-code/node_modules \
  && test -f /opt/qwen-code/package.json \
+ && { /usr/local/bin/node /opt/qwen-code/dist/record-verifier.js \
+      >/dev/null 2>&1; test "$?" -eq 2; } \
  && test -s /usr/share/doc/agent_service/UNLICENSE \
  && test -s /usr/share/doc/agent_service/THIRD_PARTY_NOTICES.md \
  && test -s /usr/share/doc/agent_service/Apache-2.0.txt \
