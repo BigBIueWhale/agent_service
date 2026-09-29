@@ -278,7 +278,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 19 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 20 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all(all(field not in event for field in
                     ("recordingVersion", "checkpointVersion", "historyRevision", "afterCommit"))

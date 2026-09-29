@@ -8436,7 +8436,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 19;",
+            "export const CHAT_RECORDING_VERSION = 20;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -9748,6 +9748,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "async recordHistoryBinding(binding: RuntimeHistoryBinding)",
         "recordChildHistoryAssertion(",
         "recordChildHistoryBinding(",
+        "async recordChildScope(",
+        "this.createBaseRecord('model_child_scope')",
         "binding: RuntimeHistoryBinding,",
         "assertion: RuntimeHistoryAssertion,",
         "this.createBaseRecord('model_history_assertion')",
@@ -9755,6 +9757,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "{ updateActiveTail: false }",
     ), label=label)
     _require_all(state, core + "agents/agent-transcript.ts", (
+        "kvScope: string;",
+        "const childScope: ChildScopeDeclaration = requireChildScopeDeclaration({",
+        "const ready = options.recording.recordChildScope(childScope)",
         "recordHistoryAssertion: async (kvScope, promptId, state) => {",
         "stateSha256: fingerprintRuntimeHistory(",
         "recordHistoryBinding: async (binding) => {",
@@ -9784,26 +9789,43 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.makeApiCallAndProcessStream(",
     ), label=label, location="attempt identity before physical dispatch")
     _require_all(state, core + "core/model-request-evidence.ts", (
+        "private readonly childScopes = new Map<string, ChildScopeDeclaration>();",
+        "if (sidechain && !this.childScope && record.type !== 'model_child_scope')",
         "record.type === 'model_history_assertion'",
         "record.type === 'model_history_binding'",
+        "record.type === 'model_child_scope'",
+        "this.rootChildScopeNames.has(request.kv_scope)",
         "this.history.assertFingerprint(assertion.stateSha256)",
         "this.historyAssertions.has(assertion.renderId)",
         "this.historyBindings.get(request.owner.attempt_id)",
         "Chat request has no matching canonical history assertion",
         "private needsRootProof(): boolean",
-        "this.historyAssertions.size > 0",
+        "return this.sidechain === true;",
+        "root child render is absent from its child recording",
+        "child scope declaration has no matching root mirror",
         "child render has no matching root history assertion",
         "child attempt has no matching root history binding",
         "root Chat attempt is absent from its child recording",
         "child physical Chat request has no completed child generation",
+        "root child compaction is absent from its child recording",
+    ), label=label)
+    _require_all(state, core + "core/model-response-evidence.ts", (
+        "unclaimedCompactionCountForScope(scope: string): number",
+        "operation.scope === scope",
     ), label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
         "readonly type: 'model_history_assertion'",
         "readonly type: 'model_history_binding'",
+        "readonly type: 'model_child_scope'",
+        "requireChildScopeDeclaration(value['childScope'])",
         "export function isTranscriptEvidenceRecord(",
         "requireRuntimeHistoryAssertion(value['runtimeHistoryAssertion'])",
         "requireRuntimeHistoryBinding(value['runtimeHistoryBinding'])",
         "Model evidence cannot contain a conversation message or system payload",
+    ), label=label)
+    _require_all(state, core + "services/chat-recording-io.ts", (
+        "requireChildArtifactIdentity(filePath, snapshot.records[0])",
+        "requireChildArtifactIdentity(filePath, firstRecord)",
     ), label=label)
     _require_all(state, core + "services/session-artifact-persistence.ts", (
         "isTranscriptEvidenceRecord,",
@@ -9820,6 +9842,9 @@ def _validate_served_accounting_after(state: State) -> None:
                  label=label)
     require_text(state, core + "core/model-request-evidence.test.ts",
                  "refuses a child attempt whose root dispatched without a child generation",
+                 label=label)
+    require_text(state, core + "core/model-request-evidence.test.ts",
+                 "refuses a stripped child even when every local attempt marker is gone",
                  label=label)
     require_text(state, core + "core/runtime-history-recording.test.ts",
                  "refuses a canonical input changed after its provider request was admitted",
@@ -10114,7 +10139,7 @@ def _validate_served_accounting_after(state: State) -> None:
     require_text(state, core + "services/chat-recording-io.test.ts",
                  "refuses an open physical request in complete synchronous reports", label=label)
     require_text(state, core + "services/chat-recording-io.test.ts",
-                 "reads a child that ended before any model attempt without requiring root output", label=label)
+                 "requires root scope proof even when the child made no model attempt", label=label)
     _require_all(state, core + "services/sessionService.ts", (
         "async readSessionView(", "await this.readAllRecords(filePath)",
         "async loadArchivedSession(", "await this.readCompleteStoredRecords(filePath)",

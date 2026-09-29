@@ -1762,26 +1762,33 @@ orders and an omitted child binding; they are unrun TypeScript source tests.
 This closes the checked child render/attempt relation by source reading, while
 provider-body renderer replay and owner gates remain open.
 
-It does not yet detect deletion of an entire child render, binding and
-generation from the child file. With no local render marker, the reader does
-not open root proof. The child file carries `agentId`, but that is not always
+The version 19 reader did not detect deletion of an entire child render,
+binding and generation from the child file. With no local render marker, it did
+not open root proof. The child file carried `agentId`, but that is not always
 the request's `kvScope`: AgentTool derives the scope from its spawning tool-call
-ID, while the child path uses the agent ID. A complete cross-file omission
-check needs a durable child scope identity that the reader can compare with
-root child requests even when the child file contains no attempt rows. That
-identity and comparison remain unimplemented and unverified.
+ID, while the child path uses the agent ID. That made a durable invocation
+scope necessary even for a child that made no attempt.
 
 The attach paths confirm how to supply that identity. AgentTool and background
 resume use a `GenerationContext` built from the spawning tool-call ID; forked,
 workflow and in-process agents construct their own explicit invocation scope.
-Every attach caller can pass that `kvScope` before execution. The writer must
-commit one child scope declaration locally and mirror it into the root before
-the child may run, including a child that produces no model attempt. Complete
-child admission must require that declaration, refuse an empty child file,
-compare the root mirror, and inspect every root child render and physical Chat
-request in the declared scope for a corresponding local record. Merely adding
-an optional scope field, or deriving it from the child file name, would leave
-the whole-render omission admissible. The root mirror also needs a durability
-barrier at each attach site so a valid child cannot be declared complete ahead
-of its scope record. These are source-derived implementation requirements,
-not yet an implemented or executed proof.
+Version 20 now writes a `model_child_scope` evidence row at every child attach,
+including resume. Each declaration has its own ID and the actual `agentId` and
+`kvScope`; the root mirrors it durably before the production child launch can
+proceed. The complete reader requires a matching first row and artifact path,
+rejects an empty child file, compares every local declaration to the root and
+every root declaration in that scope back to the child, then checks all root
+Chat renders, bindings, physical requests and compaction draws in that scope.
+Deleting every local attempt marker therefore leaves a root render with no
+child counterpart, and a zero-attempt child still needs its root declaration.
+The root replay also refuses a child Chat assertion or request whose scope was
+never declared. This behavior follows from source reading and the accepted
+read-only source patch plan. The authored TypeScript cases and actual runtime
+behavior are unverified pending the owner's build and gates.
+
+This closes the identified whole-render omission only for a child artifact
+that a caller reads. A set-level certifier must also enumerate declared child
+artifacts and refuse a missing child file; a per-file reader cannot open a
+path it was never given. The canonical-to-provider-body renderer relation
+described above also remains open. Neither issue is covered by a completed
+owner gate yet.
