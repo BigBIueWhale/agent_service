@@ -7135,6 +7135,13 @@ def _validate_terminal_state_after(state: State) -> None:
     require_text(
         state, adapter, "TERMINAL_RESULT_BY_STATE[options.terminateMode]", label=label
     )
+    _require_all(state, adapter, (
+        "const openResponses = evidence.request_evidence.open_response_ids;",
+        "const openAttempts = evidence.request_evidence.open_attempt_ids;",
+        "!requestedTerminal.isError &&",
+        "TERMINAL_RESULT_BY_STATE[AgentTerminateMode.ERROR]",
+        "Model evidence is incomplete at terminal:",
+    ), label=label)
     require_text(state, adapter, "TERMINAL_RESULT_BY_STATE[terminateMode]", label=label)
     require_text(state, adapter, "subtype: terminal.subtype,", count=3, label=label)
     forbid_text(state, adapter, "readonly subtype?: string;", label=label)
@@ -7163,11 +7170,14 @@ def _validate_terminal_state_after(state: State) -> None:
             "const finish = async (ending: SessionEnding): Promise<number> => {",
             "const terminal = TERMINAL_RESULT_BY_STATE[ending.terminateMode];",
             "const exitCode = ending.exitCode ?? terminal.exitCode;",
+            "const incompleteSuccess = emitted.is_error && !terminal.isError;",
+            "terminalExitCode = incompleteSuccess",
+            "reportInteraction(",
         ),
         label=label,
     )
     _require(
-        cli_source.count("await emitResult({") == 1,
+        cli_source.count("const emitted = await emitResult({") == 1,
         f"{label}: {cli} emits a terminal record from somewhere other than its "
         "single emitter",
     )
@@ -12075,7 +12085,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "A closed terminal-state value maps once to a wire name, whose error classification and exit "
             "code are the stream contract's terminal table, read from its generated binding. The "
             "constructed and mapped state sets agree, and every name the contract defines is one a "
-            "state produces. A run is bounded by its turn budget and nothing else: the wall-clock and "
+            "state produces. A nominal success with open physical responses or attempts is emitted "
+            "as an explicit error, and the process exit and telemetry follow that emitted result. "
+            "A run is bounded by its turn budget and nothing else: the wall-clock and "
             "cumulative tool-call budgets, the session token limit and the per-turn tool-call cap -- a "
             "second session budget, smaller than the declared one and reported as a loop -- are gone, "
             "with the state and wire name the tool-call budget ended a run in. What halts a run short "

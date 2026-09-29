@@ -1,5 +1,15 @@
 # Physical output provenance
 
+The headless terminal producer now reads its output window before emitting a
+success result. If a physical response or logical attempt remains open, both
+JSON output modes emit `error_during_execution` with the open counts, and the
+headless runner takes its exit status and telemetry outcome from that emitted
+error. The native certifier still refuses the incomplete record set; an error
+result makes the failure visible on the live wire but does not make missing
+evidence complete. This behavior follows from source reading and authored
+tests. TypeScript execution, native execution and deployed behavior remain
+unverified pending the owner's gates.
+
 The response journal retains exact HTTP body bytes and the generation envelope
 retains decoded observations used to construct model history. Those are distinct
 authorities. TypeScript root readers now replay OpenAI response bytes through
