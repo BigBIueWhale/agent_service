@@ -1361,6 +1361,18 @@ No build, release, deployment or push was run. The backend does not own the
 client SDK's utility operation or response conversion, so this change does
 not modify vLLM; direct backend callers still receive the same requests.
 
+The shared stdout output-window producer also keeps a utility completion in
+the window that admitted its physical requests. If that renderer has closed,
+a replacement window omits its completion when it owns none of the request
+IDs; the canonical journal still retains the complete operation. A retry
+split across the two windows is refused because neither window can claim a
+complete operation. This avoids making an ordinary replacement stream fail
+on an old-window completion while preserving refusal for a genuinely split
+record. Two TypeScript regression cases are authored but unrun because Node
+and Bun are unavailable. The pinned-source plan reproduced the edited files
+and the 38 patch-framework tests passed; compilation, packaged behavior and
+owner gates remain unverified.
+
 The wider record-completeness goal remains open. The Rust protocol engine
 verifies physical Chat response bytes, SDK value counts and served usage, and
 validates the claimed generation envelope and attempt separately. It does not

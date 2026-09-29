@@ -347424,7 +347424,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1519 @@
+@@ -0,0 +1,1524 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -348268,6 +348268,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        this.generations.observeResponse(record.response);
 +      }
 +    } else if (record.type === 'model_utility_completion') {
++      const ids = record.utility_completion.request_ids;
++      const owned = ids.filter((id) => this.utilityRequestIds.has(id)).length;
++      if (owned === 0 && ids.length > 0) return;
++      if (owned !== ids.length)
++        return refusal('a utility operation spans disconnected output windows');
 +      this.utilities.observeCompletion(record.utility_completion);
 +    } else if (record.type === 'model_normalization_seed') {
 +      if (
@@ -427932,7 +427937,7 @@ diff --git a/packages/core/src/core/model-utility-evidence.ts b/packages/core/sr
 diff --git a/packages/core/src/core/model-utility-journal.test.ts b/packages/core/src/core/model-utility-journal.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-utility-journal.test.ts
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,309 @@
 +import { describe, expect, it } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import {
@@ -428078,6 +428083,127 @@ diff --git a/packages/core/src/core/model-utility-journal.test.ts b/packages/cor
 +      }),
 +    ).toBe(chatBody);
 +    output.close();
++  });
++
++  it('keeps a completed old-window utility operation out of a replacement stream', async () => {
++    const persisted: ModelEvidence[] = [];
++    const journal = new ModelRequestJournal(
++      async () => {},
++      () => true,
++      async (response) => {
++        persisted.push({ type: 'model_response', response });
++      },
++      async (utility_request) => {
++        persisted.push({ type: 'model_utility_request', utility_request });
++      },
++      async (utility_completion) => {
++        persisted.push({ type: 'model_utility_completion', utility_completion });
++      },
++    );
++    const operation = {
++      operationId: 'old-window-count',
++      scope: 'ordinary-session',
++      kind: 'tokenize_text' as const,
++      model: 'selected',
++      inputCount: null,
++      expectedMaxModelLen: 4096,
++    };
++    const first = journal.openOutputWindow();
++    const recorder = await journal.captureUtility(
++      operation,
++      'https://fixture.invalid/tokenize',
++      {
++        body: JSON.stringify({
++          model: 'selected',
++          prompt: 'ordinary prompt',
++          add_special_tokens: false,
++        }),
++      },
++    );
++    recorder.dispatched();
++    const response = await recorder.capture(
++      new Response(JSON.stringify({ count: 2, max_model_len: 4096 }), {
++        status: 200,
++        headers: { 'content-type': 'application/json' },
++      }),
++    );
++    await response.json();
++    recorder.observeSdkValue();
++    await recorder.finish({ status: 'completed', error: null });
++    await recorder.recordUtilityDelivery(0);
++    first.close();
++
++    const replacement = journal.openOutputWindow();
++    await journal.completeUtility({
++      ...operation,
++      requestIds: [recorder.requestId],
++      result: { kind: 'token_count', total_tokens: 2, max_model_len: 4096 },
++      error: null,
++    });
++    await expect(journal.flush()).resolves.toBeUndefined();
++    expect(replacement.takePending()).toEqual([]);
++    expect(replacement.summary().request_count).toBe(0);
++    expect(persisted.at(-1)?.type).toBe('model_utility_completion');
++    replacement.close();
++  });
++
++  it('refuses a utility retry whose attempts span disconnected output windows', async () => {
++    const journal = new ModelRequestJournal(
++      async () => {},
++      () => true,
++      async () => {},
++      async () => {},
++      async () => {},
++    );
++    const operation = {
++      operationId: 'split-retry',
++      scope: 'ordinary-session',
++      kind: 'tokenize_text' as const,
++      model: 'selected',
++      inputCount: null,
++      expectedMaxModelLen: 4096,
++    };
++    const url = 'https://fixture.invalid/tokenize';
++    const init = {
++      body: JSON.stringify({
++        model: 'selected',
++        prompt: 'ordinary prompt',
++        add_special_tokens: false,
++      }),
++    };
++    const firstWindow = journal.openOutputWindow();
++    const first = await journal.captureUtility(operation, url, init);
++    first.dispatched();
++    const failed = await first.capture(
++      new Response('temporary failure', { status: 500 }),
++    );
++    await failed.text();
++    await first.finish({ status: 'failed', error: 'HTTP 500' });
++    await first.recordUtilityDelivery(0);
++    firstWindow.close();
++
++    const replacement = journal.openOutputWindow();
++    const second = await journal.captureUtility(operation, url, init);
++    second.dispatched();
++    const succeeded = await second.capture(
++      new Response(JSON.stringify({ count: 2, max_model_len: 4096 }), {
++        status: 200,
++        headers: { 'content-type': 'application/json' },
++      }),
++    );
++    await succeeded.json();
++    second.observeSdkValue();
++    await second.finish({ status: 'completed', error: null });
++    await second.recordUtilityDelivery(0);
++    await expect(
++      journal.completeUtility({
++        ...operation,
++        requestIds: [first.requestId, second.requestId],
++        result: { kind: 'token_count', total_tokens: 2, max_model_len: 4096 },
++        error: null,
++      }),
++    ).rejects.toThrow('utility operation spans disconnected output windows');
++    replacement.close();
 +  });
 +
 +  it('refuses a terminal after HTTP completes but the operation has no result record', async () => {

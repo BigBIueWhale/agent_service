@@ -5799,6 +5799,14 @@ def _validate_compaction_accounting_after(state: State) -> None:
         "claimTokenCount(operationId: string, scope: string): CompletedTokenizerCount",
         "this.claimedTokenCounts.add(operationId);",
     ), label=label)
+    _require_all(state, "packages/core/src/core/model-request-evidence.ts", (
+        "if (owned === 0 && ids.length > 0) return;",
+        "a utility operation spans disconnected output windows",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/model-utility-journal.test.ts", (
+        "keeps a completed old-window utility operation out of a replacement stream",
+        "refuses a utility retry whose attempts span disconnected output windows",
+    ), label=label)
     _require_all(state, "packages/core/src/core/token-count-evidence.ts", (
         "expectedModel?: string", "Token count evidence belongs to another model",
         "requestKind: 'chat' | 'text' = 'chat'", "'messages' in requestShape",
@@ -11971,6 +11979,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "output flush. Dual channel ends account for all physical, logical and partial evidence "
             "without inventing a model result. Journal replacement preserves old-window identity "
             "and closure before a new header and handshake. "
+            "A replacement output window omits completions owned wholly by a closed window "
+            "and refuses a utility retry split across both windows. "
             "Java CLI stdout uses strict UTF-8 and LF commitment with no record-size cap. "
             "Its shared task helper propagates failures; transport reads latch the first "
             "failure before cancellation and refuse later work. Executor dispatch must be "
