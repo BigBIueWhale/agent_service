@@ -1703,15 +1703,18 @@ body, and durably admits the `model_request` before SDK dispatch. This source
 order prevents a queued history write from overtaking a dispatched request.
 It is source reading, not an executed provider or packaged-resume test.
 
-The canonical evidence reader currently requires an initialized history before
-a Chat request, but its request admission does not compare the replayed history
-contents with the request that follows. The complete provider body remains the
-authority for dispatched input; it can intentionally differ from canonical
-history because request rendering curates turns, reattaches and slims images,
-adds reminders, and converts to the OpenAI shape. A text comparison would
-reject valid ordinary sessions. The root physical journal and a child's
-canonical history also live in different files, so a binding based on one
-global history cursor would misattribute child requests. A complete proof needs
-scope-specific source identity across those owners and an admitting reader
-check. That relationship is not yet implemented or verified; the current
-ordering proof alone does not certify it.
+Canonical version 18 now records a scope- and prompt-bound hash of the live
+history immediately after each Chat request is rendered. Complete admission
+compares a root or child assertion with its local replayed history, requires a
+matching assertion before each physical Chat request, and compares a child's
+local assertion with its mirrored root copy for a completed child attempt.
+The pinned source patch plan and authored cases establish the source shape;
+TypeScript execution and owner gates remain unverified. This binds canonical
+history to the request identity at rendering across the two files.
+
+The complete provider body remains the authority for dispatched input. It can
+intentionally differ from canonical history because rendering curates turns,
+reattaches and slims images, adds reminders, and converts to the OpenAI shape.
+The assertion does not independently prove that those transformations yielded
+the recorded body. A text comparison would reject valid ordinary sessions;
+that remaining relation needs an explicit renderer proof.
