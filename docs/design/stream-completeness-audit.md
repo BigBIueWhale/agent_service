@@ -1042,3 +1042,22 @@ older generated TypeScript validator copied into the scratch checkout solely
 to permit imports; those tests do not verify version 15 generated bindings.
 Native Rust, Java, generated TypeScript binding checks, compilation, owner
 gates, release, and end-to-end provider and resume behavior remain unverified.
+
+## Native compaction operation association
+
+Source reading found that the native certifier accepted a drawn compaction
+candidate without finding its physical utility requests. It now tracks each
+compaction operation from request admission through transport outcome and
+delivery, then requires the draw to claim the settled requests in order, with
+the same scope, physical output ceiling, and SDK-parsed values. An unclaimed
+operation refuses terminal admission. Ordinary request responses do not retain
+decoded SDK values for this check; only compaction operations do. The native
+fixtures now include the `purpose` field that the version 15 owner schema
+requires.
+
+The Rust change passed `rustfmt` parsing and `git diff --check`; it was not
+compiled or tested under the no-build instruction. The shared TypeScript
+reader separately replays a compaction draw's normalized output from its
+physical values. This native change binds the operation and SDK values, but
+does not yet prove every normalized field of the compaction projection from
+those bytes. Owner Rust gates and an end-to-end provider run remain unverified.

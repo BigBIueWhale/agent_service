@@ -151,7 +151,9 @@ fn validate_compaction_event(
     line: usize,
     scope: Option<&str>,
     json_limits: Limits,
-) -> ContractResult<()> {
+    requests: &crate::model_requests::ModelRequests,
+    kv_scope: &str,
+) -> ContractResult<Vec<String>> {
     let refuse = |what: &str| {
         ContractError::InvalidRecord(format!(
             "events.jsonl line {line} carries a compaction record in {} {what}",
@@ -437,7 +439,39 @@ fn validate_compaction_event(
             return Err(refuse("whose replacement count differs from its accepted draw"));
         }
     }
-    Ok(())
+    let mut claims = Vec::new();
+    let mut unique = BTreeSet::new();
+    let draws = field(record, "rejectedAttempts", line)?
+        .elements()
+        .ok_or_else(|| refuse("without a rejectedAttempts array"))?
+        .chain(record.get("output").filter(|value| !value.is_null()));
+    let mut physical_budget = None;
+    let mut previous_last_sequence = None;
+    for draw in draws {
+        let id = text(draw, "operationId", line)?;
+        if !unique.insert(id.to_string()) {
+            return Err(refuse("whose candidates repeat a physical operation identity"));
+        }
+        let physical_requests = count(draw, "physicalRequests")?;
+        let sdk_values = field(draw, "sdkValuesJson", line)?;
+        let (issued, first_sequence, last_sequence) = requests.check_compaction_draw(
+            id, kv_scope, physical_requests, sdk_values,
+        )?;
+        let served = field(draw, "usage", line)?;
+        if !served.is_null() && count(served, "candidatesTokenCount")? > issued {
+            return Err(refuse("whose draw reports more served output than its physical ceiling"));
+        }
+        if budget.is_some_and(|budget| budget != issued)
+            || physical_budget.is_some_and(|budget| budget != issued)
+            || previous_last_sequence.is_some_and(|previous| first_sequence <= previous)
+        {
+            return Err(refuse("whose draws are reordered or disagree with their physical request ceiling"));
+        }
+        physical_budget = Some(issued);
+        previous_last_sequence = Some(last_sequence);
+        claims.push(id.to_string());
+    }
+    Ok(claims)
 }
 
 /// Every emitted event names its scope: `null` and an absent field both mean
@@ -626,6 +660,7 @@ struct AdmissionPlan {
     seed: Option<crate::model_requests::SeedAdmission>,
     generation: Option<crate::model_requests::GenerationAdmission>,
     completion: Option<crate::model_requests::CompletionAdmission>,
+    compaction_claims: Vec<String>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -950,6 +985,7 @@ impl RuntimeContract {
         if let Some(completion) = plan.completion {
             self.requests.commit_completion(completion);
         }
+        self.requests.commit_compaction_claims(plan.compaction_claims);
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -1099,6 +1135,7 @@ impl RuntimeContract {
         let mut seed = None;
         let mut generation = None;
         let mut completion = None;
+        let mut compaction_claims = Vec::new();
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         let mut runtime_operation_id = None;
@@ -1264,7 +1301,14 @@ impl RuntimeContract {
                         self.bindings.validate_init(object, line)?;
                         runtime_initialized = true;
                     },
-                    SystemKind::Compaction => validate_compaction_event(object, line, scope, self.limits.json)?,
+                    SystemKind::Compaction => {
+                        let kv_scope = scope.or(self.session_id.as_deref()).ok_or_else(|| {
+                            ContractError::InvalidRecord(format!("events.jsonl line {line} has no compaction request scope; retain the complete stream_start and request evidence"))
+                        })?;
+                        compaction_claims = validate_compaction_event(
+                            object, line, scope, self.limits.json, &self.requests, kv_scope,
+                        )?;
+                    },
                     SystemKind::RuntimeOperation => {
                         let data = field(object, "data", line)?;
                         let id = text(data, "operation_id", line)?;
@@ -1389,6 +1433,7 @@ impl RuntimeContract {
             seed,
             generation,
             completion,
+            compaction_claims,
             row,
             state,
             additions,
@@ -1626,6 +1671,46 @@ mod tests {
         admit(&mut owner, &init()).unwrap();
         owner
     }
+    fn with_compaction_transport() -> RuntimeContract {
+        let mut owner = initialized();
+        let body = serde_json::json!({
+            "kv_scope":"session", "model":"fixture-model", "stream":true,
+            "max_tokens":8,
+            "messages":[{"role":"user","content":
+                "your answer may generate at most 8 tokens, reasoning included. If all draws are refused, this conversation cannot continue."}]
+        }).to_string();
+        let body_bytes = body.len();
+        let body_hash = crate::generation::sha256(body.as_bytes());
+        let request = serde_json::json!({
+            "type":"model_request", "uuid":"compaction-request", "session_id":"session", "parent_tool_use_id":null,
+            "request":{
+                "journal_id":"fixture", "request_id":"compaction-physical", "sequence":1,
+                "kv_scope":"session", "segment_id":"compaction-segment", "prompt_id":"compaction-prompt",
+                "owner":{"kind":"utility","operation_id":"compaction-operation","purpose":"compaction"},
+                "body":{"kind":"full","json":body},
+                "decode_policy":{"mode":"stream","model":"fixture-model","strict_tool_calling":false,
+                    "named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},
+                "body_bytes":body_bytes, "body_sha256":body_hash
+            }
+        });
+        admit(&mut owner, &request.to_string()).unwrap();
+        admit(&mut owner, &response("compaction-physical", 1,
+            r#"{"kind":"http","status":200,"content_type":"text/event-stream"}"#)).unwrap();
+        let bytes = b"data: {\"choices\":[{\"delta\":{\"content\":\"summary\"}}]}\n\ndata: [DONE]\n\n";
+        let chunk = serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes)});
+        admit(&mut owner, &response("compaction-physical", 2, &chunk.to_string())).unwrap();
+        let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),
+            "body_sha256":crate::generation::sha256(bytes),"error":null});
+        admit(&mut owner, &response("compaction-physical", 3, &end.to_string())).unwrap();
+        let outcome = serde_json::json!({"kind":"outcome","status":"completed","error":null,
+            "sdk_values_seen":1,"pipeline_outputs_delivered":1,
+            "served_usage":{"promptTokenCount":24,"candidatesTokenCount":4,
+                "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28}});
+        admit(&mut owner, &response("compaction-physical", 4, &outcome.to_string())).unwrap();
+        admit(&mut owner, &response("compaction-physical", 5,
+            r#"{"kind":"delivery","outputs_delivered":1}"#)).unwrap();
+        owner
+    }
     #[test]
     fn compaction_status_and_retained_count_agree_with_the_history_decision() {
         let measurement = |role: &str, count: u64| {
@@ -1675,22 +1760,38 @@ mod tests {
         success["data"]["output"] = serde_json::json!({
             "maxOutputTokens":8, "physicalRequests":1,
             "operationId":"compaction-operation", "functionCalls":[],
-            "text":"summary", "reasoning":"", "sdkValuesJson":["{}"],
+            "text":"summary", "reasoning":"", "sdkValuesJson":["{\"choices\":[{\"delta\":{\"content\":\"summary\"}}]}"],
             "newTokenCount":12, "snapshotBytes":7,
             "incompleteToolCalls":[], "finishReason":"STOP",
             "usage":{"promptTokenCount":24,"candidatesTokenCount":4,
                 "thoughtsTokenCount":0,"cachedContentTokenCount":0,
                 "totalTokenCount":28}
         });
-        admit(&mut initialized(), &success.to_string()).unwrap();
+        admit(&mut with_compaction_transport(), &success.to_string()).unwrap();
+        assert!(admit(&mut initialized(), &success.to_string()).is_err());
+        let mut foreign_operation = success.clone();
+        foreign_operation["data"]["output"]["operationId"] = serde_json::json!("unseen-operation");
+        assert!(admit(&mut with_compaction_transport(), &foreign_operation.to_string()).is_err());
+        let mut omitted_request = success.clone();
+        omitted_request["data"]["output"]["physicalRequests"] = serde_json::json!(2);
+        assert!(admit(&mut with_compaction_transport(), &omitted_request.to_string()).is_err());
+        let mut changed_budget = success.clone();
+        changed_budget["data"]["output"]["maxOutputTokens"] = serde_json::json!(9);
+        assert!(admit(&mut with_compaction_transport(), &changed_budget.to_string()).is_err());
+        let mut missing_sdk_value = success.clone();
+        missing_sdk_value["data"]["output"]["sdkValuesJson"] = serde_json::json!([]);
+        assert!(admit(&mut with_compaction_transport(), &missing_sdk_value.to_string()).is_err());
+        let mut changed_sdk_value = success.clone();
+        changed_sdk_value["data"]["output"]["sdkValuesJson"] = serde_json::json!(["{\"choices\":[{\"delta\":{\"content\":\"forged\"}}]}"]);
+        assert!(admit(&mut with_compaction_transport(), &changed_sdk_value.to_string()).is_err());
         let mut forged_count = success.clone();
         forged_count["data"]["output"]["newTokenCount"] = serde_json::json!(11);
         forged_count["data"]["newTokenCount"] = serde_json::json!(11);
-        assert!(admit(&mut initialized(), &forged_count.to_string()).is_err());
+        assert!(admit(&mut with_compaction_transport(), &forged_count.to_string()).is_err());
         let mut missing_measurement = success.clone();
         missing_measurement["data"]["tokenMeasurements"]
             .as_array_mut().unwrap().pop();
-        assert!(admit(&mut initialized(), &missing_measurement.to_string()).is_err());
+        assert!(admit(&mut with_compaction_transport(), &missing_measurement.to_string()).is_err());
         for changed in [
             ("status", serde_json::json!("COMPRESSED")),
             ("status", serde_json::json!("NOOP")),
@@ -1913,7 +2014,7 @@ mod tests {
             "request":{
                 "journal_id":"fixture", "request_id":id, "sequence":sequence,
                 "kv_scope":"internal-utility", "segment_id":format!("utility-segment-{id}"), "prompt_id":"utility-prompt",
-                "owner":{"kind":"utility","operation_id":"utility-operation"}, "body":{"kind":"full","json":body},
+                "owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"}, "body":{"kind":"full","json":body},
                 "decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,
                     "named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},
                 "body_bytes":body.len(), "body_sha256":crate::generation::sha256(body.as_bytes())

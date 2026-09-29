@@ -27,6 +27,84 @@ fn refusal(detail: &str) -> ContractError {
     ))
 }
 
+/// Both sides passed through the pinned SDK's JSON.parse boundary. Compare
+/// numbers as JavaScript Numbers, including equivalent decimal spellings.
+fn same_sdk_value(left: &serde_json::Value, right: &serde_json::Value) -> bool {
+    use serde_json::Value as Json;
+    let mut pending = vec![(left, right)];
+    while let Some((left, right)) = pending.pop() {
+        match (left, right) {
+            (Json::Null, Json::Null) => {}
+            (Json::Bool(left), Json::Bool(right)) if left == right => {}
+            (Json::Number(left), Json::Number(right))
+                if left.as_f64() == right.as_f64() => {}
+            (Json::String(left), Json::String(right)) if left == right => {}
+            (Json::Array(left), Json::Array(right)) if left.len() == right.len() => {
+                pending.extend(left.iter().zip(right));
+            }
+            (Json::Object(left), Json::Object(right)) if left.len() == right.len() => {
+                for (key, value) in left {
+                    let Some(other) = right.get(key) else { return false; };
+                    pending.push((value, other));
+                }
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
+fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64> {
+    let budget = unsigned(field(body, "max_tokens", line)?, "physical compaction ceiling", SAFE_INTEGER)?;
+    if budget == 0 {
+        return Err(refusal("compaction request has no positive physical output ceiling"));
+    }
+    let last = field(body, "messages", line)?
+        .elements()
+        .and_then(|items| items.last())
+        .ok_or_else(|| refusal("compaction request has no final directive"))?;
+    if text(last, "role", line)? != "user" {
+        return Err(refusal("compaction request does not end in a user directive"));
+    }
+    let content = field(last, "content", line)?;
+    let directive = if let Some(text) = content.as_str() {
+        text.to_string()
+    } else {
+        let parts = content
+            .elements()
+            .ok_or_else(|| refusal("compaction directive has no model-facing text"))?;
+        let mut text = String::new();
+        let mut count = 0;
+        for part in parts {
+            if crate::stream::text(part, "type", line)? != "text" {
+                return Err(refusal("compaction directive contains non-text content"));
+            }
+            text.push_str(crate::stream::text(part, "text", line)?);
+            count += 1;
+        }
+        if count == 0 {
+            return Err(refusal("compaction directive has no model-facing text"));
+        }
+        text
+    };
+    let marker = "your answer may generate at most ";
+    let claimed = directive
+        .rfind(marker)
+        .map(|at| &directive[at + marker.len()..])
+        .ok_or_else(|| refusal("compaction request has no declared output ceiling"))?;
+    let digits = claimed.bytes().take_while(|digit| digit.is_ascii_digit()).count();
+    let stated = claimed[..digits]
+        .parse::<u64>()
+        .map_err(|_| refusal("compaction directive has no valid output ceiling"))?;
+    if stated != budget
+        || !claimed[digits..].starts_with(" tokens, reasoning included.")
+        || !directive.ends_with("cannot continue.")
+    {
+        return Err(refusal("compaction directive differs from its physical output ceiling"));
+    }
+    Ok(budget)
+}
+
 /// Count the values the pinned OpenAI SDK can yield from one physical body.
 /// Streaming state retains only the unfinished SSE event; nonstreaming bodies
 /// have one SDK value when their HTTP status and media type permit decoding.
@@ -36,9 +114,9 @@ enum ResponseValues {
 }
 
 impl ResponseValues {
-    fn new(stream: bool) -> Self {
+    fn new(stream: bool, retain_values: bool) -> Self {
         if stream {
-            Self::Stream(SseValues::default())
+            Self::Stream(SseValues { retain_values, ..SseValues::default() })
         } else {
             Self::Nonstream(Vec::new())
         }
@@ -48,6 +126,13 @@ impl ResponseValues {
         match self {
             Self::Stream(values) => values.push(bytes),
             Self::Nonstream(body) => body.extend_from_slice(bytes),
+        }
+    }
+
+    fn stream_values(&self, transport_eof: bool) -> Option<Vec<serde_json::Value>> {
+        match self {
+            Self::Stream(values) => Some(values.at_eof(transport_eof).values),
+            Self::Nonstream(_) => None,
         }
     }
 
@@ -72,15 +157,8 @@ impl ResponseValues {
                         && !values.failed
                         && !values.done
                     {
-                        // The SDK yields its final incomplete SSE chunk at EOF.
-                        let mut flushed = values.clone();
-                        let pending = std::mem::take(&mut flushed.pending);
-                        flushed.feed(&pending);
-                        if flushed.after_cr || !flushed.line.is_empty() {
-                            flushed.after_cr = false;
-                            flushed.finish_line();
-                        }
-                        (flushed.count, flushed.failed)
+                        let settled = values.at_eof(true);
+                        (settled.count, settled.failed)
                     } else {
                         (values.count, values.failed)
                     }
@@ -126,12 +204,32 @@ struct SseValues {
     event: Option<String>,
     data: Vec<String>,
     count: u64,
+    values: Vec<serde_json::Value>,
+    retain_values: bool,
     failed: bool,
     done: bool,
     after_cr: bool,
 }
 
 impl SseValues {
+    fn at_eof(&self, transport_eof: bool) -> Self {
+        let mut settled = self.clone();
+        if transport_eof
+            && (!settled.pending.is_empty() || settled.after_cr || !settled.line.is_empty())
+            && !settled.failed
+            && !settled.done
+        {
+            // The pinned SDK yields its final incomplete SSE chunk at EOF.
+            let pending = std::mem::take(&mut settled.pending);
+            settled.feed(&pending);
+            if settled.after_cr || !settled.line.is_empty() {
+                settled.after_cr = false;
+                settled.finish_line();
+            }
+        }
+        settled
+    }
+
     fn push(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             if self.failed || self.done {
@@ -223,7 +321,12 @@ impl SseValues {
             .checked_add(1)
             .filter(|count| *count <= SAFE_INTEGER)
         {
-            Some(count) => self.count = count,
+            Some(count) => {
+                self.count = count;
+                if self.retain_values {
+                    self.values.push(value);
+                }
+            }
             None => self.failed = true,
         }
     }
@@ -248,9 +351,24 @@ pub(crate) struct ModelRequests {
     responses: BTreeMap<String, ResponseState>,
     response_values: BTreeMap<String, ResponseValues>,
     attempts: BTreeMap<String, AttemptState>,
+    compactions: BTreeMap<String, CompactionOperation>,
+    claimed_compactions: BTreeSet<String>,
     generation_ids: BTreeSet<String>,
     usage: BTreeMap<String, GenerationUsageSummary>,
     all_usage: GenerationUsageSummary,
+}
+
+#[derive(Default)]
+struct CompactionOperation {
+    scope: String,
+    budget: u64,
+    first_sequence: u64,
+    last_sequence: u64,
+    requests: Vec<String>,
+    open: BTreeSet<String>,
+    outcomes: BTreeMap<String, ResponseOutcome>,
+    values: BTreeMap<String, Vec<serde_json::Value>>,
+    deliveries: BTreeMap<String, u64>,
 }
 
 #[derive(Default)]
@@ -289,6 +407,7 @@ pub(crate) struct ResponseOutcome {
     pub usage: Option<ServedUsage>,
     pub completed: bool,
     pub pipeline_outputs_delivered: u64,
+    pub sdk_values_seen: u64,
 }
 
 pub(crate) struct RequestBody {
@@ -308,6 +427,7 @@ pub(crate) struct RequestAdmission {
     scope: String,
     body: RequestBody,
     attempt: Option<String>,
+    compaction: Option<(String, u64)>,
     stream: bool,
     usage: GenerationUsageSummary,
     all_usage: GenerationUsageSummary,
@@ -323,6 +443,7 @@ impl RequestAdmission {
 struct ResponseState {
     scope: String,
     attempt: Option<String>,
+    compaction: Option<String>,
     processing: Option<bool>,
     pipeline_outputs: Option<u64>,
     sequence: u64,
@@ -337,6 +458,9 @@ pub(crate) struct ResponseAdmission {
     state: Option<ResponseState>,
     attempt: Option<String>,
     settlement: Option<bool>,
+    compaction: Option<String>,
+    delivery: Option<u64>,
+    decoded_values: Option<Vec<serde_json::Value>>,
     pub outcome: Option<ResponseOutcome>,
     usage: Option<(GenerationUsageSummary, GenerationUsageSummary)>,
     body: Option<Vec<u8>>,
@@ -397,7 +521,7 @@ impl ModelRequests {
         }
         let scope = text(request, "kv_scope", line)?;
         let owner = field(request, "owner", line)?;
-        let attempt = match text(owner, "kind", line)? {
+        let (attempt, compaction_id) = match text(owner, "kind", line)? {
             "chat" => {
                 let id = text(owner, "attempt_id", line)?;
                 if self.attempts.get(id).is_some_and(|attempt| {
@@ -411,9 +535,13 @@ impl ModelRequests {
                         "chat attempt changes scope or issues a request after normalization or acceptance",
                     ));
                 }
-                Some(id.to_string())
+                (Some(id.to_string()), None)
             }
-            "utility" => None,
+            "utility" => {
+                let id = text(owner, "operation_id", line)?;
+                let purpose = text(owner, "purpose", line)?;
+                (None, if purpose == "compaction" { Some(id.to_string()) } else { None })
+            }
             _ => return Err(refusal("unknown request owner")),
         };
         let segment_id = text(request, "segment_id", line)?;
@@ -537,6 +665,22 @@ impl ModelRequests {
             }
             messages.push(message.raw().to_string());
         }
+        let compaction = if let Some(id) = compaction_id {
+            if !stream {
+                return Err(refusal("compaction request is not a streamed draw"));
+            }
+            let budget = compaction_request_budget(root, line)?;
+            if self.claimed_compactions.contains(&id)
+                || self.compactions.get(&id).is_some_and(|operation| {
+                    operation.scope != scope || operation.budget != budget
+                })
+            {
+                return Err(refusal("compaction operation changes scope or ceiling, or issues another request after its claim"));
+            }
+            Some((id, budget))
+        } else {
+            None
+        };
         Ok(RequestAdmission {
             journal_id: journal_id.to_string(),
             sequence,
@@ -545,6 +689,7 @@ impl ModelRequests {
             usage: self.scope_usage(scope).admit_request()?,
             all_usage: self.all_usage.admit_request()?,
             attempt,
+            compaction,
             body: RequestBody {
                 id: id.to_string(),
                 segment_id: segment_id.to_string(),
@@ -556,6 +701,18 @@ impl ModelRequests {
     pub(crate) fn commit(&mut self, admission: RequestAdmission) {
         self.journal_id.get_or_insert(admission.journal_id);
         self.first_sequence.get_or_insert(admission.sequence);
+        if let Some((id, budget)) = &admission.compaction {
+            let operation = self.compactions.entry(id.clone()).or_insert_with(|| CompactionOperation {
+                scope: admission.scope.clone(),
+                budget: *budget,
+                first_sequence: admission.sequence,
+                last_sequence: admission.sequence,
+                ..CompactionOperation::default()
+            });
+            operation.last_sequence = admission.sequence;
+            operation.requests.push(admission.body.id.clone());
+            operation.open.insert(admission.body.id.clone());
+        }
         if let Some(id) = &admission.attempt {
             self.attempts
                 .entry(id.clone())
@@ -569,7 +726,7 @@ impl ModelRequests {
         self.ids.insert(admission.body.id.clone());
         self.response_values.insert(
             admission.body.id.clone(),
-            ResponseValues::new(admission.stream),
+            ResponseValues::new(admission.stream, admission.compaction.is_some()),
         );
         self.responses.insert(
             admission.body.id.clone(),
@@ -577,6 +734,7 @@ impl ModelRequests {
                 scope: admission.scope.clone(),
                 digest: Some(Sha256::default()),
                 attempt: admission.attempt,
+                compaction: admission.compaction.map(|(id, _)| id),
                 ..ResponseState::default()
             },
         );
@@ -612,6 +770,7 @@ impl ModelRequests {
         let event = field(response, "event", line)?;
         let mut ended = false;
         let mut settlement = None;
+        let mut delivery = None;
         let mut outcome = None;
         let mut body = None;
         let kind = text(event, "kind", line)?;
@@ -741,6 +900,7 @@ impl ModelRequests {
                     },
                     completed,
                     pipeline_outputs_delivered,
+                    sdk_values_seen,
                 });
                 state.processing = Some(completed);
                 state.pipeline_outputs = Some(pipeline_outputs_delivered);
@@ -760,6 +920,7 @@ impl ModelRequests {
                         "utility delivery has no matching physical output prefix",
                     ));
                 }
+                delivery = Some(delivered);
                 ended = true;
             }
             "history" => {
@@ -786,10 +947,21 @@ impl ModelRequests {
             _ => return Err(refusal("response uses an unknown event")),
         }
         state.sequence = sequence;
+        let decoded_values = if outcome.is_some() && state.compaction.is_some() {
+            Some(self.response_values
+                .get(id)
+                .and_then(|values| values.stream_values(state.termination.as_deref() == Some("eof")))
+                .ok_or_else(|| refusal("compaction response has no streamed physical values"))?)
+        } else {
+            None
+        };
         Ok(ResponseAdmission {
             request_id: id.to_string(),
             attempt: state.attempt.clone(),
+            compaction: state.compaction.clone(),
             settlement,
+            delivery,
+            decoded_values,
             usage: outcome
                 .as_ref()
                 .map(|outcome| -> ContractResult<_> {
@@ -806,6 +978,19 @@ impl ModelRequests {
     }
 
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
+        if let Some(id) = &admission.compaction {
+            let operation = self.compactions.get_mut(id).expect("planned compaction operation");
+            if let Some(outcome) = &admission.outcome {
+                operation.outcomes.insert(admission.request_id.clone(), outcome.clone());
+            }
+            if let Some(values) = &admission.decoded_values {
+                operation.values.insert(admission.request_id.clone(), values.clone());
+            }
+            if let Some(delivered) = admission.delivery {
+                operation.open.remove(&admission.request_id);
+                operation.deliveries.insert(admission.request_id.clone(), delivered);
+            }
+        }
         if let Some(body) = &admission.body {
             self.response_values
                 .get_mut(&admission.request_id)
@@ -1100,7 +1285,76 @@ impl ModelRequests {
         attempt.completed = true;
     }
 
+    pub(crate) fn check_compaction_draw(
+        &self,
+        operation_id: &str,
+        scope: &str,
+        physical_requests: u64,
+        sdk_values: Value<'_>,
+    ) -> ContractResult<(u64, u64, u64)> {
+        let operation = self
+            .compactions
+            .get(operation_id)
+            .ok_or_else(|| refusal("compaction draw has no physical utility operation"))?;
+        if operation.scope != scope
+            || !operation.open.is_empty()
+            || u64::try_from(operation.requests.len()).ok() != Some(physical_requests)
+            || operation.outcomes.len() != operation.requests.len()
+            || operation.deliveries.len() != operation.requests.len()
+        {
+            return Err(refusal("compaction draw omits, repeats or misattributes physical requests"));
+        }
+        let mut observed_values = 0_u64;
+        let mut physical_values = Vec::new();
+        for (index, request_id) in operation.requests.iter().enumerate() {
+            let outcome = operation.outcomes.get(request_id)
+                .ok_or_else(|| refusal("compaction request has no processing outcome"))?;
+            if outcome.usage.is_some_and(|usage| usage.output > operation.budget) {
+                return Err(refusal("compaction physical output exceeded its request ceiling"));
+            }
+            let delivered = operation.deliveries.get(request_id)
+                .ok_or_else(|| refusal("compaction request has no delivery receipt"))?;
+            if index + 1 < operation.requests.len() && *delivered != 0 {
+                return Err(refusal("compaction draw mixes output from physical retries"));
+            }
+            observed_values = observed_values.checked_add(outcome.sdk_values_seen)
+                .filter(|total| *total <= SAFE_INTEGER)
+                .ok_or_else(|| refusal("compaction SDK value count exceeds exact range"))?;
+            let values = operation.values.get(request_id)
+                .ok_or_else(|| refusal("compaction request has no captured SDK values"))?;
+            if values.len() as u64 != outcome.sdk_values_seen {
+                return Err(refusal("compaction processing count differs from physical SDK values"));
+            }
+            physical_values.extend(values.iter());
+        }
+        let claimed = sdk_values.elements()
+            .ok_or_else(|| refusal("compaction draw has no SDK value array"))?
+            .map(|value| {
+                let raw = value.as_str()
+                    .ok_or_else(|| refusal("compaction draw has a non-string SDK value"))?;
+                serde_json::from_str::<serde_json::Value>(raw)
+                    .map_err(|_| refusal("compaction draw has undecodable SDK value JSON"))
+            })
+            .collect::<ContractResult<Vec<_>>>()?;
+        if observed_values != claimed.len() as u64
+            || !physical_values.into_iter().zip(&claimed).all(|(left, right)| same_sdk_value(left, right))
+        {
+            return Err(refusal("compaction SDK values differ from physical response bytes"));
+        }
+        Ok((operation.budget, operation.first_sequence, operation.last_sequence))
+    }
+
+    pub(crate) fn commit_compaction_claims(&mut self, ids: Vec<String>) {
+        for id in ids {
+            self.compactions.remove(&id).expect("planned compaction draw");
+            self.claimed_compactions.insert(id);
+        }
+    }
+
     pub(crate) fn validate_summary(&self, record: Value<'_>, line: usize) -> ContractResult<()> {
+        if !self.compactions.is_empty() {
+            return Err(refusal("terminal leaves physical compaction draws unclaimed"));
+        }
         let summary = field(record, "request_evidence", line)?;
         let count = unsigned(
             field(summary, "request_count", line)?,
@@ -1152,7 +1406,7 @@ mod tests {
         depth: 100,
     };
     fn request(sequence: u64, id: &str, body: serde_json::Value, json: &str) -> String {
-        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,"named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
+        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,"named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
     }
     fn admit(state: &mut ModelRequests, json: &str) -> ContractResult<()> {
         let document = Document::decode(json.as_bytes(), LIMITS).unwrap();
@@ -1162,7 +1416,7 @@ mod tests {
     }
     #[test]
     fn physical_value_reader_follows_sdk_sse_boundaries_and_errors() {
-        let mut stream = ResponseValues::new(true);
+        let mut stream = ResponseValues::new(true, false);
         for chunk in [
             ": keepalive\r".as_bytes(),
             "\ndata: {\"id\":1}\r".as_bytes(),
@@ -1182,7 +1436,7 @@ mod tests {
             .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
 
-        let mut stopped = ResponseValues::new(true);
+        let mut stopped = ResponseValues::new(true, false);
         stopped.push(b"data: {\"id\":1}\n\ndata: {\"error\":{\"message\":\"stop\"}}\n\n");
         stopped
             .require_prefix(1, false, Some(200), Some("text/event-stream"), true)
@@ -1194,14 +1448,14 @@ mod tests {
             .require_prefix(2, false, Some(200), Some("text/event-stream"), true)
             .is_err());
 
-        let mut nonstream = ResponseValues::new(false);
+        let mut nonstream = ResponseValues::new(false, false);
         nonstream.push(b"{");
         nonstream.push(b"}");
         nonstream
             .require_prefix(1, true, Some(200), Some("application/json"), true)
             .unwrap();
         for count in 1..=3 {
-            let mut with_bom = ResponseValues::new(false);
+            let mut with_bom = ResponseValues::new(false, false);
             for _ in 0..count {
                 with_bom.push(&[0xef, 0xbb, 0xbf]);
             }
@@ -1229,7 +1483,7 @@ mod tests {
             .require_prefix(1, false, Some(503), Some("application/json"), true)
             .is_err());
 
-        let mut plain = ResponseValues::new(false);
+        let mut plain = ResponseValues::new(false, false);
         plain.push(b"{not JSON}");
         plain
             .require_prefix(1, true, Some(200), Some("text/plain"), true)
@@ -1237,7 +1491,7 @@ mod tests {
         assert!(plain
             .require_prefix(1, true, Some(200), Some("application/json"), true)
             .is_err());
-        let empty = ResponseValues::new(false);
+        let empty = ResponseValues::new(false, false);
         empty
             .require_prefix(1, false, Some(204), Some("application/json"), true)
             .unwrap();
@@ -1245,14 +1499,14 @@ mod tests {
     }
     #[test]
     fn physical_value_reader_decodes_each_sse_line_like_the_sdk() {
-        let mut stream = ResponseValues::new(true);
+        let mut stream = ResponseValues::new(true, false);
         stream.push(&[0xef]);
         stream.push(b"\xbb\xbfdata: {\"id\":1}\n\n\xef\xbb\xbfdata: {\"id\":2}\n\n");
         stream
             .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
 
-        let mut double_bom = ResponseValues::new(true);
+        let mut double_bom = ResponseValues::new(true, false);
         double_bom.push(b"\xef\xbb\xbf\xef\xbb\xbfdata: {\"id\":1}\n\n");
         double_bom
             .require_prefix(0, true, Some(200), Some("text/event-stream"), true)
@@ -1260,7 +1514,7 @@ mod tests {
     }
     #[test]
     fn physical_value_reader_flushes_an_unterminated_line_only_at_eof() {
-        let mut stream = ResponseValues::new(true);
+        let mut stream = ResponseValues::new(true, false);
         stream.push(b"data: {\"id\":1}\n\xef");
         stream.push(b"\xbb\xbf");
         stream
@@ -1270,7 +1524,7 @@ mod tests {
             .require_prefix(1, false, Some(200), Some("text/event-stream"), false)
             .is_err());
 
-        let mut mixed = ResponseValues::new(true);
+        let mut mixed = ResponseValues::new(true, false);
         mixed.push(b"data: {\"id\":1}\n\r");
         mixed
             .require_prefix(1, true, Some(200), Some("text/event-stream"), true)
@@ -1279,7 +1533,7 @@ mod tests {
             .require_prefix(1, false, Some(200), Some("text/event-stream"), false)
             .is_err());
 
-        let mut delayed_cr = ResponseValues::new(true);
+        let mut delayed_cr = ResponseValues::new(true, false);
         delayed_cr.push(b"data: {\"id\":1}\r\r");
         delayed_cr
             .require_prefix(1, true, Some(200), Some("text/event-stream"), true)
@@ -1452,6 +1706,7 @@ mod tests {
                                 usage: None,
                                 completed: false,
                                 pipeline_outputs_delivered: earlier_outputs,
+                                sdk_values_seen: 0,
                             },
                         ),
                         (
@@ -1462,6 +1717,7 @@ mod tests {
                                 completed: true,
                                 pipeline_outputs_delivered: generation.observation_count
                                     + u64::from(extra_final_output),
+                                sdk_values_seen: 0,
                             },
                         ),
                     ]),
