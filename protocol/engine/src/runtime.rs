@@ -9,8 +9,8 @@ use crate::{
     ContractError, ContractResult, DecodedRecord, EventKind, PartialStreamState, SystemKind,
     SAFE_INTEGER, STREAM_CONTRACT_SHA256,
 };
-use serde::{Deserialize, Serialize};
 use base64::{engine::general_purpose::STANDARD, Engine};
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
@@ -99,9 +99,11 @@ fn read_token_measurement(
     line: usize,
     limits: Limits,
 ) -> ContractResult<(u64, u64, String)> {
-    let refuse = |detail: &str| ContractError::InvalidRecord(format!(
+    let refuse = |detail: &str| {
+        ContractError::InvalidRecord(format!(
         "events.jsonl line {line} has invalid physical tokenizer evidence: {detail}; inspect the complete compaction record and served /tokenize response"
-    ));
+    ))
+    };
     let request_url = text(value, "requestUrl", line)?;
     if !(request_url.starts_with("http://") || request_url.starts_with("https://"))
         || !request_url.ends_with("/tokenize")
@@ -118,7 +120,11 @@ fn read_token_measurement(
     {
         return Err(refuse("request is not a rendered chat-tokenizer request"));
     }
-    let status = unsigned(field(value, "responseStatus", line)?, "tokenizer HTTP status", 599)?;
+    let status = unsigned(
+        field(value, "responseStatus", line)?,
+        "tokenizer HTTP status",
+        599,
+    )?;
     let media_type = text(value, "responseContentType", line)?
         .split(';')
         .next()
@@ -131,15 +137,25 @@ fn read_token_measurement(
         return Err(refuse("response is not successful JSON"));
     }
     let encoded = text(value, "responseBase64", line)?;
-    let bytes = STANDARD.decode(encoded).map_err(|_| refuse("response is not base64"))?;
+    let bytes = STANDARD
+        .decode(encoded)
+        .map_err(|_| refuse("response is not base64"))?;
     if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
         return Err(refuse("response base64 is empty or noncanonical"));
     }
     let response_doc = Document::decode(&bytes, limits)
         .map_err(|cause| refuse(&format!("response JSON: {cause:?}")))?;
     let response = response_doc.root();
-    let count = unsigned(field(response, "count", line)?, "served token count", SAFE_INTEGER)?;
-    let window = unsigned(field(response, "max_model_len", line)?, "served model window", SAFE_INTEGER)?;
+    let count = unsigned(
+        field(response, "count", line)?,
+        "served token count",
+        SAFE_INTEGER,
+    )?;
+    let window = unsigned(
+        field(response, "max_model_len", line)?,
+        "served model window",
+        SAFE_INTEGER,
+    )?;
     if window == 0 {
         return Err(refuse("served model window is zero"));
     }
@@ -239,7 +255,9 @@ fn validate_compaction_event(
         .first()
         .is_some_and(|first| measurements.iter().any(|value| value.2 != first.2))
     {
-        return Err(refuse("whose tokenizer measurements disagree about the served model window"));
+        return Err(refuse(
+            "whose tokenizer measurements disagree about the served model window",
+        ));
     }
     if measurements
         .first()
@@ -249,7 +267,9 @@ fn validate_compaction_event(
     }
     for (index, measurement) in measurements.iter().take(3).enumerate() {
         if measurement.0 != ["original", "summary_request", "prompt_only"][index] {
-            return Err(refuse("whose tokenizer preflight measurements are missing or reordered"));
+            return Err(refuse(
+                "whose tokenizer preflight measurements are missing or reordered",
+            ));
         }
     }
 
@@ -292,8 +312,14 @@ fn validate_compaction_event(
         if !has_sdk_value
             && (holder.get("text").and_then(Value::as_str) != Some("")
                 || holder.get("reasoning").and_then(Value::as_str) != Some("")
-                || holder.get("functionCalls").and_then(Value::elements).is_none_or(|mut calls| calls.next().is_some())
-                || holder.get("incompleteToolCalls").and_then(Value::elements).is_none_or(|mut calls| calls.next().is_some())
+                || holder
+                    .get("functionCalls")
+                    .and_then(Value::elements)
+                    .is_none_or(|mut calls| calls.next().is_some())
+                || holder
+                    .get("incompleteToolCalls")
+                    .and_then(Value::elements)
+                    .is_none_or(|mut calls| calls.next().is_some())
                 || !holder.get("finishReason").is_some_and(Value::is_null)
                 || !holder.get("usage").is_some_and(Value::is_null)
                 || !holder.get("newTokenCount").is_some_and(Value::is_null)
@@ -432,15 +458,20 @@ fn validate_compaction_event(
     }
     if !draw_counts.is_empty() {
         if measurements.len() < 3 || measurements[0].1 != original_tokens {
-            return Err(refuse("whose drawn candidate has no measured original and preflight counts"));
+            return Err(refuse(
+                "whose drawn candidate has no measured original and preflight counts",
+            ));
         }
         let mut next = 3;
         for measured in draw_counts {
             if let Some(measured) = measured {
-                if !measurements.get(next).is_some_and(|count| {
-                    count.0 == "candidate" && count.1 == measured
-                }) {
-                    return Err(refuse("whose candidate count differs from the served tokenizer response"));
+                if !measurements
+                    .get(next)
+                    .is_some_and(|count| count.0 == "candidate" && count.1 == measured)
+                {
+                    return Err(refuse(
+                        "whose candidate count differs from the served tokenizer response",
+                    ));
                 }
                 next += 1;
             }
@@ -449,16 +480,23 @@ fn validate_compaction_event(
             return Err(refuse("with an unclaimed tokenizer measurement"));
         }
     } else if measurements.len() > 3
-        || measurements.first().is_some_and(|measured| measured.1 != original_tokens)
+        || measurements
+            .first()
+            .is_some_and(|measured| measured.1 != original_tokens)
     {
-        return Err(refuse("whose preflight count differs from the served tokenizer response"));
+        return Err(refuse(
+            "whose preflight count differs from the served tokenizer response",
+        ));
     }
     if succeeded {
         let output = field(record, "output", line)?;
-        if output.is_null() || field(output, "newTokenCount", line)?.is_null()
+        if output.is_null()
+            || field(output, "newTokenCount", line)?.is_null()
             || count(output, "newTokenCount")? != count(record, "newTokenCount")?
         {
-            return Err(refuse("whose replacement count differs from its accepted draw"));
+            return Err(refuse(
+                "whose replacement count differs from its accepted draw",
+            ));
         }
     }
     let mut claims = Vec::new();
@@ -472,23 +510,32 @@ fn validate_compaction_event(
     for draw in draws {
         let id = text(draw, "operationId", line)?;
         if !unique.insert(id.to_string()) {
-            return Err(refuse("whose candidates repeat a physical operation identity"));
+            return Err(refuse(
+                "whose candidates repeat a physical operation identity",
+            ));
         }
         let physical_requests = count(draw, "physicalRequests")?;
-        let sdk_values = field(draw, "sdkValuesJson", line)?;
         let (issued, first_sequence, last_sequence) = requests.check_compaction_draw(
-            id, kv_scope, &measurements[0].3, physical_requests, sdk_values,
+            id,
+            kv_scope,
+            &measurements[0].3,
+            physical_requests,
+            draw,
             succeeded || draw.get("status").is_some(),
         )?;
         let served = field(draw, "usage", line)?;
         if !served.is_null() && count(served, "candidatesTokenCount")? > issued {
-            return Err(refuse("whose draw reports more served output than its physical ceiling"));
+            return Err(refuse(
+                "whose draw reports more served output than its physical ceiling",
+            ));
         }
         if budget.is_some_and(|budget| budget != issued)
             || physical_budget.is_some_and(|budget| budget != issued)
             || previous_last_sequence.is_some_and(|previous| first_sequence <= previous)
         {
-            return Err(refuse("whose draws are reordered or disagree with their physical request ceiling"));
+            return Err(refuse(
+                "whose draws are reordered or disagree with their physical request ceiling",
+            ));
         }
         physical_budget = Some(issued);
         previous_last_sequence = Some(last_sequence);
@@ -1008,7 +1055,8 @@ impl RuntimeContract {
         if let Some(completion) = plan.completion {
             self.requests.commit_completion(completion);
         }
-        self.requests.commit_compaction_claims(plan.compaction_claims);
+        self.requests
+            .commit_compaction_claims(plan.compaction_claims);
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -1695,19 +1743,54 @@ mod tests {
         owner
     }
     fn compaction_provider_value() -> String {
-        serde_json::json!({"choices":[{"delta":{"content":"summary"}}],
+        let sections = compaction_sections();
+        serde_json::json!({"choices":[{"delta":{"tool_calls":[{
+            "index":0,"id":"snapshot-call","type":"function",
+            "function":{"name":"state_snapshot","arguments":sections.to_string()}
+        }]},"finish_reason":"tool_calls"}],
             "usage":{"prompt_tokens":24,"completion_tokens":4,"total_tokens":28,
                 "prompt_tokens_details":{"cached_tokens":0},
-                "completion_tokens_details":{"reasoning_tokens":0}}}).to_string()
+                "completion_tokens_details":{"reasoning_tokens":0}}})
+        .to_string()
+    }
+    fn compaction_sections() -> serde_json::Value {
+        serde_json::json!({
+            "primary_request_and_intent":"None", "key_technical_concepts":"None",
+            "files_and_code_sections":"None", "errors_and_fixes":"None",
+            "problem_solving":"None", "pending_tasks":"None", "current_work":"None",
+            "next_step":"None"
+        })
+    }
+    fn compaction_decoded() -> serde_json::Value {
+        serde_json::json!({
+            "response":{
+                "candidates":[{"content":{"parts":[{"functionCall":{
+                    "id":"snapshot-call","name":"state_snapshot","args":compaction_sections()
+                }}],"role":"model"},"index":0,"safetyRatings":[],"finishReason":"STOP"}],
+                "usageMetadata":{"promptTokenCount":24,"candidatesTokenCount":4,
+                    "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28}
+            },
+            "incomplete_tool_calls":[],
+            "tool_call_preparations":[{"callId":"snapshot-call","toolName":"state_snapshot"}]
+        })
     }
     fn with_compaction_transport() -> RuntimeContract {
         let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
         with_compaction_transport_response(bytes.as_bytes(), 1, true)
     }
-    fn with_compaction_transport_response(bytes: &[u8], sdk_values_seen: u64, completed: bool) -> RuntimeContract {
+    fn with_compaction_transport_response(
+        bytes: &[u8],
+        sdk_values_seen: u64,
+        completed: bool,
+    ) -> RuntimeContract {
         with_compaction_transport_delivery(bytes, sdk_values_seen, completed, u64::from(completed))
     }
-    fn with_compaction_transport_delivery(bytes: &[u8], sdk_values_seen: u64, completed: bool, delivered: u64) -> RuntimeContract {
+    fn with_compaction_transport_delivery(
+        bytes: &[u8],
+        sdk_values_seen: u64,
+        completed: bool,
+        delivered: u64,
+    ) -> RuntimeContract {
         let mut owner = initialized();
         let body = serde_json::json!({
             "kv_scope":"session", "model":"fixture-model", "stream":true,
@@ -1730,13 +1813,48 @@ mod tests {
             }
         });
         admit(&mut owner, &request.to_string()).unwrap();
-        admit(&mut owner, &response("compaction-physical", 1,
-            r#"{"kind":"http","status":200,"content_type":"text/event-stream"}"#)).unwrap();
+        admit(
+            &mut owner,
+            &response(
+                "compaction-physical",
+                1,
+                r#"{"kind":"http","status":200,"content_type":"text/event-stream"}"#,
+            ),
+        )
+        .unwrap();
         let chunk = serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes)});
-        admit(&mut owner, &response("compaction-physical", 2, &chunk.to_string())).unwrap();
+        admit(
+            &mut owner,
+            &response("compaction-physical", 2, &chunk.to_string()),
+        )
+        .unwrap();
         let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),
             "body_sha256":crate::generation::sha256(bytes),"error":null});
-        admit(&mut owner, &response("compaction-physical", 3, &end.to_string())).unwrap();
+        admit(
+            &mut owner,
+            &response("compaction-physical", 3, &end.to_string()),
+        )
+        .unwrap();
+        let outcome_sequence = if completed {
+            let decoded = compaction_decoded().to_string();
+            let chunk = serde_json::json!({"kind":"decoded_body","role":"utility","index":0,
+                "offset":0,"base64":STANDARD.encode(decoded.as_bytes())});
+            admit(
+                &mut owner,
+                &response("compaction-physical", 4, &chunk.to_string()),
+            )
+            .unwrap();
+            let end = serde_json::json!({"kind":"decoded_end","role":"utility","index":0,
+                "body_bytes":decoded.len(),"body_sha256":crate::generation::sha256(decoded.as_bytes())});
+            admit(
+                &mut owner,
+                &response("compaction-physical", 5, &end.to_string()),
+            )
+            .unwrap();
+            6
+        } else {
+            4
+        };
         let outcome = serde_json::json!({"kind":"outcome",
             "status":if completed { "completed" } else { "failed" },
             "error":if completed { serde_json::Value::Null } else { serde_json::json!("conversion failed") },
@@ -1746,9 +1864,25 @@ mod tests {
                 serde_json::json!({"promptTokenCount":24,"candidatesTokenCount":4,
                     "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28})
             } else { serde_json::Value::Null }});
-        admit(&mut owner, &response("compaction-physical", 4, &outcome.to_string())).unwrap();
+        admit(
+            &mut owner,
+            &response(
+                "compaction-physical",
+                outcome_sequence,
+                &outcome.to_string(),
+            ),
+        )
+        .unwrap();
         let delivery = serde_json::json!({"kind":"delivery", "outputs_delivered":delivered});
-        admit(&mut owner, &response("compaction-physical", 5, &delivery.to_string())).unwrap();
+        admit(
+            &mut owner,
+            &response(
+                "compaction-physical",
+                outcome_sequence + 1,
+                &delivery.to_string(),
+            ),
+        )
+        .unwrap();
         owner
     }
     #[test]
@@ -1799,62 +1933,115 @@ mod tests {
         ]);
         success["data"]["output"] = serde_json::json!({
             "maxOutputTokens":8, "physicalRequests":1,
-            "operationId":"compaction-operation", "functionCalls":[],
-            "text":"summary", "reasoning":"", "sdkValuesJson":[compaction_provider_value()],
-            "newTokenCount":12, "snapshotBytes":7,
+            "operationId":"compaction-operation", "functionCalls":[{
+                "id":"snapshot-call","name":"state_snapshot","args":compaction_sections()}],
+            "text":"", "reasoning":"", "sdkValuesJson":[compaction_provider_value()],
+            "newTokenCount":12, "snapshotBytes":588,
             "incompleteToolCalls":[], "finishReason":"STOP",
             "usage":{"promptTokenCount":24,"candidatesTokenCount":4,
                 "thoughtsTokenCount":0,"cachedContentTokenCount":0,
                 "totalTokenCount":28}
         });
         admit(&mut with_compaction_transport(), &success.to_string()).unwrap();
+        let mut forged_decoded_call = success.clone();
+        forged_decoded_call["data"]["output"]["functionCalls"] = serde_json::json!([]);
+        let error = admit(
+            &mut with_compaction_transport(),
+            &forged_decoded_call.to_string(),
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("differs from its recorded delivered output"));
         let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
-        let error = admit(&mut with_compaction_transport_delivery(bytes.as_bytes(), 1, true, 0),
-            &success.to_string()).unwrap_err();
-        assert!(error.to_string().contains("completed candidate without delivered output"));
+        let error = admit(
+            &mut with_compaction_transport_delivery(bytes.as_bytes(), 1, true, 0),
+            &success.to_string(),
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("completed candidate without delivered output"));
         let mut mixed_models = success.clone();
         let request = mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"]
-            .as_str().unwrap();
+            .as_str()
+            .unwrap();
         let mut request: serde_json::Value = serde_json::from_str(request).unwrap();
         request["model"] = serde_json::json!("another-model");
         mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"] =
             serde_json::json!(request.to_string());
         let error = admit(&mut with_compaction_transport(), &mixed_models.to_string()).unwrap_err();
-        assert!(error.to_string().contains("tokenizer measurements use different models"));
+        assert!(error
+            .to_string()
+            .contains("tokenizer measurements use different models"));
         let mut foreign_model = success.clone();
-        for measurement in foreign_model["data"]["tokenMeasurements"].as_array_mut().unwrap() {
+        for measurement in foreign_model["data"]["tokenMeasurements"]
+            .as_array_mut()
+            .unwrap()
+        {
             let request = measurement["evidence"]["requestJson"].as_str().unwrap();
             let mut request: serde_json::Value = serde_json::from_str(request).unwrap();
             request["model"] = serde_json::json!("another-model");
             measurement["evidence"]["requestJson"] = serde_json::json!(request.to_string());
         }
-        let error = admit(&mut with_compaction_transport(), &foreign_model.to_string()).unwrap_err();
-        assert!(error.to_string().contains("tokenizer model differs from physical draw model"));
+        let error =
+            admit(&mut with_compaction_transport(), &foreign_model.to_string()).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("tokenizer model differs from physical draw model"));
         assert!(admit(&mut initialized(), &success.to_string()).is_err());
         let mut foreign_operation = success.clone();
         foreign_operation["data"]["output"]["operationId"] = serde_json::json!("unseen-operation");
-        assert!(admit(&mut with_compaction_transport(), &foreign_operation.to_string()).is_err());
+        assert!(admit(
+            &mut with_compaction_transport(),
+            &foreign_operation.to_string()
+        )
+        .is_err());
         let mut omitted_request = success.clone();
         omitted_request["data"]["output"]["physicalRequests"] = serde_json::json!(2);
-        assert!(admit(&mut with_compaction_transport(), &omitted_request.to_string()).is_err());
+        assert!(admit(
+            &mut with_compaction_transport(),
+            &omitted_request.to_string()
+        )
+        .is_err());
         let mut changed_budget = success.clone();
         changed_budget["data"]["output"]["maxOutputTokens"] = serde_json::json!(9);
-        assert!(admit(&mut with_compaction_transport(), &changed_budget.to_string()).is_err());
+        assert!(admit(
+            &mut with_compaction_transport(),
+            &changed_budget.to_string()
+        )
+        .is_err());
         let mut missing_sdk_value = success.clone();
         missing_sdk_value["data"]["output"]["sdkValuesJson"] = serde_json::json!([]);
-        assert!(admit(&mut with_compaction_transport(), &missing_sdk_value.to_string()).is_err());
+        assert!(admit(
+            &mut with_compaction_transport(),
+            &missing_sdk_value.to_string()
+        )
+        .is_err());
         let mut changed_sdk_value = success.clone();
-        changed_sdk_value["data"]["output"]["sdkValuesJson"] = serde_json::json!(["{\"choices\":[{\"delta\":{\"content\":\"forged\"}}]}"]);
-        assert!(admit(&mut with_compaction_transport(), &changed_sdk_value.to_string()).is_err());
+        changed_sdk_value["data"]["output"]["sdkValuesJson"] =
+            serde_json::json!(["{\"choices\":[{\"delta\":{\"content\":\"forged\"}}]}"]);
+        assert!(admit(
+            &mut with_compaction_transport(),
+            &changed_sdk_value.to_string()
+        )
+        .is_err());
         let mut forged_count = success.clone();
         forged_count["data"]["output"]["newTokenCount"] = serde_json::json!(11);
         forged_count["data"]["newTokenCount"] = serde_json::json!(11);
         assert!(admit(&mut with_compaction_transport(), &forged_count.to_string()).is_err());
         let mut missing_measurement = success.clone();
         missing_measurement["data"]["tokenMeasurements"]
-            .as_array_mut().unwrap().pop();
-        assert!(admit(&mut with_compaction_transport(), &missing_measurement.to_string()).is_err());
-        let first = r#"{"choices":[{"finish_reason":"error_finish","delta":{"content":"failed"}}]}"#;
+            .as_array_mut()
+            .unwrap()
+            .pop();
+        assert!(admit(
+            &mut with_compaction_transport(),
+            &missing_measurement.to_string()
+        )
+        .is_err());
+        let first =
+            r#"{"choices":[{"finish_reason":"error_finish","delta":{"content":"failed"}}]}"#;
         let unread = r#"{"choices":[{"delta":{"content":"unread"}}]}"#;
         let bytes = format!("data: {first}\n\ndata: {unread}\n\n");
         let mut failed_prefix = success.clone();
@@ -1862,27 +2049,45 @@ mod tests {
         failed_prefix["data"]["succeeded"] = serde_json::json!(false);
         failed_prefix["data"]["newTokenCount"] = serde_json::json!(24);
         failed_prefix["data"]["postCompactionHistory"] = serde_json::Value::Null;
-        failed_prefix["data"]["tokenMeasurements"].as_array_mut().unwrap().pop();
+        failed_prefix["data"]["tokenMeasurements"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
         let draw = &mut failed_prefix["data"]["output"];
         draw["sdkValuesJson"] = serde_json::json!([first]);
         draw["text"] = serde_json::json!("");
+        draw["functionCalls"] = serde_json::json!([]);
         draw["newTokenCount"] = serde_json::Value::Null;
         draw["snapshotBytes"] = serde_json::Value::Null;
         draw["finishReason"] = serde_json::Value::Null;
         draw["usage"] = serde_json::Value::Null;
-        admit(&mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
-            &failed_prefix.to_string()).unwrap();
+        admit(
+            &mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
+            &failed_prefix.to_string(),
+        )
+        .unwrap();
         let mut empty_prefix = failed_prefix.clone();
         empty_prefix["data"]["output"]["sdkValuesJson"] = serde_json::json!([]);
-        admit(&mut with_compaction_transport_response(b"", 0, false),
-            &empty_prefix.to_string()).unwrap();
+        admit(
+            &mut with_compaction_transport_response(b"", 0, false),
+            &empty_prefix.to_string(),
+        )
+        .unwrap();
         empty_prefix["data"]["output"]["text"] = serde_json::json!("forged text");
-        let error = admit(&mut with_compaction_transport_response(b"", 0, false),
-            &empty_prefix.to_string()).unwrap_err();
-        assert!(error.to_string().contains("decoded output without an SDK value"));
+        let error = admit(
+            &mut with_compaction_transport_response(b"", 0, false),
+            &empty_prefix.to_string(),
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("decoded output without an SDK value"));
         failed_prefix["data"]["output"]["sdkValuesJson"] = serde_json::json!([first, unread]);
-        assert!(admit(&mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
-            &failed_prefix.to_string()).is_err());
+        assert!(admit(
+            &mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
+            &failed_prefix.to_string()
+        )
+        .is_err());
         for changed in [
             ("status", serde_json::json!("COMPRESSED")),
             ("status", serde_json::json!("NOOP")),

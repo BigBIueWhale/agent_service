@@ -8453,6 +8453,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "kind: 'delivery', outputs_delivered: outputsDelivered",
         "state.owner.kind !== 'utility'",
         "event.outputs_delivered > state.processing.pipeline_outputs_delivered",
+        "kind: 'decoded_body'", "kind: 'decoded_end'",
+        "this.recordDecoded('utility', this.pipelineOutputsDelivered, response)",
+        "this.recordDecoded('failure', 0, response)",
+        "response outcome omits or misattributes decoded observations",
+        "recorded decoded output differs from its physical response",
     ), label=label)
     _require_all(state, core + "core/utility-delivery.ts", (
         "readonly operationId = retryContext.getStore()?.operationId ?? randomUUID()",
@@ -8490,6 +8495,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses a stalled header write and resumes the paused network clock",
         "refuses a stalled body write while cancellation waits for its read",
         "waits for a responsive durable write before delivering bytes",
+        "records utility observations at their conversion boundary",
+        "records a nonstream response exposed only by failure",
     ), label=label)
     _require_all(state, core + "core/recording-stall.ts", (
         "RECORDING_STALL_TIMEOUT_MS = 60_000",
@@ -8591,6 +8598,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "new OpenAIStreamDecoder(context)",
         "readOpenAIUsage(chunk.usage)",
         "takeGenerationObservation(output)",
+        "utilityOutputsJson: deliveredOutputs.map(serializeDeliveredObservation)",
+        "failedResponseJson:",
+        "serializeDeliveredObservation(failedResponse)",
         "observation.response",
         "observation.incomplete_tool_calls",
         "normalizer.normalizeObservation(",
@@ -8688,6 +8698,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "responseEvidence.observeSdkValue();",
         "responseEvidence.observePipelineOutput(response);",
         "responseEvidence.observePipelineOutput(diagnostic);",
+        "responseEvidence.observeFailedResponse(cause.response);",
     ), label=label)
     _require_all(state, core + "core/openaiContentGenerator/pipeline.ts", (
         "const observation = readOpenAIUsage(usage)",
@@ -8794,6 +8805,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "exactIntegerLexeme(source)",
         "a decoded integer differs from its recorded JSON spelling",
         "takeGenerationSource(chunk)",
+        "export function serializeDeliveredObservation(",
         "attempt.generation.evidence.generation_sha256 !==",
         "JSON.stringify(completion.request_ids)",
         "attempt.settled.size !== attempt.requests.length",
@@ -9050,7 +9062,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v15.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v16.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -9113,6 +9125,9 @@ def _validate_served_accounting_after(state: State) -> None:
         'SDK value count claims an impossible physical response prefix',
         'compaction_id not in self.claimed_compactions',
         'operation.values[record["request_id"]] = values[:sdk_values]',
+        'if kind in ("decoded_body", "decoded_end"):',
+        'response outcome omits or misattributes decoded observations',
+        'compaction draw differs from its recorded delivered output',
         'def claim_compaction(self, data: dict[str, Any], scope: str) -> None:',
         'compaction SDK values differ from physical response bytes',
         'compaction draw claims a completed candidate without delivered output',
@@ -9316,6 +9331,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "compaction SDK values differ from physical response bytes",
         "compaction draw claims a completed candidate without delivered output",
         "compaction draw claims decoded output without an SDK value",
+        '"decoded_body".equals(kind) || "decoded_end".equals(kind)',
+        'response outcome omits or misattributes decoded observations',
+        'compaction draw differs from its recorded delivered output',
         "state.values.values.subList(0, (int) sdkValues)",
         "compaction tokenizer measurements use different models",
         "compaction tokenizer model differs from physical draw model",
@@ -9323,7 +9341,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "terminal leaves physical compaction draws unclaimed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v15.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v16.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java", (

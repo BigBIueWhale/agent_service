@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:15",
+  "$id": "urn:agent-service:stream-contract:16",
   "type": "object",
   "required": [
     "type",
@@ -2906,6 +2906,78 @@
                   }
                 }
               ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "decoded_body"
+                },
+                "role": {
+                  "enum": [
+                    "utility",
+                    "failure"
+                  ]
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "offset": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "base64": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "kind",
+                "role",
+                "index",
+                "offset",
+                "base64"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "decoded_end"
+                },
+                "role": {
+                  "enum": [
+                    "utility",
+                    "failure"
+                  ]
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "body_bytes": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "body_sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "kind",
+                "role",
+                "index",
+                "body_bytes",
+                "body_sha256"
+              ],
+              "additionalProperties": false
             },
             {
               "type": "object",

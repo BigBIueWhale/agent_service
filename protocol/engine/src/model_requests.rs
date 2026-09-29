@@ -13,6 +13,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
+use unicode_normalization::UnicodeNormalization;
 
 fn sha256(json: &str) -> String {
     Sha256::digest(json.as_bytes())
@@ -36,15 +37,16 @@ fn same_sdk_value(left: &serde_json::Value, right: &serde_json::Value) -> bool {
         match (left, right) {
             (Json::Null, Json::Null) => {}
             (Json::Bool(left), Json::Bool(right)) if left == right => {}
-            (Json::Number(left), Json::Number(right))
-                if left.as_f64() == right.as_f64() => {}
+            (Json::Number(left), Json::Number(right)) if left.as_f64() == right.as_f64() => {}
             (Json::String(left), Json::String(right)) if left == right => {}
             (Json::Array(left), Json::Array(right)) if left.len() == right.len() => {
                 pending.extend(left.iter().zip(right));
             }
             (Json::Object(left), Json::Object(right)) if left.len() == right.len() => {
                 for (key, value) in left {
-                    let Some(other) = right.get(key) else { return false; };
+                    let Some(other) = right.get(key) else {
+                        return false;
+                    };
                     pending.push((value, other));
                 }
             }
@@ -52,6 +54,193 @@ fn same_sdk_value(left: &serde_json::Value, right: &serde_json::Value) -> bool {
         }
     }
     true
+}
+
+const SNAPSHOT_ELEMENTS: [&str; 9] = [
+    "primary_request_and_intent",
+    "key_technical_concepts",
+    "files_and_code_sections",
+    "errors_and_fixes",
+    "problem_solving",
+    "all_user_messages",
+    "pending_tasks",
+    "current_work",
+    "next_step",
+];
+
+fn snapshot_bytes(calls: &[serde_json::Value]) -> Option<usize> {
+    let call = calls.first()?.as_object()?;
+    if calls.len() != 1 || call.get("name")?.as_str()? != "state_snapshot" {
+        return None;
+    }
+    let args = call.get("args")?.as_object()?;
+    if args.len() != SNAPSHOT_ELEMENTS.len() - 1
+        || SNAPSHOT_ELEMENTS
+            .iter()
+            .filter(|section| **section != "all_user_messages")
+            .any(|section| {
+                args.get(*section)
+                    .and_then(serde_json::Value::as_str)
+                    .is_none_or(|text| text.trim().is_empty())
+            })
+    {
+        return None;
+    }
+    let element = |section: &str| -> String {
+        let value = args
+            .get(section)
+            .and_then(serde_json::Value::as_str)
+            .expect("checked section");
+        let mut result = format!("    <{section}>");
+        for line in value.split('\n') {
+            result.push('\n');
+            if !line.is_empty() {
+                result.push_str("        ");
+                result.push_str(line);
+            }
+        }
+        result.push_str(&format!("\n    </{section}>"));
+        result
+    };
+    let before = SNAPSHOT_ELEMENTS[..5]
+        .iter()
+        .map(|section| element(section))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let after = SNAPSHOT_ELEMENTS[6..]
+        .iter()
+        .map(|section| element(section))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    let opening = format!("<state_snapshot>\n{before}\n\n    <all_user_messages>\n")
+        .nfc()
+        .collect::<String>();
+    let closing = format!("\n    </all_user_messages>\n\n{after}\n</state_snapshot>")
+        .nfc()
+        .collect::<String>();
+    Some(opening.len() + closing.len())
+}
+
+fn decoded_usage(value: Option<&serde_json::Value>) -> Option<serde_json::Value> {
+    let object = value?.as_object()?;
+    let count = |name: &str| {
+        object
+            .get(name)?
+            .as_u64()
+            .filter(|value| *value <= SAFE_INTEGER)
+    };
+    let prompt = count("promptTokenCount")?;
+    let output = count("candidatesTokenCount")?;
+    let total = count("totalTokenCount")?;
+    let thoughts = count("thoughtsTokenCount")?;
+    let cached = count("cachedContentTokenCount")?;
+    if prompt.checked_add(output) != Some(total) || thoughts > output || cached > prompt {
+        return None;
+    }
+    Some(serde_json::json!({
+        "promptTokenCount": prompt, "candidatesTokenCount": output,
+        "totalTokenCount": total, "thoughtsTokenCount": thoughts,
+        "cachedContentTokenCount": cached,
+    }))
+}
+
+fn project_decoded_draw(
+    observations: &[serde_json::Value],
+    failure: Option<&serde_json::Value>,
+) -> ContractResult<serde_json::Value> {
+    let mut text = String::new();
+    let mut reasoning = String::new();
+    let mut calls = Vec::new();
+    let mut incomplete = Vec::new();
+    let mut usage = None;
+    let mut finish_reason = None;
+    let items: Vec<&serde_json::Value> = if observations.is_empty() {
+        failure.into_iter().collect()
+    } else {
+        observations.iter().collect()
+    };
+    for item in items {
+        let response = item
+            .get("response")
+            .and_then(serde_json::Value::as_object)
+            .ok_or_else(|| refusal("decoded observation has no response"))?;
+        let first = response
+            .get("candidates")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|values| values.first());
+        let parts = first
+            .and_then(|value| value.get("content"))
+            .and_then(|value| value.get("parts"))
+            .and_then(serde_json::Value::as_array);
+        let mut part_calls = Vec::new();
+        if let Some(parts) = parts {
+            for part in parts {
+                let Some(part) = part.as_object() else {
+                    continue;
+                };
+                if let Some(segment) = part
+                    .get("text")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|value| !value.is_empty())
+                {
+                    if part.get("thought").is_some_and(js_truthy) {
+                        reasoning.push_str(segment);
+                    } else {
+                        text.push_str(segment);
+                    }
+                }
+                if let Some(call) = part.get("functionCall").filter(|value| js_truthy(value)) {
+                    part_calls.push(call.clone());
+                }
+            }
+        }
+        if !observations.is_empty() {
+            if part_calls.len() == 2 {
+                let first = part_calls[0].as_object();
+                let second = part_calls[1].as_object();
+                if let (Some(first), Some(second)) = (first, second) {
+                    let first_args = first.get("args").and_then(serde_json::Value::as_object);
+                    let second_args = second.get("args").and_then(serde_json::Value::as_object);
+                    if first.get("name").is_some_and(js_truthy)
+                        && first_args.is_none_or(|args| args.is_empty())
+                        && second.get("name").is_none_or(|name| !js_truthy(name))
+                        && second_args.is_some_and(|args| !args.is_empty())
+                    {
+                        part_calls = vec![serde_json::json!({
+                            "name": first.get("name"), "args": second.get("args")
+                        })];
+                    }
+                }
+            }
+            calls.extend(part_calls);
+            incomplete.extend(
+                item.get("incomplete_tool_calls")
+                    .and_then(serde_json::Value::as_array)
+                    .ok_or_else(|| refusal("decoded observation has no incomplete-call array"))?
+                    .iter()
+                    .cloned(),
+            );
+            if let Some(reason) = first
+                .and_then(|value| value.get("finishReason"))
+                .filter(|value| js_truthy(value))
+            {
+                finish_reason = Some(reason.clone());
+            }
+        }
+        if let Some(metadata) = response
+            .get("usageMetadata")
+            .filter(|value| js_truthy(value))
+        {
+            usage = decoded_usage(Some(metadata));
+        }
+    }
+    let snapshot_bytes = snapshot_bytes(&calls);
+    Ok(serde_json::json!({
+        "text": text, "reasoning": reasoning,
+        "functionCalls": calls, "incompleteToolCalls": incomplete,
+        "finishReason": finish_reason, "usage": usage,
+        "snapshotBytes": snapshot_bytes,
+    }))
 }
 
 fn openai_served_usage(value: &serde_json::Value) -> Option<ServedUsage> {
@@ -69,7 +258,11 @@ fn openai_served_usage(value: &serde_json::Value) -> Option<ServedUsage> {
         output: count(usage.get("completion_tokens"))?,
         total: count(usage.get("total_tokens"))?,
         cached: count(usage.get("prompt_tokens_details")?.get("cached_tokens"))?,
-        thoughts: count(usage.get("completion_tokens_details")?.get("reasoning_tokens"))?,
+        thoughts: count(
+            usage
+                .get("completion_tokens_details")?
+                .get("reasoning_tokens"),
+        )?,
     };
     served.validate().ok()?;
     Some(served)
@@ -84,16 +277,24 @@ fn nonstream_json_value(body: &[u8]) -> Option<serde_json::Value> {
 }
 
 fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64> {
-    let budget = unsigned(field(body, "max_tokens", line)?, "physical compaction ceiling", SAFE_INTEGER)?;
+    let budget = unsigned(
+        field(body, "max_tokens", line)?,
+        "physical compaction ceiling",
+        SAFE_INTEGER,
+    )?;
     if budget == 0 {
-        return Err(refusal("compaction request has no positive physical output ceiling"));
+        return Err(refusal(
+            "compaction request has no positive physical output ceiling",
+        ));
     }
     let last = field(body, "messages", line)?
         .elements()
         .and_then(|items| items.last())
         .ok_or_else(|| refusal("compaction request has no final directive"))?;
     if text(last, "role", line)? != "user" {
-        return Err(refusal("compaction request does not end in a user directive"));
+        return Err(refusal(
+            "compaction request does not end in a user directive",
+        ));
     }
     let content = field(last, "content", line)?;
     let directive = if let Some(text) = content.as_str() {
@@ -121,7 +322,10 @@ fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64
         .rfind(marker)
         .map(|at| &directive[at + marker.len()..])
         .ok_or_else(|| refusal("compaction request has no declared output ceiling"))?;
-    let digits = claimed.bytes().take_while(|digit| digit.is_ascii_digit()).count();
+    let digits = claimed
+        .bytes()
+        .take_while(|digit| digit.is_ascii_digit())
+        .count();
     let stated = claimed[..digits]
         .parse::<u64>()
         .map_err(|_| refusal("compaction directive has no valid output ceiling"))?;
@@ -129,7 +333,9 @@ fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64
         || !claimed[digits..].starts_with(" tokens, reasoning included.")
         || !directive.ends_with("cannot continue.")
     {
-        return Err(refusal("compaction directive differs from its physical output ceiling"));
+        return Err(refusal(
+            "compaction directive differs from its physical output ceiling",
+        ));
     }
     Ok(budget)
 }
@@ -145,7 +351,10 @@ enum ResponseValues {
 impl ResponseValues {
     fn new(stream: bool, retain_values: bool) -> Self {
         if stream {
-            Self::Stream(SseValues { retain_values, ..SseValues::default() })
+            Self::Stream(SseValues {
+                retain_values,
+                ..SseValues::default()
+            })
         } else {
             Self::Nonstream(Vec::new())
         }
@@ -193,7 +402,9 @@ impl ResponseValues {
                 }) {
                     return None;
                 }
-                nonstream_json_value(body).as_ref().and_then(openai_served_usage)
+                nonstream_json_value(body)
+                    .as_ref()
+                    .and_then(openai_served_usage)
             }
         }
     }
@@ -436,6 +647,23 @@ struct CompactionOperation {
     outcomes: BTreeMap<String, ResponseOutcome>,
     values: BTreeMap<String, Vec<serde_json::Value>>,
     deliveries: BTreeMap<String, u64>,
+    observations: BTreeMap<String, Vec<serde_json::Value>>,
+    failures: BTreeMap<String, Option<serde_json::Value>>,
+}
+
+#[derive(Clone)]
+struct DecodedChunk {
+    bytes: Vec<u8>,
+    previous: Option<Arc<DecodedChunk>>,
+}
+
+#[derive(Clone)]
+struct DecodedPending {
+    role: String,
+    index: u64,
+    bytes: u64,
+    digest: Sha256,
+    tail: Option<Arc<DecodedChunk>>,
 }
 
 #[derive(Default)]
@@ -519,6 +747,9 @@ struct ResponseState {
     termination: Option<String>,
     bytes: u64,
     digest: Option<Sha256>,
+    decoded_utility: Vec<serde_json::Value>,
+    decoded_failure: Option<serde_json::Value>,
+    decoded_pending: Option<DecodedPending>,
 }
 pub(crate) struct ResponseAdmission {
     request_id: String,
@@ -528,6 +759,8 @@ pub(crate) struct ResponseAdmission {
     compaction: Option<String>,
     delivery: Option<u64>,
     decoded_values: Option<Vec<serde_json::Value>>,
+    decoded_observations: Option<Vec<serde_json::Value>>,
+    decoded_failure: Option<Option<serde_json::Value>>,
     pub outcome: Option<ResponseOutcome>,
     usage: Option<(GenerationUsageSummary, GenerationUsageSummary)>,
     body: Option<Vec<u8>>,
@@ -607,7 +840,14 @@ impl ModelRequests {
             "utility" => {
                 let id = text(owner, "operation_id", line)?;
                 let purpose = text(owner, "purpose", line)?;
-                (None, if purpose == "compaction" { Some(id.to_string()) } else { None })
+                (
+                    None,
+                    if purpose == "compaction" {
+                        Some(id.to_string())
+                    } else {
+                        None
+                    },
+                )
             }
             _ => return Err(refusal("unknown request owner")),
         };
@@ -771,14 +1011,17 @@ impl ModelRequests {
         self.journal_id.get_or_insert(admission.journal_id);
         self.first_sequence.get_or_insert(admission.sequence);
         if let Some((id, budget, model)) = &admission.compaction {
-            let operation = self.compactions.entry(id.clone()).or_insert_with(|| CompactionOperation {
-                scope: admission.scope.clone(),
-                budget: *budget,
-                model: model.clone(),
-                first_sequence: admission.sequence,
-                last_sequence: admission.sequence,
-                ..CompactionOperation::default()
-            });
+            let operation =
+                self.compactions
+                    .entry(id.clone())
+                    .or_insert_with(|| CompactionOperation {
+                        scope: admission.scope.clone(),
+                        budget: *budget,
+                        model: model.clone(),
+                        first_sequence: admission.sequence,
+                        last_sequence: admission.sequence,
+                        ..CompactionOperation::default()
+                    });
             operation.last_sequence = admission.sequence;
             operation.requests.push(admission.body.id.clone());
             operation.open.insert(admission.body.id.clone());
@@ -845,8 +1088,10 @@ impl ModelRequests {
         let mut body = None;
         let kind = text(event, "kind", line)?;
         if matches!(kind, "history" | "delivery") != state.processing.is_some()
-            || (!matches!(kind, "history" | "delivery")
-                && (kind == "outcome") != state.digest.is_none())
+            || (kind == "outcome" && state.digest.is_some())
+            || (matches!(kind, "http" | "body" | "end") && state.digest.is_none())
+            || (matches!(kind, "decoded_body" | "decoded_end")
+                && (state.processing.is_some() || state.http_status.is_none()))
         {
             return Err(refusal(
                 "response processing outcome must follow transport completion",
@@ -923,6 +1168,126 @@ impl ModelRequests {
                 state.digest = None;
                 state.termination = Some(termination.to_string());
             }
+            "decoded_body" | "decoded_end" => {
+                let role = text(event, "role", line)?;
+                let index = unsigned(
+                    field(event, "index", line)?,
+                    "decoded output index",
+                    SAFE_INTEGER,
+                )?;
+                if (role == "utility" && state.attempt.is_some())
+                    || (role == "failure" && (index != 0 || state.decoded_failure.is_some()))
+                    || (role != "utility" && role != "failure")
+                    || (role == "utility" && index != state.decoded_utility.len() as u64)
+                {
+                    return Err(refusal(
+                        "decoded observation has no matching response owner or index",
+                    ));
+                }
+                if kind == "decoded_body" {
+                    let offset = unsigned(
+                        field(event, "offset", line)?,
+                        "decoded output offset",
+                        SAFE_INTEGER,
+                    )?;
+                    if state.decoded_pending.is_none() {
+                        if offset != 0 {
+                            return Err(refusal("decoded observation starts after a byte gap"));
+                        }
+                        state.decoded_pending = Some(DecodedPending {
+                            role: role.to_string(),
+                            index,
+                            bytes: 0,
+                            digest: Sha256::default(),
+                            tail: None,
+                        });
+                    }
+                    let pending = state
+                        .decoded_pending
+                        .as_mut()
+                        .ok_or_else(|| refusal("decoded observation has no open byte sequence"))?;
+                    if pending.role != role || pending.index != index || pending.bytes != offset {
+                        return Err(refusal(
+                            "decoded observation has an interleaved or missing byte chunk",
+                        ));
+                    }
+                    let encoded = text(event, "base64", line)?;
+                    let bytes = STANDARD
+                        .decode(encoded)
+                        .map_err(|_| refusal("decoded observation has invalid base64 bytes"))?;
+                    if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
+                        return Err(refusal("decoded observation has noncanonical base64 bytes"));
+                    }
+                    pending.bytes = pending
+                        .bytes
+                        .checked_add(bytes.len() as u64)
+                        .filter(|size| *size <= SAFE_INTEGER)
+                        .ok_or_else(|| {
+                            refusal("decoded observation exceeds exact byte accounting")
+                        })?;
+                    pending.digest.update(&bytes);
+                    pending.tail = Some(Arc::new(DecodedChunk {
+                        bytes,
+                        previous: pending.tail.take(),
+                    }));
+                } else {
+                    let pending = state
+                        .decoded_pending
+                        .take()
+                        .ok_or_else(|| refusal("decoded observation end has no byte sequence"))?;
+                    if pending.role != role
+                        || pending.index != index
+                        || pending.bytes
+                            != unsigned(
+                                field(event, "body_bytes", line)?,
+                                "decoded output bytes",
+                                SAFE_INTEGER,
+                            )?
+                        || pending
+                            .digest
+                            .finalize()
+                            .iter()
+                            .map(|byte| format!("{byte:02x}"))
+                            .collect::<String>()
+                            != text(event, "body_sha256", line)?
+                    {
+                        return Err(refusal(
+                            "decoded observation end differs from its exact bytes",
+                        ));
+                    }
+                    let mut chunks = Vec::new();
+                    let mut tail = pending.tail;
+                    while let Some(chunk) = tail {
+                        chunks.push(chunk.bytes.clone());
+                        tail = chunk.previous.clone();
+                    }
+                    let mut bytes = Vec::with_capacity(pending.bytes as usize);
+                    for chunk in chunks.into_iter().rev() {
+                        bytes.extend_from_slice(&chunk);
+                    }
+                    let decoded: serde_json::Value = serde_json::from_slice(&bytes)
+                        .map_err(|_| refusal("decoded observation is not valid JSON"))?;
+                    if !decoded.as_object().is_some_and(|object| {
+                        object.len() == 3
+                            && object
+                                .get("response")
+                                .is_some_and(serde_json::Value::is_object)
+                            && object
+                                .get("incomplete_tool_calls")
+                                .is_some_and(serde_json::Value::is_array)
+                            && object
+                                .get("tool_call_preparations")
+                                .is_some_and(serde_json::Value::is_array)
+                    }) {
+                        return Err(refusal("decoded observation has an unknown response shape"));
+                    }
+                    if role == "utility" {
+                        state.decoded_utility.push(decoded);
+                    } else {
+                        state.decoded_failure = Some(decoded);
+                    }
+                }
+            }
             "outcome" => {
                 let completed = text(event, "status", line)? == "completed";
                 if completed
@@ -946,6 +1311,18 @@ impl ModelRequests {
                     "pipeline outputs delivered",
                     SAFE_INTEGER,
                 )?;
+                if state.decoded_pending.is_some()
+                    || state.decoded_utility.len() as u64
+                        != if state.attempt.is_some() {
+                            0
+                        } else {
+                            pipeline_outputs_delivered
+                        }
+                {
+                    return Err(refusal(
+                        "response outcome omits or misattributes decoded observations",
+                    ));
+                }
                 if (sdk_values_seen > 0 && state.http_status.is_none())
                     || (pipeline_outputs_delivered > 0 && sdk_values_seen == 0)
                 {
@@ -966,7 +1343,8 @@ impl ModelRequests {
                 } else {
                     Some(ServedUsage::read(usage, line)?)
                 };
-                let observed_usage = self.response_values
+                let observed_usage = self
+                    .response_values
                     .get(id)
                     .ok_or_else(|| refusal("response has no physical value reader"))?
                     .observed_usage(
@@ -976,7 +1354,9 @@ impl ModelRequests {
                         state.termination.as_deref() == Some("eof"),
                     );
                 if recorded_usage != observed_usage {
-                    return Err(refusal("served usage differs from processed physical response bytes"));
+                    return Err(refusal(
+                        "served usage differs from processed physical response bytes",
+                    ));
                 }
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
@@ -1031,9 +1411,12 @@ impl ModelRequests {
         }
         state.sequence = sequence;
         let decoded_values = if let (Some(outcome), Some(_)) = (&outcome, &state.compaction) {
-            let mut values = self.response_values
+            let mut values = self
+                .response_values
                 .get(id)
-                .and_then(|values| values.stream_values(state.termination.as_deref() == Some("eof")))
+                .and_then(|values| {
+                    values.stream_values(state.termination.as_deref() == Some("eof"))
+                })
                 .ok_or_else(|| refusal("compaction response has no streamed physical values"))?;
             let seen = usize::try_from(outcome.sdk_values_seen)
                 .map_err(|_| refusal("compaction SDK value count exceeds addressable memory"))?;
@@ -1050,6 +1433,16 @@ impl ModelRequests {
             settlement,
             delivery,
             decoded_values,
+            decoded_observations: if outcome.is_some() && state.compaction.is_some() {
+                Some(state.decoded_utility.clone())
+            } else {
+                None
+            },
+            decoded_failure: if outcome.is_some() && state.compaction.is_some() {
+                Some(state.decoded_failure.clone())
+            } else {
+                None
+            },
             usage: outcome
                 .as_ref()
                 .map(|outcome| -> ContractResult<_> {
@@ -1067,16 +1460,35 @@ impl ModelRequests {
 
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
         if let Some(id) = &admission.compaction {
-            let operation = self.compactions.get_mut(id).expect("planned compaction operation");
+            let operation = self
+                .compactions
+                .get_mut(id)
+                .expect("planned compaction operation");
             if let Some(outcome) = &admission.outcome {
-                operation.outcomes.insert(admission.request_id.clone(), outcome.clone());
+                operation
+                    .outcomes
+                    .insert(admission.request_id.clone(), outcome.clone());
             }
             if let Some(values) = &admission.decoded_values {
-                operation.values.insert(admission.request_id.clone(), values.clone());
+                operation
+                    .values
+                    .insert(admission.request_id.clone(), values.clone());
+            }
+            if let Some(values) = &admission.decoded_observations {
+                operation
+                    .observations
+                    .insert(admission.request_id.clone(), values.clone());
+            }
+            if let Some(failure) = &admission.decoded_failure {
+                operation
+                    .failures
+                    .insert(admission.request_id.clone(), failure.clone());
             }
             if let Some(delivered) = admission.delivery {
                 operation.open.remove(&admission.request_id);
-                operation.deliveries.insert(admission.request_id.clone(), delivered);
+                operation
+                    .deliveries
+                    .insert(admission.request_id.clone(), delivered);
             }
         }
         if let Some(body) = &admission.body {
@@ -1379,7 +1791,7 @@ impl ModelRequests {
         scope: &str,
         tokenizer_model: &str,
         physical_requests: u64,
-        sdk_values: Value<'_>,
+        draw: Value<'_>,
         requires_delivery: bool,
     ) -> ContractResult<(u64, u64, u64)> {
         let operation = self
@@ -1391,65 +1803,152 @@ impl ModelRequests {
             || u64::try_from(operation.requests.len()).ok() != Some(physical_requests)
             || operation.outcomes.len() != operation.requests.len()
             || operation.deliveries.len() != operation.requests.len()
+            || operation.observations.len() != operation.requests.len()
+            || operation.failures.len() != operation.requests.len()
         {
-            return Err(refusal("compaction draw omits, repeats or misattributes physical requests"));
+            return Err(refusal(
+                "compaction draw omits, repeats or misattributes physical requests",
+            ));
         }
         if operation.model != tokenizer_model {
-            return Err(refusal("compaction tokenizer model differs from physical draw model"));
+            return Err(refusal(
+                "compaction tokenizer model differs from physical draw model",
+            ));
         }
         let mut observed_values = 0_u64;
         let mut physical_values = Vec::new();
         for (index, request_id) in operation.requests.iter().enumerate() {
-            let outcome = operation.outcomes.get(request_id)
+            let outcome = operation
+                .outcomes
+                .get(request_id)
                 .ok_or_else(|| refusal("compaction request has no processing outcome"))?;
-            if outcome.usage.is_some_and(|usage| usage.output > operation.budget) {
-                return Err(refusal("compaction physical output exceeded its request ceiling"));
+            if outcome
+                .usage
+                .is_some_and(|usage| usage.output > operation.budget)
+            {
+                return Err(refusal(
+                    "compaction physical output exceeded its request ceiling",
+                ));
             }
-            let delivered = operation.deliveries.get(request_id)
+            let delivered = operation
+                .deliveries
+                .get(request_id)
                 .ok_or_else(|| refusal("compaction request has no delivery receipt"))?;
             if index + 1 < operation.requests.len() && *delivered != 0 {
-                return Err(refusal("compaction draw mixes output from physical retries"));
+                return Err(refusal(
+                    "compaction draw mixes output from physical retries",
+                ));
             }
             if requires_delivery && index + 1 == operation.requests.len() && *delivered == 0 {
-                return Err(refusal("compaction draw claims a completed candidate without delivered output"));
+                return Err(refusal(
+                    "compaction draw claims a completed candidate without delivered output",
+                ));
             }
-            observed_values = observed_values.checked_add(outcome.sdk_values_seen)
+            observed_values = observed_values
+                .checked_add(outcome.sdk_values_seen)
                 .filter(|total| *total <= SAFE_INTEGER)
                 .ok_or_else(|| refusal("compaction SDK value count exceeds exact range"))?;
-            let values = operation.values.get(request_id)
+            let values = operation
+                .values
+                .get(request_id)
                 .ok_or_else(|| refusal("compaction request has no captured SDK values"))?;
             if values.len() as u64 != outcome.sdk_values_seen {
-                return Err(refusal("compaction processing count differs from physical SDK values"));
+                return Err(refusal(
+                    "compaction processing count differs from physical SDK values",
+                ));
             }
             physical_values.extend(values.iter());
         }
-        let claimed = sdk_values.elements()
+        let claimed = field(draw, "sdkValuesJson", 0)?
+            .elements()
             .ok_or_else(|| refusal("compaction draw has no SDK value array"))?
             .map(|value| {
-                let raw = value.as_str()
+                let raw = value
+                    .as_str()
                     .ok_or_else(|| refusal("compaction draw has a non-string SDK value"))?;
                 serde_json::from_str::<serde_json::Value>(raw)
                     .map_err(|_| refusal("compaction draw has undecodable SDK value JSON"))
             })
             .collect::<ContractResult<Vec<_>>>()?;
         if observed_values != claimed.len() as u64
-            || !physical_values.into_iter().zip(&claimed).all(|(left, right)| same_sdk_value(left, right))
+            || !physical_values
+                .into_iter()
+                .zip(&claimed)
+                .all(|(left, right)| same_sdk_value(left, right))
         {
-            return Err(refusal("compaction SDK values differ from physical response bytes"));
+            return Err(refusal(
+                "compaction SDK values differ from physical response bytes",
+            ));
         }
-        Ok((operation.budget, operation.first_sequence, operation.last_sequence))
+        let last_request = operation
+            .requests
+            .last()
+            .expect("nonempty physical operation");
+        let delivered = usize::try_from(
+            *operation
+                .deliveries
+                .get(last_request)
+                .ok_or_else(|| refusal("compaction has no final delivery receipt"))?,
+        )
+        .map_err(|_| refusal("compaction delivered count exceeds addressable memory"))?;
+        let observations = operation
+            .observations
+            .get(last_request)
+            .ok_or_else(|| refusal("compaction has no decoded output evidence"))?;
+        if delivered > observations.len() {
+            return Err(refusal(
+                "compaction delivery exceeds decoded output evidence",
+            ));
+        }
+        let projection = project_decoded_draw(
+            &observations[..delivered],
+            operation
+                .failures
+                .get(last_request)
+                .and_then(Option::as_ref),
+        )?;
+        let claimed_draw: serde_json::Value =
+            serde_json::from_str(draw.raw()).map_err(|_| refusal("compaction draw is not JSON"))?;
+        for key in [
+            "text",
+            "reasoning",
+            "functionCalls",
+            "incompleteToolCalls",
+            "finishReason",
+            "usage",
+            "snapshotBytes",
+        ] {
+            if !projection
+                .get(key)
+                .zip(claimed_draw.get(key))
+                .is_some_and(|(left, right)| same_sdk_value(left, right))
+            {
+                return Err(refusal(
+                    "compaction draw differs from its recorded delivered output",
+                ));
+            }
+        }
+        Ok((
+            operation.budget,
+            operation.first_sequence,
+            operation.last_sequence,
+        ))
     }
 
     pub(crate) fn commit_compaction_claims(&mut self, ids: Vec<String>) {
         for id in ids {
-            self.compactions.remove(&id).expect("planned compaction draw");
+            self.compactions
+                .remove(&id)
+                .expect("planned compaction draw");
             self.claimed_compactions.insert(id);
         }
     }
 
     pub(crate) fn validate_summary(&self, record: Value<'_>, line: usize) -> ContractResult<()> {
         if !self.compactions.is_empty() {
-            return Err(refusal("terminal leaves physical compaction draws unclaimed"));
+            return Err(refusal(
+                "terminal leaves physical compaction draws unclaimed",
+            ));
         }
         let summary = field(record, "request_evidence", line)?;
         let count = unsigned(
@@ -1610,11 +2109,29 @@ mod tests {
             "completion_tokens_details":{"reasoning_tokens":1}}});
         let mut response = ResponseValues::new(true, false);
         response.push(format!("data: {first}\n\ndata: {unread}\n\n").as_bytes());
-        response.require_prefix(1, false, Some(200), Some("text/event-stream"), true).unwrap();
-        assert_eq!(response.observed_usage(1, Some(200), Some("text/event-stream"), true),
-            Some(ServedUsage { prompt: 5, output: 3, total: 8, cached: 1, thoughts: 2 }));
-        assert_eq!(response.observed_usage(2, Some(200), Some("text/event-stream"), true),
-            Some(ServedUsage { prompt: 9, output: 4, total: 13, cached: 0, thoughts: 1 }));
+        response
+            .require_prefix(1, false, Some(200), Some("text/event-stream"), true)
+            .unwrap();
+        assert_eq!(
+            response.observed_usage(1, Some(200), Some("text/event-stream"), true),
+            Some(ServedUsage {
+                prompt: 5,
+                output: 3,
+                total: 8,
+                cached: 1,
+                thoughts: 2
+            })
+        );
+        assert_eq!(
+            response.observed_usage(2, Some(200), Some("text/event-stream"), true),
+            Some(ServedUsage {
+                prompt: 9,
+                output: 4,
+                total: 13,
+                cached: 0,
+                thoughts: 1
+            })
+        );
     }
     #[test]
     fn physical_value_reader_decodes_each_sse_line_like_the_sdk() {
@@ -1951,7 +2468,8 @@ mod tests {
                         "finish_reason":"stop"}],
                     "usage":{"prompt_tokens":5,"completion_tokens":3,
                     "total_tokens":8,"prompt_tokens_details":{"cached_tokens":1},
-                    "completion_tokens_details":{"reasoning_tokens":2}}}).to_string();
+                    "completion_tokens_details":{"reasoning_tokens":2}}})
+                .to_string();
                 for (index, event) in [
                     json!({"kind":"http","status":200,"content_type":"application/json"}),
                     json!({"kind":"body","offset":0,"base64":STANDARD.encode(physical.as_bytes())}),
@@ -1986,11 +2504,7 @@ mod tests {
                 let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":4,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                 let plan = state.plan_response(doc.root(), 1);
-                assert_eq!(
-                    plan.is_ok(),
-                    defect == "valid",
-                    "{status}/{defect}"
-                );
+                assert_eq!(plan.is_ok(), defect == "valid", "{status}/{defect}");
                 assert_eq!(
                     state.responses.len(),
                     1,

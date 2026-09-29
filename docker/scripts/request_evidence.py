@@ -92,7 +92,8 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
     if len(requests) != len(served) or events[-1]["request_evidence"]["open_response_ids"] != []:
         raise ValueError("response recording is incomplete; inspect the provider and recorder")
     states = {request["request_id"]: {"journal": request["journal_id"], "actual": actual,
-              "sequence": 0, "http": False, "termination": None, "ended": False, "outcome": None, "closed": False, "owner": request["owner"], "bytes": bytearray()}
+              "sequence": 0, "http": False, "termination": None, "ended": False, "outcome": None, "closed": False, "owner": request["owner"], "bytes": bytearray(),
+              "decoded_outputs": [], "decoded_failure": None, "decoded_pending": None}
               for request, actual in zip(requests, served)}
     if len(states) != len(requests):
         raise ValueError("response requests reuse an identity; inspect the original stream")
@@ -110,18 +111,21 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
             raise ValueError("response identity or sequence is incomplete")
         event = response["event"]
         actual = state["actual"]
-        if (event["kind"] in ("history", "delivery")) != (state["outcome"] is not None) or (event["kind"] not in ("history", "delivery") and (event["kind"] == "outcome") != state["ended"]):
+        kind = event["kind"]
+        if ((kind in ("history", "delivery")) != (state["outcome"] is not None)
+                or (kind == "outcome" and not state["ended"])
+                or (kind in ("http", "body", "end") and state["ended"])):
             raise ValueError("response outcome must follow transport completion; inspect the original stream")
-        if event["kind"] == "http":
+        if kind == "http":
             if state["http"] or state["sequence"] or event["status"] != actual["response_status"] or event["content_type"] != actual["response_content_type"]:
                 raise ValueError("recorded HTTP response differs from provider")
             state["http"] = True
-        elif event["kind"] == "body":
+        elif kind == "body":
             decoded = base64.b64decode(event["base64"], validate=True)
             if not state["http"] or not decoded or base64.b64encode(decoded).decode() != event["base64"] or event["offset"] != len(state["bytes"]):
                 raise ValueError("response bytes are malformed or out of order")
             state["bytes"].extend(decoded)
-        elif event["kind"] == "end":
+        elif kind == "end":
             observed = bytes(state["bytes"])
             expected = b"".join(base64.b64decode(part, validate=True) for part in actual["response_chunks"])
             termination = event["termination"]
@@ -137,7 +141,57 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
                 raise ValueError("served response was incorrectly called undispatched")
             state["ended"] = True
             state["termination"] = termination
-        elif event["kind"] == "outcome":
+        elif kind in ("decoded_body", "decoded_end"):
+            role = event.get("role")
+            index = event.get("index")
+            expected_index = len(state["decoded_outputs"]) if role == "utility" else 0
+            if (not state["http"] or role not in ("utility", "failure")
+                    or (role == "utility" and state["owner"]["kind"] != "utility")
+                    or (role == "failure" and state["decoded_failure"] is not None)
+                    or type(index) is not int or index != expected_index):
+                raise ValueError("decoded response has no matching owner or index")
+            pending = state["decoded_pending"]
+            if kind == "decoded_body":
+                if set(event) != {"kind", "role", "index", "offset", "base64"}:
+                    raise ValueError("decoded response has unknown byte fields")
+                if pending is None:
+                    if event["offset"] != 0:
+                        raise ValueError("decoded response starts after a byte gap")
+                    pending = {"role": role, "index": index, "bytes": bytearray()}
+                    state["decoded_pending"] = pending
+                decoded = base64.b64decode(event["base64"], validate=True)
+                if (pending["role"] != role or pending["index"] != index
+                        or type(event["offset"]) is not int or event["offset"] != len(pending["bytes"])
+                        or not decoded or base64.b64encode(decoded).decode() != event["base64"]):
+                    raise ValueError("decoded response has an invalid or missing byte chunk")
+                pending["bytes"].extend(decoded)
+            else:
+                if set(event) != {"kind", "role", "index", "body_bytes", "body_sha256"}:
+                    raise ValueError("decoded response has unknown completion fields")
+                if (pending is None or pending["role"] != role or pending["index"] != index
+                        or event["body_bytes"] != len(pending["bytes"])
+                        or event["body_sha256"] != hashlib.sha256(pending["bytes"]).hexdigest()):
+                    raise ValueError("decoded response end differs from its exact bytes")
+                def unique(pairs):
+                    result = {}
+                    for key, value in pairs:
+                        if key in result:
+                            raise ValueError("decoded response repeats a JSON key")
+                        result[key] = value
+                    return result
+                decoded = json.loads(bytes(pending["bytes"]).decode("utf-8"), object_pairs_hook=unique)
+                if (not isinstance(decoded, dict)
+                        or set(decoded) != {"response", "incomplete_tool_calls", "tool_call_preparations"}
+                        or not isinstance(decoded["response"], dict)
+                        or not isinstance(decoded["incomplete_tool_calls"], list)
+                        or not isinstance(decoded["tool_call_preparations"], list)):
+                    raise ValueError("decoded response has an unknown value shape")
+                if role == "utility":
+                    state["decoded_outputs"].append(decoded)
+                else:
+                    state["decoded_failure"] = decoded
+                state["decoded_pending"] = None
+        elif kind == "outcome":
             progress = (event.get("sdk_values_seen"), event.get("pipeline_outputs_delivered"))
             if (set(event) != {"kind", "status", "error", "served_usage", "sdk_values_seen", "pipeline_outputs_delivered"}
                     or any(type(value) is not int or not 0 <= value <= 2**53 - 1 for value in progress)
@@ -160,15 +214,18 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
                 raise ValueError("invalid response served usage; inspect the original stream")
             if event["status"] == "completed" and "served_usage" in actual and usage != actual["served_usage"]:
                 raise ValueError("completed response usage differs from provider; inspect the original stream")
+            if (state["decoded_pending"] is not None
+                    or len(state["decoded_outputs"]) != (progress[1] if state["owner"]["kind"] == "utility" else 0)):
+                raise ValueError("response outcome omits decoded outputs; inspect the original stream")
             state["outcome"] = event["status"]
             state["pipeline_outputs"] = progress[1]
-        elif event["kind"] == "delivery":
+        elif kind == "delivery":
             delivered = event.get("outputs_delivered")
             if (set(event) != {"kind", "outputs_delivered"} or state["owner"]["kind"] != "utility"
                     or type(delivered) is not int or not 0 <= delivered <= state["pipeline_outputs"]):
                 raise ValueError("utility delivery has no matching physical output prefix")
             state["closed"] = True
-        elif event["kind"] == "history":
+        elif kind == "history":
             if set(event) != {"kind", "disposition"} or state["owner"]["kind"] != "chat" or event["disposition"] not in ("accepted", "abandoned") or (event["disposition"] == "accepted" and state["outcome"] != "completed"):
                 raise ValueError("chat history decision has no valid processing owner")
             state["closed"] = True

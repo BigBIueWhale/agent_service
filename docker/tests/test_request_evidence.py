@@ -123,6 +123,45 @@ class ResponseEvidenceTests(unittest.TestCase):
             events, served = self.fixture(termination)
             self.assertEqual(len(require_response_evidence(events, served)), 5)
 
+    def test_utility_output_requires_complete_decoded_bytes(self):
+        import base64
+        from request_evidence import require_response_evidence
+        events, served = self.fixture()
+        provider = b'data: {"choices":[{"delta":{"content":"x"},"finish_reason":"stop"}]}\n\n'
+        events[2]["response"]["event"]["base64"] = base64.b64encode(provider).decode()
+        events[3]["response"]["event"].update(
+            body_bytes=len(provider), body_sha256=hashlib.sha256(provider).hexdigest())
+        served[0]["response_chunks"] = [base64.b64encode(provider).decode()]
+        decoded = json.dumps({"response": {"candidates": [{
+                                  "content": {"parts": [{"text": "x"}], "role": "model"},
+                                  "index": 0, "safetyRatings": [], "finishReason": "STOP"}]},
+                              "incomplete_tool_calls": [], "tool_call_preparations": []},
+                             separators=(",", ":")).encode()
+        body = {"kind": "decoded_body", "role": "utility", "index": 0,
+                "offset": 0, "base64": base64.b64encode(decoded).decode()}
+        end = {"kind": "decoded_end", "role": "utility", "index": 0,
+               "body_bytes": len(decoded), "body_sha256": hashlib.sha256(decoded).hexdigest()}
+        for offset, event in enumerate((body, end)):
+            row = copy.deepcopy(events[4])
+            row["response"]["sequence"] = 4 + offset
+            row["response"]["event"] = event
+            events.insert(4 + offset, row)
+        events[6]["response"]["sequence"] = 6
+        events[6]["response"]["event"].update(status="completed", error=None, sdk_values_seen=1)
+        events[6]["response"]["event"]["pipeline_outputs_delivered"] = 1
+        events[7]["response"]["sequence"] = 7
+        events[7]["response"]["event"]["outputs_delivered"] = 1
+        self.assertEqual(len(require_response_evidence(events, served)), 7)
+        omitted = copy.deepcopy(events)
+        del omitted[4:6]
+        for index in (4, 5):
+            omitted[index]["response"]["sequence"] -= 2
+        with self.assertRaisesRegex(ValueError, "omits decoded outputs"):
+            require_response_evidence(omitted, served)
+        events[5]["response"]["event"]["body_sha256"] = "0" * 64
+        with self.assertRaisesRegex(ValueError, "decoded response end differs"):
+            require_response_evidence(events, served)
+
     def test_processing_progress_requires_an_observed_sdk_value(self):
         from request_evidence import require_response_evidence
         for defect in ("missing", "unseen_sdk", "unsafe_count"):
