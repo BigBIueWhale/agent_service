@@ -375,7 +375,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 15 histories.
+new session. They are not promoted into complete version 16 histories.
 The complete-record evidence replay and the resume reader use the same
 projection for runtime checkpoints, compaction, and rewind. A focused source
 test passed for a compaction followed by another generation: full restore,
@@ -390,7 +390,7 @@ indexed resume select served usage only from committed local model generations;
 the canonical reader refuses an adopted or realtime assistant with a fabricated
 usage report. Source tests exercise that refusal and compare full and indexed
 served usage after a physically recorded generation. Owner gates remain pending.
-The SessionService and transcript-preparation source fixtures now use version 15
+The SessionService and transcript-preparation source fixtures now use version 16
 stored record shapes. Fork cases read their temporary JSONL files through the
 complete canonical reader; unit projection cases supply already admitted rows.
 Four focused source suites passed 224 tests, including refusal of a legacy

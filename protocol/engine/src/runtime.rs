@@ -10,6 +10,7 @@ use crate::{
     SAFE_INTEGER, STREAM_CONTRACT_SHA256,
 };
 use serde::{Deserialize, Serialize};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
@@ -93,6 +94,58 @@ pub struct RequestScope {
 /// `output` is: a draw that was refused and billed must not disappear behind a
 /// later draw that never generated. Each carries the accounting `output`
 /// carries, minus the transition-wide budget, plus the rule it failed.
+fn read_token_measurement(
+    value: Value<'_>,
+    line: usize,
+    limits: Limits,
+) -> ContractResult<(u64, u64)> {
+    let refuse = |detail: &str| ContractError::InvalidRecord(format!(
+        "events.jsonl line {line} has invalid physical tokenizer evidence: {detail}; inspect the complete compaction record and served /tokenize response"
+    ));
+    let request_url = text(value, "requestUrl", line)?;
+    if !(request_url.starts_with("http://") || request_url.starts_with("https://"))
+        || !request_url.ends_with("/tokenize")
+    {
+        return Err(refuse("request URL is not a served /tokenize endpoint"));
+    }
+    let request_json = text(value, "requestJson", line)?;
+    let request_doc = Document::decode(request_json.as_bytes(), limits)
+        .map_err(|cause| refuse(&format!("request JSON: {cause:?}")))?;
+    let request = request_doc.root();
+    if text(request, "model", line)?.is_empty()
+        || field(request, "messages", line)?.elements().is_none()
+        || field(request, "add_generation_prompt", line)?.as_bool() != Some(true)
+    {
+        return Err(refuse("request is not a rendered chat-tokenizer request"));
+    }
+    let status = unsigned(field(value, "responseStatus", line)?, "tokenizer HTTP status", 599)?;
+    let media_type = text(value, "responseContentType", line)?
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
+    if !(200..300).contains(&status)
+        || !(media_type == "application/json" || media_type.ends_with("+json"))
+    {
+        return Err(refuse("response is not successful JSON"));
+    }
+    let encoded = text(value, "responseBase64", line)?;
+    let bytes = STANDARD.decode(encoded).map_err(|_| refuse("response is not base64"))?;
+    if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
+        return Err(refuse("response base64 is empty or noncanonical"));
+    }
+    let response_doc = Document::decode(&bytes, limits)
+        .map_err(|cause| refuse(&format!("response JSON: {cause:?}")))?;
+    let response = response_doc.root();
+    let count = unsigned(field(response, "count", line)?, "served token count", SAFE_INTEGER)?;
+    let window = unsigned(field(response, "max_model_len", line)?, "served model window", SAFE_INTEGER)?;
+    if window == 0 {
+        return Err(refuse("served model window is zero"));
+    }
+    Ok((count, window))
+}
+
 fn validate_compaction_event(
     object: Value<'_>,
     line: usize,
@@ -170,12 +223,33 @@ fn validate_compaction_event(
             "with an unknown compaction trigger reason; retain the original stream and recapture with a corrected compaction producer",
         ));
     }
+    let measurements = field(record, "tokenMeasurements", line)?
+        .elements()
+        .ok_or_else(|| refuse("without a tokenMeasurements array"))?
+        .map(|measurement| {
+            let role = text(measurement, "role", line)?.to_string();
+            let evidence = field(measurement, "evidence", line)?;
+            let (count, window) = read_token_measurement(evidence, line, json_limits)?;
+            Ok((role, count, window))
+        })
+        .collect::<ContractResult<Vec<_>>>()?;
+    if measurements
+        .first()
+        .is_some_and(|first| measurements.iter().any(|value| value.2 != first.2))
+    {
+        return Err(refuse("whose tokenizer measurements disagree about the served model window"));
+    }
+    for (index, measurement) in measurements.iter().take(3).enumerate() {
+        if measurement.0 != ["original", "summary_request", "prompt_only"][index] {
+            return Err(refuse("whose tokenizer preflight measurements are missing or reordered"));
+        }
+    }
 
     // What one drawn candidate spent. `budget` is the transition's frozen
     // output ceiling when the record reports it; every candidate was issued
     // under that same ceiling, so none of them may exceed it.
     let candidate = |holder: Value<'_>, whose: &str, budget: Option<u64>| -> ContractResult<()> {
-        if count(holder, "requestAttempts")? == 0 {
+        if count(holder, "physicalRequests")? == 0 {
             return Err(refuse(&format!(
                 "whose {whose} reports no request attempt for a candidate that was drawn"
             )));
@@ -296,6 +370,7 @@ fn validate_compaction_event(
         .ok_or_else(|| refuse("without a rejectedAttempts field"))?
         .elements()
         .ok_or_else(|| refuse("whose rejectedAttempts is not an array"))?;
+    let mut draw_counts = Vec::new();
     for (index, attempt) in rejected.enumerate() {
         let whose = format!("rejected attempt {index}");
         let attempt = attempt
@@ -316,6 +391,51 @@ fn validate_compaction_event(
             )));
         }
         candidate(attempt, &whose, budget)?;
+        let measured = field(attempt, "newTokenCount", line)?;
+        draw_counts.push(if measured.is_null() {
+            None
+        } else {
+            Some(count(attempt, "newTokenCount")?)
+        });
+    }
+    if let Some(output) = record.get("output").filter(|value| !value.is_null()) {
+        let measured = field(output, "newTokenCount", line)?;
+        draw_counts.push(if measured.is_null() {
+            None
+        } else {
+            Some(count(output, "newTokenCount")?)
+        });
+    }
+    if !draw_counts.is_empty() {
+        if measurements.len() < 3 || measurements[0].1 != original_tokens {
+            return Err(refuse("whose drawn candidate has no measured original and preflight counts"));
+        }
+        let mut next = 3;
+        for measured in draw_counts {
+            if let Some(measured) = measured {
+                if !measurements.get(next).is_some_and(|count| {
+                    count.0 == "candidate" && count.1 == measured
+                }) {
+                    return Err(refuse("whose candidate count differs from the served tokenizer response"));
+                }
+                next += 1;
+            }
+        }
+        if next != measurements.len() {
+            return Err(refuse("with an unclaimed tokenizer measurement"));
+        }
+    } else if measurements.len() > 3
+        || measurements.first().is_some_and(|measured| measured.1 != original_tokens)
+    {
+        return Err(refuse("whose preflight count differs from the served tokenizer response"));
+    }
+    if succeeded {
+        let output = field(record, "output", line)?;
+        if output.is_null() || field(output, "newTokenCount", line)?.is_null()
+            || count(output, "newTokenCount")? != count(record, "newTokenCount")?
+        {
+            return Err(refuse("whose replacement count differs from its accepted draw"));
+        }
     }
     Ok(())
 }
@@ -1508,6 +1628,25 @@ mod tests {
     }
     #[test]
     fn compaction_status_and_retained_count_agree_with_the_history_decision() {
+        let measurement = |role: &str, count: u64| {
+            let response = serde_json::json!({
+                "count": count, "max_model_len": 100
+            })
+            .to_string();
+            serde_json::json!({
+                "role": role,
+                "evidence": {
+                    "requestUrl": "http://fixture.invalid/tokenize",
+                    "requestJson": serde_json::json!({
+                        "model": "fixture", "messages": [],
+                        "add_generation_prompt": true
+                    }).to_string(),
+                    "responseStatus": 200,
+                    "responseContentType": "application/json",
+                    "responseBase64": STANDARD.encode(response.as_bytes())
+                }
+            })
+        };
         let failed = serde_json::json!({
             "type":"system", "subtype":"compaction", "uuid":"compaction",
             "session_id":"session", "parent_tool_use_id":null,
@@ -1515,7 +1654,8 @@ mod tests {
                 "status":"COMPRESSION_FAILED_PROTOCOL_ERROR", "succeeded":false,
                 "originalTokenCount":24, "newTokenCount":24,
                 "triggerReason":null, "postCompactionHistory":null,
-                "output":null, "rejectedAttempts":[]
+                "output":null, "rejectedAttempts":[],
+                "tokenMeasurements":[]
             }
         });
         admit(&mut initialized(), &failed.to_string()).unwrap();
@@ -1526,8 +1666,15 @@ mod tests {
         success["data"]["postCompactionHistory"] = serde_json::json!([
             {"role":"user", "parts":[{"text":"retained input"}]}
         ]);
+        success["data"]["tokenMeasurements"] = serde_json::json!([
+            measurement("original", 24),
+            measurement("summary_request", 20),
+            measurement("prompt_only", 18),
+            measurement("candidate", 12)
+        ]);
         success["data"]["output"] = serde_json::json!({
-            "maxOutputTokens":8, "requestAttempts":1,
+            "maxOutputTokens":8, "physicalRequests":1,
+            "operationId":"compaction-operation", "functionCalls":[],
             "text":"summary", "reasoning":"", "sdkValuesJson":["{}"],
             "newTokenCount":12, "snapshotBytes":7,
             "incompleteToolCalls":[], "finishReason":"STOP",
@@ -1536,6 +1683,14 @@ mod tests {
                 "totalTokenCount":28}
         });
         admit(&mut initialized(), &success.to_string()).unwrap();
+        let mut forged_count = success.clone();
+        forged_count["data"]["output"]["newTokenCount"] = serde_json::json!(11);
+        forged_count["data"]["newTokenCount"] = serde_json::json!(11);
+        assert!(admit(&mut initialized(), &forged_count.to_string()).is_err());
+        let mut missing_measurement = success.clone();
+        missing_measurement["data"]["tokenMeasurements"]
+            .as_array_mut().unwrap().pop();
+        assert!(admit(&mut initialized(), &missing_measurement.to_string()).is_err());
         for changed in [
             ("status", serde_json::json!("COMPRESSED")),
             ("status", serde_json::json!("NOOP")),

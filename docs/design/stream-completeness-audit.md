@@ -394,7 +394,7 @@ One concrete source consumer omission remains:
   consumer gap regardless of whether the image ships that application.
 
 The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
-while the current patched Qwen source requires canonical recording version 15.
+while the current patched Qwen source requires canonical recording version 16.
 Hard-coding that version into Desktop's local JSONL loops would bind them to a
 different runtime source and could reject an ordinary session from its pinned
 runtime. The patched ACP `qwen/session/loadUpdates` path already asks the
@@ -1007,3 +1007,38 @@ synthetic body. Those failures have not been established as caused by this
 checkpoint change or as passing at the prior commit. Native compilation,
 owner gates and end-to-end `--resume` remain unverified. The provider-byte
 binding for compaction draws and input rendering provenance remain open.
+
+## Compaction draw and tokenizer evidence
+
+The compaction outcome previously named candidate token counts and converted
+output without enough evidence to recompute either from the physical operations.
+Source reading now finds one recorded operation identity for each drawn
+candidate, the SDK-parsed values tied to its provider response bytes, and the
+exact `/tokenize` request body and raw successful response for each count used
+in the transition. The shared response reader replays the physical draws and
+tokenizer responses before it accepts the projected compaction record. The
+version 15 stream contract requires the ordered `tokenMeasurements` field;
+the native certifier source also checks the measurement roles, common served
+window, candidate counts, and accepted replacement count. Canonical recording
+version 16 carries the same evidence without making it resume history. Resume
+continues to read the history commits and the installed post-compaction
+composition, rather than replaying diagnostic records as conversation turns.
+
+This is client-owned evidence for any agent_service session that compacts.
+Ordinary token counting continues through the same SDK path and only captures
+the extra body and response evidence inside a compaction measurement context.
+The backend supplies `/tokenize` results but does not choose Qwen's retained
+history or decide whether a draw was accepted, so there is no backend edit for
+that decision.
+
+Six focused Core source suites passed 248 tests after the final source
+comparison. The complete Python SDK unit suite passed 775 tests, including a
+missing-measurement refusal; these used the version 15 packaged schema. The
+Draft 7 schema check passed. The landmark transaction applied its earlier
+version to a disposable pinned upstream tree, and the final revised stage was
+planned from that pristine source with 1,164 changed paths and zero byte
+mismatches against the intended authoring source. Core source tests used an
+older generated TypeScript validator copied into the scratch checkout solely
+to permit imports; those tests do not verify version 15 generated bindings.
+Native Rust, Java, generated TypeScript binding checks, compilation, owner
+gates, release, and end-to-end provider and resume behavior remain unverified.

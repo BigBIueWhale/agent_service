@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:14",
+  "$id": "urn:agent-service:stream-contract:15",
   "type": "object",
   "required": [
     "type",
@@ -220,7 +220,8 @@
             "data": {
               "type": "object",
               "required": [
-                "postCompactionHistory"
+                "postCompactionHistory",
+                "tokenMeasurements"
               ],
               "properties": {
                 "postCompactionHistory": {
@@ -263,7 +264,10 @@
                     {
                       "properties": {
                         "status": false
-                      }
+                      },
+                      "required": [
+                        "maxOutputTokens"
+                      ]
                     }
                   ]
                 },
@@ -276,7 +280,10 @@
                       {
                         "properties": {
                           "maxOutputTokens": false
-                        }
+                        },
+                        "required": [
+                          "status"
+                        ]
                       }
                     ]
                   }
@@ -285,7 +292,13 @@
                 "succeeded": {},
                 "originalTokenCount": {},
                 "newTokenCount": {},
-                "triggerReason": {}
+                "triggerReason": {},
+                "tokenMeasurements": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/compactionTokenMeasurement"
+                  }
+                }
               },
               "additionalProperties": false,
               "allOf": [
@@ -2439,10 +2452,17 @@
     },
     "compactionDrawEvidence": {
       "required": [
+        "operationId",
         "sdkValuesJson",
+        "functionCalls",
         "newTokenCount",
         "snapshotBytes",
-        "text"
+        "text",
+        "reasoning",
+        "incompleteToolCalls",
+        "finishReason",
+        "usage",
+        "physicalRequests"
       ],
       "properties": {
         "sdkValuesJson": {
@@ -2457,14 +2477,52 @@
         "snapshotBytes": {
           "$ref": "#/definitions/nullableEvidenceCount"
         },
-        "text": {},
+        "text": {
+          "type": "string"
+        },
         "status": {},
-        "maxOutputTokens": {},
-        "requestAttempts": {},
-        "reasoning": {},
-        "incompleteToolCalls": {},
-        "finishReason": {},
-        "usage": {}
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "incompleteToolCalls": {
+          "type": "array"
+        },
+        "finishReason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/definitions/servedUsage"
+            }
+          ]
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "functionCalls": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "physicalRequests": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
       },
       "additionalProperties": false,
       "allOf": [
@@ -3024,11 +3082,18 @@
             "operation_id": {
               "type": "string",
               "minLength": 1
+            },
+            "purpose": {
+              "enum": [
+                "compaction",
+                "other"
+              ]
             }
           },
           "required": [
             "kind",
-            "operation_id"
+            "operation_id",
+            "purpose"
           ],
           "additionalProperties": false
         }
@@ -3445,6 +3510,61 @@
           "additionalProperties": false
         }
       ]
+    },
+    "tokenMeasurementEvidence": {
+      "type": "object",
+      "required": [
+        "requestUrl",
+        "requestJson",
+        "responseStatus",
+        "responseContentType",
+        "responseBase64"
+      ],
+      "properties": {
+        "requestUrl": {
+          "type": "string",
+          "pattern": "^https?://.+/tokenize$"
+        },
+        "requestJson": {
+          "type": "string",
+          "minLength": 1
+        },
+        "responseStatus": {
+          "type": "integer",
+          "minimum": 200,
+          "maximum": 299
+        },
+        "responseContentType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "responseBase64": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "compactionTokenMeasurement": {
+      "type": "object",
+      "required": [
+        "role",
+        "evidence"
+      ],
+      "properties": {
+        "role": {
+          "enum": [
+            "original",
+            "summary_request",
+            "prompt_only",
+            "candidate"
+          ]
+        },
+        "evidence": {
+          "$ref": "#/definitions/tokenMeasurementEvidence"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

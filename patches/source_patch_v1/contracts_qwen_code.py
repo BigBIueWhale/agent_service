@@ -4732,7 +4732,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const composed = composePostCompactHistory(",
             "...(startupContext ? [startupContext] : []),",
             "...composed,",
-            "const candidateCount = await chat.countRequestTokensForCandidateHistory(",
+            "const candidateCount = await measured('candidate', () => chat.countRequestTokensForCandidateHistory(",
         ),
         label=label,
         location="packages/core/src/services/chatCompressionService.ts",
@@ -4924,7 +4924,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "if (compactionOutputBudget < partition.turnGeneration) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
             "    if (newTokenCount >= partition.compactionTrigger) {",
-            "          contents,\n          config: {\n            ...sideQueryOptions.config,\n            maxOutputTokens: compactionOutputBudget,",
+            "config.getBaseLlmClient().generateText({\n            ...sideQueryOptions,\n            contents,\n            config: {\n              ...sideQueryOptions.config,\n              maxOutputTokens: compactionOutputBudget,",
             # The widest notice is derived from the notices, every kind of
             # refusal at its widest, keyed so a kind cannot go unheld.
             "export const DRAW_REFUSAL_NOTICE_MAX_BYTES = Math.max(",
@@ -5215,9 +5215,10 @@ def _validate_compaction_budget_after(state: State) -> None:
     # number is the ceiling max_tokens is set to, passed where it is derived:
     # the request is counted stating the widest ceiling, the window, and
     # issued stating the one it is issued with.
-    _require_all(
+    directive_path = "packages/core/src/services/state-snapshot.ts"
+    directive_source = _require_all(
         state,
-        service,
+        directive_path,
         (
             "export function compactionRequestDirective(maxOutputTokens: number): string {",
             "This request is not a turn, and the turn limit does not apply to it: "
@@ -5226,8 +5227,13 @@ def _validate_compaction_budget_after(state: State) -> None:
             "and the request is made again, told why, up to ${MAX_GENERATION_DRAWS} answers in all. ",
             "If all ${MAX_GENERATION_DRAWS} are refused, this conversation is not "
             "compacted and cannot continue.",
-            "text: `${systemInstruction}\\n\\n${compactionRequestDirective(maxOutputTokens)}`,",
         ),
+        label=label,
+    )
+    require_text(
+        state,
+        service,
+        "text: `${systemInstruction}\\n\\n${compactionRequestDirective(maxOutputTokens)}`",
         label=label,
     )
     _require_ordered(
@@ -5242,7 +5248,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
         location=service,
     )
-    directive_body = service_source.split(
+    directive_body = directive_source.split(
         "export function compactionRequestDirective(maxOutputTokens: number): string {"
     )[1].split("\n}\n")[0]
     served_turn = _SERVED_PARTITION["turnGeneration"]
@@ -5255,7 +5261,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         _require(
             restated not in directive_body,
-            f"{label}: {service} compactionRequestDirective names {restated!r}; a draw "
+            f"{label}: {directive_path} compactionRequestDirective names {restated!r}; a draw "
             "is told the ceiling it is issued with, passed in, never a turn's.",
         )
     # The directive once stated nothing of the draw's limit, leaving it the
@@ -5680,7 +5686,8 @@ def _validate_compaction_accounting_after(state: State) -> None:
             "text: string;",
             "reasoning: string;",
             "finishReason: string | null;",
-            "requestAttempts: number;",
+            "physicalRequests: number;",
+            "tokenMeasurements: readonly CompactionTokenMeasurement[];",
             "output: CompactionOutputAccounting | null;",
             "output: info.output ?? null,",
         ),
@@ -5688,24 +5695,25 @@ def _validate_compaction_accounting_after(state: State) -> None:
     )
     service = "packages/core/src/services/chatCompressionService.ts"
     # A request that was issued and then failed still spent the budget, and its
-    # prefix is the only evidence of where. `GenerationTextFailure` does not by
+    # prefix is the evidence of where. `GenerationTextFailure` does not by
     # itself prove a request left -- generateText wraps every error it caught in
-    # one, including failures from before the call -- so the attempt count is
-    # what separates a draw that spent something from one that never started.
+    # one, including failures from before dispatch. Require a captured physical
+    # request as well as the logical attempt before accounting for a draw.
     source = _require_all(
         state,
         service,
         (
             "error instanceof GenerationTextFailure",
             "error.partial.requestAttempts > 0",
+            "error.partial.physicalRequests > 0",
             "text: partial.text",
             "reasoning: partial.thoughtText",
             "finishReason: partial.finishReason ?? null",
-            "requestAttempts: partial.requestAttempts",
+            "physicalRequests: partial.physicalRequests",
             "    ): CompactionOutputAccounting => ({",
             "usage: summaryUsage",
             "reasoning: summaryResult.thoughtText",
-            "requestAttempts: summaryResult.requestAttempts",
+            "physicalRequests: summaryResult.physicalRequests",
         ),
         label=label,
     )
@@ -5719,6 +5727,31 @@ def _validate_compaction_accounting_after(state: State) -> None:
         and source.count("output: outputAccounting,") == 1,
         f"{label}: all post-generation outcomes must retain the same served evidence",
     )
+    # The count used to accept a replacement has a physical tokenizer request
+    # and raw response. The same replay is applied when the record is read, so
+    # a count cannot be changed independently of the bytes that supplied it.
+    _require_all(state, service, (
+        "const result = await compactionTokenEvidenceContext.run(true, count);",
+        "const served = replayVllmTokenCount(result.evidence, contextLimit);",
+        "tokenMeasurements.push({ role, evidence: result.evidence });",
+        "await measured('original',",
+        "await measured('summary_request',",
+        "await measured('prompt_only',",
+        "await measured('candidate',",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.ts", (
+        "tokenCountWireObservationContext.getStore()?.observe(args[0], args[1]);",
+        "const response = await call.asResponse();",
+        "const raw = Buffer.from(await response.clone().arrayBuffer());",
+        "const served = replayVllmTokenCount(",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/model-response-evidence.ts", (
+        "claimCompactionRecord(record: CompactionRecord, scope: string): void {",
+        "replayVllmTokenCount(measurement.evidence, window)",
+        "compaction candidate count differs from tokenizer response bytes",
+        "compaction has an unclaimed tokenizer measurement",
+        "compaction replacement count differs from its accepted draw",
+    ), label=label)
     _require_ordered(_source(state, "packages/core/src/core/geminiChat.ts", label=label), (
         "await candidate.afterCommit()",
         "throw new CompactionFinalizationError(info, error)",
@@ -8330,7 +8363,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 15;",
+            "export const CHAT_RECORDING_VERSION = 16;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -8997,7 +9030,7 @@ def _validate_served_accounting_after(state: State) -> None:
         label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
     )
     _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v14.json").read_bytes()', "Draft7Validator(SCHEMA)",
+        'joinpath("stream-contract-v15.json").read_bytes()', "Draft7Validator(SCHEMA)",
         "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
     ), label=label)
     _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
@@ -9217,7 +9250,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation has no recorded normalization seed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v14.json")', "unsupported packaged schema keyword",
+        'getResourceAsStream("/stream-contract-v15.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (
@@ -11345,9 +11378,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="compaction-output-accounting",
         rationale=(
-            "A compaction attempt retains its observed text, reasoning, terminal, request attempts, "
+            "A compaction attempt retains its observed text, reasoning, terminal, physical requests, "
             "what a call its ceiling stopped had written, as served, and "
-            "full served usage or explicit absence. Its status and retained token count agree with "
+            "full served usage or explicit absence. Every count used in its transition carries "
+            "the physical tokenizer request and response bytes. Its status and retained token count agree with "
             "whether history was replaced, and refused draws name resampleable rules. "
             "Failure after a partial stream cannot erase the "
             "last valid observation. Reasoning remains inline; this contract does not assert reference "
