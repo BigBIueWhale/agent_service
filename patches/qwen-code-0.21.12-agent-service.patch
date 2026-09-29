@@ -193139,7 +193139,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/errorHandler.ts b/pac
 diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.test.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.test.ts
 --- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.test.ts
 +++ b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.test.ts
-@@ -1,41 +1,19 @@
+@@ -1,43 +1,21 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -193178,11 +193178,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
 -  CountTokensParameters,
 -} from '@google/genai';
  import type { OpenAICompatibleProvider } from './provider/index.js';
- import type OpenAI from 'openai';
+-import type OpenAI from 'openai';
++import OpenAI from 'openai';
  
  describe('OpenAIContentGenerator (Refactored)', () => {
    let generator: OpenAIContentGenerator;
    let mockConfig: Config;
+ 
+   beforeEach(() => {
 @@ -76,12 +54,13 @@
      };
  
@@ -193197,7 +193200,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            },
          },
          embeddings: {
-@@ -120,43 +99,61 @@
+@@ -120,49 +99,132 @@
      it('should delegate to pipeline.executeStream', async () => {
        // This test verifies the method exists and can be called
        expect(typeof generator.generateContentStream).toBe('function');
@@ -193290,7 +193293,78 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
      it('should delegate to pipeline.client.embeddings.create', async () => {
        // This test verifies the method exists and can be called
        expect(typeof generator.embedContent).toBe('function');
-@@ -216,12 +213,13 @@
++    });
++
++    it('sends the requested model and one input per text through the SDK', async () => {
++      let physicalBody: unknown;
++      const vector = (values: number[]) => {
++        const bytes = Buffer.alloc(values.length * 4);
++        values.forEach((value, index) => bytes.writeFloatLE(value, index * 4));
++        return bytes.toString('base64');
++      };
++      const client = new OpenAI({
++        apiKey: 'fixture',
++        baseURL: 'http://fixture.invalid/v1',
++        maxRetries: 0,
++        fetch: async (_url, init) => {
++          physicalBody = JSON.parse(init?.body as string);
++          return new Response(
++            JSON.stringify({
++              object: 'list',
++              model: 'selected-embedding-model',
++              data: [
++                { object: 'embedding', index: 1, embedding: vector([3, 4]) },
++                { object: 'embedding', index: 0, embedding: vector([1, 2]) },
++              ],
++              usage: { prompt_tokens: 4, total_tokens: 4 },
++            }),
++            { headers: { 'content-type': 'application/json' } },
++          );
++        },
++      });
++      (
++        generator as unknown as { pipeline: { client: OpenAI } }
++      ).pipeline.client = client;
++
++      const result = await generator.embedContent({
++        model: 'selected-embedding-model',
++        contents: ['first', { parts: [{ text: 'second' }, { text: 'part' }] }],
++      });
++      expect(physicalBody).toEqual({
++        model: 'selected-embedding-model',
++        input: ['first', 'second part'],
++        encoding_format: 'base64',
++      });
++      expect(result.embeddings?.map((item) => item.values)).toEqual([
++        [1, 2],
++        [3, 4],
++      ]);
++    });
++
++    it('refuses media parts rather than silently embedding empty text', async () => {
++      const create = (
++        generator as unknown as {
++          pipeline: {
++            client: { embeddings: { create: ReturnType<typeof vi.fn> } };
++          };
++        }
++      ).pipeline.client.embeddings.create;
++      await expect(
++        generator.embedContent({
++          model: 'selected-embedding-model',
++          contents: [
++            { parts: [{ inlineData: { mimeType: 'image/png', data: 'abc' } }] },
++          ],
++        }),
++      ).rejects.toThrow('require text parts');
++      expect(create).not.toHaveBeenCalled();
+     });
+ 
+     it('should redact proxy credentials from embedding request errors', async () => {
+       const generatorWithClient = generator as unknown as {
+         pipeline: {
+           client: {
+@@ -216,12 +278,13 @@
        };
  
        // Create a minimal mock provider
@@ -193304,7 +193378,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
              },
            },
            embeddings: {
-@@ -238,12 +236,17 @@
+@@ -238,12 +301,17 @@
          mockProvider,
        );
      });
@@ -193322,7 +193396,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  
        const result = testGenerator.testShouldSuppressErrorLogging(
          new Error('Test error'),
-@@ -255,12 +258,17 @@
+@@ -255,12 +323,17 @@
  
      it('should return true for AbortError when signal is also aborted (user cancellation)', () => {
        const abortController = new AbortController();
@@ -193340,7 +193414,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -279,12 +287,17 @@
+@@ -279,12 +352,17 @@
  
      it('should return false for AbortError when signal is NOT aborted (network abort)', () => {
        const abortController = new AbortController();
@@ -193358,7 +193432,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -300,12 +313,17 @@
+@@ -300,12 +378,17 @@
  
        expect(result).toBe(false);
      });
@@ -193376,7 +193450,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  
        // AbortError but no signal at all - unknown source
        const abortError = new Error('The operation was aborted');
-@@ -321,12 +339,17 @@
+@@ -321,12 +404,17 @@
  
      it('should return false for non-AbortError even when signal is aborted', () => {
        const abortController = new AbortController();
@@ -193394,7 +193468,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -341,12 +364,17 @@
+@@ -341,12 +429,17 @@
      });
  
      it('should return false for errors with non-aborted signal', () => {
@@ -193412,7 +193486,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
            abortSignal: abortController.signal,
          },
        };
-@@ -391,12 +419,13 @@
+@@ -391,12 +484,13 @@
        };
  
        // Create a minimal mock provider
@@ -193426,7 +193500,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
              },
            },
            embeddings: {
-@@ -411,12 +440,17 @@
+@@ -411,12 +505,17 @@
          contentGeneratorConfig,
          mockConfig,
          mockProvider,
@@ -193447,7 +193521,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
 diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 --- a/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
 +++ b/packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts
-@@ -1,21 +1,22 @@
+@@ -1,27 +1,58 @@
 -import type { ContentGenerator } from '../contentGenerator.js';
 +import type { OwnedGenerationRequest as GenerateContentParameters } from '../generation-context.js';
 +import type {
@@ -193475,7 +193549,43 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
  import { redactProxyError } from '../../utils/runtimeFetchOptions.js';
  
  const debugLogger = createDebugLogger('OPENAI');
-@@ -77,37 +78,24 @@
++
++function embeddingText(content: unknown): string {
++  if (typeof content === 'string') return content;
++  if (
++    !content ||
++    typeof content !== 'object' ||
++    !('parts' in content) ||
++    !Array.isArray(content.parts)
++  ) {
++    throw new Error(
++      'OpenAI embeddings require text content. Use text input or select a provider that supports this content shape.',
++    );
++  }
++  return content.parts
++    .map((part) => {
++      if (typeof part === 'string') return part;
++      if (
++        part &&
++        typeof part === 'object' &&
++        'text' in part &&
++        typeof part.text === 'string'
++      ) {
++        return part.text;
++      }
++      throw new Error(
++        'OpenAI embeddings require text parts. Use text input or select a provider that supports media embeddings.',
++      );
++    })
++    .join(' ');
++}
+ 
+ export class OpenAIContentGenerator implements ContentGenerator {
+   protected pipeline: ContentGenerationPipeline;
+ 
+   constructor(
+     contentGeneratorConfig: ContentGeneratorConfig,
+@@ -77,86 +108,73 @@
      request: GenerateContentParameters,
      userPromptId: string,
    ): Promise<AsyncGenerator<GenerateContentResponse>> {
@@ -193524,7 +193634,94 @@ diff --git a/packages/core/src/core/openaiContentGenerator/openaiContentGenerato
    async embedContent(
      request: EmbedContentParameters,
    ): Promise<EmbedContentResponse> {
-     // Extract text from contents
+-    // Extract text from contents
+-    let text = '';
+-    if (Array.isArray(request.contents)) {
+-      text = request.contents
+-        .map((content) => {
+-          if (typeof content === 'string') return content;
+-          if ('parts' in content && content.parts) {
+-            return content.parts
+-              .map((part) =>
+-                typeof part === 'string'
+-                  ? part
+-                  : 'text' in part
+-                    ? (part as { text?: string }).text || ''
+-                    : '',
+-              )
+-              .join(' ');
+-          }
+-          return '';
+-        })
+-        .join(' ');
+-    } else if (request.contents) {
+-      if (typeof request.contents === 'string') {
+-        text = request.contents;
+-      } else if ('parts' in request.contents && request.contents.parts) {
+-        text = request.contents.parts
+-          .map((part) =>
+-            typeof part === 'string' ? part : 'text' in part ? part.text : '',
+-          )
+-          .join(' ');
+-      }
++    if (typeof request.model !== 'string' || !request.model.trim()) {
++      throw new Error(
++        'OpenAI embeddings require the selected model. Choose a configured embedding model and retry.',
++      );
+     }
++    const contents = Array.isArray(request.contents)
++      ? request.contents
++      : [request.contents];
++    if (contents.length === 0) {
++      throw new Error(
++        'OpenAI embeddings require at least one text input. Supply text and retry.',
++      );
++    }
++    const inputs = contents.map(embeddingText);
+ 
+     try {
+       const embedding = await this.pipeline.client.embeddings.create({
+-        model: 'text-embedding-ada-002', // Default embedding model
+-        input: text,
++        model: request.model,
++        input: inputs.length === 1 ? inputs[0]! : inputs,
+       });
+-
++      if (!Array.isArray(embedding.data)) {
++        throw new Error(
++          'The embedding response has no data array. Inspect the provider response and retry with a compatible embedding model.',
++        );
++      }
++      const ordered = [...embedding.data].sort(
++        (left, right) => left.index - right.index,
++      );
++      if (
++        ordered.length !== inputs.length ||
++        ordered.some(
++          (entry, index) =>
++            entry.index !== index ||
++            !Array.isArray(entry.embedding) ||
++            entry.embedding.length === 0 ||
++            !entry.embedding.every(Number.isFinite),
++        )
++      ) {
++        throw new Error(
++          'The embedding response does not match the requested inputs. Inspect the provider response and retry with a compatible embedding model.',
++        );
++      }
+       return {
+-        embeddings: [
+-          {
+-            values: embedding.data[0].embedding,
+-          },
+-        ],
++        embeddings: ordered.map((entry) => ({ values: entry.embedding })),
+       };
+     } catch (error) {
+       const redactedError = redactProxyError(error);
+       debugLogger.error('OpenAI API Embedding Error:', redactedError);
+       throw new Error(
+         `OpenAI API error: ${redactedError instanceof Error ? redactedError.message : String(redactedError)}`,
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-guard-config.test.ts

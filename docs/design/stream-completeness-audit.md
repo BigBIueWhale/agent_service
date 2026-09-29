@@ -1264,3 +1264,23 @@ counts used by ordinary turns are still not persisted as session records, and
 failed tokenizer calls do not yet have physical operation records. Those remain
 open for token reconciliation. Compilation, packaged behavior, provider runs
 and owner gates remain unverified under the no-build instruction.
+
+## Embedding input identity
+
+The shared OpenAI-compatible embedding adapter sends the configured embedding
+model and preserves one input per requested text. It accepts text parts, refuses
+media parts that this adapter cannot embed, and requires one finite nonempty
+vector per input in provider index order. This prevents a request for several
+texts from becoming one concatenated embedding and prevents silent media loss.
+The source test used the real OpenAI SDK with a captured request body and a
+base64-encoded response whose entries arrived out of order; the adapter test
+suite passed all 16 cases. Eight focused `BaseLlmClient.generateEmbedding`
+tests also passed. A combined run had three failures in unrelated batch
+diagnostic cases, so that broader suite is not claimed as passed.
+
+The embedding operation still has no durable physical request and response
+record. Exact tokenization operations also remain outside the session record.
+Both require versioned operation evidence and reader admission before the
+record can support utility-call reconciliation. Compilation, packaged behavior,
+live provider behavior, and owner gates remain unverified under the no-build
+instruction.

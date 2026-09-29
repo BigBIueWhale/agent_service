@@ -1470,6 +1470,12 @@ def _validate_model_config_after(state: State) -> None:
 
 def _validate_behavioral_evidence_before(state: State) -> None:
     label = "focused behavioral evidence precondition"
+    forbid_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts",
+        "function embeddingText(content: unknown): string",
+        label=label,
+    )
     _require(
         "packages/core/src/config/qwen38-agent-service-contract.test.ts" not in state,
         f"{label}: locked contract test unexpectedly exists upstream",
@@ -1487,6 +1493,20 @@ def _validate_behavioral_evidence_before(state: State) -> None:
 
 def _validate_behavioral_evidence_after(state: State) -> None:
     label = "focused behavioral evidence result"
+    _require_all(
+        state,
+        "packages/core/src/core/openaiContentGenerator/openaiContentGenerator.ts",
+        (
+            "function embeddingText(content: unknown): string",
+            "const inputs = contents.map(embeddingText);",
+            "model: request.model,",
+            "input: inputs.length === 1 ? inputs[0]! : inputs,",
+            "const ordered = [...embedding.data].sort(",
+            "ordered.length !== inputs.length",
+            "embeddings: ordered.map((entry) => ({ values: entry.embedding }))",
+        ),
+        label=label,
+    )
     required_evidence = {
         "packages/core/src/config/qwen38-agent-service-contract.test.ts": (
             "disables ambient extension, hook, and skill initialization",
@@ -1495,6 +1515,11 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         "packages/core/src/core/openaiContentGenerator/pipeline.tokenize.test.ts": (
             "derives the root tokenizer endpoint from a /v1 API base",
             "fails closed on malformed or mismatched responses",
+        ),
+        "packages/core/src/core/openaiContentGenerator/openaiContentGenerator.test.ts": (
+            "sends the requested model and one input per text through the SDK",
+            "refuses media parts rather than silently embedding empty text",
+            "encoding_format: 'base64'",
         ),
         "packages/core/src/core/geminiChat.test.ts": (
             "gives every turn the same room, whatever its prompt",
@@ -11314,7 +11339,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="behavioral-regression-evidence",
         rationale=(
             "Exact source identity and semantic relationships are supplemented by executable tests of "
-            "ownership, provider validation, durable recording, usage, retries, text, tool schemas, and "
+            "ownership, provider validation, durable recording, usage, retries, embedding inputs, text, tool schemas, and "
             "artifacts. Each test must exercise its stated boundary."
         ),
         removal_condition=(
