@@ -1678,3 +1678,29 @@ ordinary and long Qwen sessions alike; vLLM does not own the client's
 canonical history file. It closes the checked admission paths, while the
 separate provenance relationship between runtime history and provider request
 bodies remains to be examined. Owner gates remain unverified.
+
+## Canonical history at provider admission
+
+Source reading traced the common `GeminiChat` send path for root and child
+conversations. Its constructor records an initial runtime-history checkpoint;
+the checked mutation paths record splices or a compaction checkpoint when they
+change history. Request rendering can also replace image Parts with references,
+and that path records its representation change. Immediately before invoking
+the generator, `makeApiCallAndProcessStream` awaits the recorder's `flush`.
+The OpenAI pipeline then builds the provider-enhanced request, freezes its JSON
+body, and durably admits the `model_request` before SDK dispatch. This source
+order prevents a queued history write from overtaking a dispatched request.
+It is source reading, not an executed provider or packaged-resume test.
+
+The canonical evidence reader currently requires an initialized history before
+a Chat request, but its request admission does not compare the replayed history
+contents with the request that follows. The complete provider body remains the
+authority for dispatched input; it can intentionally differ from canonical
+history because request rendering curates turns, reattaches and slims images,
+adds reminders, and converts to the OpenAI shape. A text comparison would
+reject valid ordinary sessions. The root physical journal and a child's
+canonical history also live in different files, so a binding based on one
+global history cursor would misattribute child requests. A complete proof needs
+scope-specific source identity across those owners and an admitting reader
+check. That relationship is not yet implemented or verified; the current
+ordering proof alone does not certify it.
