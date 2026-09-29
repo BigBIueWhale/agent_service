@@ -192,6 +192,8 @@ def require_response_evidence(events: list[dict], served: list[dict]) -> list[di
                     state["decoded_failure"] = decoded
                 state["decoded_pending"] = None
         elif kind == "outcome":
+            if event["status"] == "completed" and state["decoded_failure"] is not None:
+                raise ValueError("completed response contains a failed decode observation")
             progress = (event.get("sdk_values_seen"), event.get("pipeline_outputs_delivered"))
             if (set(event) != {"kind", "status", "error", "served_usage", "sdk_values_seen", "pipeline_outputs_delivered"}
                     or any(type(value) is not int or not 0 <= value <= 2**53 - 1 for value in progress)

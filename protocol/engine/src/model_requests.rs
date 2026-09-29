@@ -1290,6 +1290,11 @@ impl ModelRequests {
             }
             "outcome" => {
                 let completed = text(event, "status", line)? == "completed";
+                if completed && state.decoded_failure.is_some() {
+                    return Err(refusal(
+                        "completed response contains a failed decode observation",
+                    ));
+                }
                 if completed
                     && (!state
                         .http_status

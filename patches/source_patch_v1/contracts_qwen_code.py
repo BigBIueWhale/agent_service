@@ -8457,6 +8457,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.recordDecoded('utility', this.pipelineOutputsDelivered, response)",
         "this.recordDecoded('failure', 0, response)",
         "response outcome omits or misattributes decoded observations",
+        "completed response contains a failed decode observation",
         "recorded decoded output differs from its physical response",
     ), label=label)
     _require_all(state, core + "core/utility-delivery.ts", (
@@ -9127,6 +9128,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'operation.values[record["request_id"]] = values[:sdk_values]',
         'if kind in ("decoded_body", "decoded_end"):',
         'response outcome omits or misattributes decoded observations',
+        'completed response contains a failed decode observation',
         'compaction draw differs from its recorded delivered output',
         'def claim_compaction(self, data: dict[str, Any], scope: str) -> None:',
         'compaction SDK values differ from physical response bytes',
@@ -9333,6 +9335,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "compaction draw claims decoded output without an SDK value",
         '"decoded_body".equals(kind) || "decoded_end".equals(kind)',
         'response outcome omits or misattributes decoded observations',
+        'completed response contains a failed decode observation',
         'compaction draw differs from its recorded delivered output',
         "state.values.values.subList(0, (int) sdkValues)",
         "compaction tokenizer measurements use different models",

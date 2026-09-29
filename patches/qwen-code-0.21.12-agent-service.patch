@@ -347394,7 +347394,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,1351 @@
+@@ -0,0 +1,1381 @@
 +import { createHash } from 'node:crypto';
 +import OpenAI from 'openai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -347553,6 +347553,36 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      kind: 'outcome',
 +      pipeline_outputs_delivered: 0,
 +    });
++    const forged = structuredClone(f.records);
++    const outcome = forged.find((record) => record.event.kind === 'outcome')!;
++    Object.assign(outcome.event, { status: 'completed', error: null });
++    const replay = new ModelResponseReplay();
++    replay.begin(
++      'journal',
++      'request',
++      { kind: 'utility', operation_id: 'utility-operation', purpose: 'other' },
++      'scope',
++      { ...TEST_POLICY, mode: 'nonstream' },
++    );
++    expect(() => forged.forEach((record) => replay.observe(record))).toThrow(
++      'completed response contains a failed decode observation',
++    );
++  });
++
++  it('cannot complete after observing a failed decode', async () => {
++    const f = fixture();
++    f.recorder.dispatched();
++    await (await f.recorder.capture(new Response('{}'))).text();
++    f.recorder.observeSdkValue();
++    f.recorder.observeFailedResponse({ candidates: [] });
++    await expect(
++      f.recorder.finish({ status: 'completed', error: null }),
++    ).rejects.toThrow(
++      'completed response contains a failed decode observation',
++    );
++    expect(f.records.some((record) => record.event.kind === 'outcome')).toBe(
++      false,
++    );
 +  });
 +
 +  it.each(['completed', 'failed', 'cancelled'] as const)(
@@ -348749,7 +348779,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1499 @@
+@@ -0,0 +1,1503 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -349302,6 +349332,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        : outcome;
 +      try {
 +        await this.enqueue(async () => {
++          if (processing.status === 'completed' && this.failedResponseObserved)
++            failure('completed response contains a failed decode observation');
 +          requireCompatibleProcessing(
 +            this.httpStatus,
 +            this.termination,
@@ -350014,6 +350046,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    if (event.kind === 'outcome') {
 +      if (state.digest !== null)
 +        failure('response outcome precedes transport completion');
++      if (event.status === 'completed' && state.decodedFailure !== null)
++        failure('completed response contains a failed decode observation');
 +      if (
 +        state.decodedPending !== null ||
 +        (state.owner.kind === 'utility' &&
@@ -354981,7 +355015,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1607 @@
+@@ -0,0 +1,1611 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -355982,6 +356016,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            _require(
 +                state.digest is None, "response outcome precedes transport completion"
 +            )
++            _require(
++                event["status"] != "completed" or state.decoded_failure is None,
++                "completed response contains a failed decode observation",
++            )
 +            sdk_values = event["sdk_values_seen"]
 +            pipeline_outputs = event["pipeline_outputs_delivered"]
 +            _require(
@@ -356592,7 +356630,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,917 @@
+@@ -0,0 +1,947 @@
 +from __future__ import annotations
 +
 +import base64
@@ -356981,6 +357019,36 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +        RecordContractError, match="selected decoder contradicts the dispatched model"
 +    ):
 +        admit_all(wire)
++
++
++def test_completed_response_refuses_forged_failed_decode_observation() -> None:
++    wire = records()
++    admit_all(wire).finish()
++    body = json.dumps(
++        {"response": {}, "incomplete_tool_calls": [], "tool_call_preparations": []},
++        separators=(",", ":"),
++    ).encode()
++    outcome_index = next(
++        index for index, row in enumerate(wire)
++        if row["type"] == "model_response"
++        and row["response"]["event"]["kind"] == "outcome"
++    )
++    for row in wire[outcome_index:]:
++        if row["type"] == "model_response":
++            row["response"]["sequence"] += 2
++    for offset, event in enumerate((
++        {"kind": "decoded_body", "role": "failure", "index": 0,
++         "offset": 0, "base64": base64.b64encode(body).decode()},
++        {"kind": "decoded_end", "role": "failure", "index": 0,
++         "body_bytes": len(body), "body_sha256": hashlib.sha256(body).hexdigest()},
++    )):
++        row = copy.deepcopy(wire[outcome_index])
++        row["uuid"] = f"forged-failure-{offset}"
++        row["response"]["sequence"] = 4 + offset
++        row["response"]["event"] = event
++        wire.insert(outcome_index + offset, row)
++    with pytest.raises(RecordContractError, match="completed response contains a failed decode"):
++        admit_all(wire).finish()
 +
 +
 +def _tool_result(
@@ -362612,7 +362680,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,1178 @@
+@@ -0,0 +1,1180 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -362895,6 +362963,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        }
 +        require(state.processingStatus == null, "response processing is already complete");
 +        if ("outcome".equals(kind)) {
++            require(!"completed".equals(event.get("status")) || state.decodedFailure == null,
++                    "completed response contains a failed decode observation");
 +            require(state.digest == null, "response outcome precedes transport completion");
 +            long sdkValues = integer(event.get("sdk_values_seen"));
 +            long pipelineOutputs = integer(event.get("pipeline_outputs_delivered"));
@@ -366420,7 +366490,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,1038 @@
+@@ -0,0 +1,1082 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -366540,6 +366610,50 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        RecordAdmission admission = new RecordAdmission();
 +        for (JSONObject row : rows) admission.admit(row.toJSONString(JSONWriter.Feature.WriteNulls), null);
 +        admission.finish();
++    }
++
++    @Test
++    void completedResponseRefusesForgedFailedDecodeObservation() {
++        List<JSONObject> rows = new ArrayList<>();
++        for (String line : EvidenceFixtures.records("chat_request_response_history"))
++            rows.add(JSON.parseObject(line));
++        byte[] bytes = "{\"response\":{},\"incomplete_tool_calls\":[],\"tool_call_preparations\":[]}"
++                .getBytes(StandardCharsets.UTF_8);
++        JSONObject template = rows.get(5);
++        for (int index = 5; index < rows.size(); index++) {
++            JSONObject row = rows.get(index);
++            if ("model_response".equals(row.getString("type")))
++                row.getJSONObject("response").put("sequence",
++                        row.getJSONObject("response").getLongValue("sequence") + 2);
++        }
++        JSONObject body = JSON.parseObject(template.toJSONString(JSONWriter.Feature.WriteNulls));
++        body.put("uuid", "forged-failure-body");
++        body.getJSONObject("response").put("sequence", 4);
++        JSONObject bodyEvent = new JSONObject();
++        bodyEvent.put("kind", "decoded_body");
++        bodyEvent.put("role", "failure");
++        bodyEvent.put("index", 0);
++        bodyEvent.put("offset", 0);
++        bodyEvent.put("base64", Base64.getEncoder().encodeToString(bytes));
++        body.getJSONObject("response").put("event", bodyEvent);
++        JSONObject end = JSON.parseObject(body.toJSONString(JSONWriter.Feature.WriteNulls));
++        end.put("uuid", "forged-failure-end");
++        end.getJSONObject("response").put("sequence", 5);
++        JSONObject endEvent = new JSONObject();
++        endEvent.put("kind", "decoded_end");
++        endEvent.put("role", "failure");
++        endEvent.put("index", 0);
++        endEvent.put("body_bytes", bytes.length);
++        endEvent.put("body_sha256", StreamSchema.sha256(bytes));
++        end.getJSONObject("response").put("event", endEvent);
++        rows.add(5, body);
++        rows.add(6, end);
++        RecordContractException failure = assertThrows(RecordContractException.class, () -> {
++            RecordAdmission admission = new RecordAdmission();
++            for (JSONObject row : rows) admission.admit(row.toJSONString(JSONWriter.Feature.WriteNulls), null);
++            admission.finish();
++        });
++        assertTrue(failure.getMessage().contains("completed response contains a failed decode observation"));
 +    }
 +
 +    private static List<JSONObject> streamedCompaction(String payload) {

@@ -152,6 +152,16 @@ class ResponseEvidenceTests(unittest.TestCase):
         events[7]["response"]["sequence"] = 7
         events[7]["response"]["event"]["outputs_delivered"] = 1
         self.assertEqual(len(require_response_evidence(events, served)), 7)
+        forged = copy.deepcopy(events)
+        for offset, original in enumerate((body, end)):
+            row = copy.deepcopy(forged[6])
+            row["response"]["sequence"] = 6 + offset
+            row["response"]["event"] = {**original, "role": "failure"}
+            forged.insert(6 + offset, row)
+        forged[8]["response"]["sequence"] = 8
+        forged[9]["response"]["sequence"] = 9
+        with self.assertRaisesRegex(ValueError, "completed response contains a failed decode"):
+            require_response_evidence(forged, served)
         omitted = copy.deepcopy(events)
         del omitted[4:6]
         for index in (4, 5):
