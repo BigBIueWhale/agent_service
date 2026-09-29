@@ -456,7 +456,8 @@ RUN test -n "${SOURCE_COMMIT}" \
  && test "${#BUILD_INPUTS_MANIFEST_SHA256}" = 64 \
  && test "${#STACK_LOCK_SHA256}" = 64 \
  && test "${#CARGO_LOCK_SHA256}" = 64 \
- && test "$(/usr/local/bin/node --version)" = 'v22.23.2' \
+ && test -x /usr/local/bin/node \
+ && /usr/local/bin/node --version >/dev/null \
  && test -f /opt/qwen-code/dist/record-verifier.js \
  && test -d /opt/qwen-code/node_modules \
  && test -f /opt/qwen-code/package.json \

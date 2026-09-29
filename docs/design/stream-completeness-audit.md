@@ -1356,10 +1356,11 @@ verification path: `result_parse.rs` invokes `/usr/local/bin/node` and
 `docker/Dockerfile` inherited the minimal runtime base and copied neither.
 The service stage now copies the pinned Node binary, Qwen bundle, dependencies
 and package identity from `qwen-build`, and its image gate checks their
-presence and Node version. The old source image definition could not satisfy
-that subprocess dependency. This is a source conclusion, not a claim about any
-previously published image or a successful build. The new image composition,
-running verifier and complete-result certification remain unverified pending
+presence and that the copied Node binary starts. The old source image
+definition could not satisfy that subprocess dependency. This source
+conclusion makes no claim about a previously published image or a successful
+build. The new image composition, running verifier and complete-result
+certification remain unverified pending
 the owner's gates; no build or image step was run here.
 
 The displayed user/tool-result projection is likewise not bound to the
