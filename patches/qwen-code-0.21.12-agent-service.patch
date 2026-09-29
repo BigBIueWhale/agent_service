@@ -354044,7 +354044,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/__init__.py b/packages/sdk-py
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_admission.py
-@@ -0,0 +1,537 @@
+@@ -0,0 +1,530 @@
 +"""Admission of the shared versioned CLI stream before SDK interpretation."""
 +
 +from __future__ import annotations
@@ -354054,16 +354054,29 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +from dataclasses import dataclass, field
 +from typing import Any, Literal
 +
-+from .json_lines import require_json_values
-+from .json_lines import parse_json_line
++from .json_lines import parse_json_line, require_json_values
 +from .model_generation import Generation
-+from .record_evidence import PartialOutput, RequestEvidence, _require, _served_usage
++from .record_evidence import (
++    PartialOutput,
++    RequestEvidence,
++    _require,
++    _same_json,
++    _served_usage,
++)
++from .stream_schema import (
++    CONTROL as _CONTROL,
++)
++from .stream_schema import (
++    CONTROL_TYPES as _CONTROL_TYPES,
++)
++from .stream_schema import (
++    GOAL_BYTES as _GOAL_BYTES,
++)
++from .stream_schema import (
++    STREAM as _STREAM,
++)
 +from .stream_schema import (
 +    STREAM_CONTRACT_SHA256,
-+    STREAM as _STREAM,
-+    CONTROL as _CONTROL,
-+    CONTROL_TYPES as _CONTROL_TYPES,
-+    GOAL_BYTES as _GOAL_BYTES,
 +)
 +
 +
@@ -354100,29 +354113,6 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +    name: str
 +    structured_input: dict[str, Any] | None = None
 +    returned: bool = False
-+
-+
-+def _same_json(left: Any, right: Any) -> bool:
-+    pending = [(left, right)]
-+    while pending:
-+        a, b = pending.pop()
-+        if isinstance(a, bool) or isinstance(b, bool):
-+            if type(a) is not type(b) or a != b:
-+                return False
-+        elif isinstance(a, (int, float)) or isinstance(b, (int, float)):
-+            if not isinstance(a, (int, float)) or not isinstance(b, (int, float)) or a != b:
-+                return False
-+        elif isinstance(a, dict) and isinstance(b, dict):
-+            if a.keys() != b.keys():
-+                return False
-+            pending.extend((a[key], b[key]) for key in a)
-+        elif isinstance(a, list) and isinstance(b, list):
-+            if len(a) != len(b):
-+                return False
-+            pending.extend(zip(a, b))
-+        elif type(a) is not type(b) or a != b:
-+            return False
-+    return True
 +
 +
 +@dataclass(frozen=True)
@@ -354356,6 +354346,9 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 +            session.needs_result = True
 +        if kind == "system" and subtype == "compaction":
 +            _compaction_outcome(record["data"])
++            session.requests.claim_compaction(
++                record["data"], scope or record["session_id"]
++            )
 +        if kind == "model_request":
 +            session.requests.observe_request(record["request"])
 +            session.needs_result = True
@@ -354585,7 +354578,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,932 @@
+@@ -0,0 +1,1278 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -354594,6 +354587,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +import copy
 +import hashlib
 +import json
++import math
++import re
 +from dataclasses import dataclass, field
 +from typing import Any
 +
@@ -354625,7 +354620,49 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    def reject_constant(value: str) -> Any:
 +        raise ValueError(f"invalid JSON constant {value}")
 +
-+    return json.loads(text, parse_constant=reject_constant)
++    # JSON.parse gives every numeric spelling the same JavaScript Number
++    # boundary before ProviderOutput serializes the observed SDK value.
++    return json.loads(
++        text, parse_int=float, parse_float=float, parse_constant=reject_constant
++    )
++
++
++def _sdk_json_value(value: Any) -> Any:
++    """The value retained by JSON.stringify after the SDK's JSON.parse."""
++    if isinstance(value, float) and not math.isfinite(value):
++        return None
++    if isinstance(value, list):
++        return [_sdk_json_value(item) for item in value]
++    if isinstance(value, dict):
++        return {key: _sdk_json_value(item) for key, item in value.items()}
++    return value
++
++
++def _same_json(left: Any, right: Any) -> bool:
++    pending = [(left, right)]
++    while pending:
++        a, b = pending.pop()
++        if isinstance(a, bool) or isinstance(b, bool):
++            if type(a) is not type(b) or a != b:
++                return False
++        elif isinstance(a, (int, float)) or isinstance(b, (int, float)):
++            if (
++                not isinstance(a, (int, float))
++                or not isinstance(b, (int, float))
++                or a != b
++            ):
++                return False
++        elif isinstance(a, dict) and isinstance(b, dict):
++            if a.keys() != b.keys():
++                return False
++            pending.extend((a[key], b[key]) for key in a)
++        elif isinstance(a, list) and isinstance(b, list):
++            if len(a) != len(b):
++                return False
++            pending.extend(zip(a, b, strict=True))
++        elif type(a) is not type(b) or a != b:
++            return False
++    return True
 +
 +
 +def _js_truthy(value: Any) -> bool:
@@ -354645,6 +354682,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    event: str | None = None
 +    data: list[str] = field(default_factory=list)
 +    count: int = 0
++    values: list[Any] = field(default_factory=list)
++    retain_values: bool = False
 +    failed: bool = False
 +    done: bool = False
 +    after_cr: bool = False
@@ -354715,19 +354754,50 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        self.count += 1
 +        if self.count > 2**53 - 1:
 +            self.failed = True
++        elif self.retain_values:
++            self.values.append(_sdk_json_value(value))
 +
 +
 +@dataclass
 +class _ResponseValues:
 +    stream: bool
++    retain_values: bool = False
 +    sse: _SseValues = field(default_factory=_SseValues)
 +    body: bytearray = field(default_factory=bytearray)
++
++    def __post_init__(self) -> None:
++        self.sse.retain_values = self.retain_values
 +
 +    def push(self, chunk: bytes) -> None:
 +        if self.stream:
 +            self.sse.push(chunk)
 +        else:
 +            self.body.extend(chunk)
++
++    def _settled_sse(self, transport_eof: bool) -> _SseValues:
++        values = self.sse
++        if (
++            transport_eof
++            and (values.pending or values.after_cr or values.line)
++            and not values.failed
++            and not values.done
++        ):
++            values = copy.deepcopy(values)
++            pending = bytes(values.pending)
++            values.pending.clear()
++            values._feed(pending)
++            if values.after_cr or values.line:
++                values.after_cr = False
++                values._finish_line()
++        return values
++
++    def sdk_values(self, status: int | None, transport_eof: bool) -> list[Any]:
++        _require(
++            self.stream and self.retain_values, "compaction response is not streamed"
++        )
++        if status is None or not 200 <= status < 300:
++            return []
++        return self._settled_sse(transport_eof).values
 +
 +    def require_prefix(
 +        self,
@@ -354740,21 +354810,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        if status is None or not 200 <= status < 300:
 +            available, failed = 0, False
 +        elif self.stream:
-+            values = self.sse
-+            if (
-+                transport_eof
-+                and (values.pending or values.after_cr or values.line)
-+                and not values.failed
-+                and not values.done
-+            ):
-+                # The SDK yields its last incomplete SSE chunk only at EOF.
-+                values = copy.deepcopy(values)
-+                pending = bytes(values.pending)
-+                values.pending.clear()
-+                values._feed(pending)
-+                if values.after_cr or values.line:
-+                    values.after_cr = False
-+                    values._finish_line()
++            values = self._settled_sse(transport_eof)
 +            available, failed = values.count, values.failed
 +        elif status == 204:
 +            available, failed = 1, False
@@ -354828,6 +354884,100 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    raise ValueError("request body has no top-level messages array")
 +
 +
++def _compaction_budget(body: str) -> int:
++    request = parse_json_line(body)
++    budget = request.get("max_tokens") if isinstance(request, dict) else None
++    _require(
++        type(budget) is int and 0 < budget <= 2**53 - 1,
++        "compaction request has no positive physical output ceiling",
++    )
++    messages = request.get("messages")
++    _require(
++        isinstance(messages, list) and bool(messages),
++        "compaction request has no final directive",
++    )
++    last = messages[-1]
++    _require(
++        isinstance(last, dict) and last.get("role") == "user",
++        "compaction request does not end in a user directive",
++    )
++    content = last.get("content")
++    if isinstance(content, str):
++        directive = content
++    else:
++        _require(
++            isinstance(content, list)
++            and bool(content)
++            and all(
++                isinstance(part, dict)
++                and part.get("type") == "text"
++                and isinstance(part.get("text"), str)
++                for part in content
++            ),
++            "compaction directive has no model-facing text",
++        )
++        directive = "".join(part["text"] for part in content)
++    marker = "your answer may generate at most "
++    at = directive.rfind(marker)
++    claimed = directive[at + len(marker) :] if at >= 0 else ""
++    match = re.match(r"([1-9][0-9]*) tokens, reasoning included\.", claimed)
++    _require(
++        match is not None
++        and int(match.group(1)) == budget
++        and directive.endswith("cannot continue."),
++        "compaction directive differs from its physical output ceiling",
++    )
++    return budget
++
++
++def _token_measurement(measurement: dict[str, Any]) -> tuple[str, int, int]:
++    evidence = measurement["evidence"]
++    url = evidence["requestUrl"]
++    _require(
++        isinstance(url, str)
++        and re.match(r"^https?://", url) is not None
++        and url.endswith("/tokenize"),
++        "tokenizer measurement has no served /tokenize endpoint",
++    )
++    request = _parse_sdk_json(evidence["requestJson"])
++    _require(
++        isinstance(request, dict)
++        and isinstance(request.get("model"), str)
++        and bool(request["model"])
++        and isinstance(request.get("messages"), list)
++        and request.get("add_generation_prompt") is True,
++        "tokenizer measurement has no rendered chat request",
++    )
++    media_type = evidence["responseContentType"].split(";", 1)[0].strip().lower()
++    _require(
++        200 <= evidence["responseStatus"] < 300
++        and (media_type == "application/json" or media_type.endswith("+json")),
++        "tokenizer measurement has no successful JSON response",
++    )
++    encoded = evidence["responseBase64"]
++    raw = base64.b64decode(encoded, validate=True)
++    _require(
++        bool(raw) and base64.b64encode(raw).decode() == encoded,
++        "tokenizer measurement has no canonical response bytes",
++    )
++    response = _parse_sdk_json(raw.decode("utf-8"))
++    _require(isinstance(response, dict), "tokenizer measurement has no result object")
++
++    def count(key: str, positive: bool = False) -> int:
++        value = response.get(key)
++        _require(
++            type(value) is float
++            and math.isfinite(value)
++            and value.is_integer()
++            and (value > 0 if positive else value >= 0)
++            and value <= 2**53 - 1,
++            f"tokenizer measurement has no exact {key}",
++        )
++        return int(value)
++
++    return measurement["role"], count("count"), count("max_model_len", True)
++
++
 +@dataclass
 +class _RequestBody:
 +    request_id: str
@@ -354853,6 +355003,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    owner_kind: str
 +    attempt_id: str | None
 +    values: _ResponseValues
++    compaction_id: str | None = None
 +    sequence: int = 0
 +    http_status: int | None = None
 +    content_type: str | None = None
@@ -354861,6 +355012,17 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    digest: Any = field(default_factory=hashlib.sha256)
 +    processing_status: str | None = None
 +    pipeline_outputs: int | None = None
++
++
++@dataclass
++class _CompactionOperation:
++    scope: str
++    budget: int
++    requests: list[tuple[str, int]] = field(default_factory=list)
++    open: set[str] = field(default_factory=set)
++    outcomes: dict[str, dict[str, Any]] = field(default_factory=dict)
++    deliveries: dict[str, int] = field(default_factory=dict)
++    values: dict[str, list[Any]] = field(default_factory=dict)
 +
 +
 +class RequestEvidence:
@@ -354872,6 +355034,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        self.responses: dict[str, _Response] = {}
 +        self.attempts: dict[str, _Attempt] = {}
 +        self.generation_ids: set[str] = set()
++        self.compactions: dict[str, _CompactionOperation] = {}
++        self.claimed_compactions: set[str] = set()
 +        self.finalized_requests = 0
 +        self.usage_reports = 0
 +        self.served_usage: dict[str, int] | None = None
@@ -354888,6 +355052,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        self.responses.clear()
 +        self.attempts.clear()
 +        self.generation_ids.clear()
++        self.compactions.clear()
++        self.claimed_compactions.clear()
 +        self.finalized_requests = 0
 +        self.usage_reports = 0
 +        self.served_usage = None
@@ -354953,6 +355119,25 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                "delta does not replace the top-level messages suffix",
 +            )
 +        owner = request["owner"]
++        compaction_id: str | None = None
++        if owner["kind"] == "utility" and owner["purpose"] == "compaction":
++            _require(stream, "compaction request is not a streamed draw")
++            compaction_id = owner["operation_id"]
++            budget = _compaction_budget(body)
++            operation = self.compactions.get(compaction_id)
++            _require(
++                compaction_id not in self.claimed_compactions
++                and (
++                    operation is None
++                    or (operation.scope == scope and operation.budget == budget)
++                ),
++                "compaction operation changes scope or budget or repeats after claim",
++            )
++            if operation is None:
++                operation = _CompactionOperation(scope, budget)
++                self.compactions[compaction_id] = operation
++            operation.requests.append((request["request_id"], request["sequence"]))
++            operation.open.add(request["request_id"])
 +        if owner["kind"] == "chat":
 +            attempt = self.attempts.get(owner["attempt_id"])
 +            if attempt is None:
@@ -354971,7 +355156,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        self.ids.add(request_id)
 +        self.scopes[scope] = _RequestBody(request_id, request["segment_id"], messages)
 +        self.responses[request_id] = _Response(
-+            owner["kind"], owner.get("attempt_id"), _ResponseValues(stream)
++            owner["kind"],
++            owner.get("attempt_id"),
++            _ResponseValues(stream, compaction_id is not None),
++            compaction_id=compaction_id,
 +        )
 +        self.count += 1
 +
@@ -354988,10 +355176,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            attempt.output_scope is None or attempt.output_scope == (scope,),
 +            "chat output changes assistant scope",
 +        )
++        attempt.output_scope = (scope,)
 +
 +    def has_chat_attempt_in_scope(self, scope: str) -> bool:
 +        return any(attempt.scope == scope for attempt in self.attempts.values())
-+        attempt.output_scope = (scope,)
 +
 +    def observe_seed(self, seed: dict[str, Any]) -> None:
 +        origin = seed["origin"]
@@ -355164,6 +355352,15 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                and 0 <= event["outputs_delivered"] <= state.pipeline_outputs,
 +                "utility delivery has no matching physical output prefix",
 +            )
++            if state.compaction_id is not None:
++                operation = self.compactions[state.compaction_id]
++                _require(
++                    record["request_id"] in operation.open
++                    and record["request_id"] not in operation.deliveries,
++                    "compaction delivery has no open physical request",
++                )
++                operation.open.remove(record["request_id"])
++                operation.deliveries[record["request_id"]] = event["outputs_delivered"]
 +            del self.responses[record["request_id"]]
 +            return
 +        _require(
@@ -355200,6 +355397,17 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                state.content_type,
 +                state.termination == "eof",
 +            )
++            if state.compaction_id is not None:
++                operation = self.compactions[state.compaction_id]
++                values = state.values.sdk_values(
++                    state.http_status, state.termination == "eof"
++                )
++                _require(
++                    len(values) == sdk_values,
++                    "compaction processing count differs from physical SDK values",
++                )
++                operation.values[record["request_id"]] = values
++                operation.outcomes[record["request_id"]] = copy.deepcopy(event)
 +            if event["served_usage"] is not None:
 +                _served_usage(event["served_usage"])
 +            served_usage = self.served_usage
@@ -355263,7 +355471,137 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            state.termination = event["termination"]
 +        state.sequence += 1
 +
++    def claim_compaction(self, data: dict[str, Any], scope: str) -> None:
++        draws = [*data["rejectedAttempts"]]
++        if data["output"] is not None:
++            draws.append(data["output"])
++        measurements = [_token_measurement(item) for item in data["tokenMeasurements"]]
++        _require(
++            not measurements
++            or all(window == measurements[0][2] for _, _, window in measurements),
++            "compaction tokenizer measurements disagree about the served model window",
++        )
++        _require(
++            all(
++                item[0] == ("original", "summary_request", "prompt_only")[index]
++                for index, item in enumerate(measurements[:3])
++            ),
++            "compaction tokenizer preflight measurements are missing or reordered",
++        )
++        if draws:
++            _require(
++                len(measurements) >= 3
++                and measurements[0][1] == data["originalTokenCount"],
++                "compaction draw has no measured original and preflight counts",
++            )
++            next_measurement = 3
++            for draw in draws:
++                count = draw["newTokenCount"]
++                if count is not None:
++                    _require(
++                        next_measurement < len(measurements)
++                        and measurements[next_measurement][:2] == ("candidate", count),
++                        "compaction candidate count differs from tokenizer bytes",
++                    )
++                    next_measurement += 1
++            _require(
++                next_measurement == len(measurements),
++                "compaction has an unclaimed tokenizer measurement",
++            )
++        else:
++            _require(
++                len(measurements) <= 3
++                and (
++                    not measurements or measurements[0][1] == data["originalTokenCount"]
++                ),
++                "compaction preflight count differs from its physical measurement",
++            )
++        if data["succeeded"]:
++            _require(
++                data["output"] is not None
++                and data["output"]["newTokenCount"] == data["newTokenCount"],
++                "compaction replacement count differs from its accepted draw",
++            )
++
++        claimed: set[str] = set()
++        previous_last_sequence = 0
++        physical_budget: int | None = None
++        for draw in draws:
++            operation_id = draw["operationId"]
++            operation = self.compactions.get(operation_id)
++            _require(
++                operation_id not in claimed
++                and operation_id not in self.claimed_compactions
++                and operation is not None
++                and operation.scope == scope
++                and not operation.open
++                and draw["physicalRequests"] > 0
++                and draw["physicalRequests"] == len(operation.requests)
++                and len(operation.outcomes) == len(operation.requests)
++                and len(operation.deliveries) == len(operation.requests)
++                and len(operation.values) == len(operation.requests),
++                "compaction draw has no settled physical operation in its scope",
++            )
++            assert operation is not None
++            _require(
++                physical_budget is None or physical_budget == operation.budget,
++                "compaction draws disagree about their physical request ceiling",
++            )
++            physical_budget = operation.budget
++            _require(
++                operation.requests[0][1] > previous_last_sequence,
++                "compaction draws reorder physical requests",
++            )
++            previous_last_sequence = operation.requests[-1][1]
++            if "maxOutputTokens" in draw:
++                _require(
++                    draw["maxOutputTokens"] == operation.budget,
++                    "compaction output ceiling differs from its model-facing request",
++                )
++            if draw["usage"] is not None:
++                _served_usage(draw["usage"])
++                _require(
++                    draw["usage"]["candidatesTokenCount"] <= operation.budget,
++                    "compaction output exceeds its physical request ceiling",
++                )
++            physical_values: list[Any] = []
++            for index, (request_id, _) in enumerate(operation.requests):
++                _require(
++                    index + 1 == len(operation.requests)
++                    or operation.deliveries[request_id] == 0,
++                    "compaction draw mixes output from physical retries",
++                )
++                outcome = operation.outcomes[request_id]
++                if outcome["served_usage"] is not None:
++                    _require(
++                        outcome["served_usage"]["candidatesTokenCount"]
++                        <= operation.budget,
++                        "compaction physical output exceeds its request ceiling",
++                    )
++                physical_values.extend(operation.values[request_id])
++            recorded_values = [
++                _sdk_json_value(_parse_sdk_json(raw)) for raw in draw["sdkValuesJson"]
++            ]
++            _require(
++                len(physical_values) == len(recorded_values)
++                and all(
++                    _same_json(physical, recorded)
++                    for physical, recorded in zip(
++                        physical_values, recorded_values, strict=True
++                    )
++                ),
++                "compaction SDK values differ from physical response bytes",
++            )
++            claimed.add(operation_id)
++        for operation_id in claimed:
++            del self.compactions[operation_id]
++        self.claimed_compactions.update(claimed)
++
 +    def summary(self, summary: dict[str, Any]) -> None:
++        _require(
++            not self.compactions,
++            "terminal leaves physical compaction draws unclaimed",
++        )
 +        _require(
 +            self.origin is not None
 +            and (summary["journal_id"], summary["first_sequence"]) == self.origin
@@ -355300,6 +355638,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        )
 +
 +    def finish(self) -> None:
++        _require(not self.compactions, "EOF leaves physical compaction draws unclaimed")
 +        _require(not self.responses, "EOF omits a response completion")
 +        _require(
 +            not self.open_attempt_ids(), "EOF omits a generation or attempt completion"
@@ -355521,7 +355860,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/sdk-python/tests/unit/test_record_admission.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_record_admission.py
-@@ -0,0 +1,854 @@
+@@ -0,0 +1,874 @@
 +from __future__ import annotations
 +
 +import copy
@@ -355564,6 +355903,26 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    for record in wire:
 +        admission.admit(record)
 +    return admission
++
++
++@pytest.mark.parametrize("first,changed", [(None, "another-tool"), ("tool", None)])
++def test_chat_output_cannot_change_assistant_scope(
++    first: str | None, changed: str | None
++) -> None:
++    from qwen_code_sdk.record_evidence import RequestEvidence
++
++    physical = request(records())
++    origin = {
++        "kind": "model",
++        "attempt_id": physical["owner"]["attempt_id"],
++        "kv_scope": physical["kv_scope"],
++    }
++    reader = RequestEvidence()
++    reader.observe_request(physical)
++    reader.observe_origin(origin, first)
++    reader.observe_origin(origin, first)
++    with pytest.raises(ValueError, match="chat output changes assistant scope"):
++        reader.observe_origin(origin, changed)
 +
 +
 +def test_utility_response_requires_its_delivery_receipt() -> None:
@@ -427148,3 +427507,309 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 +    },
 +  ].map((row) => ({ ...row, session_id: scope }));
 +}
+diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
+--- /dev/null
++++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
+@@ -0,0 +1,302 @@
++"""Compaction claims must account for the physical work in the same stream."""
++
++from __future__ import annotations
++
++import base64
++import copy
++import hashlib
++import json
++from pathlib import Path
++from typing import Any
++
++import pytest
++
++from qwen_code_sdk.record_admission import RecordAdmission, RecordContractError
++
++FIXTURE = json.loads(
++    (Path(__file__).parents[1] / "fixtures/record-evidence.json").read_text()
++)["chat_request_response_history"]
++
++
++def _json(value: Any) -> str:
++    return json.dumps(value, separators=(",", ":"), ensure_ascii=False)
++
++
++def _hash(value: bytes) -> str:
++    return hashlib.sha256(value).hexdigest()
++
++
++def _measurement(role: str, count: int = 5) -> dict[str, Any]:
++    return {
++        "role": role,
++        "evidence": {
++            "requestUrl": "http://fixture.invalid/tokenize",
++            "requestJson": _json(
++                {"model": "fixture", "messages": [], "add_generation_prompt": True}
++            ),
++            "responseStatus": 200,
++            "responseContentType": "application/json",
++            "responseBase64": base64.b64encode(
++                _json({"count": count, "max_model_len": 100}).encode()
++            ).decode(),
++        },
++    }
++
++
++def _rows() -> list[dict[str, Any]]:
++    start = copy.deepcopy(FIXTURE[0])
++    result = copy.deepcopy(FIXTURE[-1])
++    session_id = start["session_id"]
++    journal_id = start["request_evidence_origin"]["journal_id"]
++    request_id = "compaction-physical"
++    operation_id = "compaction-operation"
++    directive = (
++        "Reason in the native hidden-thinking channel, then call state_snapshot once "
++        "with every section filled in. This request is not a turn, and the turn limit "
++        "does not apply to it: your answer may generate at most 8 tokens, reasoning "
++        "included. An answer that reaches that limit is refused, and the request is "
++        "made again, told why, up to 4 answers in all. If all 4 are refused, this "
++        "conversation is not compacted and cannot continue."
++    )
++    body = _json(
++        {
++            "model": "fixture",
++            "stream": True,
++            "kv_scope": session_id,
++            "max_tokens": 8,
++            "messages": [
++                {"role": "user", "content": [{"type": "text", "text": directive}]}
++            ],
++        }
++    )
++    request = copy.deepcopy(
++        next(row for row in FIXTURE if row["type"] == "model_request")
++    )
++    request["uuid"] = "compaction-request"
++    request["request"].update(
++        request_id=request_id,
++        segment_id="compaction-segment",
++        owner={
++            "kind": "utility",
++            "operation_id": operation_id,
++            "purpose": "compaction",
++        },
++        decode_policy={
++            "mode": "stream",
++            "model": "fixture",
++            "strict_tool_calling": False,
++            "named_tool_choice": None,
++            "exact_token_counting": False,
++            "tagged_thinking_tags": False,
++        },
++        body={"kind": "full", "json": body},
++        body_bytes=len(body.encode()),
++        body_sha256=_hash(body.encode()),
++    )
++
++    def response(sequence: int, event: dict[str, Any]) -> dict[str, Any]:
++        return {
++            "type": "model_response",
++            "uuid": f"compaction-response-{sequence}",
++            "session_id": session_id,
++            "parent_tool_use_id": None,
++            "response": {
++                "journal_id": journal_id,
++                "request_id": request_id,
++                "sequence": sequence,
++                "event": event,
++            },
++        }
++
++    responses = [
++        response(1, {"kind": "http", "status": 500, "content_type": "text/plain"}),
++        response(
++            2,
++            {
++                "kind": "end",
++                "termination": "eof",
++                "body_bytes": 0,
++                "body_sha256": _hash(b""),
++                "error": None,
++            },
++        ),
++        response(
++            3,
++            {
++                "kind": "outcome",
++                "status": "failed",
++                "error": "HTTP 500",
++                "served_usage": None,
++                "sdk_values_seen": 0,
++                "pipeline_outputs_delivered": 0,
++            },
++        ),
++        response(4, {"kind": "delivery", "outputs_delivered": 0}),
++    ]
++    compaction = {
++        "type": "system",
++        "subtype": "compaction",
++        "uuid": "compaction-record",
++        "session_id": session_id,
++        "parent_tool_use_id": None,
++        "data": {
++            "status": "COMPRESSION_FAILED_PROTOCOL_ERROR",
++            "succeeded": False,
++            "originalTokenCount": 5,
++            "newTokenCount": 5,
++            "triggerReason": None,
++            "postCompactionHistory": None,
++            "tokenMeasurements": [
++                _measurement("original"),
++                _measurement("summary_request"),
++                _measurement("prompt_only"),
++            ],
++            "output": {
++                "operationId": operation_id,
++                "maxOutputTokens": 8,
++                "physicalRequests": 1,
++                "sdkValuesJson": [],
++                "text": "",
++                "reasoning": "",
++                "functionCalls": [],
++                "newTokenCount": None,
++                "snapshotBytes": None,
++                "incompleteToolCalls": [],
++                "finishReason": None,
++                "usage": None,
++            },
++            "rejectedAttempts": [],
++        },
++    }
++    result["request_evidence"] = {
++        "journal_id": journal_id,
++        "first_sequence": start["request_evidence_origin"]["first_sequence"],
++        "request_count": 1,
++        "open_response_ids": [],
++        "open_attempt_ids": [],
++    }
++    result["usage"] = {
++        "requests": 1,
++        "usageReports": 0,
++        "unfinalizedRequests": 0,
++        "unreportedUsageRequests": 1,
++        "usage": None,
++    }
++    return [start, request, *responses, compaction, result]
++
++
++def _admit(rows: list[dict[str, Any]]) -> None:
++    reader = RecordAdmission()
++    for row in rows:
++        reader.admit(row)
++    reader.finish()
++
++
++def test_settled_failed_compaction_draw_is_admitted() -> None:
++    _admit(_rows())
++
++
++def test_compaction_request_is_streamed_and_claimed_in_its_scope() -> None:
++    rows = _rows()
++    physical = rows[1]["request"]
++    body = json.loads(physical["body"]["json"])
++    body["stream"] = False
++    raw = _json(body)
++    physical["body"]["json"] = raw
++    physical["body_bytes"] = len(raw.encode())
++    physical["body_sha256"] = _hash(raw.encode())
++    physical["decode_policy"]["mode"] = "nonstream"
++    with pytest.raises(RecordContractError, match="streamed draw"):
++        _admit(rows)
++
++    rows = _rows()
++    rows[-2]["parent_tool_use_id"] = "another-scope"
++    with pytest.raises(RecordContractError, match="physical operation in its scope"):
++        _admit(rows)
++
++
++@pytest.mark.parametrize(
++    "change",
++    [
++        "no_request",
++        "operation",
++        "request_count",
++        "budget",
++        "token_count",
++        "measurements",
++        "unclaimed",
++    ],
++)
++def test_compaction_draw_requires_its_physical_work(change: str) -> None:
++    rows = _rows()
++    draw = rows[-2]["data"]["output"]
++    if change == "no_request":
++        rows = [rows[0], rows[-2], rows[-1]]
++        rows[-1]["request_evidence"]["request_count"] = 0
++        rows[-1]["usage"].update(requests=0, unreportedUsageRequests=0)
++    elif change == "operation":
++        draw["operationId"] = "another-operation"
++    elif change == "request_count":
++        draw["physicalRequests"] = 2
++    elif change == "budget":
++        draw["maxOutputTokens"] = 9
++    elif change == "token_count":
++        rows[-2]["data"]["tokenMeasurements"][0] = _measurement("original", 99)
++    elif change == "measurements":
++        rows[-2]["data"]["tokenMeasurements"] = []
++    else:
++        rows = [*rows[:-2], rows[-1]]
++    with pytest.raises(RecordContractError):
++        _admit(rows)
++
++
++@pytest.mark.parametrize(
++    ("wire_value", "claimed_value", "forged_value"),
++    [
++        (
++            _json({"choices": []}),
++            _json({"choices": []}),
++            _json({"choices": [{"text": "forged"}]}),
++        ),
++        ('"literal"', '"literal"', '"forged"'),
++        ("1e0", "1", "2"),
++    ],
++)
++def test_compaction_sdk_value_must_match_recorded_response_bytes(
++    wire_value: str, claimed_value: str, forged_value: str
++) -> None:
++    rows = _rows()
++    body = f"data: {wire_value}\n\n".encode()
++    rows[1 + 1]["response"]["event"] = {
++        "kind": "http",
++        "status": 200,
++        "content_type": "text/event-stream",
++    }
++    rows.insert(
++        3,
++        {
++            "type": "model_response",
++            "uuid": "compaction-response-body",
++            "session_id": rows[0]["session_id"],
++            "parent_tool_use_id": None,
++            "response": {
++                "journal_id": rows[0]["request_evidence_origin"]["journal_id"],
++                "request_id": "compaction-physical",
++                "sequence": 2,
++                "event": {
++                    "kind": "body",
++                    "offset": 0,
++                    "base64": base64.b64encode(body).decode(),
++                },
++            },
++        },
++    )
++    for sequence, row in enumerate(rows[4:7], start=3):
++        row["response"]["sequence"] = sequence
++    rows[4]["response"]["event"].update(body_bytes=len(body), body_sha256=_hash(body))
++    rows[5]["response"]["event"].update(error="conversion failed", sdk_values_seen=1)
++    rows[-2]["data"]["output"]["sdkValuesJson"] = [claimed_value]
++    _admit(rows)
++    rows[-2]["data"]["output"]["sdkValuesJson"] = [forged_value]
++    with pytest.raises(RecordContractError):
++        _admit(rows)

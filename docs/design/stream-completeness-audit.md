@@ -1084,3 +1084,40 @@ found it before any owner build. A follow-up routes that branch to the file's
 existing actionable refusal and executes it with a null-data fixture. Both
 verifier source suites passed again; this does not establish TypeScript
 typechecking or a packaged verifier run.
+
+## Python compaction physical claims
+
+The Python SDK's full-schema record reader admitted a compaction draw naming
+one physical request when the stream contained no request and no tokenizer
+measurements. Starting from a valid settled failed draw, it also admitted a
+changed operation identity, request count, output ceiling, tokenizer count and
+SDK value while the physical records stayed fixed. These are executed source
+reproductions, not an inference from a missing check.
+
+The Python request reader now opens a compaction operation from the streamed
+request and its model-facing output ceiling. Response admission retains decoded
+SDK values only for that operation, then requires its outcome and delivery
+before the compaction draw can claim it. The draw must use the same scope,
+physical request count, ordered operations, ceiling and decoded values;
+tokenizer counts must be recomputed from the recorded successful `/tokenize`
+response bytes. An unclaimed operation refuses terminal admission. Normal
+chat requests do not retain SDK values for this check.
+
+Twelve focused compaction cases and all 789 Python SDK unit cases passed from
+the source checkout using a cached pytest runner with its async plugin. The
+initial full-suite attempt without that plugin failed on async test setup;
+rerunning with it passed. The tested Python reader is not a packaged SDK or
+owner-built image. This change affects any Python SDK caller interpreting the
+versioned stream; it does not change the Qwen request, vLLM response, canonical
+chat recording, or resume-history projection. Java's direct reader still lacks
+this physical compaction claim. Normalized compaction text and snapshot fields
+are not independently derived by the Python reader from those SDK values, and
+native and Java execution plus owner gates remain unverified.
+
+Source review also found an unreachable assignment that was meant to remember
+the first assistant scope of a Python model attempt. It now runs after the
+scope check. A direct reader probe reproduced the old admission and two new
+unit cases refuse a changed scope. The complete stream reader had already
+refused the tested scope changes through its partial-group and generation
+checks, so this is an internal invariant repair, not a claim that those
+complete forged streams had passed admission.

@@ -9051,6 +9051,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'identity["stream_contract_sha256"] == STREAM_CONTRACT_SHA256',
         'session.requests.observe_request(record["request"])',
         'session.requests.observe_response(record["response"])',
+        'session.requests.claim_compaction(',
         'session.requests.summary(record["request_evidence"])',
         'record["uuid"] not in session.terminal_ids', "partial.observe_origin(origin)",
         "session.requests.finish()", "partial.finish()", "self._pending_inputs == 0",
@@ -9096,6 +9097,11 @@ def _validate_served_accounting_after(state: State) -> None:
         'state.content_type = event["content_type"]',
         'state.values.push(raw)',
         'SDK value count claims an impossible physical response prefix',
+        'compaction_id not in self.claimed_compactions',
+        'operation.values[record["request_id"]] = values',
+        'def claim_compaction(self, data: dict[str, Any], scope: str) -> None:',
+        'compaction SDK values differ from physical response bytes',
+        'terminal leaves physical compaction draws unclaimed',
         'completion["consumer_observations"]',
         'or consumed == final_outcome["pipeline_outputs_delivered"]',
         'observation["source_request_id"]',
@@ -9108,6 +9114,14 @@ def _validate_served_accounting_after(state: State) -> None:
         "runtime partial text has no matching full assistant message",
         "terminal result contradicts runtime assistant text",
     ), label=label)
+    _require_ordered(
+        _source(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", label=label)
+        .split("def observe_origin(self, origin:", 1)[1]
+        .split("def has_chat_attempt_in_scope", 1)[0],
+        ("attempt.output_scope is None or attempt.output_scope == (scope,)",
+         "attempt.output_scope = (scope,)"),
+        label=label, location=python_sdk + "src/qwen_code_sdk/record_evidence.py",
+    )
     _require_all(state, python_sdk + "tests/unit/test_generation_completion_v11.py", (
         "test_physical_stream_bounds_declared_sdk_progress",
         "test_sse_unterminated_line_flushes_only_after_transport_eof",
@@ -9127,6 +9141,13 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_duplicate_terminal_cannot_settle_queued_input",
         "test_structured_result_binds_to_successful_accepted_submission",
         "test_utility_response_requires_its_delivery_receipt",
+        "test_chat_output_cannot_change_assistant_scope",
+    ), label=label)
+    _require_all(state, python_sdk + "tests/unit/test_compaction_physical.py", (
+        "test_settled_failed_compaction_draw_is_admitted",
+        "test_compaction_request_is_streamed_and_claimed_in_its_scope",
+        "test_compaction_draw_requires_its_physical_work",
+        "test_compaction_sdk_value_must_match_recorded_response_bytes",
     ), label=label)
     _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
         "seed_row[\"normalization_seed\"].update(",
