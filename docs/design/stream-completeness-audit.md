@@ -1741,7 +1741,9 @@ rendered `Content[]`. The writer replays curation, image projection and media
 slimming from post-conversion canonical state and compares the result before
 admitting the assertion; the complete reader repeats the comparison against
 replayed history. The Chat attempt checks the same fingerprint before calling
-the generation client and on the OpenAI pipeline path. `countExactRequestTokens`
+the generation client and both before and after OpenAI provider request
+construction, so a mutation during asynchronous tool conversion or the provider
+hook refuses before physical request admission. `countExactRequestTokens`
 may then await a
 separate `/tokenize` operation before Chat creates an attempt. The attempt
 binding correctly names that earlier render even if another history commit

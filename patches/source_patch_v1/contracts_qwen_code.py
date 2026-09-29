@@ -8469,6 +8469,15 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.claimCompaction(data as CompactionRecord, scope);",
         "this.utilities.claimTokenCount(id, owner)",
     ), label=label)
+    _require_ordered(_source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label), (
+        "request.chatAttempt?.assertRequestContents(request.contents);",
+        "openaiRequest = await this.buildRequest(",
+        "request.chatAttempt?.assertRequestContents(request.contents);",
+        "const body = JSON.stringify(openaiRequest);",
+    ), label=label, location="provider request render remains bound to canonical contents")
+    require_text(state, core + "core/openaiContentGenerator/pipeline.test.ts",
+                 "refuses a provider mutation of rendered contents before request admission",
+                 label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",
                 "retained > 0 || previous.body.messages.length === 0", label=label)
     require_text(state, core + "core/model-request-evidence.test.ts",
