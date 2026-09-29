@@ -9938,10 +9938,16 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "services/sessionService.ts", (
         "async readSessionView(", "await this.readAllRecords(filePath)",
         "async loadArchivedSession(", "await this.readCompleteStoredRecords(filePath)",
+        "readCompleteStoredCanonicalChatSnapshot(filePath)",
+        "transcriptSha256: snapshot.sha256",
+        "transcriptByteLength: snapshot.byteLength",
     ), label=label)
     _require_all(state, core + "services/chat-recording-io.ts", (
         "Cannot read incomplete recording ${filePath}",
         "If its writer is active, wait for it to finish and retry",
+        "digest?.update(chunk as Buffer)",
+        "readCompleteStoredCanonicalChatSnapshot(",
+        "byteLength: snapshot.byteLength",
     ), label=label)
     load_updates = _source(state, cli + "acp-integration/acpAgent.ts", label=label).split(
         "case 'qwen/session/loadUpdates': {", 1
@@ -9949,8 +9955,17 @@ def _validate_served_accounting_after(state: State) -> None:
     _require("config.getSessionService().loadSession(sessionId)" in load_updates
              and "sessionService.loadSession(sessionId)" in load_updates
              and "recording.runWithWriteBarrier(loadAuthoritative)" in load_updates
+             and "transcriptSha256: sessionData.transcriptSha256" in load_updates
+             and "transcriptByteLength: sessionData.transcriptByteLength" in load_updates
              and "readSessionView" not in load_updates,
              f"{label}: ACP complete history must use closed canonical evidence")
+    _require_all(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts", (
+        "readQwenTranscriptRecords(sessionId, cwd, true)",
+        "bytes.subarray(0, expectedSnapshot.byteLength)",
+        "response.transcriptSha256 === null",
+        "response.transcriptByteLength === null",
+        "Qwen transcript ${transcriptPath} changed after its runtime admitted it",
+    ), label=label)
     for complete_path in (
         core + "services/session-reference-service.ts",
         cli + "serve/server/session-export.ts",

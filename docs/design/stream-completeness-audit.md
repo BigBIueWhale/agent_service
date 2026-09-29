@@ -388,7 +388,7 @@ Insight and command source tests passed 66 cases. The adjacent static-generator
 suite could not start because this source checkout has no resolvable
 `@qwen-code/web-templates` package entry; no build was run to produce one.
 
-One concrete source consumer omission remains:
+The audited checkpoint also had a concrete source consumer omission:
 
 - Desktop `qwen-agent.ts` parses canonical transcript lines directly in text,
   telemetry and history projections. The examined loops continue after JSON
@@ -396,15 +396,16 @@ One concrete source consumer omission remains:
   consumer gap regardless of whether the image ships that application.
 
 The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
-while the current patched Qwen source requires canonical recording version 16.
+while the patched Qwen source at that checkpoint required canonical recording
+version 16 (the current contract is version 17).
 Hard-coding that version into Desktop's local JSONL loops would bind them to a
 different runtime source and could reject an ordinary session from its pinned
 runtime. The patched ACP `qwen/session/loadUpdates` path already asks the
 runtime to produce validated history; the remaining local text, telemetry,
 slash-command and text-element projections still read the file independently.
-They need a runtime-owned validated projection, with an explicit compatibility
-decision for the older vendored runtime, before the direct loops can be removed.
-This is a source ownership conclusion, not an implemented repair or a measured
+The later Desktop snapshot binding below addresses those history projections
+without hard-coding the current runtime's version into the older vendored
+client. The compatibility behavior is source implementation, not a measured
 runtime compatibility result.
 
 The shared ACP transcript replay now projects a visible `system/slash_command`
@@ -1497,3 +1498,40 @@ SHA-256. That source path contradicts the claim that the standalone service
 certifier currently accepts a rehashed generation with unchanged response
 bytes. The executable behavior remains unverified pending the owner's gates;
 direct construction of lower-level admission classes is a separate limit.
+
+## Desktop history bound to the admitted canonical bytes
+
+Source reading found that Desktop reopened the Qwen JSONL file for slash
+commands, telemetry and text elements after receiving ACP history. Each local
+loop skipped malformed JSON; the slash-command loop also returned an empty
+projection on read failure. A valid ACP replay could therefore be supplemented
+from a different or incomplete file state. The same permissive parser was used
+to choose the user record for text-element persistence. This affects ordinary
+Desktop sessions as well as long sessions; the canonical file is owned by Qwen,
+not by vLLM.
+
+The Qwen closed-record reader now returns the SHA-256 and byte length of the
+exact bytes admitted during `loadSession`. ACP `qwen/session/loadUpdates`
+returns that identity with the replay. Desktop reads the local file once,
+compares the admitted prefix against the identity and derives all three
+history projections from that one prefix. A later append does not invalidate
+the prior snapshot; a changed or missing prefix refuses with the file path and
+a recovery action. The runtime's canonical decoder remains the version and
+record authority, and the ACP payload adds only a digest and length instead
+of duplicating potentially large message bodies.
+
+Desktop's separately pinned 0.15.11 runtime does not provide this extension.
+Its `session/load` path retains an explicit unversioned local reader that
+refuses malformed JSON, unfinished lines, mixed session IDs, unknown record
+types and versioned files. This version split preserves ordinary sessions from
+that older runtime while preventing it from interpreting the current tagged
+format. The standalone local reader used before writing text-element metadata
+now also refuses malformed physical lines; binding that optional metadata to
+the precise user record at the Qwen writer remains a separate open question.
+
+Source tests were authored for digest production, changed-prefix refusal,
+appended-prefix stability and strict older-runtime refusal. They were not run:
+Node and Bun are unavailable in this checkout. The source patch plan reproduced
+the eight edited Qwen files from the pinned archive. Compilation, Desktop
+runtime compatibility, packaged behavior and owner gates remain unverified.
+No build, release, deployment or push was run.
