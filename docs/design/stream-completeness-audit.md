@@ -1865,3 +1865,26 @@ ordinary turns. Authored tests cover matching bytes, mismatched digest and
 length, and a mismatched admitted digest at Config activation. The splice plan
 and semantic contracts passed by read-only Python validation. The TypeScript
 tests, compilation, packaged resume and owner gates have not been run.
+
+## Dispatched input and display interpretation
+
+For this goal, the exact final provider request body is the authority for the
+input dispatched by Qwen Code. The pipeline captures it after provider
+conversion and checks the SDK's serialized send against it; the stream reader
+reconstructs the full body from its segment base and deltas. Canonical history
+has a separate purpose: it restores the conversation and proves which rendered
+history assertion an attempt used. A replay of every provider transformation
+would add an independent derivation proof, but its absence does not remove the
+captured final body or make a display row an input source. The effective
+provider configuration can deliberately replace `messages`, so equality with
+canonical history would be a false rule for ordinary sessions.
+
+The direct display-row probe remains a real limit: an added `user` projection
+can pass direct admission without a corresponding client-source proof. Native
+admission checks tool-result ownership but does not use display text to
+reconstruct dispatched input; neither should an analysis of what the model
+saw. This certificate does not authenticate the authorship of every display
+row. Establishing that separate provenance would require a source identity
+that survives the canonical and stdout projections, including notification,
+tool and presentation-only paths. No such proof is claimed here. These are
+source-reading conclusions, not an executed end-to-end verification.
