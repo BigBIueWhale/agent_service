@@ -5671,7 +5671,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
         state,
         "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java",
         (
-            "compactionOutcome(object(record.get(\"data\")))",
+            "compactionOutcome(data)",
             "compaction status contradicts whether history was replaced",
         ),
         label=label,
@@ -9250,6 +9250,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "successful result contradicts accepted model text",
         "structured result has no successful accepted structured_output submission",
         "structured result contradicts the accepted tool submission or result text",
+        "session.requests.claimCompaction(data, scope == null ? sessionId : scope)",
     ), label=label)
     _require_all(state, java_cli + "protocol/GenerationEvidence.java", (
         "final String displayText;", "displayText = display.toString();",
@@ -9281,10 +9282,17 @@ def _validate_served_accounting_after(state: State) -> None:
         "accepted chat history precedes generation",
         "completed processing has no successful HTTP transport completion",
         "generation has no recorded normalization seed",
+        "compaction draw has no settled physical operation in its scope",
+        "compaction SDK values differ from physical response bytes",
+        "tokenizer measurement has no canonical response bytes",
+        "terminal leaves physical compaction draws unclaimed",
     ), label=label)
     _require_all(state, java_cli + "protocol/StreamSchema.java", (
         'getResourceAsStream("/stream-contract-v15.json")', "unsupported packaged schema keyword",
         "Deque<Task>", "checkReferenceCycle", "longValueExact()",
+    ), label=label)
+    _require_all(state, "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java", (
+        "public static Object parseSdk(", "SDK_FACTORY", "STRICT_DUPLICATE_DETECTION",
     ), label=label)
     _require_all(state, java_cli + "session/Session.java", (
         "implements AutoCloseable", "admission.admit(line, expectedSession)",
@@ -9308,6 +9316,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "utilityResponseRequiresDeliveryAfterProcessing",
         "structuredResultRequiresTheSuccessfulAcceptedSubmission",
         "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
+        "compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes",
+        "compactionSdkValuesMustComeFromRecordedSseBytes",
     ), label=label)
     _require_all(state, java_tests + "session/SessionRecordTest.java", (
         "initializationAndOrdinaryTurnsDeliverCompleteEvidenceInOrder", "childTerminalDoesNotFinishRootPrompt",
@@ -11681,6 +11691,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "failure before cancellation and refuse later work. Executor dispatch must be "
             "asynchronous, and startup rejection closes the owned process. Java admission uses "
             "the exact bound schema, replays original request spellings and response lifetimes, "
+            "binds compaction draws to settled requests, decoded response bytes and tokenizer "
+            "responses in the same scope, "
             "and preserves complete immutable records before typed views and callbacks. "
             "Initialization and controls match owned identities; child results cannot finish "
             "root prompts. Closing ends input, drains evidence and checks complete EOF before "

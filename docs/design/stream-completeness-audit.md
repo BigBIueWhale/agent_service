@@ -1109,10 +1109,35 @@ initial full-suite attempt without that plugin failed on async test setup;
 rerunning with it passed. The tested Python reader is not a packaged SDK or
 owner-built image. This change affects any Python SDK caller interpreting the
 versioned stream; it does not change the Qwen request, vLLM response, canonical
-chat recording, or resume-history projection. Java's direct reader still lacks
-this physical compaction claim. Normalized compaction text and snapshot fields
-are not independently derived by the Python reader from those SDK values, and
-native and Java execution plus owner gates remain unverified.
+chat recording, or resume-history projection. Normalized compaction text and
+snapshot fields are not independently derived by the Python reader from those
+SDK values, and native execution plus owner gates remain unverified.
+
+## Java compaction physical claims
+
+Source inspection found that Java's direct reader checked compaction status,
+token counts and rejected-attempt labels but did not associate a drawn result
+with a model request or response. A forged operation identity, physical request
+count, output ceiling or SDK value could therefore pass its compaction check.
+The reader now opens a compaction operation from a streamed utility request,
+reads its model-facing output ceiling, decodes the physical SSE values, and
+requires every response outcome and delivery receipt before a compaction draw
+can claim it. It checks scope, ordered physical requests, budgets and decoded
+SDK values, and replays recorded tokenizer response bytes for the original and
+candidate counts. A terminal record or EOF refuses an unclaimed operation.
+Ordinary chat responses do not retain these compaction values.
+Provider JSON uses the SDK's last-value rule for repeated members, while the
+stream record itself retains its strict duplicate-member refusal.
+
+The new Java source tests include a settled failed draw, a streamed value
+control and mutations of the operation, scope, request count, ceiling, decoded
+value, tokenizer response and delivery. They have not been executed: Java
+compilation, packaged SDK execution and owner gates remain unverified under
+the no-build instruction. This reader change affects every Java SDK caller
+interpreting the versioned stream; it does not change the Qwen request, vLLM
+response, canonical chat recording or resume-history projection. Normalized
+compaction text, reasoning, function calls and snapshot fields are still not
+independently derived by the Java reader from those SDK values.
 
 Source review also found an unreachable assignment that was meant to remember
 the first assistant scope of a Python model attempt. It now runs after the

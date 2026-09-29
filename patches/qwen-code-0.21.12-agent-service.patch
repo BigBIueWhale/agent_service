@@ -361312,7 +361312,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java
-@@ -0,0 +1,436 @@
+@@ -0,0 +1,438 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -361346,7 +361346,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private final Map<String, SessionState> sessions = new HashMap<>();
 +    private long pendingInputs;
 +
-+    private static boolean sameJson(Object left, Object right) {
++    static boolean sameJson(Object left, Object right) {
 +        Deque<Object[]> pending = new ArrayDeque<>();
 +        pending.push(new Object[] {left, right});
 +        while (!pending.isEmpty()) {
@@ -361527,7 +361527,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            session.needsResult = true;
 +        }
 +        if ("system".equals(kind) && "compaction".equals(subtype)) {
-+            compactionOutcome(object(record.get("data")));
++            Map<String, Object> data = object(record.get("data"));
++            compactionOutcome(data);
++            session.requests.claimCompaction(data, scope == null ? sessionId : scope);
 +        }
 +        switch (kind) {
 +            case "model_request":
@@ -361835,11 +361837,16 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,477 @@
+@@ -0,0 +1,852 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
++import java.io.ByteArrayOutputStream;
++import java.math.BigDecimal;
++import java.nio.ByteBuffer;
 +import java.nio.charset.StandardCharsets;
++import java.nio.charset.CharacterCodingException;
++import java.nio.charset.CodingErrorAction;
 +import java.security.MessageDigest;
 +import java.util.ArrayList;
 +import java.util.Base64;
@@ -361850,6 +361857,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +import java.util.Map;
 +import java.util.Objects;
 +import java.util.Set;
++import java.util.regex.Matcher;
++import java.util.regex.Pattern;
 +import static com.alibaba.qwen.code.shared.StrictJson.array;
 +import static com.alibaba.qwen.code.shared.StrictJson.object;
 +import static com.alibaba.qwen.code.cli.protocol.StreamSchema.integer;
@@ -361865,6 +361874,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private final Map<String, Response> responses = new LinkedHashMap<>();
 +    private final Map<String, Attempt> attempts = new HashMap<>();
 +    private final Set<String> generations = new HashSet<>();
++    private final Map<String, CompactionOperation> compactions = new HashMap<>();
++    private final Set<String> claimedCompactions = new HashSet<>();
 +
 +    void begin(Map<String, Object> origin) {
 +        String nextJournal = (String) origin.get("journal_id");
@@ -361880,6 +361891,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        scopes.clear();
 +        attempts.clear();
 +        generations.clear();
++        compactions.clear();
++        claimedCompactions.clear();
 +    }
 +
 +    void request(Map<String, Object> request) {
@@ -361924,6 +361937,22 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    "delta does not replace the top-level messages suffix");
 +        }
 +        Map<String, Object> owner = object(request.get("owner"));
++        String compactionId = null;
++        if ("utility".equals(owner.get("kind")) && "compaction".equals(owner.get("purpose"))) {
++            require(slices.stream, "compaction request is not a streamed draw");
++            compactionId = (String) owner.get("operation_id");
++            long budget = compactionBudget(body);
++            CompactionOperation operation = compactions.get(compactionId);
++            require(!claimedCompactions.contains(compactionId)
++                    && (operation == null || (operation.scope.equals(scope) && operation.budget == budget)),
++                    "compaction operation changes scope or budget or repeats after claim");
++            if (operation == null) {
++                operation = new CompactionOperation(scope, budget);
++                compactions.put(compactionId, operation);
++            }
++            operation.requests.add(new PhysicalRequest(requestId, integer(request.get("sequence"))));
++            operation.open.add(requestId);
++        }
 +        RequestUsage nextUsage = usage.request();
 +        if ("chat".equals(owner.get("kind"))) {
 +            Attempt attempt = attempts.computeIfAbsent((String) owner.get("attempt_id"), key -> new Attempt(scope));
@@ -361935,7 +361964,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        }
 +        ids.add(requestId);
 +        scopes.put(scope, new RequestBody(requestId, (String) request.get("segment_id"), slices.messages));
-+        responses.put(requestId, new Response((String) owner.get("kind"), (String) owner.get("attempt_id")));
++        responses.put(requestId, new Response((String) owner.get("kind"), (String) owner.get("attempt_id"), compactionId));
 +        usage = nextUsage;
 +    }
 +
@@ -362077,6 +362106,12 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            require("utility".equals(state.ownerKind) && state.processingStatus != null
 +                    && state.pipelineOutputs != null && delivered >= 0 && delivered <= state.pipelineOutputs,
 +                    "utility delivery has no matching physical output prefix");
++            if (state.compactionId != null) {
++                CompactionOperation operation = compactions.get(state.compactionId);
++                require(operation.open.remove(id) && !operation.deliveries.containsKey(id),
++                        "compaction delivery has no open physical request");
++                operation.deliveries.put(id, delivered);
++            }
 +            responses.remove(id);
 +            return;
 +        }
@@ -362096,6 +362131,16 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    "completed processing has no successful HTTP transport completion");
 +            require(event.containsKey("served_usage"), "response outcome requires nullable served usage");
 +            Map<String, Long> report = RequestUsage.served(event.get("served_usage"));
++            if (state.compactionId != null) {
++                state.values.settle("eof".equals(state.termination));
++                require(sdkValues <= state.values.values.size()
++                        && (!"completed".equals(event.get("status"))
++                            || (!state.values.failed && sdkValues == state.values.values.size())),
++                        "compaction SDK value count contradicts physical response bytes");
++                CompactionOperation operation = compactions.get(state.compactionId);
++                operation.values.put(id, new ArrayList<>(state.values.values));
++                operation.outcomes.put(id, new CompactionOutcome(report));
++            }
 +            RequestUsage nextUsage = usage.outcome(report);
 +            if (state.attemptId != null) {
 +                Attempt attempt = attempts.get(state.attemptId);
@@ -362122,6 +362167,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                require(bytes.length != 0 && Base64.getEncoder().encodeToString(bytes).equals(encoded), "noncanonical response base64");
 +                long nextSize = RequestUsage.add(state.size, bytes.length);
 +                state.digest.update(bytes);
++                if (state.values != null && state.httpStatus >= 200 && state.httpStatus < 300) {
++                    state.values.push(bytes);
++                }
 +                state.size = nextSize;
 +                break;
 +            case "end":
@@ -362139,7 +362187,190 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        state.sequence++;
 +    }
 +
++    void claimCompaction(Map<String, Object> data, String scope) {
++        List<Object> draws = new ArrayList<>(array(data.get("rejectedAttempts")));
++        if (data.get("output") != null) draws.add(data.get("output"));
++        List<Object> measurements = array(data.get("tokenMeasurements"));
++        List<Long> counts = new ArrayList<>();
++        Long window = null;
++        for (int index = 0; index < measurements.size(); index++) {
++            Map<String, Object> measurement = object(measurements.get(index));
++            String expected = index < 3 ? List.of("original", "summary_request", "prompt_only").get(index) : "candidate";
++            require(expected.equals(measurement.get("role")),
++                    "compaction tokenizer measurements are missing or reordered");
++            long[] result = tokenMeasurement(measurement);
++            require(window == null || window == result[1],
++                    "compaction tokenizer measurements disagree about the served model window");
++            window = result[1];
++            counts.add(result[0]);
++        }
++        if (!draws.isEmpty()) {
++            require(counts.size() >= 3 && counts.get(0) == integer(data.get("originalTokenCount")),
++                    "compaction draw has no measured original and preflight counts");
++            int next = 3;
++            for (Object raw : draws) {
++                Object count = object(raw).get("newTokenCount");
++                if (count != null) {
++                    require(next < counts.size() && counts.get(next) == integer(count),
++                            "compaction candidate count differs from tokenizer bytes");
++                    next++;
++                }
++            }
++            require(next == counts.size(), "compaction has an unclaimed tokenizer measurement");
++        } else {
++            require(counts.size() <= 3 && (counts.isEmpty() || counts.get(0) == integer(data.get("originalTokenCount"))),
++                    "compaction preflight count differs from its physical measurement");
++        }
++        if (Boolean.TRUE.equals(data.get("succeeded"))) {
++            require(data.get("output") != null
++                    && Objects.equals(object(data.get("output")).get("newTokenCount"), data.get("newTokenCount")),
++                    "compaction replacement count differs from its accepted draw");
++        }
++        Set<String> claimed = new HashSet<>();
++        long lastSequence = 0;
++        Long budget = null;
++        for (Object raw : draws) {
++            Map<String, Object> draw = object(raw);
++            String operationId = (String) draw.get("operationId");
++            CompactionOperation operation = compactions.get(operationId);
++            require(claimed.add(operationId) && !claimedCompactions.contains(operationId)
++                    && operation != null && operation.scope.equals(scope)
++                    && operation.open.isEmpty() && !operation.requests.isEmpty()
++                    && integer(draw.get("physicalRequests")) == operation.requests.size()
++                    && operation.outcomes.size() == operation.requests.size()
++                    && operation.deliveries.size() == operation.requests.size()
++                    && operation.values.size() == operation.requests.size(),
++                    "compaction draw has no settled physical operation in its scope");
++            require(budget == null || budget == operation.budget,
++                    "compaction draws disagree about their physical request ceiling");
++            budget = operation.budget;
++            require(operation.requests.get(0).sequence > lastSequence,
++                    "compaction draws reorder physical requests");
++            lastSequence = operation.requests.get(operation.requests.size() - 1).sequence;
++            if (draw.containsKey("maxOutputTokens")) {
++                require(integer(draw.get("maxOutputTokens")) == operation.budget,
++                        "compaction output ceiling differs from its model-facing request");
++            }
++            Map<String, Long> drawUsage = RequestUsage.served(draw.get("usage"));
++            if (drawUsage != null) {
++                require(drawUsage.get("candidatesTokenCount") <= operation.budget,
++                        "compaction output exceeds its physical request ceiling");
++            }
++            List<Object> physical = new ArrayList<>();
++            for (int index = 0; index < operation.requests.size(); index++) {
++                String requestId = operation.requests.get(index).id;
++                require(index == operation.requests.size() - 1 || operation.deliveries.get(requestId) == 0,
++                        "compaction draw mixes output from physical retries");
++                Map<String, Long> served = operation.outcomes.get(requestId).usage;
++                if (served != null) {
++                    require(served.get("candidatesTokenCount") <= operation.budget,
++                            "compaction physical output exceeds its request ceiling");
++                }
++                physical.addAll(operation.values.get(requestId));
++            }
++            List<Object> recorded = array(draw.get("sdkValuesJson"));
++            require(physical.size() == recorded.size(), "compaction SDK values differ from physical response bytes");
++            for (int index = 0; index < recorded.size(); index++) {
++                require(RecordAdmission.sameJson(physical.get(index),
++                        sdkJsonValue(StrictJson.parseSdk((String) recorded.get(index), "compaction SDK value"))),
++                        "compaction SDK values differ from physical response bytes");
++            }
++        }
++        for (String operationId : claimed) compactions.remove(operationId);
++        claimedCompactions.addAll(claimed);
++    }
++
++    private static long[] tokenMeasurement(Map<String, Object> measurement) {
++        Map<String, Object> evidence = object(measurement.get("evidence"));
++        String url = (String) evidence.get("requestUrl");
++        require(url.matches("https?://.+/tokenize"),
++                "tokenizer measurement has no served /tokenize endpoint");
++        Map<String, Object> request = StrictJson.parseObject((String) evidence.get("requestJson"),
++                "tokenizer request");
++        require(request.get("model") instanceof String && !((String) request.get("model")).isBlank()
++                && request.get("messages") instanceof List
++                && Boolean.TRUE.equals(request.get("add_generation_prompt")),
++                "tokenizer measurement has no rendered chat request");
++        String mediaType = ((String) evidence.get("responseContentType")).split(";", 2)[0].trim().toLowerCase();
++        require(integer(evidence.get("responseStatus")) >= 200 && integer(evidence.get("responseStatus")) < 300
++                && (mediaType.equals("application/json") || mediaType.endsWith("+json")),
++                "tokenizer measurement has no successful JSON response");
++        String encoded = (String) evidence.get("responseBase64");
++        byte[] bytes = Base64.getDecoder().decode(encoded);
++        require(bytes.length > 0 && Base64.getEncoder().encodeToString(bytes).equals(encoded),
++                "tokenizer measurement has no canonical response bytes");
++        String responseText;
++        try {
++            responseText = StandardCharsets.UTF_8.newDecoder()
++                    .onMalformedInput(CodingErrorAction.REPORT)
++                    .onUnmappableCharacter(CodingErrorAction.REPORT)
++                    .decode(ByteBuffer.wrap(bytes)).toString();
++        } catch (CharacterCodingException cause) {
++            throw new IllegalArgumentException("tokenizer measurement has invalid UTF-8 response bytes", cause);
++        }
++        Map<String, Object> response = StrictJson.parseSdkObject(responseText,
++                "tokenizer response");
++        long count = integer(response.get("count"));
++        long maxModelLen = integer(response.get("max_model_len"));
++        require(count >= 0 && count <= SAFE_INTEGER && maxModelLen > 0 && maxModelLen <= SAFE_INTEGER,
++                "tokenizer measurement has no exact count or served model window");
++        return new long[] {count, maxModelLen};
++    }
++
++    private static long compactionBudget(String body) {
++        Map<String, Object> request = StrictJson.parseObject(body, "compaction request");
++        long budget = integer(request.get("max_tokens"));
++        require(budget > 0 && budget <= SAFE_INTEGER, "compaction request has no positive physical output ceiling");
++        List<Object> messages = array(request.get("messages"));
++        require(!messages.isEmpty(), "compaction request has no final directive");
++        Map<String, Object> last = object(messages.get(messages.size() - 1));
++        require("user".equals(last.get("role")), "compaction request does not end in a user directive");
++        Object content = last.get("content");
++        String directive;
++        if (content instanceof String) {
++            directive = (String) content;
++        } else {
++            List<Object> parts = array(content);
++            require(!parts.isEmpty(), "compaction directive has no model-facing text");
++            StringBuilder text = new StringBuilder();
++            for (Object item : parts) {
++                Map<String, Object> part = object(item);
++                require("text".equals(part.get("type")) && part.get("text") instanceof String,
++                        "compaction directive has no model-facing text");
++                text.append(part.get("text"));
++            }
++            directive = text.toString();
++        }
++        String marker = "your answer may generate at most ";
++        int at = directive.lastIndexOf(marker);
++        Matcher ceiling = Pattern.compile("^([1-9][0-9]*) tokens, reasoning included\\.")
++                .matcher(at < 0 ? "" : directive.substring(at + marker.length()));
++        require(ceiling.find() && new BigDecimal(ceiling.group(1)).compareTo(BigDecimal.valueOf(budget)) == 0
++                && directive.endsWith("cannot continue."),
++                "compaction directive differs from its physical output ceiling");
++        return budget;
++    }
++
++    private static Object sdkJsonValue(Object value) {
++        if (value instanceof Number) {
++            double number = Double.parseDouble(value.toString());
++            return Double.isFinite(number) ? number : null;
++        }
++        if (value instanceof List) {
++            List<Object> normalized = new ArrayList<>();
++            for (Object item : array(value)) normalized.add(sdkJsonValue(item));
++            return normalized;
++        }
++        if (value instanceof Map) {
++            Map<String, Object> normalized = new LinkedHashMap<>();
++            object(value).forEach((key, item) -> normalized.put(key, sdkJsonValue(item)));
++            return normalized;
++        }
++        return value;
++    }
++
 +    void summary(Map<String, Object> summary) {
++        require(compactions.isEmpty(), "terminal leaves physical compaction draws unclaimed");
 +        require(Objects.equals(journal, summary.get("journal_id")) && first == integer(summary.get("first_sequence"))
 +                && usage.requests == integer(summary.get("request_count"))
 +                && new ArrayList<>(responses.keySet()).equals(summary.get("open_response_ids"))
@@ -362159,6 +362390,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    }
 +
 +    void finish() {
++        require(compactions.isEmpty(), "EOF leaves physical compaction draws unclaimed");
 +        require(responses.isEmpty(), "EOF omits a response completion");
 +        require(openAttempts().isEmpty(), "EOF omits a generation or logical attempt completion");
 +    }
@@ -362284,6 +362516,147 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        }
 +    }
 +
++    private static final class PhysicalRequest {
++        private final String id;
++        private final long sequence;
++
++        private PhysicalRequest(String id, long sequence) {
++            this.id = id;
++            this.sequence = sequence;
++        }
++    }
++
++    private static final class CompactionOutcome {
++        private final Map<String, Long> usage;
++
++        private CompactionOutcome(Map<String, Long> usage) {
++            this.usage = usage;
++        }
++    }
++
++    private static final class CompactionOperation {
++        private final String scope;
++        private final long budget;
++        private final List<PhysicalRequest> requests = new ArrayList<>();
++        private final Set<String> open = new HashSet<>();
++        private final Map<String, CompactionOutcome> outcomes = new HashMap<>();
++        private final Map<String, Long> deliveries = new HashMap<>();
++        private final Map<String, List<Object>> values = new HashMap<>();
++
++        private CompactionOperation(String scope, long budget) {
++            this.scope = scope;
++            this.budget = budget;
++        }
++    }
++
++    private static final class SseValues {
++        private final List<Object> values = new ArrayList<>();
++        private final List<String> data = new ArrayList<>();
++        private final ByteArrayOutputStream line = new ByteArrayOutputStream();
++        private final ByteArrayOutputStream pending = new ByteArrayOutputStream();
++        private String event;
++        private boolean afterCr;
++        private boolean failed;
++        private boolean done;
++        private int previous1 = -1;
++        private int previous2 = -1;
++        private int previous3 = -1;
++
++        private void push(byte[] body) {
++            for (byte value : body) {
++                if (failed || done) return;
++                pending.write(value);
++                int current = value & 0xff;
++                boolean boundary = (previous1 == '\n' && current == '\n')
++                        || (previous1 == '\r' && current == '\r')
++                        || (previous3 == '\r' && previous2 == '\n'
++                            && previous1 == '\r' && current == '\n');
++                previous3 = previous2;
++                previous2 = previous1;
++                previous1 = current;
++                if (boundary) {
++                    byte[] tail = pending.toByteArray();
++                    feed(tail, 0, tail.length);
++                    pending.reset();
++                }
++            }
++        }
++
++        private void settle(boolean eof) {
++            if (!eof || failed || done) return;
++            byte[] remainder = pending.toByteArray();
++            pending.reset();
++            feed(remainder, 0, remainder.length);
++            if (afterCr || line.size() != 0) {
++                afterCr = false;
++                finishLine();
++            }
++        }
++
++        private void feed(byte[] body, int start, int end) {
++            for (int index = start; index < end && !failed && !done; index++) {
++                byte value = body[index];
++                if (afterCr) {
++                    afterCr = false;
++                    finishLine();
++                    if (value == '\n') continue;
++                }
++                if (value == '\r') afterCr = true;
++                else if (value == '\n') finishLine();
++                else line.write(value);
++            }
++        }
++
++        private void finishLine() {
++            String text = new String(line.toByteArray(), StandardCharsets.UTF_8);
++            line.reset();
++            if (text.startsWith("\ufeff")) text = text.substring(1);
++            if (text.isEmpty()) {
++                finishEvent();
++                return;
++            }
++            if (text.startsWith(":")) return;
++            int colon = text.indexOf(':');
++            String name = colon < 0 ? text : text.substring(0, colon);
++            String value = colon < 0 ? "" : text.substring(colon + 1);
++            if (value.startsWith(" ")) value = value.substring(1);
++            if ("event".equals(name)) event = value;
++            else if ("data".equals(name)) data.add(value);
++        }
++
++        private void finishEvent() {
++            if (event == null && data.isEmpty()) return;
++            String name = event;
++            String payload = String.join("\n", data);
++            event = null;
++            data.clear();
++            if (payload.startsWith("[DONE]")) {
++                done = true;
++                return;
++            }
++            Object value;
++            try {
++                value = StrictJson.parseSdk(payload, "SSE data");
++            } catch (IllegalArgumentException cause) {
++                failed = true;
++                return;
++            }
++            if ((name == null || !name.startsWith("thread.")) && value instanceof Map
++                    && truthy(object(value).get("error"))) {
++                failed = true;
++                return;
++            }
++            values.add(sdkJsonValue(value));
++        }
++
++        private static boolean truthy(Object value) {
++            if (value == null || Boolean.FALSE.equals(value)) return false;
++            if (value instanceof Number) return new BigDecimal(value.toString()).signum() != 0;
++            if (value instanceof String) return !((String) value).isEmpty();
++            return true;
++        }
++    }
++
 +    private static final class Outcome {
 +        private final boolean completed;
 +        private final Map<String, Long> usage;
@@ -362299,6 +362672,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private static final class Response {
 +        private final String ownerKind;
 +        private final String attemptId;
++        private final String compactionId;
++        private final SseValues values;
 +        private long sequence;
 +        private Long httpStatus;
 +        private String termination;
@@ -362307,9 +362682,11 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        private String processingStatus;
 +        private Long pipelineOutputs;
 +
-+        private Response(String ownerKind, String attemptId) {
++        private Response(String ownerKind, String attemptId, String compactionId) {
 +            this.ownerKind = ownerKind;
 +            this.attemptId = attemptId;
++            this.compactionId = compactionId;
++            this.values = compactionId == null ? null : new SseValues();
 +        }
 +    }
 +}
@@ -364615,7 +364992,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/daem
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java
-@@ -0,0 +1,223 @@
+@@ -0,0 +1,248 @@
 +package com.alibaba.qwen.code.shared;
 +
 +import com.fasterxml.jackson.core.JsonFactory;
@@ -364637,14 +365014,21 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shar
 +/** Strict, immutable JSON values shared by Java protocol readers. */
 +public final class StrictJson {
 +    // Java strings and collections use int indices; an I/O buffer is not a record limit.
-+    private static final JsonFactory FACTORY = JsonFactory.builder()
-+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-+            .streamReadConstraints(StreamReadConstraints.builder()
++    private static StreamReadConstraints constraints() {
++        return StreamReadConstraints.builder()
 +                    .maxStringLength(Integer.MAX_VALUE)
 +                    .maxNameLength(Integer.MAX_VALUE)
 +                    .maxNumberLength(Integer.MAX_VALUE)
 +                    .maxNestingDepth(Integer.MAX_VALUE)
-+                    .build())
++                    .build();
++    }
++
++    private static final JsonFactory FACTORY = JsonFactory.builder()
++            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
++            .streamReadConstraints(constraints())
++            .build();
++    private static final JsonFactory SDK_FACTORY = JsonFactory.builder()
++            .streamReadConstraints(constraints())
 +            .build();
 +
 +    private StrictJson() {
@@ -364654,24 +365038,42 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shar
 +        return read(json, context, false).value;
 +    }
 +
++    /** JSON.parse permits repeated response members and retains the last value. */
++    public static Object parseSdk(String json, String context) {
++        return read(json, context, false, SDK_FACTORY, false).value;
++    }
++
++    public static Map<String, Object> parseSdkObject(String json, String context) {
++        Object value = parseSdk(json, context);
++        if (!(value instanceof Map)) {
++            throw new IllegalArgumentException(context + " must be a JSON object; inspect the original response.");
++        }
++        return object(value);
++    }
++
 +    /** Retains member offsets when a reader must compare original JSON lexemes. */
 +    public static Document document(String json, String context) {
 +        return read(json, context, true);
 +    }
 +
 +    private static Document read(String json, String context, boolean retainSpans) {
++        return read(json, context, retainSpans, FACTORY, true);
++    }
++
++    private static Document read(String json, String context, boolean retainSpans,
++            JsonFactory factory, boolean requireUnicodeScalar) {
 +        Deque<Container> stack = new ArrayDeque<>();
 +        Map<Object, Map<String, Span>> spans = retainSpans ? new IdentityHashMap<>() : null;
 +        Object result = null;
 +        boolean complete = false;
-+        try (JsonParser parser = FACTORY.createParser(json)) {
++        try (JsonParser parser = factory.createParser(json)) {
 +            for (JsonToken token = parser.nextToken(); token != null; token = parser.nextToken()) {
 +                if (complete) {
 +                    throw new IllegalArgumentException("contains more than one JSON value");
 +                }
 +                if (token == JsonToken.FIELD_NAME) {
 +                    String name = parser.currentName();
-+                    requireScalar(name);
++                    if (requireUnicodeScalar) requireScalar(name);
 +                    stack.peek().member = name;
 +                    continue;
 +                }
@@ -364694,7 +365096,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shar
 +                        break;
 +                    case VALUE_STRING:
 +                        value = parser.getText();
-+                        requireScalar((String) value);
++                        if (requireUnicodeScalar) requireScalar((String) value);
 +                        break;
 +                    case VALUE_NUMBER_INT:
 +                        value = narrowInteger(parser.getBigIntegerValue());
@@ -364917,7 +365319,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,699 @@
+@@ -0,0 +1,879 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -364927,12 +365329,192 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +import java.nio.charset.StandardCharsets;
 +import java.security.MessageDigest;
 +import java.util.ArrayList;
++import java.util.Base64;
 +import java.util.List;
 +import java.util.Map;
 +import org.junit.jupiter.api.Test;
 +import static org.junit.jupiter.api.Assertions.*;
 +
 +class RecordAdmissionTest {
++    private static JSONObject compactionMeasurement(String role) {
++        JSONObject measurement = new JSONObject();
++        measurement.put("role", role);
++        JSONObject evidence = new JSONObject();
++        evidence.put("requestUrl", "http://fixture.invalid/tokenize");
++        evidence.put("requestJson", "{\"model\":\"fixture\",\"messages\":[],\"add_generation_prompt\":true}");
++        evidence.put("responseStatus", 200);
++        evidence.put("responseContentType", "application/json");
++        evidence.put("responseBase64", Base64.getEncoder().encodeToString(
++                "{\"count\":5,\"max_model_len\":100}".getBytes(StandardCharsets.UTF_8)));
++        measurement.put("evidence", evidence);
++        return measurement;
++    }
++
++    private static List<JSONObject> settledCompaction() {
++        List<String> source = EvidenceFixtures.records("chat_request_response_history");
++        JSONObject start = JSON.parseObject(source.get(0));
++        JSONObject result = JSON.parseObject(source.get(source.size() - 1));
++        String session = start.getString("session_id");
++        String journal = start.getJSONObject("request_evidence_origin").getString("journal_id");
++        String directive = "Reason in the native hidden-thinking channel, then call state_snapshot once "
++                + "with every section filled in. This request is not a turn, and the turn limit "
++                + "does not apply to it: your answer may generate at most 8 tokens, reasoning "
++                + "included. An answer that reaches that limit is refused, and the request is "
++                + "made again, told why, up to 4 answers in all. If all 4 are refused, this "
++                + "conversation is not compacted and cannot continue.";
++        JSONObject body = new JSONObject();
++        body.put("model", "fixture");
++        body.put("stream", true);
++        body.put("kv_scope", session);
++        body.put("max_tokens", 8);
++        body.put("messages", List.of(Map.of("role", "user", "content",
++                List.of(Map.of("type", "text", "text", directive)))));
++        String bodyJson = body.toJSONString();
++        JSONObject request = JSON.parseObject(source.stream()
++                .filter(line -> "model_request".equals(JSON.parseObject(line).getString("type"))).findFirst().orElseThrow());
++        request.put("uuid", "compaction-request");
++        JSONObject physical = request.getJSONObject("request");
++        physical.put("request_id", "compaction-physical");
++        physical.put("segment_id", "compaction-segment");
++        physical.put("owner", JSON.parseObject("{\"kind\":\"utility\",\"operation_id\":\"compaction-operation\","
++                + "\"purpose\":\"compaction\"}"));
++        physical.put("decode_policy", JSON.parseObject("{\"mode\":\"stream\",\"model\":\"fixture\","
++                + "\"strict_tool_calling\":false,\"named_tool_choice\":null,"
++                + "\"exact_token_counting\":false,\"tagged_thinking_tags\":false}"));
++        physical.put("body", Map.of("kind", "full", "json", bodyJson));
++        physical.put("body_bytes", bodyJson.getBytes(StandardCharsets.UTF_8).length);
++        physical.put("body_sha256", StreamSchema.sha256(bodyJson.getBytes(StandardCharsets.UTF_8)));
++        List<JSONObject> rows = new ArrayList<>();
++        rows.add(start);
++        rows.add(request);
++        rows.add(compactionResponse(session, journal, 1,
++                JSON.parseObject("{\"kind\":\"http\",\"status\":500,\"content_type\":\"text/plain\"}")));
++        JSONObject end = JSON.parseObject("{\"kind\":\"end\",\"termination\":\"eof\",\"body_bytes\":0,\"error\":null}");
++        end.put("body_sha256", StreamSchema.sha256(new byte[0]));
++        rows.add(compactionResponse(session, journal, 2, end));
++        rows.add(compactionResponse(session, journal, 3,
++                JSON.parseObject("{\"kind\":\"outcome\",\"status\":\"failed\",\"error\":\"HTTP 500\","
++                        + "\"served_usage\":null,\"sdk_values_seen\":0,\"pipeline_outputs_delivered\":0}")));
++        rows.add(compactionResponse(session, journal, 4,
++                JSON.parseObject("{\"kind\":\"delivery\",\"outputs_delivered\":0}")));
++        JSONObject compaction = JSON.parseObject("{\"type\":\"system\",\"subtype\":\"compaction\","
++                + "\"uuid\":\"compaction-record\",\"parent_tool_use_id\":null,"
++                + "\"data\":{\"status\":\"COMPRESSION_FAILED_PROTOCOL_ERROR\",\"succeeded\":false,"
++                + "\"originalTokenCount\":5,\"newTokenCount\":5,\"triggerReason\":null,"
++                + "\"postCompactionHistory\":null,\"tokenMeasurements\":[],\"rejectedAttempts\":[],"
++                + "\"output\":{\"operationId\":\"compaction-operation\",\"maxOutputTokens\":8,"
++                + "\"physicalRequests\":1,\"sdkValuesJson\":[],\"text\":\"\",\"reasoning\":\"\","
++                + "\"functionCalls\":[],\"newTokenCount\":null,\"snapshotBytes\":null,"
++                + "\"incompleteToolCalls\":[],\"finishReason\":null,\"usage\":null}}}");
++        compaction.put("session_id", session);
++        compaction.getJSONObject("data").put("tokenMeasurements", List.of(
++                compactionMeasurement("original"), compactionMeasurement("summary_request"),
++                compactionMeasurement("prompt_only")));
++        rows.add(compaction);
++        result.put("request_evidence", Map.of("journal_id", journal,
++                "first_sequence", start.getJSONObject("request_evidence_origin").getLongValue("first_sequence"),
++                "request_count", 1, "open_response_ids", List.of(), "open_attempt_ids", List.of()));
++        result.put("usage", JSON.parseObject("{\"requests\":1,\"usageReports\":0,"
++                + "\"unfinalizedRequests\":0,\"unreportedUsageRequests\":1,\"usage\":null}"));
++        rows.add(result);
++        return rows;
++    }
++
++    private static JSONObject compactionResponse(String session, String journal, int sequence, JSONObject event) {
++        JSONObject response = new JSONObject();
++        response.put("journal_id", journal);
++        response.put("request_id", "compaction-physical");
++        response.put("sequence", sequence);
++        response.put("event", event);
++        JSONObject row = new JSONObject();
++        row.put("type", "model_response");
++        row.put("uuid", "compaction-response-" + sequence);
++        row.put("session_id", session);
++        row.put("parent_tool_use_id", null);
++        row.put("response", response);
++        return row;
++    }
++
++    private static void admitCompaction(List<JSONObject> rows) {
++        RecordAdmission admission = new RecordAdmission();
++        for (JSONObject row : rows) admission.admit(row.toJSONString(JSONWriter.Feature.WriteNulls), null);
++        admission.finish();
++    }
++
++    private static List<JSONObject> streamedCompaction(String payload) {
++        List<JSONObject> rows = settledCompaction();
++        String session = rows.get(0).getString("session_id");
++        String journal = rows.get(0).getJSONObject("request_evidence_origin").getString("journal_id");
++        byte[] body = ("data: " + payload + "\n\n").getBytes(StandardCharsets.UTF_8);
++        rows.get(2).getJSONObject("response").getJSONObject("event").put("status", 200);
++        rows.get(2).getJSONObject("response").getJSONObject("event").put("content_type", "text/event-stream");
++        rows.add(3, compactionResponse(session, journal, 2, JSON.parseObject("{\"kind\":\"body\",\"offset\":0}")));
++        rows.get(3).getJSONObject("response").getJSONObject("event").put("base64",
++                Base64.getEncoder().encodeToString(body));
++        for (int index = 4; index <= 6; index++) {
++            rows.get(index).getJSONObject("response").put("sequence", index - 1);
++            rows.get(index).put("uuid", "compaction-response-" + (index - 1));
++        }
++        JSONObject end = rows.get(4).getJSONObject("response").getJSONObject("event");
++        end.put("body_bytes", body.length);
++        end.put("body_sha256", StreamSchema.sha256(body));
++        JSONObject outcome = rows.get(5).getJSONObject("response").getJSONObject("event");
++        outcome.put("status", "completed");
++        outcome.put("error", null);
++        outcome.put("sdk_values_seen", 1);
++        rows.get(7).getJSONObject("data").getJSONObject("output").put("sdkValuesJson", List.of(payload));
++        return rows;
++    }
++
++    @Test
++    void compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes() {
++        admitCompaction(settledCompaction());
++        for (String change : List.of("operation", "scope", "request_count", "budget", "request_budget",
++                "values", "measurement", "delivery", "unclaimed")) {
++            List<JSONObject> rows = settledCompaction();
++            JSONObject draw = rows.get(6).getJSONObject("data").getJSONObject("output");
++            switch (change) {
++                case "operation": draw.put("operationId", "unobserved"); break;
++                case "scope": rows.get(6).put("parent_tool_use_id", "another-scope"); break;
++                case "request_count": draw.put("physicalRequests", 2); break;
++                case "budget": draw.put("maxOutputTokens", 7); break;
++                case "request_budget":
++                    JSONObject physical = rows.get(1).getJSONObject("request");
++                    JSONObject body = JSON.parseObject(physical.getJSONObject("body").getString("json"));
++                    body.put("max_tokens", 7);
++                    String raw = body.toJSONString();
++                    physical.getJSONObject("body").put("json", raw);
++                    physical.put("body_bytes", raw.getBytes(StandardCharsets.UTF_8).length);
++                    physical.put("body_sha256", StreamSchema.sha256(raw.getBytes(StandardCharsets.UTF_8)));
++                    break;
++                case "values": draw.put("sdkValuesJson", List.of("{\"forged\":true}")); break;
++                case "measurement":
++                    rows.get(6).getJSONObject("data").getJSONArray("tokenMeasurements")
++                            .getJSONObject(0).getJSONObject("evidence").put("responseBase64",
++                                    Base64.getEncoder().encodeToString(
++                                            "{\"count\":6,\"max_model_len\":100}".getBytes(StandardCharsets.UTF_8)));
++                    break;
++                case "delivery": rows.remove(5); break;
++                case "unclaimed": rows.remove(6); break;
++                default: throw new AssertionError(change);
++            }
++            assertThrows(RecordContractException.class, () -> admitCompaction(rows), change);
++        }
++    }
++
++    @Test
++    void compactionSdkValuesMustComeFromRecordedSseBytes() {
++        admitCompaction(streamedCompaction("{\"choices\":[]}"));
++        List<JSONObject> repeatedProviderMember = streamedCompaction("{\"choices\":[],\"choices\":[{}]}");
++        repeatedProviderMember.get(7).getJSONObject("data").getJSONObject("output")
++                .put("sdkValuesJson", List.of("{\"choices\":[{}]}"));
++        admitCompaction(repeatedProviderMember);
++        List<JSONObject> forged = streamedCompaction("{\"choices\":[{}]}");
++        forged.get(7).getJSONObject("data").getJSONObject("output")
++                .put("sdkValuesJson", List.of("{\"choices\":[]}"));
++        assertThrows(RecordContractException.class, () -> admitCompaction(forged));
++    }
++
 +    @Test
 +    void compactionStatusAgreesWithRetainedHistory() {
 +        String start = EvidenceFixtures.records("chat_request_response_history").get(0);
