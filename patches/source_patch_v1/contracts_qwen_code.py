@@ -9594,10 +9594,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "projectRuntimeHistoryChange(record)",
         "this.history.applyCompaction(",
         "requireRuntimeCompaction(record.systemPayload)",
-        "if (request.owner.kind === 'chat') this.history.assertInitialized()",
+        "request.owner.kind === 'chat' ||",
+        "request.owner.purpose === 'compaction'",
+        "this.history.assertInitialized();",
     ), label=label)
     require_text(state, core + "core/model-request-evidence.test.ts",
-                 "refuses a chat request before its runtime history checkpoint", label=label)
+                 "refuses conversation and compaction requests before runtime history", label=label)
     require_text(state, core + "services/runtime-history.test.ts",
                  "projects exact runtime history after a %s checkpoint", label=label)
     require_text(state, core + "services/runtime-history.test.ts",
@@ -11942,8 +11944,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "resume history. Stored generation evidence excludes derived message fields. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
             "including image payload state, without inferring admission from display records. "
-            "A chat request cannot precede the runtime history checkpoint it needs for replay; "
-            "utility requests remain independent of chat history. "
+            "A chat request or compaction draw cannot precede the runtime history checkpoint it needs for replay; "
+            "Other utility requests remain independent of chat history. "
             "Successful compaction checkpoints equal the committed composition; failed compactions "
             "preserve exact retained history in both full and indexed restore. Tool "
             "restore snapshots carry the same complete state, validate before file rewind, and "

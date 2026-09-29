@@ -346613,7 +346613,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,807 @@
+@@ -0,0 +1,821 @@
 +import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -346675,7 +346675,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  };
 +}
 +describe('mandatory model request evidence', () => {
-+  it('refuses a chat request before its runtime history checkpoint', async () => {
++  it('refuses conversation and compaction requests before runtime history', async () => {
 +    const f = fixture();
 +    await f.journal.capture(serialize([]), 'root', 'p', 's', null, TEST_POLICY);
 +    const request = {
@@ -346687,6 +346687,20 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +      replay.observe({
 +        type: 'model_request',
 +        modelRequest: request,
++      }),
++    ).toThrow('no initial history checkpoint');
++
++    expect(() =>
++      new ModelEvidenceReplay().observe({
++        type: 'model_request',
++        modelRequest: {
++          ...f.records[0],
++          owner: {
++            kind: 'utility',
++            operation_id: 'compaction-draw',
++            purpose: 'compaction',
++          },
++        },
 +      }),
 +    ).toThrow('no initial history checkpoint');
 +
@@ -347424,7 +347438,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1524 @@
+@@ -0,0 +1,1528 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -348687,7 +348701,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      if (sidechain)
 +        return refusal('child artifact contains root-owned physical requests');
 +      const request = requireModelRequestEvidence(record.modelRequest);
-+      if (request.owner.kind === 'chat') this.history.assertInitialized();
++      if (
++        request.owner.kind === 'chat' ||
++        request.owner.purpose === 'compaction'
++      )
++        this.history.assertInitialized();
 +      const body = this.requests.observe(request);
 +      this.responses.begin(
 +        request.journal_id,
