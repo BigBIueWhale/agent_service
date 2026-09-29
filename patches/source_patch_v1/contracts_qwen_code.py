@@ -5731,8 +5731,8 @@ def _validate_compaction_accounting_after(state: State) -> None:
     # and raw response. The same replay is applied when the record is read, so
     # a count cannot be changed independently of the bytes that supplied it.
     _require_all(state, service, (
-        "const result = await compactionTokenEvidenceContext.run(true, count);",
-        "const served = replayVllmTokenCount(result.evidence, contextLimit, sessionModel);",
+        "const result = await count();",
+        "const served = replayVllmTokenCount(",
         "const sessionModel = config.getModel();",
         "model: sessionModel,",
         "tokenMeasurements.push({ role, evidence: result.evidence });",
@@ -5743,10 +5743,16 @@ def _validate_compaction_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.ts", (
         "tokenCountWireObservationContext.getStore()?.observe(args[0], args[1]);",
+        "return this.countVllmTokens(",
+        "const observation = new TokenCountWireObservation(url, requestJson);",
+        "requestKind: 'chat' | 'text'",
         "const response = await call.asResponse();",
         "const raw = Buffer.from(await response.clone().arrayBuffer());",
         "const served = replayVllmTokenCount(",
+        "throw observation.mismatch ?? error;",
     ), label=label)
+    forbid_text(state, "packages/core/src/core/token-count-evidence.ts",
+                "compactionTokenEvidenceContext", label=label)
     _require_all(state, "packages/core/src/core/model-response-evidence.ts", (
         "claimCompactionRecord(record: CompactionRecord, scope: string): void {",
         "replayVllmTokenCount(measurement.evidence, window)",
@@ -5758,6 +5764,11 @@ def _validate_compaction_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, "packages/core/src/core/token-count-evidence.ts", (
         "expectedModel?: string", "Token count evidence belongs to another model",
+        "init.body !== this.expectedBody", "'messages' in requestShape",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.test.ts", (
+        "refuses a parsed count that differs from the physical response",
+        "refuses a tokenizer body changed by the SDK before dispatch",
     ), label=label)
     _require_ordered(_source(state, "packages/core/src/core/geminiChat.ts", label=label), (
         "await candidate.afterCommit()",

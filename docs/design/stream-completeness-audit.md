@@ -1242,3 +1242,25 @@ with fake providers lacking the required physical request owner or shape; the
 remaining broader Chat-suite failures were not triaged. Those failures do not
 verify this change. Compilation, packaged behavior, live provider behavior and
 owner gates remain unverified under the no-build instruction.
+
+## Physical exact tokenizer counts for ordinary turns
+
+The OpenAI pipeline now uses one physical `/tokenize` path for both rendered
+chat-request counts and text-only framing counts. It freezes the intended body,
+refuses an SDK body change before fetch, replays the captured response bytes,
+and refuses a parsed SDK count that disagrees with those bytes. Compaction still
+retains its token measurements; ordinary successful counts now return the same
+physical evidence to their caller. For an unchanged SDK serializer, the body
+sent to vLLM stays the same. The check applies whenever the shared vLLM exact
+counter is used, regardless of session length.
+
+Executed source tests passed 78 compaction, token-evidence and runtime-history
+cases, plus seven focused pipeline count cases. The runtime-history fixture
+routes text framing counts through the real SDK and an in-memory tokenizer.
+The broader pipeline suite was
+not treated as verification: its generation tests require a shared physical
+request owner absent from that suite's older fake calls. The exact tokenizer
+counts used by ordinary turns are still not persisted as session records, and
+failed tokenizer calls do not yet have physical operation records. Those remain
+open for token reconciliation. Compilation, packaged behavior, provider runs
+and owner gates remain unverified under the no-build instruction.
