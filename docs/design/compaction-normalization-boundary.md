@@ -27,9 +27,23 @@ those fields when the draw's physically checked SDK value list is empty.
 This rule applies to every compaction operation, regardless of model, session
 length or benchmark. The backend does not own this client conversion or record.
 
-The Python regression failed before the rule and passed afterward, together
-with the Python SDK unit suite. Native and Java regressions are authored but
-unexecuted. Compilation, application resume and owner gates remain unverified.
+Delivery is a separate boundary. The shared utility wrapper counts an output
+only when its caller receives it, and settles a physical delivery receipt with
+that count. `generateText` requires a terminal reason and served usage before
+it can return a candidate for compaction to judge. A successful replacement or
+a candidate rejected by a redrawable rule therefore has at least one output
+delivered from its final physical request. An executed Python admission probe
+accepted a claimed successful replacement with a processed SDK value but a
+zero-output delivery receipt. Native, Python and Java admission now refuse that
+combination, while still allowing a failed draw to retain a processed value
+that never reached the utility caller. The producer's utility delivery counter
+already records the needed distinction, so this changes readers only.
+
+The zero-value Python regression failed before its rule, while the delivery
+defect was established by a direct admission probe. Both corrected cases and
+the Python SDK unit suite passed afterward. Native and Java regressions are
+authored but unexecuted. Compilation, application resume and owner gates remain
+unverified.
 The change strengthens admission of the existing versioned stdout records; it
 does not change the producer or canonical chat JSONL. Resume still reads that
 canonical history, not the service's `output/events.jsonl` copy.

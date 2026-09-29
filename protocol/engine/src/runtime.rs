@@ -478,6 +478,7 @@ fn validate_compaction_event(
         let sdk_values = field(draw, "sdkValuesJson", line)?;
         let (issued, first_sequence, last_sequence) = requests.check_compaction_draw(
             id, kv_scope, &measurements[0].3, physical_requests, sdk_values,
+            succeeded || draw.get("status").is_some(),
         )?;
         let served = field(draw, "usage", line)?;
         if !served.is_null() && count(served, "candidatesTokenCount")? > issued {
@@ -1704,6 +1705,9 @@ mod tests {
         with_compaction_transport_response(bytes.as_bytes(), 1, true)
     }
     fn with_compaction_transport_response(bytes: &[u8], sdk_values_seen: u64, completed: bool) -> RuntimeContract {
+        with_compaction_transport_delivery(bytes, sdk_values_seen, completed, u64::from(completed))
+    }
+    fn with_compaction_transport_delivery(bytes: &[u8], sdk_values_seen: u64, completed: bool, delivered: u64) -> RuntimeContract {
         let mut owner = initialized();
         let body = serde_json::json!({
             "kv_scope":"session", "model":"fixture-model", "stream":true,
@@ -1743,7 +1747,7 @@ mod tests {
                     "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28})
             } else { serde_json::Value::Null }});
         admit(&mut owner, &response("compaction-physical", 4, &outcome.to_string())).unwrap();
-        let delivery = serde_json::json!({"kind":"delivery", "outputs_delivered":if completed { 1 } else { 0 }});
+        let delivery = serde_json::json!({"kind":"delivery", "outputs_delivered":delivered});
         admit(&mut owner, &response("compaction-physical", 5, &delivery.to_string())).unwrap();
         owner
     }
@@ -1804,6 +1808,10 @@ mod tests {
                 "totalTokenCount":28}
         });
         admit(&mut with_compaction_transport(), &success.to_string()).unwrap();
+        let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
+        let error = admit(&mut with_compaction_transport_delivery(bytes.as_bytes(), 1, true, 0),
+            &success.to_string()).unwrap_err();
+        assert!(error.to_string().contains("completed candidate without delivered output"));
         let mut mixed_models = success.clone();
         let request = mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"]
             .as_str().unwrap();

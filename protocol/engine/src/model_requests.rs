@@ -1380,6 +1380,7 @@ impl ModelRequests {
         tokenizer_model: &str,
         physical_requests: u64,
         sdk_values: Value<'_>,
+        requires_delivery: bool,
     ) -> ContractResult<(u64, u64, u64)> {
         let operation = self
             .compactions
@@ -1408,6 +1409,9 @@ impl ModelRequests {
                 .ok_or_else(|| refusal("compaction request has no delivery receipt"))?;
             if index + 1 < operation.requests.len() && *delivered != 0 {
                 return Err(refusal("compaction draw mixes output from physical retries"));
+            }
+            if requires_delivery && index + 1 == operation.requests.len() && *delivered == 0 {
+                return Err(refusal("compaction draw claims a completed candidate without delivered output"));
             }
             observed_values = observed_values.checked_add(outcome.sdk_values_seen)
                 .filter(|total| *total <= SAFE_INTEGER)

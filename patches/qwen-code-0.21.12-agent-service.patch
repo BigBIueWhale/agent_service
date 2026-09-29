@@ -354659,7 +354659,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1397 @@
+@@ -0,0 +1,1402 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -355765,6 +355765,11 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                        "compaction physical output exceeds its request ceiling",
 +                    )
 +                physical_values.extend(operation.values[request_id])
++            _require(
++                not (data["succeeded"] or draw is not data["output"])
++                or operation.deliveries[operation.requests[-1][0]] > 0,
++                "compaction draw claims a completed candidate without delivered output",
++            )
 +            recorded_values = [
 +                _sdk_json_value(_parse_sdk_json(raw)) for raw in draw["sdkValuesJson"]
 +            ]
@@ -362037,7 +362042,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,984 @@
+@@ -0,0 +1,989 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -362476,6 +362481,11 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                            "compaction physical output exceeds its request ceiling");
 +                }
 +                physical.addAll(operation.values.get(requestId));
++            }
++            if (Boolean.TRUE.equals(data.get("succeeded")) || raw != data.get("output")) {
++                String finalRequest = operation.requests.get(operation.requests.size() - 1).id;
++                require(operation.deliveries.get(finalRequest) > 0,
++                        "compaction draw claims a completed candidate without delivered output");
 +            }
 +            List<Object> recorded = array(draw.get("sdkValuesJson"));
 +            require(physical.size() == recorded.size(), "compaction SDK values differ from physical response bytes");
@@ -365651,7 +365661,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,953 @@
+@@ -0,0 +1,1004 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -365860,6 +365870,57 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        forged.get(7).getJSONObject("data").getJSONObject("output")
 +                .put("sdkValuesJson", List.of("{\"choices\":[]}"));
 +        assertThrows(RecordContractException.class, () -> admitCompaction(forged));
++    }
++
++    @Test
++    void successfulCompactionRequiresDeliveredPhysicalOutput() {
++        Map<String, String> sections = Map.of(
++                "primary_request_and_intent", "None",
++                "key_technical_concepts", "None",
++                "files_and_code_sections", "None",
++                "errors_and_fixes", "None",
++                "problem_solving", "None",
++                "pending_tasks", "None",
++                "current_work", "None",
++                "next_step", "None");
++        String arguments = JSON.toJSONString(sections);
++        String payload = JSON.toJSONString(Map.of(
++                "choices", List.of(Map.of(
++                        "delta", Map.of("tool_calls", List.of(Map.of(
++                                "index", 0, "id", "snapshot-call", "type", "function",
++                                "function", Map.of("name", "state_snapshot", "arguments", arguments)))),
++                        "finish_reason", "tool_calls")),
++                "usage", Map.of("prompt_tokens", 5, "completion_tokens", 0, "total_tokens", 5,
++                        "prompt_tokens_details", Map.of("cached_tokens", 0),
++                        "completion_tokens_details", Map.of("reasoning_tokens", 0))));
++        List<JSONObject> rows = streamedCompaction(payload);
++        Map<String, Long> usage = Map.of("promptTokenCount", 5L, "candidatesTokenCount", 0L,
++                "totalTokenCount", 5L, "cachedContentTokenCount", 0L, "thoughtsTokenCount", 0L);
++        rows.get(5).getJSONObject("response").getJSONObject("event")
++                .put("served_usage", usage);
++        rows.get(5).getJSONObject("response").getJSONObject("event")
++                .put("pipeline_outputs_delivered", 1);
++        rows.get(8).getJSONObject("usage").put("usageReports", 1);
++        rows.get(8).getJSONObject("usage").put("unreportedUsageRequests", 0);
++        rows.get(8).getJSONObject("usage").put("usage", usage);
++        JSONObject data = rows.get(7).getJSONObject("data");
++        data.put("status", "COMPRESSED");
++        data.put("succeeded", true);
++        data.put("newTokenCount", 5);
++        data.put("postCompactionHistory", List.of(Map.of("role", "user",
++                "parts", List.of(Map.of("text", "snapshot")))));
++        data.getJSONArray("tokenMeasurements").add(compactionMeasurement("candidate"));
++        JSONObject draw = data.getJSONObject("output");
++        draw.put("functionCalls", List.of(Map.of("name", "state_snapshot", "args", sections)));
++        draw.put("usage", usage);
++        draw.put("newTokenCount", 5);
++        draw.put("snapshotBytes", 588);
++        draw.put("finishReason", "STOP");
++        RecordContractException refusal = assertThrows(RecordContractException.class,
++                () -> admitCompaction(rows));
++        assertTrue(refusal.getMessage().contains("completed candidate without delivered output"));
++        rows.get(6).getJSONObject("response").getJSONObject("event").put("outputs_delivered", 1);
++        admitCompaction(rows);
 +    }
 +
 +    @Test
@@ -428598,7 +428659,7 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
-@@ -0,0 +1,425 @@
+@@ -0,0 +1,532 @@
 +"""Compaction claims must account for the physical work in the same stream."""
 +
 +from __future__ import annotations
@@ -428804,6 +428865,113 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +        RecordContractError, match="decoded output without an SDK value"
 +    ):
 +        _admit(rows)
++
++
++def test_successful_compaction_requires_a_delivered_physical_output() -> None:
++    rows = _rows()
++    sections = {
++        name: "None"
++        for name in (
++            "primary_request_and_intent",
++            "key_technical_concepts",
++            "files_and_code_sections",
++            "errors_and_fixes",
++            "problem_solving",
++            "pending_tasks",
++            "current_work",
++            "next_step",
++        )
++    }
++    value = _json(
++        {
++            "choices": [
++                {
++                    "delta": {
++                        "tool_calls": [
++                            {
++                                "index": 0,
++                                "id": "snapshot-call",
++                                "type": "function",
++                                "function": {
++                                    "name": "state_snapshot",
++                                    "arguments": _json(sections),
++                                },
++                            }
++                        ]
++                    },
++                    "finish_reason": "tool_calls",
++                }
++            ],
++            "usage": {
++                "prompt_tokens": 5,
++                "completion_tokens": 0,
++                "total_tokens": 5,
++                "prompt_tokens_details": {"cached_tokens": 0},
++                "completion_tokens_details": {"reasoning_tokens": 0},
++            },
++        }
++    )
++    body = f"data: {value}\n\n".encode()
++    rows[2]["response"]["event"].update(status=200, content_type="text/event-stream")
++    rows.insert(
++        3,
++        {
++            "type": "model_response",
++            "uuid": "compaction-response-body",
++            "session_id": rows[0]["session_id"],
++            "parent_tool_use_id": None,
++            "response": {
++                "journal_id": rows[0]["request_evidence_origin"]["journal_id"],
++                "request_id": "compaction-physical",
++                "sequence": 2,
++                "event": {
++                    "kind": "body",
++                    "offset": 0,
++                    "base64": base64.b64encode(body).decode(),
++                },
++            },
++        },
++    )
++    for sequence, row in enumerate(rows[4:7], start=3):
++        row["response"]["sequence"] = sequence
++    rows[4]["response"]["event"].update(body_bytes=len(body), body_sha256=_hash(body))
++    usage = {
++        "promptTokenCount": 5,
++        "candidatesTokenCount": 0,
++        "totalTokenCount": 5,
++        "cachedContentTokenCount": 0,
++        "thoughtsTokenCount": 0,
++    }
++    rows[5]["response"]["event"].update(
++        status="completed",
++        error=None,
++        served_usage=usage,
++        sdk_values_seen=1,
++        pipeline_outputs_delivered=1,
++    )
++    rows[-1]["usage"].update(usageReports=1, unreportedUsageRequests=0, usage=usage)
++    data = rows[-2]["data"]
++    data.update(
++        status="COMPRESSED",
++        succeeded=True,
++        newTokenCount=5,
++        postCompactionHistory=[{"role": "user", "parts": [{"text": "snapshot"}]}],
++    )
++    data["tokenMeasurements"].append(_measurement("candidate"))
++    data["output"].update(
++        sdkValuesJson=[value],
++        functionCalls=[{"name": "state_snapshot", "args": sections}],
++        usage=usage,
++        newTokenCount=5,
++        snapshotBytes=588,
++        finishReason="STOP",
++    )
++    with pytest.raises(
++        RecordContractError, match="completed candidate without delivered output"
++    ):
++        _admit(rows)
++    rows[6]["response"]["event"]["outputs_delivered"] = 1
++    _admit(rows)
 +
 +
 +def test_compaction_request_is_streamed_and_claimed_in_its_scope() -> None:
