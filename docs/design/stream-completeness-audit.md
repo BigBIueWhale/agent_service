@@ -1726,16 +1726,23 @@ history to the request identity at rendering across the two files.
 The complete provider body remains the authority for dispatched input. It can
 intentionally differ from canonical history because rendering curates turns,
 reattaches and slims images, adds reminders, and converts to the OpenAI shape.
-The assertion does not independently prove that those transformations yielded
-the recorded body. A text comparison would reject valid ordinary sessions;
-that remaining relation needs an explicit renderer proof.
+Version 21 adds a source-level proof for the intermediate rendered `Content[]`.
+It does not yet prove that provider conversion yielded the recorded body. A
+text comparison would reject valid ordinary sessions; that remaining relation
+needs an explicit provider transformation proof.
 
 Source tracing narrows that proof boundary. `getRequestHistoryForRoute` first
 curates adjacent turns, can replace inline images with durable references and
 reattach selected image bytes, removes reference metadata, then slims media the
 selected route cannot accept. The assertion is written after those operations
-have updated canonical history, but it does not retain the rendered `Content[]`
-or the route's modality selection. `countExactRequestTokens` may then await a
+have updated canonical history. Version 21 records the effective image
+thresholds, selected user index, route modalities, and a fingerprint of the
+rendered `Content[]`. The writer replays curation, image projection and media
+slimming from post-conversion canonical state and compares the result before
+admitting the assertion; the complete reader repeats the comparison against
+replayed history. The Chat attempt checks the same fingerprint before calling
+the generation client and on the OpenAI pipeline path. `countExactRequestTokens`
+may then await a
 separate `/tokenize` operation before Chat creates an attempt. The attempt
 binding correctly names that earlier render even if another history commit
 arrives during the wait.
@@ -1746,8 +1753,10 @@ system instruction and input-affecting context (`splitToolMedia` and
 selected provider change the request. It serializes the final body and checks
 the SDK's dispatched bytes against that serialization. Those source checks
 establish the final-body identity, but neither the canonical assertion nor the
-physical request currently carries enough independent renderer selection to
-reproduce the intermediate `Content[]` or provider conversion from the record.
+physical request currently carries enough independent provider selection to
+reproduce provider conversion from the record. The intermediate `Content[]`
+can now be deterministically replayed from canonical state and its recorded
+selection by source reading.
 The provider change is material to this proof: the default provider spreads
 `extra_body` after its converted `messages`, so that configuration can replace
 the message list; DashScope, DeepSeek and Mistral also have message-changing
@@ -1759,12 +1768,13 @@ any explicit message override, rather than assuming the provider left messages
 alone. The captured body still states the actual dispatched input; this is a
 limit on independently proving its derivation from canonical history, not
 evidence that the body omitted model input.
-An additional self-declared hash of the body or of the rendered contents would
-not establish that relation. A complete reader needs a deterministic replay of
-the selected curation, media and provider transformations against the canonical
-state and the captured body, with ordinary text, tool-result and image turns
-covered. This is a source-reading requirement for the remaining implementation;
-no renderer replay or owner gate has verified it yet.
+The rendered fingerprint is compared with a deterministic replay; a
+self-declared hash alone would not establish that relation. The remaining
+provider-body relation needs a deterministic replay of provider transformations
+against the captured body, including configured message overrides. Ordinary
+text, tool-result and image source cases were authored for the rendered proof
+but have not been executed. No TypeScript compilation, source test, native
+gate, or packaged runtime test has verified version 21 behavior.
 
 Source inspection then found a narrower child admission gap in the version 19
 reader. It opened root proof only for a child with a completed generation or a

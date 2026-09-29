@@ -4561,7 +4561,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "refusedBefore = refusal.draws;",
             "if (draw === 'redraw') {",
             "currentUserContent = this.admitHistoryContent(notice);",
-            "requestContents = this.getRequestHistoryForRoute(",
+            "requestContents = rendered.contents;",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "            refusedBefore *\n            (partition.messageFraming + TURN_REFUSAL_NOTICE_MAX_BYTES);",
             "            partition.compactionTrigger + noticesAdded",
@@ -8436,7 +8436,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 20;",
+            "export const CHAT_RECORDING_VERSION = 21;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -9667,11 +9667,13 @@ def _validate_served_accounting_after(state: State) -> None:
         "private admitHistoryContent(content: Content)",
         "historyLength: this.history.length", "await this.chatRecordingService.flush()",
         "this.pendingAssistant = accepted", "this.pendingCheckpoint = previousHistory",
-        "replaceHistoryImageParts", "withoutImageReferenceMetadata", "getRuntimeHistory(): RuntimeHistoryState",
+        "replaceHistoryImageParts", "renderRequestHistoryFrom", "getRuntimeHistory(): RuntimeHistoryState",
         "setRuntimeHistory(state: RuntimeHistoryState)", "assertHistoryReplacementReady()",
         "const startup = declareStartupContext(history)", "this.imagePayloadStore = images",
         "this.startupContext = startup",
     ), label=label)
+    require_text(state, core + "services/rendered-request-history.ts",
+                 "history: withoutImageReferenceMetadata(requestHistory)", label=label)
     _require_ordered(_source(state, core + "core/geminiChat.ts", label=label), (
         "setRuntimeHistory(state: RuntimeHistoryState)",
         "requireRuntimeHistoryState(state)",
@@ -9733,6 +9735,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label, location="root runtime history admission")
     _require_all(state, core + "services/runtime-history.ts", (
         "export function fingerprintRuntimeHistory(",
+        "export function requireRequestRenderSelection(",
         "export function requireRuntimeHistoryAssertion(",
         "export function requireRuntimeHistoryBinding(",
         "readonly renderId: string;",
@@ -9743,6 +9746,8 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "services/chatRecordingService.ts", (
         "async recordHistoryAssertion(",
         "requireRuntimeHistoryState(state)",
+        "replayRenderedRequestHistory(state, selection)",
+        "const renderedContentsSha256 = fingerprintRenderedContents(contents)",
         "renderId: randomUUID()",
         "stateSha256: fingerprintRuntimeHistory(state)",
         "async recordHistoryBinding(binding: RuntimeHistoryBinding)",
@@ -9760,14 +9765,16 @@ def _validate_served_accounting_after(state: State) -> None:
         "kvScope: string;",
         "const childScope: ChildScopeDeclaration = requireChildScopeDeclaration({",
         "const ready = options.recording.recordChildScope(childScope)",
-        "recordHistoryAssertion: async (kvScope, promptId, state) => {",
+        "recordHistoryAssertion: async (kvScope, promptId, state, selection, contents) => {",
+        "replayRenderedRequestHistory(checkedState, selection)",
         "stateSha256: fingerprintRuntimeHistory(",
         "recordHistoryBinding: async (binding) => {",
         "await options.recording.recordChildHistoryAssertion(assertion)",
         "await options.recording.recordChildHistoryBinding(binding)",
     ), label=label)
     _require_all(state, core + "core/geminiChat.ts", (
-        "requestContents = this.getRequestHistoryForRoute(",
+        "requestContents = rendered.contents",
+        "const rendered = this.renderRequestForRoute(",
         "historyAssertion = await this.chatRecordingService.recordHistoryAssertion(",
         "await this.chatRecordingService.recordHistoryBinding(",
     ), label=label)
@@ -9775,9 +9782,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "// The notice joins the conversation on the message the refused turn", 1
     )[1].split("// Count the request compaction has settled on.", 1)[0]
     _require_ordered(render_source, (
-        "requestContents = this.getRequestHistoryForRoute(",
+        "const rendered = this.renderRequestForRoute(",
         "historyAssertion = await this.chatRecordingService.recordHistoryAssertion(",
-        "requestContents = this.getRequestHistoryForRoute(",
+        "const rendered = this.renderRequestForRoute(",
         "historyAssertion = await this.chatRecordingService.recordHistoryAssertion(",
     ), label=label, location="both Chat render paths before dispatch")
     _require_ordered(_source(state, core + "core/geminiChat.ts", label=label), (
@@ -9796,6 +9803,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "record.type === 'model_child_scope'",
         "this.rootChildScopeNames.has(request.kv_scope)",
         "this.history.assertFingerprint(assertion.stateSha256)",
+        "replayRenderedRequestHistory(",
+        "assertion.renderedContentsSha256",
         "this.historyAssertions.has(assertion.renderId)",
         "this.historyBindings.get(request.owner.attempt_id)",
         "Chat request has no matching canonical history assertion",
@@ -9848,6 +9857,12 @@ def _validate_served_accounting_after(state: State) -> None:
                  label=label)
     require_text(state, core + "core/runtime-history-recording.test.ts",
                  "refuses a canonical input changed after its provider request was admitted",
+                 label=label)
+    require_text(state, core + "services/rendered-request-history.test.ts",
+                 "replays image replacement and reattachment from the durable post-render state",
+                 label=label)
+    require_text(state, core + "core/chat-attempt.test.ts",
+                 "refuses contents changed after the canonical render before dispatch",
                  label=label)
     _require_ordered(_source(state, core + "services/chatRecordingService.ts", label=label), (
         "async rewindRecording(",
