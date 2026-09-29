@@ -1367,3 +1367,29 @@ The displayed user/tool-result projection is likewise not bound to the
 rendered request input; exact request bodies remain the authority for what
 was dispatched. Any such binding must preserve valid ordinary sessions with
 reminders, media rendering, cancellations and retries.
+
+## Model-bound canonical input admission
+
+Source tracing found that the canonical recorder's fire-and-forget writes for
+tool results, Goal continuations, cron prompts and in-process notifications
+caught synchronous errors and only logged them. They also used `appendRecord`,
+which returns without writing while the recorder is inactive. Those records
+can contain user-role input for the next generation, so an omitted row would
+make resume's canonical history differ from the model's active conversation.
+
+These four call paths now use one recorder-owned admission rule: check that
+the writer is active, construct and enqueue the complete record, and latch
+any synchronous failure through `enterWriteFailure`. The existing queued
+append path latches asynchronous write failures. `flush` and `close`
+refuse a latched failure. Valid records retain their prior shape and ordering;
+the physical request body remains the authority for what was actually sent.
+This applies to ordinary and long sessions alike and changes no vLLM output
+or backend record owner.
+
+Eight source unit cases were authored for synchronous failure and inactive
+recorder admission across the four paths. They were not run: this checkout
+has no Node or Bun executable, and no build or compile step was permitted.
+The source patch plan reproduced both edited files byte-for-byte from the
+pinned upstream archive; the 38 patch-framework tests, manifest hash check
+and 35-concern identifier check passed. Packaged recording, owner gates and
+end-to-end resume remain unverified.

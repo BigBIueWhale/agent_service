@@ -8190,6 +8190,15 @@ def _validate_served_accounting_after(state: State) -> None:
         label="owned canonical append",
         location=recorder_path,
     )
+    _require_all(state, recorder_path, (
+        "private queueModelInput(",
+        "if (!this.acceptingWrites || this.state !== 'active')",
+        "this.appendRecord(create());",
+        "this.enterWriteFailure(cause, this.getSessionId(), operation);",
+        "this.queueModelInput('goal_runtime',",
+        "this.queueModelInput(subtype,",
+        "this.queueModelInput('tool_result',",
+    ), label="owned canonical append")
     label = "served usage and durable observation result"
     core = "packages/core/src/"
     cli = "packages/cli/src/"

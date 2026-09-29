@@ -228231,12 +228231,66 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const toolResultParts: Part[] = [
          {
            functionResponse: {
-@@ -1568,12 +1982,39 @@
+@@ -1567,13 +1981,93 @@
+       expect(userRecord.parentUuid).toBeNull();
        expect(assistantRecord.parentUuid).toBe(userRecord.uuid);
        expect(toolResultRecord.parentUuid).toBe(assistantRecord.uuid);
      });
    });
  
++  describe('model-bound input recording', () => {
++    const inputs: Array<{
++      name: string;
++      record: (recorder: ChatRecordingService) => void;
++    }> = [
++      {
++        name: 'tool result',
++        record: (recorder) =>
++          recorder.recordToolResult([
++            { functionResponse: { name: 'run', response: { ok: true } } },
++          ]),
++      },
++      {
++        name: 'goal continuation',
++        record: (recorder) =>
++          recorder.recordGoalRuntimeMessage([{ text: 'continue' }], {
++            goalId: 'goal-1',
++            revision: 1,
++            turnId: 'turn-1',
++          }),
++      },
++      {
++        name: 'notification',
++        record: (recorder) =>
++          recorder.recordNotification([{ text: 'background work finished' }]),
++      },
++      {
++        name: 'cron prompt',
++        record: (recorder) =>
++          recorder.recordCronPrompt([{ text: 'scheduled request' }]),
++      },
++    ];
++
++    it.each(inputs)('latches a synchronous $name admission failure', async ({ record }) => {
++      const error = new Error('Canonical input metadata unavailable');
++      vi.mocked(mockConfig.getProjectRoot).mockImplementationOnce(() => {
++        throw error;
++      });
++      expect(() => record(chatRecordingService)).not.toThrow();
++      await expect(chatRecordingService.flush()).rejects.toBe(error);
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
++    });
++
++    it.each(inputs)('refuses an inactive $name recorder', async ({ record }) => {
++      const inactive = new ChatRecordingService(mockConfig);
++      record(inactive);
++      await expect(inactive.flush()).rejects.toBeInstanceOf(
++        SessionWriterUnavailableError,
++      );
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
++    });
++  });
++
    describe('recordSlashCommand', () => {
 +    it('reports synchronous admission failure through the recorder owner', async () => {
 +      const error = new Error('Metadata unavailable');
@@ -228271,7 +228325,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          rawCommand: '/about',
        });
        await chatRecordingService.flush();
-@@ -1587,13 +2028,13 @@
+@@ -1587,13 +2081,13 @@
          phase: 'invocation',
          rawCommand: '/about',
        });
@@ -228286,7 +228340,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        });
        await chatRecordingService.flush();
  
-@@ -1617,50 +2058,63 @@
+@@ -1617,50 +2111,63 @@
        expect(jsonl.writeLine).not.toHaveBeenCalled();
      });
  
@@ -228360,7 +228414,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(firstFailure).toEqual(new Error('disk full'));
        await expect(chatRecordingService.flush()).rejects.toBe(firstFailure);
      });
-@@ -1674,20 +2128,27 @@
+@@ -1674,20 +2181,27 @@
        );
        const listener = vi.fn();
        const service = activateRecording(
@@ -228391,7 +228445,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(listener).toHaveBeenCalledWith({
          sessionId: 'test-session-id',
          error: writeError,
-@@ -1701,19 +2162,23 @@
+@@ -1701,19 +2215,23 @@
          .mockRejectedValueOnce(new Error('first failure'))
          .mockRejectedValueOnce(new Error('second failure'));
  
@@ -228417,7 +228471,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(secondListener).toHaveBeenCalledOnce();
      });
  
-@@ -1727,169 +2192,373 @@
+@@ -1727,169 +2245,373 @@
              throw new Error('listener threw');
            }),
          );
@@ -228886,7 +228940,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
    describe('recordAttributionSnapshot', () => {
      const baseSnapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1916,13 +2585,13 @@
+@@ -1916,13 +2638,13 @@
  
      it('refreshes the cached git branch at the attribution turn boundary', async () => {
        vi.mocked(execSync)
@@ -228901,7 +228955,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          promptCount: 1,
        });
        await chatRecordingService.flush();
-@@ -1950,18 +2619,21 @@
+@@ -1950,18 +2672,21 @@
  
      // After rewindRecording, the previous attribution snapshot lives on
      // the abandoned branch, so the dedup key has to clear — otherwise
@@ -228925,7 +228979,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        // 1 rewind record + 1 fresh snapshot = 2 more writes after rewind.
        expect(vi.mocked(jsonl.writeLine).mock.calls.length).toBe(
          beforeRewind + 2,
-@@ -1976,19 +2648,21 @@
+@@ -1976,19 +2701,21 @@
  
        chatRecordingService.recordAttributionSnapshot(baseSnapshot);
        await expect(chatRecordingService.flush()).rejects.toBe(writeError);
@@ -228949,7 +229003,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        } finally {
          process.off('unhandledRejection', handler);
        }
-@@ -2007,20 +2681,27 @@
+@@ -2007,20 +2734,27 @@
          v: 2,
          sessionId: 'test-session-id',
          sequence: 1,
@@ -228980,7 +229034,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            sessionId: 'test-session-id',
            sequence: 2,
            recordedAt: '2026-07-04T00:00:01.000Z',
-@@ -2088,24 +2769,28 @@
+@@ -2088,24 +2822,28 @@
          chatRecordingService.recordSessionArtifactEvent(payload),
        ).resolves.toBeUndefined();
        expect(jsonl.writeLine).toHaveBeenCalledOnce();
@@ -229011,7 +229065,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const artifact = vi.mocked(jsonl.writeLine).mock
          .calls[1][1] as ChatRecord;
        const after = vi.mocked(jsonl.writeLine).mock.calls[2][1] as ChatRecord;
-@@ -2114,26 +2799,31 @@
+@@ -2114,26 +2852,31 @@
        expect(after.parentUuid).not.toBe(artifact.uuid);
      });
    });
@@ -229045,7 +229099,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
        expect(mockLease.sealForHandoff).not.toHaveBeenCalled();
        expect(mockLease.release).not.toHaveBeenCalled();
-@@ -2141,13 +2831,15 @@
+@@ -2141,13 +2884,15 @@
      });
  
      it('releases the writer lease before reporting a flush failure', async () => {
@@ -229062,7 +229116,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
      });
  
-@@ -2156,19 +2848,24 @@
+@@ -2156,19 +2901,24 @@
        vi.mocked(mockLease.appendJsonLine).mockImplementationOnce(
          () =>
            new Promise<void>((resolve) => {
@@ -229089,7 +229143,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          undefined,
        ]);
        expect(mockLease.appendJsonLine).toHaveBeenCalledTimes(1);
-@@ -2197,10 +2894,141 @@
+@@ -2197,10 +2947,141 @@
  
        await expect(chatRecordingService.close()).rejects.toBe(cleanupFailure);
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
@@ -230144,16 +230198,38 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    getUserDisplayTextsForTitle(): ReadonlyArray<string | undefined> {
-@@ -1384,7 +1381,7 @@
+@@ -1380,49 +1377,40 @@
+   }
+ 
+   recordGoalRuntimeMessage(
+     message: PartListUnion,
      goalContext: GoalTurnPermit,
    ): void {
-     try {
+-    try {
 -      const record: ChatRecord = {
-+      const record: StoredChatRecord = {
-         ...this.createBaseRecord('user'),
-         subtype: 'goal_runtime',
-         provenance: 'goal_runtime',
-@@ -1404,25 +1401,21 @@
+-        ...this.createBaseRecord('user'),
+-        subtype: 'goal_runtime',
+-        provenance: 'goal_runtime',
+-        goalContext: copyGoalContext(goalContext),
+-        message: createUserContent(message),
+-      };
+-      this.appendRecord(record);
+-    } catch (error) {
+-      debugLogger.error('Error saving Goal runtime message:', error);
+-    }
++    this.queueModelInput('goal_runtime', () => ({
++      ...this.createBaseRecord('user'),
++      subtype: 'goal_runtime',
++      provenance: 'goal_runtime',
++      goalContext: copyGoalContext(goalContext),
++      message: createUserContent(message),
++    }));
+   }
+ 
+   /**
+    * Records a user message drained while tool results are being submitted.
+    *
+    * The model sees these as extra user-role parts in the same API Content as
     * tool results. Keeping a distinct subtype lets resume reconstruct that shape
     * instead of replaying consecutive user-role entries.
     */
@@ -230191,7 +230267,49 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1511,7 +1504,7 @@
+@@ -1488,30 +1476,43 @@
+     message: PartListUnion,
+     subtype: 'notification' | 'cron',
+     displayText?: string,
+     backgroundTask?: NotificationRecordPayload['backgroundTask'],
+     goalContext?: GoalTurnPermit,
+   ): void {
+-    try {
+-      const record = this.createNotificationRecord(
++    this.queueModelInput(subtype, () =>
++      this.createNotificationRecord(
+         message,
+         subtype,
+         displayText,
+         backgroundTask,
+         goalContext,
+-      );
+-      this.appendRecord(record);
+-    } catch (error) {
+-      debugLogger.error(`Error saving ${subtype} record:`, error);
++      ),
++    );
++  }
++
++  /** A missing model-bound input makes the canonical resume chain unusable. */
++  private queueModelInput(
++    operation: 'goal_runtime' | 'notification' | 'cron' | 'tool_result',
++    create: () => StoredChatRecord,
++  ): void {
++    if (this.writeFailure) return;
++    try {
++      if (!this.acceptingWrites || this.state !== 'active') {
++        throw new SessionWriterUnavailableError();
++      }
++      this.appendRecord(create());
++    } catch (cause) {
++      this.enterWriteFailure(cause, this.getSessionId(), operation);
+     }
+   }
+ 
+   private createNotificationRecord(
+     message: PartListUnion,
+     subtype: 'notification' | 'cron',
      displayText?: string,
      backgroundTask?: NotificationRecordPayload['backgroundTask'],
      goalContext?: GoalTurnPermit,
@@ -230200,7 +230318,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      return {
        ...this.createBaseRecord('user'),
        subtype,
-@@ -1524,49 +1517,121 @@
+@@ -1524,49 +1525,121 @@
      };
    }
  
@@ -230365,7 +230483,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    async recordRealtimeConversation(
-@@ -1577,7 +1642,7 @@
+@@ -1577,7 +1650,7 @@
      model: string,
    ): Promise<void> {
      for (const entry of entries) {
@@ -230374,7 +230492,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord(entry.role),
          subtype: 'realtime_message',
          message:
-@@ -1605,6 +1670,7 @@
+@@ -1605,6 +1678,7 @@
     * as a user-visible error or interrupt recording.
     */
    private maybeTriggerAutoTitle(): void {
@@ -230382,7 +230500,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      if (this.currentCustomTitle) return;
      if (this.writeFailure) return;
      if (this.pendingExplicitTitleWrites > 0) return;
-@@ -1614,18 +1680,6 @@
+@@ -1614,18 +1688,6 @@
      // unset their fast model (which would break `/rename --auto`, recap,
      // compression, and other fast-model features).
      if (autoTitleDisabledByEnv()) return;
@@ -230401,7 +230519,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      const fastModel = this.config.getFastModel();
      if (!fastModel) return;
  
-@@ -1633,7 +1687,7 @@
+@@ -1633,7 +1695,7 @@
      const controller = new AbortController();
      this.autoTitleController = controller;
  
@@ -230410,7 +230528,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        try {
          const outcome = await tryGenerateSessionTitle(
            this.config,
-@@ -1647,30 +1701,6 @@
+@@ -1647,30 +1709,6 @@
          if (this.currentCustomTitle) return;
          if (this.pendingExplicitTitleWrites > 0) return;
          if (this.writeFailure) return;
@@ -230441,7 +230559,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          await this.persistCustomTitle(outcome.title, 'auto');
        } catch (err) {
          // Don't permanently disable: transient failures (network blips, rate
-@@ -1680,9 +1710,6 @@
+@@ -1680,9 +1718,6 @@
            `Auto-title generation failed: ${err instanceof Error ? err.message : String(err)}`,
          );
        } finally {
@@ -230451,16 +230569,37 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          if (this.autoTitleController === controller) {
            this.autoTitleController = undefined;
          }
-@@ -1703,7 +1730,7 @@
+@@ -1699,13 +1734,13 @@
+    */
+   recordToolResult(
+     message: PartListUnion,
+     toolCallResult?: Partial<ToolCallResponseInfo> & { status: Status },
      options?: RecordToolResultOptions,
    ): void {
-     try {
+-    try {
 -      const record: ChatRecord = {
++    this.queueModelInput('tool_result', () => {
 +      const record: StoredChatRecord = {
          ...this.createBaseRecord('tool_result'),
          ...(options?.goalContext
            ? { goalContext: copyGoalContext(options.goalContext) }
-@@ -1746,21 +1773,55 @@
+           : {}),
+         ...(options?.provenance ? { provenance: options.provenance } : {}),
+@@ -1734,33 +1769,65 @@
+           };
+         } else {
+           record.toolCallResult = recordingToolCallResult;
+         }
+       }
+ 
+-      this.appendRecord(record);
+-    } catch (error) {
+-      debugLogger.error('Error saving tool result:', error);
+-    }
++      return record;
++    });
+   }
+ 
    /**
     * Records a slash command invocation as a system record. This keeps the model
     * history clean while allowing resume to replay UI output for commands like
@@ -230523,7 +230662,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1768,37 +1829,29 @@
+@@ -1768,37 +1835,29 @@
     * history immutable while allowing resume/continue flows to reconstruct the
     * compressed model-facing history from the stored snapshot.
     */
@@ -230579,7 +230718,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1837,7 +1890,7 @@
+@@ -1837,7 +1896,7 @@
        // post-rewind identical snapshot would be skipped and the rewound
        // session would lose all attribution state on restore.
        this.lastAttributionSnapshotJson = undefined;
@@ -230588,7 +230727,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'rewind',
-@@ -1860,13 +1913,13 @@
+@@ -1860,13 +1919,13 @@
     * Rebuilds `turnParentUuids` from a reconstructed message list.
     *
     * Call this after resuming a session so that subsequent rewinds within
@@ -230603,7 +230742,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        const record = messages[i];
        if (
          record.type === 'user' &&
-@@ -1954,10 +2007,8 @@
+@@ -1954,10 +2013,8 @@
      customTitle: string,
      titleSource: TitleSource,
    ): Promise<boolean> {
@@ -230615,7 +230754,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'custom_title',
-@@ -1976,23 +2027,12 @@
+@@ -1976,23 +2033,12 @@
        } catch {
          // Observer errors must never break title recording.
        }
@@ -230639,7 +230778,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      }
    }
  
-@@ -2015,7 +2055,7 @@
+@@ -2015,7 +2061,7 @@
      // record — the session would then carry two `parent_session` entries.
      if (this.currentParentSessionId === parentSessionId) return true;
      try {
@@ -230648,7 +230787,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'parent_session',
-@@ -2044,7 +2084,7 @@
+@@ -2044,7 +2090,7 @@
        );
      }
      try {
@@ -230657,7 +230796,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'session_source',
-@@ -2065,54 +2105,10 @@
+@@ -2065,54 +2111,10 @@
      }
    }
  
@@ -230716,7 +230855,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -2120,7 +2116,7 @@
+@@ -2120,7 +2122,7 @@
     */
    recordAtCommand(payload: AtCommandRecordPayload): void {
      try {
@@ -230725,7 +230864,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'at_command',
-@@ -2157,7 +2153,7 @@
+@@ -2157,7 +2159,7 @@
        if (json === this.lastAttributionSnapshotJson) {
          return;
        }
@@ -230734,7 +230873,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'attribution_snapshot',
-@@ -2200,7 +2196,7 @@
+@@ -2200,7 +2202,7 @@
    async recordUserTextElements(
      payload: UserTextElementsRecordPayload,
    ): Promise<void> {
@@ -230743,7 +230882,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        ...this.createBaseRecord('system'),
        type: 'system',
        subtype: 'user_text_elements',
-@@ -2213,7 +2209,7 @@
+@@ -2213,7 +2215,7 @@
      snapshots: SerializedFileHistorySnapshot[],
    ): void {
      try {
@@ -230752,7 +230891,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'file_history_snapshot',
-@@ -2228,7 +2224,7 @@
+@@ -2228,7 +2230,7 @@
    async recordSessionArtifactEvent(
      payload: SessionArtifactEventRecordPayload,
    ): Promise<void> {
@@ -230761,7 +230900,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        ...this.createBaseRecord('system'),
        type: 'system',
        subtype: 'session_artifact_event',
-@@ -2240,7 +2236,7 @@
+@@ -2240,7 +2242,7 @@
    async recordSessionArtifactSnapshot(
      payload: SessionArtifactSnapshotRecordPayload,
    ): Promise<void> {
