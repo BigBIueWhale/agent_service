@@ -111,8 +111,9 @@ was run:
   and root model text only for accepted completion. Abandoned output remains
   visible and billed as served work, with its abandoned decision retained.
   This is a source-reading conclusion, not an executed native refusal. The
-  separate native physical-byte replay and runtime-origin ownership questions
-  remain open.
+  service certificate also invokes the pinned client verifier after native
+  admission to replay retained model observations from physical response
+  bytes. That replay does not establish a slash command's external effect.
 - The baseline response completion validated byte counts, digests and some
   termination conditions without linking processing success to transport.
   The shared writer and readers now require observed 2xx HTTP and an EOF or
@@ -191,9 +192,15 @@ assistant row. The same attempt has generation and completion records keyed by
 origin, and completion carries the accepted or abandoned decision. The partial
 reader requires that completion before closing a model origin and permits a
 tool claim only after accepted completion. Repeating the decision on every
-partial would create a second authority for the same fact. Per-attempt output
-reconciliation against physical response bytes remains open. The focused CLI
-test was attempted in the current source checkout but could not collect because
+partial would create a second authority for the same fact. The service's pinned
+physical verifier reconciles each retained generation observation against
+decoded response bytes and its recorded normalization seed; native admission
+separately checks attempt ownership, consumer counts and usage. This is
+established by source reading of `read_event_snapshot`,
+`ModelRequestStreamReplay.observeGeneration` and
+`verifyRecordedOpenAIGeneration`, not by a newly run native or packaged verifier
+test. The focused CLI test was attempted in the current source checkout but
+could not collect because
 the installed `@qwen-code/web-templates` package has no resolvable entry; this
 paragraph is source-reading evidence, not a newly executed CLI test.
 
