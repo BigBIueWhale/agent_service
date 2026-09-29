@@ -1559,3 +1559,29 @@ were not run because Node and Bun are unavailable. The source patch plan
 reproduced both edited Qwen files from the pinned archive, and 38 patch
 framework tests passed. Compilation, packaged resume and owner gates remain
 unverified. No build or push was run.
+
+## Attribution snapshot read admission
+
+Source reading found that the shared canonical decoder checked file-history
+snapshots but did not inspect attribution snapshots. The full session loader
+and indexed restore reader both use that decoder; the indexed path explicitly
+treated a later malformed attribution row as absent and restored an earlier
+snapshot. This could make a resumed ordinary session's attribution counters or
+file state differ from the state recorded at its last turn boundary.
+
+The canonical decoder now requires a complete, versioned attribution snapshot
+on every branch before a recording can be read. The shared writer validates
+the snapshot's serialized form before queuing it, so a custom serializer cannot
+turn a valid in-memory value into a partial row. Missing state, inconsistent
+counters and incomplete file entries refuse with a recovery action. An empty
+entrypoint environment value now uses the existing `cli` default so the writer
+does not produce an empty surface that its reader would reject. An attribution
+snapshot subtype on a conversation row also refuses, so it cannot be replayed
+as a user or assistant turn. These changes
+serve all Qwen recording callers; vLLM does not write or interpret this
+client-owned metadata.
+
+Source tests were authored for malformed active and inactive rows, the full
+and indexed loaders, and writer-side serialization admission. They were not
+run because Node and Bun are unavailable. Compilation, packaged resume and
+owner gates remain unverified. No build or push was run.

@@ -9726,8 +9726,23 @@ def _validate_served_accounting_after(state: State) -> None:
         "recordAtCommand(payload: AtCommandRecordPayload)",
         "this.enterWriteFailure(cause, this.getSessionId(), 'at_command')",
         "recordAttributionSnapshot(snapshot: AttributionSnapshot)",
+        "const storedSnapshot = requireAttributionSnapshot(JSON.parse(json))",
+        "systemPayload: { snapshot: storedSnapshot }",
         "this.enterWriteFailure(cause, this.getSessionId(), 'attribution_snapshot')",
         "Cannot serialize an attribution snapshot",
+    ), label=label)
+    _require_all(state, core + "services/commitAttribution.ts", (
+        "export function requireAttributionSnapshot(",
+        "object['version'] !== ATTRIBUTION_SNAPSHOT_VERSION",
+        "committed > count",
+        "Object.entries(states)",
+        "process.env['QWEN_CODE_ENTRYPOINT'] || 'cli'",
+    ), label=label)
+    _require_all(state, core + "utils/transcript-records.ts", (
+        "subtype === 'attribution_snapshot'",
+        "requireAttributionSnapshot(",
+        "Invalid attribution snapshot record",
+        "snapshots must be system rows without conversation messages",
     ), label=label)
     forbid_text(state, core + "services/chatRecordingService.ts",
                 "Error saving attribution snapshot:", label=label)
@@ -9737,8 +9752,20 @@ def _validate_served_accounting_after(state: State) -> None:
         "latches a synchronous @-command admission failure",
         "refuses an inactive @-command recorder",
         "latches a snapshot serialization omission",
+        "latches a snapshot whose serialized counters cannot be restored",
         "refuses an inactive attribution recorder",
     ), label=label)
+    _require_all(state, core + "utils/transcript-records.test.ts", (
+        "refuses %s in an inactive attribution snapshot",
+        "schema version is missing or unsupported",
+        "does not replay attribution metadata as a user turn",
+    ), label=label)
+    _require_all(state, core + "services/session-transcript-reader.test.ts", (
+        "refuses a later attribution record that cannot restore its snapshot",
+        "Invalid attribution snapshot record malformed-attribution",
+    ), label=label)
+    forbid_text(state, core + "services/session-transcript-reader.test.ts",
+                "ignores a later non-snapshot attribution record", label=label)
     _require_all(state, "packages/cli/src/ui/AppContainer.tsx", (
         "await config.getChatRecordingService().rewindRecording(",
     ), label=label)
