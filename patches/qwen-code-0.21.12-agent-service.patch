@@ -219365,7 +219365,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
        role: 'user',
        parts: [
          {
-@@ -2475,1931 +570,1382 @@
+@@ -2475,1931 +570,1402 @@
          },
        ],
      };
@@ -220425,6 +220425,26 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +    );
 +    expect(rejected.generateText).not.toHaveBeenCalled();
++  });
++
++  it('refuses a tokenizer measurement for another model before drawing', async () => {
++    const harness = makeHarness();
++    const count = measuredCount(230_000);
++    harness.countCandidate.mockReset().mockResolvedValueOnce({
++      ...count,
++      evidence: {
++        ...count.evidence,
++        requestJson: JSON.stringify({
++          model: 'another-model',
++          messages: [{ role: 'user', content: 'fixture count request' }],
++          add_generation_prompt: true,
++        }),
++      },
++    });
++    expect((await compress(harness)).info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++    );
++    expect(harness.generateText).not.toHaveBeenCalled();
 +  });
 +
 +  it("issues the generation at the room the window has, less a redraw's notice, never below a turn's", async () => {
@@ -223080,7 +223100,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    // Google GenAI prefix caching is implicit. `enableCacheControl` configures
    // explicit provider cache markers, so it must not disable Gemini/Vertex
    // cache sharing as an unrelated side effect.
-@@ -336,126 +342,63 @@
+@@ -336,126 +342,64 @@
    return supportsOpenAIPrefixCaching(provider);
  }
  
@@ -223165,6 +223185,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -        contextLimit,
 -        config.getAutoCompactThreshold(),
 +    const contentGeneratorConfig = config.requireContentGeneratorConfig();
++    const sessionModel = config.getModel();
 +    const contextLimit = contentGeneratorConfig.contextWindowSize;
 +    if (contextLimit === undefined) {
 +      throw new Error(
@@ -223237,7 +223258,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      if (!result.evidence) {
 +        throw new Error('Compaction token count has no physical tokenizer evidence');
 +      }
-+      const served = replayVllmTokenCount(result.evidence, contextLimit);
++      const served = replayVllmTokenCount(result.evidence, contextLimit, sessionModel);
 +      if (
 +        served.totalTokens !== result.totalTokens ||
 +        served.maxModelLen !== result.maxModelLen
@@ -223255,7 +223276,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
      const curatedHistory = chat.getHistoryShallow(true);
      if (curatedHistory.length === 0) {
        return {
-@@ -464,15 +407,37 @@
+@@ -464,15 +408,37 @@
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
@@ -223298,7 +223319,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Guard: need at least a user+model pair for a meaningful summary.
      // This runs BEFORE the PreCompact hook fires — a hook with side effects
-@@ -485,6 +450,7 @@
+@@ -485,6 +451,7 @@
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
@@ -223306,7 +223327,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
          },
        };
      }
-@@ -512,616 +478,737 @@
+@@ -512,616 +479,737 @@
          // client.ts) — keep it consistent.
          const merged = result?.getAdditionalContext();
          if (merged && merged.trim().length > 0) {
@@ -224031,7 +224052,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    // the answer to that one call rather than to any declared tool.
 +    const turnTools = generationConfig.tools ?? [];
 +    const requestOptions = {
-+      model: config.getModel(),
++      model: sessionModel,
 +      systemInstruction: mainSystemInstruction,
 +      config: {
 +        ...generationConfig,
@@ -348580,7 +348601,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1265 @@
+@@ -0,0 +1,1325 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -349295,6 +349316,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +
 +type CompactionPhysicalOperation = {
 +  scope: string;
++  model: string;
 +  declaredBudget: number;
 +  open: Set<string>;
 +  responses: CompactionPhysicalResponse[];
@@ -349334,14 +349356,21 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  else return failure('compaction directive has no model-facing text');
 +  const marker = 'your answer may generate at most ';
 +  const at = text.lastIndexOf(marker);
-+  const digits = at < 0 ? '' : text.slice(at + marker.length).match(/^([1-9][0-9]*) tokens, reasoning included\./)?.[1];
++  const digits =
++    at < 0
++      ? ''
++      : text
++          .slice(at + marker.length)
++          .match(/^([1-9][0-9]*) tokens, reasoning included\./)?.[1];
 +  const budget = Number(digits);
 +  if (
 +    !digits ||
 +    !Number.isSafeInteger(budget) ||
 +    !text.endsWith(compactionRequestDirective(budget))
 +  )
-+    return failure('compaction request has no matching output ceiling directive');
++    return failure(
++      'compaction request has no matching output ceiling directive',
++    );
 +  return budget;
 +}
 +
@@ -349375,16 +349404,32 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    const counts = measurements.map((measurement) =>
 +      replayVllmTokenCount(measurement.evidence, window),
 +    );
++    const measuredModels = measurements.map(
++      (measurement) =>
++        (JSON.parse(measurement.evidence.requestJson) as { model: string })
++          .model,
++    );
++    if (new Set(measuredModels).size > 1)
++      failure('compaction tokenizer measurements use different models');
 +    if (
 +      measurements
 +        .slice(0, Math.min(measurements.length, 3))
-+        .some((measurement, index) => measurement.role !== preflightRoles[index])
++        .some(
++          (measurement, index) => measurement.role !== preflightRoles[index],
++        )
 +    ) {
-+      failure('compaction tokenizer preflight measurements are missing or reordered');
++      failure(
++        'compaction tokenizer preflight measurements are missing or reordered',
++      );
 +    }
 +    if (draws.length > 0) {
-+      if (counts.length < 3 || counts[0]!.totalTokens !== record.originalTokenCount)
-+        failure('compaction preflight has no measured original and request counts');
++      if (
++        counts.length < 3 ||
++        counts[0]!.totalTokens !== record.originalTokenCount
++      )
++        failure(
++          'compaction preflight has no measured original and request counts',
++        );
 +      let next = 3;
 +      for (const draw of draws) {
 +        if (draw.newTokenCount !== null) {
@@ -349392,7 +349437,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +            measurements[next]?.role !== 'candidate' ||
 +            counts[next++]?.totalTokens !== draw.newTokenCount
 +          )
-+            failure('compaction candidate count differs from tokenizer response bytes');
++            failure(
++              'compaction candidate count differs from tokenizer response bytes',
++            );
 +        }
 +      }
 +      if (next !== counts.length)
@@ -349402,7 +349449,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      (counts.length > 0 &&
 +        counts[0]!.totalTokens !== record.originalTokenCount)
 +    ) {
-+      failure('compaction preflight count differs from its physical measurement');
++      failure(
++        'compaction preflight count differs from its physical measurement',
++      );
 +    }
 +    if (
 +      record.succeeded &&
@@ -349415,8 +349464,19 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    const budgets = draws.map(
 +      (draw) => this.compactionOperations.get(draw.operationId)?.declaredBudget,
 +    );
-+    if (budgets.some((budget) => budget === undefined) || new Set(budgets).size > 1)
++    if (
++      budgets.some((budget) => budget === undefined) ||
++      new Set(budgets).size > 1
++    )
 +      failure('compaction draws have no single recorded request ceiling');
++    if (
++      draws.some(
++        (draw) =>
++          this.compactionOperations.get(draw.operationId)?.model !==
++          measuredModels[0],
++      )
++    )
++      failure('compaction tokenizer model differs from physical draw model');
 +    for (const draw of draws) this.claimCompactionDraw(draw, scope);
 +  }
 +  claimCompactionDraw(
@@ -349440,12 +349500,16 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      'maxOutputTokens' in draw &&
 +      draw.maxOutputTokens !== operation.declaredBudget
 +    )
-+      failure('compaction output ceiling differs from its model-facing request');
++      failure(
++        'compaction output ceiling differs from its model-facing request',
++      );
 +    const physicalValues = operation.responses.flatMap(
 +      (response) => response.sdkValuesJson,
 +    );
 +    if (!isDeepStrictEqual(draw.sdkValuesJson, physicalValues))
-+      failure('compaction SDK values differ from recorded physical response bytes');
++      failure(
++        'compaction SDK values differ from recorded physical response bytes',
++      );
 +    const contributors = operation.responses.filter(
 +      (response) => response.delivered !== null && response.delivered > 0,
 +    );
@@ -349456,7 +349520,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    )
 +      failure('compaction draw mixes outputs from separate physical requests');
 +    const last = operation.responses.at(-1)!;
-+    const delivered = last.delivered ?? failure('compaction response has no delivery receipt');
++    const delivered =
++      last.delivered ?? failure('compaction response has no delivery receipt');
 +    const outputs = last.outputs.slice(0, delivered);
 +    let text = '';
 +    let reasoning = '';
@@ -349500,7 +349565,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      draw.text !== text ||
 +      draw.reasoning !== reasoning ||
 +      draw.finishReason !== finishReason ||
-+      !isDeepStrictEqual(jsonValue(draw.functionCalls), jsonValue(functionCalls)) ||
++      !isDeepStrictEqual(
++        jsonValue(draw.functionCalls),
++        jsonValue(functionCalls),
++      ) ||
 +      !isDeepStrictEqual(jsonValue(draw.usage), jsonValue(usage)) ||
 +      !isDeepStrictEqual(
 +        jsonValue(draw.incompleteToolCalls),
@@ -349574,11 +349642,21 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        failure('compaction operation issues a request after its draw claim');
 +      let operation = this.compactionOperations.get(owner.operation_id);
 +      if (!operation) {
-+        operation = { scope, declaredBudget, open: new Set(), responses: [] };
++        operation = {
++          scope,
++          model: policy.model,
++          declaredBudget,
++          open: new Set(),
++          responses: [],
++        };
 +        this.compactionOperations.set(owner.operation_id, operation);
 +      }
-+      if (operation.scope !== scope || operation.declaredBudget !== declaredBudget)
-+        failure('compaction operation changes request scope or ceiling');
++      if (
++        operation.scope !== scope ||
++        operation.model !== policy.model ||
++        operation.declaredBudget !== declaredBudget
++      )
++        failure('compaction operation changes request scope, model or ceiling');
 +      operation.open.add(requestId);
 +      operation.responses.push({
 +        requestId,
@@ -349672,7 +349750,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      )
 +        failure('utility delivery has no matching physical output prefix');
 +      if (state.owner.purpose === 'compaction') {
-+        const operation = this.compactionOperations.get(state.owner.operation_id);
++        const operation = this.compactionOperations.get(
++          state.owner.operation_id,
++        );
 +        const physical = operation?.responses.find(
 +          (response) => response.requestId === record.request_id,
 +        );
@@ -349719,7 +349799,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +            ?.responses.find(
 +              (response) => response.requestId === record.request_id,
 +            );
-+          if (!physical) failure('compaction response has no physical operation');
++          if (!physical)
++            failure('compaction response has no physical operation');
 +          physical.sdkValuesJson = sdkValues.map((value) =>
 +            JSON.stringify(value),
 +          );
@@ -354578,7 +354659,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1278 @@
+@@ -0,0 +1,1299 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -354645,10 +354726,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        if isinstance(a, bool) or isinstance(b, bool):
 +            if type(a) is not type(b) or a != b:
 +                return False
-+        elif isinstance(a, (int, float)) or isinstance(b, (int, float)):
++        elif isinstance(a, int | float) or isinstance(b, int | float):
 +            if (
-+                not isinstance(a, (int, float))
-+                or not isinstance(b, (int, float))
++                not isinstance(a, int | float)
++                or not isinstance(b, int | float)
 +                or a != b
 +            ):
 +                return False
@@ -354930,7 +355011,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    return budget
 +
 +
-+def _token_measurement(measurement: dict[str, Any]) -> tuple[str, int, int]:
++def _token_measurement(measurement: dict[str, Any]) -> tuple[str, int, int, str]:
 +    evidence = measurement["evidence"]
 +    url = evidence["requestUrl"]
 +    _require(
@@ -354975,7 +355056,12 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        )
 +        return int(value)
 +
-+    return measurement["role"], count("count"), count("max_model_len", True)
++    return (
++        measurement["role"],
++        count("count"),
++        count("max_model_len", True),
++        request["model"],
++    )
 +
 +
 +@dataclass
@@ -355018,6 +355104,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +class _CompactionOperation:
 +    scope: str
 +    budget: int
++    model: str
 +    requests: list[tuple[str, int]] = field(default_factory=list)
 +    open: set[str] = field(default_factory=set)
 +    outcomes: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -355129,12 +355216,18 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                compaction_id not in self.claimed_compactions
 +                and (
 +                    operation is None
-+                    or (operation.scope == scope and operation.budget == budget)
++                    or (
++                        operation.scope == scope
++                        and operation.budget == budget
++                        and operation.model == request["decode_policy"]["model"]
++                    )
 +                ),
-+                "compaction operation changes scope or budget or repeats after claim",
++                "compaction operation changes scope, model or budget, or repeats",
 +            )
 +            if operation is None:
-+                operation = _CompactionOperation(scope, budget)
++                operation = _CompactionOperation(
++                    scope, budget, request["decode_policy"]["model"]
++                )
 +                self.compactions[compaction_id] = operation
 +            operation.requests.append((request["request_id"], request["sequence"]))
 +            operation.open.add(request["request_id"])
@@ -355478,8 +355571,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        measurements = [_token_measurement(item) for item in data["tokenMeasurements"]]
 +        _require(
 +            not measurements
-+            or all(window == measurements[0][2] for _, _, window in measurements),
++            or all(item[2] == measurements[0][2] for item in measurements),
 +            "compaction tokenizer measurements disagree about the served model window",
++        )
++        _require(
++            not measurements
++            or all(item[3] == measurements[0][3] for item in measurements),
++            "compaction tokenizer measurements use different models",
 +        )
 +        _require(
 +            all(
@@ -355543,6 +355641,10 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                "compaction draw has no settled physical operation in its scope",
 +            )
 +            assert operation is not None
++            _require(
++                operation.model == measurements[0][3],
++                "compaction tokenizer model differs from physical draw model",
++            )
 +            _require(
 +                physical_budget is None or physical_budget == operation.budget,
 +                "compaction draws disagree about their physical request ceiling",
@@ -361837,7 +361939,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,852 @@
+@@ -0,0 +1,873 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -361944,10 +362046,11 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            long budget = compactionBudget(body);
 +            CompactionOperation operation = compactions.get(compactionId);
 +            require(!claimedCompactions.contains(compactionId)
-+                    && (operation == null || (operation.scope.equals(scope) && operation.budget == budget)),
-+                    "compaction operation changes scope or budget or repeats after claim");
++                    && (operation == null || (operation.scope.equals(scope) && operation.budget == budget
++                        && operation.model.equals(policy.get("model")))),
++                    "compaction operation changes scope, model or budget or repeats after claim");
 +            if (operation == null) {
-+                operation = new CompactionOperation(scope, budget);
++                operation = new CompactionOperation(scope, budget, (String) policy.get("model"));
 +                compactions.put(compactionId, operation);
 +            }
 +            operation.requests.add(new PhysicalRequest(requestId, integer(request.get("sequence"))));
@@ -362193,16 +362296,20 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        List<Object> measurements = array(data.get("tokenMeasurements"));
 +        List<Long> counts = new ArrayList<>();
 +        Long window = null;
++        String measuredModel = null;
 +        for (int index = 0; index < measurements.size(); index++) {
 +            Map<String, Object> measurement = object(measurements.get(index));
 +            String expected = index < 3 ? List.of("original", "summary_request", "prompt_only").get(index) : "candidate";
 +            require(expected.equals(measurement.get("role")),
 +                    "compaction tokenizer measurements are missing or reordered");
-+            long[] result = tokenMeasurement(measurement);
-+            require(window == null || window == result[1],
++            TokenMeasurement result = tokenMeasurement(measurement);
++            require(window == null || window == result.window,
 +                    "compaction tokenizer measurements disagree about the served model window");
-+            window = result[1];
-+            counts.add(result[0]);
++            require(measuredModel == null || measuredModel.equals(result.model),
++                    "compaction tokenizer measurements use different models");
++            window = result.window;
++            measuredModel = result.model;
++            counts.add(result.count);
 +        }
 +        if (!draws.isEmpty()) {
 +            require(counts.size() >= 3 && counts.get(0) == integer(data.get("originalTokenCount")),
@@ -362241,6 +362348,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    && operation.deliveries.size() == operation.requests.size()
 +                    && operation.values.size() == operation.requests.size(),
 +                    "compaction draw has no settled physical operation in its scope");
++            require(operation.model.equals(measuredModel),
++                    "compaction tokenizer model differs from physical draw model");
 +            require(budget == null || budget == operation.budget,
 +                    "compaction draws disagree about their physical request ceiling");
 +            budget = operation.budget;
@@ -362280,7 +362389,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        claimedCompactions.addAll(claimed);
 +    }
 +
-+    private static long[] tokenMeasurement(Map<String, Object> measurement) {
++    private static TokenMeasurement tokenMeasurement(Map<String, Object> measurement) {
 +        Map<String, Object> evidence = object(measurement.get("evidence"));
 +        String url = (String) evidence.get("requestUrl");
 +        require(url.matches("https?://.+/tokenize"),
@@ -362314,7 +362423,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        long maxModelLen = integer(response.get("max_model_len"));
 +        require(count >= 0 && count <= SAFE_INTEGER && maxModelLen > 0 && maxModelLen <= SAFE_INTEGER,
 +                "tokenizer measurement has no exact count or served model window");
-+        return new long[] {count, maxModelLen};
++        return new TokenMeasurement(count, maxModelLen, (String) request.get("model"));
 +    }
 +
 +    private static long compactionBudget(String body) {
@@ -362537,15 +362646,29 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    private static final class CompactionOperation {
 +        private final String scope;
 +        private final long budget;
++        private final String model;
 +        private final List<PhysicalRequest> requests = new ArrayList<>();
 +        private final Set<String> open = new HashSet<>();
 +        private final Map<String, CompactionOutcome> outcomes = new HashMap<>();
 +        private final Map<String, Long> deliveries = new HashMap<>();
 +        private final Map<String, List<Object>> values = new HashMap<>();
 +
-+        private CompactionOperation(String scope, long budget) {
++        private CompactionOperation(String scope, long budget, String model) {
 +            this.scope = scope;
 +            this.budget = budget;
++            this.model = model;
++        }
++    }
++
++    private static final class TokenMeasurement {
++        private final long count;
++        private final long window;
++        private final String model;
++
++        private TokenMeasurement(long count, long window, String model) {
++            this.count = count;
++            this.window = window;
++            this.model = model;
 +        }
 +    }
 +
@@ -365319,7 +365442,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,879 @@
+@@ -0,0 +1,898 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -365513,6 +365636,25 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        forged.get(7).getJSONObject("data").getJSONObject("output")
 +                .put("sdkValuesJson", List.of("{\"choices\":[]}"));
 +        assertThrows(RecordContractException.class, () -> admitCompaction(forged));
++    }
++
++    @Test
++    void compactionTokenizerModelMustMatchEveryPhysicalDraw() {
++        for (boolean all : List.of(false, true)) {
++            List<JSONObject> rows = settledCompaction();
++            var measurements = rows.get(6).getJSONObject("data").getJSONArray("tokenMeasurements");
++            for (int index = 0; index < (all ? measurements.size() : 1); index++) {
++                JSONObject evidence = measurements.getJSONObject(index).getJSONObject("evidence");
++                JSONObject request = JSON.parseObject(evidence.getString("requestJson"));
++                request.put("model", "another-model");
++                evidence.put("requestJson", request.toJSONString());
++            }
++            RecordContractException failure = assertThrows(RecordContractException.class,
++                    () -> admitCompaction(rows));
++            assertTrue(failure.getMessage().contains(all
++                    ? "tokenizer model differs from physical draw model"
++                    : "measurements use different models"));
++        }
 +    }
 +
 +    @Test
@@ -420188,7 +420330,7 @@ diff --git a/packages/core/src/utils/retry.test.ts b/packages/core/src/utils/ret
 diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages/core/src/core/model-compaction-physical.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-compaction-physical.test.ts
-@@ -0,0 +1,414 @@
+@@ -0,0 +1,487 @@
 +import { createHash } from 'node:crypto';
 +import { describe, expect, it } from 'vitest';
 +import { ModelResponseReplay } from './model-response-evidence.js';
@@ -420389,7 +420531,11 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +        event,
 +      });
 +    observe({ kind: 'http', status: 200, content_type: 'application/json' });
-+    observe({ kind: 'body', offset: 0, base64: Buffer.from(body).toString('base64') });
++    observe({
++      kind: 'body',
++      offset: 0,
++      base64: Buffer.from(body).toString('base64'),
++    });
 +    observe({
 +      kind: 'end',
 +      termination: 'eof',
@@ -420406,23 +420552,29 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +      pipeline_outputs_delivered: 1,
 +    });
 +    observe({ kind: 'delivery', outputs_delivered: 1 });
-+    reader.claimCompaction({
-+      postCompactionHistory: null,
-+      status: 'COMPRESSION_FAILED_PROTOCOL_ERROR',
-+      succeeded: false,
-+      originalTokenCount: 5,
-+      newTokenCount: 5,
-+      tokenMeasurements: preflightMeasurements,
-+      triggerReason: null,
-+      output: draw,
-+      rejectedAttempts: [],
-+    }, 'scope');
++    reader.claimCompaction(
++      {
++        postCompactionHistory: null,
++        status: 'COMPRESSION_FAILED_PROTOCOL_ERROR',
++        succeeded: false,
++        originalTokenCount: 5,
++        newTokenCount: 5,
++        tokenMeasurements: preflightMeasurements,
++        triggerReason: null,
++        output: draw,
++        rejectedAttempts: [],
++      },
++      'scope',
++    );
 +    expect(() => reader.finishStream()).not.toThrow();
 +  });
 +
 +  it('counts captured utility requests at the shared provider-output boundary', () => {
 +    const output = new ProviderOutput();
-+    const delivery = compactionDrawContext.run(true, () => new UtilityDelivery());
++    const delivery = compactionDrawContext.run(
++      true,
++      () => new UtilityDelivery(),
++    );
 +    providerOutputContext.run(output, () => {
 +      delivery.attach({ requestId: 'physical-request' } as never);
 +    });
@@ -420491,6 +420643,47 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +        'scope',
 +      ),
 +    ).toThrow('preflight measurements are missing or reordered');
++    expect(() =>
++      replay().claimCompactionRecord(
++        {
++          ...record,
++          tokenMeasurements: [
++            ...preflightMeasurements,
++            {
++              role: 'candidate',
++              evidence: {
++                ...measurement(4),
++                requestJson: JSON.stringify({
++                  model: 'another-model',
++                  messages: [],
++                  add_generation_prompt: true,
++                }),
++              },
++            },
++          ],
++        },
++        'scope',
++      ),
++    ).toThrow('measurements use different models');
++    expect(() =>
++      replay().claimCompactionRecord(
++        {
++          ...record,
++          tokenMeasurements: record.tokenMeasurements.map((measurement) => ({
++            ...measurement,
++            evidence: {
++              ...measurement.evidence,
++              requestJson: JSON.stringify({
++                model: 'another-model',
++                messages: [],
++                add_generation_prompt: true,
++              }),
++            },
++          })),
++        },
++        'scope',
++      ),
++    ).toThrow('tokenizer model differs from physical draw model');
 +  });
 +
 +  it.each([
@@ -420511,7 +420704,9 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +      },
 +    ],
 +  ])('refuses changed %s with the same provider bytes', (_name, change) => {
-+    expect(() => replay().claimCompactionDraw({ ...draw, ...change }, 'scope')).toThrow();
++    expect(() =>
++      replay().claimCompactionDraw({ ...draw, ...change }, 'scope'),
++    ).toThrow();
 +  });
 +
 +  it('refuses an unclaimed output and a request without the final directive', () => {
@@ -420528,7 +420723,9 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +        },
 +        'scope',
 +        policy,
-+        JSON.stringify({ messages: [{ role: 'user', content: 'no directive' }] }),
++        JSON.stringify({
++          messages: [{ role: 'user', content: 'no directive' }],
++        }),
 +      ),
 +    ).toThrow('directive');
 +  });
@@ -420540,7 +420737,14 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +      operation_id: draw.operationId,
 +      purpose: 'compaction',
 +    } as const;
-+    reader.begin('journal', 'undispatched', owner, 'scope', policy, requestBody(100));
++    reader.begin(
++      'journal',
++      'undispatched',
++      owner,
++      'scope',
++      policy,
++      requestBody(100),
++    );
 +    reader.observe({
 +      journal_id: 'journal',
 +      request_id: 'undispatched',
@@ -420572,7 +420776,14 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +      sequence: 3,
 +      event: { kind: 'delivery', outputs_delivered: 0 },
 +    });
-+    reader.begin('journal', 'dispatched', owner, 'scope', policy, requestBody(100));
++    reader.begin(
++      'journal',
++      'dispatched',
++      owner,
++      'scope',
++      policy,
++      requestBody(100),
++    );
 +    let sequence = 0;
 +    const observe = (event: unknown) =>
 +      reader.observe({
@@ -420582,7 +420793,11 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +        event,
 +      });
 +    observe({ kind: 'http', status: 200, content_type: 'application/json' });
-+    observe({ kind: 'body', offset: 0, base64: Buffer.from(body).toString('base64') });
++    observe({
++      kind: 'body',
++      offset: 0,
++      base64: Buffer.from(body).toString('base64'),
++    });
 +    observe({
 +      kind: 'end',
 +      termination: 'eof',
@@ -420606,7 +420821,7 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 diff --git a/packages/core/src/core/token-count-evidence.test.ts b/packages/core/src/core/token-count-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/token-count-evidence.test.ts
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,81 @@
 +import { describe, expect, it } from 'vitest';
 +import OpenAI from 'openai';
 +import {
@@ -420656,6 +420871,9 @@ diff --git a/packages/core/src/core/token-count-evidence.test.ts b/packages/core
 +      totalTokens: parsed.count,
 +      maxModelLen: parsed.max_model_len,
 +    });
++    expect(() => replayVllmTokenCount(evidence, 100, 'another-model')).toThrow(
++      'belongs to another model',
++    );
 +    expect(() =>
 +      replayVllmTokenCount(
 +        {
@@ -420688,7 +420906,7 @@ diff --git a/packages/core/src/core/token-count-evidence.test.ts b/packages/core
 diff --git a/packages/core/src/core/token-count-evidence.ts b/packages/core/src/core/token-count-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/token-count-evidence.ts
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,109 @@
 +import { AsyncLocalStorage } from 'node:async_hooks';
 +import type {
 +  ExactRequestTokenCount,
@@ -420731,6 +420949,7 @@ diff --git a/packages/core/src/core/token-count-evidence.ts b/packages/core/src/
 +export function replayVllmTokenCount(
 +  evidence: ExactTokenCountEvidence,
 +  expectedMaxModelLen: number | undefined,
++  expectedModel?: string,
 +): ExactRequestTokenCount {
 +  const mediaType =
 +    typeof evidence?.responseContentType === 'string'
@@ -420767,7 +420986,9 @@ diff --git a/packages/core/src/core/token-count-evidence.ts b/packages/core/src/
 +      ),
 +    );
 +  } catch {
-+    throw new Error('Token count evidence has invalid request or response JSON');
++    throw new Error(
++      'Token count evidence has invalid request or response JSON',
++    );
 +  }
 +  if (
 +    !request ||
@@ -420779,6 +421000,12 @@ diff --git a/packages/core/src/core/token-count-evidence.ts b/packages/core/src/
 +    (request as Record<string, unknown>)['add_generation_prompt'] !== true
 +  ) {
 +    throw new Error('Token count evidence has no rendered chat request');
++  }
++  if (
++    expectedModel !== undefined &&
++    (request as Record<string, unknown>)['model'] !== expectedModel
++  ) {
++    throw new Error('Token count evidence belongs to another model');
 +  }
 +  if (!response || typeof response !== 'object' || Array.isArray(response)) {
 +    throw new Error('Token count evidence has no tokenizer result');
@@ -428092,7 +428319,7 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,323 @@
 +"""Compaction claims must account for the physical work in the same stream."""
 +
 +from __future__ import annotations
@@ -428342,6 +428569,27 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +    else:
 +        rows = [*rows[:-2], rows[-1]]
 +    with pytest.raises(RecordContractError):
++        _admit(rows)
++
++
++def test_compaction_tokenizer_uses_one_physical_draw_model() -> None:
++    rows = _rows()
++    evidence = rows[-2]["data"]["tokenMeasurements"][1]["evidence"]
++    request = json.loads(evidence["requestJson"])
++    request["model"] = "another-model"
++    evidence["requestJson"] = _json(request)
++    with pytest.raises(RecordContractError, match="measurements use different models"):
++        _admit(rows)
++
++    rows = _rows()
++    for measurement in rows[-2]["data"]["tokenMeasurements"]:
++        evidence = measurement["evidence"]
++        request = json.loads(evidence["requestJson"])
++        request["model"] = "another-model"
++        evidence["requestJson"] = _json(request)
++    with pytest.raises(
++        RecordContractError, match="tokenizer model differs from physical draw"
++    ):
 +        _admit(rows)
 +
 +

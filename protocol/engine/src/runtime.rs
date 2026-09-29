@@ -98,7 +98,7 @@ fn read_token_measurement(
     value: Value<'_>,
     line: usize,
     limits: Limits,
-) -> ContractResult<(u64, u64)> {
+) -> ContractResult<(u64, u64, String)> {
     let refuse = |detail: &str| ContractError::InvalidRecord(format!(
         "events.jsonl line {line} has invalid physical tokenizer evidence: {detail}; inspect the complete compaction record and served /tokenize response"
     ));
@@ -143,7 +143,7 @@ fn read_token_measurement(
     if window == 0 {
         return Err(refuse("served model window is zero"));
     }
-    Ok((count, window))
+    Ok((count, window, text(request, "model", line)?.to_string()))
 }
 
 fn validate_compaction_event(
@@ -231,8 +231,8 @@ fn validate_compaction_event(
         .map(|measurement| {
             let role = text(measurement, "role", line)?.to_string();
             let evidence = field(measurement, "evidence", line)?;
-            let (count, window) = read_token_measurement(evidence, line, json_limits)?;
-            Ok((role, count, window))
+            let (count, window, model) = read_token_measurement(evidence, line, json_limits)?;
+            Ok((role, count, window, model))
         })
         .collect::<ContractResult<Vec<_>>>()?;
     if measurements
@@ -240,6 +240,12 @@ fn validate_compaction_event(
         .is_some_and(|first| measurements.iter().any(|value| value.2 != first.2))
     {
         return Err(refuse("whose tokenizer measurements disagree about the served model window"));
+    }
+    if measurements
+        .first()
+        .is_some_and(|first| measurements.iter().any(|value| value.3 != first.3))
+    {
+        return Err(refuse("whose tokenizer measurements use different models"));
     }
     for (index, measurement) in measurements.iter().take(3).enumerate() {
         if measurement.0 != ["original", "summary_request", "prompt_only"][index] {
@@ -455,7 +461,7 @@ fn validate_compaction_event(
         let physical_requests = count(draw, "physicalRequests")?;
         let sdk_values = field(draw, "sdkValuesJson", line)?;
         let (issued, first_sequence, last_sequence) = requests.check_compaction_draw(
-            id, kv_scope, physical_requests, sdk_values,
+            id, kv_scope, &measurements[0].3, physical_requests, sdk_values,
         )?;
         let served = field(draw, "usage", line)?;
         if !served.is_null() && count(served, "candidatesTokenCount")? > issued {
@@ -1723,7 +1729,7 @@ mod tests {
                 "evidence": {
                     "requestUrl": "http://fixture.invalid/tokenize",
                     "requestJson": serde_json::json!({
-                        "model": "fixture", "messages": [],
+                        "model": "fixture-model", "messages": [],
                         "add_generation_prompt": true
                     }).to_string(),
                     "responseStatus": 200,
@@ -1768,6 +1774,24 @@ mod tests {
                 "totalTokenCount":28}
         });
         admit(&mut with_compaction_transport(), &success.to_string()).unwrap();
+        let mut mixed_models = success.clone();
+        let request = mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"]
+            .as_str().unwrap();
+        let mut request: serde_json::Value = serde_json::from_str(request).unwrap();
+        request["model"] = serde_json::json!("another-model");
+        mixed_models["data"]["tokenMeasurements"][0]["evidence"]["requestJson"] =
+            serde_json::json!(request.to_string());
+        let error = admit(&mut with_compaction_transport(), &mixed_models.to_string()).unwrap_err();
+        assert!(error.to_string().contains("tokenizer measurements use different models"));
+        let mut foreign_model = success.clone();
+        for measurement in foreign_model["data"]["tokenMeasurements"].as_array_mut().unwrap() {
+            let request = measurement["evidence"]["requestJson"].as_str().unwrap();
+            let mut request: serde_json::Value = serde_json::from_str(request).unwrap();
+            request["model"] = serde_json::json!("another-model");
+            measurement["evidence"]["requestJson"] = serde_json::json!(request.to_string());
+        }
+        let error = admit(&mut with_compaction_transport(), &foreign_model.to_string()).unwrap_err();
+        assert!(error.to_string().contains("tokenizer model differs from physical draw model"));
         assert!(admit(&mut initialized(), &success.to_string()).is_err());
         let mut foreign_operation = success.clone();
         foreign_operation["data"]["output"]["operationId"] = serde_json::json!("unseen-operation");

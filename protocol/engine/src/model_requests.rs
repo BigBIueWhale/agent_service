@@ -362,6 +362,7 @@ pub(crate) struct ModelRequests {
 struct CompactionOperation {
     scope: String,
     budget: u64,
+    model: String,
     first_sequence: u64,
     last_sequence: u64,
     requests: Vec<String>,
@@ -427,7 +428,7 @@ pub(crate) struct RequestAdmission {
     scope: String,
     body: RequestBody,
     attempt: Option<String>,
-    compaction: Option<(String, u64)>,
+    compaction: Option<(String, u64, String)>,
     stream: bool,
     usage: GenerationUsageSummary,
     all_usage: GenerationUsageSummary,
@@ -672,12 +673,14 @@ impl ModelRequests {
             let budget = compaction_request_budget(root, line)?;
             if self.claimed_compactions.contains(&id)
                 || self.compactions.get(&id).is_some_and(|operation| {
-                    operation.scope != scope || operation.budget != budget
+                    operation.scope != scope
+                        || operation.budget != budget
+                        || operation.model != model
                 })
             {
-                return Err(refusal("compaction operation changes scope or ceiling, or issues another request after its claim"));
+                return Err(refusal("compaction operation changes scope, model or ceiling, or issues another request after its claim"));
             }
-            Some((id, budget))
+            Some((id, budget, model.to_string()))
         } else {
             None
         };
@@ -701,10 +704,11 @@ impl ModelRequests {
     pub(crate) fn commit(&mut self, admission: RequestAdmission) {
         self.journal_id.get_or_insert(admission.journal_id);
         self.first_sequence.get_or_insert(admission.sequence);
-        if let Some((id, budget)) = &admission.compaction {
+        if let Some((id, budget, model)) = &admission.compaction {
             let operation = self.compactions.entry(id.clone()).or_insert_with(|| CompactionOperation {
                 scope: admission.scope.clone(),
                 budget: *budget,
+                model: model.clone(),
                 first_sequence: admission.sequence,
                 last_sequence: admission.sequence,
                 ..CompactionOperation::default()
@@ -734,7 +738,7 @@ impl ModelRequests {
                 scope: admission.scope.clone(),
                 digest: Some(Sha256::default()),
                 attempt: admission.attempt,
-                compaction: admission.compaction.map(|(id, _)| id),
+                compaction: admission.compaction.map(|(id, _, _)| id),
                 ..ResponseState::default()
             },
         );
@@ -1289,6 +1293,7 @@ impl ModelRequests {
         &self,
         operation_id: &str,
         scope: &str,
+        tokenizer_model: &str,
         physical_requests: u64,
         sdk_values: Value<'_>,
     ) -> ContractResult<(u64, u64, u64)> {
@@ -1303,6 +1308,9 @@ impl ModelRequests {
             || operation.deliveries.len() != operation.requests.len()
         {
             return Err(refusal("compaction draw omits, repeats or misattributes physical requests"));
+        }
+        if operation.model != tokenizer_model {
+            return Err(refusal("compaction tokenizer model differs from physical draw model"));
         }
         let mut observed_values = 0_u64;
         let mut physical_values = Vec::new();

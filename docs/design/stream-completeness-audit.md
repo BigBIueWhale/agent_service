@@ -1141,6 +1141,25 @@ response, canonical chat recording or resume-history projection. Normalized
 compaction text, reasoning, function calls and snapshot fields are still not
 independently derived by the Java reader from those SDK values.
 
+The compaction producer now freezes its model before measuring or drawing a
+candidate. A `/tokenize` response for another model refuses the transition
+before generation. The shared TypeScript reader, native certifier and direct
+Python and Java readers require all recorded measurements to name one model
+and require that model to match every physical draw. Source inspection found
+that counts from another model were otherwise admissible even when their bytes
+were intact. This is a client-side relationship between Qwen's count and draw;
+the vLLM tokenizer and generation APIs remain the sources of their own bytes,
+and the backend needs no caller-specific workaround. It applies to ordinary
+sessions whenever compaction occurs and does not change the canonical chat
+recording or resume projection.
+
+Four affected TypeScript source suites passed 140 tests, including the producer
+refusal and measurement forgery cases; the Python SDK unit suite passed 790
+tests. Native and Java regression cases were authored but not executed. Rust
+and Java compilation, packaged behavior, provider runs and owner gates remain
+unverified. These checks bind the model identity used for counting; they do
+not yet derive every normalized compaction field from the provider bytes.
+
 Source review also found an unreachable assignment that was meant to remember
 the first assistant scope of a Python model attempt. It now runs after the
 scope check. A direct reader probe reproduced the old admission and two new

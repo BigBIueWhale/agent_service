@@ -5732,7 +5732,9 @@ def _validate_compaction_accounting_after(state: State) -> None:
     # a count cannot be changed independently of the bytes that supplied it.
     _require_all(state, service, (
         "const result = await compactionTokenEvidenceContext.run(true, count);",
-        "const served = replayVllmTokenCount(result.evidence, contextLimit);",
+        "const served = replayVllmTokenCount(result.evidence, contextLimit, sessionModel);",
+        "const sessionModel = config.getModel();",
+        "model: sessionModel,",
         "tokenMeasurements.push({ role, evidence: result.evidence });",
         "await measured('original',",
         "await measured('summary_request',",
@@ -5748,9 +5750,14 @@ def _validate_compaction_accounting_after(state: State) -> None:
     _require_all(state, "packages/core/src/core/model-response-evidence.ts", (
         "claimCompactionRecord(record: CompactionRecord, scope: string): void {",
         "replayVllmTokenCount(measurement.evidence, window)",
+        "compaction tokenizer measurements use different models",
+        "compaction tokenizer model differs from physical draw model",
         "compaction candidate count differs from tokenizer response bytes",
         "compaction has an unclaimed tokenizer measurement",
         "compaction replacement count differs from its accepted draw",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/token-count-evidence.ts", (
+        "expectedModel?: string", "Token count evidence belongs to another model",
     ), label=label)
     _require_ordered(_source(state, "packages/core/src/core/geminiChat.ts", label=label), (
         "await candidate.afterCommit()",
@@ -5762,6 +5769,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
         (
             "[compaction-event] records where every truncated draw spent its output budget",
             "[compaction-event] leaves the accounting null when no generation ran",
+            "refuses a tokenizer measurement for another model before drawing",
         ),
         label=label,
     )
@@ -9101,6 +9109,8 @@ def _validate_served_accounting_after(state: State) -> None:
         'operation.values[record["request_id"]] = values',
         'def claim_compaction(self, data: dict[str, Any], scope: str) -> None:',
         'compaction SDK values differ from physical response bytes',
+        'compaction tokenizer measurements use different models',
+        'compaction tokenizer model differs from physical draw model',
         'terminal leaves physical compaction draws unclaimed',
         'completion["consumer_observations"]',
         'or consumed == final_outcome["pipeline_outputs_delivered"]',
@@ -9148,6 +9158,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_compaction_request_is_streamed_and_claimed_in_its_scope",
         "test_compaction_draw_requires_its_physical_work",
         "test_compaction_sdk_value_must_match_recorded_response_bytes",
+        "test_compaction_tokenizer_uses_one_physical_draw_model",
     ), label=label)
     _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
         "seed_row[\"normalization_seed\"].update(",
@@ -9284,6 +9295,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation has no recorded normalization seed",
         "compaction draw has no settled physical operation in its scope",
         "compaction SDK values differ from physical response bytes",
+        "compaction tokenizer measurements use different models",
+        "compaction tokenizer model differs from physical draw model",
         "tokenizer measurement has no canonical response bytes",
         "terminal leaves physical compaction draws unclaimed",
     ), label=label)
@@ -9318,6 +9331,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
         "compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes",
         "compactionSdkValuesMustComeFromRecordedSseBytes",
+        "compactionTokenizerModelMustMatchEveryPhysicalDraw",
     ), label=label)
     _require_all(state, java_tests + "session/SessionRecordTest.java", (
         "initializationAndOrdinaryTurnsDeliverCompleteEvidenceInOrder", "childTerminalDoesNotFinishRootPrompt",
