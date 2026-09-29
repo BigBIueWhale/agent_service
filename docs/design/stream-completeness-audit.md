@@ -1189,3 +1189,12 @@ gates and provider behavior remain unverified. This correction benefits any
 agent_service reader of a failed compaction, without changing provider requests,
 vLLM output, ordinary chat handling or canonical resume history. It does not
 yet derive every normalized compaction field from the physical values.
+
+The next reader correction binds the nullable physical served-usage field to
+the actual OpenAI values processed before response outcome. It applies to
+ordinary Chat, utility work and compaction, including failed prefixes and the
+last valid cumulative report. The Python source suite passed 791 cases after
+its shared fixtures were made provider-shaped; native and Java execution and
+the owner build remain unverified. The canonical resume file and provider
+requests are unchanged. The exact rule and limits are recorded in the
+[physical usage note](physical-response-usage.md#physical-response-bytes-determine-served-usage).

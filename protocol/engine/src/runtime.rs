@@ -1677,12 +1677,15 @@ mod tests {
         admit(&mut owner, &init()).unwrap();
         owner
     }
+    fn compaction_provider_value() -> String {
+        serde_json::json!({"choices":[{"delta":{"content":"summary"}}],
+            "usage":{"prompt_tokens":24,"completion_tokens":4,"total_tokens":28,
+                "prompt_tokens_details":{"cached_tokens":0},
+                "completion_tokens_details":{"reasoning_tokens":0}}}).to_string()
+    }
     fn with_compaction_transport() -> RuntimeContract {
-        with_compaction_transport_response(
-            b"data: {\"choices\":[{\"delta\":{\"content\":\"summary\"}}]}\n\ndata: [DONE]\n\n",
-            1,
-            true,
-        )
+        let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
+        with_compaction_transport_response(bytes.as_bytes(), 1, true)
     }
     fn with_compaction_transport_response(bytes: &[u8], sdk_values_seen: u64, completed: bool) -> RuntimeContract {
         let mut owner = initialized();
@@ -1777,7 +1780,7 @@ mod tests {
         success["data"]["output"] = serde_json::json!({
             "maxOutputTokens":8, "physicalRequests":1,
             "operationId":"compaction-operation", "functionCalls":[],
-            "text":"summary", "reasoning":"", "sdkValuesJson":["{\"choices\":[{\"delta\":{\"content\":\"summary\"}}]}"],
+            "text":"summary", "reasoning":"", "sdkValuesJson":[compaction_provider_value()],
             "newTokenCount":12, "snapshotBytes":7,
             "incompleteToolCalls":[], "finishReason":"STOP",
             "usage":{"promptTokenCount":24,"candidatesTokenCount":4,

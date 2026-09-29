@@ -54,6 +54,35 @@ fn same_sdk_value(left: &serde_json::Value, right: &serde_json::Value) -> bool {
     true
 }
 
+fn openai_served_usage(value: &serde_json::Value) -> Option<ServedUsage> {
+    let usage = value.get("usage")?;
+    let count = |value: Option<&serde_json::Value>| {
+        let number = value?.as_f64()?;
+        (number.is_finite()
+            && number >= 0.0
+            && number <= SAFE_INTEGER as f64
+            && number.fract() == 0.0)
+            .then_some(number as u64)
+    };
+    let served = ServedUsage {
+        prompt: count(usage.get("prompt_tokens"))?,
+        output: count(usage.get("completion_tokens"))?,
+        total: count(usage.get("total_tokens"))?,
+        cached: count(usage.get("prompt_tokens_details")?.get("cached_tokens"))?,
+        thoughts: count(usage.get("completion_tokens_details")?.get("reasoning_tokens"))?,
+    };
+    served.validate().ok()?;
+    Some(served)
+}
+
+fn nonstream_json_value(body: &[u8]) -> Option<serde_json::Value> {
+    // Node fetch removes up to two leading UTF-8 marks before SDK JSON.parse.
+    let bom = &[0xef, 0xbb, 0xbf];
+    let first = body.strip_prefix(bom).unwrap_or(body);
+    let second = first.strip_prefix(bom).unwrap_or(first);
+    serde_json::from_str(&String::from_utf8_lossy(second)).ok()
+}
+
 fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64> {
     let budget = unsigned(field(body, "max_tokens", line)?, "physical compaction ceiling", SAFE_INTEGER)?;
     if budget == 0 {
@@ -136,6 +165,39 @@ impl ResponseValues {
         }
     }
 
+    fn observed_usage(
+        &self,
+        seen: u64,
+        status: Option<u64>,
+        content_type: Option<&str>,
+        transport_eof: bool,
+    ) -> Option<ServedUsage> {
+        if seen == 0 || !status.is_some_and(|status| (200..300).contains(&status)) {
+            return None;
+        }
+        match self {
+            Self::Stream(values) => values
+                .at_eof(transport_eof)
+                .usage_reports
+                .iter()
+                .rev()
+                .find(|(position, _)| *position <= seen)
+                .map(|(_, usage)| *usage),
+            Self::Nonstream(_) if status == Some(204) => None,
+            Self::Nonstream(body) => {
+                let media_type = content_type
+                    .and_then(|value| value.split(';').next())
+                    .map(str::trim);
+                if !media_type.is_some_and(|value| {
+                    value.contains("application/json") || value.ends_with("+json")
+                }) {
+                    return None;
+                }
+                nonstream_json_value(body).as_ref().and_then(openai_served_usage)
+            }
+        }
+    }
+
     fn require_prefix(
         &self,
         seen: u64,
@@ -172,14 +234,7 @@ impl ResponseValues {
                         value.contains("application/json") || value.ends_with("+json")
                     });
                     if is_json {
-                        // Node's fetch Body parser removes up to two leading
-                        // UTF-8 marks before the pinned SDK parses JSON.
-                        let bom = &[0xef, 0xbb, 0xbf];
-                        let without_first = body.strip_prefix(bom).unwrap_or(body);
-                        let without_second =
-                            without_first.strip_prefix(bom).unwrap_or(without_first);
-                        let text = String::from_utf8_lossy(without_second);
-                        let valid = serde_json::from_str::<serde_json::Value>(&text).is_ok();
+                        let valid = nonstream_json_value(body).is_some();
                         (u64::from(valid), !valid)
                     } else {
                         // The SDK returns even an empty text body as one value.
@@ -205,6 +260,7 @@ struct SseValues {
     data: Vec<String>,
     count: u64,
     values: Vec<serde_json::Value>,
+    usage_reports: Vec<(u64, ServedUsage)>,
     retain_values: bool,
     failed: bool,
     done: bool,
@@ -323,6 +379,11 @@ impl SseValues {
         {
             Some(count) => {
                 self.count = count;
+                if ordinary {
+                    if let Some(usage) = openai_served_usage(&value) {
+                        self.usage_reports.push((count, usage));
+                    }
+                }
                 if self.retain_values {
                     self.values.push(value);
                 }
@@ -895,13 +956,26 @@ impl ModelRequests {
                         state.content_type.as_deref(),
                         state.termination.as_deref() == Some("eof"),
                     )?;
+                let recorded_usage = if usage.is_null() {
+                    None
+                } else {
+                    Some(ServedUsage::read(usage, line)?)
+                };
+                let observed_usage = self.response_values
+                    .get(id)
+                    .ok_or_else(|| refusal("response has no physical value reader"))?
+                    .observed_usage(
+                        sdk_values_seen,
+                        state.http_status,
+                        state.content_type.as_deref(),
+                        state.termination.as_deref() == Some("eof"),
+                    );
+                if recorded_usage != observed_usage {
+                    return Err(refusal("served usage differs from processed physical response bytes"));
+                }
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
-                    usage: if usage.is_null() {
-                        None
-                    } else {
-                        Some(ServedUsage::read(usage, line)?)
-                    },
+                    usage: recorded_usage,
                     completed,
                     pipeline_outputs_delivered,
                     sdk_values_seen,
@@ -1511,6 +1585,22 @@ mod tests {
         assert!(empty.require_prefix(1, false, None, None, true).is_err());
     }
     #[test]
+    fn physical_usage_comes_from_the_sdk_values_processed_before_failure() {
+        let first = json!({"usage":{"prompt_tokens":5,"completion_tokens":3,
+            "total_tokens":8,"prompt_tokens_details":{"cached_tokens":1},
+            "completion_tokens_details":{"reasoning_tokens":2}}});
+        let unread = json!({"usage":{"prompt_tokens":9,"completion_tokens":4,
+            "total_tokens":13,"prompt_tokens_details":{"cached_tokens":0},
+            "completion_tokens_details":{"reasoning_tokens":1}}});
+        let mut response = ResponseValues::new(true, false);
+        response.push(format!("data: {first}\n\ndata: {unread}\n\n").as_bytes());
+        response.require_prefix(1, false, Some(200), Some("text/event-stream"), true).unwrap();
+        assert_eq!(response.observed_usage(1, Some(200), Some("text/event-stream"), true),
+            Some(ServedUsage { prompt: 5, output: 3, total: 8, cached: 1, thoughts: 2 }));
+        assert_eq!(response.observed_usage(2, Some(200), Some("text/event-stream"), true),
+            Some(ServedUsage { prompt: 9, output: 4, total: 13, cached: 0, thoughts: 1 }));
+    }
+    #[test]
     fn physical_value_reader_decodes_each_sse_line_like_the_sdk() {
         let mut stream = ResponseValues::new(true, false);
         stream.push(&[0xef]);
@@ -1839,9 +1929,17 @@ mod tests {
                     &request(1, "r", json!({"kind":"full","json":body}), body),
                 )
                 .unwrap();
+                let physical = json!({"id":"usage-test","object":"chat.completion",
+                    "created":1,"model":"fixture-model",
+                    "choices":[{"index":0,"message":{"role":"assistant","content":""},
+                        "finish_reason":"stop"}],
+                    "usage":{"prompt_tokens":5,"completion_tokens":3,
+                    "total_tokens":8,"prompt_tokens_details":{"cached_tokens":1},
+                    "completion_tokens_details":{"reasoning_tokens":2}}}).to_string();
                 for (index, event) in [
-                    json!({"kind":"http","status":200,"content_type":null}),
-                    json!({"kind":"end","termination":"eof","body_bytes":0,"body_sha256":sha256(""),"error":null}),
+                    json!({"kind":"http","status":200,"content_type":"application/json"}),
+                    json!({"kind":"body","offset":0,"base64":STANDARD.encode(physical.as_bytes())}),
+                    json!({"kind":"end","termination":"eof","body_bytes":physical.len(),"body_sha256":sha256(&physical),"error":null}),
                 ].into_iter().enumerate() {
                     let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
                     let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
@@ -1849,7 +1947,7 @@ mod tests {
                     state.commit_response(plan);
                 }
                 let mut event = json!({"kind":"outcome","status":status,
-                    "sdk_values_seen":if status == "completed" { 1 } else { 0 },"pipeline_outputs_delivered":0,
+                    "sdk_values_seen":1,"pipeline_outputs_delivered":if status == "completed" { 1 } else { 0 },
                     "error":if status == "failed" {json!("processing failed")} else {json!(null)},
                     "served_usage":{"promptTokenCount":5,"candidatesTokenCount":3,"totalTokenCount":8,
                         "cachedContentTokenCount":1,"thoughtsTokenCount":2}});
@@ -1869,12 +1967,12 @@ mod tests {
                     "negative" => event["served_usage"]["thoughtsTokenCount"] = json!(-1),
                     _ => {}
                 }
-                let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":3,"event":event}}).to_string();
+                let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":4,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                 let plan = state.plan_response(doc.root(), 1);
                 assert_eq!(
                     plan.is_ok(),
-                    matches!(defect, "valid" | "null" | "zero"),
+                    defect == "valid",
                     "{status}/{defect}"
                 );
                 assert_eq!(

@@ -354659,7 +354659,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1296 @@
+@@ -0,0 +1,1379 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -354695,6 +354695,46 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        and usage["thoughtsTokenCount"] <= usage["candidatesTokenCount"],
 +        "inconsistent served token counts",
 +    )
++
++
++def _openai_served_usage(value: Any) -> dict[str, int] | None:
++    if not isinstance(value, dict) or not isinstance(value.get("usage"), dict):
++        return None
++    usage = value["usage"]
++    prompt_details = usage.get("prompt_tokens_details")
++    output_details = usage.get("completion_tokens_details")
++    mapped = {
++        "promptTokenCount": usage.get("prompt_tokens"),
++        "candidatesTokenCount": usage.get("completion_tokens"),
++        "totalTokenCount": usage.get("total_tokens"),
++        "cachedContentTokenCount": (
++            prompt_details.get("cached_tokens")
++            if isinstance(prompt_details, dict)
++            else None
++        ),
++        "thoughtsTokenCount": (
++            output_details.get("reasoning_tokens")
++            if isinstance(output_details, dict)
++            else None
++        ),
++    }
++    if not all(
++        type(count) is float
++        and math.isfinite(count)
++        and count.is_integer()
++        and 0 <= count <= 2**53 - 1
++        for count in mapped.values()
++    ):
++        return None
++    result = {key: int(count) for key, count in mapped.items()}
++    if (
++        result["totalTokenCount"]
++        != result["promptTokenCount"] + result["candidatesTokenCount"]
++        or result["cachedContentTokenCount"] > result["promptTokenCount"]
++        or result["thoughtsTokenCount"] > result["candidatesTokenCount"]
++    ):
++        return None
++    return result
 +
 +
 +def _parse_sdk_json(text: str) -> Any:
@@ -354764,6 +354804,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +    data: list[str] = field(default_factory=list)
 +    count: int = 0
 +    values: list[Any] = field(default_factory=list)
++    usage_reports: list[tuple[int, dict[str, int]]] = field(default_factory=list)
 +    retain_values: bool = False
 +    failed: bool = False
 +    done: bool = False
@@ -354835,8 +354876,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +        self.count += 1
 +        if self.count > 2**53 - 1:
 +            self.failed = True
-+        elif self.retain_values:
-+            self.values.append(_sdk_json_value(value))
++        else:
++            if not (name and name.startswith("thread.")):
++                usage = _openai_served_usage(value)
++                if usage is not None:
++                    self.usage_reports.append((self.count, usage))
++            if self.retain_values:
++                self.values.append(_sdk_json_value(value))
 +
 +
 +@dataclass
@@ -354880,6 +354926,34 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            return []
 +        return self._settled_sse(transport_eof).values
 +
++    def _nonstream_json_value(self) -> Any:
++        text = self.body.decode("utf-8-sig", "replace").removeprefix("\ufeff")
++        return _parse_sdk_json(text)
++
++    def observed_usage(
++        self,
++        seen: int,
++        status: int | None,
++        content_type: str | None,
++        transport_eof: bool,
++    ) -> dict[str, int] | None:
++        if seen == 0 or status is None or not 200 <= status < 300:
++            return None
++        if self.stream:
++            reports = self._settled_sse(transport_eof).usage_reports
++            return next(
++                (usage for position, usage in reversed(reports) if position <= seen),
++                None,
++            )
++        if status == 204:
++            return None
++        media_type = content_type.split(";", 1)[0].strip() if content_type else None
++        if not media_type or not (
++            "application/json" in media_type or media_type.endswith("+json")
++        ):
++            return None
++        return _openai_served_usage(self._nonstream_json_value())
++
 +    def require_prefix(
 +        self,
 +        seen: int,
@@ -354903,9 +354977,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +            )
 +            if is_json:
 +                try:
-+                    text = self.body.decode("utf-8-sig", "replace")
-+                    text = text.removeprefix("\ufeff")
-+                    _parse_sdk_json(text)
++                    self._nonstream_json_value()
 +                except ValueError:
 +                    available, failed = 0, True
 +                else:
@@ -355489,6 +355561,17 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                state.http_status,
 +                state.content_type,
 +                state.termination == "eof",
++            )
++            _require(
++                event["served_usage"]
++                == state.values.observed_usage(
++                    sdk_values,
++                    state.http_status,
++                    state.content_type,
++                    state.termination == "eof",
++                ),
++                "served usage differs from processed physical response bytes; "
++                "inspect the complete original recording with its matching client",
 +            )
 +            if state.compaction_id is not None:
 +                operation = self.compactions[state.compaction_id]
@@ -356704,7 +356787,7 @@ diff --git a/packages/sdk-python/tests/unit/test_record_admission.py b/packages/
 +    }
 +    wire.insert(-1, delivery)
 +    expected = copy.deepcopy(wire)
-+    if defect in (None, "null", "zero"):
++    if defect is None:
 +        admit_all(wire).finish()
 +        assert wire == expected
 +    else:
@@ -361936,7 +362019,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,874 @@
+@@ -0,0 +1,966 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -362064,7 +362147,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        }
 +        ids.add(requestId);
 +        scopes.put(scope, new RequestBody(requestId, (String) request.get("segment_id"), slices.messages));
-+        responses.put(requestId, new Response((String) owner.get("kind"), (String) owner.get("attempt_id"), compactionId));
++        responses.put(requestId, new Response((String) owner.get("kind"), (String) owner.get("attempt_id"),
++                compactionId, slices.stream));
 +        usage = nextUsage;
 +    }
 +
@@ -362231,12 +362315,9 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                    "completed processing has no successful HTTP transport completion");
 +            require(event.containsKey("served_usage"), "response outcome requires nullable served usage");
 +            Map<String, Long> report = RequestUsage.served(event.get("served_usage"));
++            require(Objects.equals(report, physicalServedUsage(state, sdkValues, "completed".equals(event.get("status")))),
++                    "served usage differs from processed physical response bytes; inspect the complete original recording");
 +            if (state.compactionId != null) {
-+                state.values.settle("eof".equals(state.termination));
-+                require(sdkValues <= state.values.values.size()
-+                        && (!"completed".equals(event.get("status"))
-+                            || (!state.values.failed && sdkValues == state.values.values.size())),
-+                        "compaction SDK value count contradicts physical response bytes");
 +                CompactionOperation operation = compactions.get(state.compactionId);
 +                // A failed SDK read can leave later complete SSE values unconsumed.
 +                operation.values.put(id, new ArrayList<>(state.values.values.subList(0, (int) sdkValues)));
@@ -362259,6 +362340,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            case "http":
 +                require(state.httpStatus == null && state.sequence == 0, "repeated or late HTTP headers");
 +                state.httpStatus = integer(event.get("status"));
++                state.contentType = (String) event.get("content_type");
 +                break;
 +            case "body":
 +                require(state.httpStatus != null && integer(event.get("offset")) == state.size,
@@ -362270,6 +362352,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                state.digest.update(bytes);
 +                if (state.values != null && state.httpStatus >= 200 && state.httpStatus < 300) {
 +                    state.values.push(bytes);
++                } else if (state.nonstreamBody != null && state.httpStatus >= 200 && state.httpStatus < 300) {
++                    state.nonstreamBody.writeBytes(bytes);
 +                }
 +                state.size = nextSize;
 +                break;
@@ -362476,6 +362560,68 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        return value;
 +    }
 +
++    private static Long sdkCount(Object value) {
++        if (!(value instanceof Number)) return null;
++        double number = ((Number) value).doubleValue();
++        return Double.isFinite(number) && number >= 0 && number <= SAFE_INTEGER && Math.rint(number) == number
++                ? (long) number : null;
++    }
++
++    private static Map<String, Long> openaiServedUsage(Object value) {
++        if (!(value instanceof Map) || !(object(value).get("usage") instanceof Map)) return null;
++        Map<String, Object> usage = object(object(value).get("usage"));
++        Map<String, Object> promptDetails = usage.get("prompt_tokens_details") instanceof Map
++                ? object(usage.get("prompt_tokens_details")) : Map.of();
++        Map<String, Object> outputDetails = usage.get("completion_tokens_details") instanceof Map
++                ? object(usage.get("completion_tokens_details")) : Map.of();
++        Long prompt = sdkCount(usage.get("prompt_tokens"));
++        Long output = sdkCount(usage.get("completion_tokens"));
++        Long total = sdkCount(usage.get("total_tokens"));
++        Long cached = sdkCount(promptDetails.get("cached_tokens"));
++        Long thoughts = sdkCount(outputDetails.get("reasoning_tokens"));
++        if (prompt == null || output == null || total == null || cached == null || thoughts == null
++                || prompt + output != total || cached > prompt || thoughts > output) return null;
++        return Map.of("promptTokenCount", prompt, "candidatesTokenCount", output,
++                "totalTokenCount", total, "cachedContentTokenCount", cached, "thoughtsTokenCount", thoughts);
++    }
++
++    private static Map<String, Long> physicalServedUsage(Response state, long seen, boolean completed) {
++        if (state.httpStatus == null || state.httpStatus < 200 || state.httpStatus >= 300) {
++            require(seen == 0, "SDK processing claims values from an unsuccessful HTTP response");
++            return null;
++        }
++        if (state.values != null) {
++            state.values.settle("eof".equals(state.termination));
++            require(seen <= state.values.count && (!completed || (!state.values.failed && seen == state.values.count)),
++                    "SDK value count contradicts physical response bytes");
++            for (int index = state.values.usageReports.size() - 1; index >= 0; index--) {
++                UsageObservation report = state.values.usageReports.get(index);
++                if (report.position <= seen) return report.usage;
++            }
++            return null;
++        }
++        if (state.httpStatus == 204) {
++            require(seen <= 1 && (!completed || seen == 1), "SDK value count contradicts no-content response");
++            return null;
++        }
++        String mediaType = state.contentType == null ? null : state.contentType.split(";", 2)[0].trim();
++        if (mediaType == null || !(mediaType.contains("application/json") || mediaType.endsWith("+json"))) {
++            require(seen <= 1 && (!completed || seen == 1), "SDK value count contradicts text response");
++            return null;
++        }
++        String text = new String(state.nonstreamBody.toByteArray(), StandardCharsets.UTF_8);
++        for (int marks = 0; marks < 2 && text.startsWith("\ufeff"); marks++) text = text.substring(1);
++        Object value;
++        try {
++            value = StrictJson.parseSdk(text, "physical response JSON");
++        } catch (IllegalArgumentException cause) {
++            require(!completed && seen == 0, "SDK processing claims an undecodable JSON response");
++            return null;
++        }
++        require(seen <= 1 && (!completed || seen == 1), "SDK value count contradicts JSON response");
++        return seen == 1 ? openaiServedUsage(value) : null;
++    }
++
 +    void summary(Map<String, Object> summary) {
 +        require(compactions.isEmpty(), "terminal leaves physical compaction draws unclaimed");
 +        require(Objects.equals(journal, summary.get("journal_id")) && first == integer(summary.get("first_sequence"))
@@ -362672,6 +362818,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +
 +    private static final class SseValues {
 +        private final List<Object> values = new ArrayList<>();
++        private final List<UsageObservation> usageReports = new ArrayList<>();
++        private final boolean retainValues;
 +        private final List<String> data = new ArrayList<>();
 +        private final ByteArrayOutputStream line = new ByteArrayOutputStream();
 +        private final ByteArrayOutputStream pending = new ByteArrayOutputStream();
@@ -362679,9 +362827,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        private boolean afterCr;
 +        private boolean failed;
 +        private boolean done;
++        private long count;
 +        private int previous1 = -1;
 +        private int previous2 = -1;
 +        private int previous3 = -1;
++
++        private SseValues(boolean retainValues) {
++            this.retainValues = retainValues;
++        }
 +
 +        private void push(byte[] body) {
 +            for (byte value : body) {
@@ -362767,7 +362920,16 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                failed = true;
 +                return;
 +            }
-+            values.add(sdkJsonValue(value));
++            if (count == SAFE_INTEGER) {
++                failed = true;
++                return;
++            }
++            count++;
++            if (name == null || !name.startsWith("thread.")) {
++                Map<String, Long> usage = openaiServedUsage(value);
++                if (usage != null) usageReports.add(new UsageObservation(count, usage));
++            }
++            if (retainValues) values.add(sdkJsonValue(value));
 +        }
 +
 +        private static boolean truthy(Object value) {
@@ -362775,6 +362937,16 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +            if (value instanceof Number) return new BigDecimal(value.toString()).signum() != 0;
 +            if (value instanceof String) return !((String) value).isEmpty();
 +            return true;
++        }
++    }
++
++    private static final class UsageObservation {
++        private final long position;
++        private final Map<String, Long> usage;
++
++        private UsageObservation(long position, Map<String, Long> usage) {
++            this.position = position;
++            this.usage = usage;
 +        }
 +    }
 +
@@ -362795,19 +362967,22 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +        private final String attemptId;
 +        private final String compactionId;
 +        private final SseValues values;
++        private final ByteArrayOutputStream nonstreamBody;
 +        private long sequence;
 +        private Long httpStatus;
++        private String contentType;
 +        private String termination;
 +        private long size;
 +        private MessageDigest digest = StreamSchema.digest();
 +        private String processingStatus;
 +        private Long pipelineOutputs;
 +
-+        private Response(String ownerKind, String attemptId, String compactionId) {
++        private Response(String ownerKind, String attemptId, String compactionId, boolean stream) {
 +            this.ownerKind = ownerKind;
 +            this.attemptId = attemptId;
 +            this.compactionId = compactionId;
-+            this.values = compactionId == null ? null : new SseValues();
++            this.values = stream ? new SseValues(compactionId != null) : null;
++            this.nonstreamBody = stream ? null : new ByteArrayOutputStream();
 +        }
 +    }
 +}
@@ -365440,7 +365615,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,919 @@
+@@ -0,0 +1,938 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -365638,8 +365813,14 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +
 +    @Test
 +    void failedCompactionClaimsOnlyConsumedSdkValuePrefix() {
-+        String first = "{\"choices\":[{\"finish_reason\":\"error_finish\",\"delta\":{\"content\":\"failed\"}}]}";
-+        String unread = "{\"choices\":[{\"delta\":{\"content\":\"unread\"}}]}";
++        String first = "{\"choices\":[{\"finish_reason\":\"error_finish\",\"delta\":{\"content\":\"failed\"}}],"
++                + "\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8,"
++                + "\"prompt_tokens_details\":{\"cached_tokens\":1},"
++                + "\"completion_tokens_details\":{\"reasoning_tokens\":2}}}";
++        String unread = "{\"choices\":[{\"delta\":{\"content\":\"unread\"}}],"
++                + "\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":4,\"total_tokens\":13,"
++                + "\"prompt_tokens_details\":{\"cached_tokens\":0},"
++                + "\"completion_tokens_details\":{\"reasoning_tokens\":1}}}";
 +        List<JSONObject> rows = streamedCompaction(first);
 +        byte[] body = ("data: " + first + "\n\ndata: " + unread + "\n\n")
 +                .getBytes(StandardCharsets.UTF_8);
@@ -365650,10 +365831,23 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        JSONObject outcome = rows.get(5).getJSONObject("response").getJSONObject("event");
 +        outcome.put("status", "failed");
 +        outcome.put("error", "conversion failed");
++        Map<String, Long> served = Map.of("promptTokenCount", 5L, "candidatesTokenCount", 3L,
++                "totalTokenCount", 8L, "cachedContentTokenCount", 1L, "thoughtsTokenCount", 2L);
++        outcome.put("served_usage", served);
++        JSONObject terminalUsage = rows.get(8).getJSONObject("usage");
++        terminalUsage.put("usageReports", 1);
++        terminalUsage.put("unreportedUsageRequests", 0);
++        terminalUsage.put("usage", served);
 +        admitCompaction(rows);
 +
 +        rows.get(7).getJSONObject("data").getJSONObject("output")
 +                .put("sdkValuesJson", List.of(first, unread));
++        assertThrows(RecordContractException.class, () -> admitCompaction(rows));
++
++        rows.get(7).getJSONObject("data").getJSONObject("output")
++                .put("sdkValuesJson", List.of(first));
++        outcome.put("served_usage", Map.of("promptTokenCount", 9L, "candidatesTokenCount", 4L,
++                "totalTokenCount", 13L, "cachedContentTokenCount", 0L, "thoughtsTokenCount", 1L));
 +        assertThrows(RecordContractException.class, () -> admitCompaction(rows));
 +    }
 +
@@ -366322,7 +366516,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +                    }
 +                    fail("Fixture did not reach a physical outcome");
 +                };
-+                if (List.of("valid", "null", "zero").contains(defect)) {
++                if ("valid".equals(defect)) {
 +                    assertDoesNotThrow(read);
 +                } else {
 +                    RecordContractException failure = assertThrows(RecordContractException.class, read);
@@ -397841,7 +398035,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -397857,8 +398051,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -398213,7 +398407,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -398229,8 +398423,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -398585,7 +398779,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -398601,8 +398795,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -398957,7 +399151,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -398973,8 +399167,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -399329,7 +399523,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -399345,8 +399539,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -399781,7 +399975,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -399797,8 +399991,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -399907,7 +400101,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -399923,8 +400117,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -400280,7 +400474,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -400296,8 +400490,8 @@ diff --git a/packages/sdk-java/qwencode/src/test/resources/accepted-generation-v
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -402400,7 +402594,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -402416,8 +402610,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -402772,7 +402966,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -402788,8 +402982,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -403144,7 +403338,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -403160,8 +403354,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -403516,7 +403710,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -403532,8 +403726,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -403888,7 +404082,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -403904,8 +404098,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -404340,7 +404534,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -404356,8 +404550,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -404466,7 +404660,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -404482,8 +404676,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -404839,7 +405033,7 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "body",
 +            "offset": 0,
-+            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdFRva2VuQ291bnQiOjEyLCJjYW5kaWRhdGVzVG9rZW5Db3VudCI6NywidG90YWxUb2tlbkNvdW50IjoxOSwiY2FjaGVkQ29udGVudFRva2VuQ291bnQiOjQsInRob3VnaHRzVG9rZW5Db3VudCI6Mn0sInJlc3BvbnNlIjoicmF3IGJvZHkgcmV0YWluZWQifQ=="
++            "base64": "eyJtb2RlbCI6ImFjdHVhbC1tb2RlbC1vdmVycmlkZSIsInVzYWdlIjp7InByb21wdF90b2tlbnMiOjEyLCJjb21wbGV0aW9uX3Rva2VucyI6NywidG90YWxfdG9rZW5zIjoxOSwicHJvbXB0X3Rva2Vuc19kZXRhaWxzIjp7ImNhY2hlZF90b2tlbnMiOjR9LCJjb21wbGV0aW9uX3Rva2Vuc19kZXRhaWxzIjp7InJlYXNvbmluZ190b2tlbnMiOjJ9fSwicmVzcG9uc2UiOiJyYXcgYm9keSByZXRhaW5lZCJ9"
 +          }
 +        }
 +      },
@@ -404855,8 +405049,8 @@ diff --git a/packages/sdk-python/tests/fixtures/accepted-generation-view.json b/
 +          "event": {
 +            "kind": "end",
 +            "termination": "eof",
-+            "body_bytes": 193,
-+            "body_sha256": "0591b430accdbddf20bde4542aacdf1c85f97eb6166092e0ea116982d3d4c103",
++            "body_bytes": 228,
++            "body_sha256": "32e09aa727acd1dd2a226e944d4646763d864d7d3ee3d990849fcc51483be31f",
 +            "error": null
 +          }
 +        }
@@ -407061,7 +407255,7 @@ diff --git a/packages/sdk-python/tests/unit/test_generation_output_scope.py b/pa
 diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packages/sdk-python/tests/unit/test_root_physical_usage.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_root_physical_usage.py
-@@ -0,0 +1,585 @@
+@@ -0,0 +1,600 @@
 +from __future__ import annotations
 +
 +import asyncio
@@ -407163,8 +407357,23 @@ diff --git a/packages/sdk-python/tests/unit/test_root_physical_usage.py b/packag
 +    chat: bool = True,
 +    journal: str = "journal-a",
 +) -> list[dict[str, Any]]:
++    provider_usage = (
++        {
++            "prompt_tokens": usage["promptTokenCount"],
++            "completion_tokens": usage["candidatesTokenCount"],
++            "total_tokens": usage["totalTokenCount"],
++            "prompt_tokens_details": {
++                "cached_tokens": usage["cachedContentTokenCount"]
++            },
++            "completion_tokens_details": {
++                "reasoning_tokens": usage["thoughtsTokenCount"]
++            },
++        }
++        if usage is not None
++        else None
++    )
 +    body = encoded(
-+        {"model": "actual-model-override", "usage": usage, "response": prefix}
++        {"model": "actual-model-override", "usage": provider_usage, "response": prefix}
 +    )
 +    events = [
 +        {"kind": "http", "status": 200, "content_type": "application/json"},
@@ -428338,7 +428547,7 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
-@@ -0,0 +1,362 @@
+@@ -0,0 +1,408 @@
 +"""Compaction claims must account for the physical work in the same stream."""
 +
 +from __future__ import annotations
@@ -428665,10 +428874,39 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +
 +
 +def test_failed_compaction_claims_only_the_sdk_values_it_consumed() -> None:
++    first_usage = {
++        "promptTokenCount": 5,
++        "candidatesTokenCount": 3,
++        "totalTokenCount": 8,
++        "cachedContentTokenCount": 1,
++        "thoughtsTokenCount": 2,
++    }
 +    first = _json(
-+        {"choices": [{"finish_reason": "error_finish", "delta": {"content": "failed"}}]}
++        {
++            "choices": [
++                {"finish_reason": "error_finish", "delta": {"content": "failed"}}
++            ],
++            "usage": {
++                "prompt_tokens": 5,
++                "completion_tokens": 3,
++                "total_tokens": 8,
++                "prompt_tokens_details": {"cached_tokens": 1},
++                "completion_tokens_details": {"reasoning_tokens": 2},
++            },
++        }
 +    )
-+    unread = _json({"choices": [{"delta": {"content": "unread"}}]})
++    unread = _json(
++        {
++            "choices": [{"delta": {"content": "unread"}}],
++            "usage": {
++                "prompt_tokens": 9,
++                "completion_tokens": 4,
++                "total_tokens": 13,
++                "prompt_tokens_details": {"cached_tokens": 0},
++                "completion_tokens_details": {"reasoning_tokens": 1},
++            },
++        }
++    )
 +    rows = _rows()
 +    body = f"data: {first}\n\ndata: {unread}\n\n".encode()
 +    rows[2]["response"]["event"].update(status=200, content_type="text/event-stream")
@@ -428694,10 +428932,27 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +    for sequence, row in enumerate(rows[4:7], start=3):
 +        row["response"]["sequence"] = sequence
 +    rows[4]["response"]["event"].update(body_bytes=len(body), body_sha256=_hash(body))
-+    rows[5]["response"]["event"].update(error="conversion failed", sdk_values_seen=1)
++    rows[5]["response"]["event"].update(
++        error="conversion failed", sdk_values_seen=1, served_usage=first_usage
++    )
++    rows[-1]["usage"].update(
++        usageReports=1, unreportedUsageRequests=0, usage=first_usage
++    )
 +    rows[-2]["data"]["output"]["sdkValuesJson"] = [first]
 +    _admit(rows)
 +
 +    rows[-2]["data"]["output"]["sdkValuesJson"] = [first, unread]
 +    with pytest.raises(RecordContractError, match="physical response bytes"):
++        _admit(rows)
++
++    rows[-2]["data"]["output"]["sdkValuesJson"] = [first]
++    rows[5]["response"]["event"]["served_usage"] = {
++        **first_usage,
++        "promptTokenCount": 9,
++        "candidatesTokenCount": 4,
++        "totalTokenCount": 13,
++        "cachedContentTokenCount": 0,
++        "thoughtsTokenCount": 1,
++    }
++    with pytest.raises(RecordContractError, match="served usage differs"):
 +        _admit(rows)

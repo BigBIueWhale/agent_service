@@ -100,3 +100,34 @@ All 6,925 review hunks matched both coordinate systems. The 26 saved test-source
 identities matched the sealed result. Framework checks passed 38 tests and the
 semantic concern count remains 35. Manifest/lock bindings and unchanged protected
 release inputs were checked. These are patch/source identity checks, not a build.
+
+## Physical response bytes determine served usage
+
+The producer observes the last complete, valid OpenAI usage report among SDK
+values it processed. It makes that observation before attempting to convert
+each value, so a failed conversion can still carry a real served-usage report.
+The shared TypeScript reader already checks this relation against physical
+response bytes. Native, Python and Java admission now derive the same five
+counts from the recorded nonstream JSON or SSE prefix named by
+`sdk_values_seen`. Missing or invalid reports leave the last valid report in
+force; values physically present after a failed SDK read cannot change it.
+The declared nullable `served_usage` must equal that derived value. This
+applies to ordinary Chat and utility responses as well as compaction draws.
+
+The Python SDK's complete source unit suite passed 791 cases after the check.
+Its shared positive fixtures had encoded the five-count *record* shape inside
+the fake provider body; they now encode the provider's `prompt_tokens`,
+`completion_tokens`, `total_tokens`, cached and reasoning fields. Existing
+tests that expected null or zero outcome usage over a nonzero physical report
+now require refusal. The Java fixture copy and equivalent refusal case were
+updated. Native and Java regression cases are authored and source-reviewed,
+but not executed. Rust formatting parsed the native edits; compilation,
+packaged SDKs, owner gates and provider execution remain unverified.
+
+This tightens interpretation of an existing versioned field; the writer,
+request bytes, vLLM response bytes, canonical chat JSONL and resume projection
+are unchanged. It benefits any agent_service reader of physical usage, with
+transient response-local parsing rather than a new history representation.
+Direct vLLM callers have no agent_service record to admit; the backend already
+provides the bytes from which this usage is derived. Text, reasoning and call
+normalization in native, Python and Java remain separate, open provenance work.

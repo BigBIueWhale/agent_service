@@ -9102,6 +9102,11 @@ def _validate_served_accounting_after(state: State) -> None:
         'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
         'event["sdk_values_seen"]', 'event["pipeline_outputs_delivered"]',
         'state.values.require_prefix(',
+        'def _openai_served_usage(value: Any)',
+        'usage_reports: list[tuple[int, dict[str, int]]]',
+        'def observed_usage(',
+        'event["served_usage"]\n                == state.values.observed_usage(',
+        'served usage differs from processed physical response bytes',
         'state.content_type = event["content_type"]',
         'state.values.push(raw)',
         'SDK value count claims an impossible physical response prefix',
@@ -9144,6 +9149,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, python_sdk + "tests/unit/test_record_admission.py", (
         "test_authoritative_request_response_streams", "test_shared_goal_vectors",
         "test_physical_usage_is_explicit_and_valid",
+        "if defect is None:",
         '"model_normalization_seed",',
         "test_full_body_requires_a_new_segment_for_its_scope",
         "test_shared_partial_vectors", "test_request_replay_preserves_raw_json_spelling",
@@ -9162,6 +9168,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_compaction_tokenizer_uses_one_physical_draw_model",
     ), label=label)
     _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
+        '"prompt_tokens": usage["promptTokenCount"]',
         "seed_row[\"normalization_seed\"].update(",
         "*responses[:-1]",
         "responses[-1]",
@@ -9284,6 +9291,10 @@ def _validate_served_accounting_after(state: State) -> None:
         '"eof".equals(state.termination) || "cancelled".equals(state.termination)',
         'state.termination = (String) event.get("termination")',
         'RequestUsage.served(event.get("served_usage"))',
+        'physicalServedUsage(state, sdkValues, "completed".equals(event.get("status")))',
+        'private static Map<String, Long> openaiServedUsage(Object value)',
+        'private static Map<String, Long> physicalServedUsage(Response state',
+        'new SseValues(compactionId != null)',
         'event.get("sdk_values_seen")', 'event.get("pipeline_outputs_delivered")',
         '"delivery".equals(kind)',
         'delivered <= state.pipelineOutputs',
@@ -9334,6 +9345,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes",
         "compactionSdkValuesMustComeFromRecordedSseBytes",
         "failedCompactionClaimsOnlyConsumedSdkValuePrefix",
+        '"valid".equals(defect)',
         "compactionTokenizerModelMustMatchEveryPhysicalDraw",
     ), label=label)
     _require_all(state, java_tests + "session/SessionRecordTest.java", (
