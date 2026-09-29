@@ -344838,7 +344838,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1249 @@
+@@ -0,0 +1,1265 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -345688,6 +345688,22 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  }
 +  claimCompaction(record: CompactionRecord, scope: string): void {
 +    this.responses.claimCompactionRecord(record, scope);
++  }
++  claimCompactionSystemRecord(record: Record<string, unknown>): void {
++    const parent = record['parent_tool_use_id'];
++    const scope = parent === null ? record['session_id'] : parent;
++    const data = record['data'];
++    if (
++      record['type'] !== 'system' ||
++      record['subtype'] !== 'compaction' ||
++      typeof scope !== 'string' ||
++      !scope ||
++      !data ||
++      typeof data !== 'object' ||
++      Array.isArray(data)
++    )
++      failure('compaction system record has no scope or object data');
++    this.responses.claimCompactionRecord(data as CompactionRecord, scope);
 +  }
 +  finishStream(): void {
 +    this.responses.finish();
@@ -417997,7 +418013,7 @@ diff --git a/esbuild.config.js b/esbuild.config.js
 diff --git a/packages/core/src/core/record-verifier-core.ts b/packages/core/src/core/record-verifier-core.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-core.ts
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,167 @@
 +import { createHash } from 'node:crypto';
 +import { constants } from 'node:fs';
 +import { open } from 'node:fs/promises';
@@ -418075,6 +418091,10 @@ diff --git a/packages/core/src/core/record-verifier-core.ts b/packages/core/src/
 +          'Captured events precede stream_start. Retain the complete invocation and retry.',
 +        );
 +      switch (record['type']) {
++        case 'system':
++          if (record['subtype'] === 'compaction')
++            replay.claimCompactionSystemRecord(record);
++          break;
 +        case 'model_request':
 +          replay.observe(record['request']);
 +          break;
@@ -418164,7 +418184,7 @@ diff --git a/packages/core/src/core/record-verifier-core.ts b/packages/core/src/
 diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core/src/core/record-verifier-core.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-core.test.ts
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,95 @@
 +import { createHash } from 'node:crypto';
 +import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 +import { tmpdir } from 'node:os';
@@ -418172,6 +418192,7 @@ diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core
 +import { readFileSync } from 'node:fs';
 +import { afterEach, expect, it } from 'vitest';
 +import { verifyPhysicalModelRecords } from './record-verifier-core.js';
++import { failedCompactionRows } from './record-verifier-compaction.fixture.js';
 +
 +type WireRow = Record<string, unknown>;
 +const fixture = JSON.parse(
@@ -418242,6 +418263,23 @@ diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core
 +    /changed between native and physical verification/,
 +  );
 +});
++
++
++it('accepts a failed compaction draw only when its physical operation is claimed', async () => {
++  const rows = failedCompactionRows();
++  await expect(verify(rows)).resolves.toBeUndefined();
++  const missing = rows.filter(
++    (row) => row['type'] !== 'system' || row['subtype'] !== 'compaction',
++  );
++  await expect(verify(missing)).rejects.toThrow(/response completion/);
++  const forged = structuredClone(rows);
++  const compaction = forged.find((row) => row['subtype'] === 'compaction')!;
++  (compaction['data'] as Record<string, unknown>)['output'] = {
++    ...((compaction['data'] as Record<string, unknown>)['output'] as object),
++    physicalRequests: 2,
++  };
++  await expect(verify(forged)).rejects.toThrow(/physical operation/);
++});
 diff --git a/packages/core/src/core/record-verifier.ts b/packages/core/src/core/record-verifier.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier.ts
@@ -418280,7 +418318,7 @@ diff --git a/packages/core/src/core/record-verifier.ts b/packages/core/src/core/
 diff --git a/packages/core/src/core/record-verifier-stream.ts b/packages/core/src/core/record-verifier-stream.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-stream.ts
-@@ -0,0 +1,186 @@
+@@ -0,0 +1,190 @@
 +import { createHash } from 'node:crypto';
 +import { once } from 'node:events';
 +import { ModelRequestStreamReplay } from './model-request-evidence.js';
@@ -418366,6 +418404,10 @@ diff --git a/packages/core/src/core/record-verifier-stream.ts b/packages/core/sr
 +        state.terminal = !state.dual;
 +        break;
 +      case 'system':
++        if (record['subtype'] === 'compaction') {
++          state.replay.claimCompactionSystemRecord(record);
++          break;
++        }
 +        if (record['subtype'] === 'session_start') {
 +          state.dual = true;
 +          break;
@@ -418470,7 +418512,7 @@ diff --git a/packages/core/src/core/record-verifier-stream.ts b/packages/core/sr
 diff --git a/packages/core/src/core/record-verifier-stream.test.ts b/packages/core/src/core/record-verifier-stream.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-stream.test.ts
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,131 @@
 +import { createHash } from 'node:crypto';
 +import { readFileSync } from 'node:fs';
 +import { expect, it } from 'vitest';
@@ -418478,6 +418520,7 @@ diff --git a/packages/core/src/core/record-verifier-stream.test.ts b/packages/co
 +  verifyRecordStream,
 +  type RecordVerifierAcknowledgment,
 +} from './record-verifier-stream.js';
++import { failedCompactionRows } from './record-verifier-compaction.fixture.js';
 +
 +type WireRow = Record<string, unknown>;
 +const fixture = JSON.parse(
@@ -418588,6 +418631,18 @@ diff --git a/packages/core/src/core/record-verifier-stream.test.ts b/packages/co
 +    ).rejects.toThrow(/blank physical record|unterminated suffix/);
 +    expect(acknowledgments).toEqual([]);
 +  }
++});
++
++it('acknowledges a failed physical compaction draw only after its system record', async () => {
++  const rows = failedCompactionRows();
++  const { acknowledgments } = await verify(rows);
++  expect(acknowledgments.at(-1)).toEqual({
++    status: 'complete', records: rows.length,
++  });
++  const missing = rows.filter(
++    (row) => row['type'] !== 'system' || row['subtype'] !== 'compaction',
++  );
++  await expect(verify(missing)).rejects.toThrow(/response completion/);
 +});
 diff --git a/packages/cli/index.ts b/packages/cli/index.ts
 --- a/packages/cli/index.ts
@@ -426934,4 +426989,110 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v15.json b/pa
 +      "additionalProperties": false
 +    }
 +  }
++}
+diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/packages/core/src/core/record-verifier-compaction.fixture.ts
+--- /dev/null
++++ b/packages/core/src/core/record-verifier-compaction.fixture.ts
+@@ -0,0 +1,102 @@
++import { createHash } from 'node:crypto';
++import { compactionRequestDirective } from '../services/state-snapshot.js';
++
++type WireRow = Record<string, unknown>;
++
++export function failedCompactionRows(): WireRow[] {
++  const journal = 'compaction-journal';
++  const requestId = 'compaction-physical';
++  const operationId = 'compaction-operation';
++  const scope = 'session';
++  const body = JSON.stringify({
++    model: 'fixture-model',
++    kv_scope: scope,
++    stream: true,
++    max_tokens: 8,
++    messages: [{
++      role: 'user',
++      content: [{ type: 'text', text: compactionRequestDirective(8) }],
++    }],
++  });
++  const digest = (bytes: string | Buffer) =>
++    createHash('sha256').update(bytes).digest('hex');
++  const response = (sequence: number, event: Record<string, unknown>) => ({
++    type: 'model_response',
++    response: { journal_id: journal, request_id: requestId, sequence, event },
++  });
++  const tokenEvidence = (count: number) => ({
++    requestUrl: 'http://fixture.invalid/tokenize',
++    requestJson: JSON.stringify({
++      model: 'fixture-model', messages: [], add_generation_prompt: true,
++    }),
++    responseStatus: 200,
++    responseContentType: 'application/json',
++    responseBase64: Buffer.from(JSON.stringify({
++      count, max_model_len: 100,
++    })).toString('base64'),
++  });
++  return [
++    {
++      type: 'system', subtype: 'stream_start',
++      request_evidence_origin: { journal_id: journal, first_sequence: 1 },
++    },
++    {
++      type: 'model_request',
++      request: {
++        journal_id: journal, sequence: 1, request_id: requestId,
++        owner: { kind: 'utility', operation_id: operationId, purpose: 'compaction' },
++        kv_scope: scope, segment_id: 'compaction-segment', prompt_id: 'compaction',
++        decode_policy: {
++          mode: 'stream', model: 'fixture-model', strict_tool_calling: false,
++          named_tool_choice: null, exact_token_counting: false,
++          tagged_thinking_tags: false,
++        },
++        body_bytes: Buffer.byteLength(body), body_sha256: digest(body),
++        body: { kind: 'full', json: body },
++      },
++    },
++    response(1, { kind: 'http', status: 500, content_type: 'text/plain' }),
++    response(2, {
++      kind: 'end', termination: 'eof', body_bytes: 0,
++      body_sha256: digest(''), error: null,
++    }),
++    response(3, {
++      kind: 'outcome', status: 'failed', error: 'HTTP 500',
++      served_usage: null, sdk_values_seen: 0,
++      pipeline_outputs_delivered: 0,
++    }),
++    response(4, { kind: 'delivery', outputs_delivered: 0 }),
++    {
++      type: 'system', subtype: 'compaction', session_id: scope,
++      parent_tool_use_id: null,
++      data: {
++        status: 'COMPRESSION_FAILED_PROTOCOL_ERROR', succeeded: false,
++        originalTokenCount: 5, newTokenCount: 5,
++        tokenMeasurements: [
++          { role: 'original', evidence: tokenEvidence(5) },
++          { role: 'summary_request', evidence: tokenEvidence(5) },
++          { role: 'prompt_only', evidence: tokenEvidence(5) },
++        ],
++        triggerReason: null, postCompactionHistory: null,
++        output: {
++          maxOutputTokens: 8, operationId, physicalRequests: 1,
++          sdkValuesJson: [], text: '', reasoning: '', functionCalls: [],
++          newTokenCount: null, snapshotBytes: null,
++          incompleteToolCalls: [], finishReason: null, usage: null,
++        },
++        rejectedAttempts: [],
++      },
++    },
++    {
++      type: 'result', parent_tool_use_id: null,
++      request_evidence: {
++        journal_id: journal, first_sequence: 1, request_count: 1,
++        open_response_ids: [], open_attempt_ids: [],
++      },
++      usage: {
++        requests: 1, usageReports: 0, unfinalizedRequests: 0,
++        unreportedUsageRequests: 1, usage: null,
++      },
++    },
++  ].map((row) => ({ ...row, session_id: scope }));
 +}

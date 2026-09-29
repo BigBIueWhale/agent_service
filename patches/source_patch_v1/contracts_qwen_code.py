@@ -8391,6 +8391,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "operation_id: utilityDelivery!.operationId",
         "utilityDelivery!.attach(response)",
         "if (!attempt && !utilityDelivery)",
+        "claimCompactionSystemRecord(record: Record<string, unknown>): void",
+        "this.responses.claimCompactionRecord(data as CompactionRecord, scope)",
     ), label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",
                 "retained > 0 || previous.body.messages.length === 0", label=label)
@@ -8611,6 +8613,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "stat.size !== expectedBytes",
         "digest.update(chunk)",
         "replay.observeGeneration(record['generation'])",
+        "replay.claimCompactionSystemRecord(record)",
         "replay.finishStream()",
         "digest.digest('hex') !== expectedSha256",
     ), label=label)
@@ -8618,6 +8621,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "accepts a complete physical generation from the captured body",
         "refuses a rehashed thought that the physical response did not produce",
         "refuses a changed captured file even when its records still parse",
+        "accepts a failed compaction draw only when its physical operation is claimed",
+    ), label=label)
+    _require_all(state, core + "core/record-verifier-compaction.fixture.ts", (
+        "export function failedCompactionRows()",
+        "purpose: 'compaction'",
+        "compactionRequestDirective(8)",
     ), label=label)
     _require_all(state, core + "core/record-verifier.ts", (
         "STREAM_CONTRACT_SHA256",
@@ -8628,6 +8637,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "new ModelRequestStreamReplay()",
         "state.replay.observeResponse(record['response'])",
         "state.replay.observeGeneration(record['generation'])",
+        "state.replay.claimCompactionSystemRecord(record)",
         "state.replay.finishStream()",
         "sha256: createHash('sha256').update(raw).update('\\n').digest('hex')",
         "export async function runRecordStreamVerifier(): Promise<void>",
@@ -8638,6 +8648,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "keeps a %s generation tied to its response through both terminals",
         "keeps a dual output window open until session_end after a root result",
         "never acknowledges blank records or unterminated suffixes",
+        "acknowledges a failed physical compaction draw only after its system record",
     ), label=label)
     require_text(state, "packages/core/package.json", '"./recordVerifierStream"', label=label)
     require_text(state, "packages/cli/index.ts", "void runCliOrVerifierEntryPoint();", label=label)

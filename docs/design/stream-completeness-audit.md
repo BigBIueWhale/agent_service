@@ -1061,3 +1061,21 @@ reader separately replays a compaction draw's normalized output from its
 physical values. This native change binds the operation and SDK values, but
 does not yet prove every normalized field of the compaction projection from
 those bytes. Owner Rust gates and an end-to-end provider run remain unverified.
+
+## Compaction claims in both physical verifier transports
+
+Source reading after the native operation change found a second failure: the
+service's file verifier and the SDK process stream verifier both sent request
+and response records to `ModelRequestStreamReplay`, but neither sent the
+`system/compaction` record that claims the physical operation. That reader's
+terminal check consequently refused an otherwise settled compaction operation.
+Both verifier transports now call one shared method that derives the root or
+child scope from the system record and claims its draw through the existing
+response-byte replay. The method refuses a missing scope or object data.
+
+Two focused source suites passed 11 tests, including a recorded failed draw
+that is admitted only with its compaction record and refusals for missing or
+miscounted physical operations. This tests local replay, not the packaged
+verifier processes, generated bindings, native certifier, provider, or owner
+build gates. No backend edit belongs at this reader boundary: the recorded
+request and response bytes are unchanged for ordinary and long sessions.
