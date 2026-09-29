@@ -167,8 +167,8 @@ was run:
   model-facing response Parts and later reminders. Neither proof is supplied
   by the direct Python probe, and no deployed end-to-end failure was executed.
 
-  The current canonical version 19 source records a unique render assertion
-  when Chat renders a request, then binds each attempt ID to it before
+  At the version 19 checkpoint, canonical source recorded a unique render
+  assertion when Chat rendered a request, then bound each attempt ID to it before
   dispatch. A complete reader compares its SHA-256 with the replayed root or
   child history and requires that binding before the physical request. Child
   assertions and bindings are also mirrored into the root file and compared
@@ -1787,8 +1787,15 @@ read-only source patch plan. The authored TypeScript cases and actual runtime
 behavior are unverified pending the owner's build and gates.
 
 This closes the identified whole-render omission only for a child artifact
-that a caller reads. A set-level certifier must also enumerate declared child
-artifacts and refuse a missing child file; a per-file reader cannot open a
-path it was never given. The canonical-to-provider-body renderer relation
-described above also remains open. Neither issue is covered by a completed
-owner gate yet.
+that a caller reads. A per-file reader cannot discover a child path it was
+never given. Source inspection does not yet establish that a missing child
+sidecar makes the model-input/output set incomplete: the root journal mirrors
+physical child requests and output evidence. A client-side artifact-set rule
+therefore needs its own authority decision before making missing sidecars a
+blanket refusal. The native service certifier has a different boundary: it
+reads `output/events.jsonl`, while `/qwen-runtime` is a container tmpfs and
+the bundle selects `staged`, `artifacts`, `control` and `output`. It cannot
+prove canonical sidecar presence after teardown and must prove stream
+completeness from the captured stream. The canonical-to-provider-body renderer
+relation described above remains open. These are source-reading boundaries,
+not completed owner-gate results.
