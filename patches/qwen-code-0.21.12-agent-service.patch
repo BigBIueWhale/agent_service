@@ -354659,7 +354659,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1299 @@
+@@ -0,0 +1,1296 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -355495,11 +355495,8 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                values = state.values.sdk_values(
 +                    state.http_status, state.termination == "eof"
 +                )
-+                _require(
-+                    len(values) == sdk_values,
-+                    "compaction processing count differs from physical SDK values",
-+                )
-+                operation.values[record["request_id"]] = values
++                # The body can contain complete SSE values the SDK never consumed.
++                operation.values[record["request_id"]] = values[:sdk_values]
 +                operation.outcomes[record["request_id"]] = copy.deepcopy(event)
 +            if event["served_usage"] is not None:
 +                _served_usage(event["served_usage"])
@@ -361939,7 +361936,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,873 @@
+@@ -0,0 +1,874 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -362241,7 +362238,8 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                            || (!state.values.failed && sdkValues == state.values.values.size())),
 +                        "compaction SDK value count contradicts physical response bytes");
 +                CompactionOperation operation = compactions.get(state.compactionId);
-+                operation.values.put(id, new ArrayList<>(state.values.values));
++                // A failed SDK read can leave later complete SSE values unconsumed.
++                operation.values.put(id, new ArrayList<>(state.values.values.subList(0, (int) sdkValues)));
 +                operation.outcomes.put(id, new CompactionOutcome(report));
 +            }
 +            RequestUsage nextUsage = usage.outcome(report);
@@ -365442,7 +365440,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,898 @@
+@@ -0,0 +1,919 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -365636,6 +365634,27 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +        forged.get(7).getJSONObject("data").getJSONObject("output")
 +                .put("sdkValuesJson", List.of("{\"choices\":[]}"));
 +        assertThrows(RecordContractException.class, () -> admitCompaction(forged));
++    }
++
++    @Test
++    void failedCompactionClaimsOnlyConsumedSdkValuePrefix() {
++        String first = "{\"choices\":[{\"finish_reason\":\"error_finish\",\"delta\":{\"content\":\"failed\"}}]}";
++        String unread = "{\"choices\":[{\"delta\":{\"content\":\"unread\"}}]}";
++        List<JSONObject> rows = streamedCompaction(first);
++        byte[] body = ("data: " + first + "\n\ndata: " + unread + "\n\n")
++                .getBytes(StandardCharsets.UTF_8);
++        rows.get(3).getJSONObject("response").getJSONObject("event").put("base64",
++                Base64.getEncoder().encodeToString(body));
++        rows.get(4).getJSONObject("response").getJSONObject("event").put("body_bytes", body.length);
++        rows.get(4).getJSONObject("response").getJSONObject("event").put("body_sha256", StreamSchema.sha256(body));
++        JSONObject outcome = rows.get(5).getJSONObject("response").getJSONObject("event");
++        outcome.put("status", "failed");
++        outcome.put("error", "conversion failed");
++        admitCompaction(rows);
++
++        rows.get(7).getJSONObject("data").getJSONObject("output")
++                .put("sdkValuesJson", List.of(first, unread));
++        assertThrows(RecordContractException.class, () -> admitCompaction(rows));
 +    }
 +
 +    @Test
@@ -428319,7 +428338,7 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,362 @@
 +"""Compaction claims must account for the physical work in the same stream."""
 +
 +from __future__ import annotations
@@ -428642,4 +428661,43 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +    _admit(rows)
 +    rows[-2]["data"]["output"]["sdkValuesJson"] = [forged_value]
 +    with pytest.raises(RecordContractError):
++        _admit(rows)
++
++
++def test_failed_compaction_claims_only_the_sdk_values_it_consumed() -> None:
++    first = _json(
++        {"choices": [{"finish_reason": "error_finish", "delta": {"content": "failed"}}]}
++    )
++    unread = _json({"choices": [{"delta": {"content": "unread"}}]})
++    rows = _rows()
++    body = f"data: {first}\n\ndata: {unread}\n\n".encode()
++    rows[2]["response"]["event"].update(status=200, content_type="text/event-stream")
++    rows.insert(
++        3,
++        {
++            "type": "model_response",
++            "uuid": "compaction-response-body",
++            "session_id": rows[0]["session_id"],
++            "parent_tool_use_id": None,
++            "response": {
++                "journal_id": rows[0]["request_evidence_origin"]["journal_id"],
++                "request_id": "compaction-physical",
++                "sequence": 2,
++                "event": {
++                    "kind": "body",
++                    "offset": 0,
++                    "base64": base64.b64encode(body).decode(),
++                },
++            },
++        },
++    )
++    for sequence, row in enumerate(rows[4:7], start=3):
++        row["response"]["sequence"] = sequence
++    rows[4]["response"]["event"].update(body_bytes=len(body), body_sha256=_hash(body))
++    rows[5]["response"]["event"].update(error="conversion failed", sdk_values_seen=1)
++    rows[-2]["data"]["output"]["sdkValuesJson"] = [first]
++    _admit(rows)
++
++    rows[-2]["data"]["output"]["sdkValuesJson"] = [first, unread]
++    with pytest.raises(RecordContractError, match="physical response bytes"):
 +        _admit(rows)

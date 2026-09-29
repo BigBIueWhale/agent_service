@@ -9106,7 +9106,7 @@ def _validate_served_accounting_after(state: State) -> None:
         'state.values.push(raw)',
         'SDK value count claims an impossible physical response prefix',
         'compaction_id not in self.claimed_compactions',
-        'operation.values[record["request_id"]] = values',
+        'operation.values[record["request_id"]] = values[:sdk_values]',
         'def claim_compaction(self, data: dict[str, Any], scope: str) -> None:',
         'compaction SDK values differ from physical response bytes',
         'compaction tokenizer measurements use different models',
@@ -9158,6 +9158,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "test_compaction_request_is_streamed_and_claimed_in_its_scope",
         "test_compaction_draw_requires_its_physical_work",
         "test_compaction_sdk_value_must_match_recorded_response_bytes",
+        "test_failed_compaction_claims_only_the_sdk_values_it_consumed",
         "test_compaction_tokenizer_uses_one_physical_draw_model",
     ), label=label)
     _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
@@ -9295,6 +9296,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "generation has no recorded normalization seed",
         "compaction draw has no settled physical operation in its scope",
         "compaction SDK values differ from physical response bytes",
+        "state.values.values.subList(0, (int) sdkValues)",
         "compaction tokenizer measurements use different models",
         "compaction tokenizer model differs from physical draw model",
         "tokenizer measurement has no canonical response bytes",
@@ -9331,6 +9333,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
         "compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes",
         "compactionSdkValuesMustComeFromRecordedSseBytes",
+        "failedCompactionClaimsOnlyConsumedSdkValuePrefix",
         "compactionTokenizerModelMustMatchEveryPhysicalDraw",
     ), label=label)
     _require_all(state, java_tests + "session/SessionRecordTest.java", (

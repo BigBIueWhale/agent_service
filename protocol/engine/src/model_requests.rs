@@ -951,11 +951,16 @@ impl ModelRequests {
             _ => return Err(refusal("response uses an unknown event")),
         }
         state.sequence = sequence;
-        let decoded_values = if outcome.is_some() && state.compaction.is_some() {
-            Some(self.response_values
+        let decoded_values = if let (Some(outcome), Some(_)) = (&outcome, &state.compaction) {
+            let mut values = self.response_values
                 .get(id)
                 .and_then(|values| values.stream_values(state.termination.as_deref() == Some("eof")))
-                .ok_or_else(|| refusal("compaction response has no streamed physical values"))?)
+                .ok_or_else(|| refusal("compaction response has no streamed physical values"))?;
+            let seen = usize::try_from(outcome.sdk_values_seen)
+                .map_err(|_| refusal("compaction SDK value count exceeds addressable memory"))?;
+            // Retain only what the SDK reached; later body values remain wire evidence.
+            values.truncate(seen);
+            Some(values)
         } else {
             None
         };

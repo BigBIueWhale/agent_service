@@ -1167,3 +1167,25 @@ unit cases refuse a changed scope. The complete stream reader had already
 refused the tested scope changes through its partial-group and generation
 checks, so this is an internal invariant repair, not a claim that those
 complete forged streams had passed admission.
+
+## Failed compaction response prefixes
+
+Source tracing found a false refusal shared by the native, Python and Java
+compaction readers. A failed SDK conversion can stop after its first SSE value
+even when the captured HTTP body contains a later complete value. The producer
+records the SDK values it consumed, while these readers compared the draw with
+every value parseable from the captured body. Each reader now checks that the
+claimed count is a possible physical prefix and retains only that prefix for
+the draw comparison. The later bytes remain in the physical response journal;
+they do not become compaction output. A forged draw that claims the unread
+value still refuses. The shared TypeScript reader already slices the parsed
+values at `sdk_values_seen` before replay.
+
+The Python compaction regression passed 14 cases and its full SDK unit suite
+passed 791 cases from source. Native and Java regression cases were authored,
+but not executed under the no-build instruction; Rust formatting parsed the
+edited native files. Compilation, generated bindings, packaged readers, owner
+gates and provider behavior remain unverified. This correction benefits any
+agent_service reader of a failed compaction, without changing provider requests,
+vLLM output, ordinary chat handling or canonical resume history. It does not
+yet derive every normalized compaction field from the physical values.

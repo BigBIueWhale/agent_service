@@ -1678,6 +1678,13 @@ mod tests {
         owner
     }
     fn with_compaction_transport() -> RuntimeContract {
+        with_compaction_transport_response(
+            b"data: {\"choices\":[{\"delta\":{\"content\":\"summary\"}}]}\n\ndata: [DONE]\n\n",
+            1,
+            true,
+        )
+    }
+    fn with_compaction_transport_response(bytes: &[u8], sdk_values_seen: u64, completed: bool) -> RuntimeContract {
         let mut owner = initialized();
         let body = serde_json::json!({
             "kv_scope":"session", "model":"fixture-model", "stream":true,
@@ -1702,19 +1709,23 @@ mod tests {
         admit(&mut owner, &request.to_string()).unwrap();
         admit(&mut owner, &response("compaction-physical", 1,
             r#"{"kind":"http","status":200,"content_type":"text/event-stream"}"#)).unwrap();
-        let bytes = b"data: {\"choices\":[{\"delta\":{\"content\":\"summary\"}}]}\n\ndata: [DONE]\n\n";
         let chunk = serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes)});
         admit(&mut owner, &response("compaction-physical", 2, &chunk.to_string())).unwrap();
         let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),
             "body_sha256":crate::generation::sha256(bytes),"error":null});
         admit(&mut owner, &response("compaction-physical", 3, &end.to_string())).unwrap();
-        let outcome = serde_json::json!({"kind":"outcome","status":"completed","error":null,
-            "sdk_values_seen":1,"pipeline_outputs_delivered":1,
-            "served_usage":{"promptTokenCount":24,"candidatesTokenCount":4,
-                "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28}});
+        let outcome = serde_json::json!({"kind":"outcome",
+            "status":if completed { "completed" } else { "failed" },
+            "error":if completed { serde_json::Value::Null } else { serde_json::json!("conversion failed") },
+            "sdk_values_seen":sdk_values_seen,
+            "pipeline_outputs_delivered":if completed { 1 } else { 0 },
+            "served_usage":if completed {
+                serde_json::json!({"promptTokenCount":24,"candidatesTokenCount":4,
+                    "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28})
+            } else { serde_json::Value::Null }});
         admit(&mut owner, &response("compaction-physical", 4, &outcome.to_string())).unwrap();
-        admit(&mut owner, &response("compaction-physical", 5,
-            r#"{"kind":"delivery","outputs_delivered":1}"#)).unwrap();
+        let delivery = serde_json::json!({"kind":"delivery", "outputs_delivered":if completed { 1 } else { 0 }});
+        admit(&mut owner, &response("compaction-physical", 5, &delivery.to_string())).unwrap();
         owner
     }
     #[test]
@@ -1816,6 +1827,27 @@ mod tests {
         missing_measurement["data"]["tokenMeasurements"]
             .as_array_mut().unwrap().pop();
         assert!(admit(&mut with_compaction_transport(), &missing_measurement.to_string()).is_err());
+        let first = r#"{"choices":[{"finish_reason":"error_finish","delta":{"content":"failed"}}]}"#;
+        let unread = r#"{"choices":[{"delta":{"content":"unread"}}]}"#;
+        let bytes = format!("data: {first}\n\ndata: {unread}\n\n");
+        let mut failed_prefix = success.clone();
+        failed_prefix["data"]["status"] = serde_json::json!("COMPRESSION_FAILED_PROTOCOL_ERROR");
+        failed_prefix["data"]["succeeded"] = serde_json::json!(false);
+        failed_prefix["data"]["newTokenCount"] = serde_json::json!(24);
+        failed_prefix["data"]["postCompactionHistory"] = serde_json::Value::Null;
+        failed_prefix["data"]["tokenMeasurements"].as_array_mut().unwrap().pop();
+        let draw = &mut failed_prefix["data"]["output"];
+        draw["sdkValuesJson"] = serde_json::json!([first]);
+        draw["text"] = serde_json::json!("");
+        draw["newTokenCount"] = serde_json::Value::Null;
+        draw["snapshotBytes"] = serde_json::Value::Null;
+        draw["finishReason"] = serde_json::Value::Null;
+        draw["usage"] = serde_json::Value::Null;
+        admit(&mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
+            &failed_prefix.to_string()).unwrap();
+        failed_prefix["data"]["output"]["sdkValuesJson"] = serde_json::json!([first, unread]);
+        assert!(admit(&mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
+            &failed_prefix.to_string()).is_err());
         for changed in [
             ("status", serde_json::json!("COMPRESSED")),
             ("status", serde_json::json!("NOOP")),
