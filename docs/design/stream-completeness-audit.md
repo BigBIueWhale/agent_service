@@ -1284,3 +1284,25 @@ Both require versioned operation evidence and reader admission before the
 record can support utility-call reconciliation. Compilation, packaged behavior,
 live provider behavior, and owner gates remain unverified under the no-build
 instruction.
+
+## Physical tokenizer retries
+
+The exact `/tokenize` counter uses `client.post` without an operation-specific
+retry setting. The configured OpenAI client can therefore make several physical
+sends before returning one successful count. `TokenCountWireObservation`
+observes each request body but accepts repeated identical bodies and returns
+only the last one; the successful `ExactTokenCountEvidence` retains only the
+final HTTP response. A compaction measurement using that evidence can omit an
+earlier physical tokenizer attempt. Ordinary successful counts have the same
+transport behavior, although their evidence is not yet durable at all.
+
+This is supported by code reading of the counter, fetch wrapper and pinned
+SDK retry path. An executed local SDK probe configured one retry and returned
+HTTP 500 followed by HTTP 200 for `/tokenize`: it observed two sends of the
+same body, while `asResponse()` and the parsed call exposed the final 200 and
+count. The probe exercised the SDK directly, not a full Qwen session or vLLM.
+Disabling retries would turn a recoverable tokenizer failure into a session
+failure, so the record needs every attempt's physical request, response or
+transport failure and the final count's owning attempt. The versioned producer,
+canonical and stdout records, admitting readers and owner gates for that
+operation journal remain unimplemented and unverified.
