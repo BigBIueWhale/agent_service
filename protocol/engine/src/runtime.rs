@@ -277,7 +277,9 @@ fn validate_compaction_event(
             .ok_or_else(|| {
                 refuse("without SDK value JSON; capture this run with the current client")
             })?;
+        let mut has_sdk_value = false;
         for response in responses {
+            has_sdk_value = true;
             let raw = response.as_str().ok_or_else(|| {
                 refuse("with a non-string SDK value; inspect the compaction producer")
             })?;
@@ -286,6 +288,20 @@ fn validate_compaction_event(
                     "with undecodable SDK value JSON ({cause:?}); inspect the captured provider value"
                 ))
             })?;
+        }
+        if !has_sdk_value
+            && (holder.get("text").and_then(Value::as_str) != Some("")
+                || holder.get("reasoning").and_then(Value::as_str) != Some("")
+                || holder.get("functionCalls").and_then(Value::elements).is_none_or(|mut calls| calls.next().is_some())
+                || holder.get("incompleteToolCalls").and_then(Value::elements).is_none_or(|mut calls| calls.next().is_some())
+                || !holder.get("finishReason").is_some_and(Value::is_null)
+                || !holder.get("usage").is_some_and(Value::is_null)
+                || !holder.get("newTokenCount").is_some_and(Value::is_null)
+                || !holder.get("snapshotBytes").is_some_and(Value::is_null))
+        {
+            return Err(refuse(&format!(
+                "whose {whose} claims decoded output without an SDK value"
+            )));
         }
         // What a draw its ceiling stopped had written of a call, as served:
         // always present, a name or null and the arguments text, and nothing
@@ -1848,6 +1864,14 @@ mod tests {
         draw["usage"] = serde_json::Value::Null;
         admit(&mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
             &failed_prefix.to_string()).unwrap();
+        let mut empty_prefix = failed_prefix.clone();
+        empty_prefix["data"]["output"]["sdkValuesJson"] = serde_json::json!([]);
+        admit(&mut with_compaction_transport_response(b"", 0, false),
+            &empty_prefix.to_string()).unwrap();
+        empty_prefix["data"]["output"]["text"] = serde_json::json!("forged text");
+        let error = admit(&mut with_compaction_transport_response(b"", 0, false),
+            &empty_prefix.to_string()).unwrap_err();
+        assert!(error.to_string().contains("decoded output without an SDK value"));
         failed_prefix["data"]["output"]["sdkValuesJson"] = serde_json::json!([first, unread]);
         assert!(admit(&mut with_compaction_transport_response(bytes.as_bytes(), 1, false),
             &failed_prefix.to_string()).is_err());

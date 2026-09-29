@@ -354659,7 +354659,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_admission.py b/package
 diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
 --- /dev/null
 +++ b/packages/sdk-python/src/qwen_code_sdk/record_evidence.py
-@@ -0,0 +1,1383 @@
+@@ -0,0 +1,1397 @@
 +"""Ordered replay of schema-admitted request, response and partial evidence."""
 +
 +from __future__ import annotations
@@ -355777,6 +355777,20 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/record_evidence.py b/packages
 +                    )
 +                ),
 +                "compaction SDK values differ from physical response bytes",
++            )
++            _require(
++                bool(physical_values)
++                or (
++                    draw["text"] == ""
++                    and draw["reasoning"] == ""
++                    and draw["functionCalls"] == []
++                    and draw["incompleteToolCalls"] == []
++                    and draw["finishReason"] is None
++                    and draw["usage"] is None
++                    and draw["newTokenCount"] is None
++                    and draw["snapshotBytes"] is None
++                ),
++                "compaction draw claims decoded output without an SDK value",
 +            )
 +            claimed.add(operation_id)
 +        for operation_id in claimed:
@@ -362023,7 +362037,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RequestEvidence.java
-@@ -0,0 +1,976 @@
+@@ -0,0 +1,984 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.qwen.code.shared.StrictJson;
@@ -362469,6 +362483,14 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +                require(RecordAdmission.sameJson(physical.get(index),
 +                        sdkJsonValue(StrictJson.parseSdk((String) recorded.get(index), "compaction SDK value"))),
 +                        "compaction SDK values differ from physical response bytes");
++            }
++            if (physical.isEmpty()) {
++                require("".equals(draw.get("text")) && "".equals(draw.get("reasoning"))
++                                && array(draw.get("functionCalls")).isEmpty()
++                                && array(draw.get("incompleteToolCalls")).isEmpty()
++                                && draw.get("finishReason") == null && draw.get("usage") == null
++                                && draw.get("newTokenCount") == null && draw.get("snapshotBytes") == null,
++                        "compaction draw claims decoded output without an SDK value");
 +            }
 +        }
 +        for (String operationId : claimed) compactions.remove(operationId);
@@ -365629,7 +365651,7 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
 --- /dev/null
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/protocol/RecordAdmissionTest.java
-@@ -0,0 +1,950 @@
+@@ -0,0 +1,953 @@
 +package com.alibaba.qwen.code.cli.protocol;
 +
 +import com.alibaba.fastjson2.JSON;
@@ -365785,6 +365807,9 @@ diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/
 +    @Test
 +    void compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes() {
 +        admitCompaction(settledCompaction());
++        List<JSONObject> unobserved = settledCompaction();
++        unobserved.get(6).getJSONObject("data").getJSONObject("output").put("text", "forged text");
++        assertThrows(RecordContractException.class, () -> admitCompaction(unobserved));
 +        for (String change : List.of("operation", "scope", "request_count", "budget", "request_budget",
 +                "values", "measurement", "delivery", "unclaimed")) {
 +            List<JSONObject> rows = settledCompaction();
@@ -428573,7 +428598,7 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packages/sdk-python/tests/unit/test_compaction_physical.py
 --- /dev/null
 +++ b/packages/sdk-python/tests/unit/test_compaction_physical.py
-@@ -0,0 +1,416 @@
+@@ -0,0 +1,425 @@
 +"""Compaction claims must account for the physical work in the same stream."""
 +
 +from __future__ import annotations
@@ -428770,6 +428795,15 @@ diff --git a/packages/sdk-python/tests/unit/test_compaction_physical.py b/packag
 +
 +def test_settled_failed_compaction_draw_is_admitted() -> None:
 +    _admit(_rows())
++
++
++def test_compaction_without_sdk_value_cannot_claim_decoded_output() -> None:
++    rows = _rows()
++    rows[-2]["data"]["output"]["text"] = "forged text"
++    with pytest.raises(
++        RecordContractError, match="decoded output without an SDK value"
++    ):
++        _admit(rows)
 +
 +
 +def test_compaction_request_is_streamed_and_claimed_in_its_scope() -> None:
