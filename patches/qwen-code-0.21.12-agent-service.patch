@@ -182779,7 +182779,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
                    delayMs,
                    model,
                  ),
-@@ -3239,674 +2046,61 @@
+@@ -3239,674 +2046,64 @@
                await delay(delayMs, params.config?.abortSignal).promise;
                continue;
              }
@@ -183450,6 +183450,9 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    refusedBefore: number,
 +    attempt: ChatAttempt,
 +  ): Promise<AsyncGenerator<ProcessedStreamChunk>> {
++    const observationNormalizer = new GenerationObservationNormalizer(
++      this.history,
++    );
 +    const {
 +      model,
 +      contentGenerator: generator,
@@ -183483,7 +183486,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        shouldRetryOnError: (error: unknown) => {
          if (error instanceof Error) {
            if (isSchemaDepthError(error.message)) return false;
-@@ -3936,17 +2130,8 @@
+@@ -3936,17 +2133,8 @@
        },
        authType,
        extraRetryErrorCodes,
@@ -183502,7 +183505,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        onRetry: (info) => {
          logApiRetry(
            this.config,
-@@ -3961,38 +2146,38 @@
+@@ -3961,40 +2149,47 @@
            }),
          );
        },
@@ -183514,6 +183517,12 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        },
 +        async () => {
 +          if (attempt.hasRequests) {
++            await this.chatRecordingService.recordNormalizationSeed({
++              journal_id: attempt.journalId,
++              origin: attempt.origin,
++              request_id: attempt.finalRequestId,
++              history_call_ids: observationNormalizer.seedCallIds,
++            });
 +            const generation = freezeModelGeneration(attempt.journalId, {
 +              origin: attempt.origin,
 +              output_scope: this.generationContext.outputScope,
@@ -183539,6 +183548,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -      transportContinuationPrefix,
 +      refusedBefore,
 +      attempt,
++      observationNormalizer,
      );
 -  }
 -
@@ -183567,7 +183577,9 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4018,10 +2203,17 @@
+    * Returns the chat history.
+    *
+@@ -4018,10 +2213,17 @@
     * @return History contents alternating between user and model for the entire
     * chat session.
     */
@@ -183587,7 +183599,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Deep copy the history to avoid mutating the history outside of the
      // chat session.
      return structuredClone(history);
-@@ -4034,8 +2226,8 @@
+@@ -4034,8 +2236,8 @@
    getHistoryTail(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -183598,7 +183610,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return structuredClone(history.slice(-count));
    }
  
-@@ -4046,13 +2238,15 @@
+@@ -4046,13 +2248,15 @@
     */
    getHistoryShallow(curated: boolean = false): Content[] {
      const history = curated
@@ -183617,7 +183629,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return extractCuratedHistory(history).map(copyContentContainer);
    }
  
-@@ -4062,8 +2256,8 @@
+@@ -4062,8 +2266,8 @@
    getHistoryTailShallow(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -183628,7 +183640,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return history.slice(-count).map(copyContentContainer);
    }
  
-@@ -4081,7 +2275,7 @@
+@@ -4081,7 +2285,7 @@
     * mutate the returned object.
     */
    peekLastHistoryEntry(): Content | undefined {
@@ -183637,7 +183649,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4090,8 +2284,8 @@
+@@ -4090,8 +2294,8 @@
     * needed.
     */
    getLastModelMessageText(): string | undefined {
@@ -183648,7 +183660,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (message?.role !== 'model') continue;
        const text =
          message.parts
-@@ -4112,7 +2306,7 @@
+@@ -4112,7 +2316,7 @@
     * otherwise pay the {@link getHistory} `structuredClone` cost.
     */
    getHistoryLength(): number {
@@ -183657,7 +183669,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4133,7 +2327,7 @@
+@@ -4133,7 +2337,7 @@
     */
    getHistoryFunctionResponseIds(): Set<string> {
      const ids = new Set<string>();
@@ -183666,7 +183678,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (entry.role !== 'user') continue;
        for (const part of entry.parts ?? []) {
          const id = part.functionResponse?.id;
-@@ -4147,192 +2341,75 @@
+@@ -4147,192 +2351,75 @@
     * Clears the chat history.
     */
    clearHistory(): void {
@@ -183912,7 +183924,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4342,6 +2419,8 @@
+@@ -4342,6 +2429,8 @@
     */
    stripOrphanedUserEntriesFromHistory(): Content[] {
      const strippedEntries: Content[] = [];
@@ -183921,7 +183933,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      while (
        this.history.length > 0 &&
        this.history[this.history.length - 1]!.role === 'user'
-@@ -4365,18 +2444,9 @@
+@@ -4365,18 +2454,9 @@
        }
        strippedEntries.unshift(this.history.pop()!);
      }
@@ -183943,7 +183955,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return strippedEntries;
    }
  
-@@ -4388,7 +2458,10 @@
+@@ -4388,7 +2468,10 @@
      injected: Array<{ callId: string; name: string }>;
      droppedDuplicates: Array<{ callId: string; name: string }>;
    } {
@@ -183955,7 +183967,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    setTools(tools: Tool[]): void {
-@@ -4396,7 +2469,7 @@
+@@ -4396,7 +2479,7 @@
    }
  
    /** Returns a shallow copy of the current generation config (for cache param snapshots). */
@@ -183964,7 +183976,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return { ...this.generationConfig };
    }
  
-@@ -4430,687 +2503,223 @@
+@@ -4430,687 +2513,221 @@
      }
    }
  
@@ -183991,6 +184003,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    goalContext: GoalTurnPermit | undefined,
 +    refusedBefore: number,
 +    attempt: ChatAttempt,
++    observationNormalizer: GenerationObservationNormalizer,
 +  ): AsyncGenerator<ProcessedStreamChunk> {
 +    const observations: GenerationObservation[] = [];
 +    let generation: ModelGenerationEvidence | undefined;
@@ -183998,9 +184011,6 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +    // are never made and never enter history, and they are recorded with the
 +    // turn and published on its terminal like the reason itself.
 +    const incompleteToolCalls: IncompleteToolCall[] = [];
-+    const observationNormalizer = new GenerationObservationNormalizer(
-+      this.history,
-+    );
      let usageMetadata: GenerateContentResponseUsageMetadata | undefined;
 -    let coercedUsage:
 -      | {
@@ -199638,7 +199648,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        });
        let result: IteratorResult<OpenAI.Chat.ChatCompletionChunk>;
        try {
-@@ -413,100 +467,306 @@
+@@ -413,100 +467,316 @@
          void Promise.resolve(nextPromise).catch(() => {});
          throw err;
        } finally {
@@ -199742,7 +199752,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +  return config?.mode === 'NONE' ? 'none' : undefined;
 +}
 +
-+const responseAttemptContext = new AsyncLocalStorage<ModelResponseRecorder>();
++const responseAttemptContext = new AsyncLocalStorage<{
++  recorder: ModelResponseRecorder;
++  admittedBody: string;
++  mismatch?: Error;
++}>();
 +const recordedClients = new WeakSet<OpenAI>();
 +
 +/** Preserve the provider's fetch/proxy and intercept before SDK body parsing. */
@@ -199753,8 +199767,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +    tokenCountWireObservationContext.getStore()?.observe(args[0], args[1]);
 +    const attempt = responseAttemptContext.getStore();
 +    if (!attempt) return fetchWithTimeout(...args);
-+    attempt.dispatched();
-+    return attempt.capture(await fetchWithTimeout(...args));
++    if (args[1]?.body !== attempt.admittedBody) {
++      attempt.mismatch = new Error(
++        'The OpenAI SDK changed the admitted provider request body before dispatch. Inspect the pinned SDK serialization and update the recorder before retrying.',
++      );
++      throw attempt.mismatch;
++    }
++    attempt.recorder.dispatched();
++    return attempt.recorder.capture(await fetchWithTimeout(...args));
 +  };
 +  recordedClients.add(client);
 +}
@@ -199979,7 +199999,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
          let stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>;
          try {
            // Stage 1: Create OpenAI stream. Wrapped in try so a network /
-@@ -518,90 +778,66 @@
+@@ -518,90 +788,66 @@
            // returning text/html with HTTP 200).
            const createPromise = this.client.chat.completions.create(
              openaiRequest,
@@ -200121,7 +200141,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
          // Stage 2: Process stream with conversion and logging.
          // Wrap in an async generator that aborts the per-request controller
-@@ -611,17 +847,82 @@
+@@ -611,17 +857,82 @@
            guarded,
            context,
            request,
@@ -200207,7 +200227,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        },
      );
    }
-@@ -638,186 +939,44 @@
+@@ -638,186 +949,44 @@
      stream: AsyncIterable<OpenAI.Chat.ChatCompletionChunk>,
      context: RequestContext,
      request: GenerateContentParameters,
@@ -200421,7 +200441,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        if (error instanceof InvalidStreamError) {
          throw error;
        }
-@@ -829,13 +988,15 @@
+@@ -829,13 +998,15 @@
        }
  
        // Bypass handleError so callers retain the dedicated timeout type and
@@ -200444,7 +200464,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        if (
          error instanceof StreamInactivityTimeoutError ||
          error instanceof StreamLifetimeExceededError
-@@ -843,11 +1004,11 @@
+@@ -843,11 +1014,11 @@
          const isLifetime = error instanceof StreamLifetimeExceededError;
          debugLogger.warn(
            isLifetime
@@ -200458,7 +200478,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
              // the log reconcile the same way the error message does.
              wallClockMs: error.streamLifetimeMs,
              ...(isLifetime
-@@ -861,94 +1022,13 @@
+@@ -861,94 +1032,13 @@
          throw redactProxyError(error);
        }
  
@@ -200554,7 +200574,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      userPromptId: string,
      context: RequestContext,
      isStreaming: boolean,
-@@ -991,13 +1071,12 @@
+@@ -991,13 +1081,12 @@
        // classifier's respond_in_schema) can force the model to emit a tool
        // call instead of free-texting. Without this, thinking-heavy models
        // may consume the tiny output budget on reasoning and skip the tool.
@@ -200573,7 +200593,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        }
      }
  
-@@ -1032,7 +1111,7 @@
+@@ -1032,7 +1121,7 @@
      // model generation config). For these, never emit the disable on the
      // wire: a "disabled" shape is a guaranteed request failure, so the flag
      // also overrides the config-level `reasoning: false` opt-out.
@@ -200582,7 +200602,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const isDashScope = DashScopeOpenAICompatibleProvider.isDashScopeProvider(
        this.contentGeneratorConfig,
      );
-@@ -1050,9 +1129,8 @@
+@@ -1050,9 +1139,8 @@
        // `thinking: { type: 'disabled' }`; sending `enable_thinking` to them
        // is at best a no-op, at worst forwarded upstream and rejected).
        //
@@ -200594,7 +200614,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // request-level model override would otherwise desync the gate from
        // what actually ships: a qwen config with a non-qwen request model
        // would leak the field, and a non-qwen config with a qwen request
-@@ -1176,6 +1254,14 @@
+@@ -1176,6 +1264,14 @@
        delete typed['tool_choice'];
      }
  
@@ -200609,7 +200629,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      return providerRequest;
    }
  
-@@ -1321,16 +1407,17 @@
+@@ -1321,16 +1417,17 @@
     * Common error handling wrapper for execute methods
     */
    private async executeWithErrorHandling<T>(
@@ -200629,7 +200649,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      let openaiRequest: OpenAI.Chat.ChatCompletionCreateParams | undefined;
      const executeAttempt = async () => {
        openaiRequest = await this.buildRequest(
-@@ -1340,14 +1427,76 @@
+@@ -1340,16 +1437,85 @@
          isStreaming,
        );
  
@@ -200669,6 +200689,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +          decodePolicy,
 +          request.config?.abortSignal,
 +        );
++      const dispatchedAttempt = {
++        recorder: responseEvidence,
++        admittedBody: body,
++        mismatch: undefined as Error | undefined,
++      };
 +      try {
 +        openaiRequest = JSON.parse(
 +          body,
@@ -200683,7 +200708,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +        runtimeDiagnostics.recordOpenAIWireRequest(openaiRequest);
 +        const telemetryAttempt = reportOpenAiRequest(openaiRequest);
 +
-+        const result = await responseAttemptContext.run(responseEvidence, () =>
++        const result = await responseAttemptContext.run(dispatchedAttempt, () =>
 +          executor(
 +            openaiRequest!,
 +            decodeContext,
@@ -200691,30 +200716,34 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +            responseEvidence,
 +          ),
 +        );
++        if (dispatchedAttempt.mismatch) throw dispatchedAttempt.mismatch;
 +        if (!isStreaming)
 +          await responseEvidence.finish({ status: 'completed', error: null });
 +        return result;
 +      } catch (cause) {
++        const observedError = dispatchedAttempt.mismatch ?? cause;
 +        try {
 +          await responseEvidence.finish({
 +            status: request.config?.abortSignal?.aborted
 +              ? 'cancelled'
 +              : 'failed',
-+            error: describeResponseFailure(cause),
++            error: describeResponseFailure(observedError),
 +          });
 +        } catch (recordingError) {
-+          if (recordingError !== cause)
++          if (recordingError !== observedError)
 +            throw new AggregateError(
-+              [cause, recordingError],
++              [observedError, recordingError],
 +              'Generation and response recording failed',
 +            );
 +        }
-+        throw cause;
++        throw observedError;
 +      }
      };
  
      try {
-@@ -1401,25 +1550,26 @@
+       return await executeAttempt();
+     } catch (error) {
+@@ -1401,25 +1567,26 @@
     */
    private createRequestContext(
      request: GenerateContentParameters,
@@ -200751,7 +200780,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        splitToolMedia:
          providerOverrides.splitToolMedia ??
          this.contentGeneratorConfig.splitToolMedia ??
-@@ -1435,9 +1585,7 @@
+@@ -1435,9 +1602,7 @@
          providerOverrides.toolResultContentFormat ??
          this.contentGeneratorConfig.toolResultContentFormat ??
          'parts',
@@ -378944,7 +378973,7 @@ diff --git a/packages/core/src/agents/backends/types.ts b/packages/core/src/agen
 diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages/core/src/core/runtime-history-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/runtime-history-recording.test.ts
-@@ -0,0 +1,680 @@
+@@ -0,0 +1,801 @@
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
 +import OpenAI from 'openai';
@@ -378968,6 +378997,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +import { ChatCompressionService } from '../services/chatCompressionService.js';
 +import { CompressionStatus } from '../core/turn.js';
 +import { BaseLlmClient } from '../core/baseLlmClient.js';
++import { ModelRequestReplay } from '../core/model-request-evidence.js';
 +import {
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  STATE_SNAPSHOT_SECTIONS,
@@ -379032,6 +379062,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  };
 +  const outputs: Part[][] = [[{ text: 'accepted answer 雪🧪\n' }]];
 +  const tokenCounts: number[] = [];
++  const physicalRequests: string[] = [];
 +  const responseGate: { wait?: () => Promise<void> } = {};
 +  const requests: unknown[] = [];
 +  const provider: Partial<ContentGenerator> & {
@@ -379121,13 +379152,14 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    apiKey: 'fixture',
 +    baseURL: profile.baseUrl,
 +    maxRetries: 0,
-+    fetch: async (url) => {
++    fetch: async (url, init) => {
 +      if (String(url).endsWith('/tokenize')) {
 +        const count = tokenCounts.shift() ?? 10;
 +        return new Response(JSON.stringify({ count, max_model_len: window }), {
 +          headers: { 'content-type': 'application/json' },
 +        });
 +      }
++      if (typeof init?.body === 'string') physicalRequests.push(init.body);
 +      if (responseGate.wait) await responseGate.wait();
 +      const parts = outputs.shift() ?? [{ text: 'next answer' }];
 +      const content = parts
@@ -379276,7 +379308,9 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    readEvidence,
 +    outputs,
 +    tokenCounts,
++    physicalRequests,
 +    responseGate,
++    transport: clientTransport,
 +  };
 +}
 +function snapshotCall(): Part {
@@ -379299,6 +379333,13 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  const o = await f.observe();
 +  const records = await f.readEvidence();
 +  expect(records.map((record) => record.type)).toContain('model_request');
++  const request = records.find(
++    (record) => record.type === 'model_request',
++  )?.modelRequest;
++  expect(request?.body.kind).toBe('full');
++  if (!request || request.body.kind !== 'full')
++    throw new Error('The initial request has no full recorded body');
++  expect(f.physicalRequests[0]).toBe(request.body.json);
 +  expect(records.map((record) => record.type)).toContain('model_response');
 +  expect(records.map((record) => record.type)).toContain(
 +    'model_attempt_completion',
@@ -379308,6 +379349,110 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  ).toBe(true);
 +  expect.soft(JSON.stringify(o.resumed)).toBe(JSON.stringify(o.live));
 +  expect.soft(JSON.stringify(o.indexed)).toBe(JSON.stringify(o.live));
++});
++it('refuses a provider request the SDK changes before dispatch', async () => {
++  const f = await setup('changed-dispatch-body');
++  (
++    f.transport as unknown as {
++      prepareRequest: (request: RequestInit) => Promise<void>;
++    }
++  ).prepareRequest = async (request) => {
++    request.body = JSON.stringify({
++      ...JSON.parse(request.body as string),
++      unrecorded: true,
++    });
++  };
++  let failure: unknown;
++  try {
++    await f.chatSend([{ text: 'ordinary question' }]);
++  } catch (error) {
++    failure = error;
++  }
++  expect(failure).toBeInstanceOf(Error);
++  expect((failure as Error).message).toMatch(
++    /SDK changed the admitted provider request body before dispatch/,
++  );
++  expect(f.physicalRequests).toEqual([]);
++  const records = await f.readEvidence();
++  expect(records.some((record) => record.type === 'model_generation')).toBe(
++    true,
++  );
++  expect(
++    records.some(
++      (record) =>
++        record.type === 'model_response' &&
++        record.modelResponse?.event.kind === 'end' &&
++        record.modelResponse.event.termination === 'not_dispatched',
++    ),
++  ).toBe(true);
++  expect(
++    records.some(
++      (record) =>
++        record.type === 'model_response' &&
++        record.modelResponse?.event.kind === 'outcome' &&
++        record.modelResponse.event.status === 'failed' &&
++        record.modelResponse.event.error.includes('SDK changed the admitted'),
++    ),
++  ).toBe(true);
++  const restored = await f.observe();
++  expect(restored.resumed).toEqual(restored.live);
++  expect(restored.indexed).toEqual(restored.live);
++});
++it('keeps a complete abandoned attempt when transport fails before stream acquisition', async () => {
++  const f = await setup('failed-stream-acquisition');
++  f.outputs[0] = [
++    {
++      functionCall: {
++        id: 'earlier-call',
++        name: 'read_file',
++        args: { path: '/x' },
++      },
++    },
++  ];
++  await f.chatSend([{ text: 'inspect' }], 'first');
++  const toolResult = [
++    {
++      functionResponse: {
++        id: 'earlier-call',
++        name: 'read_file',
++        response: { output: 'the earlier result' },
++      },
++    },
++  ];
++  f.recorder.recordToolResult(toolResult);
++  await f.recorder.flush();
++  for await (const event of await f.chat.sendMessageStream(
++    'fixture',
++    { message: toolResult },
++    'second',
++  )) {
++    void event;
++  }
++  f.responseGate.wait = async () => {
++    throw new Error('fixture transport failed');
++  };
++  await expect(
++    f.chatSend([{ text: 'another question' }], 'third'),
++  ).rejects.toThrow(/Connection error/);
++  expect(f.physicalRequests).toHaveLength(3);
++  const records = await f.readEvidence();
++  const seeds = records.filter(
++    (record) => record.type === 'model_normalization_seed',
++  );
++  expect(seeds.at(-1)?.normalizationSeed?.history_call_ids).toContain(
++    'earlier-call',
++  );
++  expect(
++    records.some(
++      (record) =>
++        record.type === 'model_response' &&
++        record.modelResponse?.event.kind === 'end' &&
++        record.modelResponse.event.termination === 'failed',
++    ),
++  ).toBe(true);
++  const restored = await f.observe();
++  expect(restored.resumed).toEqual(restored.live);
++  expect(restored.indexed).toEqual(restored.live);
 +});
 +it('manual plan exit injected by Chat survives both resume readers', async () => {
 +  const f = await setup('manual-plan');
@@ -379439,6 +379584,11 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +  expect(info.tokenMeasurements).toHaveLength(4);
 +  expect(info.output?.physicalRequests).toBe(1);
 +  const o = await f.observe();
++  const replay = new ModelRequestReplay();
++  const requestBodies = (await f.readEvidence())
++    .filter((record) => record.type === 'model_request')
++    .map((record) => replay.observe(record.modelRequest));
++  expect(f.physicalRequests).toEqual(requestBodies);
 +  expect(o.live[0]?.parts?.[0]?.text).toContain(
 +    'retained primary_request_and_intent',
 +  );

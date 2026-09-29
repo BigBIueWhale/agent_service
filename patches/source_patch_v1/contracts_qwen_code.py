@@ -8420,12 +8420,17 @@ def _validate_served_accounting_after(state: State) -> None:
         "getChatRecordingService()",
         ".modelRequests.capture(",
         "openaiRequest = JSON.parse(",
-        "responseAttemptContext.run(responseEvidence",
+        "responseAttemptContext.run(dispatchedAttempt",
         "executor(", "decodeContext,",
     ), label=label, location=pipeline)
     require_text(state, pipeline, "maxRetries: 0", count=2, label=label)
     _require_all(state, pipeline, (
-        "client.fetchWithTimeout.bind(client)", "attempt.capture(await fetchWithTimeout(...args))",
+        "client.fetchWithTimeout.bind(client)",
+        "args[1]?.body !== attempt.admittedBody",
+        "attempt.recorder.dispatched()",
+        "attempt.recorder.capture(await fetchWithTimeout(...args))",
+        "if (dispatchedAttempt.mismatch) throw dispatchedAttempt.mismatch;",
+        "const observedError = dispatchedAttempt.mismatch ?? cause;",
         "await createPromise.withResponse()", "clock.subscribe(rearm)",
         "clock.paused", "clock.now() - awaitedAt", "await responseEvidence.finish(outcome)",
         "request.generationContext.requestSegmentId,", "request.chatAttempt,",
@@ -8694,6 +8699,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "f.outputs.push([snapshotCall()])",
         "expect(info.tokenMeasurements).toHaveLength(4)",
         "readCompleteStoredCanonicalChatRecords(file)",
+        "refuses a provider request the SDK changes before dispatch",
+        "keeps a complete abandoned attempt when transport fails before stream acquisition",
         "accepted turn after actual compaction commit retains later runtime reminder",
     ), label=label)
     _require_all(state, pipeline, (
@@ -8851,9 +8858,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "if (deliveredContent || disposition !== null) throw error;",
         "generator.generateChatContentStream(",
         "attempt.observeConsumerOutput(observed.source_request_id)",
+        "const observationNormalizer = new GenerationObservationNormalizer(",
         "await this.chatRecordingService.recordNormalizationSeed({",
         "history_call_ids: observationNormalizer.seedCallIds",
         "request_id: attempt.finalRequestId",
+        "observationNormalizer,",
     ), label=label)
     _require_all(state, core + "services/chatRecordingService.ts", (
         "recordNormalizationSeed(", "recordChildNormalizationSeed(",

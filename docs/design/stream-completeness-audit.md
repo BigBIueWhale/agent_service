@@ -1218,3 +1218,26 @@ source-test evidence for those cases, not a build, packaged-client check, live
 provider run, or proof of every resume scenario. The production producer and
 reader code did not change in this splice; owner build and release gates remain
 unverified.
+
+## Request dispatch and failed acquisition
+
+The OpenAI pipeline journals the serialized request before asking the SDK to
+send it. The shared fetch boundary now requires the SDK's physical request body
+to equal that admitted body before dispatch; if the SDK changes it, the attempt
+records a failed, undispatched response and raises an actionable error. This
+keeps the journal's exact-body claim true for ordinary Chat and compaction
+requests alike. The check belongs at the client SDK boundary, which owns this
+serialization step; it does not change a vLLM response or hide a backend
+recording defect.
+
+When transport fails after request admission but before a Chat stream is
+acquired, Chat now records the same history-call seed it would have recorded
+for an acquired stream. The resulting abandoned generation remains admissible
+to the canonical reader and both resume paths; neither reader replays evidence
+as a turn. Source tests exercised the unmodified SDK body, an SDK-altered body,
+and acquisition failure after an earlier tool call. The three targeted
+TypeScript source suites passed 114 tests. Broader Chat and concurrent-pipeline
+suites also fail on an untouched baseline because their fake providers lack
+the required physical request owner or shape; those failures do not verify this
+change. Compilation, packaged behavior, live provider behavior and owner gates
+remain unverified under the no-build instruction.
