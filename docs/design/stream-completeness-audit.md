@@ -1741,6 +1741,17 @@ the SDK's dispatched bytes against that serialization. Those source checks
 establish the final-body identity, but neither the canonical assertion nor the
 physical request currently carries enough independent renderer selection to
 reproduce the intermediate `Content[]` or provider conversion from the record.
+The provider change is material to this proof: the default provider spreads
+`extra_body` after its converted `messages`, so that configuration can replace
+the message list; DashScope, DeepSeek and Mistral also have message-changing
+`buildRequest` paths, and official OpenAI prompt caching runs after the provider
+hook. Equality between converted history and the final body's messages is not
+an invariant even for an ordinary configured session. A replay proof would need
+the effective input-affecting selection and provider transformation, including
+any explicit message override, rather than assuming the provider left messages
+alone. The captured body still states the actual dispatched input; this is a
+limit on independently proving its derivation from canonical history, not
+evidence that the body omitted model input.
 An additional self-declared hash of the body or of the rendered contents would
 not establish that relation. A complete reader needs a deterministic replay of
 the selected curation, media and provider transformations against the canonical
