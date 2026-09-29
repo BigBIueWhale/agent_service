@@ -133,6 +133,30 @@ was run:
   to model input. An immutable input receipt and explicit rendered-request
   binding remain to be designed and admitted across producer and readers.
 
+  An executed direct Python admission probe made this limit concrete against
+  the authored `chat_request_response_history` fixture (SHA-256
+  `5ded2fdac33c9ae3f1aa4b3830941750a93eb4769518297b142ee74fb3fa91f5`).
+  It inserted a `user` display row before the unchanged request. Both the
+  request's visible text, `first`, and an unrelated displayed text passed
+  `RecordAdmission.admit` and `finish`. The reproducible probe is
+  `/tmp/codex-input-provenance/probe.py`. This tests the direct Python reader
+  with authored records, not a CLI session, the native certifier, or the
+  service's separate physical-response verifier. By source reading, that
+  verifier checks generated output against response bytes, not input display
+  against request messages.
+
+  The producer boundaries explain why a direct text comparison would be
+  wrong. The CLI adapter emits a display row; `recordUserMessage` persists
+  post-hook Parts; `GeminiChat` can then append a manual-plan reminder and
+  slim media in the request history; and the OpenAI pipeline applies its
+  converter and provider enhancements before journalling the exact body.
+  A correct input proof needs durable source identity through those stages
+  and a reader check against the final recorded request. Tool results need
+  the same treatment because their displayed result can differ from the
+  model-facing response Parts and later reminders. This remains an
+  implementation gap, not an executed end-to-end failure of the deployed
+  service.
+
 Charging served output from an abandoned draw is correct. Served work and
 history acceptance are distinct facts. The defect is missing disposition
 accounting, not the inclusion of served work in usage totals.
