@@ -9722,6 +9722,23 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses an inactive snapshot recorder instead of dropping the update",
         "latches an asynchronous snapshot write failure for the next barrier",
     ), label=label)
+    _require_all(state, core + "services/chatRecordingService.ts", (
+        "recordAtCommand(payload: AtCommandRecordPayload)",
+        "this.enterWriteFailure(cause, this.getSessionId(), 'at_command')",
+        "recordAttributionSnapshot(snapshot: AttributionSnapshot)",
+        "this.enterWriteFailure(cause, this.getSessionId(), 'attribution_snapshot')",
+        "Cannot serialize an attribution snapshot",
+    ), label=label)
+    forbid_text(state, core + "services/chatRecordingService.ts",
+                "Error saving attribution snapshot:", label=label)
+    forbid_text(state, core + "services/chatRecordingService.ts",
+                "Error saving @-command record:", label=label)
+    _require_all(state, core + "services/chatRecordingService.test.ts", (
+        "latches a synchronous @-command admission failure",
+        "refuses an inactive @-command recorder",
+        "latches a snapshot serialization omission",
+        "refuses an inactive attribution recorder",
+    ), label=label)
     _require_all(state, "packages/cli/src/ui/AppContainer.tsx", (
         "await config.getChatRecordingService().rewindRecording(",
     ), label=label)

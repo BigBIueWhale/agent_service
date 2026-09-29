@@ -1535,3 +1535,27 @@ Node and Bun are unavailable in this checkout. The source patch plan reproduced
 the eight edited Qwen files from the pinned archive. Compilation, Desktop
 runtime compatibility, packaged behavior and owner gates remain unverified.
 No build, release, deployment or push was run.
+
+## Turn-boundary metadata admission
+
+Source reading found two remaining fire-and-forget omissions in the shared
+canonical recorder. An `at_command` metadata record could be silently skipped
+with an inactive writer or a synchronous construction failure. An attribution
+snapshot could be skipped in the same way, and `JSON.stringify` returning
+`undefined` could even match the initial dedup key. The latter snapshot is
+restored on resume and is recorded at each non-retry turn boundary. An omitted
+update would leave the resumed attribution state behind the live turn.
+
+Both methods now require the active writer and latch synchronous failures
+through the recorder's failure state. The attribution path also refuses a
+non-serializable snapshot before deduplication. Queued write failures already
+latched through the shared append path. The normal record shape, deduplication
+of identical admitted snapshots and provider request bytes are unchanged.
+This serves ordinary turns and all Qwen recording callers; vLLM does not own
+these client-side metadata rows.
+
+Four source cases were authored for synchronous and inactive failures. They
+were not run because Node and Bun are unavailable. The source patch plan
+reproduced both edited Qwen files from the pinned archive, and 38 patch
+framework tests passed. Compilation, packaged resume and owner gates remain
+unverified. No build or push was run.

@@ -228139,7 +228139,47 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(jsonl.writeLine).toHaveBeenCalledTimes(2);
        const userRecord = vi.mocked(jsonl.writeLine).mock
          .calls[0][1] as ChatRecord;
-@@ -1003,12 +1167,42 @@
+@@ -887,12 +1051,39 @@
+ 
+       expect(userRecord.type).toBe('user');
+       expect(systemRecord.type).toBe('system');
+       expect(systemRecord.subtype).toBe('at_command');
+       expect(systemRecord.systemPayload).toEqual(payload);
+       expect(systemRecord.parentUuid).toBe(userRecord.uuid);
++    });
++
++    it('latches a synchronous @-command admission failure', async () => {
++      const error = new Error('Missing recording metadata');
++      vi.mocked(mockConfig.getProjectRoot).mockImplementationOnce(() => {
++        throw error;
++      });
++      chatRecordingService.recordAtCommand({
++        filesRead: ['foo.txt'],
++        status: 'success',
++        userText: '@foo.txt',
++      });
++      await expect(chatRecordingService.flush()).rejects.toBe(error);
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
++    });
++
++    it('refuses an inactive @-command recorder', async () => {
++      const inactive = new ChatRecordingService(mockConfig);
++      inactive.recordAtCommand({
++        filesRead: ['foo.txt'],
++        status: 'success',
++        userText: '@foo.txt',
++      });
++      await expect(inactive.flush()).rejects.toBeInstanceOf(
++        SessionWriterUnavailableError,
++      );
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
+     });
+   });
+ 
+   describe('recordFileHistorySnapshot', () => {
+     const oldSnapshot: FileHistorySnapshot = {
+       promptId: 'p1',
+@@ -1003,12 +1194,42 @@
                  backupTime: '2026-06-13T00:01:02.000Z',
                },
              },
@@ -228182,7 +228222,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        chatRecordingService.recordFileHistorySnapshot(oldSnapshot);
        chatRecordingService.recordFileHistorySnapshot(updatedSnapshot);
        await chatRecordingService.flush();
-@@ -1103,15 +1297,20 @@
+@@ -1103,15 +1324,20 @@
          ]),
        ).toEqual([failedSnapshot]);
      });
@@ -228206,7 +228246,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const staleSnapshot = vi.mocked(jsonl.writeLine).mock
          .calls[0][1] as ChatRecord;
        const rewind = vi.mocked(jsonl.writeLine).mock.calls[1][1] as ChatRecord;
-@@ -1135,76 +1334,307 @@
+@@ -1135,76 +1361,307 @@
          ],
        });
      });
@@ -228525,7 +228565,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          [
            { role: 'user', text: '你好' },
            { role: 'assistant', text: '你好！' },
-@@ -1233,14 +1663,18 @@
+@@ -1233,14 +1690,18 @@
      });
    });
  
@@ -228546,7 +228586,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
  
        // Now record the tool result (Parts with functionResponse)
        const toolResultParts: Part[] = [
-@@ -1330,13 +1764,26 @@
+@@ -1330,13 +1791,26 @@
  
        chatRecordingService.recordToolResult(toolResultParts, metadata);
        await chatRecordingService.flush();
@@ -228574,7 +228614,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      });
  
      it('compacts large resultDisplay metadata before recording', async () => {
-@@ -1412,13 +1859,26 @@
+@@ -1412,13 +1886,26 @@
  
        chatRecordingService.recordToolResult(toolResultParts, metadata);
        await chatRecordingService.flush();
@@ -228602,7 +228642,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      });
  
      it('should shrink large file diff resultDisplay without mutating input', async () => {
-@@ -1513,12 +1973,17 @@
+@@ -1513,12 +2000,17 @@
            taskDescription: 'Run task',
            taskPrompt: 'Run task',
            status: 'completed' as const,
@@ -228620,7 +228660,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
                args: {},
                result: 'nested result',
              },
-@@ -1537,14 +2002,18 @@
+@@ -1537,14 +2029,18 @@
          type: 'task_execution',
          toolCalls: [],
        });
@@ -228641,7 +228681,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const toolResultParts: Part[] = [
          {
            functionResponse: {
-@@ -1567,13 +2036,93 @@
+@@ -1567,13 +2063,93 @@
        expect(userRecord.parentUuid).toBeNull();
        expect(assistantRecord.parentUuid).toBe(userRecord.uuid);
        expect(toolResultRecord.parentUuid).toBe(assistantRecord.uuid);
@@ -228735,7 +228775,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          rawCommand: '/about',
        });
        await chatRecordingService.flush();
-@@ -1587,13 +2136,13 @@
+@@ -1587,13 +2163,13 @@
          phase: 'invocation',
          rawCommand: '/about',
        });
@@ -228750,7 +228790,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        });
        await chatRecordingService.flush();
  
-@@ -1617,50 +2166,63 @@
+@@ -1617,50 +2193,63 @@
        expect(jsonl.writeLine).not.toHaveBeenCalled();
      });
  
@@ -228824,7 +228864,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(firstFailure).toEqual(new Error('disk full'));
        await expect(chatRecordingService.flush()).rejects.toBe(firstFailure);
      });
-@@ -1674,20 +2236,27 @@
+@@ -1674,20 +2263,27 @@
        );
        const listener = vi.fn();
        const service = activateRecording(
@@ -228855,7 +228895,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(listener).toHaveBeenCalledWith({
          sessionId: 'test-session-id',
          error: writeError,
-@@ -1701,19 +2270,23 @@
+@@ -1701,19 +2297,23 @@
          .mockRejectedValueOnce(new Error('first failure'))
          .mockRejectedValueOnce(new Error('second failure'));
  
@@ -228881,7 +228921,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(secondListener).toHaveBeenCalledOnce();
      });
  
-@@ -1727,169 +2300,373 @@
+@@ -1727,169 +2327,373 @@
              throw new Error('listener threw');
            }),
          );
@@ -229350,7 +229390,41 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
    describe('recordAttributionSnapshot', () => {
      const baseSnapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1916,13 +2693,13 @@
+@@ -1897,12 +2701,33 @@
+       surface: 'cli',
+       fileStates: {},
+       promptCount: 0,
+       promptCountAtLastCommit: 0,
+     };
+ 
++    it('latches a snapshot serialization omission', async () => {
++      const invalid = {
++        ...baseSnapshot,
++        toJSON: () => undefined,
++      };
++      chatRecordingService.recordAttributionSnapshot(invalid);
++      await expect(chatRecordingService.flush()).rejects.toThrow(
++        'Cannot serialize an attribution snapshot',
++      );
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
++    });
++
++    it('refuses an inactive attribution recorder', async () => {
++      const inactive = new ChatRecordingService(mockConfig);
++      inactive.recordAttributionSnapshot(baseSnapshot);
++      await expect(inactive.flush()).rejects.toBeInstanceOf(
++        SessionWriterUnavailableError,
++      );
++      expect(jsonl.writeLine).not.toHaveBeenCalled();
++    });
++
+     it('should write each distinct snapshot', async () => {
+       chatRecordingService.recordAttributionSnapshot(baseSnapshot);
+       chatRecordingService.recordAttributionSnapshot({
+         ...baseSnapshot,
+         promptCount: 1,
+       });
+@@ -1916,13 +2741,13 @@
  
      it('refreshes the cached git branch at the attribution turn boundary', async () => {
        vi.mocked(execSync)
@@ -229365,7 +229439,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          promptCount: 1,
        });
        await chatRecordingService.flush();
-@@ -1950,18 +2727,21 @@
+@@ -1950,18 +2775,21 @@
  
      // After rewindRecording, the previous attribution snapshot lives on
      // the abandoned branch, so the dedup key has to clear — otherwise
@@ -229389,7 +229463,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        // 1 rewind record + 1 fresh snapshot = 2 more writes after rewind.
        expect(vi.mocked(jsonl.writeLine).mock.calls.length).toBe(
          beforeRewind + 2,
-@@ -1976,19 +2756,21 @@
+@@ -1976,19 +2804,21 @@
  
        chatRecordingService.recordAttributionSnapshot(baseSnapshot);
        await expect(chatRecordingService.flush()).rejects.toBe(writeError);
@@ -229413,7 +229487,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        } finally {
          process.off('unhandledRejection', handler);
        }
-@@ -2007,20 +2789,27 @@
+@@ -2007,20 +2837,27 @@
          v: 2,
          sessionId: 'test-session-id',
          sequence: 1,
@@ -229444,7 +229518,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            sessionId: 'test-session-id',
            sequence: 2,
            recordedAt: '2026-07-04T00:00:01.000Z',
-@@ -2088,24 +2877,28 @@
+@@ -2088,24 +2925,28 @@
          chatRecordingService.recordSessionArtifactEvent(payload),
        ).resolves.toBeUndefined();
        expect(jsonl.writeLine).toHaveBeenCalledOnce();
@@ -229475,7 +229549,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const artifact = vi.mocked(jsonl.writeLine).mock
          .calls[1][1] as ChatRecord;
        const after = vi.mocked(jsonl.writeLine).mock.calls[2][1] as ChatRecord;
-@@ -2114,26 +2907,31 @@
+@@ -2114,26 +2955,31 @@
        expect(after.parentUuid).not.toBe(artifact.uuid);
      });
    });
@@ -229509,7 +229583,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
        expect(mockLease.sealForHandoff).not.toHaveBeenCalled();
        expect(mockLease.release).not.toHaveBeenCalled();
-@@ -2141,13 +2939,15 @@
+@@ -2141,13 +2987,15 @@
      });
  
      it('releases the writer lease before reporting a flush failure', async () => {
@@ -229526,7 +229600,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
      });
  
-@@ -2156,19 +2956,24 @@
+@@ -2156,19 +3004,24 @@
        vi.mocked(mockLease.appendJsonLine).mockImplementationOnce(
          () =>
            new Promise<void>((resolve) => {
@@ -229553,7 +229627,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          undefined,
        ]);
        expect(mockLease.appendJsonLine).toHaveBeenCalledTimes(1);
-@@ -2197,10 +3002,141 @@
+@@ -2197,10 +3050,141 @@
  
        await expect(chatRecordingService.close()).rejects.toBe(cleanupFailure);
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
@@ -231265,7 +231339,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'session_source',
-@@ -2065,54 +2130,10 @@
+@@ -2065,74 +2130,34 @@
      }
    }
  
@@ -231324,16 +231398,58 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -2120,7 +2141,7 @@
+    * Records @-command metadata as a system record for UI reconstruction.
     */
    recordAtCommand(payload: AtCommandRecordPayload): void {
++    if (this.writeFailure) return;
      try {
 -      const record: ChatRecord = {
++      if (!this.acceptingWrites || this.state !== 'active') {
++        throw new SessionWriterUnavailableError();
++      }
 +      const record: StoredChatRecord = {
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'at_command',
-@@ -2157,7 +2178,7 @@
+         systemPayload: payload,
+       };
+ 
+       this.appendRecord(record);
+-    } catch (error) {
+-      debugLogger.error('Error saving @-command record:', error);
++    } catch (cause) {
++      this.enterWriteFailure(cause, this.getSessionId(), 'at_command');
+     }
+   }
+ 
+   /**
+    * Records an attribution state snapshot for session persistence.
+    * Called at the start of every non-retry turn so that a resumed session
+@@ -2142,93 +2167,98 @@
+    * form is byte-identical to the last one we wrote, skip the append.
+    * Without this, sessions that touch many files would write a full
+    * duplicate of the entire snapshot to the JSONL on every turn, even
+    * when nothing changed — inflating session size and slowing /resume.
+    *
+    * Set the dedup key optimistically so synchronous identical calls (common
+-   * during a tool-driven turn) dedup correctly. A synchronous setup failure
+-   * rolls the key back; an async write failure permanently degrades this
+-   * recorder, so the current instance never retries it.
++   * during a tool-driven turn) dedup correctly. Any omitted snapshot degrades
++   * this recorder; a later turn cannot claim a complete resume chain.
+    */
+   recordAttributionSnapshot(snapshot: AttributionSnapshot): void {
++    if (this.writeFailure) return;
+     let json: string | undefined;
+     try {
++      if (!this.acceptingWrites || this.state !== 'active') {
++        throw new SessionWriterUnavailableError();
++      }
+       this.cachedGitBranch = undefined;
+       json = JSON.stringify(snapshot);
++      if (json === undefined) {
++        throw new Error('Cannot serialize an attribution snapshot. Inspect its source before retrying the session.');
++      }
        if (json === this.lastAttributionSnapshotJson) {
          return;
        }
@@ -231342,9 +231458,21 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          ...this.createBaseRecord('system'),
          type: 'system',
          subtype: 'attribution_snapshot',
-@@ -2175,60 +2196,62 @@
+         systemPayload: { snapshot },
+       };
+ 
+       this.lastAttributionSnapshotJson = json;
+       this.appendRecord(record);
+-    } catch (error) {
+-      // Synchronous setup failures happen before an async write is queued and
+-      // do not degrade the recorder, so roll back the optimistic dedup key to
+-      // let the next identical snapshot retry.
++    } catch (cause) {
+       if (json !== undefined && this.lastAttributionSnapshotJson === json) {
+         this.lastAttributionSnapshotJson = undefined;
        }
-       debugLogger.error('Error saving attribution snapshot:', error);
+-      debugLogger.error('Error saving attribution snapshot:', error);
++      this.enterWriteFailure(cause, this.getSessionId(), 'attribution_snapshot');
      }
    }
  
@@ -231431,7 +231559,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        ...this.createBaseRecord('system'),
        type: 'system',
        subtype: 'session_artifact_event',
-@@ -2240,7 +2263,7 @@
+@@ -2240,7 +2270,7 @@
    async recordSessionArtifactSnapshot(
      payload: SessionArtifactSnapshotRecordPayload,
    ): Promise<void> {
