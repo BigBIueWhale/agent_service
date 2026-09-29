@@ -9716,6 +9716,30 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, "packages/cli/src/acp-integration/acpAgent.ts", (
         "rewindResult = await session.rewindToTurn(",
     ), label=label)
+    _require_all(state, core + "services/fileHistoryService.ts", (
+        "deserializeSnapshots(arr: unknown)",
+        "date.toISOString() !== value",
+        "File history snapshots must be an array",
+    ), label=label)
+    _require_all(state, core + "utils/transcript-records.ts", (
+        "subtype === 'file_history_snapshot'",
+        "Invalid file history snapshot record",
+    ), label=label)
+    _require_all(state, core + "services/session-file-history-state.ts", (
+        "requireFileHistorySnapshots(record.systemPayload)",
+        "export function requireFileHistorySnapshots(",
+    ), label=label)
+    _require_all(state, core + "services/sessionService.ts", (
+        "Cannot read file history snapshots from ${filePath}",
+        "requireFileHistorySnapshots(payload).map(",
+        "requireFileHistorySnapshots(record.systemPayload)",
+    ), label=label)
+    require_text(state, core + "services/session-transcript-reader.ts",
+                 "Cannot restore file history from ${filePath}", label=label)
+    forbid_text(state, core + "services/sessionService.ts",
+                "skipping malformed file_history_snapshot", label=label)
+    forbid_text(state, core + "services/session-transcript-reader.ts",
+                "skipping malformed file_history_snapshot", label=label)
     _require_all(state, core + "services/image-payload-references.ts", (
         "restore(payloads: readonly StoredImagePayload[])", "snapshot(): StoredImagePayload[]",
         "payload.id !== expected.id || payload.bytes !== expected.bytes",

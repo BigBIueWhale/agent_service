@@ -241504,8 +241504,41 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      );
      expect(projection?.runtime.fileHistorySnapshots).toEqual(
        loaded?.fileHistorySnapshots,
-@@ -955,19 +1452,22 @@
+@@ -950,24 +1447,55 @@
+       'none',
      );
+     expect(mockAddDaemonRequestAttribute).toHaveBeenCalledWith(
+       'qwen-code.daemon.session_restore.compression_selected',
+       expect.any(Boolean),
+     );
++  });
++
++  it('refuses a malformed file history snapshot in both restore readers', async () => {
++    const malformed: ChatRecord = {
++      ...record('files', 'u1', ''),
++      type: 'system',
++      subtype: 'file_history_snapshot',
++      message: undefined,
++      systemPayload: {
++        snapshots: [
++          {
++            promptId: `${sessionId}########1`,
++            timestamp: 'not-a-date',
++            trackedFileBackups: {},
++          },
++        ],
++      },
++    };
++    await writeRecords([record('u1', null, 'prompt'), malformed]);
++
++    await expect(new SessionService(workspaceDir).loadSession(sessionId))
++      .rejects.toThrow('Invalid file history snapshot record');
++    await expect(
++      new SessionTranscriptReader(workspaceDir).readRestoreProjection(
++        sessionId,
++        { replay: { kind: 'none' } },
++      ),
++    ).rejects.toThrow('Invalid file history snapshot record');
    });
  
 -  it('uses the bounded persisted-title picker instead of the full active chain', async () => {
@@ -241533,7 +241566,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const service = new SessionService(workspaceDir, {
-@@ -977,9 +1477,12 @@
+@@ -977,9 +1505,12 @@
        replay: { kind: 'none' },
      });
  
@@ -241549,7 +241582,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('matches full-loader artifact selection across an abandoned branch', async () => {
-@@ -1028,11 +1531,15 @@
+@@ -1028,11 +1559,15 @@
            },
          ],
        },
@@ -241570,7 +241603,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        artifactRecord(
          'abandoned-artifact',
          'abandoned',
-@@ -1047,8 +1554,9 @@
+@@ -1047,8 +1582,9 @@
          activeArtifactId,
          'https://example.com/active',
        ),
@@ -241582,7 +241615,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const service = new SessionService(workspaceDir, {
-@@ -1107,8 +1615,14 @@
+@@ -1107,8 +1643,14 @@
            },
          ],
        },
@@ -241599,7 +241632,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
      const service = new SessionService(workspaceDir, {
        runtimeBaseDir: runtimeDir,
-@@ -1160,6 +1674,7 @@
+@@ -1160,6 +1702,7 @@
            },
          ],
        },
@@ -241607,7 +241640,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      await writeRecords([
        record('u1', null, 'first fragment'),
-@@ -1167,6 +1682,16 @@
+@@ -1167,6 +1710,16 @@
        record('u1', null, 'second fragment'),
        record('dead', null, 'abandoned blocker'),
        record('u1', null, 'final fragment'),
@@ -241624,7 +241657,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const service = new SessionService(workspaceDir, {
-@@ -1207,20 +1732,29 @@
+@@ -1207,20 +1760,29 @@
          },
        },
      };
@@ -241659,7 +241692,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const projection = await new SessionTranscriptReader(
-@@ -1236,6 +1770,7 @@
+@@ -1236,6 +1798,7 @@
      expect(projection?.replay).toMatchObject({
        records: [
          expect.objectContaining({ uuid: 'u3' }),
@@ -241667,7 +241700,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          expect.objectContaining({ uuid: 'a3' }),
        ],
        hasMore: true,
-@@ -1253,7 +1788,8 @@
+@@ -1253,7 +1816,8 @@
        forkedFrom: { sessionId: 'parent', messageUuid: 'u1' },
      };
      const inheritedAssistant = {
@@ -241677,7 +241710,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        forkedFrom: { sessionId: 'parent', messageUuid: 'a1' },
      };
      const inheritedGoal: ChatRecord = {
-@@ -1273,13 +1809,21 @@
+@@ -1273,13 +1837,21 @@
            },
          ],
        },
@@ -241700,7 +241733,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
      const reader = new SessionTranscriptReader(workspaceDir);
  
-@@ -1292,13 +1836,16 @@
+@@ -1292,13 +1864,16 @@
  
      expect(visible?.replay?.records.map((item) => item.uuid)).toEqual([
        'u1',
@@ -241717,7 +241750,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        'a2',
      ]);
      expect(hidden?.runtime.apiHistory).toEqual(visible?.runtime.apiHistory);
-@@ -1314,6 +1861,7 @@
+@@ -1314,6 +1889,7 @@
      });
      expect(hiddenLive?.replay?.records.map((item) => item.uuid)).toEqual([
        'u2',
@@ -241725,7 +241758,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        'a2',
      ]);
      expect(hiddenLive?.goalRecoverySourceUuid).toBeUndefined();
-@@ -1333,6 +1881,7 @@
+@@ -1333,6 +1909,7 @@
            { type: 'goal_status', kind: 'set', condition: 'visible goal' },
          ],
        },
@@ -241733,7 +241766,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      const hiddenGoal: ChatRecord = {
        ...record('hidden-goal', 'visible-goal', ''),
-@@ -1347,16 +1896,26 @@
+@@ -1347,16 +1924,26 @@
            { type: 'goal_status', kind: 'set', condition: 'hidden goal' },
          ],
        },
@@ -241763,7 +241796,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
      const reader = new SessionTranscriptReader(workspaceDir);
      const options = {
-@@ -1372,6 +1931,7 @@
+@@ -1372,6 +1959,7 @@
  
      expect(cold?.replay?.records.map((record) => record.uuid)).toEqual([
        'u2',
@@ -241771,7 +241804,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        'a2',
      ]);
      expect(cold?.runtime.goalRecoverySourceUuid).toBe('hidden-goal');
-@@ -1385,47 +1945,34 @@
+@@ -1385,47 +1973,34 @@
      ]);
    });
  
@@ -241834,7 +241867,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('ignores a later non-snapshot attribution record like the full loader', async () => {
-@@ -1438,11 +1985,12 @@
+@@ -1438,11 +2013,12 @@
        promptCountAtLastCommit: 1,
      };
      const valid: ChatRecord = {
@@ -241848,7 +241881,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      const malformed: ChatRecord = {
        ...record('malformed-attribution', 'attribution', ''),
-@@ -1452,12 +2000,16 @@
+@@ -1452,12 +2028,16 @@
        systemPayload: {
          ignored: true,
        } as unknown as ChatRecord['systemPayload'],
@@ -241866,7 +241899,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const projection = await new SessionTranscriptReader(
-@@ -1468,14 +2020,18 @@
+@@ -1468,14 +2048,18 @@
    });
  
    it('rejects a cold projection when the frozen transcript changes', async () => {
@@ -241887,7 +241920,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          'utf8',
        );
      });
-@@ -1532,7 +2088,7 @@
+@@ -1532,7 +2116,7 @@
      expect(buildCount).toBe(0);
    });
  
@@ -241896,7 +241929,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      await writeRawTranscript('');
      const reader = new SessionTranscriptReader(workspaceDir);
      await expect(
-@@ -1546,7 +2102,7 @@
+@@ -1546,7 +2130,7 @@
        reader.readRestoreProjection(sessionId, {
          replay: { kind: 'none' },
        }),
@@ -241905,7 +241938,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
      await writeRecords([record('u1', null, 'foreign')]);
      await expect(
-@@ -1582,8 +2138,19 @@
+@@ -1582,8 +2166,19 @@
        subtype: 'session_source',
        message: undefined,
        systemPayload: { sourceType: 'daemon', sourceId: 'metadata-only' },
@@ -241925,7 +241958,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
      const projection = await new SessionTranscriptReader(
        workspaceDir,
-@@ -1606,24 +2173,63 @@
+@@ -1606,24 +2201,63 @@
          subtype: 'chat_compression',
          message: undefined,
          systemPayload: {
@@ -241996,7 +242029,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('normalizes Goal candidates without changing recovery precedence', async () => {
-@@ -1646,26 +2252,28 @@
+@@ -1646,26 +2280,28 @@
          },
        },
      };
@@ -242030,7 +242063,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      const malformed: ChatRecord = {
        ...record('malformed-goal', 'valid-goal', ''),
-@@ -1677,13 +2285,17 @@
+@@ -1677,13 +2313,17 @@
          cause: 'create',
          snapshot: null,
        } as unknown as ChatRecord['systemPayload'],
@@ -242050,7 +242083,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
  
      const projection = await new SessionTranscriptReader(
-@@ -1697,11 +2309,11 @@
+@@ -1697,11 +2337,11 @@
      expect(projection?.runtime.goalRecoverySourceUuid).toBe('valid-goal');
      expect(projection?.runtime.goalRecords).toEqual([
        expect.objectContaining({
@@ -242064,7 +242097,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
            ],
          },
        }),
-@@ -1710,7 +2322,7 @@
+@@ -1710,7 +2350,7 @@
      ]);
    });
  
@@ -242073,7 +242106,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      const malformedGoal: ChatRecord = {
        ...record('a-goal', 'u1', 'model payload'),
        subtype: 'goal_state',
-@@ -1719,25 +2331,15 @@
+@@ -1719,25 +2359,15 @@
        } as unknown as ChatRecord['systemPayload'],
      };
      await writeRecords([record('u1', null, 'prompt'), malformedGoal]);
@@ -242105,7 +242138,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('reads a narrow live projection without cold runtime state', async () => {
-@@ -1778,6 +2380,7 @@
+@@ -1778,6 +2408,7 @@
              },
            ],
          },
@@ -242113,7 +242146,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        },
        record('a1', 'u1', 'one answer'),
        record('u2', 'a1', 'two'),
-@@ -1814,8 +2417,8 @@
+@@ -1814,8 +2445,8 @@
      );
    });
  
@@ -242124,7 +242157,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        ...record('goal', null, ''),
        type: 'system',
        subtype: 'slash_command',
-@@ -1832,9 +2435,10 @@
+@@ -1832,9 +2463,10 @@
            },
          ],
        },
@@ -242138,7 +242171,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        record('u1', 'goal', 'one'),
        record('a1', 'u1', 'one answer'),
        record('u2', 'a1', 'two'),
-@@ -1868,31 +2472,41 @@
+@@ -1868,31 +2500,41 @@
        type: 'system',
        subtype: 'goal_runtime',
        message: undefined,
@@ -242187,7 +242220,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      const goalPayload: GoalStateRecordPayloadV2 = {
        v: 2,
-@@ -1923,11 +2537,12 @@
+@@ -1923,11 +2565,12 @@
        subtype: 'goal_state',
        message: undefined,
        systemPayload: goalPayload,
@@ -242201,7 +242234,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        ...evidence.slice(1),
        compression,
        goalState,
-@@ -1972,7 +2587,7 @@
+@@ -1972,7 +2615,7 @@
        goalContext: permit,
      };
      const goalState: ChatRecord = {
@@ -242210,7 +242243,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        type: 'system',
        subtype: 'goal_state',
        message: undefined,
-@@ -1996,8 +2611,13 @@
+@@ -1996,8 +2639,13 @@
          },
          checkpointPending: { permit, recordUuid: evidence.uuid },
        } satisfies GoalStateRecordPayloadV2,
@@ -242226,7 +242259,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
  
      const projection = await new SessionTranscriptReader(
        workspaceDir,
-@@ -2013,6 +2633,7 @@
+@@ -2013,6 +2661,7 @@
      const toolResult = {
        ...record('t1', 'a-tool', 'tool result'),
        type: 'tool_result' as const,
@@ -242234,7 +242267,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      await writeRecords([
        record('u1', null, 'first prompt'),
-@@ -2041,6 +2662,7 @@
+@@ -2041,6 +2690,7 @@
      const toolResult = {
        ...record('t1', 'a-tool', 'tool result'),
        type: 'tool_result' as const,
@@ -242242,7 +242275,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      await writeRecords([
        record('u1', null, 'prompt'),
-@@ -2070,6 +2692,7 @@
+@@ -2070,6 +2720,7 @@
      const toolResult = {
        ...record('t1', 'a-tool', 'tool result'),
        type: 'tool_result' as const,
@@ -242250,7 +242283,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      const finalAnswer = record('a-final', 't1', 'final answer');
      const turnRecords = [prompt, toolCall, toolResult, finalAnswer];
-@@ -2326,17 +2949,16 @@
+@@ -2326,17 +2977,16 @@
      ).rejects.toBeInstanceOf(InvalidSessionTranscriptCursorError);
    });
  
@@ -242274,7 +242307,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('aggregates multiple physical records for the same active uuid', async () => {
-@@ -2358,30 +2980,19 @@
+@@ -2358,30 +3008,19 @@
      expect(page.hasMore).toBe(true);
    });
  
@@ -242313,7 +242346,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('keeps cursors valid after the in-memory key cache is reset', async () => {
-@@ -2509,55 +3120,103 @@
+@@ -2509,55 +3148,103 @@
      ).rejects.toBeInstanceOf(InvalidSessionTranscriptCursorError);
    });
  
@@ -242456,7 +242489,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('raises snapshot-unavailable when a same-size in-place rewrite reuses a cached segment', async () => {
-@@ -2646,27 +3305,33 @@
+@@ -2646,27 +3333,33 @@
      expect(siblingRanBeforeSettlement).toBe(true);
    });
  
@@ -242503,7 +242536,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('rejects oversized snapshots before indexing', async () => {
-@@ -2839,7 +3504,10 @@
+@@ -2839,7 +3532,10 @@
    it('does not let a fresh cold projection replace a cached pending build', async () => {
      const filePath = await writeRecords([
        record('u1', null, 'hello'),
@@ -242515,7 +242548,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      ]);
      let buildCount = 0;
      let releaseCachedBuild: (() => void) | undefined;
-@@ -2869,6 +3537,7 @@
+@@ -2869,6 +3565,7 @@
      await expect(cachedRead).resolves.toMatchObject({
        records: [
          expect.objectContaining({ uuid: 'u1' }),
@@ -242523,7 +242556,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          expect.objectContaining({ uuid: 'a1' }),
        ],
      });
-@@ -2918,7 +3587,7 @@
+@@ -2918,7 +3615,7 @@
  
      await expect(
        new SessionTranscriptReader(workspaceDir).readPage(sessionId),
@@ -242532,7 +242565,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('rejects foreign dead-branch metadata even when no consumer selects it', async () => {
-@@ -2928,7 +3597,11 @@
+@@ -2928,7 +3625,11 @@
        type: 'system',
        subtype: 'rewind',
        message: undefined,
@@ -242545,7 +242578,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
      };
      await writeRecords([
        record('u1', null, 'local'),
-@@ -2943,7 +3616,7 @@
+@@ -2943,7 +3644,7 @@
          sessionId,
          { replay: { kind: 'none' } },
        ),
@@ -242554,7 +242587,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
    });
  
    it('rejects tampered cursor snapshots before cache lookup', async () => {
-@@ -2976,6 +3649,7 @@
+@@ -2976,6 +3677,7 @@
    // not be masked by the index cache (cache key includes the file mtime).
    it('reflects an in-place same-size rewrite once the mtime advances', async () => {
      const mk = (uuid: string, parentUuid: string | null): ChatRecord => ({
@@ -242562,7 +242595,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        uuid,
        parentUuid,
        sessionId,
-@@ -3370,6 +4044,7 @@
+@@ -3370,6 +4072,7 @@
          type: 'system',
          subtype: 'goal_state',
          message: undefined,
@@ -242570,7 +242603,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        });
        records.push(record('a10', 'sys1', 'step 10'));
        records.push(record('a11', 'a10', 'step 11'));
-@@ -3404,10 +4079,12 @@
+@@ -3404,10 +4107,12 @@
          records.push({
            ...record(`urt${i}`, parent, `user speech ${i}`),
            subtype: 'realtime_message',
@@ -242583,7 +242616,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          });
          parent = `art${i}`;
        }
-@@ -3439,6 +4116,7 @@
+@@ -3439,6 +4144,7 @@
            type: 'system',
            subtype: 'ui_telemetry',
            message: undefined,
@@ -242591,7 +242624,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
          });
        }
        records.push(record('u1', 'sys199', 'prompt'));
-@@ -3517,7 +4195,9 @@
+@@ -3517,7 +4223,9 @@
        await writeRecords(records);
  
        const reader = new SessionTranscriptReader(workspaceDir);
@@ -242602,7 +242635,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
        let page = await reader.readPage(sessionId, {
          direction: 'backward',
          limit: 50,
-@@ -3648,6 +4328,7 @@
+@@ -3648,6 +4356,7 @@
        records.push({
          ...record('a-live', 'ar0', 'live interjection'),
          subtype: 'realtime_message',
@@ -243349,7 +243382,27 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
          )?.uiEvent;
          if (uiEvent) uiTelemetryEvents.push(uiEvent);
        }
-@@ -2255,13 +2314,13 @@
+@@ -2123,15 +2182,16 @@
+         sourceType = payload?.sourceType;
+         sourceId = payload?.sourceId;
+       }
+       if (fileHistorySet.has(record.uuid)) {
+         try {
+           fileHistory.add(record);
+-        } catch (error) {
+-          debugLogger.warn(
+-            `restore projection: skipping malformed file_history_snapshot: ${error}`,
++        } catch (cause) {
++          throw new Error(
++            `Cannot restore file history from ${filePath}. Inspect the original recording with the matching client, or repair it before retrying.`,
++            { cause },
+           );
+         }
+       }
+       if (artifactSet.has(record.uuid)) artifacts.add(record);
+       if (goalEvidenceSet.has(record.uuid)) {
+         goalCheckpointAccumulator?.capture(record);
+@@ -2255,13 +2315,13 @@
                replaySet.has(uuid) ||
                goalEvidenceSet.has(uuid),
            );
@@ -243364,7 +243417,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
            for (const uuid of remainingUuids) selectedReadSet.add(uuid);
            await forEachAggregatedRecord(
              index,
-@@ -2300,15 +2359,18 @@
+@@ -2300,15 +2360,18 @@
      }
      const customTitle = persistedTitle.title;
      const titleSource = persistedTitle.source;
@@ -243386,7 +243439,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        : [];
      const replayGoalRecoverySourceUuid = replaySelection
        ? selectGoalRecoveryFromRecords(replayGoalRecords).sourceUuid
-@@ -2348,19 +2410,21 @@
+@@ -2348,19 +2411,21 @@
                },
              }
            : {}),
@@ -243412,7 +243465,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        ...(index.gaps.length > 0 ? { historyGaps: index.gaps } : {}),
        recording: {
          lastCompletedUuid: index.leafUuid,
-@@ -2484,23 +2548,24 @@
+@@ -2484,23 +2549,24 @@
        (uuid) =>
          replaySet.has(uuid) || goalStateSet.has(uuid) || goalSet.has(uuid),
      );
@@ -243438,7 +243491,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
      try {
        await forEachAggregatedRecord(
          index,
-@@ -2510,13 +2575,14 @@
+@@ -2510,13 +2576,14 @@
              record.uuid === index.firstRecordUuid &&
              readOptions.validateFirstRecord &&
              !(await readOptions.validateFirstRecord(record))
@@ -243454,7 +243507,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
                parseGoalStateRecordPayloadV2(record.systemPayload),
              );
            }
-@@ -2531,12 +2597,18 @@
+@@ -2531,12 +2598,18 @@
        recordRestoreStage('selected_record_read', selectedReadsStartedAt);
      }
      recordRestoreSelectionAttributes(index, selectedReadSet, replaySet);
@@ -243473,7 +243526,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.ts b/packages/
        replay = {
          records: replayRecords,
          gaps: index.gaps,
-@@ -2695,12 +2767,13 @@
+@@ -2695,12 +2768,13 @@
  
      return {
        sessionId,
@@ -247973,7 +248026,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          survivingSnapshotRecord,
        ]);
  
-@@ -1406,13 +1491,16 @@
+@@ -1406,20 +1491,23 @@
      it('leaves file history snapshots undefined when none are recorded', async () => {
        const now = Date.now();
        statSyncSpy.mockReturnValue({
@@ -247991,6 +248044,14 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        expect(loaded?.fileHistorySnapshots).toBeUndefined();
      });
  
+-    it('skips malformed file history snapshot records and keeps later valid ones', async () => {
++    it('refuses a malformed file history snapshot before presenting later records', async () => {
+       const now = Date.now();
+       statSyncSpy.mockReturnValue({
+         mtimeMs: now,
+         isFile: () => true,
+       } as fs.Stats);
+ 
 @@ -1435,12 +1523,13 @@
              {
                promptId: 'bad',
@@ -248005,7 +248066,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          uuid: 'good-snapshot',
          parentUuid: 'bad-snapshot',
          type: 'system',
-@@ -1458,14 +1547,15 @@
+@@ -1458,39 +1547,27 @@
                    backupTime: '2026-06-13T00:00:01.000Z',
                  },
                },
@@ -248021,11 +248082,25 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          validSnapshotRecord,
        ]);
  
-       const loaded = await sessionService.loadSession(sessionIdB);
-@@ -1484,13 +1574,13 @@
-           },
-         },
-       ]);
+-      const loaded = await sessionService.loadSession(sessionIdB);
+-
+-      expect(loaded?.fileHistorySnapshots).toEqual([
+-        {
+-          promptId: 'p1',
+-          timestamp: new Date('2026-06-13T00:00:00.000Z'),
+-          trackedFileBackups: {
+-            'a.txt': {
+-              backupFileName: 'backup-a',
+-              version: 1,
+-              backupTime: new Date('2026-06-13T00:00:01.000Z'),
+-              failed: undefined,
+-            },
+-          },
+-        },
+-      ]);
++      await expect(sessionService.loadSession(sessionIdB)).rejects.toThrow(
++        'Cannot read file history snapshots from',
++      );
      });
  
      it('should return undefined when session file is empty', async () => {
@@ -248037,7 +248112,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        expect(loaded).toBeUndefined();
      });
  
-@@ -1502,13 +1592,15 @@
+@@ -1502,13 +1579,15 @@
        } as fs.Stats);
  
        const differentProjectRecord: ChatRecord = {
@@ -248054,7 +248129,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            : 'other-project-hash',
        );
  
-@@ -1525,13 +1617,15 @@
+@@ -1525,13 +1604,15 @@
        } as fs.Stats);
  
        const migratedRecord: ChatRecord = {
@@ -248071,7 +248146,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          sessionId: sessionIdA,
          workDir: '/test/project/root',
          hostname: 'host',
-@@ -1550,32 +1644,37 @@
+@@ -1550,32 +1631,37 @@
        expect(loaded?.conversation.projectHash).toBe('test-project-hash');
      });
  
@@ -248109,7 +248184,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            timestamp: '2024-01-01T00:02:00Z',
            type: 'user',
            message: { role: 'user', parts: [{ text: 'Third' }] },
-@@ -1585,130 +1684,109 @@
+@@ -1585,130 +1671,109 @@
        ];
  
        statSyncSpy.mockReturnValue({
@@ -248273,7 +248348,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const warnings: string[] = [];
        sessionService = new SessionService('/test/project/root', {
          onWarning: (message) => warnings.push(message),
-@@ -1718,23 +1796,25 @@
+@@ -1718,23 +1783,25 @@
          .mockImplementation(function (this: {
            onWarning?: (message: string) => void;
          }) {
@@ -248301,7 +248376,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
  
        expect(result).toBe(false);
-@@ -1743,13 +1823,15 @@
+@@ -1743,13 +1810,15 @@
  
      it('should return false for session from different project', async () => {
        const differentProjectRecord: ChatRecord = {
@@ -248318,7 +248393,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            : 'other-project-hash',
        );
  
-@@ -1761,13 +1843,15 @@
+@@ -1761,13 +1830,15 @@
  
      it('should remove a migrated session when runtime status matches this project', async () => {
        const migratedRecord: ChatRecord = {
@@ -248335,7 +248410,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          sessionId: sessionIdA,
          workDir: '/test/project/root',
          hostname: 'host',
-@@ -1786,23 +1870,23 @@
+@@ -1786,23 +1857,23 @@
        expect(unlinkSyncSpy).toHaveBeenCalled();
      });
  
@@ -248361,7 +248436,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            error.code = 'ENOENT';
            throw error;
          },
-@@ -1822,46 +1906,30 @@
+@@ -1822,46 +1893,30 @@
        );
        expect(unlinkSyncSpy).toHaveBeenCalledWith(
          expect.stringContaining(`/chats/archive/${sessionIdA}.worktree.json`),
@@ -248416,7 +248491,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              error.code = 'ENOENT';
              throw error;
            }
-@@ -1953,14 +2021,15 @@
+@@ -1953,14 +2008,15 @@
  
        const result = await sessionService.archiveSessions([sessionIdA]);
  
@@ -248433,7 +248508,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          expect.stringContaining(`/chats/archive/${sessionIdA}.jsonl`),
        );
        expect(renameSyncSpy).not.toHaveBeenCalledWith(
-@@ -1983,13 +2052,13 @@
+@@ -1983,13 +2039,13 @@
          expect.stringContaining(`/chats/${sessionIdA}.jsonl`),
          expect.stringContaining(`/chats/archive/${sessionIdA}.jsonl`),
        );
@@ -248448,7 +248523,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            error.code = 'ENOENT';
            throw error;
          },
-@@ -2000,13 +2069,13 @@
+@@ -2000,13 +2056,13 @@
        expect(result.archived).toEqual([]);
        expect(result.alreadyArchived).toEqual([sessionIdA]);
        expect(renameSyncSpy).not.toHaveBeenCalled();
@@ -248463,7 +248538,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        expect(result.archived).toEqual([]);
        expect(result.errors[0]?.sessionId).toBe(sessionIdA);
        expect(result.errors[0]?.error.message).toMatch(/conflict/i);
-@@ -2017,13 +2086,13 @@
+@@ -2017,13 +2073,13 @@
    describe('unarchiveSessions', () => {
      beforeEach(() => {
        mkdirSyncSpy.mockImplementation(() => undefined);
@@ -248478,7 +248553,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            error.code = 'ENOENT';
            throw error;
          },
-@@ -2092,29 +2161,31 @@
+@@ -2092,29 +2148,31 @@
          expect.stringContaining(`/chats/archive/${sessionIdA}.jsonl`),
          expect.stringContaining(`/chats/${sessionIdA}.jsonl`),
        );
@@ -248516,7 +248591,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              error.code = 'ENOENT';
              throw error;
            }
-@@ -2183,27 +2254,28 @@
+@@ -2183,27 +2241,28 @@
  
        const result = await sessionService.unarchiveSessions([sessionIdA]);
  
@@ -248547,7 +248622,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        expect(result.unarchived).toEqual([]);
        expect(result.errors[0]?.sessionId).toBe(sessionIdA);
        expect(result.errors[0]?.error.message).toMatch(/conflict/i);
-@@ -2215,13 +2287,13 @@
+@@ -2215,13 +2274,13 @@
      it('should remove multiple sessions and report each outcome', async () => {
        const removeOrganizationsSpy = vi
          .spyOn(SessionOrganizationService.prototype, 'removeSessions')
@@ -248562,7 +248637,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              error.code = 'ENOENT';
              throw error;
            }
-@@ -2246,13 +2318,13 @@
+@@ -2246,13 +2305,13 @@
          sessionIdA,
          sessionIdB,
        ]);
@@ -248577,7 +248652,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              error.code = 'ENOENT';
              throw error;
            }
-@@ -2269,13 +2341,13 @@
+@@ -2269,13 +2328,13 @@
        expect(result.removed).toEqual([sessionIdA]);
        expect(result.notFound).toEqual([]);
        expect(unlinkSyncSpy).toHaveBeenCalledTimes(1);
@@ -248592,7 +248667,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              error.code = 'ENOENT';
              throw error;
            }
-@@ -2312,64 +2384,32 @@
+@@ -2312,64 +2371,32 @@
        expect(result.errors).toEqual([]);
        expect(unlinkSyncSpy).not.toHaveBeenCalled();
      });
@@ -248674,7 +248749,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const createReadStreamSpy = vi.spyOn(fs, 'createReadStream');
  
        const count = await sessionService.countSessionMessages('not-a-uuid');
-@@ -2378,13 +2418,13 @@
+@@ -2378,13 +2405,13 @@
        expect(createReadStreamSpy).not.toHaveBeenCalled();
      });
  
@@ -248689,7 +248764,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const count = await sessionService.countSessionMessages(sessionIdA);
  
        expect(count).toBe(0);
-@@ -2395,13 +2435,15 @@
+@@ -2395,13 +2422,15 @@
        // its first-record cwd hashes to a different project. Lazy-count
        // callers must not bypass project scoping.
        const otherProjectRecord: ChatRecord = {
@@ -248706,7 +248781,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          cwd === '/test/project/root' ? 'test-project-hash' : 'other-hash',
        );
        const createReadStreamSpy = vi.spyOn(fs, 'createReadStream');
-@@ -2416,66 +2458,61 @@
+@@ -2416,66 +2445,61 @@
  
      it('should count a migrated session when runtime status matches this project', async () => {
        const migratedRecord: ChatRecord = {
@@ -248783,7 +248858,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        expect(warnings).toHaveLength(2);
        for (const warning of warnings) {
-@@ -2484,23 +2521,23 @@
+@@ -2484,23 +2508,23 @@
          expect(warning).toContain('malformed JSON');
        }
      });
@@ -248812,7 +248887,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
    describe('loadLastSession', () => {
      it('should return the most recent session (same as getLatestSession)', async () => {
        const now = Date.now();
-@@ -2515,22 +2552,25 @@
+@@ -2515,22 +2539,25 @@
          return {
            mtimeMs: path.includes(sessionIdB) ? now : now - 10000,
            isFile: () => true,
@@ -248840,7 +248915,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        expect(latest?.conversation.sessionId).toBe(sessionIdB);
      });
  
-@@ -2542,52 +2582,56 @@
+@@ -2542,52 +2569,56 @@
        expect(latest).toBeUndefined();
      });
    });
@@ -248904,7 +248979,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const exists = sessionService.sessionExists(sessionIdA, {
          signal: controller.signal,
        });
-@@ -2598,13 +2642,15 @@
+@@ -2598,13 +2629,15 @@
  
      it('passes cancellation to migrated-session runtime status reads', async () => {
        const migratedRecord: ChatRecord = {
@@ -248921,7 +248996,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            : 'other-project-hash',
        );
        const controller = new AbortController();
-@@ -2640,13 +2686,15 @@
+@@ -2640,13 +2673,15 @@
  
      it('should return false for session from different project', async () => {
        const differentProjectRecord: ChatRecord = {
@@ -248938,7 +249013,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            : 'other-project-hash',
        );
  
-@@ -2657,13 +2705,15 @@
+@@ -2657,13 +2692,15 @@
  
      it('should return true for a migrated session when runtime status matches this project', async () => {
        const migratedRecord: ChatRecord = {
@@ -248955,7 +249030,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          sessionId: sessionIdA,
          workDir: '/test/project/root',
          hostname: 'host',
-@@ -2679,13 +2729,13 @@
+@@ -2679,13 +2716,13 @@
        const exists = await sessionService.sessionExists(sessionIdA);
  
        expect(exists).toBe(true);
@@ -248970,7 +249045,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            error.code = 'ENOENT';
            throw error;
          },
-@@ -2696,214 +2746,161 @@
+@@ -2696,214 +2733,161 @@
        );
        await expect(
          sessionService.sessionExistsInAnyState(sessionIdA),
@@ -249279,7 +249354,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
  
        expect(history).toEqual([recordA1.message, assistantA1.message]);
      });
-@@ -2911,33 +2908,40 @@
+@@ -2911,33 +2895,40 @@
      it('keeps Realtime dialogue out of backend model history', () => {
        const realtimeUser: ChatRecord = {
          ...recordA1,
@@ -249321,7 +249396,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          backendUser.message,
        ]);
      });
-@@ -2945,14 +2949,15 @@
+@@ -2945,14 +2936,15 @@
      it('does not deep-clone stored messages when rebuilding resume API history', () => {
        const largePayload = {
          output: 'x'.repeat(128 * 1024),
@@ -249338,7 +249413,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          message: {
            role: 'user',
            parts: [
-@@ -2970,13 +2975,17 @@
+@@ -2970,13 +2962,17 @@
        };
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -249357,7 +249432,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          .mockImplementation(() => {
            throw new Error('unexpected deep clone');
          });
-@@ -2990,19 +2999,22 @@
+@@ -2990,19 +2986,22 @@
        const response = history[1].parts![0] as {
          functionResponse: { response: typeof largePayload };
        };
@@ -249381,7 +249456,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              {
                functionCall: {
                  id: 'call-1',
-@@ -3013,12 +3025,13 @@
+@@ -3013,12 +3012,13 @@
            ],
          },
          cwd: '/test/project/root',
@@ -249395,7 +249470,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-01T00:02:00Z',
          type: 'tool_result',
          message: {
-@@ -3034,12 +3047,13 @@
+@@ -3034,12 +3034,13 @@
            ],
          },
          cwd: '/test/project/root',
@@ -249409,7 +249484,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-01T00:03:00Z',
          type: 'user',
          subtype: 'mid_turn_user_message',
-@@ -3058,15 +3072,30 @@
+@@ -3058,15 +3059,30 @@
          sessionId: sessionIdA,
          projectHash: 'test-project-hash',
          startTime: '2024-01-01T00:00:00Z',
@@ -249440,7 +249515,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const history = buildApiHistoryFromConversation(conversation);
  
        expect(history).toEqual([
-@@ -3080,40 +3109,46 @@
+@@ -3080,40 +3096,46 @@
            ],
          },
        ]);
@@ -249495,7 +249570,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-02T04:00:00Z',
          type: 'user',
          message: { role: 'user', parts: [{ text: 'new question' }] },
-@@ -3126,55 +3161,77 @@
+@@ -3126,55 +3148,77 @@
          sessionId: sessionIdA,
          projectHash: 'test-project-hash',
          startTime: '2024-01-01T00:00:00Z',
@@ -249580,7 +249655,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-02T04:00:00Z',
          type: 'tool_result',
          message: {
-@@ -3191,12 +3248,13 @@
+@@ -3191,12 +3235,13 @@
          },
          cwd: '/test/project/root',
          version: '1.0.0',
@@ -249594,7 +249669,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          timestamp: '2024-01-02T04:01:00Z',
          type: 'user',
          subtype: 'mid_turn_user_message',
-@@ -3216,16 +3274,40 @@
+@@ -3216,16 +3261,40 @@
          sessionId: sessionIdA,
          projectHash: 'test-project-hash',
          startTime: '2024-01-01T00:00:00Z',
@@ -249636,7 +249711,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        const history = buildApiHistoryFromConversation(conversation);
  
        expect(history).toEqual([
-@@ -3240,17 +3322,20 @@
+@@ -3240,17 +3309,20 @@
          },
        ]);
      });
@@ -249658,7 +249733,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              { text: 'reasoning step', thought: true },
              { text: 'final answer' },
            ],
-@@ -3261,13 +3346,17 @@
+@@ -3261,13 +3333,17 @@
  
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -249677,7 +249752,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
  
        // Thought parts should be preserved by default
        expect(history).toHaveLength(2);
-@@ -3276,17 +3365,20 @@
+@@ -3276,17 +3352,20 @@
          { text: 'final answer' },
        ]);
      });
@@ -249699,7 +249774,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              { text: 'reasoning step', thought: true },
              { text: 'final answer' },
            ],
-@@ -3297,60 +3389,78 @@
+@@ -3297,60 +3376,78 @@
  
        const conversation: ConversationRecord = {
          sessionId: sessionIdA,
@@ -249790,7 +249865,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
  
        // Thought parts should be preserved in compressed history by default.
        // The compressedHistory has 2 entries (user, model), and no messages
-@@ -3361,33 +3471,38 @@
+@@ -3361,33 +3458,38 @@
          { text: 'final answer' },
        ]);
      });
@@ -249830,7 +249905,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        vi.mocked(path.dirname).mockImplementation(
          realPath.dirname as unknown as typeof path.dirname,
-@@ -3405,14 +3520,42 @@
+@@ -3405,14 +3507,42 @@
        // Storage.getProjectDir calls sanitizeCwd via a non-spied namespace import;
        // restore it module-globally so getChatsDir() returns a real path.
        const mockedPaths = (await import('../utils/paths.js')) as unknown as {
@@ -249875,7 +249950,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        vi.mocked(statSyncSpy).mockRestore?.();
        vi.mocked(unlinkSyncSpy).mockRestore?.();
        vi.mocked(rmSyncSpy).mockRestore?.();
-@@ -3447,26 +3590,30 @@
+@@ -3447,26 +3577,30 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -249906,7 +249981,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            message: { role: 'model', parts: [{ text: 'hi' }] },
          },
        ];
-@@ -3491,18 +3638,20 @@
+@@ -3491,18 +3625,20 @@
          .trim()
          .split('\n')
          .map((l) => JSON.parse(l));
@@ -249927,7 +250002,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          forkedFrom: { sessionId: oldId, messageUuid: 'u2' },
        });
        // Source file is untouched.
-@@ -3522,12 +3671,13 @@
+@@ -3522,12 +3658,13 @@
        const { file, lines } = seedSession(oldId);
        fs.writeFileSync(
          file,
@@ -249941,7 +250016,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
              type: 'system',
              subtype: 'custom_title',
              timestamp: '2026-04-22T00:00:02.000Z',
-@@ -3585,12 +3735,13 @@
+@@ -3585,12 +3722,13 @@
        const { file, lines } = seedSession(oldId);
        const oldArtifactId = stableSessionArtifactId(
          oldId,
@@ -249955,7 +250030,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.500Z',
-@@ -3664,12 +3815,13 @@
+@@ -3664,12 +3802,13 @@
        const { file, lines } = seedSession(oldId);
        const oldArtifactId = stableSessionArtifactId(
          oldId,
@@ -249969,7 +250044,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.500Z',
-@@ -3736,12 +3888,13 @@
+@@ -3736,12 +3875,13 @@
        const oldId = '73737373-7373-7373-7373-737373737373';
        const newId = '83838383-8383-8383-8383-838383838383';
        const { file, lines } = seedSession(oldId);
@@ -249983,7 +250058,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:01.500Z',
-@@ -3802,12 +3955,13 @@
+@@ -3802,12 +3942,13 @@
        const newId = '82828282-8282-8282-8282-828282828282';
        const { file, lines } = seedSession(oldId);
        const url = 'https://example.com/forked-then-removed';
@@ -249997,7 +250072,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.500Z',
-@@ -3838,12 +3992,13 @@
+@@ -3838,12 +3979,13 @@
                },
              },
            ],
@@ -250011,7 +250086,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_artifact_event',
          timestamp: '2026-04-22T00:00:00.750Z',
-@@ -3899,12 +4054,13 @@
+@@ -3899,12 +4041,13 @@
  
      it('preserves file history snapshots on the forked session', async () => {
        const oldId = '31313131-3131-3131-3131-313131313131';
@@ -250025,7 +250100,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'file_history_snapshot',
          timestamp: '2026-04-22T00:00:02.000Z',
-@@ -3969,61 +4125,80 @@
+@@ -3969,61 +4112,80 @@
        );
        fs.mkdirSync(chatsDir, { recursive: true });
        fs.writeFileSync(
@@ -250107,7 +250182,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            .join('\n') + '\n',
        );
  
-@@ -4045,17 +4220,13 @@
+@@ -4045,17 +4207,13 @@
      });
  
      it('throws when the target session file already exists', async () => {
@@ -250126,7 +250201,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
      });
  
-@@ -4065,24 +4236,28 @@
+@@ -4065,24 +4223,28 @@
        seedSession(oldId);
        const targetPath = realPath.join(
          service['storage'].getProjectDir(),
@@ -250165,7 +250240,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
      it('throws when the source session belongs to a different project', async () => {
        // Defensive guard: a file can physically sit in this project's chats
        // dir but carry a record whose cwd hashes to a different project
-@@ -4095,12 +4270,13 @@
+@@ -4095,12 +4257,13 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -250179,7 +250254,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'user',
            timestamp: '2026-04-22T00:00:00.000Z',
            cwd: '/some/other/project',
-@@ -4163,44 +4339,50 @@
+@@ -4163,44 +4326,50 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -250230,7 +250305,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
          type: 'system',
          subtype: 'session_source',
          timestamp: '2026-04-22T00:00:00.750Z',
-@@ -4262,12 +4444,15 @@
+@@ -4262,12 +4431,15 @@
          await vi.importActual<typeof import('../utils/paths.js')>(
            '../utils/paths.js',
          );
@@ -250246,7 +250321,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        vi.mocked(path.dirname).mockImplementation(
          realPath.dirname as unknown as typeof path.dirname,
-@@ -4280,14 +4465,33 @@
+@@ -4280,14 +4452,33 @@
        );
        vi.mocked(getProjectHash).mockImplementation(actualPaths.getProjectHash);
        const mockedPaths = (await import('../utils/paths.js')) as unknown as {
@@ -250282,7 +250357,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        vi.mocked(unlinkSyncSpy).mockRestore?.();
  
        realTmpDir = fs.mkdtempSync(
-@@ -4317,22 +4521,24 @@
+@@ -4317,22 +4508,24 @@
          'chats',
        );
        fs.mkdirSync(chatsDir, { recursive: true });
@@ -250307,7 +250382,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'system',
            subtype: 'custom_title',
            timestamp: '2026-04-22T00:00:01.000Z',
-@@ -4401,12 +4607,13 @@
+@@ -4401,12 +4594,13 @@
        );
        fs.mkdirSync(chatsDir, { recursive: true });
        const file = realPath.join(chatsDir, `${sessionId}.jsonl`);
@@ -250321,7 +250396,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'user',
            timestamp: '2026-04-22T00:00:00.000Z',
            cwd,
-@@ -4425,13 +4632,13 @@
+@@ -4425,13 +4619,13 @@
  
      it('includes a session whose transcript cwd is a worktree under this project', async () => {
        (path as unknown as Record<string, unknown>)['sep'] = '/';
@@ -250336,7 +250411,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            cwd: '/test/project/root/.qwen/worktrees/my-task',
          },
        ]);
-@@ -4450,13 +4657,13 @@
+@@ -4450,13 +4644,13 @@
  
      it('excludes a session whose worktree belongs to a different project', async () => {
        (path as unknown as Record<string, unknown>)['sep'] = '/';
@@ -250351,7 +250426,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            cwd: '/other/repo/.qwen/worktrees/my-task',
          },
        ]);
-@@ -4470,13 +4677,13 @@
+@@ -4470,13 +4664,13 @@
      });
    });
  
@@ -250366,7 +250441,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
      let service: SessionService;
      let cwd: string;
  
-@@ -4487,12 +4694,15 @@
+@@ -4487,12 +4681,15 @@
          await vi.importActual<typeof import('../utils/paths.js')>(
            '../utils/paths.js',
          );
@@ -250382,7 +250457,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        );
        vi.mocked(path.dirname).mockImplementation(
          realPath.dirname as unknown as typeof path.dirname,
-@@ -4505,14 +4715,33 @@
+@@ -4505,14 +4702,33 @@
        );
        vi.mocked(getProjectHash).mockImplementation(actualPaths.getProjectHash);
        const mockedPaths = (await import('../utils/paths.js')) as unknown as {
@@ -250418,7 +250493,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        vi.mocked(unlinkSyncSpy).mockRestore?.();
  
        realTmpDir = fs.mkdtempSync(
-@@ -4539,35 +4768,38 @@
+@@ -4539,35 +4755,38 @@
        );
        fs.mkdirSync(chatsDir, { recursive: true });
        return chatsDir;
@@ -250457,7 +250532,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
        type: 'system',
        subtype: 'session_source',
        timestamp: '2026-04-22T00:00:02.000Z',
-@@ -4676,12 +4908,13 @@
+@@ -4676,12 +4895,13 @@
          userLine(sessionId, 'hello'),
          parentSessionLine(sessionId, 'parent-head'),
        ];
@@ -250471,7 +250546,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
            type: 'user',
            timestamp: '2026-04-22T00:01:00.000Z',
            cwd,
-@@ -4719,6 +4952,11 @@
+@@ -4719,6 +4939,11 @@
        const sessionId = '66666666-6666-6666-6666-666666666666';
  
        expect(await service.readParentSessionId(sessionId)).toBeUndefined();
@@ -250486,7 +250561,7 @@ diff --git a/packages/core/src/services/sessionService.test.ts b/packages/core/s
 diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/services/sessionService.ts
 --- a/packages/core/src/services/sessionService.ts
 +++ b/packages/core/src/services/sessionService.ts
-@@ -1,25 +1,40 @@
+@@ -1,45 +1,57 @@
  /**
   * @license
   * Copyright 2025 Qwen Code
@@ -250524,16 +250599,22 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    ChatRecord,
 +  ConversationChatRecord,
 +  StoredChatRecord,
-   FileHistorySnapshotRecordPayload,
+-  FileHistorySnapshotRecordPayload,
    TitleSource,
    UiTelemetryRecordPayload,
    UserPromptRecordPayload,
  } from './chatRecordingService.js';
  import type { FileHistorySnapshot } from './fileHistoryService.js';
-@@ -29,17 +44,13 @@
+ import {
+-  deserializeSnapshots,
+   FILE_HISTORY_DIR,
    serializeSnapshot,
  } from './fileHistoryService.js';
- import { SessionFileHistoryAccumulator } from './session-file-history-state.js';
+-import { SessionFileHistoryAccumulator } from './session-file-history-state.js';
++import {
++  requireFileHistorySnapshots,
++  SessionFileHistoryAccumulator,
++} from './session-file-history-state.js';
  import { uiTelemetryService } from '../telemetry/uiTelemetry.js';
  import { createDebugLogger } from '../utils/debugLogger.js';
  import { readRuntimeStatus } from '../utils/runtimeStatus.js';
@@ -250549,7 +250630,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    remapSessionArtifactPayloadForFork,
    selectActiveSideArtifactRecordUuids,
    type RebuiltSessionArtifactSnapshot,
-@@ -58,21 +69,15 @@
+@@ -58,21 +70,15 @@
    type SessionWriterProcessKind,
  } from './session-writer-lease.js';
  export {
@@ -250574,7 +250655,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  /**
   * Session item for list display.
   * Contains essential info extracted from the first record of a session file.
-@@ -134,13 +139,14 @@
+@@ -134,13 +140,14 @@
     * Cursor for pagination (mtime of the last item from previous page).
     * Items with mtime < cursor will be returned.
     * If undefined, starts from the most recent.
@@ -250590,7 +250671,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    /**
     * Which session directory to list.
     * @default 'active'
-@@ -153,19 +159,49 @@
+@@ -153,19 +160,49 @@
  /**
   * Result of listing sessions with pagination info.
   */
@@ -250640,7 +250721,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
   * Aggregate persisted-session counts for a workspace.
   *
   * Built by scanning local JSONL files. This is intentionally separate from
-@@ -201,23 +237,25 @@
+@@ -201,23 +238,25 @@
    notFound: string[];
    errors: Array<{ sessionId: string; error: Error }>;
  }
@@ -250666,7 +250747,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    onWarning?: (message: string) => void;
    runtimeBaseDir?: string;
  }
-@@ -229,34 +267,47 @@
+@@ -229,34 +268,47 @@
  export interface ConversationRecord {
    sessionId: string;
    projectHash: string;
@@ -250721,7 +250802,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
   * Maximum number of files to process when listing sessions.
   * This is a safety limit to prevent performance issues with very large chat directories.
   */
-@@ -274,18 +325,12 @@
+@@ -274,18 +326,12 @@
   * Session files are named as `${sessionId}.jsonl` where sessionId is a UUID-like identifier
   * (32-36 hex characters, optionally with hyphens).
   */
@@ -250740,7 +250821,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  ): Promise<void> {
    const fsPromises = await import('node:fs/promises');
    const sourceDir = path.join(
-@@ -386,12 +431,54 @@
+@@ -386,12 +432,54 @@
      return SessionWriterLease.acquire({
        runtimeBaseDir: this.storage.getRuntimeBaseDir(),
        sessionId,
@@ -250795,7 +250876,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
      debugLogger.warn(message);
      this.onWarning?.(message);
    }
-@@ -484,13 +571,13 @@
+@@ -484,13 +572,13 @@
  
    private async readProjectSessionHead(
      sessionId: string,
@@ -250810,7 +250891,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
        const firstRecord = records[0];
        if (
          !(await this.sessionBelongsToCurrentProject(sessionId, firstRecord.cwd))
-@@ -524,13 +611,13 @@
+@@ -524,13 +612,13 @@
      sourceType?: string;
      sourceId?: string;
    }> {
@@ -250825,7 +250906,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
          if (records.length === 0) continue;
          if (
            !(await this.sessionBelongsToCurrentProject(
-@@ -540,15 +627,13 @@
+@@ -540,15 +628,13 @@
          ) {
            continue;
          }
@@ -250842,7 +250923,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    }
  
    async getSessionLocation(sessionId: string): Promise<SessionLocation> {
-@@ -668,62 +753,24 @@
+@@ -668,62 +754,24 @@
    }
  
    private sessionFileMoveError(
@@ -250910,7 +250991,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Extracts the `parent_session` record's `parentSessionId` from records
     * ALREADY read for the listing (the first {@link MAX_PROMPT_SCAN_LINES}), or
     * undefined when the session has no parent. The record is written once right
-@@ -787,86 +834,12 @@
+@@ -787,86 +835,12 @@
      if (!SESSION_FILE_PATTERN.test(`${sessionId}.jsonl`)) {
        return {};
      }
@@ -250997,7 +251078,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Extracts the first user prompt text from a Content object.
     */
    private extractPromptText(message: Content | undefined): string {
-@@ -917,16 +890,13 @@
+@@ -917,16 +891,13 @@
      }
      return text;
    }
@@ -251015,7 +251096,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * renameSession, loadSession) apply the same first-record cwd check;
     * mirroring it here keeps lazy-count callers from accidentally
     * counting a session that lives in the shared chats directory but
-@@ -947,66 +917,55 @@
+@@ -947,66 +918,55 @@
        return 0;
      }
      const chatsDir = this.getChatsDir();
@@ -251098,7 +251179,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * @returns Paginated list of sessions
     */
    async listSessions(
-@@ -1015,142 +974,180 @@
+@@ -1015,142 +975,180 @@
      const { cursor, size = 20, archiveState = 'active', signal } = options;
      const chatsDir = this.getChatsDirForState(archiveState);
      const isArchived = archiveState === 'archived';
@@ -251335,7 +251416,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    /**
     * Counts persisted sessions for this project by scanning the active and
     * archived chats directories.
-@@ -1204,13 +1201,13 @@
+@@ -1204,13 +1202,13 @@
  
        const filePath = path.join(chatsDir, name);
        // Project filter only — same first-record membership check as
@@ -251350,7 +251431,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
          }
          const firstRecord = records[0]!;
          if (
-@@ -1233,21 +1230,45 @@
+@@ -1233,21 +1231,45 @@
  
    /**
     * Reads all records from a session file.
@@ -251398,7 +251479,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Delegates validation, parentUuid walking, and fragment aggregation to the
     * shared transcript record preparation module. With
     * `detectGaps`, a walk that stops on a physically-missing parent records the
-@@ -1256,19 +1277,37 @@
+@@ -1256,19 +1278,37 @@
     * could resurrect turns the user rewound away). Without `detectGaps` the
     * result is identical to the historical walk.
     */
@@ -251440,7 +251521,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  
    /**
     * Loads a session by its session ID.
-@@ -1276,16 +1315,46 @@
+@@ -1276,16 +1316,46 @@
     *
     * @param sessionId The session ID to load
     * @returns Session data for resumption, or undefined if not found
@@ -251488,7 +251569,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
      sessionId: string,
      options: SelectiveSessionRestoreOptions,
    ): Promise<SessionRestoreProjection | undefined> {
-@@ -1309,13 +1378,13 @@
+@@ -1309,13 +1379,13 @@
     * Reads an archived session without changing its archive state.
     * Daemon load/resume paths must continue to use {@link loadSession}.
     */
@@ -251503,7 +251584,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
      const filePath = this.getSessionFilePath(sessionId, 'archived');
      let stats: fs.Stats;
      try {
-@@ -1333,23 +1402,26 @@
+@@ -1333,23 +1403,26 @@
        }
        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
          throw error;
@@ -251537,7 +251618,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  
      const firstRecord = records[0];
      if (
-@@ -1359,36 +1431,38 @@
+@@ -1359,211 +1432,195 @@
        ))
      ) {
        return;
@@ -251582,17 +251663,24 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
        lastUpdated: new Date(stats.mtimeMs).toISOString(),
        messages,
      };
-@@ -1397,173 +1471,154 @@
+ 
+     // Extract file history snapshots for /rewind across resume
      const fileHistoryAccumulator = new SessionFileHistoryAccumulator();
-     for (const msg of messages) {
-       try {
+-    for (const msg of messages) {
+-      try {
++    try {
++      for (const msg of messages) {
          fileHistoryAccumulator.add(msg);
-       } catch (e) {
-         debugLogger.warn(
+-      } catch (e) {
+-        debugLogger.warn(
 -          `loadSession: skipping malformed file_history_snapshot: ${e}`,
-+          `Session view: skipping malformed file_history_snapshot: ${e}`,
-         );
+-        );
        }
++    } catch (cause) {
++      throw new Error(
++        `Cannot read file history snapshots from ${filePath}. Inspect the original recording with the matching client, or repair it before retrying.`,
++        { cause },
++      );
      }
      const fileHistorySnapshots = fileHistoryAccumulator.finish();
 -    const activeBranchRecords = includeActiveSideArtifactRecords(
@@ -251837,7 +251925,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
            error: error instanceof Error ? error : new Error(String(error)),
          });
        }
-@@ -1579,56 +1634,69 @@
+@@ -1579,56 +1636,69 @@
      const unarchived: string[] = [];
      const alreadyActive: string[] = [];
      const notFound: string[] = [];
@@ -251948,7 +252036,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
            error: error instanceof Error ? error : new Error(String(error)),
          });
        }
-@@ -1694,62 +1762,62 @@
+@@ -1694,62 +1764,62 @@
     * `sessionExistsInAnyState()` for archive-aware lookups.
     */
    async renameSession(
@@ -252057,7 +252145,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Forks a session to a new sessionId.
     *
     * Reads the source JSONL into memory, reconstructs the active record chain,
-@@ -1770,191 +1838,200 @@
+@@ -1770,191 +1840,200 @@
     */
    async forkSession(
      sourceSessionId: string,
@@ -252427,7 +252515,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Gets the custom title for a session by reading from its JSONL file.
     *
     * @param sessionId The session ID to look up
-@@ -2012,30 +2089,26 @@
+@@ -2012,30 +2091,26 @@
      }
  
      // Sort most-recent first, with filename as a stable tie-breaker so runs
@@ -252461,7 +252549,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
        if (records.length === 0) continue;
        const firstRecord = records[0];
  
-@@ -2101,36 +2174,35 @@
+@@ -2101,36 +2176,35 @@
        if (!SESSION_FILE_PATTERN.test(name)) continue;
        if (filesProcessed >= MAX_FILES_TO_PROCESS) break;
        filesProcessed++;
@@ -252503,7 +252591,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
      }
  
      return titles;
-@@ -2140,17 +2212,31 @@
+@@ -2140,17 +2214,31 @@
     * Loads the most recent session for the current project.
     * Combines listSessions and loadSession for convenience.
     *
@@ -252539,7 +252627,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Checks if a session exists by its session ID.
     *
     * @param sessionId The session ID to check
-@@ -2168,37 +2254,39 @@
+@@ -2168,37 +2256,39 @@
      }
      const chatsDir = this.getChatsDir();
      const filePath = path.join(chatsDir, `${sessionId}.jsonl`);
@@ -252585,7 +252673,40 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  
  function remapSnapshotPromptId(
    snapshot: FileHistorySnapshot,
-@@ -2261,13 +2349,13 @@
+@@ -2217,26 +2307,18 @@
+ 
+ function remapFileHistorySnapshotPayload(
+   payload: ChatRecord['systemPayload'],
+   sourceSessionId: string,
+   newSessionId: string,
+ ): ChatRecord['systemPayload'] {
+-  const filePayload = payload as FileHistorySnapshotRecordPayload | undefined;
+-  if (!Array.isArray(filePayload?.snapshots)) return payload;
+-
+-  try {
+-    const snapshots = deserializeSnapshots(filePayload.snapshots).map(
+-      (snapshot) =>
+-        serializeSnapshot(
+-          remapSnapshotPromptId(snapshot, sourceSessionId, newSessionId),
+-        ),
+-    );
+-    return { snapshots };
+-  } catch {
+-    return payload;
+-  }
++  const snapshots = requireFileHistorySnapshots(payload).map((snapshot) =>
++    serializeSnapshot(
++      remapSnapshotPromptId(snapshot, sourceSessionId, newSessionId),
++    ),
++  );
++  return { snapshots };
+ }
+ 
+ function remapSystemPayloadForFork(
+   record: ChatRecord,
+   sourceSessionId: string,
+   newSessionId: string,
+@@ -2261,13 +2343,13 @@
        remappedArtifactIds,
      ) as ChatRecord['systemPayload'];
    }
@@ -252600,7 +252721,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    const activeByUuid = new Map(
      activeRecords.map((record) => [record.uuid, record]),
    );
-@@ -2282,17 +2370,74 @@
+@@ -2282,76 +2364,123 @@
      const activeRecord = activeByUuid.get(record.uuid);
      if (activeRecord) {
        selected.push(activeRecord);
@@ -252676,7 +252797,24 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    const ids = new Set<string>();
    for (const record of records) {
      if (
-@@ -2314,44 +2459,41 @@
+       record.type !== 'system' ||
+-      record.subtype !== 'file_history_snapshot' ||
+-      !record.systemPayload
++      record.subtype !== 'file_history_snapshot'
+     ) {
+       continue;
+     }
+-    const payload = record.systemPayload as FileHistorySnapshotRecordPayload;
+-    if (!Array.isArray(payload.snapshots)) continue;
+-    try {
+-      for (const snapshot of deserializeSnapshots(payload.snapshots)) {
+-        ids.add(snapshot.promptId);
+-      }
+-    } catch {
+-      // Malformed snapshot records are ignored the same way loadSession does.
++    for (const snapshot of requireFileHistorySnapshots(record.systemPayload)) {
++      ids.add(snapshot.promptId);
+     }
    }
    return ids;
  }
@@ -319147,7 +319285,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
 diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/utils/transcript-records.ts
 --- a/packages/core/src/utils/transcript-records.ts
 +++ b/packages/core/src/utils/transcript-records.ts
-@@ -1,14 +1,77 @@
+@@ -1,14 +1,78 @@
 +import {
 +  generationHistory,
 +  generationIncompleteCalls,
@@ -319166,6 +319304,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +  requireRuntimeHistoryChange,
 +  requireRuntimeHistoryState,
 +} from '../services/runtime-history.js';
++import { deserializeSnapshots } from '../services/fileHistoryService.js';
 +import {
 +  requireModelResponseEvidence,
 +  type ModelResponseEvidence,
@@ -319226,7 +319365,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
  export interface TranscriptProjectionDiagnostic {
    readonly code: string;
-@@ -20,18 +83,29 @@
+@@ -20,18 +84,29 @@
    readonly path?: string;
  }
  
@@ -319258,7 +319397,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    readonly usageMetadata?: unknown;
    readonly toolCallResult?: unknown;
    readonly systemPayload?: unknown;
-@@ -40,6 +114,128 @@
+@@ -40,6 +115,128 @@
      readonly messageUuid: string;
    };
  }
@@ -319387,7 +319526,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
  export const USER_PROMPT_SUBMIT_CONTEXT_OPEN =
    '<qwen:user-prompt-submit-context>';
-@@ -63,15 +259,17 @@
+@@ -63,15 +260,17 @@
    readonly childUuid: string;
    readonly missingParentUuid: string;
  }
@@ -319406,7 +319545,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    | 'invalid_records'
    | 'leaf_not_found'
    | 'mixed_session_ids';
-@@ -99,8 +297,15 @@
+@@ -99,8 +298,15 @@
  const RECORD_TYPES = new Set<TranscriptRecordType>([
    'user',
    'assistant',
@@ -319422,7 +319561,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  ]);
  
  const ARTIFACT_RECORD_SUBTYPES = new Set([
-@@ -108,8 +313,12 @@
+@@ -108,8 +314,12 @@
    'session_artifact_snapshot',
  ]);
  
@@ -319436,7 +319575,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    'slash_command',
    'ui_telemetry',
    'at_command',
-@@ -117,19 +326,23 @@
+@@ -117,19 +327,23 @@
    'notification',
    'cron',
    'mid_turn_user_message',
@@ -319466,7 +319605,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
  function isObjectRecord(value: unknown): value is Record<string, unknown> {
    return typeof value === 'object' && value !== null && !Array.isArray(value);
-@@ -221,13 +434,25 @@
+@@ -221,13 +435,25 @@
      affectsCompleteness,
      ...fields,
    };
@@ -319493,7 +319632,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
  export function isTranscriptArtifactRecord(record: {
    readonly type?: unknown;
-@@ -240,11 +465,11 @@
+@@ -240,11 +466,11 @@
    );
  }
  
@@ -319507,7 +319646,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    readonly diagnostics: readonly TranscriptProjectionDiagnostic[];
  } {
    const diagnostics: TranscriptProjectionDiagnostic[] = [];
-@@ -252,7 +477,7 @@
+@@ -252,7 +478,7 @@
      diagnostics.push(
        diagnostic(
          'invalid_record',
@@ -319516,7 +319655,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
          true,
          { recordIndex },
        ),
-@@ -261,6 +486,14 @@
+@@ -261,6 +487,14 @@
    }
  
    const uuid = value['uuid'];
@@ -319531,7 +319670,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    const parentUuid = value['parentUuid'];
    const sessionId = value['sessionId'];
    const type = value['type'];
-@@ -275,7 +508,7 @@
+@@ -275,7 +509,7 @@
      diagnostics.push(
        diagnostic(
          'invalid_record',
@@ -319540,7 +319679,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
          true,
          { recordIndex, recordId },
        ),
-@@ -289,13 +522,136 @@
+@@ -289,13 +523,136 @@
      diagnostics.push(
        diagnostic(
          'unknown_record_or_part',
@@ -319678,7 +319817,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
    const timestamp = value['timestamp'];
    if (
-@@ -306,7 +662,7 @@
+@@ -306,7 +663,7 @@
      diagnostics.push(
        diagnostic(
          'invalid_timestamp',
@@ -319687,7 +319826,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
          false,
          { recordIndex, recordId, path: 'timestamp' },
        ),
-@@ -314,6 +670,81 @@
+@@ -314,9 +671,97 @@
    }
  
    const subtype = value['subtype'];
@@ -319766,10 +319905,26 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +  if (type === 'system' && subtype === 'chat_compression') {
 +    requireRuntimeCompaction(value['systemPayload']);
 +  }
++  if (type === 'system' && subtype === 'file_history_snapshot') {
++    const payload = value['systemPayload'];
++    try {
++      deserializeSnapshots(
++        isObjectRecord(payload) ? payload['snapshots'] : undefined,
++      );
++    } catch (cause) {
++      throw new TranscriptRecordPreparationError(
++        'invalid_records',
++        `Invalid file history snapshot record ${recordId}: ${cause instanceof Error ? cause.message : String(cause)}. Inspect the original recording with its matching client, or repair this record before retrying.`,
++      );
++    }
++  }
    if (
      subtype !== undefined &&
      (typeof subtype !== 'string' || !KNOWN_RECORD_SUBTYPES.has(subtype))
-@@ -334,7 +765,7 @@
+   ) {
+     diagnostics.push(
+       diagnostic(
+@@ -334,7 +779,7 @@
        diagnostics.push(
          diagnostic(
            'malformed_part',
@@ -319778,7 +319933,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
            true,
            { recordIndex, recordId, path: 'message' },
          ),
-@@ -345,36 +776,79 @@
+@@ -345,36 +790,79 @@
          diagnostics.push(
            diagnostic(
              'malformed_part',
@@ -319869,7 +320024,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    };
  }
  
-@@ -431,6 +905,27 @@
+@@ -431,6 +919,27 @@
    return { uuids, gaps, ...(cycleUuid ? { cycleUuid } : {}) };
  }
  
@@ -319897,7 +320052,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  export function aggregateTranscriptRecordFragments<
    T extends TranscriptRecordInput,
  >(records: readonly T[]): T {
-@@ -438,6 +933,12 @@
+@@ -438,6 +947,12 @@
    if (!first) {
      throw new Error('Cannot aggregate empty transcript record array');
    }
@@ -319910,7 +320065,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
    const base = { ...first } as Record<string, unknown>;
    let message = first.message
      ? { ...first.message, parts: [...(first.message.parts ?? [])] }
-@@ -480,17 +981,23 @@
+@@ -480,17 +995,23 @@
      );
    }
  
@@ -319944,7 +320099,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
  
    const sessionIds = new Set(records.map((record) => record.sessionId));
    if (sessionIds.size > 1) {
-@@ -520,31 +1027,24 @@
+@@ -520,31 +1041,24 @@
      return {
        ...(sessionIds.size === 1 ? { sessionId: records[0]!.sessionId } : {}),
        records: [],
@@ -319985,7 +320140,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
        fragments.push(record);
      } else {
        fragmentsByUuid.set(record.uuid, [record]);
-@@ -576,12 +1076,45 @@
+@@ -576,12 +1090,45 @@
      );
    }
  
@@ -435895,3 +436050,189 @@ diff --git a/packages/sdk-python/tests/unit/test_physical_utility.py b/packages/
 +        reader.observe_utility_completion(wrong)
 +    reader.observe_utility_completion(completion)
 +    reader.finish()
+diff --git a/packages/core/src/services/fileHistoryService.ts b/packages/core/src/services/fileHistoryService.ts
+--- a/packages/core/src/services/fileHistoryService.ts
++++ b/packages/core/src/services/fileHistoryService.ts
+@@ -137,35 +137,83 @@
+         },
+       ]),
+     ),
+   };
+ }
+ 
+-function safeParseDate(iso: string): Date {
+-  const d = new Date(iso);
+-  return Number.isNaN(d.getTime()) ? new Date(0) : d;
++function requireSnapshotDate(value: unknown, field: string): Date {
++  if (typeof value !== 'string') {
++    throw new Error(`${field} must be a date string`);
++  }
++  const date = new Date(value);
++  if (!Number.isFinite(date.getTime()) || date.toISOString() !== value) {
++    throw new Error(`${field} is not a serialized ISO date`);
++  }
++  return date;
+ }
+ 
+-export function deserializeSnapshots(
+-  arr: SerializedFileHistorySnapshot[],
+-): FileHistorySnapshot[] {
+-  return arr.map((s) => ({
+-    promptId: s.promptId,
+-    timestamp: safeParseDate(s.timestamp),
+-    trackedFileBackups: Object.fromEntries(
+-      Object.entries(s.trackedFileBackups).map(([path, backup]) => [
+-        path,
+-        {
+-          backupFileName: backup.backupFileName,
+-          version: backup.version,
+-          backupTime: safeParseDate(backup.backupTime),
+-          failed: backup.failed,
+-        },
+-      ]),
+-    ),
+-  }));
++function isSnapshotObject(value: unknown): value is Record<string, unknown> {
++  return value !== null && typeof value === 'object' && !Array.isArray(value);
++}
++
++export function deserializeSnapshots(arr: unknown): FileHistorySnapshot[] {
++  if (!Array.isArray(arr)) {
++    throw new Error('File history snapshots must be an array');
++  }
++  return arr.map((snapshot: unknown, index: number) => {
++    const field = `File history snapshot ${index}`;
++    if (!isSnapshotObject(snapshot)) {
++      throw new Error(`${field} must be an object`);
++    }
++    const promptId = snapshot['promptId'];
++    const backups = snapshot['trackedFileBackups'];
++    if (
++      typeof promptId !== 'string' ||
++      promptId.length === 0 ||
++      !isSnapshotObject(backups)
++    ) {
++      throw new Error(`${field} has invalid prompt or backup fields`);
++    }
++    const timestamp = requireSnapshotDate(
++      snapshot['timestamp'],
++      `${field} timestamp`,
++    );
++    const trackedFileBackups: Record<string, FileHistoryBackup> =
++      Object.fromEntries(
++        Object.entries(backups).map(([path, backup]): [string, FileHistoryBackup] => {
++          if (!isSnapshotObject(backup)) {
++            throw new Error(`${field} has an invalid backup for ${path}`);
++          }
++          const backupFileName = backup['backupFileName'];
++          const version = backup['version'];
++          const failed = backup['failed'];
++          if (
++            (backupFileName !== null && typeof backupFileName !== 'string') ||
++            typeof version !== 'number' ||
++            !Number.isSafeInteger(version) ||
++            version < 0 ||
++            (failed !== undefined && typeof failed !== 'boolean')
++          ) {
++            throw new Error(`${field} has an invalid backup for ${path}`);
++          }
++          return [
++            path,
++            {
++              backupFileName,
++              version,
++              backupTime: requireSnapshotDate(
++                backup['backupTime'],
++                `${field} backup time for ${path}`,
++              ),
++              failed,
++            },
++          ];
++        }),
++      );
++    return { promptId, timestamp, trackedFileBackups };
++  });
+ }
+ /** Per-turn read-fanout cap. Each candidate file may read up to two backups,
+  *  so 500 files ≈ 1000 concurrent opens — safely under the typical 4096 fd
+  *  ceiling and well below `ulimit -n` defaults on Linux/macOS. */
+ const MAX_TURN_DIFF_FILES = 500;
+ /** How many bytes to scan for NUL when sniffing binary content. Matches
+diff --git a/packages/core/src/services/session-file-history-state.ts b/packages/core/src/services/session-file-history-state.ts
+--- a/packages/core/src/services/session-file-history-state.ts
++++ b/packages/core/src/services/session-file-history-state.ts
+@@ -17,22 +17,15 @@
+ export class SessionFileHistoryAccumulator {
+   private readonly seenPromptIds = new Set<string>();
+   private readonly retainedPromptIds: string[] = [];
+   private readonly snapshotsByPromptId = new Map<string, FileHistorySnapshot>();
+ 
+   add(record: Pick<ChatRecord, 'type' | 'subtype' | 'systemPayload'>): void {
+-    if (
+-      record.type !== 'system' ||
+-      record.subtype !== 'file_history_snapshot' ||
+-      !record.systemPayload
+-    ) {
++    if (record.type !== 'system' || record.subtype !== 'file_history_snapshot')
+       return;
+-    }
+-    const payload = record.systemPayload as FileHistorySnapshotRecordPayload;
+-    if (!Array.isArray(payload.snapshots)) return;
+-    const deserialized = deserializeSnapshots(payload.snapshots);
++    const deserialized = requireFileHistorySnapshots(record.systemPayload);
+     for (const snapshot of deserialized) {
+       if (this.seenPromptIds.has(snapshot.promptId)) {
+         if (this.snapshotsByPromptId.has(snapshot.promptId)) {
+           this.snapshotsByPromptId.set(snapshot.promptId, snapshot);
+         }
+         continue;
+@@ -51,6 +44,21 @@
+     const snapshots = this.retainedPromptIds.map(
+       (promptId) => this.snapshotsByPromptId.get(promptId)!,
+     );
+     return snapshots.length > 0 ? snapshots : undefined;
+   }
+ }
++
++export function requireFileHistorySnapshots(
++  payload: ChatRecord['systemPayload'],
++): FileHistorySnapshot[] {
++  const snapshots = (payload as FileHistorySnapshotRecordPayload | undefined)
++    ?.snapshots;
++  try {
++    return deserializeSnapshots(snapshots);
++  } catch (cause) {
++    throw new Error(
++      'Cannot interpret a file history snapshot record. Inspect the original recording with the matching client, or repair that record before retrying.',
++      { cause },
++    );
++  }
++}
+diff --git a/packages/core/src/services/session-file-history-state.test.ts b/packages/core/src/services/session-file-history-state.test.ts
+--- a/packages/core/src/services/session-file-history-state.test.ts
++++ b/packages/core/src/services/session-file-history-state.test.ts
+@@ -84,7 +84,24 @@
+     ).toThrow();
+ 
+     expect(accumulator.finish()?.map((item) => item.promptId)).toEqual([
+       'before',
+     ]);
+   });
++
++  it('refuses an absent snapshot array and an invalid date', () => {
++    const accumulator = new SessionFileHistoryAccumulator();
++    expect(() =>
++      accumulator.add({
++        type: 'system',
++        subtype: 'file_history_snapshot',
++        systemPayload: {} as FileHistorySnapshotRecordPayload,
++      }),
++    ).toThrow('Cannot interpret a file history snapshot record');
++    expect(() =>
++      accumulator.add(
++        snapshotRecord([snapshot('bad-date', 'not-a-date')]),
++      ),
++    ).toThrow('Cannot interpret a file history snapshot record');
++    expect(accumulator.finish()).toBeUndefined();
++  });
+ });

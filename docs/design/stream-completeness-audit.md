@@ -1415,3 +1415,28 @@ Those TypeScript tests were **not run** because this checkout has no Node or
 Bun executable. The patch plan reproduced all seven edited source files from
 the pinned archive, and the 38 patch-framework tests passed. Packaged rewind,
 resume behavior, compilation and owner gates remain unverified.
+
+## File-history snapshot admission
+
+Source reading found that the shared session view and indexed restore reader
+caught malformed `file_history_snapshot` payloads, logged them and returned a
+complete-looking session without those snapshots. Fork helpers also returned
+the original malformed payload or skipped its prompt IDs. The snapshot decoder
+turned an invalid date into the Unix epoch. A later file rewind could therefore
+use different snapshot state than the retained canonical recording describes.
+
+Canonical record admission now validates every snapshot payload, including an
+inactive branch, against the shape the writer serializes: a nonempty prompt ID,
+an ISO date, a backup map and complete backup fields. The shared snapshot
+reader performs the same decoding for session views, indexed restore and fork;
+these callers propagate an error with a possible recovery action instead of
+dropping a record. The normal snapshot record and model-facing conversation
+shape are unchanged. This applies to every Qwen session with file history,
+regardless of context length; vLLM does not own this client-side recording.
+
+The session-view test that previously required a silent skip now requires a
+refusal. Additional source tests cover a missing snapshot array, an invalid
+date and both restore readers. These TypeScript tests were authored but not
+run because Node and Bun are unavailable here. The patch plan reproduced all
+eight edited Qwen files from the pinned archive. Compilation, packaged
+restore, end-to-end resume and owner gates remain unverified.
