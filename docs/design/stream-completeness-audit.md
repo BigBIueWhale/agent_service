@@ -1440,3 +1440,31 @@ date and both restore readers. These TypeScript tests were authored but not
 run because Node and Bun are unavailable here. The patch plan reproduced all
 eight edited Qwen files from the pinned archive. Compilation, packaged
 restore, end-to-end resume and owner gates remain unverified.
+
+## Complete history surfaces and live prefixes
+
+Source reading found a boundary error in complete-looking history results:
+`readSessionView` deliberately admits a live canonical prefix, but ACP
+`qwen/session/loadUpdates`, active exports and session references used it
+without a provisional marker. Archived export also admitted an open physical
+attempt through `loadArchivedSession`. A caller could therefore receive a
+well-formed but incomplete record set as if it were finished. This is a client
+record-reader issue for every affected Qwen session; vLLM does not own this
+canonical file or these presentation APIs.
+
+ACP history loading now reads closed evidence under its existing live-writer
+barrier or pinned offline runtime. CLI, server and VS Code exports, referenced
+sessions and archived session views use closed evidence as well. A session
+whose writer is in a model attempt is refused with the recording path and a
+possible next action; once the attempt closes, the same export remains
+available. `readSessionView` remains the explicit live-prefix API for active
+task and startup-context views, which describe work in progress rather than
+claiming a complete exported history. Tests were updated to require refusal
+during both physical-request and generation stages and a complete export
+after closure.
+
+These conclusions follow from the source paths and the existing closed-record
+reader. The TypeScript tests were authored but not run because Node and Bun
+are unavailable; compilation, packaged behavior and owner gates remain
+unverified. The source patch plan, patch-framework tests, manifest and
+identifier checks are recorded with the corresponding commit.

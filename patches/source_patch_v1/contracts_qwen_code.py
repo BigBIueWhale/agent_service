@@ -9920,6 +9920,36 @@ def _validate_served_accounting_after(state: State) -> None:
                  "refuses an open physical request in complete synchronous reports", label=label)
     require_text(state, core + "services/chat-recording-io.test.ts",
                  "reads a child that ended before any model attempt without requiring root output", label=label)
+    _require_all(state, core + "services/sessionService.ts", (
+        "async readSessionView(", "await this.readAllRecords(filePath)",
+        "async loadArchivedSession(", "await this.readCompleteStoredRecords(filePath)",
+    ), label=label)
+    _require_all(state, core + "services/chat-recording-io.ts", (
+        "Cannot read incomplete recording ${filePath}",
+        "If its writer is active, wait for it to finish and retry",
+    ), label=label)
+    load_updates = _source(state, cli + "acp-integration/acpAgent.ts", label=label).split(
+        "case 'qwen/session/loadUpdates': {", 1
+    )[1].split("case 'restoreSessionHistory': {", 1)[0]
+    _require("config.getSessionService().loadSession(sessionId)" in load_updates
+             and "sessionService.loadSession(sessionId)" in load_updates
+             and "recording.runWithWriteBarrier(loadAuthoritative)" in load_updates
+             and "readSessionView" not in load_updates,
+             f"{label}: ACP complete history must use closed canonical evidence")
+    for complete_path in (
+        core + "services/session-reference-service.ts",
+        cli + "serve/server/session-export.ts",
+        cli + "ui/commands/exportCommand.ts",
+        "packages/vscode-ide-companion/src/services/sessionExportService.ts",
+    ):
+        _require_all(state, complete_path, ("loadSession(sessionId)",), label=label)
+        forbid_text(state, complete_path, "readSessionView(sessionId)", label=label)
+    _require_all(state, core + "services/session-generation-view.test.ts", (
+        "refusing incomplete archived, resume, and fork reads",
+        "fixture.service.loadArchivedSession(fixture.session",
+    ), label=label)
+    require_text(state, cli + "serve/server/session-export-generation.test.ts",
+                 "refuses an open export and exports complete presentation exactly once", label=label)
     _require_all(state, core + "core/model-generation-recording.test.ts", (
         "refuses a child generation that differs from its physically verified root attempt",
         "refuses a child seed naming a different physical request than its root",

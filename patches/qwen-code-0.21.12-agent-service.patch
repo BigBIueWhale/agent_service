@@ -13148,7 +13148,42 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getGoalRuntimeReady: vi
          .fn()
          .mockRejectedValue(new Error('journal disk failure')),
-@@ -10875,27 +10849,29 @@
+@@ -10831,12 +10805,34 @@
+     ).resolves.toEqual({ updates: [] });
+ 
+     mockConnectionState.resolve();
+     await agentPromise;
+   });
+ 
++  it('qwen/session/loadUpdates refuses an incomplete canonical recording', async () => {
++    const settings = makeCoreSettings();
++    vi.mocked(SessionService).mockImplementation(
++      () =>
++        ({
++          loadSession: vi.fn().mockRejectedValue(
++            new Error('Cannot read incomplete recording /tmp/session.jsonl. Wait for its writer to finish and retry.'),
++          ),
++        }) as unknown as InstanceType<typeof SessionService>,
++    );
++    const { agent, agentPromise } = await bootCoreSettingsAgent(settings);
++
++    await expect(
++      agent.extMethod('qwen/session/loadUpdates', {
++        sessionId: VALID_SESSION_ID,
++      }),
++    ).rejects.toThrow(/incomplete recording/);
++
++    mockConnectionState.resolve();
++    await agentPromise;
++  });
++
+   it('qwen/session/loadUpdates replays history and lifts _meta.timestamp to the top level', async () => {
+     const settings = makeCoreSettings();
+     mockSessionServiceLoad({
+       conversation: {
+         messages: [{ role: 'user' }],
+         startTime: 'start',
+@@ -10875,27 +10871,29 @@
          lastUpdated: 'end',
        },
        historyGaps: gaps,
@@ -13193,7 +13228,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      mockSessionServiceLoad({
        conversation: {
-@@ -10928,12 +10904,13 @@
+@@ -10928,12 +10926,13 @@
      vi.mocked(loadCliConfig).mockResolvedValue(
        transcriptConfig as unknown as Config,
      );
@@ -13207,7 +13242,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          sessionId: VALID_SESSION_ID,
          fileIdentity: { dev: 1, ino: 2 },
          snapshotSize: 123,
-@@ -10956,318 +10933,347 @@
+@@ -10956,318 +10955,347 @@
        async (context: { sendUpdate: (u: unknown) => Promise<void> }) => {
          await context.sendUpdate({
            sessionUpdate: 'user_message_chunk',
@@ -13733,7 +13768,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            }),
          }) as unknown as InstanceType<typeof SessionTranscriptReader>,
      );
-@@ -11276,20 +11282,34 @@
+@@ -11276,20 +11304,34 @@
      const request = agent.extMethod(
        SERVE_STATUS_EXT_METHODS.sessionTranscript,
        { sessionId: VALID_SESSION_ID },
@@ -13775,7 +13810,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      const readPage = vi.fn();
      vi.mocked(SessionTranscriptReader).mockImplementation(
-@@ -11352,12 +11372,13 @@
+@@ -11352,12 +11394,13 @@
        ...makeInnerConfig(),
        enableFileCheckpointing: vi.fn(),
      } as unknown as Config);
@@ -13789,7 +13824,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          sessionId: VALID_SESSION_ID,
          fileIdentity: { dev: 1, ino: 2 },
          snapshotSize: 123,
-@@ -11377,42 +11398,44 @@
+@@ -11377,42 +11420,44 @@
      );
      mockHistoryReplayPage.mockRejectedValue(new Error('replay boom'));
      mockHistoryPendingToolCalls.mockReturnValue([
@@ -13861,7 +13896,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeCoreSettings();
      const readPage = vi
        .fn()
-@@ -11545,118 +11568,102 @@
+@@ -11545,118 +11590,102 @@
  
        mockConnectionState.resolve();
        await agentPromise;
@@ -14018,7 +14053,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          sessionId: VALID_SESSION_ID,
          fileIdentity: { dev: 1, ino: 2 },
          snapshotSize: 123,
-@@ -11709,23 +11716,29 @@
+@@ -11709,23 +11738,29 @@
      expect(result.nextCursor).toBeUndefined();
  
      mockConnectionState.resolve();
@@ -14051,7 +14086,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          sessionId: VALID_SESSION_ID,
          fileIdentity: { dev: 1, ino: 2 },
          snapshotSize: 123,
-@@ -11734,24 +11747,20 @@
+@@ -11734,24 +11769,20 @@
          startTime: 'start',
          lastUpdated: 'end',
        },
@@ -14080,7 +14115,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        lastUpdated: 'end',
      };
      const readPage = vi
-@@ -11761,61 +11770,59 @@
+@@ -11761,61 +11792,59 @@
      vi.mocked(SessionTranscriptReader).mockImplementation(
        () =>
          ({
@@ -14184,7 +14219,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const settings = makeSessionSettings();
      const agentPromise = runAcpAgent(mockConfig, settings, mockArgv);
  
-@@ -13890,40 +13897,12 @@
+@@ -13890,40 +13919,12 @@
      // [] is truthy and silently blocks all extension commands (#5216).
      expect(vi.mocked(loadCliConfig).mock.calls[0]?.[3]).toBeUndefined();
  
@@ -14225,7 +14260,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
  // bypassed any live ChatRecordingService. The disk-only path left the
  // recording service's in-memory `currentCustomTitle` stale, and the next
  // re-anchor (every 32KB) or finalize() silently reverted the rename by
-@@ -13989,12 +13968,18 @@
+@@ -13989,12 +13990,18 @@
        getDebugMode: vi.fn().mockReturnValue(false),
      } as unknown as Config;
    });
@@ -14244,7 +14279,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        flush: vi.fn().mockResolvedValue(undefined),
        runWithWriteBarrier: vi.fn(
          async <T>(operation: () => Promise<T>): Promise<T> => operation(),
-@@ -14452,14 +14437,15 @@
+@@ -14452,14 +14459,15 @@
      expect(SessionService).not.toHaveBeenCalled();
  
      mockConnectionState.resolve();
@@ -14261,7 +14296,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        renameSession: vi.fn().mockResolvedValue(true),
        removeSession: vi.fn().mockResolvedValue(undefined),
      };
-@@ -14480,16 +14466,17 @@
+@@ -14480,16 +14488,17 @@
        },
      );
  
@@ -14282,7 +14317,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        'manual',
      );
      expect(result).toMatchObject({
-@@ -14500,12 +14487,13 @@
+@@ -14500,12 +14509,13 @@
      mockConnectionState.resolve();
      await agentPromise;
    });
@@ -14296,7 +14331,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        removeSession: vi.fn().mockResolvedValue(undefined),
      };
      const innerConfig = makeLiveSessionInnerConfig(recording);
-@@ -14521,36 +14509,203 @@
+@@ -14521,36 +14531,203 @@
          cwd: '/tmp',
          sessionId: liveSessionId,
          name: 'Side task',
@@ -14512,7 +14547,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const recording = makeRecordingService();
      recording.flush.mockRejectedValue(new Error('flush failed'));
      const innerConfig = makeLiveSessionInnerConfig(recording);
-@@ -14863,12 +15018,14 @@
+@@ -14863,12 +15040,14 @@
        await agentPromise;
      }
    });
@@ -14527,7 +14562,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      vi.mocked(SessionService).mockImplementation(
        () =>
          ({
-@@ -14880,12 +15037,16 @@
+@@ -14880,12 +15059,16 @@
      try {
        for (const cursor of [undefined, null, '']) {
          listSessions.mockClear();
@@ -14544,7 +14579,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          expect(listSessions).toHaveBeenCalledWith({
            cursor: undefined,
            size: undefined,
-@@ -14896,12 +15057,14 @@
+@@ -14896,12 +15079,14 @@
        await agentPromise;
      }
    });
@@ -14559,7 +14594,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      vi.mocked(SessionService).mockImplementation(
        () =>
          ({
-@@ -14923,12 +15086,16 @@
+@@ -14923,12 +15108,16 @@
          await expect(
            agent.unstable_listSessions({
              cwd: '/tmp/project',
@@ -14576,7 +14611,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          expect(listSessions).toHaveBeenCalledWith({
            cursor: undefined,
            size: undefined,
-@@ -14939,12 +15106,14 @@
+@@ -14939,12 +15128,14 @@
        await agentPromise;
      }
    });
@@ -14591,7 +14626,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      vi.mocked(SessionService).mockImplementation(
        () =>
          ({
-@@ -14963,12 +15132,16 @@
+@@ -14963,12 +15154,16 @@
          await expect(
            agent.unstable_listSessions({
              cwd: '/tmp/project',
@@ -14608,7 +14643,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          expect(listSessions).toHaveBeenCalledWith({
            cursor: undefined,
            size: expected,
-@@ -14979,12 +15152,14 @@
+@@ -14979,12 +15174,14 @@
        await agentPromise;
      }
    });
@@ -14623,7 +14658,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            cwd: '/tmp/project',
            startTime: '2026-06-22T01:00:00.000Z',
            prompt: 'hello',
-@@ -15006,12 +15181,16 @@
+@@ -15006,12 +15203,16 @@
          agent.unstable_listSessions({
            cwd: '/tmp/project',
            cursor: '1797860000000.5',
@@ -14640,7 +14675,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
                createdAt: '2026-06-22T01:00:00.000Z',
                startTime: '2026-06-22T01:00:00.000Z',
                preview: 'hello',
-@@ -15064,18 +15243,12 @@
+@@ -15064,18 +15265,12 @@
          sendAvailableCommandsUpdate: ReturnType<typeof vi.fn>;
          replayHistory: ReturnType<typeof vi.fn>;
          primeTurnFromHistory: ReturnType<typeof vi.fn>;
@@ -14659,7 +14694,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          enableLiveScreenContext: ReturnType<typeof vi.fn>;
          assertCanStartTurn: ReturnType<typeof vi.fn>;
          beginClose: ReturnType<typeof vi.fn>;
-@@ -15426,18 +15599,12 @@
+@@ -15426,18 +15621,12 @@
              opts.replayHistoryImpl ?? (async () => undefined),
            ),
          primeTurnFromHistory: vi.fn(opts.primeTurnFromHistoryImpl),
@@ -14678,7 +14713,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          enableLiveScreenContext: vi.fn().mockResolvedValue(undefined),
          beginClose: vi.fn().mockReturnValue(releaseCloseGate),
          beginCloseIfAvailable: vi.fn().mockReturnValue(releaseCloseGate),
-@@ -15819,12 +15986,13 @@
+@@ -15819,12 +16008,13 @@
    it('leaves canonical Goal recovery to Config initialization', async () => {
      bindRestoreMocks({
        sessionExists: true,
@@ -14692,7 +14727,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
              timestamp: new Date(0).toISOString(),
              type: 'system',
              subtype: 'goal_state',
-@@ -15860,159 +16028,139 @@
+@@ -15860,159 +16050,139 @@
        sessionExists: true,
        resumedConversation: {
          messages,
@@ -14955,7 +14990,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
    // publication in `createAndStoreSession`. Left there, the web-shell's
    // primary load path replays the pre-migration `set` card as the newest goal
    // card and shows a phantom running goal. The card has to ride inside the
-@@ -16081,31 +16229,38 @@
+@@ -16081,31 +16251,38 @@
      bindRestoreMocks({
        sessionExists: true,
        resumedConversation: { messages },
@@ -15013,7 +15048,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const messages = [{ role: 'user', parts: [{ text: 'hi' }] }];
      bindRestoreMocks({
        sessionExists: true,
-@@ -16242,12 +16397,13 @@
+@@ -16242,12 +16419,13 @@
    it('loadSession limits bulk replay to complete recent turns', async () => {
      const makeMessage = (
        uuid: string,
@@ -15027,7 +15062,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16305,12 +16461,13 @@
+@@ -16305,12 +16483,13 @@
          createdAt: 1,
          updatedAt: 1,
        },
@@ -15041,7 +15076,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type: 'system',
        subtype: 'goal_state',
-@@ -16321,22 +16478,24 @@
+@@ -16321,22 +16500,24 @@
          cause: goalCause,
          snapshot: activeGoalState,
        },
@@ -15066,7 +15101,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          timestamp: '2026-07-16T00:00:02.000Z',
          type: 'assistant',
          cwd: '/tmp',
-@@ -16383,36 +16542,40 @@
+@@ -16383,36 +16564,40 @@
        },
      };
      innerConfig
@@ -15131,7 +15166,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const recentRecords = [
        { uuid: 'u2', role: 'user', parts: [{ text: 'latest' }] },
        { uuid: 'a2', role: 'model', parts: [{ text: 'answer' }] },
-@@ -16497,12 +16660,13 @@
+@@ -16497,12 +16682,13 @@
          'qwen.session.loadReplayPageSize': 2,
          'qwen.session.loadReplayHideInherited': true,
        },
@@ -15145,7 +15180,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            condition: 'visible goal',
            iterations: 0,
            setAt: 123,
-@@ -16578,33 +16742,34 @@
+@@ -16578,33 +16764,34 @@
          gaps: [],
          hasMore: false,
          goalRecoverySourceUuid: 'visible-goal',
@@ -15201,7 +15236,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const innerConfig = bindRestoreMocks({
        sessionExists: true,
        resumedConversation: {
-@@ -16684,12 +16849,13 @@
+@@ -16684,12 +16871,13 @@
    it('loadSession keeps one long turn complete', async () => {
      const makeMessage = (
        uuid: string,
@@ -15215,7 +15250,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16738,12 +16904,13 @@
+@@ -16738,12 +16926,13 @@
    it('loadSession bounds bulk replay expansion inside one long turn', async () => {
      const makeMessage = (
        uuid: string,
@@ -15229,7 +15264,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16789,12 +16956,13 @@
+@@ -16789,12 +16978,13 @@
    it('loadSession bulk replay extends a mid-pair window to the owning call', async () => {
      const makeMessage = (
        uuid: string,
@@ -15243,7 +15278,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        cwd: '/tmp',
-@@ -16855,12 +17023,13 @@
+@@ -16855,12 +17045,13 @@
      const makeMessage = (
        uuid: string,
        parentUuid: string | null,
@@ -15257,7 +15292,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        timestamp: '2026-07-16T00:00:00.000Z',
        type,
        ...(subtype !== undefined ? { subtype } : {}),
-@@ -16920,56 +17089,57 @@
+@@ -16920,56 +17111,57 @@
        resumedConversation: {
          messages,
        },
@@ -15355,7 +15390,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const messages = [{ role: 'user', parts: [{ text: 'hi' }] }];
      let primeCalls = 0;
      bindRestoreMocks({
-@@ -17375,102 +17545,66 @@
+@@ -17375,102 +17567,66 @@
      expect(firstSession.beginClose).not.toHaveBeenCalled();
  
      mockConnectionState.resolve();
@@ -15502,7 +15537,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      const recentRecords = [
        { uuid: 'u2', role: 'user', parts: [{ text: 'latest' }] },
        { uuid: 'a2', role: 'model', parts: [{ text: 'answer' }] },
-@@ -17533,12 +17667,13 @@
+@@ -17533,12 +17689,13 @@
          'qwen.session.loadReplayMode': 'bulk',
          'qwen.session.loadReplayPageSize': 2,
        },
@@ -15516,7 +15551,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
            condition: 'keep the live goal visible',
            iterations: 0,
          },
-@@ -17618,13 +17753,16 @@
+@@ -17618,13 +17775,16 @@
        _meta: {
          'qwen.session.loadReplayMode': 'bulk',
          'qwen.session.loadReplayPageSize': 2,
@@ -15534,7 +15569,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
    });
  
    it('does not bootstrap a filtered live Goal candidate without a visible source', async () => {
-@@ -17690,13 +17828,16 @@
+@@ -17690,13 +17850,16 @@
          'qwen.session.loadReplayMode': 'bulk',
          'qwen.session.loadReplayPageSize': 2,
          'qwen.session.loadReplayHideInherited': true,
@@ -15552,7 +15587,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
    });
  
    it('live resume refreshes artifacts without replaying UI history', async () => {
-@@ -17921,12 +18062,13 @@
+@@ -17921,12 +18084,13 @@
          },
        } as unknown as InstanceType<typeof AgentSideConnection>;
      });
@@ -15566,7 +15601,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getDisableAllHooks: vi.fn().mockReturnValue(false),
        hasHooksForEvent: vi.fn().mockReturnValue(false),
        getModel: vi.fn().mockReturnValue('test-model'),
-@@ -17999,13 +18141,15 @@
+@@ -17999,13 +18163,15 @@
          refusedServerNames: [],
        }),
        getMcpClientBudget: vi.fn().mockReturnValue(undefined),
@@ -15582,7 +15617,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getMcpServers: vi.fn().mockReturnValue({}),
        getTopTierMcpServers: vi.fn().mockReturnValue(undefined),
        getRuntimeMcpServers: vi.fn().mockReturnValue({}),
-@@ -18181,13 +18325,15 @@
+@@ -18181,13 +18347,15 @@
          refusedServerNames: [],
        }),
        getMcpClientBudget: vi.fn().mockReturnValue(undefined),
@@ -15598,7 +15633,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getMcpServers: vi.fn().mockReturnValue({}),
        getTopTierMcpServers: vi.fn().mockReturnValue(undefined),
        getRuntimeMcpServers: vi.fn().mockReturnValue({}),
-@@ -18267,13 +18413,15 @@
+@@ -18267,13 +18435,15 @@
          refusedServerNames: [],
        }),
        getMcpClientBudget: vi.fn().mockReturnValue(undefined),
@@ -15614,7 +15649,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
        getMcpServers: vi.fn().mockReturnValue({}),
        getTopTierMcpServers: vi.fn().mockReturnValue(undefined),
        getRuntimeMcpServers: vi.fn().mockReturnValue({}),
-@@ -18336,22 +18484,27 @@
+@@ -18336,22 +18506,27 @@
    });
  
    it('allows workspace MCP initialization to retry after a failure', async () => {
@@ -15643,7 +15678,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
      } as unknown as Config;
      vi.mocked(loadSettings).mockReturnValue({
        merged: { mcpServers: {} },
-@@ -18448,13 +18601,15 @@
+@@ -18448,13 +18623,15 @@
      const discoveryManager = {
        discoverAllMcpToolsIncremental: vi.fn().mockResolvedValue(undefined),
        getDiscoveryState: vi.fn().mockReturnValue(MCPDiscoveryState.COMPLETED),
@@ -15659,7 +15694,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          user: userServer,
          project: projectServer,
          systemDefault: systemDefaultServer,
-@@ -18949,12 +19104,13 @@
+@@ -18949,12 +19126,13 @@
      stdoutDestroySpy.mockRestore();
    });
  
@@ -15673,7 +15708,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.test.ts b/packages/cli/sr
          getCurrentAuthType: vi.fn().mockReturnValue('api-key'),
          syncAfterAuthRefresh: vi.fn(),
        }),
-@@ -19985,12 +20141,13 @@
+@@ -19985,12 +20163,13 @@
        subtype: string;
        systemPayload: unknown;
        forkedFrom: { sessionId: string; messageUuid: string };
@@ -16686,7 +16721,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
 -          sessionData = recording
 -            ? await recording.runWithWriteBarrier(loadAuthoritative)
 -            : await loadAuthoritative();
-+            config.getSessionService().readSessionView(sessionId);
++            config.getSessionService().loadSession(sessionId);
 +          sessionData = await recording.runWithWriteBarrier(loadAuthoritative);
            replayConfig = config;
          } else {
@@ -16697,7 +16732,7 @@ diff --git a/packages/cli/src/acp-integration/acpAgent.ts b/packages/cli/src/acp
              async () => {
                const sessionService = new SessionService(cwd);
 -              return sessionService.loadSession(sessionId);
-+              return sessionService.readSessionView(sessionId);
++              return sessionService.loadSession(sessionId);
              },
            );
          }
@@ -251584,7 +251619,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
      const filePath = this.getSessionFilePath(sessionId, 'archived');
      let stats: fs.Stats;
      try {
-@@ -1333,23 +1403,26 @@
+@@ -1333,23 +1403,24 @@
        }
        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
          throw error;
@@ -251592,12 +251627,10 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
        return undefined;
      }
 -    return this.loadSessionFromState(sessionId, 'archived', stats);
-+    return this.projectSessionView(
-+      sessionId,
-+      filePath,
-+      await this.readAllRecords(filePath),
-+      stats,
++    const records = (await this.readCompleteStoredRecords(filePath)).map(
++      (record) => resolveTranscriptRecord(record) as ChatRecord,
 +    );
++    return this.projectSessionView(sessionId, filePath, records, stats);
    }
  
 -  private async loadSessionFromState(
@@ -251618,7 +251651,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  
      const firstRecord = records[0];
      if (
-@@ -1359,211 +1432,195 @@
+@@ -1359,211 +1430,195 @@
        ))
      ) {
        return;
@@ -251925,7 +251958,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
            error: error instanceof Error ? error : new Error(String(error)),
          });
        }
-@@ -1579,56 +1636,69 @@
+@@ -1579,56 +1634,69 @@
      const unarchived: string[] = [];
      const alreadyActive: string[] = [];
      const notFound: string[] = [];
@@ -252036,7 +252069,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
            error: error instanceof Error ? error : new Error(String(error)),
          });
        }
-@@ -1694,62 +1764,62 @@
+@@ -1694,62 +1762,62 @@
     * `sessionExistsInAnyState()` for archive-aware lookups.
     */
    async renameSession(
@@ -252145,7 +252178,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Forks a session to a new sessionId.
     *
     * Reads the source JSONL into memory, reconstructs the active record chain,
-@@ -1770,191 +1840,200 @@
+@@ -1770,191 +1838,200 @@
     */
    async forkSession(
      sourceSessionId: string,
@@ -252515,7 +252548,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Gets the custom title for a session by reading from its JSONL file.
     *
     * @param sessionId The session ID to look up
-@@ -2012,30 +2091,26 @@
+@@ -2012,30 +2089,26 @@
      }
  
      // Sort most-recent first, with filename as a stable tie-breaker so runs
@@ -252549,7 +252582,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
        if (records.length === 0) continue;
        const firstRecord = records[0];
  
-@@ -2101,36 +2176,35 @@
+@@ -2101,36 +2174,35 @@
        if (!SESSION_FILE_PATTERN.test(name)) continue;
        if (filesProcessed >= MAX_FILES_TO_PROCESS) break;
        filesProcessed++;
@@ -252591,7 +252624,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
      }
  
      return titles;
-@@ -2140,17 +2214,31 @@
+@@ -2140,17 +2212,31 @@
     * Loads the most recent session for the current project.
     * Combines listSessions and loadSession for convenience.
     *
@@ -252627,7 +252660,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
     * Checks if a session exists by its session ID.
     *
     * @param sessionId The session ID to check
-@@ -2168,37 +2256,39 @@
+@@ -2168,37 +2254,39 @@
      }
      const chatsDir = this.getChatsDir();
      const filePath = path.join(chatsDir, `${sessionId}.jsonl`);
@@ -252673,7 +252706,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
  
  function remapSnapshotPromptId(
    snapshot: FileHistorySnapshot,
-@@ -2217,26 +2307,18 @@
+@@ -2217,26 +2305,18 @@
  
  function remapFileHistorySnapshotPayload(
    payload: ChatRecord['systemPayload'],
@@ -252706,7 +252739,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    record: ChatRecord,
    sourceSessionId: string,
    newSessionId: string,
-@@ -2261,13 +2343,13 @@
+@@ -2261,13 +2341,13 @@
        remappedArtifactIds,
      ) as ChatRecord['systemPayload'];
    }
@@ -252721,7 +252754,7 @@ diff --git a/packages/core/src/services/sessionService.ts b/packages/core/src/se
    const activeByUuid = new Map(
      activeRecords.map((record) => [record.uuid, record]),
    );
-@@ -2282,76 +2364,123 @@
+@@ -2282,76 +2362,123 @@
      const activeRecord = activeByUuid.get(record.uuid);
      if (activeRecord) {
        selected.push(activeRecord);
@@ -343291,7 +343324,7 @@ diff --git a/packages/core/src/services/chat-recording-io.ts b/packages/core/src
 +    );
 +  } catch (cause) {
 +    throw new Error(
-+      `Cannot resume or fork incomplete recording ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}`,
++      `Cannot read incomplete recording ${filePath}: ${cause instanceof Error ? cause.message : String(cause)}. If its writer is active, wait for it to finish and retry; otherwise inspect the original recording with the matching client.`,
 +      { cause },
 +    );
 +  }
@@ -391710,7 +391743,7 @@ diff --git a/packages/cli/src/serve/server/session-export.ts b/packages/cli/src/
            maxBytes: SESSION_TRANSCRIPT_MAX_INDEX_BYTES,
          })
 -      : await service.loadSession(sessionId);
-+      : await service.readSessionView(sessionId);
++      : await service.loadSession(sessionId);
    if (!sessionData) {
      throw new SessionNotFoundError(sessionId);
    }
@@ -391734,21 +391767,6 @@ diff --git a/packages/cli/src/serve/server/session-export.ts b/packages/cli/src/
 diff --git a/packages/cli/src/ui/commands/exportCommand.ts b/packages/cli/src/ui/commands/exportCommand.ts
 --- a/packages/cli/src/ui/commands/exportCommand.ts
 +++ b/packages/cli/src/ui/commands/exportCommand.ts
-@@ -290,13 +290,13 @@
-     });
- 
-     // Load the current session using the current session ID
-     const sessionService = new SessionService(cwd);
-     const sessionId = config.getSessionId();
-     debugLogger.debug('Loading session for export:', { sessionId, cwd });
--    const sessionData = await sessionService.loadSession(sessionId);
-+    const sessionData = await sessionService.readSessionView(sessionId);
- 
-     if (!sessionData) {
-       debugLogger.debug('No active session found for export:', {
-         sessionId,
-         cwd,
-       });
 @@ -304,19 +304,22 @@
          type: 'message',
          messageType: 'error',
@@ -391931,21 +391949,6 @@ diff --git a/packages/core/src/services/session-artifact-persistence.ts b/packag
 diff --git a/packages/core/src/services/session-reference-service.ts b/packages/core/src/services/session-reference-service.ts
 --- a/packages/core/src/services/session-reference-service.ts
 +++ b/packages/core/src/services/session-reference-service.ts
-@@ -58,13 +58,13 @@
-   constructor(cwd: string) {
-     this.sessionService = new SessionService(cwd);
-   }
- 
-   // Indirection kept as an instance method so tests can stub it.
-   protected loadSession(sessionId: string) {
--    return this.sessionService.loadSession(sessionId);
-+    return this.sessionService.readSessionView(sessionId);
-   }
- 
-   async resolve(
-     sessionId: string,
-     opts: { budgetTokens?: number; title?: string } = {},
-   ): Promise<SlimmedSessionReference | { notFound: true }> {
 @@ -124,13 +124,13 @@
      const contents: Content[] = [
        { role: 'user', parts: [{ text: lines.join('\n') }] },
@@ -392229,7 +392232,7 @@ diff --git a/packages/vscode-ide-companion/src/services/sessionExportService.ts 
    const { cwd, format, sessionId } = options;
    const sessionService = new SessionService(cwd);
 -  const sessionData = await sessionService.loadSession(sessionId);
-+  const sessionData = await sessionService.readSessionView(sessionId);
++  const sessionData = await sessionService.loadSession(sessionId);
  
    if (!sessionData) {
      throw new Error('No active session found to export.');
@@ -393895,7 +393898,7 @@ diff --git a/packages/cli/src/nonInteractive/io/terminal-usage.test.ts b/package
 diff --git a/packages/cli/src/serve/server/session-export-generation.test.ts b/packages/cli/src/serve/server/session-export-generation.test.ts
 --- /dev/null
 +++ b/packages/cli/src/serve/server/session-export-generation.test.ts
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,89 @@
 +// @vitest-environment node
 +import { expect, it, vi } from 'vitest';
 +import { Storage, generationParts } from '@qwen-code/qwen-code-core';
@@ -393940,31 +393943,17 @@ diff --git a/packages/cli/src/serve/server/session-export-generation.test.ts b/p
 +}
 +
 +it.each(['accepted', 'invalid_usage'] as const)(
-+  'exports complete presentation exactly once before and after completion (%s)',
++  'refuses an open export and exports complete presentation exactly once (%s)',
 +  async (mode) => {
 +    const fixture = await createRecordedGenerationFixture();
-+    const stages = new Map<RecordingStage, ExportMessage[]>();
++    const stages: RecordingStage[] = [];
 +    Storage.setRuntimeBaseDir(fixture.runtimeBaseDir, fixture.dir);
 +    try {
 +      const result = await fixture.run(mode, async (stage) => {
-+        const messages = await exportMessages(fixture);
-+        stages.set(stage, messages);
-+        const owned = messages.filter((message) => message.generationAttempt);
-+        if (stage === 'physical') expect(owned).toHaveLength(0);
-+        else {
-+          expect(owned.length).toBeGreaterThan(0);
-+          expect(owned.filter((message) => message.usageMetadata)).toHaveLength(
-+            1,
-+          );
-+          expect(
-+            owned.every(
-+              (message) =>
-+                message.generationAttempt!.historyDisposition ===
-+                (mode === 'accepted' ? 'accepted' : 'abandoned'),
-+            ),
-+          ).toBe(true);
-+        }
++        stages.push(stage);
++        await expect(exportMessages(fixture)).rejects.toThrow(/incomplete/);
 +      });
++      expect(stages).toEqual(['physical', 'generation']);
 +      const messages = await exportMessages(fixture);
 +      const belongs = (message: ExportMessage) =>
 +        message.generationAttempt?.origin.attempt_id ===
@@ -393993,18 +393982,6 @@ diff --git a/packages/cli/src/serve/server/session-export-generation.test.ts b/p
 +      expect(
 +        owned.every((message) => message.timestamp === canonical.timestamp),
 +      ).toBe(true);
-+      const stable = (items: ExportMessage[]) =>
-+        items.map((message) => {
-+          const copy = structuredClone(message);
-+          // No tool executes in this fixture. Replay synthesizes only its missing
-+          // result timestamp; canonical message timestamps above remain exact.
-+          if (mode === 'accepted' && copy.toolCall)
-+            delete copy.toolCall.timestamp;
-+          return copy;
-+        });
-+      expect(stable(stages.get('generation')!.filter(belongs))).toEqual(
-+        stable(owned),
-+      );
 +    } finally {
 +      Storage.setRuntimeBaseDir(null);
 +      await fixture.cleanup();
@@ -396407,7 +396384,7 @@ diff --git a/packages/core/src/core/model-generation.ts b/packages/core/src/core
 diff --git a/packages/core/src/services/session-generation-view.test.ts b/packages/core/src/services/session-generation-view.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/session-generation-view.test.ts
-@@ -0,0 +1,165 @@
+@@ -0,0 +1,172 @@
 +import { expect, it } from 'vitest';
 +import { randomUUID } from 'node:crypto';
 +import fs from 'node:fs/promises';
@@ -396512,7 +396489,7 @@ diff --git a/packages/core/src/services/session-generation-view.test.ts b/packag
 +  }
 +});
 +
-+it('keeps ordinary/archive prefix views readable without certifying incomplete work for resume or fork', async () => {
++it('keeps live prefixes readable while refusing incomplete archived, resume, and fork reads', async () => {
 +  const fixture = await createRecordedGenerationFixture();
 +  try {
 +    const visited: string[] = [];
@@ -396544,13 +396521,11 @@ diff --git a/packages/core/src/services/session-generation-view.test.ts b/packag
 +      );
 +      await fs.mkdir(path.dirname(archivedPath), { recursive: true });
 +      await fs.copyFile(fixture.rootPath, archivedPath);
-+      const archived = await fixture.service.loadArchivedSession(
-+        fixture.session,
-+        { maxBytes: 1024 * 1024 },
-+      );
-+      expect(archived).toBeDefined();
-+      expect(Object.hasOwn(archived!, 'lastCompletedUuid')).toBe(false);
-+      expect(archived!.presentationRecords).toEqual(view!.presentationRecords);
++      await expect(
++        fixture.service.loadArchivedSession(fixture.session, {
++          maxBytes: 1024 * 1024,
++        }),
++      ).rejects.toThrow(/incomplete/);
 +      await expect(
 +        fixture.service.loadSession(fixture.session),
 +      ).rejects.toThrow(/incomplete/);
@@ -396569,6 +396544,15 @@ diff --git a/packages/core/src/services/session-generation-view.test.ts b/packag
 +    const closed = await fixture.service.loadSession(fixture.session);
 +    expect(closed!.lastCompletedUuid).toEqual(expect.any(String));
 +    expect(closed!.presentationRecords).toEqual(view!.presentationRecords);
++    const archivedPath = fixture.service['getSessionFilePath'](
++      fixture.session,
++      'archived',
++    );
++    await fs.copyFile(fixture.rootPath, archivedPath);
++    const archived = await fixture.service.loadArchivedSession(fixture.session, {
++      maxBytes: 1024 * 1024,
++    });
++    expect(archived!.presentationRecords).toEqual(closed!.presentationRecords);
 +  } finally {
 +    await fixture.cleanup();
 +  }
@@ -416338,7 +416322,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
  
  const mockSessionServiceMocks = vi.hoisted(() => ({
 -  loadSession: vi.fn(),
-+  readSessionView: vi.fn(),
++  loadSession: vi.fn(),
  }));
  
 -vi.mock('@qwen-code/qwen-code-core', () => {
@@ -416349,8 +416333,8 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
      constructor(_cwd: string) {}
 -    async loadSession(_sessionId: string) {
 -      return mockSessionServiceMocks.loadSession();
-+    async readSessionView(sessionId: string) {
-+      return mockSessionServiceMocks.readSessionView(sessionId);
++    async loadSession(sessionId: string) {
++      return mockSessionServiceMocks.loadSession(sessionId);
      }
    }
  
@@ -416440,7 +416424,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
      vi.clearAllMocks();
  
 -    mockSessionServiceMocks.loadSession.mockResolvedValue(mockSessionData);
-+    mockSessionServiceMocks.readSessionView.mockResolvedValue(mockSessionData);
++    mockSessionServiceMocks.loadSession.mockResolvedValue(mockSessionData);
  
      mockContext = createMockCommandContext({
        services: {
@@ -416455,7 +416439,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
        });
  
 -      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).toHaveBeenCalledWith(
++      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalledWith(
 +        'test-session-id',
 +      );
        expect(collectSessionData).toHaveBeenCalledWith(
@@ -416483,111 +416467,6 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
        expect(fs.writeFile).toHaveBeenCalledWith(
          expect.stringContaining('export-2025-01-01T00-00-00-000Z.md'),
          '# Test Markdown',
-@@ -267,13 +307,13 @@
-         messageType: 'error',
-         content: 'Could not determine current working directory.',
-       });
-     });
- 
-     it('should return error when no session is found', async () => {
--      mockSessionServiceMocks.loadSession.mockResolvedValue(undefined);
-+      mockSessionServiceMocks.readSessionView.mockResolvedValue(undefined);
- 
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
-       if (!mdCommand?.action) {
-         throw new Error('md command not found');
-       }
-       const result = await mdCommand.action(mockContext, '');
-@@ -330,13 +370,13 @@
-       expect(result.content).toContain('Failed to generate markdown');
-       expect(result.content).not.toContain('markdown target:');
-       expect(fs.writeFile).not.toHaveBeenCalled();
-     });
- 
-     it('should handle session load errors', async () => {
--      mockSessionServiceMocks.loadSession.mockRejectedValue(
-+      mockSessionServiceMocks.readSessionView.mockRejectedValue(
-         new Error('EIO: failed to read session'),
-       );
- 
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
-       if (!mdCommand?.action) {
-         throw new Error('md command not found');
-@@ -437,13 +477,13 @@
-         type: 'message',
-         messageType: 'error',
-         content:
-           `Export directory must be within the project working directory. ` +
-           `(target path is outside cwd; target: "${outputDir}", cwd: "${mockWorkingDir}")`,
-       });
--      expect(mockSessionServiceMocks.loadSession).not.toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).not.toHaveBeenCalled();
-       expect(fs.mkdir).not.toHaveBeenCalled();
-       expect(fs.writeFile).not.toHaveBeenCalled();
-     });
- 
-     it('should reject absolute output directories outside the working directory', async () => {
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
-@@ -458,13 +498,13 @@
-         type: 'message',
-         messageType: 'error',
-         content:
-           `Export directory must be within the project working directory. ` +
-           `(target path is outside cwd; target: "${outputDir}", cwd: "${mockWorkingDir}")`,
-       });
--      expect(mockSessionServiceMocks.loadSession).not.toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).not.toHaveBeenCalled();
-       expect(fs.mkdir).not.toHaveBeenCalled();
-       expect(fs.writeFile).not.toHaveBeenCalled();
-     });
- 
-     it('should report default directory realpath validation failures', async () => {
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
-@@ -487,13 +527,13 @@
-         type: 'message',
-         messageType: 'error',
-         content:
-           `Export target directory is not accessible (path does not exist; ` +
-           `target: "${mockWorkingDir}", cwd: "${mockWorkingDir}").`,
-       });
--      expect(mockSessionServiceMocks.loadSession).not.toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).not.toHaveBeenCalled();
-       expect(fs.writeFile).not.toHaveBeenCalled();
-     });
- 
-     it('should reject symlinked output directories outside the working directory', async () => {
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
-       if (!mdCommand?.action) {
-@@ -547,13 +587,13 @@
-         type: 'message',
-         messageType: 'error',
-         content:
-           `Export directory must be within the project working directory. ` +
-           `(parent path resolves outside cwd via symlink; target: "${missingOutputDir}", cwd: "${mockWorkingDir}")`,
-       });
--      expect(mockSessionServiceMocks.loadSession).not.toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).not.toHaveBeenCalled();
-       expect(fs.mkdir).not.toHaveBeenCalled();
-       expect(fs.writeFile).not.toHaveBeenCalled();
-     });
- 
-     it('should explain when no existing export ancestor can be resolved', async () => {
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
-@@ -574,13 +614,13 @@
-         messageType: 'error',
-         content:
-           `Failed to export session: Cannot resolve any existing ancestor ` +
-           `within cwd: ${mockWorkingDir}. This usually means the project ` +
-           `working directory has been deleted or is on an unmounted filesystem. (markdown)`,
-       });
--      expect(mockSessionServiceMocks.loadSession).not.toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).not.toHaveBeenCalled();
-       expect(fs.mkdir).not.toHaveBeenCalled();
-       expect(fs.writeFile).not.toHaveBeenCalled();
-     });
- 
-     it('should revalidate the output directory before writing', async () => {
-       const mdCommand = exportCommand.subCommands?.find((c) => c.name === 'md');
 @@ -825,18 +865,31 @@
          messageType: 'info',
          content: expect.stringContaining(
@@ -416596,7 +416475,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
        });
  
 -      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).toHaveBeenCalledWith(
++      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalledWith(
 +        'test-session-id',
 +      );
        expect(collectSessionData).toHaveBeenCalledWith(
@@ -416624,21 +416503,6 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
          expect.stringContaining('export-2025-01-01T00-00-00-000Z.html'),
          expect.stringContaining('{"data": "test"}'),
          { encoding: 'utf-8', mode: 0o600 },
-@@ -918,13 +971,13 @@
-         messageType: 'error',
-         content: 'Could not determine current working directory.',
-       });
-     });
- 
-     it('should return error when no session is found', async () => {
--      mockSessionServiceMocks.loadSession.mockResolvedValue(undefined);
-+      mockSessionServiceMocks.readSessionView.mockResolvedValue(undefined);
- 
-       const htmlCommand = exportCommand.subCommands?.find(
-         (c) => c.name === 'html',
-       );
-       if (!htmlCommand?.action) {
-         throw new Error('html command not found');
 @@ -1005,18 +1058,31 @@
          messageType: 'info',
          content: expect.stringContaining(
@@ -416647,7 +416511,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
        });
  
 -      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).toHaveBeenCalledWith(
++      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalledWith(
 +        'test-session-id',
 +      );
        expect(collectSessionData).toHaveBeenCalledWith(
@@ -416683,7 +416547,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
        });
  
 -      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalled();
-+      expect(mockSessionServiceMocks.readSessionView).toHaveBeenCalledWith(
++      expect(mockSessionServiceMocks.loadSession).toHaveBeenCalledWith(
 +        'test-session-id',
 +      );
        expect(collectSessionData).toHaveBeenCalledWith(
@@ -416714,7 +416578,7 @@ diff --git a/packages/cli/src/ui/commands/exportCommand.test.ts b/packages/cli/s
 diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli/src/serve/server/session-export.test.ts
 --- a/packages/cli/src/serve/server/session-export.test.ts
 +++ b/packages/cli/src/serve/server/session-export.test.ts
-@@ -5,14 +5,15 @@
+@@ -5,14 +5,16 @@
   */
  
  import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -416722,6 +416586,7 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
    SESSION_TRANSCRIPT_MAX_INDEX_BYTES,
    SessionService,
 -  type ResumedSessionData,
++  type ResumedSessionData,
 +  type SessionViewData,
  } from '@qwen-code/qwen-code-core';
 +import { CHAT_RECORDING_VERSION } from '@qwen-code/qwen-code-core/transcriptRecords';
@@ -416731,7 +416596,7 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
    normalizeSessionData,
    toHtml,
    toJson,
-@@ -29,22 +30,35 @@
+@@ -29,22 +31,35 @@
    toJson: vi.fn(),
    toJsonl: vi.fn(),
    toMarkdown: vi.fn(),
@@ -416769,7 +416634,7 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
    beforeEach(() => {
      vi.clearAllMocks();
      vi.mocked(collectSessionData).mockResolvedValue({
-@@ -61,44 +75,68 @@
+@@ -61,44 +76,71 @@
    });
  
    afterEach(() => {
@@ -416800,9 +416665,9 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
        .spyOn(SessionService.prototype, 'loadArchivedSession')
        .mockResolvedValue(sessionData);
 -    const loadSession = vi.spyOn(SessionService.prototype, 'loadSession');
-+    const readSessionView = vi.spyOn(
++    const loadSession = vi.spyOn(
 +      SessionService.prototype,
-+      'readSessionView',
++      'loadSession',
 +    );
  
      await exportSessionTranscript({
@@ -416816,7 +416681,7 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
        maxBytes: SESSION_TRANSCRIPT_MAX_INDEX_BYTES,
      });
 -    expect(loadSession).not.toHaveBeenCalled();
-+    expect(readSessionView).not.toHaveBeenCalled();
++    expect(loadSession).not.toHaveBeenCalled();
 +    expectPresentationExport();
    });
  
@@ -416827,9 +416692,13 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
      );
 -    const loadSession = vi
 -      .spyOn(SessionService.prototype, 'loadSession')
-+    const readSessionView = vi
-+      .spyOn(SessionService.prototype, 'readSessionView')
-       .mockResolvedValue(sessionData);
+-      .mockResolvedValue(sessionData);
++    const loadSession = vi
++      .spyOn(SessionService.prototype, 'loadSession')
++      .mockResolvedValue({
++        ...sessionData,
++        lastCompletedUuid: null,
++      } as ResumedSessionData);
  
      await exportSessionTranscript({
        workspaceCwd: '/workspace',
@@ -416838,7 +416707,7 @@ diff --git a/packages/cli/src/serve/server/session-export.test.ts b/packages/cli
      });
  
 -    expect(loadSession).toHaveBeenCalledWith(sessionId);
-+    expect(readSessionView).toHaveBeenCalledWith(sessionId);
++    expect(loadSession).toHaveBeenCalledWith(sessionId);
      expect(loadArchivedSession).not.toHaveBeenCalled();
 +    expectPresentationExport();
    });
