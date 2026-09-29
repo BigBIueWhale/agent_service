@@ -441,6 +441,13 @@ LABEL agent_service.profile="qwen38-agent-service-v3" \
       agent_service.stack-lock.sha256="${STACK_LOCK_SHA256}" \
       agent_service.cargo-lock.sha256="${CARGO_LOCK_SHA256}"
 COPY --from=service-build /build/target/release/agent_service /usr/local/bin/agent_service
+# The service's complete-result reader runs the pinned Qwen response verifier
+# against the exact events.jsonl bytes it has just scanned. Keep that verifier
+# and its Node runtime in this image, where the service executes the reader.
+COPY --from=qwen-build /usr/local/bin/node /usr/local/bin/node
+COPY --from=qwen-build /src/dist /opt/qwen-code/dist
+COPY --from=qwen-build /src/node_modules /opt/qwen-code/node_modules
+COPY --from=qwen-build /src/package.json /opt/qwen-code/package.json
 COPY LICENSE /usr/share/doc/agent_service/UNLICENSE
 COPY THIRD_PARTY_NOTICES.md /usr/share/doc/agent_service/THIRD_PARTY_NOTICES.md
 COPY LICENSES/Apache-2.0.txt /usr/share/doc/agent_service/Apache-2.0.txt
@@ -449,6 +456,10 @@ RUN test -n "${SOURCE_COMMIT}" \
  && test "${#BUILD_INPUTS_MANIFEST_SHA256}" = 64 \
  && test "${#STACK_LOCK_SHA256}" = 64 \
  && test "${#CARGO_LOCK_SHA256}" = 64 \
+ && test "$(/usr/local/bin/node --version)" = 'v22.23.2' \
+ && test -f /opt/qwen-code/dist/record-verifier.js \
+ && test -d /opt/qwen-code/node_modules \
+ && test -f /opt/qwen-code/package.json \
  && test -s /usr/share/doc/agent_service/UNLICENSE \
  && test -s /usr/share/doc/agent_service/THIRD_PARTY_NOTICES.md \
  && test -s /usr/share/doc/agent_service/Apache-2.0.txt \

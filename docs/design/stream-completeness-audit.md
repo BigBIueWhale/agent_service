@@ -1336,16 +1336,33 @@ No build, release, deployment or push was run. The backend does not own the
 client SDK's utility operation or response conversion, so this change does
 not modify vLLM; direct backend callers still receive the same requests.
 
-The wider record-completeness goal remains open. In particular, the native
-certifier verifies physical Chat response bytes, SDK value counts and served
-usage, and validates the claimed generation envelope and attempt separately.
-It does not derive the ordinary Chat generation from those physical response
-bytes. The TypeScript reader does perform that replay. Python and Java readers
-also compare generation claims with attempt counts and usage without the full
-physical Chat conversion. A coherent but false normalized output claim could
-therefore remain admissible to those readers. The displayed user/tool-result
-projection is likewise not bound to the rendered request input; exact request
-bodies remain the authority for what was dispatched. These are source-reading
-findings, not executed native refusals or a claim that the whole record set is
-certified. Any binding must preserve valid ordinary sessions with reminders,
-media rendering, cancellations and retries.
+The wider record-completeness goal remains open. The Rust protocol engine
+verifies physical Chat response bytes, SDK value counts and served usage, and
+validates the claimed generation envelope and attempt separately. It does not
+itself derive ordinary Chat output from the physical response. The service's
+`read_event_snapshot` then requires the patched Qwen verifier to replay the
+same captured file through its pinned converter, bound to the native scan's
+length and SHA-256. Packaged Python and Java SDK transports likewise run the
+CLI stream verifier before delivering records. Their direct admission classes
+do not replay conversion independently: a source-level Python repro admitted
+a forged Chat text claim after its generation hash, completion hash and
+terminal result were changed together, while the physical response bytes were
+left intact. That repro proves the direct-reader limit, not acceptance by the
+packaged SDK or service.
+
+Source inspection found an image-composition defect in the required service
+verification path: `result_parse.rs` invokes `/usr/local/bin/node` and
+`/opt/qwen-code/dist/record-verifier.js`, but the `service` stage of
+`docker/Dockerfile` inherited the minimal runtime base and copied neither.
+The service stage now copies the pinned Node binary, Qwen bundle, dependencies
+and package identity from `qwen-build`, and its image gate checks their
+presence and Node version. The old source image definition could not satisfy
+that subprocess dependency. This is a source conclusion, not a claim about any
+previously published image or a successful build. The new image composition,
+running verifier and complete-result certification remain unverified pending
+the owner's gates; no build or image step was run here.
+
+The displayed user/tool-result projection is likewise not bound to the
+rendered request input; exact request bodies remain the authority for what
+was dispatched. Any such binding must preserve valid ordinary sessions with
+reminders, media rendering, cancellations and retries.
