@@ -347105,7 +347105,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,927 @@
+@@ -0,0 +1,1066 @@
 +import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -347355,6 +347355,145 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +        modelRequest: request,
 +      }),
 +    ).not.toThrow();
++  });
++
++  it('requires root proof for a child render even when no attempt dispatched', () => {
++    const state = { history: [], imagePayloads: [] };
++    const assertion = {
++      renderId: 'child-render',
++      kvScope: 'child-scope',
++      promptId: 'child-prompt',
++      stateSha256: fingerprintRuntimeHistory(state),
++    };
++    const child = new ModelEvidenceReplay();
++    child.observe({
++      type: 'system',
++      subtype: 'runtime_history',
++      sessionId: 'root-session',
++      isSidechain: true,
++      systemPayload: { kind: 'checkpoint', state },
++    });
++    child.observe({
++      type: 'model_history_assertion',
++      sessionId: 'root-session',
++      isSidechain: true,
++      runtimeHistoryAssertion: assertion,
++    });
++    expect(child.rootProofSessionId()).toBe('root-session');
++    expect(() => child.finish()).toThrow('needs its root physical recording');
++    const root = [
++      {
++        type: 'system',
++        subtype: 'runtime_history',
++        sessionId: 'root-session',
++        systemPayload: { kind: 'checkpoint', state },
++      },
++      {
++        type: 'model_history_assertion',
++        sessionId: 'root-session',
++        placement: 'child',
++        runtimeHistoryAssertion: assertion,
++      },
++    ];
++    expect(() => child.finish(root)).not.toThrow();
++    expect(() =>
++      child.finish([
++        root[0],
++        {
++          ...root[1],
++          runtimeHistoryAssertion: { ...assertion, stateSha256: '0'.repeat(64) },
++        },
++      ]),
++    ).toThrow('child render has no matching root history assertion');
++    expect(() =>
++      child.finish([
++        ...root,
++        {
++          type: 'model_history_binding',
++          sessionId: 'root-session',
++          placement: 'child',
++          runtimeHistoryBinding: {
++            renderId: assertion.renderId,
++            attemptId: 'unrecorded-attempt',
++          },
++        },
++      ]),
++    ).toThrow('root Chat attempt is absent from its child recording');
++  });
++
++  it('refuses a child attempt whose root dispatched without a child generation', async () => {
++    const state = { history: [], imagePayloads: [] };
++    const assertion = {
++      renderId: 'child-render',
++      kvScope: 'child-scope',
++      promptId: 'child-prompt',
++      stateSha256: fingerprintRuntimeHistory(state),
++    };
++    const binding = { renderId: assertion.renderId, attemptId: 'child-attempt' };
++    const child = new ModelEvidenceReplay();
++    child.observe({
++      type: 'system',
++      subtype: 'runtime_history',
++      sessionId: 'root-session',
++      isSidechain: true,
++      systemPayload: { kind: 'checkpoint', state },
++    });
++    child.observe({
++      type: 'model_history_assertion',
++      sessionId: 'root-session',
++      isSidechain: true,
++      runtimeHistoryAssertion: assertion,
++    });
++    child.observe({
++      type: 'model_history_binding',
++      sessionId: 'root-session',
++      isSidechain: true,
++      runtimeHistoryBinding: binding,
++    });
++    const root = [
++      {
++        type: 'system',
++        subtype: 'runtime_history',
++        sessionId: 'root-session',
++        systemPayload: { kind: 'checkpoint', state },
++      },
++      {
++        type: 'model_history_assertion',
++        sessionId: 'root-session',
++        placement: 'child',
++        runtimeHistoryAssertion: assertion,
++      },
++      {
++        type: 'model_history_binding',
++        sessionId: 'root-session',
++        placement: 'child',
++        runtimeHistoryBinding: binding,
++      },
++    ];
++    expect(() => child.finish(root)).not.toThrow();
++    const f = fixture();
++    await f.journal.capture(
++      serialize([], 'child-scope'),
++      'child-scope',
++      'child-prompt',
++      'segment',
++      null,
++      TEST_POLICY,
++    );
++    const request = {
++      ...f.records[0],
++      owner: { kind: 'chat' as const, attempt_id: binding.attemptId },
++    };
++    expect(() =>
++      child.finish([
++        ...root,
++        {
++          type: 'model_request',
++          sessionId: 'root-session',
++          modelRequest: request,
++        },
++      ]),
++    ).toThrow('child physical Chat request has no completed child generation');
 +  });
 +
 +  it('requires the selected decoder in every durable request', async () => {
@@ -348036,7 +348175,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1633 @@
+@@ -0,0 +1,1647 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -349495,12 +349634,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  }
 +  finish(rootRecords?: Iterable<CanonicalModelEvidenceRecord>): void {
 +    requireCompleteModelEvidence(this.completionState());
-+    if (
-+      !this.sidechain ||
-+      (this.completedChildAttempts.size === 0 &&
-+        this.childCompactionDraws.length === 0)
-+    )
-+      return;
++    if (!this.needsRootProof()) return;
 +    if (!rootRecords)
 +      return refusal(
 +        'a complete child transcript needs its root physical recording; read the child with its parent session recording',
@@ -349513,12 +349647,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    rootRecords?: AsyncIterable<CanonicalModelEvidenceRecord>,
 +  ): Promise<void> {
 +    requireCompleteModelEvidence(this.completionState());
-+    if (
-+      !this.sidechain ||
-+      (this.completedChildAttempts.size === 0 &&
-+        this.childCompactionDraws.length === 0)
-+    )
-+      return;
++    if (!this.needsRootProof()) return;
 +    if (!rootRecords)
 +      return refusal(
 +        'a complete child transcript needs its root physical recording; read the child with its parent session recording',
@@ -349526,6 +349655,14 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    const verifier = this.rootProofVerifier();
 +    for await (const record of rootRecords) verifier.observe(record);
 +    verifier.finish();
++  }
++  private needsRootProof(): boolean {
++    return (
++      this.sidechain === true &&
++      (this.historyAssertions.size > 0 ||
++        this.completedChildAttempts.size > 0 ||
++        this.childCompactionDraws.length > 0)
++    );
 +  }
 +  private rootProofVerifier(): {
 +    observe: (record: CanonicalModelEvidenceRecord) => void;
@@ -349536,7 +349673,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      string,
 +      Partial<CompletedChildAttempt> & { placement?: string }
 +    >();
-+    const assertedChildRequests = new Set<string>();
++    const physicalChildRequests = new Set<string>();
 +    return {
 +      observe: (record) => {
 +        if (
@@ -349547,35 +349684,15 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        root.observe(record);
 +        if (record.type === 'model_request') {
 +          const request = requireModelRequestEvidence(record.modelRequest);
-+          if (
-+            request.owner.kind === 'chat' &&
-+            this.completedChildAttempts.has(request.owner.attempt_id)
-+          ) {
-+            const childBinding = this.historyBindings.get(
-+              request.owner.attempt_id,
-+            );
++          if (request.owner.kind === 'chat') {
 +            const rootBinding = root.historyBindings.get(
 +              request.owner.attempt_id,
 +            );
-+            const childMarker = childBinding &&
-+              this.historyAssertions.get(childBinding.binding.renderId);
-+            const rootMarker = rootBinding &&
-+              root.historyAssertions.get(rootBinding.binding.renderId);
 +            if (
-+              !childBinding ||
-+              !rootBinding ||
-+              childBinding.placement !== undefined ||
-+              rootBinding.placement !== 'child' ||
-+              !isDeepStrictEqual(rootBinding.binding, childBinding.binding) ||
-+              !childMarker ||
-+              childMarker.placement !== undefined ||
-+              rootMarker?.placement !== 'child' ||
-+              !isDeepStrictEqual(rootMarker.assertion, childMarker.assertion)
++              rootBinding &&
++              this.historyAssertions.has(rootBinding.binding.renderId)
 +            )
-+              return refusal(
-+                'child Chat request has no matching verified history assertion',
-+              );
-+            assertedChildRequests.add(request.owner.attempt_id);
++              physicalChildRequests.add(request.owner.attempt_id);
 +          }
 +        }
 +        const seed =
@@ -349610,6 +349727,46 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        matching.set(attemptId, matched);
 +      },
 +      finish: () => {
++        for (const [renderId, childMarker] of this.historyAssertions) {
++          const rootMarker = root.historyAssertions.get(renderId);
++          if (
++            childMarker.placement !== undefined ||
++            !rootMarker ||
++            rootMarker.placement !== 'child' ||
++            !isDeepStrictEqual(rootMarker.assertion, childMarker.assertion)
++          )
++            return refusal(
++              'child render has no matching root history assertion',
++            );
++        }
++        for (const [attemptId, childBinding] of this.historyBindings) {
++          const rootBinding = root.historyBindings.get(attemptId);
++          if (
++            childBinding.placement !== undefined ||
++            !rootBinding ||
++            rootBinding.placement !== 'child' ||
++            !isDeepStrictEqual(rootBinding.binding, childBinding.binding)
++          )
++            return refusal(
++              'child attempt has no matching root history binding',
++            );
++        }
++        for (const [attemptId, rootBinding] of root.historyBindings) {
++          if (
++            rootBinding.placement === 'child' &&
++            this.historyAssertions.has(rootBinding.binding.renderId) &&
++            !this.historyBindings.has(attemptId)
++          )
++            return refusal(
++              'root Chat attempt is absent from its child recording',
++            );
++        }
++        for (const attemptId of physicalChildRequests) {
++          if (!this.completedChildAttempts.has(attemptId))
++            return refusal(
++              'child physical Chat request has no completed child generation',
++            );
++        }
 +        for (const { scope, record } of this.childCompactionDraws) {
 +          root.responses.claimCompactionRecord(record, scope, (id, owner) =>
 +            root.utilities.claimTokenCount(id, owner),
@@ -349619,7 +349776,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +          const corresponding = matching.get(attemptId);
 +          if (
 +            !corresponding ||
-+            !assertedChildRequests.has(attemptId) ||
++            !physicalChildRequests.has(attemptId) ||
 +            corresponding.placement !== 'child' ||
 +            !isDeepStrictEqual(corresponding.seed, child.seed) ||
 +            !isDeepStrictEqual(corresponding.generation, child.generation) ||
@@ -349634,11 +349791,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    };
 +  }
 +  rootProofSessionId(): string | undefined {
-+    return this.sidechain &&
-+      (this.completedChildAttempts.size > 0 ||
-+        this.childCompactionDraws.length > 0)
-+      ? this.sessionId
-+      : undefined;
++    return this.needsRootProof() ? this.sessionId : undefined;
 +  }
 +  completionState(): ModelEvidenceCompletionState {
 +    return {
@@ -382982,7 +383135,7 @@ diff --git a/docs/design/background-resume-history.md b/docs/design/background-r
 diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-history-recording.md
 --- /dev/null
 +++ b/docs/design/runtime-history-recording.md
-@@ -0,0 +1,162 @@
+@@ -0,0 +1,166 @@
 +# Runtime history recording
 +
 +This document describes the shared source implementation and its verification
@@ -383022,6 +383175,10 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +  mirrors them into the root before dispatch. The complete reader checks the
 +  local assertion against replayed history, requires the matching binding
 +  before each Chat request, and compares both child copies during root proof.
++  A child render requires its root mirror even when token counting stops before
++  an attempt. A bound child attempt may have no physical request, but a root
++  physical request for it requires the matching completed child generation.
++  The root cannot add a binding to the child's render that the child omitted.
 +
 +The ordinary and indexed resume readers use the same accumulator. There is no
 +raw-message reconstruction mode. Missing initialization, invalid splice ranges,
@@ -397399,7 +397556,7 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 +    );
 +    await expect(
 +      readCompleteStoredCanonicalChatRecords(fixture.childPath),
-+    ).rejects.toThrow('matching verified history assertion');
++    ).rejects.toThrow('child render has no matching root history assertion');
 +  } finally {
 +    await fixture.cleanup();
 +  }
@@ -397443,7 +397600,7 @@ diff --git a/packages/core/src/core/model-generation-recording.test.ts b/package
 +    );
 +    await expect(
 +      readCompleteStoredCanonicalChatRecords(fixture.childPath),
-+    ).rejects.toThrow('matching verified history assertion');
++    ).rejects.toThrow('child attempt has no matching root history binding');
 +  } finally {
 +    await fixture.cleanup();
 +  }

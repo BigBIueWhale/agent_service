@@ -9790,7 +9790,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.historyAssertions.has(assertion.renderId)",
         "this.historyBindings.get(request.owner.attempt_id)",
         "Chat request has no matching canonical history assertion",
-        "child Chat request has no matching verified history assertion",
+        "private needsRootProof(): boolean",
+        "this.historyAssertions.size > 0",
+        "child render has no matching root history assertion",
+        "child attempt has no matching root history binding",
+        "root Chat attempt is absent from its child recording",
+        "child physical Chat request has no completed child generation",
     ), label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
         "readonly type: 'model_history_assertion'",
@@ -9809,6 +9814,12 @@ def _validate_served_accounting_after(state: State) -> None:
                  label=label)
     require_text(state, core + "core/model-generation-recording.test.ts",
                  "refuses a child request whose mirrored root history assertion differs",
+                 label=label)
+    require_text(state, core + "core/model-request-evidence.test.ts",
+                 "requires root proof for a child render even when no attempt dispatched",
+                 label=label)
+    require_text(state, core + "core/model-request-evidence.test.ts",
+                 "refuses a child attempt whose root dispatched without a child generation",
                  label=label)
     require_text(state, core + "core/runtime-history-recording.test.ts",
                  "refuses a canonical input changed after its provider request was admitted",

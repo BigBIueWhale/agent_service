@@ -1747,3 +1747,17 @@ the selected curation, media and provider transformations against the canonical
 state and the captured body, with ordinary text, tool-result and image turns
 covered. This is a source-reading requirement for the remaining implementation;
 no renderer replay or owner gate has verified it yet.
+
+Source inspection then found a narrower child admission gap in the version 19
+reader. It opened root proof only for a child with a completed generation or a
+compaction draw. A child could therefore record a render assertion and attempt
+binding, omit its generation, and be called complete without reading the root
+file that owns physical requests. The reader now opens root proof for every
+child render, compares all local assertions and bindings with their root
+mirrors, and refuses a root physical Chat request for one of those attempts
+without a completed child generation. A render abandoned before an attempt, or
+an attempt stopped before physical dispatch, remains a valid complete child
+only when its root mirror confirms that sequence. Authored cases cover these
+orders and an omitted child binding; they are unrun TypeScript source tests.
+This closes the checked child render/attempt relation by source reading, while
+provider-body renderer replay and owner gates remain open.
