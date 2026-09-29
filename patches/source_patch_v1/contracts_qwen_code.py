@@ -8392,6 +8392,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "utilityDelivery!.attach(response)",
         "if (!attempt && !utilityDelivery)",
         "claimCompactionSystemRecord(record: Record<string, unknown>): void",
+        "refusal('compaction system record has no scope or object data')",
         "this.responses.claimCompactionRecord(data as CompactionRecord, scope)",
     ), label=label)
     forbid_text(state, core + "core/model-request-evidence.ts",

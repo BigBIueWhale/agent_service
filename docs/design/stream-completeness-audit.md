@@ -1079,3 +1079,8 @@ miscounted physical operations. This tests local replay, not the packaged
 verifier processes, generated bindings, native certifier, provider, or owner
 build gates. No backend edit belongs at this reader boundary: the recorded
 request and response bytes are unchanged for ordinary and long sessions.
+The initial malformed-record branch named an undefined helper; source review
+found it before any owner build. A follow-up routes that branch to the file's
+existing actionable refusal and executes it with a null-data fixture. Both
+verifier source suites passed again; this does not establish TypeScript
+typechecking or a packaged verifier run.

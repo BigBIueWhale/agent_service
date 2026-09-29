@@ -345702,7 +345702,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      typeof data !== 'object' ||
 +      Array.isArray(data)
 +    )
-+      failure('compaction system record has no scope or object data');
++      refusal('compaction system record has no scope or object data');
 +    this.responses.claimCompactionRecord(data as CompactionRecord, scope);
 +  }
 +  finishStream(): void {
@@ -418184,7 +418184,7 @@ diff --git a/packages/core/src/core/record-verifier-core.ts b/packages/core/src/
 diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core/src/core/record-verifier-core.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-core.test.ts
-@@ -0,0 +1,95 @@
+@@ -0,0 +1,100 @@
 +import { createHash } from 'node:crypto';
 +import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 +import { tmpdir } from 'node:os';
@@ -418279,6 +418279,11 @@ diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core
 +    physicalRequests: 2,
 +  };
 +  await expect(verify(forged)).rejects.toThrow(/physical operation/);
++  const missingData = structuredClone(rows);
++  missingData.find((row) => row['subtype'] === 'compaction')!['data'] = null;
++  await expect(verify(missingData)).rejects.toThrow(
++    /Invalid model request evidence: compaction system record has no scope or object data/,
++  );
 +});
 diff --git a/packages/core/src/core/record-verifier.ts b/packages/core/src/core/record-verifier.ts
 --- /dev/null
