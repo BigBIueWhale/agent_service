@@ -128,34 +128,44 @@ was run:
   could lose its output from this projection when an error was present.
   The current authoring splice retains the response-part display text and
   distinct top-level or embedded errors; four source assertions reproduced
-  loss and the Base adapter's 146 cases passed afterward. This presentation repair
-  does not bind input provenance or prove that the display text is identical
-  to model input. An immutable input receipt and explicit rendered-request
-  binding remain to be designed and admitted across producer and readers.
+  loss and the Base adapter's 146 cases passed afterward. This presentation
+  repair does not bind the display row to the client input that produced it.
+  The recorded provider body already contains the input dispatched to the
+  model; display text is not a second copy of that input. Display provenance
+  remains unproved and must be addressed on its own terms, without treating
+  text equality with the provider body as an invariant.
 
   An executed direct Python admission probe made this limit concrete against
   the authored `chat_request_response_history` fixture (SHA-256
   `5ded2fdac33c9ae3f1aa4b3830941750a93eb4769518297b142ee74fb3fa91f5`).
   It inserted a `user` display row before the unchanged request. Both the
   request's visible text, `first`, and an unrelated displayed text passed
-  `RecordAdmission.admit` and `finish`. The reproducible probe is
+  `RecordAdmission.admit` and `finish`. This demonstrates that the direct
+  Python reader does not authenticate an extra display row. It does not
+  demonstrate missing model input: the unchanged, reconstructible provider
+  body remains in the record. The reproducible probe is
   `/tmp/codex-input-provenance/probe.py`. This tests the direct Python reader
   with authored records, not a CLI session, the native certifier, or the
   service's separate physical-response verifier. By source reading, that
   verifier checks generated output against response bytes, not input display
-  against request messages.
+  against request messages. In native `RuntimeContract`, a `user` row is
+  inspected for issued `tool_result` ownership; its ordinary display text is
+  not used to reconstruct the model request.
 
   The producer boundaries explain why a direct text comparison would be
-  wrong. The CLI adapter emits a display row; `recordUserMessage` persists
-  post-hook Parts; `GeminiChat` can then append a manual-plan reminder and
-  slim media in the request history; and the OpenAI pipeline applies its
-  converter and provider enhancements before journalling the exact body.
-  A correct input proof needs durable source identity through those stages
-  and a reader check against the final recorded request. Tool results need
-  the same treatment because their displayed result can differ from the
-  model-facing response Parts and later reminders. This remains an
-  implementation gap, not an executed end-to-end failure of the deployed
-  service.
+  wrong. The CLI adapter emits a display row, and its notification path can
+  show `displayText` while sending separate `modelText`;
+  `recordUserMessage` persists post-hook Parts; `GeminiChat` can then append
+  a manual-plan reminder and slim media in the request history; and the OpenAI
+  pipeline converts content and applies provider enhancements before
+  journalling the exact body.
+  Any proof that a display row came from client-authored input needs durable
+  source identity across the canonical and stream projections. A separate
+  proof that the recorded runtime history rendered into the provider body
+  would have to account for each transformation. Tool results need the same
+  distinction because their displayed result can differ from the
+  model-facing response Parts and later reminders. Neither proof is supplied
+  by the direct Python probe, and no deployed end-to-end failure was executed.
 
 Charging served output from an abandoned draw is correct. Served work and
 history acceptance are distinct facts. The defect is missing disposition
@@ -1400,10 +1410,12 @@ successful build. The new image composition, running verifier and complete
 result certification remain unverified pending
 the owner's gates; no build or image step was run here.
 
-The displayed user/tool-result projection is likewise not bound to the
-rendered request input; exact request bodies remain the authority for what
-was dispatched. Any such binding must preserve valid ordinary sessions with
-reminders, media rendering, cancellations and retries.
+The displayed user/tool-result projection is not authenticated against its
+client-authored source, and runtime-history contents are not independently
+re-rendered into the provider body by the service certifier. Exact request
+bodies remain the authority for what was dispatched. A future provenance
+check must preserve valid ordinary sessions with reminders, media rendering,
+cancellations and retries.
 
 ## Model-bound canonical input admission
 
