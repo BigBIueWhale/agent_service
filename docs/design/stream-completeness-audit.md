@@ -153,6 +153,17 @@ was run:
   inspected for issued `tool_result` ownership; its ordinary display text is
   not used to reconstruct the model request.
 
+  Two headless runtime notices had a sharper producer-order defect: a refused
+  generation's redraw notice and a slipped final message's notice were
+  displayed before their canonical mid-turn input write was admitted. If that
+  write failed, the live stream could contain a user row for input the session
+  never recorded and never sent. Headless now awaits canonical admission before
+  displaying either notice; the interactive mid-turn path already has that
+  order. Source tests cover both failed-write paths but were not executed in
+  this workspace. This prevents those two false rows on recording failure; it
+  does not authenticate every display row against its canonical source or the
+  physical request.
+
   The producer boundaries explain why a direct text comparison would be
   wrong. The CLI adapter emits a display row, and its notification path can
   show `displayText` while sending separate `modelText`;

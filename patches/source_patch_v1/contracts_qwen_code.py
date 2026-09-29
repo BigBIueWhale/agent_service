@@ -6113,8 +6113,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
             "message: describeRefusedTurns(terminal, turnCount),",
             "const parts: Part[] = [{ text: refusedTurnNotice(terminal) }];",
-            "adapter.emitUserMessage(parts);",
             ".recordMidTurnUserMessage(parts);",
+            "adapter.emitUserMessage(parts);",
             "if (redrawRefusedTurn) {",
             "sendType = SendMessageType.Redraw;",
             "redrawRefusedTurn = false;",
@@ -6131,6 +6131,12 @@ def _validate_incomplete_generation_after(state: State) -> None:
         ),
         label=label,
         location=cli,
+    )
+    require_text(
+        state,
+        "packages/cli/src/nonInteractiveCli.test.ts",
+        "does not display a redraw notice whose canonical input was refused",
+        label=label,
     )
     # Both loops read where the generation stood from the turn's own events,
     # and a retry starts the turn's record again.
@@ -6627,11 +6633,28 @@ def _validate_final_message_slip_after(state: State) -> None:
             "if (consecutiveFinalMessageSlips >= FINAL_MESSAGE_SLIP_LIMIT) {",
             "terminateMode: AgentTerminateMode.SLIPPED_FINAL_MESSAGE,",
             "message: describeSlippedFinalMessage(kind),",
-            "adapter.emitUserMessage(notice);",
             "recordMidTurnUserMessage(notice)",
+            "adapter.emitUserMessage(notice);",
             "? describeFinalMessageSlip(turnText)",
             "? describeFinalMessageSlip(itemText)",
         ),
+        label=label,
+    )
+    _require_ordered(
+        cli_source,
+        (
+            "const noticeForFinalMessageSlip = async (",
+            "recordMidTurnUserMessage(notice)",
+            "adapter.emitUserMessage(notice);",
+            "return notice;",
+        ),
+        label=label,
+        location=cli,
+    )
+    require_text(
+        state,
+        cli_test,
+        "does not display a slip notice whose canonical input was refused",
         label=label,
     )
     _require(
@@ -12028,7 +12051,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "and what the generation was writing when it ended, so the description says what the "
             "stop cost -- a call the model had not completed, which was not made, and where what "
             "was served of it is kept; a message cut to a prefix; or nothing visible -- and that "
-            "the run carries no final answer."
+            "the run carries no final answer. A redraw notice is admitted to the canonical "
+            "recording before it appears as a user row in the stream."
         ),
         removal_condition=(
             "Upstream distinguishes self-ended generation from a severed response, asks for a turn "
@@ -12049,7 +12073,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "state, error_slipped_final_message on the wire, in the headless session and every "
             "subagent alike, after the incomplete-generation check and never in its place. Detection "
             "is an exact string test on the turn's visible text; no next-speaker judgment returns: "
-            "the check, its telemetry event and the setting that switched it off are gone."
+            "the check, its telemetry event and the setting that switched it off are gone. "
+            "The canonical mid-turn input is admitted before the notice is displayed."
         ),
         removal_condition=(
             "Upstream answers an empty or markup-carrying self-ended turn with the same notice in "
