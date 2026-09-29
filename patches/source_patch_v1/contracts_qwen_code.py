@@ -8436,7 +8436,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 18;",
+            "export const CHAT_RECORDING_VERSION = 19;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -9734,47 +9734,79 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "services/runtime-history.ts", (
         "export function fingerprintRuntimeHistory(",
         "export function requireRuntimeHistoryAssertion(",
+        "export function requireRuntimeHistoryBinding(",
+        "readonly renderId: string;",
+        "readonly attemptId: string;",
         "assertFingerprint(expected: string): void",
         "history assertion differs from the recorded conversation",
     ), label=label)
     _require_all(state, core + "services/chatRecordingService.ts", (
         "async recordHistoryAssertion(",
         "requireRuntimeHistoryState(state)",
+        "renderId: randomUUID()",
         "stateSha256: fingerprintRuntimeHistory(state)",
+        "async recordHistoryBinding(binding: RuntimeHistoryBinding)",
         "recordChildHistoryAssertion(",
+        "recordChildHistoryBinding(",
+        "binding: RuntimeHistoryBinding,",
         "assertion: RuntimeHistoryAssertion,",
         "this.createBaseRecord('model_history_assertion')",
+        "this.createBaseRecord('model_history_binding')",
         "{ updateActiveTail: false }",
     ), label=label)
     _require_all(state, core + "agents/agent-transcript.ts", (
         "recordHistoryAssertion: async (kvScope, promptId, state) => {",
         "stateSha256: fingerprintRuntimeHistory(",
+        "recordHistoryBinding: async (binding) => {",
         "await options.recording.recordChildHistoryAssertion(assertion)",
+        "await options.recording.recordChildHistoryBinding(binding)",
     ), label=label)
     _require_all(state, core + "core/geminiChat.ts", (
         "requestContents = this.getRequestHistoryForRoute(",
-        "await this.chatRecordingService.recordHistoryAssertion(",
+        "historyAssertion = await this.chatRecordingService.recordHistoryAssertion(",
+        "await this.chatRecordingService.recordHistoryBinding(",
     ), label=label)
     render_source = _source(state, core + "core/geminiChat.ts", label=label).split(
         "// The notice joins the conversation on the message the refused turn", 1
     )[1].split("// Count the request compaction has settled on.", 1)[0]
     _require_ordered(render_source, (
         "requestContents = this.getRequestHistoryForRoute(",
-        "await this.chatRecordingService.recordHistoryAssertion(",
+        "historyAssertion = await this.chatRecordingService.recordHistoryAssertion(",
         "requestContents = this.getRequestHistoryForRoute(",
-        "await this.chatRecordingService.recordHistoryAssertion(",
+        "historyAssertion = await this.chatRecordingService.recordHistoryAssertion(",
     ), label=label, location="both Chat render paths before dispatch")
+    _require_ordered(_source(state, core + "core/geminiChat.ts", label=label), (
+        "const attempt = new ChatAttempt(",
+        "await this.chatRecordingService.recordHistoryBinding(",
+        "renderId: historyAssertion.renderId,",
+        "attempt.id,",
+        "yield { type: StreamEventType.ATTEMPT_STARTED",
+        "this.makeApiCallAndProcessStream(",
+    ), label=label, location="attempt identity before physical dispatch")
     _require_all(state, core + "core/model-request-evidence.ts", (
         "record.type === 'model_history_assertion'",
+        "record.type === 'model_history_binding'",
         "this.history.assertFingerprint(assertion.stateSha256)",
+        "this.historyAssertions.has(assertion.renderId)",
+        "this.historyBindings.get(request.owner.attempt_id)",
         "Chat request has no matching canonical history assertion",
         "child Chat request has no matching verified history assertion",
     ), label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
         "readonly type: 'model_history_assertion'",
+        "readonly type: 'model_history_binding'",
+        "export function isTranscriptEvidenceRecord(",
         "requireRuntimeHistoryAssertion(value['runtimeHistoryAssertion'])",
+        "requireRuntimeHistoryBinding(value['runtimeHistoryBinding'])",
         "Model evidence cannot contain a conversation message or system payload",
     ), label=label)
+    _require_all(state, core + "services/session-artifact-persistence.ts", (
+        "isTranscriptEvidenceRecord,",
+        "!isTranscriptEvidenceRecord(record)",
+    ), label=label)
+    require_text(state, core + "services/session-artifact-persistence.test.ts",
+                 "keeps side artifacts attached across canonical evidence records",
+                 label=label)
     require_text(state, core + "core/model-generation-recording.test.ts",
                  "refuses a child request whose mirrored root history assertion differs",
                  label=label)

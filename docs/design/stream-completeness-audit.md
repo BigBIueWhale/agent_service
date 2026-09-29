@@ -167,11 +167,12 @@ was run:
   model-facing response Parts and later reminders. Neither proof is supplied
   by the direct Python probe, and no deployed end-to-end failure was executed.
 
-  The current canonical version 18 source records a history assertion when
-  Chat renders each request. A complete reader compares its SHA-256 with the
-  replayed root or child history and requires its scope and prompt identity
-  before the physical request. Child assertions are also mirrored into the
-  root file and compared during complete child verification. These are
+  The current canonical version 19 source records a unique render assertion
+  when Chat renders a request, then binds each attempt ID to it before
+  dispatch. A complete reader compares its SHA-256 with the replayed root or
+  child history and requires that binding before the physical request. Child
+  assertions and bindings are also mirrored into the root file and compared
+  during complete child verification. These are
   source-reading conclusions with authored, unrun TypeScript tests. The
   assertion binds canonical state to the request identity at rendering; it
   does not independently prove that every rendering transformation yielded
@@ -442,7 +443,7 @@ The audited checkpoint also had a concrete source consumer omission:
 
 The Desktop package declares a separately vendored Qwen runtime at 0.15.11,
 while the patched Qwen source at that checkpoint required canonical recording
-version 16 (the current contract is version 18).
+version 16 (the current contract is version 19).
 Hard-coding that version into Desktop's local JSONL loops would bind them to a
 different runtime source and could reject an ordinary session from its pinned
 runtime. The patched ACP `qwen/session/loadUpdates` path already asks the
@@ -1703,11 +1704,14 @@ body, and durably admits the `model_request` before SDK dispatch. This source
 order prevents a queued history write from overtaking a dispatched request.
 It is source reading, not an executed provider or packaged-resume test.
 
-Canonical version 18 now records a scope- and prompt-bound hash of the live
-history immediately after each Chat request is rendered. Complete admission
+Canonical version 19 now records a unique assertion immediately after each
+Chat request is rendered and binds every new attempt to it before dispatch.
+The attempt identity prevents a later attempt with the same prompt ID from
+reusing an earlier assertion. Complete admission
 compares a root or child assertion with its local replayed history, requires a
-matching assertion before each physical Chat request, and compares a child's
-local assertion with its mirrored root copy for a completed child attempt.
+matching attempt binding before each physical Chat request, and compares a
+child's local assertion and binding with their mirrored root copies for a
+completed child attempt.
 The pinned source patch plan and authored cases establish the source shape;
 TypeScript execution and owner gates remain unverified. This binds canonical
 history to the request identity at rendering across the two files.

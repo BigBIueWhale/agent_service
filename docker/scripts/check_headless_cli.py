@@ -278,7 +278,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 13 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 19 for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all(all(field not in event for field in
                     ("recordingVersion", "checkpointVersion", "historyRevision", "afterCommit"))
@@ -350,12 +350,39 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require([r["normalizationSeed"] for r in records if r["type"] == "model_normalization_seed"] ==
             [e["normalization_seed"] for e in events if e["type"] == "model_normalization_seed"],
             "canonical and stdout normalization seeds differ")
+    renders = {}
+    bindings = {}
+    for record in records:
+        if record["type"] == "model_history_assertion":
+            assertion = record["runtimeHistoryAssertion"]
+            render_id = assertion["renderId"]
+            require(isinstance(render_id, str) and render_id and render_id not in renders and
+                    isinstance(assertion["stateSha256"], str) and
+                    len(assertion["stateSha256"]) == 64 and
+                    all(character in "0123456789abcdef" for character in assertion["stateSha256"]),
+                    "canonical render assertion has no unique identity or state digest")
+            renders[render_id] = assertion
+        elif record["type"] == "model_history_binding":
+            binding = record["runtimeHistoryBinding"]
+            attempt_id = binding["attemptId"]
+            require(isinstance(attempt_id, str) and attempt_id and
+                    attempt_id not in bindings and binding["renderId"] in renders,
+                    "canonical Chat attempt has no unique prior render assertion")
+            bindings[attempt_id] = binding
+        elif record["type"] == "model_request" and record["modelRequest"]["owner"]["kind"] == "chat":
+            request = record["modelRequest"]
+            binding = bindings.get(request["owner"]["attempt_id"])
+            assertion = renders.get(binding["renderId"]) if binding else None
+            require(assertion is not None and assertion["kvScope"] == request["kv_scope"] and
+                    assertion["promptId"] == request["prompt_id"],
+                    "canonical physical Chat request has no matching attempt-bound render")
     parent = None
     for record in records:
         require(record["parentUuid"] == parent, "canonical transcript chain is incomplete")
         if record["type"] in ("model_request", "model_utility_request", "model_response",
                               "model_utility_completion", "model_normalization_seed",
-                              "model_generation", "model_attempt_completion"):
+                              "model_generation", "model_attempt_completion",
+                              "model_history_assertion", "model_history_binding"):
             require("message" not in record, "request evidence entered replayable history")
         else:
             parent = record["uuid"]
