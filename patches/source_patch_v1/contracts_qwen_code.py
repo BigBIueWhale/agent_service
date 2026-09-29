@@ -10204,6 +10204,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "transcriptSha256: snapshot.sha256",
         "transcriptByteLength: snapshot.byteLength",
     ), label=label)
+    _require_all(state, core + "config/config.ts", (
+        "await lease.assertOwnedAndMatchingTranscriptSnapshot(",
+        "authoritative.transcriptSha256 ?? ''",
+        "authoritative.transcriptByteLength ?? -1",
+    ), label=label)
     _require_all(state, core + "services/chat-recording-io.ts", (
         "Cannot read incomplete recording ${filePath}",
         "If its writer is active, wait for it to finish and retry",
@@ -10274,6 +10279,9 @@ def _validate_served_accounting_after(state: State) -> None:
         "SESSION_WRITER_STALL_TIMEOUT_MS",
         "SESSION_WRITER_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS",
         "this.runExclusive(() => this.assertOwnedAndUnchangedOnce(), true)",
+        "assertOwnedAndMatchingTranscriptSnapshot(",
+        "hasher.copy().digest('hex') !== sha256",
+        "Inspect the original recording or start a new session.",
         "this.runExclusive(() => this.appendJsonLinesOnce(values), true)",
         "if (this.stallFailure) return Promise.reject(this.stallFailure);",
         "if (this.stallFailure) throw this.stallFailure;",
@@ -10329,6 +10337,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "new GenerationObservationNormalizer([], [])",
         "type: 'model_normalization_seed'",
         "message.type !== 'model_normalization_seed'",
+        "binds admitted resume bytes to the owned transcript snapshot",
+        "refuses to activate a resume whose admitted digest differs from the owned bytes",
     ), label=label)
 
 

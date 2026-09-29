@@ -1849,3 +1849,19 @@ prove canonical sidecar presence after teardown and must prove stream
 completeness from the captured stream. The canonical-to-provider-body renderer
 relation described above remains open. These are source-reading boundaries,
 not completed owner-gate results.
+
+## Resume snapshot ownership
+
+The complete canonical reader computes a SHA-256 digest and byte length from
+the same scan that admits resume history. The writer lease independently hashes
+the transcript when it acquires ownership. Source inspection found that
+activation checked the lease's file state but did not compare these two byte
+snapshots before installing the admitted history. It now checks ownership and
+matches the digest and length inside the lease's serialized operation before
+activating the recorder or restoring the model conversation. A changed or
+missing digest refuses the resume; new sessions retain their ordinary lease
+check. This costs a hash copy only at resume activation, with no added work on
+ordinary turns. Authored tests cover matching bytes, mismatched digest and
+length, and a mismatched admitted digest at Config activation. The splice plan
+and semantic contracts passed by read-only Python validation. The TypeScript
+tests, compilation, packaged resume and owner gates have not been run.

@@ -139732,7 +139732,29 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          authoritative = await this.getSessionService().loadSession(
            this.sessionId,
          );
-@@ -3625,39 +3466,12 @@
+@@ -3234,13 +3075,20 @@
+       } else if (location !== undefined) {
+         throw new SessionTranscriptChangedError();
+       }
+       const persistedTitleInfo = authoritative
+         ? this.getSessionService().getSessionTitleInfo(this.sessionId)
+         : undefined;
+-      await lease.assertOwnedAndUnchanged();
++      if (authoritative) {
++        await lease.assertOwnedAndMatchingTranscriptSnapshot(
++          authoritative.transcriptSha256 ?? '',
++          authoritative.transcriptByteLength ?? -1,
++        );
++      } else {
++        await lease.assertOwnedAndUnchanged();
++      }
+       if (this.sessionWriterShutdownRequested) {
+         throw new SessionWriterShutdownError();
+       }
+       this.sessionData = authoritative;
+       recorder.activate(
+         lease,
+@@ -3625,39 +3473,12 @@
      this.getFileReadCache().recordRead(indexPath, indexRead.stats, {
        full: true,
        cacheable: true,
@@ -139772,7 +139794,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      }
  
      if (this.getBareMode()) {
-@@ -3683,15 +3497,19 @@
+@@ -3683,15 +3504,19 @@
    }
  
    getContextRuleExcludes(): string[] {
@@ -139795,7 +139817,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    /**
     * Get the ModelsConfig instance for model-related operations.
     * External code (e.g., CLI) can use this to access model configuration.
-@@ -3736,98 +3554,101 @@
+@@ -3736,98 +3561,101 @@
      this.baseLlmClient?.clearPerModelGeneratorCache();
    }
  
@@ -139977,7 +139999,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getSessionId(): string {
      return this.sessionId;
    }
-@@ -3919,64 +3740,114 @@
+@@ -3919,64 +3747,114 @@
    /**
     * Returns warnings generated during configuration resolution.
     * These warnings are collected from model configuration resolution
@@ -140120,7 +140142,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (process.env) {
        process.env['QWEN_CODE_SESSION_ID'] = this.sessionId;
      }
-@@ -3986,43 +3857,56 @@
+@@ -3986,43 +3864,56 @@
      // model by the new id, miss, and fall back to another session's value.
      // Drop the orphaned entry too — shutdown only unregisters the current id.
      unregisterSessionModel(previousSessionId);
@@ -140183,7 +140205,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          sessionData && isSessionTransition ? previousSessionId : undefined,
        );
      }
-@@ -4118,17 +4002,53 @@
+@@ -4118,17 +4009,53 @@
    }
  
    getImportFormat(): 'tree' | 'flat' {
@@ -140242,7 +140264,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // If contentGeneratorConfigSources is empty (before initializeAuth),
      // get sources from ModelsConfig
      if (
-@@ -4139,13 +4059,13 @@
+@@ -4139,13 +4066,13 @@
      }
      return this.contentGeneratorConfigSources;
    }
@@ -140257,7 +140279,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getCurrentModelRegistryBaseUrl(): string | null | undefined {
      return this.modelsConfig.getCurrentRegistryBaseUrl();
    }
-@@ -4288,65 +4208,1 @@
+@@ -4288,65 +4215,1 @@
      this.visionModel = model || undefined;
 -  }
 -
@@ -140323,7 +140345,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -   */
 -  setCompactionModel(model: string | undefined): void {
 -    this.compactionModel = model || undefined;
-@@ -4360,21 +4216,12 @@
+@@ -4360,21 +4223,12 @@
      this.imageModel = model || undefined;
      if (!this.initialized || !this.isImageGenerationEnabled()) {
        return;
@@ -140345,7 +140367,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Read the active reasoning-effort tier from the live content-generator
     * config. Returns undefined when thinking is disabled (`reasoning: false`) or
     * no tier is set (the model/provider default applies).
-@@ -4476,15 +4323,18 @@
+@@ -4476,15 +4330,18 @@
        // `if (cfg.reasoning)` checks would treat reasoning as active and the
        // pipeline would emit `reasoning: {}` as wire noise.
        cfg.reasoning = Object.keys(next).length > 0 ? next : undefined;
@@ -140366,7 +140388,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      applyEffort(this.modelsConfig?.getGenerationConfig());
    }
  
-@@ -4618,36 +4468,29 @@
+@@ -4618,36 +4475,29 @@
     */
    getVisionBridgeTimeoutMs(): number | undefined {
      return this.visionBridgeTimeoutMs;
@@ -140406,7 +140428,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // Reasoning effort is a global, model-independent preference (set via
      // /effort). Capture it before the rebuild and re-apply after, so switching
      // models never silently drops the user's chosen effort — neither the
-@@ -4655,101 +4498,12 @@
+@@ -4655,101 +4505,12 @@
      // full refresh path (which rebuilds the config from scratch).
      const priorReasoningEffort = this.getReasoningEffort();
  
@@ -140508,7 +140530,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // preceding switchModel() ran applyResolvedModelDefaults(), which overwrote
      // modelsConfig's `reasoning` with the new model's preset (undefined for most
      // models), BEFORE this callback fires. So refreshAuth reads `undefined` and
-@@ -4837,20 +4591,4 @@
+@@ -4837,20 +4598,4 @@
      return this.maxSubagentDepth;
 -  }
 -
@@ -140529,7 +140551,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getEmbeddingModel(): string {
-@@ -4873,135 +4611,20 @@
+@@ -4873,135 +4618,20 @@
    }
  
    getTargetDir(): string {
@@ -140666,7 +140688,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      const targetPath = path.resolve(newDir);
      const expected = expectedCanonicalDir ?? fs.realpathSync(targetPath);
      if (!fs.statSync(targetPath).isDirectory()) {
-@@ -5030,29 +4653,16 @@
+@@ -5030,29 +4660,16 @@
          throw new Error(
            `Realpath mismatch: resolved ${actualCanonical}, expected ${expected}.`,
          );
@@ -140697,7 +140719,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionService = undefined;
      this.fileHistoryService = undefined;
      this.getFileReadCache().clear();
-@@ -5125,51 +4735,44 @@
+@@ -5125,51 +4742,44 @@
    async shutdown(options?: {
      shutdownTelemetry?: boolean;
      skipSessionWriter?: boolean;
@@ -140776,7 +140798,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      waitForInitialization: boolean,
    ): Promise<void> {
      if (waitForInitialization) {
-@@ -5219,67 +4822,67 @@
+@@ -5219,67 +4829,67 @@
      };
      void shutdown.then(clear, clear);
      return shutdown;
@@ -140899,7 +140921,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.promptRegistry;
    }
  
-@@ -5313,12 +4916,25 @@
+@@ -5313,12 +4923,25 @@
    /** @deprecated Use getPermissionsAllow() instead. */
    getCoreTools(): string[] | undefined {
      if (this.getBareMode()) {
@@ -140925,7 +140947,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Returns the merged allow-rules for PermissionManager.
     *
     * This merges all sources so that PermissionManager receives a single,
-@@ -6515,16 +6131,12 @@
+@@ -6515,16 +6138,12 @@
    }
  
    getAccessibility(): AccessibilitySettings {
@@ -140942,7 +140964,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    isTelemetryInitializationDeferred(): boolean {
      return this.telemetryInitializationDeferred;
-@@ -6974,13 +6586,13 @@
+@@ -6974,13 +6593,13 @@
        const service = new FileHistoryService(
          this.sessionId,
          this.fileCheckpointingEnabled,
@@ -140957,7 +140979,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        const snapshots = this.sessionData?.fileHistorySnapshots;
        if (snapshots?.length && service.isEnabled()) {
          service.restoreFromSnapshots(snapshots);
-@@ -7031,16 +6643,12 @@
+@@ -7031,16 +6650,12 @@
    }
  
    getExperimentalZedIntegration(): boolean {
@@ -140974,7 +140996,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    getExtensionManager(): ExtensionManager {
      return this.extensionManager;
-@@ -7069,32 +6677,40 @@
+@@ -7069,32 +6684,40 @@
    }
  
    /**
@@ -141018,7 +141040,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7108,13 +6724,13 @@
+@@ -7108,13 +6731,13 @@
     * Whether the daemon/session should auto-sync team memory with the git
     * remote (pull + commit + push). Resolves the `memory.enableTeamMemorySync`
     * setting, with env `QWEN_CODE_MEMORY_TEAM_SYNC` ('0'/'1') as an override.
@@ -141033,7 +141055,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7122,23 +6738,35 @@
+@@ -7122,23 +6745,35 @@
        return true;
      }
      return this.enableTeamMemorySync;
@@ -141072,7 +141094,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Toggle auto-skill for the running session. The startup value is copied from
     * settings, so persisting a settings change alone would not take effect until
     * the next launch; the skill-review scheduler reads `getAutoSkillEnabled()`
-@@ -7149,13 +6777,17 @@
+@@ -7149,13 +6784,17 @@
     */
    setAutoSkillEnabled(enabled: boolean): void {
      this.enableAutoSkill = enabled;
@@ -141091,7 +141113,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Max runtime in minutes for background memory agents (extraction, dream,
     * remember, skill review). Resolves the `memory.agentTimeoutMinutes`
     * setting. Unset → each agent's built-in default; 0 → no time limit.
-@@ -7418,20 +7050,12 @@
+@@ -7418,20 +7057,12 @@
    setFileSystemService(fileSystemService: FileSystemService): void {
      this.fileSystemService = fileSystemService;
    }
@@ -141112,7 +141134,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.interactive;
    }
  
-@@ -7456,10 +7080,6 @@
+@@ -7456,10 +7087,6 @@
      return this.shouldUseNodePtyShell;
    }
  
@@ -141123,7 +141145,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getShellExecutionConfig(): ShellExecutionConfig {
      return this.shellExecutionConfig;
    }
-@@ -7487,26 +7107,4 @@
+@@ -7487,26 +7114,4 @@
    getSkipLoopDetection(): boolean {
      return this.skipLoopDetection;
    }
@@ -141150,7 +141172,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.maxToolCallsPerTurnExplicit;
 -  }
 -
-@@ -7523,26 +7121,6 @@
+@@ -7523,26 +7128,6 @@
     * extensions, skills, MCP servers, rules) for troubleshooting.
     */
    isSafeMode(): boolean {
@@ -141177,7 +141199,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.truncateToolOutputLines;
 -  }
 -
-@@ -7562,52 +7140,25 @@
+@@ -7562,52 +7147,25 @@
     * default). 0 disables heartbeats.
     */
    getShellHeartbeatIntervalMs(): number | undefined {
@@ -141232,7 +141254,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getGoalRuntimeReady(): Promise<GoalRuntime> {
-@@ -7624,15 +7175,12 @@
+@@ -7624,15 +7182,12 @@
      return runtime.getPreparedRestore().then(() => runtime);
    }
  
@@ -141248,7 +141270,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      runtime.dispose();
      this.initializeGoalRuntime(records);
      await this.goalRuntimeReady;
-@@ -7666,20 +7214,15 @@
+@@ -7666,20 +7221,15 @@
      return () => {
        this.chatRecordingFailureListeners.delete(listener);
      };
@@ -141272,7 +141294,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      records?: readonly GoalRecoveryRecord[],
      restoreRuntime?: SessionRuntimeResumeState,
    ): void {
-@@ -7694,35 +7237,25 @@
+@@ -7694,35 +7244,25 @@
      // writer: its records belong to the outgoing session.
      this.settlePendingGoalRestore(
        new GoalPersistenceUnavailableError(
@@ -141310,7 +141332,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          restoreRuntime.goalCheckpointWindow,
        );
        let resolveActivation!: () => void;
-@@ -7737,16 +7270,13 @@
+@@ -7737,16 +7277,13 @@
          void started.then(resolveActivation, rejectActivation);
          return started;
        };
@@ -141328,7 +141350,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.goalRuntimeReady = ready;
      } else {
        this.goalRuntimeReady = runtime
-@@ -7835,34 +7365,32 @@
+@@ -7835,34 +7372,32 @@
      }
    }
  
@@ -141369,7 +141391,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    setSessionWriterReclaimPolicy(policy: 'local' | 'never'): void {
      if (this.initialized) {
        throw new SessionWriterUnavailableError();
-@@ -7879,13 +7407,13 @@
+@@ -7879,13 +7414,13 @@
  
    closeSessionWriter(options?: { handoff?: boolean }): Promise<void> {
      if (options?.handoff && this.sessionWriterTakeoverPolicy === 'certified') {
@@ -141384,7 +141406,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionWriterClosePromise ??= this.closeSessionWriterOnce();
      return this.sessionWriterClosePromise;
    }
-@@ -7898,13 +7426,13 @@
+@@ -7898,13 +7433,13 @@
      } catch (error) {
        if (!(error instanceof SessionWriterShutdownError)) {
          failures.push(error);
@@ -141399,7 +141421,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        failures.push(error);
      }
      const pendingLease = activation
-@@ -8332,7 +7860,10 @@
+@@ -8332,7 +7867,10 @@
        });
        await registerLazy(ToolNames.SHELL, async () => {
          const { ShellTool } = await import('../tools/shell.js');
@@ -141411,7 +141433,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        });
        await registerGoalWorkerTools();
        await registerStructuredOutputIfRequested();
-@@ -8444,7 +7975,10 @@
+@@ -8444,7 +7982,10 @@
      });
      await registerLazy(ToolNames.SHELL, async () => {
        const { ShellTool } = await import('../tools/shell.js');
@@ -245920,11 +245942,86 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
          }),
      );
  
-@@ -948,33 +1526,39 @@
+@@ -946,35 +1524,114 @@
+     await expect(lease.release()).rejects.toBeInstanceOf(
+       SessionWriterLostError,
      );
      await expect(fs.readFile(lockPath, 'utf8')).resolves.toBe(
        '{"replacement":true}',
      );
++  });
++
++  it('binds admitted resume bytes to the owned transcript snapshot', async () => {
++    const fixture = await createFixture();
++    const bytes = Buffer.from('{"seed":true}\n');
++    await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
++    await fs.writeFile(fixture.transcriptPath, bytes);
++    const lease = await SessionWriterLease.acquire(fixture.options);
++    const digest = createHash('sha256').update(bytes).digest('hex');
++
++    await expect(
++      lease.assertOwnedAndMatchingTranscriptSnapshot(digest, bytes.length),
++    ).resolves.toBeUndefined();
++    await expect(
++      lease.assertOwnedAndMatchingTranscriptSnapshot('0'.repeat(64), bytes.length),
++    ).rejects.toBeInstanceOf(SessionTranscriptChangedError);
++    await expect(
++      lease.assertOwnedAndMatchingTranscriptSnapshot(digest, bytes.length - 1),
++    ).rejects.toBeInstanceOf(SessionTranscriptChangedError);
++    await lease.release();
++  });
++
++  it('refuses to activate a resume whose admitted digest differs from the owned bytes', async () => {
++    const fixture = await createFixture();
++    const firstUser = record(
++      'user-1',
++      null,
++      fixture.options.sessionId,
++      fixture.projectRoot,
++      'start',
++    );
++    await fs.mkdir(path.dirname(fixture.transcriptPath), { recursive: true });
++    await fs.writeFile(fixture.transcriptPath, `${JSON.stringify(firstUser)}\n`);
++    const sessionService = new SessionService(fixture.projectRoot, {
++      runtimeBaseDir: fixture.runtimeBaseDir,
++    });
++    const admitted = await sessionService.loadSession(fixture.options.sessionId);
++    expect(admitted).toBeDefined();
++    const loadSession = vi
++      .spyOn(SessionService.prototype, 'loadSession')
++      .mockResolvedValue({ ...admitted!, transcriptSha256: '0'.repeat(64) });
++    try {
++      const config = Storage.runWithRuntimeBaseDir(
++        fixture.runtimeBaseDir,
++        fixture.projectRoot,
++        () =>
++          new Config({
++            sessionId: fixture.options.sessionId,
++            sessionData: admitted,
++            cwd: fixture.projectRoot,
++            targetDir: fixture.projectRoot,
++            debugMode: false,
++            model: 'test-model',
++            experimentalZedIntegration: true,
++            bareMode: true,
++            telemetry: { enabled: false },
++            usageStatisticsEnabled: false,
++          }),
++      );
++      await expect(
++        config.initialize({
++          skipGeminiInitialization: true,
++          skipHooks: true,
++          skipMcpDiscovery: true,
++          skipSkillManager: true,
++          skipFileCheckpointing: true,
++          lenientToolWarmup: true,
++        }),
++      ).rejects.toBeInstanceOf(SessionTranscriptChangedError);
++      expect(config.hasSessionWriteOwnership()).toBe(false);
++    } finally {
++      loadSession.mockRestore();
++    }
    });
  
 -  it.runIf(process.platform !== 'win32')(
@@ -245980,7 +246077,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      const lockPath = getSessionWriterLockPath(
        fixture.runtimeBaseDir,
        fixture.options.sessionId,
-@@ -2116,12 +2700,137 @@
+@@ -2116,12 +2773,137 @@
      );
      await expect(
        Promise.all([lease.release(), lease.release()]),
@@ -246118,7 +246215,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        const fixture = await createFixture();
        const lease = await SessionWriterLease.acquire(fixture.options);
  
-@@ -2230,13 +2939,13 @@
+@@ -2230,13 +3012,13 @@
        state: 'active',
        hostname: 'retired-foreign-host',
      });
@@ -246133,7 +246230,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
        fixture.options.sessionId,
      );
      const active = JSON.parse(await fs.readFile(lockPath, 'utf8')) as Record<
-@@ -2759,19 +3468,136 @@
+@@ -2759,19 +3541,136 @@
      };
      const results = await Promise.all(
        contenders.map((child) =>
@@ -246271,7 +246368,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      );
      const first = await SessionWriterLease.acquire(fixture.options);
      await first.sealForHandoff();
-@@ -3180,27 +4006,42 @@
+@@ -3180,27 +4079,42 @@
      const fixture = await createFixture(sessionId);
      const firstUser = record(
        'user-1',
@@ -246319,7 +246416,7 @@ diff --git a/packages/core/src/services/session-writer-lease.test.ts b/packages/
      expect(
        await requestChild(processA, {
          type: 'acquire',
-@@ -3208,56 +4049,91 @@
+@@ -3208,56 +4122,91 @@
        }),
      ).toMatchObject({ ok: true });
      await expect(
@@ -246472,7 +246569,24 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
    | 'session_writer_lost'
    | 'session_transcript_changed'
    | 'session_writer_unavailable';
-@@ -325,13 +326,13 @@
+@@ -99,13 +100,15 @@
+   override readonly name = 'SessionTranscriptChangedError';
+   readonly rpcCode = SESSION_WRITER_RPC_CODES.session_transcript_changed;
+   readonly errorKind = 'session_transcript_changed';
+   readonly httpStatus = 409;
+ 
+   constructor() {
+-    super('The session transcript changed outside its active writer.');
++    super(
++      'The session transcript does not match the admitted writer snapshot. Inspect the original recording or start a new session.',
++    );
+   }
+ }
+ 
+ export class SessionWriterUnavailableError extends SessionWriterError {
+   // Widened from the literal type so the subclass below can redeclare `name`.
+   // Narrowing this back to a literal makes that subclass fail to compile.
+@@ -325,13 +328,13 @@
      (record['process_start_identity'] === undefined ||
        (typeof record['process_start_identity'] === 'string' &&
          record['process_start_identity'].length > 0)) &&
@@ -246487,7 +246601,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        typeof record['qwen_version'] === 'string')
    );
  }
-@@ -571,16 +572,18 @@
+@@ -571,16 +574,18 @@
  }
  
  async function getOpenTranscriptState(
@@ -246506,7 +246620,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        (error as NodeJS.ErrnoException).code === 'ENOENT'
      ) {
        throw new SessionTranscriptChangedError();
-@@ -596,19 +599,21 @@
+@@ -596,19 +601,21 @@
      const { bytesRead } = await handle.read(
        lastByte,
        0,
@@ -246528,7 +246642,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        (error as NodeJS.ErrnoException).code === 'ENOENT'
      ) {
        throw new SessionTranscriptChangedError();
-@@ -627,16 +632,18 @@
+@@ -627,16 +634,18 @@
    return pathState;
  }
  
@@ -246547,7 +246661,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      }
      throw error;
    }
-@@ -647,16 +654,18 @@
+@@ -647,16 +656,18 @@
    return transcriptStateFromStat(stat);
  }
  
@@ -246566,7 +246680,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
    }
    if (!pathState.exists) return undefined;
  
-@@ -665,26 +674,33 @@
+@@ -665,26 +676,33 @@
    } catch (error) {
      if (expectedState !== undefined) {
        const code = (error as NodeJS.ErrnoException).code;
@@ -246602,7 +246716,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
  
    try {
      const flags = expectedState.exists
-@@ -693,32 +709,36 @@
+@@ -693,32 +711,36 @@
      return await fs.open(filePath, flags, 0o600);
    } catch (error) {
      const code = (error as NodeJS.ErrnoException).code;
@@ -246641,7 +246755,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      throw new SessionWriterUnavailableError({
        cause: error instanceof Error ? error : undefined,
      });
-@@ -728,63 +748,66 @@
+@@ -728,63 +750,66 @@
  }
  
  async function captureOpenTranscriptSnapshot(
@@ -246714,7 +246828,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      }
      if (sameTranscriptState(beforeState, afterState)) {
        return { state: afterState, hasher, attempts: attempt };
-@@ -799,17 +822,18 @@
+@@ -799,17 +824,18 @@
    });
  }
  
@@ -246735,7 +246849,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          expectedState &&
          !sameHardTranscriptState(missingState, expectedState)
        ) {
-@@ -822,13 +846,13 @@
+@@ -822,13 +848,13 @@
        };
      }
      return await captureOpenTranscriptSnapshot(
@@ -246750,7 +246864,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      throw new SessionWriterUnavailableError({
        cause: error instanceof Error ? error : undefined,
      });
-@@ -1309,6 +1333,19 @@
+@@ -1309,6 +1335,19 @@
          await waitForClaimedPrimaryCandidate(++candidateWaitAttempts);
          continue;
        }
@@ -246770,7 +246884,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        if (state === 'other') throw new SessionWriterLostError();
        throw new SessionWriterUnavailableError({
          cause: error instanceof Error ? error : undefined,
-@@ -1483,12 +1520,17 @@
+@@ -1483,12 +1522,17 @@
    readonly transcriptPath: string;
    private expectedTranscriptState: TranscriptState | undefined;
    private expectedTranscriptHasher: Hash | undefined;
@@ -246788,7 +246902,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
  
    private constructor(
      private readonly lockPath: string,
-@@ -1841,13 +1883,13 @@
+@@ -1841,13 +1885,13 @@
      const lease = new SessionWriterLease(lockPath, lockRecord, options);
      try {
        options.onOwnershipAcquired?.(lease);
@@ -246803,7 +246917,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
            options.transcriptPath,
          );
        }
-@@ -1929,34 +1971,36 @@
+@@ -1929,34 +1973,36 @@
        }
      }
      return { kind: 'malformed' };
@@ -246841,7 +246955,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
        !isActiveLockRecord(record) ||
        record.owner_id !== this.ownerId ||
        raw !== this.lockRecordRaw
-@@ -1964,25 +2008,27 @@
+@@ -1964,25 +2010,50 @@
        throw new SessionWriterLostError();
      }
      return record;
@@ -246852,6 +246966,29 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
 +    return this.runExclusive(() => this.assertOwnedAndUnchangedOnce(), true);
    }
  
++  assertOwnedAndMatchingTranscriptSnapshot(
++    sha256: string,
++    byteLength: number,
++  ): Promise<void> {
++    return this.runExclusive(async () => {
++      await this.assertOwnedAndUnchangedOnce();
++      const state = this.expectedTranscriptState;
++      const hasher = this.expectedTranscriptHasher;
++      if (
++        !/^[0-9a-f]{64}$/.test(sha256) ||
++        !Number.isSafeInteger(byteLength) ||
++        byteLength < 0 ||
++        !state ||
++        !hasher ||
++        !state.exists ||
++        state.byteLength !== byteLength ||
++        hasher.copy().digest('hex') !== sha256
++      ) {
++        throw new SessionTranscriptChangedError();
++      }
++    }, true);
++  }
++
    private async assertOwnedAndUnchangedOnce(): Promise<void> {
      await this.readOwnedLock();
      const expectedState = this.expectedTranscriptState;
@@ -246870,7 +247007,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
      }
      if (!sameHardTranscriptState(transcriptState, expectedState)) {
        debugLogger.debug(
-@@ -1991,45 +2037,62 @@
+@@ -1991,45 +2062,62 @@
        throw new SessionTranscriptChangedError();
      }
      await this.reconcileTranscriptMetadata(transcriptState);
@@ -246941,7 +247078,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
            if (!sameHardTranscriptState(beforeState, expectedBefore)) {
              throw new SessionTranscriptChangedError();
            }
-@@ -2051,15 +2114,27 @@
+@@ -2051,15 +2139,27 @@
        await this.readOwnedLock();
        // Defence in depth only: every path that produces `beforeState` already
        // went through `transcriptStateFromStat`, which asserts. Kept so the
@@ -246970,7 +247107,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          !sameFileIdentity(afterState.fingerprint, beforeState.fingerprint) ||
          !sameFileSecurityMetadata(
            afterState.fingerprint,
-@@ -2067,16 +2142,19 @@
+@@ -2067,16 +2167,19 @@
          )
        ) {
          throw new SessionTranscriptChangedError();
@@ -246990,7 +247127,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          !sameFileIdentity(
            transcriptState.fingerprint,
            afterState.fingerprint,
-@@ -2104,13 +2182,13 @@
+@@ -2104,13 +2207,13 @@
          );
          const startedAt = Date.now();
          await this.readOwnedLock();
@@ -247005,7 +247142,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
              `Session transcript content changed after append metadata signal ` +
                `path=slow changedFields=${changedFields.join(',')} ` +
                `attempts=${snapshot.attempts} durationMs=${Date.now() - startedAt}`,
-@@ -2172,18 +2250,18 @@
+@@ -2172,18 +2275,18 @@
      await this.readOwnedLock();
      const snapshot = handle
        ? await captureOpenTranscriptSnapshot(
@@ -247026,7 +247163,7 @@ diff --git a/packages/core/src/services/session-writer-lease.ts b/packages/core/
          `Session transcript content changed after metadata signal ` +
            `path=slow changedFields=${changedFields.join(',')} ` +
            `attempts=${snapshot.attempts} durationMs=${Date.now() - startedAt}`,
-@@ -2211,19 +2289,65 @@
+@@ -2211,19 +2314,65 @@
    }
  
    get isReleased(): boolean {
