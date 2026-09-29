@@ -344838,7 +344838,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1265 @@
+@@ -0,0 +1,1266 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -345081,8 +345081,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        keys(owner, ['kind', 'operation_id', 'purpose']) &&
 +        typeof owner['operation_id'] === 'string' &&
 +        owner['operation_id'].length > 0 &&
-+        (owner['purpose'] === 'compaction' ||
-+          owner['purpose'] === 'other')) ||
++        (owner['purpose'] === 'compaction' || owner['purpose'] === 'other')) ||
 +      (owner['kind'] === 'chat' &&
 +        keys(owner, ['kind', 'attempt_id']) &&
 +        typeof owner['attempt_id'] === 'string' &&
@@ -346082,11 +346081,13 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  completionState(): ModelEvidenceCompletionState {
 +    return {
 +      openRequests: this.responses.openRequestIds().length,
-+      openAttempts: new Set([
-+        ...this.logical.openAttemptIds(),
-+        ...this.seeds.keys(),
-+        ...this.generations.keys(),
-+      ]).size + (this.sidechain ? 0 : this.responses.unclaimedCompactionCount()),
++      openAttempts:
++        new Set([
++          ...this.logical.openAttemptIds(),
++          ...this.seeds.keys(),
++          ...this.generations.keys(),
++        ]).size +
++        (this.sidechain ? 0 : this.responses.unclaimedCompactionCount()),
 +    };
 +  }
 +}
@@ -418184,7 +418185,7 @@ diff --git a/packages/core/src/core/record-verifier-core.ts b/packages/core/src/
 diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core/src/core/record-verifier-core.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-core.test.ts
-@@ -0,0 +1,100 @@
+@@ -0,0 +1,99 @@
 +import { createHash } from 'node:crypto';
 +import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 +import { tmpdir } from 'node:os';
@@ -418263,7 +418264,6 @@ diff --git a/packages/core/src/core/record-verifier-core.test.ts b/packages/core
 +    /changed between native and physical verification/,
 +  );
 +});
-+
 +
 +it('accepts a failed compaction draw only when its physical operation is claimed', async () => {
 +  const rows = failedCompactionRows();
@@ -418517,7 +418517,7 @@ diff --git a/packages/core/src/core/record-verifier-stream.ts b/packages/core/sr
 diff --git a/packages/core/src/core/record-verifier-stream.test.ts b/packages/core/src/core/record-verifier-stream.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-stream.test.ts
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,132 @@
 +import { createHash } from 'node:crypto';
 +import { readFileSync } from 'node:fs';
 +import { expect, it } from 'vitest';
@@ -418642,7 +418642,8 @@ diff --git a/packages/core/src/core/record-verifier-stream.test.ts b/packages/co
 +  const rows = failedCompactionRows();
 +  const { acknowledgments } = await verify(rows);
 +  expect(acknowledgments.at(-1)).toEqual({
-+    status: 'complete', records: rows.length,
++    status: 'complete',
++    records: rows.length,
 +  });
 +  const missing = rows.filter(
 +    (row) => row['type'] !== 'system' || row['subtype'] !== 'compaction',
@@ -426998,7 +426999,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/stream-contract-v15.json b/pa
 diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/packages/core/src/core/record-verifier-compaction.fixture.ts
 --- /dev/null
 +++ b/packages/core/src/core/record-verifier-compaction.fixture.ts
-@@ -0,0 +1,102 @@
+@@ -0,0 +1,148 @@
 +import { createHash } from 'node:crypto';
 +import { compactionRequestDirective } from '../services/state-snapshot.js';
 +
@@ -427014,10 +427015,12 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 +    kv_scope: scope,
 +    stream: true,
 +    max_tokens: 8,
-+    messages: [{
-+      role: 'user',
-+      content: [{ type: 'text', text: compactionRequestDirective(8) }],
-+    }],
++    messages: [
++      {
++        role: 'user',
++        content: [{ type: 'text', text: compactionRequestDirective(8) }],
++      },
++    ],
 +  });
 +  const digest = (bytes: string | Buffer) =>
 +    createHash('sha256').update(bytes).digest('hex');
@@ -427028,75 +427031,119 @@ diff --git a/packages/core/src/core/record-verifier-compaction.fixture.ts b/pack
 +  const tokenEvidence = (count: number) => ({
 +    requestUrl: 'http://fixture.invalid/tokenize',
 +    requestJson: JSON.stringify({
-+      model: 'fixture-model', messages: [], add_generation_prompt: true,
++      model: 'fixture-model',
++      messages: [],
++      add_generation_prompt: true,
 +    }),
 +    responseStatus: 200,
 +    responseContentType: 'application/json',
-+    responseBase64: Buffer.from(JSON.stringify({
-+      count, max_model_len: 100,
-+    })).toString('base64'),
++    responseBase64: Buffer.from(
++      JSON.stringify({
++        count,
++        max_model_len: 100,
++      }),
++    ).toString('base64'),
 +  });
 +  return [
 +    {
-+      type: 'system', subtype: 'stream_start',
++      type: 'system',
++      subtype: 'stream_start',
 +      request_evidence_origin: { journal_id: journal, first_sequence: 1 },
 +    },
 +    {
 +      type: 'model_request',
 +      request: {
-+        journal_id: journal, sequence: 1, request_id: requestId,
-+        owner: { kind: 'utility', operation_id: operationId, purpose: 'compaction' },
-+        kv_scope: scope, segment_id: 'compaction-segment', prompt_id: 'compaction',
++        journal_id: journal,
++        sequence: 1,
++        request_id: requestId,
++        owner: {
++          kind: 'utility',
++          operation_id: operationId,
++          purpose: 'compaction',
++        },
++        kv_scope: scope,
++        segment_id: 'compaction-segment',
++        prompt_id: 'compaction',
 +        decode_policy: {
-+          mode: 'stream', model: 'fixture-model', strict_tool_calling: false,
-+          named_tool_choice: null, exact_token_counting: false,
++          mode: 'stream',
++          model: 'fixture-model',
++          strict_tool_calling: false,
++          named_tool_choice: null,
++          exact_token_counting: false,
 +          tagged_thinking_tags: false,
 +        },
-+        body_bytes: Buffer.byteLength(body), body_sha256: digest(body),
++        body_bytes: Buffer.byteLength(body),
++        body_sha256: digest(body),
 +        body: { kind: 'full', json: body },
 +      },
 +    },
 +    response(1, { kind: 'http', status: 500, content_type: 'text/plain' }),
 +    response(2, {
-+      kind: 'end', termination: 'eof', body_bytes: 0,
-+      body_sha256: digest(''), error: null,
++      kind: 'end',
++      termination: 'eof',
++      body_bytes: 0,
++      body_sha256: digest(''),
++      error: null,
 +    }),
 +    response(3, {
-+      kind: 'outcome', status: 'failed', error: 'HTTP 500',
-+      served_usage: null, sdk_values_seen: 0,
++      kind: 'outcome',
++      status: 'failed',
++      error: 'HTTP 500',
++      served_usage: null,
++      sdk_values_seen: 0,
 +      pipeline_outputs_delivered: 0,
 +    }),
 +    response(4, { kind: 'delivery', outputs_delivered: 0 }),
 +    {
-+      type: 'system', subtype: 'compaction', session_id: scope,
++      type: 'system',
++      subtype: 'compaction',
++      session_id: scope,
 +      parent_tool_use_id: null,
 +      data: {
-+        status: 'COMPRESSION_FAILED_PROTOCOL_ERROR', succeeded: false,
-+        originalTokenCount: 5, newTokenCount: 5,
++        status: 'COMPRESSION_FAILED_PROTOCOL_ERROR',
++        succeeded: false,
++        originalTokenCount: 5,
++        newTokenCount: 5,
 +        tokenMeasurements: [
 +          { role: 'original', evidence: tokenEvidence(5) },
 +          { role: 'summary_request', evidence: tokenEvidence(5) },
 +          { role: 'prompt_only', evidence: tokenEvidence(5) },
 +        ],
-+        triggerReason: null, postCompactionHistory: null,
++        triggerReason: null,
++        postCompactionHistory: null,
 +        output: {
-+          maxOutputTokens: 8, operationId, physicalRequests: 1,
-+          sdkValuesJson: [], text: '', reasoning: '', functionCalls: [],
-+          newTokenCount: null, snapshotBytes: null,
-+          incompleteToolCalls: [], finishReason: null, usage: null,
++          maxOutputTokens: 8,
++          operationId,
++          physicalRequests: 1,
++          sdkValuesJson: [],
++          text: '',
++          reasoning: '',
++          functionCalls: [],
++          newTokenCount: null,
++          snapshotBytes: null,
++          incompleteToolCalls: [],
++          finishReason: null,
++          usage: null,
 +        },
 +        rejectedAttempts: [],
 +      },
 +    },
 +    {
-+      type: 'result', parent_tool_use_id: null,
++      type: 'result',
++      parent_tool_use_id: null,
 +      request_evidence: {
-+        journal_id: journal, first_sequence: 1, request_count: 1,
-+        open_response_ids: [], open_attempt_ids: [],
++        journal_id: journal,
++        first_sequence: 1,
++        request_count: 1,
++        open_response_ids: [],
++        open_attempt_ids: [],
 +      },
 +      usage: {
-+        requests: 1, usageReports: 0, unfinalizedRequests: 0,
-+        unreportedUsageRequests: 1, usage: null,
++        requests: 1,
++        usageReports: 0,
++        unfinalizedRequests: 0,
++        unreportedUsageRequests: 1,
++        usage: null,
 +      },
 +    },
 +  ].map((row) => ({ ...row, session_id: scope }));
