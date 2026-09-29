@@ -290,14 +290,16 @@ the other items remain open:
   The resulting compaction field is now `sdkValuesJson`: it preserves the SDK's
   pre-conversion values, including partial tool-call arguments, as JSON text.
   It is distinct from the response-byte journal and makes no claim about HTTP
-  wire bytes. A physical binding between a compaction draw and its provider
-  response bytes remains open. The pinned SDK's `text/plain` path can yield a
-  string; an executed local SDK probe observed this, and source inspection
-  showed the compaction producer can retain it before conversion fails. The
-  native validator's object-only check therefore rejected a producer-valid
+  wire bytes. The shared TypeScript reader, native certifier, and direct Python
+  and Java readers now bind compaction SDK values to the physical response-byte
+  journal; the native, Python and Java readers do not yet derive every
+  normalized draw field from those values. The pinned SDK's `text/plain` path
+  can yield a string; an executed local SDK probe observed this, and source
+  inspection showed the compaction producer can retain it before conversion
+  fails. The native validator's object-only check therefore rejected a producer-valid
   failed draw. It now admits any decodable JSON value in that field, as the
-  v14 schema specifies. The native regression is authored but unrun; physical
-  binding and owner gates remain open.
+  v14 schema specifies. The native regression is authored but unrun; normalized
+  draw binding and owner gates remain open.
 - `ModelRequestJournal.capture` emits a full body when two requests in one
   segment share no message prefix at the audited checkpoint. This question was
   confirmed and the producer fallback is removed in the current authoritative
