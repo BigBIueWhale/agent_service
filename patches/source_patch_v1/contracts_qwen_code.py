@@ -9736,6 +9736,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "object['version'] !== ATTRIBUTION_SNAPSHOT_VERSION",
         "committed > count",
         "Object.entries(states)",
+        "/^[a-f0-9]{64}$/.test(contentHash)",
         "process.env['QWEN_CODE_ENTRYPOINT'] || 'cli'",
     ), label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
@@ -9758,6 +9759,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "utils/transcript-records.test.ts", (
         "refuses %s in an inactive attribution snapshot",
         "schema version is missing or unsupported",
+        "invalid content hash",
         "does not replay attribution metadata as a user turn",
     ), label=label)
     _require_all(state, core + "services/session-transcript-reader.test.ts", (

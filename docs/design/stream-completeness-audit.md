@@ -1585,3 +1585,10 @@ Source tests were authored for malformed active and inactive rows, the full
 and indexed loaders, and writer-side serialization admission. They were not
 run because Node and Bun are unavailable. Compilation, packaged resume and
 owner gates remain unverified. No build or push was run.
+
+A follow-up source review found that a syntactically complete file state could
+still carry an arbitrary content hash. Canonical admission now accepts the
+producer's lowercase SHA-256 form or the intentional empty legacy marker and
+refuses other strings before restore can silently reset attribution on a later
+edit. The authored malformed-hash source test was not run. Patch mechanics and
+owner gates remain separate from TypeScript execution.

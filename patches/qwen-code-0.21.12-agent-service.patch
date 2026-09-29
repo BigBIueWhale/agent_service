@@ -319518,7 +319518,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
        record('source', null, {
          type: 'system',
          subtype: 'session_source',
-@@ -154,41 +177,198 @@
+@@ -154,41 +177,218 @@
          recordId: 'source',
          path: 'subtype',
        }),
@@ -319612,6 +319612,26 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
 +        },
 +      },
 +      /file state for \/work\/file is incomplete/,
++    ],
++    [
++      'invalid content hash',
++      {
++        snapshot: {
++          type: 'attribution-snapshot',
++          version: 1,
++          surface: 'cli',
++          fileStates: {
++            '/work/file': {
++              aiContribution: 3,
++              aiCreated: true,
++              contentHash: 'not-a-sha256',
++            },
++          },
++          promptCount: 1,
++          promptCountAtLastCommit: 0,
++        },
++      },
++      /file state for \/work\/file has an invalid content hash/,
 +    ],
 +  ])('refuses %s in an inactive attribution snapshot', (_name, payload, reason) => {
 +    const invalid = record('invalid', 'root', {
@@ -319735,7 +319755,7 @@ diff --git a/packages/core/src/utils/transcript-records.test.ts b/packages/core/
    it('accepts Goal state and runtime records as known subtypes', () => {
      const prepared = prepareTranscriptRecords([
        record('goal-state', null, {
-@@ -212,17 +392,13 @@
+@@ -212,17 +412,13 @@
    it('rejects mixed sessions and an explicit artifact leaf', () => {
      expect(() =>
        prepareTranscriptRecords([
@@ -437541,7 +437561,7 @@ diff --git a/packages/core/src/services/session-file-history-state.test.ts b/pac
 diff --git a/packages/core/src/services/commitAttribution.ts b/packages/core/src/services/commitAttribution.ts
 --- a/packages/core/src/services/commitAttribution.ts
 +++ b/packages/core/src/services/commitAttribution.ts
-@@ -239,12 +239,67 @@
+@@ -239,12 +239,70 @@
    surface: string;
    fileStates: Record<string, FileAttribution>;
    promptCount: number;
@@ -437591,14 +437611,17 @@ diff --git a/packages/core/src/services/commitAttribution.ts b/packages/core/src
 +    )
 +      invalid('a file state is malformed');
 +    const state = entry as Record<string, unknown>;
++    const contentHash = state['contentHash'];
 +    if (
 +      typeof state['aiContribution'] !== 'number' ||
 +      !Number.isSafeInteger(state['aiContribution']) ||
 +      state['aiContribution'] < 0 ||
 +      typeof state['aiCreated'] !== 'boolean' ||
-+      typeof state['contentHash'] !== 'string'
++      typeof contentHash !== 'string'
 +    )
 +      invalid(`file state for ${filePath} is incomplete`);
++    if (contentHash !== '' && !/^[a-f0-9]{64}$/.test(contentHash))
++      invalid(`file state for ${filePath} has an invalid content hash`);
 +  }
 +  return value as AttributionSnapshot;
 +}
@@ -437609,7 +437632,7 @@ diff --git a/packages/core/src/services/commitAttribution.ts b/packages/core/src
  
  const INTERNAL_MODEL_PATTERNS = [
    /qwen[-_]?\d+(\.\d+)?[-_]?b?/i,
-@@ -293,13 +348,13 @@
+@@ -293,13 +351,13 @@
   * Surface label embedded in the git-notes payload. Defaults to `'cli'`
   * for the qwen-code CLI; embedders (IDE extensions, SDK consumers) can
   * override by setting `QWEN_CODE_ENTRYPOINT` before construction so the
