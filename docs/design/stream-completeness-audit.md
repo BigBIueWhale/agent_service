@@ -1306,3 +1306,46 @@ failure, so the record needs every attempt's physical request, response or
 transport failure and the final count's owning attempt. The versioned producer,
 canonical and stdout records, admitting readers and owner gates for that
 operation journal remain unimplemented and unverified.
+
+## Physical utility operation journal after `c1f0815`
+
+The preceding utility sections describe the earlier source checkpoint. The
+current v17 authoring source records the serialized SDK body before each
+physical `/tokenize` or `/embeddings` send, then the response bytes, transport
+ending, processing outcome, zero-output delivery and a completion naming every
+retry. This path serves ordinary token counts, compaction counts and embeddings
+through the same OpenAI fetch boundary. A failed operation has an explicit
+completion even when no send occurred. The shared stream and canonical readers,
+native certifier, Python and Java readers, and service harness now admit these
+operation records and refuse incomplete or mismatched attempts by source
+inspection. The v17 compaction record names completed chat-tokenizer operations
+by ID instead of copying a second response. Readers derive counts from the
+recorded final successful response and enforce scope, single claim and causal
+request order around each compaction draw. The obsolete
+`TokenCountWireObservation` path is removed.
+
+The source patch plan reproduced the pinned Qwen tree and its semantic
+contracts. Thirty-eight transformer framework tests and fifteen service
+harness tests passed. Twenty-eight focused Python reader cases passed under a
+minimal `pytest.raises` shim; this was not a pytest suite. Draft 7 schema
+checking, the documented 35-concern count, manifest hashes, stack-lock pins
+and staged diff checks passed. TypeScript, Rust and Java compilation and
+runtime tests, image composition, live provider behavior, resume through the
+packaged application and deployment remain unverified pending owner gates.
+No build, release, deployment or push was run. The backend does not own the
+client SDK's utility operation or response conversion, so this change does
+not modify vLLM; direct backend callers still receive the same requests.
+
+The wider record-completeness goal remains open. In particular, the native
+certifier verifies physical Chat response bytes, SDK value counts and served
+usage, and validates the claimed generation envelope and attempt separately.
+It does not derive the ordinary Chat generation from those physical response
+bytes. The TypeScript reader does perform that replay. Python and Java readers
+also compare generation claims with attempt counts and usage without the full
+physical Chat conversion. A coherent but false normalized output claim could
+therefore remain admissible to those readers. The displayed user/tool-result
+projection is likewise not bound to the rendered request input; exact request
+bodies remain the authority for what was dispatched. These are source-reading
+findings, not executed native refusals or a claim that the whole record set is
+certified. Any binding must preserve valid ordinary sessions with reminders,
+media rendering, cancellations and retries.
