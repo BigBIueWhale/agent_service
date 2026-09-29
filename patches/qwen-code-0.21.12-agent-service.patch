@@ -378944,7 +378944,7 @@ diff --git a/packages/core/src/agents/backends/types.ts b/packages/core/src/agen
 diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages/core/src/core/runtime-history-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/runtime-history-recording.test.ts
-@@ -0,0 +1,675 @@
+@@ -0,0 +1,680 @@
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
 +import OpenAI from 'openai';
@@ -378967,6 +378967,11 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +import { GeminiClient, SendMessageType } from '../core/client.js';
 +import { ChatCompressionService } from '../services/chatCompressionService.js';
 +import { CompressionStatus } from '../core/turn.js';
++import { BaseLlmClient } from '../core/baseLlmClient.js';
++import {
++  STATE_SNAPSHOT_FUNCTION_NAME,
++  STATE_SNAPSHOT_SECTIONS,
++} from '../services/state-snapshot.js';
 +import { activeTodoReminder } from '../tools/todo-reminder.js';
 +import { InMemoryImagePayloadStore } from '../services/image-payload-references.js';
 +import { buildRuntimeHistoryFromConversation } from '../services/session-api-history.js';
@@ -379026,6 +379031,8 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    samplingParams: { max_tokens: 1000 },
 +  };
 +  const outputs: Part[][] = [[{ text: 'accepted answer 雪🧪\n' }]];
++  const tokenCounts: number[] = [];
++  const responseGate: { wait?: () => Promise<void> } = {};
 +  const requests: unknown[] = [];
 +  const provider: Partial<ContentGenerator> & {
 +    countTextTokens: () => Promise<{
@@ -379040,10 +379047,9 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +        return pipeline.executeStream(params, userPromptId);
 +      },
 +    ),
-+    countRequestTokens: vi.fn(async () => ({
-+      totalTokens: 10,
-+      maxModelLen: window,
-+    })),
++    countRequestTokens: vi.fn((params: GenerateContentParameters, id: string) =>
++      pipeline.countRequestTokens(params, id),
++    ),
 +    countTextTokens: vi.fn(async () => ({
 +      totalTokens: 1,
 +      maxModelLen: window,
@@ -379066,6 +379072,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    requireContentGeneratorConfig: () => profile,
 +    getEffectiveInputModalities: () => ({ image: true }),
 +    getChatCompression: () => undefined,
++    getBaseLlmClient: () => baseLlmClient,
 +    getHookSystem: () => undefined,
 +    getApprovalMode: () => 'default',
 +    getDebugLogger: () => ({ debug() {}, warn() {}, info() {} }),
@@ -379085,6 +379092,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    getSkillManager: () => ({ getSkills: () => [], getAllSkills: () => [] }),
 +    getGoalRuntime: async () => undefined,
 +    getSdkMode: () => true,
++    getUsageStatisticsEnabled: () => false,
 +  };
 +  const fallbackCalls = new Set<string>();
 +  const config = new Proxy(properties, {
@@ -379099,6 +379107,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +      return undefined;
 +    },
 +  }) as unknown as Config;
++  const baseLlmClient = new BaseLlmClient(config);
 +  const recorder = new ChatRecordingService(config);
 +  active.push(recorder);
 +  properties['getChatRecordingService'] = () => recorder;
@@ -379112,7 +379121,14 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    apiKey: 'fixture',
 +    baseURL: profile.baseUrl,
 +    maxRetries: 0,
-+    fetch: async () => {
++    fetch: async (url) => {
++      if (String(url).endsWith('/tokenize')) {
++        const count = tokenCounts.shift() ?? 10;
++        return new Response(JSON.stringify({ count, max_model_len: window }), {
++          headers: { 'content-type': 'application/json' },
++        });
++      }
++      if (responseGate.wait) await responseGate.wait();
 +      const parts = outputs.shift() ?? [{ text: 'next answer' }];
 +      const content = parts
 +        .filter((part) => !part.thought)
@@ -379259,6 +379275,22 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    observe,
 +    readEvidence,
 +    outputs,
++    tokenCounts,
++    responseGate,
++  };
++}
++function snapshotCall(): Part {
++  return {
++    functionCall: {
++      id: 'snapshot-call',
++      name: STATE_SNAPSHOT_FUNCTION_NAME,
++      args: Object.fromEntries(
++        STATE_SNAPSHOT_SECTIONS.map((section) => [
++          section,
++          `retained ${section}`,
++        ]),
++      ),
++    },
 +  };
 +}
 +it('ordinary direct Chat accepted history resumes exactly', async () => {
@@ -379397,55 +379429,32 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +it('actual compaction commit preserves its whole snapshot', async () => {
 +  const f = await setup('compaction-control');
 +  await f.chatSend([{ text: 'old prompt' }]);
-+  const compressed: Content[] = [
-+    {
-+      role: 'user',
-+      parts: [
-+        { text: 'accepted summary 雪' },
-+        { text: 'retained summary context' },
-+      ],
-+    },
-+    { role: 'model', parts: [{ text: 'acknowledged' }] },
-+  ];
++  f.tokenCounts.push(230_000, 230_000, 190_000, 188_000, 12_000);
++  f.outputs.push([snapshotCall()]);
 +  f.properties['getFileReadCache'] = () => ({
 +    markAllReadsEvictedFromHistory: () => 0,
 +  });
-+  vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValueOnce({
-+    newHistory: structuredClone(compressed),
-+    afterCommit: async () => {},
-+    info: {
-+      originalTokenCount: 1000,
-+      newTokenCount: 200,
-+      compressionStatus: CompressionStatus.COMPRESSED,
-+      rejectedAttempts: [],
-+    },
-+  });
-+  await f.chat.tryCompress('compact', true);
++  const info = await f.chat.tryCompress('compact', true);
++  expect(info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++  expect(info.tokenMeasurements).toHaveLength(4);
++  expect(info.output?.physicalRequests).toBe(1);
 +  const o = await f.observe();
-+  expect(o.live).toEqual(compressed);
++  expect(o.live[0]?.parts?.[0]?.text).toContain(
++    'retained primary_request_and_intent',
++  );
 +  expect(JSON.stringify(o.resumed)).toBe(JSON.stringify(o.live));
 +  expect(JSON.stringify(o.indexed)).toBe(JSON.stringify(o.live));
 +});
 +it('accepted turn after actual compaction commit retains later runtime reminder', async () => {
 +  const f = await setup('post-compaction');
 +  await f.chatSend([{ text: 'old prompt' }]);
++  f.tokenCounts.push(230_000, 230_000, 190_000, 188_000, 12_000);
++  f.outputs.push([snapshotCall()]);
 +  f.properties['getFileReadCache'] = () => ({
 +    markAllReadsEvictedFromHistory: () => 0,
 +  });
-+  vi.spyOn(ChatCompressionService.prototype, 'compress').mockResolvedValueOnce({
-+    newHistory: [
-+      { role: 'user', parts: [{ text: 'accepted summary' }] },
-+      { role: 'model', parts: [{ text: 'acknowledged' }] },
-+    ],
-+    afterCommit: async () => {},
-+    info: {
-+      originalTokenCount: 1000,
-+      newTokenCount: 200,
-+      compressionStatus: CompressionStatus.COMPRESSED,
-+      rejectedAttempts: [],
-+    },
-+  });
-+  await f.chat.tryCompress('compact', true);
++  const info = await f.chat.tryCompress('compact', true);
++  expect(info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
 +  const checkpoint = await f.observe();
 +  expect(checkpoint.resumed).toEqual(checkpoint.live);
 +  f.properties['getApprovalMode'] = () => 'plan';
@@ -379559,40 +379568,32 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    const entry = new Promise<void>((resolve) => {
 +      entered = resolve;
 +    });
-+    const afterCommit = vi.fn(async () => {});
-+    const output = {
-+      maxOutputTokens: 100,
-+      usage: null,
-+      text: '  literal generated draw\n',
-+      reasoning: 'literal reasoning',
-+      sdkValuesJson: ['{"text":"  literal generated draw\\n"}'],
-+      newTokenCount: 200,
-+      snapshotBytes: 30,
-+      incompleteToolCalls: [],
-+      finishReason: 'STOP',
-+      requestAttempts: 1,
-+    };
-+    vi.spyOn(
-+      ChatCompressionService.prototype,
-+      'compress',
-+    ).mockImplementationOnce(async () => {
-+      entered();
-+      await hold;
-+      const info = {
-+        originalTokenCount: 1000,
-+        newTokenCount: 200,
-+        compressionStatus: status,
-+        output,
-+        rejectedAttempts: [],
++    if (status === CompressionStatus.COMPRESSED) {
++      f.tokenCounts.push(230_000, 230_000, 190_000, 188_000, 12_000);
++      f.outputs.push([snapshotCall()]);
++      f.responseGate.wait = async () => {
++        entered();
++        await hold;
 +      };
-+      return status === CompressionStatus.COMPRESSED
-+        ? {
-+            newHistory: [{ role: 'user', parts: [{ text: 'stale summary' }] }],
-+            info,
-+            afterCommit,
-+          }
-+        : { newHistory: null, info };
-+    });
++    } else {
++      vi.spyOn(
++        ChatCompressionService.prototype,
++        'compress',
++      ).mockImplementationOnce(async () => {
++        entered();
++        await hold;
++        return {
++          newHistory: null,
++          info: {
++            originalTokenCount: 10,
++            newTokenCount: 10,
++            compressionStatus: status,
++            rejectedAttempts: [],
++          },
++        };
++      });
++      f.tokenCounts.push(10);
++    }
 +    const pending = f.chat.tryCompress('held-compaction', true);
 +    await entry;
 +    const accepted: Content = {
@@ -379610,9 +379611,13 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +        : status,
 +    );
 +    expect(info.newTokenCount).toBeNull();
-+    expect(info.output).toEqual(output);
++    if (status === CompressionStatus.COMPRESSED) {
++      expect(info.output?.physicalRequests).toBe(1);
++      expect(info.output?.functionCalls).toHaveLength(1);
++    } else {
++      expect(info.output).toBeUndefined();
++    }
 +    expect(info.postCompactionHistory).toBeUndefined();
-+    expect(afterCommit).not.toHaveBeenCalled();
 +    const observed = await f.observe();
 +    expect(f.chat.getRuntimeHistory()).toEqual(expected);
 +    expect(observed.runtime).toEqual(expected);
@@ -380797,7 +380802,7 @@ diff --git a/packages/core/src/services/image-payload-references.test.ts b/packa
 diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/src/services/runtime-history.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/runtime-history.test.ts
-@@ -0,0 +1,376 @@
+@@ -0,0 +1,388 @@
 +import type { Content } from '@google/genai';
 +import { describe, expect, it } from 'vitest';
 +import { ModelEvidenceReplay } from '../core/model-request-evidence.js';
@@ -381043,7 +381048,7 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 +  });
 +
 +  it.each(['chat_compression', 'rewind'] as const)(
-+    'keeps canonical evidence history aligned after a %s checkpoint',
++    'projects exact runtime history after a %s checkpoint',
 +    (subtype) => {
 +      const initial = checkpoint([user, assistant]);
 +      const compressed = [
@@ -381057,6 +381062,7 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 +        systemPayload:
 +          subtype === 'chat_compression'
 +            ? {
++                kvScope: 'session',
 +                compressedHistory: compressed,
 +                imagePayloads: [],
 +                info: {
@@ -381087,8 +381093,16 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 +      };
 +      const records = [initial, replacement, following];
 +      const replay = new ModelEvidenceReplay();
-+      for (const record of records) replay.observe(record);
-+      expect(() => replay.finish()).not.toThrow();
++      replay.observe(initial);
++      if (subtype === 'chat_compression') {
++        expect(() => replay.observe(replacement)).toThrow(
++          /compaction replacement count differs from its accepted draw/,
++        );
++      } else {
++        replay.observe(replacement);
++        replay.observe(following);
++        expect(() => replay.finish()).not.toThrow();
++      }
 +      expect(
 +        buildRuntimeHistoryFromConversation({ messages: records }),
 +      ).toEqual({
@@ -381109,11 +381123,13 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 +      parentUuid: initial.uuid,
 +      subtype: 'chat_compression',
 +      systemPayload: {
++        kvScope: 'session',
 +        info: {
 +          compressionStatus: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 +          originalTokenCount: 2,
 +          newTokenCount: 2,
 +          rejectedAttempts: [],
++          tokenMeasurements: [],
 +        },
 +        compressedHistory: [user, assistant],
 +        imagePayloads: [],
@@ -381150,6 +381166,7 @@ diff --git a/packages/core/src/services/runtime-history.test.ts b/packages/core/
 +      ...checkpoint(),
 +      subtype: 'chat_compression',
 +      systemPayload: {
++        kvScope: 'session',
 +        info: {
 +          compressionStatus: CompressionStatus.COMPRESSED,
 +          originalTokenCount: 2,

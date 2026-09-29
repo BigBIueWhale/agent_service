@@ -8689,6 +8689,10 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "core/runtime-history-recording.test.ts", (
         "new OpenAI({",
         "new ContentGenerationPipeline({",
+        "new BaseLlmClient(config)",
+        "pipeline.countRequestTokens(params, id)",
+        "f.outputs.push([snapshotCall()])",
+        "expect(info.tokenMeasurements).toHaveLength(4)",
         "readCompleteStoredCanonicalChatRecords(file)",
         "accepted turn after actual compaction commit retains later runtime reminder",
     ), label=label)
@@ -9517,7 +9521,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "requireRuntimeCompaction(record.systemPayload)",
     ), label=label)
     require_text(state, core + "services/runtime-history.test.ts",
-                 "keeps canonical evidence history aligned after a %s checkpoint", label=label)
+                 "projects exact runtime history after a %s checkpoint", label=label)
     require_text(state, core + "services/runtime-history.test.ts",
                  "keeps a failed compaction inert and refuses a forged retained history", label=label)
     require_text(state, core + "services/session-writer-lease.test.ts",

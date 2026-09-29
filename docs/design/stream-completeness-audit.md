@@ -1198,3 +1198,23 @@ its shared fixtures were made provider-shaped; native and Java execution and
 the owner build remain unverified. The canonical resume file and provider
 requests are unchanged. The exact rule and limits are recorded in the
 [physical usage note](physical-response-usage.md#physical-response-bytes-determine-served-usage).
+
+## Physical compaction and resume source regression
+
+The runtime-history source tests had called `GeminiChat.tryCompress` with a
+mocked compressor that supplied a replacement history but no physical draw or
+tokenizer measurements. Both canonical readers correctly refused those
+records. The fixture now routes compaction through the real compressor, an
+in-memory OpenAI SSE response, and physical `/tokenize` response bytes. It
+checks that a committed snapshot and a later accepted turn restore to the
+same history as the live chat. A concurrent-input case holds the physical
+draw while a new history entry is admitted, then checks that compaction does
+not replace that entry. Hand-written history projection fixtures assert the
+projection separately and require physical admission to refuse a successful
+checkpoint with no recorded draw.
+
+The three targeted TypeScript source suites passed 50 tests. This is executed
+source-test evidence for those cases, not a build, packaged-client check, live
+provider run, or proof of every resume scenario. The production producer and
+reader code did not change in this splice; owner build and release gates remain
+unverified.
