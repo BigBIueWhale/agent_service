@@ -1614,6 +1614,68 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         _require_all(state, path, needles, label=label)
 
 
+def _validate_declared_deliverables_before(state: State) -> None:
+    label = "declared deliverables precondition"
+    # Upstream ends a run that wrote its final message as a success whatever
+    # it left on disk; nothing names what a run owes.
+    forbid_text(state, "packages/cli/src/config/config.ts", "deliverables", label=label)
+    forbid_text(state, "packages/cli/src/nonInteractiveCli.ts", "deliverables", label=label)
+
+
+def _validate_declared_deliverables_after(state: State) -> None:
+    label = "declared deliverables result"
+    module = "packages/core/src/utils/qwen38-deliverables.ts"
+    # Every component is examined where it stands, never followed: the model
+    # can create links, and a followed one would count a file outside the
+    # artifacts root as delivered.
+    _require_all(state, module, (
+        "export const QWEN38_ARTIFACTS_ROOT = '/artifacts';",
+        "const NAME_MAX_BYTES = 255;",
+        "const PATH_MAX_BYTES = 4095;",
+        "stat = fs.lstatSync(current, { throwIfNoEntry: false });",
+        "if (stat.isSymbolicLink()) return `${shown} is a symbolic link`;",
+        "if (!stat.isDirectory()) return `${shown} is not a directory`;",
+        "if (!stat.isFile()) return 'not a regular file';",
+        "if (stat.size === 0) return 'an empty file';",
+    ), label=label)
+    for following in ("fs.statSync(", "realpath", "existsSync(", "accessSync("):
+        forbid_text(state, module, following, label=label)
+    # The locked runtime cannot start without saying what it owes, and no
+    # other runtime can declare it: outside it no artifacts root is defined.
+    _require_all(state, "packages/cli/src/config/config.ts", (
+        "Locked agent-service configuration requires --deliverables",
+        "--deliverables belongs to the locked agent-service runtime",
+        "      : parseDeclaredDeliverables(argv.deliverables);",
+        "    declaredDeliverables,",
+    ), label=label)
+    # One emitter settles it: only a final message can owe anything, and the
+    # ending it reports is the one the table maps.
+    _require_all(state, "packages/cli/src/nonInteractiveCli.ts", (
+        "if (ending.terminateMode !== AgentTerminateMode.GOAL || !declared) {",
+        "const missing = missingDeliverables(QWEN38_ARTIFACTS_ROOT, declared);",
+        "terminateMode: SessionTerminateMode.MISSING_DELIVERABLES,",
+        "const ending = endedWith ? reached : settleDeclaredDeliverables(config, reached);",
+    ), label=label)
+    require_text(
+        state,
+        "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts",
+        "? { missing_deliverables: [...options.missingDeliverables] }",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/utils/qwen38-deliverables.test.ts",
+        "accepts only non-empty regular files reached without following a link",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/nonInteractiveCli.test.ts",
+        "checks the declared deliverables only when the run wrote its final message: $subtype",
+        label=label,
+    )
+
+
 def _validate_stream_evidence_before(state: State) -> None:
     label = "headless stream-evidence precondition"
     adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
@@ -6996,13 +7058,16 @@ def _validate_terminal_state_before(state: State) -> None:
 
 _TERMINAL_ENUM = re.compile(r"\n  ([A-Z_]+) = '([A-Z_]+)',")
 _NAMED = re.compile(
-    r"\n  \[AgentTerminateMode\.([A-Z_]+)\]: terminalResult\(\s*'([a-z_]+)',?\s*\),"
+    r"\n  \[(?:AgentTerminateMode|SessionTerminateMode)\.([A-Z_]+)\]: "
+    r"terminalResult\(\s*'([a-z_]+)',?\s*\),"
 )
 # The two shapes that put a terminal state into a value: an ending carrying it
 # as `terminateMode`, and the table naming the state each run budget's overrun
 # ends the run in. A comparison against a state is not one of these -- reading a
 # state is not producing it, and the distinction is the whole point.
-_STATE_PRODUCER = re.compile(r"terminateMode\s*[:=]\s*AgentTerminateMode\.([A-Z_]+)")
+_STATE_PRODUCER = re.compile(
+    r"terminateMode\s*[:=]\s*(?:AgentTerminateMode|SessionTerminateMode)\.([A-Z_]+)"
+)
 _BUDGET_STATE_TABLE = re.compile(
     r"const BUDGET_STATE: Record<BudgetKind, AgentTerminateMode> = \{\n"
     r"((?:  '[a-z-]+': AgentTerminateMode\.[A-Z_]+,\n)+)\};"
@@ -7098,6 +7163,27 @@ def _validate_terminal_state_after(state: State) -> None:
             f"{label}: {agent_types} state {name!r} does not spell itself {value!r}",
         )
     state_names = {name for name, _ in states}
+    # The states only the session's own run can end in live beside the table,
+    # in the headless client, where no subagent code can name them.
+    session_body = _source(state, types, label=label).split(
+        "export enum SessionTerminateMode {", 1
+    )
+    _require(
+        len(session_body) == 2,
+        f"{label}: {types} declares no session-only terminal states",
+    )
+    session_states = _TERMINAL_ENUM.findall(session_body[1].split("\n}", 1)[0])
+    _require(session_states, f"{label}: {types} declares an empty SessionTerminateMode")
+    for name, value in session_states:
+        _require(
+            name == value and name not in state_names,
+            f"{label}: session-only state {name!r} does not spell itself or repeats a shared state",
+        )
+    state_names |= {name for name, _ in session_states}
+    _require(
+        "SessionTerminateMode" not in _source(state, agent_types, label=label),
+        f"{label}: {agent_types} names a session-only state, which no subagent can end in",
+    )
 
     types_source = _require_all(
         state,
@@ -7114,7 +7200,7 @@ def _validate_terminal_state_after(state: State) -> None:
             "export type TerminalSubtypeWithoutAState = RequireNever<\n"
             "  Exclude<\n"
             "    TerminalSubtype,\n"
-            "    (typeof TERMINAL_RESULT_BY_STATE)[AgentTerminateMode]['subtype']\n"
+            "    (typeof TERMINAL_RESULT_BY_STATE)[SessionTerminalState]['subtype']\n"
             "  >\n"
             ">;",
         ),
@@ -7135,7 +7221,7 @@ def _validate_terminal_state_after(state: State) -> None:
 
     named = _NAMED.findall(
         types_source.split("export const TERMINAL_RESULT_BY_STATE = {", 1)[1].split(
-            "} as const satisfies Record<AgentTerminateMode, TerminalResult>;", 1
+            "} as const satisfies Record<SessionTerminalState, TerminalResult>;", 1
         )[0]
     )
     _require(named, f"{label}: {types} maps no state to a terminal record")
@@ -7221,9 +7307,9 @@ def _validate_terminal_state_after(state: State) -> None:
         state,
         cli,
         (
-            "interface SessionEnding {",
+            "type SessionEnding = ResultEnding & {",
             "class SessionEnded extends Error {",
-            "const finish = async (ending: SessionEnding): Promise<number> => {",
+            "const finish = async (reached: SessionEnding): Promise<number> => {",
             "const terminal = TERMINAL_RESULT_BY_STATE[ending.terminateMode];",
             "const exitCode = ending.exitCode ?? terminal.exitCode;",
             "const incompleteSuccess = emitted.is_error && !terminal.isError;",
@@ -11840,6 +11926,25 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_bounded_output_before,
         validate_after=_validate_bounded_output_after,
+    ),
+    SemanticConcern(
+        name="declared-deliverables",
+        rationale=(
+            "A locked agent-service run is started owing a declared list of paths under /artifacts, "
+            "[] when it owes none, and cannot start without one. When it ends with its final "
+            "message, each declared path must be a non-empty regular file reached without following "
+            "a symbolic link; if any is not, the run ends as error_missing_deliverables with exit 1, "
+            "naming every missing path and what stands there, never as success. Nothing is told to "
+            "the model: the prompt names its files, and the deployment contract says /artifacts "
+            "holds requested deliverables. The check proves existence, not quality, and nothing "
+            "checks that a declared path is the one the prompt names."
+        ),
+        removal_condition=(
+            "Upstream reports a headless run that ended without files its caller declared as an "
+            "error that names them, checked without following links."
+        ),
+        validate_before=_validate_declared_deliverables_before,
+        validate_after=_validate_declared_deliverables_after,
     ),
     SemanticConcern(
         name="terminal-state-is-a-value",

@@ -4566,7 +4566,7 @@ diff --git a/docs/design/shared-stream-gate.md b/docs/design/shared-stream-gate.
 +# Shared captured-stream gate and producer contract
 +
 +One versioned JSON definition, agent_service's
-+`protocol/stream-contract-v17.json`, owns every accepted top-level and nested
++`protocol/stream-contract-v18.json`, owns every accepted top-level and nested
 +record variant and its structural constraints. Build-time generators derive
 +the Rust discriminators and the client's TypeScript validators from that exact
 +definition, and producer and reader agree on the SHA-256 of its bytes. Every
@@ -43912,14 +43912,13 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
      const sourceData = {
        conversation: { sessionId: sourceSessionId, messages: [] },
        uiHistory: [],
-@@ -3051,12 +2926,132 @@
-   it('should allow all MCP servers if the flag is not provided', async () => {
+@@ -3052,11 +2927,195 @@
      process.argv = ['node', 'script.js'];
      const argv = await parseArguments();
      const config = await loadCliConfig(baseSettings, argv, undefined, []);
      expect(config.getMcpServers()).toEqual(baseSettings.mcpServers);
    });
-+
+ 
 +  it('drops every ambient or injected MCP server in foreground-only agent-service mode', async () => {
 +    vi.stubEnv('QWEN38_AGENT_SERVICE_LOCKED', '1');
 +    vi.stubEnv('QWEN_STREAM_CONTRACT_SHA256', STREAM_CONTRACT_SHA256);
@@ -43932,7 +43931,12 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +    vi.mocked(fs.existsSync).mockImplementation(
 +      (p) => String(p) === '/opt/agent/output-language.md',
 +    );
-+    process.argv = ['node', 'script.js', '--foreground-agents-only'];
++    process.argv = [
++      'node',
++      'script.js',
++      '--foreground-agents-only',
++      '--deliverables=[]',
++    ];
 +    const argv = await parseArguments();
 +    const config = await loadCliConfig(
 +      {
@@ -43983,7 +43987,12 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +      '/opt/agent/deployment-contract.md',
 +    );
 +    vi.stubEnv('QWEN_HOME', '/opt/agent');
-+    process.argv = ['node', 'script.js', '--foreground-agents-only'];
++    process.argv = [
++      'node',
++      'script.js',
++      '--foreground-agents-only',
++      '--deliverables=[]',
++    ];
 +    const argv = await parseArguments();
 +    // A project's rule is repository content, not configuration: present
 +    // beside the sealed one, it is still not the one read.
@@ -44004,6 +44013,60 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +      loadCliConfig(baseSettings, argv, undefined, []),
 +    ).rejects.toThrow(
 +      'Locked agent-service configuration requires the sealed output-language rule at /opt/agent/output-language.md',
++    );
++  });
++
++  it('requires the declared deliverables in foreground-only agent-service mode and refuses them elsewhere', async () => {
++    vi.stubEnv('QWEN38_AGENT_SERVICE_LOCKED', '1');
++    vi.stubEnv('QWEN_STREAM_CONTRACT_SHA256', STREAM_CONTRACT_SHA256);
++    vi.stubEnv('QWEN_SYSTEM_MD', '/opt/agent/system.md');
++    vi.stubEnv(
++      'QWEN_DEPLOYMENT_CONTRACT_MD',
++      '/opt/agent/deployment-contract.md',
++    );
++    vi.stubEnv('QWEN_HOME', '/opt/agent');
++    vi.mocked(fs.existsSync).mockImplementation(
++      (p) => String(p) === '/opt/agent/output-language.md',
++    );
++    const load = async (...extra: string[]) => {
++      process.argv = ['node', 'script.js', ...extra];
++      return loadCliConfig(baseSettings, await parseArguments(), undefined, []);
++    };
++
++    await load(
++      '--foreground-agents-only',
++      '--deliverables=["summary.md","out/report.pdf"]',
++    );
++    expect(
++      mockConfigConstructorParams.mock.calls.at(-1)?.[0].declaredDeliverables,
++    ).toEqual(['summary.md', 'out/report.pdf']);
++    await load('--foreground-agents-only', '--deliverables=[]');
++    expect(
++      mockConfigConstructorParams.mock.calls.at(-1)?.[0].declaredDeliverables,
++    ).toEqual([]);
++
++    // Absent, the run could not say what it owes; it does not start.
++    await expect(load('--foreground-agents-only')).rejects.toThrow(
++      'Locked agent-service configuration requires --deliverables',
++    );
++    for (const [list, reason] of [
++      ['{}', 'must be a JSON array'],
++      ['not json', 'it is not JSON'],
++      ['["/etc/passwd"]', 'is absolute'],
++      ['["a/../b"]', 'has the component ".."'],
++      ['["a//b"]', 'has an empty path component'],
++      ['[""]', 'is not a non-empty string'],
++      ['["a.md","a.md"]', 'twice'],
++      [JSON.stringify(['x'.repeat(256)]), 'longer than 255 bytes'],
++    ]) {
++      await expect(
++        load('--foreground-agents-only', `--deliverables=${list}`),
++      ).rejects.toThrow(reason);
++    }
++    // Outside the locked runtime no artifacts root is defined.
++    vi.unstubAllEnvs();
++    await expect(load('--deliverables=[]')).rejects.toThrow(
++      '--deliverables belongs to the locked agent-service runtime',
 +    );
 +  });
 +
@@ -44039,13 +44102,13 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +      expect(mockConfigConstructorParams).not.toHaveBeenCalled();
 +    },
 +  );
- 
++
    it('should allow only the specified MCP server', async () => {
      process.argv = [
        'node',
        'script.js',
        '--allowed-mcp-server-names',
-@@ -3926,14 +3921,14 @@
+@@ -3926,14 +3985,14 @@
        model: {
          chatCompression: {
            imageTokenEstimate: 1234,
@@ -44065,7 +44128,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.ts
 --- a/packages/cli/src/config/config.ts
 +++ b/packages/cli/src/config/config.ts
-@@ -5,12 +5,13 @@
+@@ -5,12 +5,15 @@
   */
  
  import {
@@ -44073,13 +44136,15 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    AuthType,
    Config,
 +  STREAM_CONTRACT_SHA256,
++  QWEN38_ARTIFACTS_ROOT,
++  parseDeclaredDeliverables,
    DEFAULT_QWEN_EMBEDDING_MODEL,
    FileDiscoveryService,
    getAllGeminiMdFilenames,
    loadServerHierarchicalMemory,
    type LoadServerHierarchicalMemoryOptions,
    type LoadServerHierarchicalMemoryResponse,
-@@ -40,13 +41,12 @@
+@@ -40,13 +43,12 @@
    SchemaValidator,
    type ConfigParameters,
    type MCPServerConfig,
@@ -44093,7 +44158,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
  import { resolveAcpChannelFallback } from './acp-channel-fallback.js';
  import { normalizeDisabledToolList } from './normalizeDisabledTools.js';
  import type { LoadedSettings, Settings } from './settings.js';
-@@ -82,11 +82,6 @@
+@@ -82,11 +84,6 @@
  import { assembleMcpServers } from './mcpServers.js';
  import { getPendingGatedMcpServers } from './mcpApprovals.js';
  import { writeStderrLine } from '../utils/stdioHelpers.js';
@@ -44105,7 +44170,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
  import { detectSystemLanguage } from '../i18n/index.js';
  import { resolveSkillSettings } from './skill-settings.js';
  
-@@ -147,13 +142,12 @@
+@@ -147,13 +144,12 @@
    }
  }
  
@@ -44119,7 +44184,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    prompt: string | undefined;
    promptInteractive: string | undefined;
    systemPrompt: string | undefined;
-@@ -184,17 +178,12 @@
+@@ -184,17 +180,12 @@
    insecure?: boolean | undefined;
    includeDirectories: string[] | undefined;
    screenReader: boolean | undefined;
@@ -44137,7 +44202,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    resume: string | undefined;
    /** Specify a session ID without session resumption */
    sessionId: string | undefined;
-@@ -218,12 +207,12 @@
+@@ -218,12 +209,13 @@
    worktree?: string | undefined;
    maxSessionTurns: number | undefined;
 -  maxWallTime: string | undefined;
@@ -44146,13 +44211,14 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    coreTools: string[] | undefined;
 +  strictTools?: string[] | undefined;
 +  foregroundAgentsOnly?: boolean | undefined;
++  deliverables?: string | undefined;
    excludeTools: string[] | undefined;
    disabledSlashCommands: string[] | undefined;
    authType: string | undefined;
    channel: string | undefined;
    jsonFd?: number | undefined;
    jsonFile?: string | undefined;
-@@ -646,37 +635,22 @@
+@@ -646,37 +638,22 @@
      .option('insecure', {
        type: 'boolean',
        description:
@@ -44190,7 +44256,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
            type: 'string',
            description: 'Prompt. Appended to input on stdin (if any).',
          })
-@@ -902,16 +876,6 @@
+@@ -902,16 +879,6 @@
            type: 'number',
            description: 'Maximum number of session turns (must be an integer)',
          })
@@ -44207,14 +44273,13 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          .option('max-subagent-depth', {
            type: 'number',
            description:
-@@ -920,12 +884,26 @@
-         .option('core-tools', {
+@@ -921,12 +888,30 @@
            type: 'array',
            string: true,
            description: 'Core tool paths',
            coerce: (tools: string[]) =>
              tools.flatMap((tool) => tool.split(',').map((t) => t.trim())),
-+        })
+         })
 +        .option('strict-tools', {
 +          type: 'array',
 +          string: true,
@@ -44228,13 +44293,18 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
 +          default: false,
 +          description:
 +            'Defensive unattended mode: Agent may launch only the built-in general-purpose or Explore agent, always inline and sequentially; forks, background agents, teams, worktrees, and model overrides are rejected',
-         })
++        })
++        .option('deliverables', {
++          type: 'string',
++          description: `Locked agent-service only: a JSON array of paths relative to ${QWEN38_ARTIFACTS_ROOT} that the run must leave as non-empty regular files; [] when it owes none`,
++        })
          .option('exclude-tools', {
            type: 'array',
            string: true,
            description: 'Tools to exclude',
            coerce: (tools: string[]) =>
-@@ -1210,40 +1188,12 @@
+             tools.flatMap((tool) => tool.split(',').map((t) => t.trim())),
+@@ -1210,40 +1195,12 @@
      contextRuleExcludes,
      options,
    );
@@ -44275,7 +44345,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
   * selector, WEB_SEARCH_EXTRACTOR for page reading.
   *
   * Env-only backend: WEB_SEARCH_BASE_URL mirrors a modelProviders entry's
-@@ -1282,65 +1232,6 @@
+@@ -1282,65 +1239,6 @@
      return undefined;
    }
    return { enabled, model, webExtractor, baseUrl, apiKeyEnv };
@@ -44341,7 +44411,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
  }
  
  /**
-@@ -1570,12 +1461,46 @@
+@@ -1570,12 +1468,59 @@
    if (debugMode && process.env['QWEN_DEBUG_LOG_FILE'] === undefined) {
      process.env['QWEN_DEBUG_LOG_FILE'] = '1';
    }
@@ -44381,14 +44451,27 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
 +        'Locked agent-service configuration forbids CLI system-prompt overrides',
 +      );
 +    }
++    if (argv.deliverables === undefined) {
++      throw new Error(
++        `Locked agent-service configuration requires --deliverables: the JSON array of paths under ${QWEN38_ARTIFACTS_ROOT} the run must leave, [] when it owes none`,
++      );
++    }
++  } else if (argv.deliverables !== undefined) {
++    throw new Error(
++      `--deliverables belongs to the locked agent-service runtime (--foreground-agents-only), whose deployment keeps ${QWEN38_ARTIFACTS_ROOT}; outside it no artifacts root is defined. Remove --deliverables.`,
++    );
 +  }
++  const declaredDeliverables =
++    argv.deliverables === undefined
++      ? undefined
++      : parseDeclaredDeliverables(argv.deliverables);
  
    // Surface `--insecure` as an env var so it reaches the undici dispatcher
    // layer (which controls TLS verification) without threading a flag through
    // every content generator and the preconnect path. Resolution there ORs this
    // with QWEN_TLS_INSECURE / NODE_TLS_REJECT_UNAUTHORIZED=0.
    if (argv.insecure) {
-@@ -1635,13 +1560,26 @@
+@@ -1635,13 +1580,26 @@
    const globalOutputLanguagePath = path.join(
      Storage.getGlobalQwenDir(),
      'output-language.md',
@@ -44416,7 +44499,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
        outputLanguageFilePath = globalOutputLanguagePath;
      }
    }
-@@ -1649,16 +1587,22 @@
+@@ -1649,16 +1607,22 @@
    const fileService = new FileDiscoveryService(
      cwd,
      settings.context?.fileFiltering?.customIgnoreFiles,
@@ -44441,7 +44524,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    let lspClient: LspClient | undefined;
    const question = argv.promptInteractive || argv.prompt || '';
    const inputFormat: InputFormat =
-@@ -1979,16 +1923,14 @@
+@@ -1979,16 +1943,14 @@
      argv.screenReader !== undefined
        ? argv.screenReader
        : (settings.ui?.accessibility?.screenReader ?? false);
@@ -44458,7 +44541,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      if (argv.continue) {
        sessionData = await sessionService.loadLastSession();
        if (sessionData) {
-@@ -2003,27 +1945,13 @@
+@@ -2003,27 +1965,13 @@
  
      if (argv.resume) {
        // By the time we get here, argv.resume has been resolved to a valid
@@ -44487,7 +44570,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          const message = `No saved session found with ID ${argv.resume}. Run \`qwen --resume\` without an ID to choose from existing sessions.`;
          writeStderrLine(message);
          process.exit(1);
-@@ -2041,20 +1969,12 @@
+@@ -2041,20 +1989,12 @@
          );
          process.exit(1);
        }
@@ -44508,7 +44591,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
            writeStderrLine(`Failed to load forked session ${forkedSessionId}.`);
            process.exit(1);
          }
-@@ -2097,59 +2017,68 @@
+@@ -2097,59 +2037,69 @@
    // and compute which gated (project/workspace) servers are still pending
    // approval (#4615), so the discovery layer can skip them with no connection
    // side effect. Loading `.mcp.json` is a pure read.
@@ -44576,13 +44659,14 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          : argv.coreTools || settings.tools?.core || undefined,
 +    strictTools: argv.strictTools,
 +    foregroundAgentsOnly: argv.foregroundAgentsOnly,
++    declaredDeliverables,
      allowedTools:
        bareMode || safeMode
          ? argv.allowedTools || undefined
          : argv.allowedTools || settings.tools?.allowed || undefined,
      excludeTools: mergedDeny,
      disabledSlashCommands:
-@@ -2190,25 +2119,30 @@
+@@ -2190,25 +2140,30 @@
        deny: mergedDeny.length > 0 ? mergedDeny : undefined,
        autoMode:
          bareMode || safeMode ? undefined : settings.permissions?.autoMode,
@@ -44626,7 +44710,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
        bareMode || safeMode ? undefined : settings.tools?.callCommand,
      mcpServerCommand:
        bareMode || safeMode ? undefined : settings.mcp?.serverCommand,
-@@ -2229,14 +2163,12 @@
+@@ -2229,14 +2184,12 @@
        : undefined,
      approvalMode,
      accessibility: {
@@ -44641,7 +44725,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      // before deferred init are an accepted startup-latency tradeoff. `qwen -i
      // "prompt"` still initializes eagerly because it auto-submits after render.
      deferTelemetryInitialization: isAcpMode || (interactive && !question),
-@@ -2245,7 +2177,6 @@
+@@ -2245,7 +2198,6 @@
        parseBooleanEnvFlag(process.env['QWEN_USAGE_STATISTICS_ENABLED']) ??
        settings.privacy?.usageStatisticsEnabled ??
        true,
@@ -44649,13 +44733,13 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      fileFiltering: settings.context?.fileFiltering,
      plansDirectory: settings.plansDirectory,
      proxy:
-@@ -2260,5 +2191,4 @@
+@@ -2260,5 +2212,4 @@
      bugCommand: settings.advanced?.bugCommand,
      model: resolvedModel,
      outputLanguageFilePath,
 -    sessionTokenLimit: settings.model?.sessionTokenLimit ?? -1,
      maxSessionTurns:
-@@ -2265,14 +2195,10 @@
+@@ -2265,14 +2216,10 @@
        argv.maxSessionTurns ?? settings.model?.maxSessionTurns ?? -1,
 -    maxWallTimeSeconds: resolveMaxWallTimeSeconds(argv, settings),
 -    maxToolCalls: resolveMaxToolCalls(argv, settings),
@@ -44670,7 +44754,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      artifactEnabled: settings.experimental?.artifact ?? true,
      artifactAutoOpen: settings.artifact?.autoOpen ?? true,
      artifactPublisher: settings.artifact?.publisher ?? 'local',
-@@ -2336,13 +2262,12 @@
+@@ -2336,13 +2283,12 @@
        bareMode || safeMode
          ? false
          : (settings.security?.allowPrivateNetworkHooks ?? false),
@@ -44684,7 +44768,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      useRipgrep: settings.tools?.useRipgrep,
      useBuiltinRipgrep: settings.tools?.useBuiltinRipgrep,
      shouldUseNodePtyShell: settings.tools?.shell?.enableInteractiveShell,
-@@ -2351,57 +2276,47 @@
+@@ -2351,57 +2297,47 @@
      preventSystemSleep: settings.general?.preventSystemSleep ?? true,
 -    skipNextSpeakerCheck: settings.model?.skipNextSpeakerCheck,
      skipWorkflowUsageWarning: settings.model?.skipWorkflowUsageWarning ?? false,
@@ -44748,7 +44832,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          ? undefined
          : (hooksConfig?.userHooks ?? settings.hooks),
      projectHooks: bareMode || safeMode ? undefined : hooksConfig?.projectHooks,
-@@ -2416,17 +2331,12 @@
+@@ -2416,17 +2352,12 @@
      // `--input-file` fall back to settings.dualOutput.* when the flag is
      // absent.
      jsonFd: argv.jsonFd,
@@ -48152,7 +48236,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 +  SubagentStopState,
 +  GenerationUsageSummary,
  } from '../types.js';
-+import { TERMINAL_RESULT_BY_STATE } from '../types.js';
++import { SessionTerminateMode, TERMINAL_RESULT_BY_STATE } from '../types.js';
  import {
    BaseJsonOutputAdapter,
    type MessageState,
@@ -50145,10 +50229,43 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          numTurns: 1,
        };
  
-@@ -1392,13 +2043,13 @@
+@@ -1389,16 +2040,46 @@
+ 
+       if (!result.is_error && 'stats' in result) {
+         expect(result['stats']).toEqual(stats);
        }
      });
  
++    it('names the missing deliverables on the session record that ended without them', () => {
++      const options: ResultOptions = {
++        terminateMode: SessionTerminateMode.MISSING_DELIVERABLES,
++        missingDeliverables: ['summary.md', 'out/report.pdf'],
++        errorMessage: 'The run ended without 2 of its 2 declared deliverables.',
++        durationMs: 1000,
++        apiDurationMs: 800,
++        numTurns: 3,
++      };
++
++      const result = adapter.exposeBuildResultMessage(options);
++
++      expect(result).toMatchObject({
++        subtype: 'error_missing_deliverables',
++        is_error: true,
++        parent_tool_use_id: null,
++        missing_deliverables: ['summary.md', 'out/report.pdf'],
++        error: {
++          message: 'The run ended without 2 of its 2 declared deliverables.',
++        },
++      });
++      expect(
++        TERMINAL_RESULT_BY_STATE[SessionTerminateMode.MISSING_DELIVERABLES],
++      ).toEqual({
++        subtype: 'error_missing_deliverables',
++        isError: true,
++        exitCode: 1,
++      });
++    });
++
      it('should handle result without assistant message', () => {
        adapter = new TestJsonOutputAdapter(mockConfig);
        const options: ResultOptions = {
@@ -50160,7 +50277,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1408,13 +2059,13 @@
+@@ -1408,13 +2089,13 @@
        }
      });
  
@@ -50175,7 +50292,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: payload,
        };
  
-@@ -1426,15 +2077,15 @@
+@@ -1426,15 +2107,15 @@
            (result as unknown as { structured_result?: unknown })
              .structured_result,
          ).toEqual(payload);
@@ -50193,7 +50310,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
        };
  
        const result = adapter.exposeBuildResultMessage(options);
-@@ -1451,13 +2102,13 @@
+@@ -1451,13 +2132,13 @@
        // schema (`{}`). The previous `!== undefined` guard collapsed
        // "absent" with "submitted-as-undefined", silently dropping the
        // field and falling back to the free-text result. Track presence
@@ -50208,7 +50325,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          structuredResult: undefined,
        };
  
-@@ -1474,41 +2125,56 @@
+@@ -1474,41 +2155,56 @@
    });
  
    describe('startSubagentAssistantMessage', () => {
@@ -50270,7 +50387,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          (msg) => msg.type === 'result' && msg.is_error === true,
        );
        expect(errorResult).toBeDefined();
-@@ -1521,83 +2187,150 @@
+@@ -1521,83 +2217,150 @@
          expect(errorResult.num_turns).toBe(5);
        }
      });
@@ -50474,7 +50591,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
          status: 'success',
          resultDisplay: 'Result',
        };
-@@ -1619,26 +2352,272 @@
+@@ -1619,26 +2382,272 @@
      });
    });
  
@@ -50750,7 +50867,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
      it('should return session ID from config', () => {
        expect(adapter.getSessionId()).toBe('test-session-id');
        expect(mockConfig.getSessionId).toHaveBeenCalled();
-@@ -1750,211 +2729,353 @@
+@@ -1750,211 +2759,353 @@
  
          expect(result).toBe('');
        });
@@ -51186,7 +51303,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
  
      describe('extractTextFromBlocks', () => {
        it('should extract text from text blocks', () => {
-@@ -1992,19 +3113,8 @@
+@@ -1992,19 +3143,8 @@
  
          const result = extractTextFromBlocks(blocks);
  
@@ -51209,7 +51326,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts b/
 diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 --- a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
 +++ b/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts
-@@ -1,79 +1,94 @@
+@@ -1,103 +1,131 @@
 +import type {
 +  GenerationDisplayMessage,
 +  GenerationEnvelope,
@@ -51279,7 +51396,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  } from '../types.js';
 -import { functionResponsePartsToString } from '../../utils/nonInteractiveHelpers.js';
 -import { projectHeadlessToolResultContent } from './headless-tool-result-text-projection.js';
-+import { TERMINAL_RESULT_BY_STATE } from '../types.js';
++import { SessionTerminateMode, TERMINAL_RESULT_BY_STATE } from '../types.js';
  
  /**
   * Internal state for managing a single message context (main agent or subagent).
@@ -51299,14 +51416,23 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
   * Options for building result messages.
   * Used by both streaming and non-streaming JSON output adapters.
   */
- export interface ResultOptions {
+-export interface ResultOptions {
 -  readonly isError: boolean;
-+  /**
-+   * The state the run ended in. It decides the record's subtype and its
-+   * `is_error` together, through the one table that maps a state to its
-+   * terminal record, so the envelope cannot name one ending and flag another.
-+   */
-+  readonly terminateMode: AgentTerminateMode;
++/**
++ * The state the run ended in. It decides the record's subtype and its
++ * `is_error` together, through the one table that maps a state to its
++ * terminal record, so the envelope cannot name one ending and flag another.
++ * A run that ended without some of its declared deliverables carries the
++ * list its record names; no other ending can carry one.
++ */
++export type ResultEnding =
++  | { readonly terminateMode: AgentTerminateMode }
++  | {
++      readonly terminateMode: SessionTerminateMode.MISSING_DELIVERABLES;
++      readonly missingDeliverables: readonly [string, ...string[]];
++    };
++
++export type ResultOptions = ResultEnding & {
    readonly errorMessage?: string;
    readonly durationMs: number;
    readonly apiDurationMs: number;
@@ -51321,7 +51447,11 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * top-level `structured_result` field is added to the result message.
     */
    readonly structuredResult?: unknown;
-@@ -84,20 +99,25 @@
+-}
++};
+ 
+ /**
+  * Interface for message emission strategies.
   * Implementations decide whether to emit messages immediately (streaming)
   * or collect them for batch emission (non-streaming).
   * This interface defines the common message emission methods that
@@ -51348,7 +51478,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * In non-streaming mode, this is a no-op.
     *
     * @param request - Tool call request info
-@@ -112,26 +132,29 @@
+@@ -112,26 +140,29 @@
  /**
   * JSON-focused output adapter interface.
   * Handles structured JSON output for both streaming and non-streaming modes.
@@ -51382,7 +51512,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    ): void;
  
    getSessionId(): string;
-@@ -148,32 +171,205 @@
+@@ -148,32 +179,205 @@
    // Main agent message state
    protected mainAgentMessageState: MessageState;
  
@@ -51592,7 +51722,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      };
    }
  
-@@ -193,90 +389,48 @@
+@@ -193,90 +397,48 @@
        state = this.createMessageState();
        this.subagentMessageStates.set(parentToolUseId, state);
      }
@@ -51702,7 +51832,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Finalizes pending blocks (text or thinking) by closing them.
-@@ -369,13 +523,12 @@
+@@ -369,13 +531,12 @@
     * @param state - Message state to reset
     */
    protected startAssistantMessageInternal(state: MessageState): void {
@@ -51716,7 +51846,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -385,30 +538,40 @@
+@@ -385,30 +546,40 @@
     * @param parentToolUseId - null for main agent, string for subagent
     * @returns CLIAssistantMessage
     */
@@ -51761,7 +51891,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Abstract method for emitting messages. Implementations decide whether
-@@ -541,12 +704,31 @@
+@@ -541,12 +712,31 @@
      _input: unknown,
      _parentToolUseId: string | null,
    ): void {
@@ -51793,7 +51923,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     *
     * @param state - Message state
     * @param index - Block index
-@@ -595,74 +777,78 @@
+@@ -595,74 +785,78 @@
    // ========== Main Agent APIs ==========
  
    /**
@@ -51904,7 +52034,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
      }
    }
  
-@@ -671,51 +857,62 @@
+@@ -671,51 +865,62 @@
    /**
     * Starts a new assistant message for a subagent.
     * This is a shared implementation used by both streaming and non-streaming adapters.
@@ -51970,7 +52100,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    /**
     * Processes a subagent tool call.
     * This is a shared implementation used by both streaming and non-streaming adapters.
-@@ -727,26 +924,24 @@
+@@ -727,26 +932,24 @@
    processSubagentToolCall(
      toolCall: NonNullable<AgentResultDisplay['toolCalls']>[number],
      parentToolUseId: string,
@@ -52000,7 +52130,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      const { index } = this.createSubagentToolUseBlock(
        state,
-@@ -760,12 +955,43 @@
+@@ -760,12 +963,43 @@
  
      // Finalize tool_use message immediately
      this.finalizeSubagentAssistantMessage(parentToolUseId);
@@ -52044,7 +52174,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     * input setting, and closure. Subclasses can override this to customize behavior.
     *
     * @param state - Message state
-@@ -789,20 +1015,35 @@
+@@ -789,20 +1023,35 @@
      this.onToolUseBlockCreated(state, index, startBlock, parentToolUseId);
      this.onToolUseInputSet(state, index, toolCall.args ?? {}, parentToolUseId);
      this.onBlockClosed(state, index, parentToolUseId);
@@ -52088,7 +52218,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
    /**
     * Appends text content to the current message.
-@@ -844,35 +1085,22 @@
+@@ -844,35 +1093,22 @@
  
    /**
     * Appends thinking content to the current message.
@@ -52126,7 +52256,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
  
      this.ensureBlockTypeConsistency(state, 'thinking', actualParentToolUseId);
      this.ensureMessageStarted(state, actualParentToolUseId);
-@@ -882,13 +1110,12 @@
+@@ -882,13 +1118,12 @@
        | undefined;
      const isNewBlock = !current || current.type !== 'thinking';
      if (isNewBlock) {
@@ -52140,7 +52270,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        this.openBlock(state, index, current);
        this.onThinkingBlockCreated(state, index, current, actualParentToolUseId);
      }
-@@ -937,12 +1164,48 @@
+@@ -937,12 +1172,48 @@
      this.onToolUseInputSet(state, index, request.args ?? {}, parentToolUseId);
  
      this.onBlockClosed(state, index, parentToolUseId);
@@ -52189,7 +52319,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
     *
     * @param state - Message state
     * @param parentToolUseId - null for main agent, string for subagent
-@@ -1053,18 +1316,15 @@
+@@ -1053,18 +1324,15 @@
        this.permissionDenials.push(denial);
      }
  
@@ -52209,7 +52339,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        uuid: randomUUID(),
        session_id: this.getSessionId(),
        parent_tool_use_id: parentToolUseId,
-@@ -1077,20 +1337,28 @@
+@@ -1077,20 +1345,28 @@
    }
  
    /**
@@ -52240,7 +52370,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
    }
  
    /**
-@@ -1173,43 +1441,51 @@
+@@ -1173,45 +1449,59 @@
  
    /**
     * Builds a result message from options.
@@ -52281,13 +52411,18 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +      : requestedTerminal;
  
 -    if (options.isError) {
-+    if (terminal.isError) {
 -      const errorMessage = options.errorMessage ?? 'Unknown error';
++    if (terminal.isError) {
 +      const errorMessage = incomplete
 +        ? `Model evidence is incomplete at terminal: ${openResponses.length} response(s) ` +
 +          `and ${openAttempts.length} attempt(s) remain open. ` +
 +          'Inspect the unfinished requests and retry the operation after they settle.'
 +        : (options.errorMessage ?? 'Unknown error');
++      const missing =
++        !incomplete &&
++        options.terminateMode === SessionTerminateMode.MISSING_DELIVERABLES
++          ? { missing_deliverables: [...options.missingDeliverables] }
++          : {};
        return {
          type: 'result',
 -        subtype:
@@ -52305,11 +52440,14 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
 +        ...evidence,
          permission_denials: [...this.permissionDenials],
          error: { message: errorMessage },
++        ...missing,
        };
      } else {
        // Track presence by property existence — `runNonInteractive` may
        // legitimately pass `structuredResult: undefined` (e.g. the model
-@@ -1231,22 +1507,22 @@
+       // called structured_output with no args under an empty schema).
+       // A `!== undefined` sentinel would silently fall back to the
+@@ -1231,22 +1521,22 @@
          : resultText;
        const success: CLIResultMessageSuccess & {
          stats?: SessionMetrics;
@@ -52335,7 +52473,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        if (options.stats) {
          success.stats = options.stats;
        }
-@@ -1260,33 +1536,43 @@
+@@ -1260,33 +1550,43 @@
  
    /**
     * Builds a subagent error result message.
@@ -52386,7 +52524,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        error: { message: errorMessage },
      };
    }
-@@ -1311,18 +1597,13 @@
+@@ -1311,18 +1611,13 @@
      // Handle text parts
      if ('text' in part && typeof part.text === 'string') {
        textContent = part.text;
@@ -52406,7 +52544,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
        textContent = JSON.stringify(part);
      }
  
-@@ -1391,69 +1672,28 @@
+@@ -1391,69 +1686,28 @@
    }
  
    return undefined;
@@ -52488,7 +52626,7 @@ diff --git a/packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts b/packa
   * Extracts text from content blocks.
   *
   * @param blocks - Array of content blocks
-@@ -1462,18 +1702,6 @@
+@@ -1462,18 +1716,6 @@
  export function extractTextFromBlocks(blocks: ContentBlock[]): string {
    return blocks
      .filter((block) => block.type === 'text')
@@ -59093,14 +59231,14 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
    data?: unknown;
    cwd?: string;
    tools?: string[];
-@@ -159,34 +176,93 @@
+@@ -159,47 +176,226 @@
  }
  
 +/**
 + * The stream contract's terminal table, read from its generated binding:
 + * every result subtype, whether it is an error, and the exit code a process
 + * that ended with it leaves. It is stated once, in
-+ * `protocol/stream-contract-v17.json`, and nowhere in this client.
++ * `protocol/stream-contract-v18.json`, and nowhere in this client.
 + */
 +type TerminalOutcomes = typeof TERMINAL_OUTCOMES;
 +
@@ -59165,8 +59303,12 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 +   * ended three consecutive turns with a message that was not a final
 +   * answer -- no visible text, or tool-call markup outside a structured
 +   * call -- after being told twice, so the scope holds a slip rather than
-+   * an answer. `error_cancelled` is an abort signal from outside. Each is a
-+   * counterpart of `success`, which asserts the model wrote its final
++   * an answer. `error_missing_deliverables` says the session's own run wrote
++   * its final message but some path it was started owing under the artifacts
++   * root is not a non-empty regular file there; `missing_deliverables` lists
++   * them. Only the session's scope declares deliverables, so only its record
++   * can carry this. `error_cancelled` is an abort signal from outside. Each
++   * is a counterpart of `success`, which asserts the model wrote its final
 +   * message to the end.
 +   *
 +   * A state earns a name here when it names an authority other than the run
@@ -59195,7 +59337,12 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
      type?: string;
      message: string;
      [key: string]: unknown;
-@@ -194,12 +270,103 @@
+   };
++  /**
++   * The declared deliverables the run ended without, in declared order;
++   * present exactly when `subtype` is `error_missing_deliverables`.
++   */
++  missing_deliverables?: string[];
    [key: string]: unknown;
  }
  
@@ -59220,8 +59367,25 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 +}
 +
 +/**
++ * The terminal states only the session's own run can end in. A subagent is
++ * started owing no deliverables, so it has no such state, and
++ * {@link AgentTerminateMode} -- the states every scope shares -- does not
++ * name it.
++ */
++export enum SessionTerminateMode {
++  /**
++   * The run wrote its final message, and some path it was started owing under
++   * the artifacts root is not a non-empty regular file there.
++   */
++  MISSING_DELIVERABLES = 'MISSING_DELIVERABLES',
++}
++
++/** Every state a session's own run can end in. */
++export type SessionTerminalState = AgentTerminateMode | SessionTerminateMode;
++
++/**
 + * How every terminal state is reported, for the session's own scope and for
-+ * each subagent's alike. The mapping is total over {@link AgentTerminateMode}:
++ * each subagent's alike. The mapping is total over {@link SessionTerminalState}:
 + * a state added without a name here is a compile error rather than a run
 + * reported under a neighbouring state's name, a name the contract does not
 + * define is a compile error too, and so is a name it defines that no state
@@ -59249,7 +59413,10 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 +    'error_slipped_final_message',
 +  ),
 +  [AgentTerminateMode.CANCELLED]: terminalResult('error_cancelled'),
-+} as const satisfies Record<AgentTerminateMode, TerminalResult>;
++  [SessionTerminateMode.MISSING_DELIVERABLES]: terminalResult(
++    'error_missing_deliverables',
++  ),
++} as const satisfies Record<SessionTerminalState, TerminalResult>;
 +
 +type RequireNever<T extends never> = T;
 +
@@ -59261,7 +59428,7 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 +export type TerminalSubtypeWithoutAState = RequireNever<
 +  Exclude<
 +    TerminalSubtype,
-+    (typeof TERMINAL_RESULT_BY_STATE)[AgentTerminateMode]['subtype']
++    (typeof TERMINAL_RESULT_BY_STATE)[SessionTerminalState]['subtype']
 +  >
 +>;
 +
@@ -59299,7 +59466,7 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
    type: 'message_start';
    message: {
      id: string;
-@@ -517,13 +684,79 @@
+@@ -517,13 +713,79 @@
    | CLIControlResponse
    | ControlCancelRequest;
  
@@ -59797,7 +59964,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getDebugMode: vi.fn().mockReturnValue(false),
        getOutputFormat: vi.fn().mockReturnValue('text'),
        getJsonSchema: vi.fn().mockReturnValue(undefined),
-@@ -369,6 +560,12 @@
+@@ -369,9 +560,16 @@
          currentModel = model;
        }),
        getExperimentalZedIntegration: vi.fn().mockReturnValue(false),
@@ -59807,10 +59974,14 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      // TypeError. False is the general-CLI answer -- the locked-mode branch
 +      // is covered by nonInteractiveHelpers.test.ts.
 +      getForegroundAgentsOnly: vi.fn().mockReturnValue(false),
++      getDeclaredDeliverables: vi.fn().mockReturnValue(undefined),
        isInteractive: vi.fn().mockReturnValue(false),
        getHookSystem: vi.fn().mockReturnValue(undefined),
        isCronEnabled: vi.fn().mockReturnValue(false),
-@@ -441,6 +638,13 @@
+       getCronScheduler: vi.fn().mockReturnValue(null),
+       getTeamManager: vi.fn().mockReturnValue(null),
+       onTeamManagerChange: vi.fn(),
+@@ -441,6 +639,13 @@
      overrides?: Partial<SessionMetrics>,
    ): SessionMetrics {
      return {
@@ -59824,7 +59995,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        models: {},
        tools: {
          totalCalls: 0,
-@@ -470,27 +674,648 @@
+@@ -470,27 +675,648 @@
    }
  
    /**
@@ -60478,7 +60649,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      input: string;
      prepare: 'none' | 'active' | 'paused';
      expectedStatus: 'active' | 'paused' | null;
-@@ -581,15 +1406,19 @@
+@@ -581,15 +1407,19 @@
      }
    }
  
@@ -60500,7 +60671,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -615,9 +1444,9 @@
+@@ -615,9 +1445,9 @@
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(
          testCase.expectedWorkers,
        );
@@ -60513,7 +60684,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(goalRuntime.getSnapshot()).toMatchObject({
          goal:
            testCase.expectedStatus === null
-@@ -630,33 +1459,30 @@
+@@ -630,33 +1460,30 @@
      },
    );
  
@@ -60561,7 +60732,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      },
    );
  
-@@ -664,7 +1490,7 @@
+@@ -664,7 +1491,7 @@
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
      mockConfig.getGoalRuntimeReady = vi.fn(async () => {
@@ -60570,7 +60741,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      });
  
      const exitCode = await runNonInteractive(
-@@ -713,42 +1539,38 @@
+@@ -713,42 +1540,38 @@
  
    it('keeps the exact Goal permit through a ToolResult continuation', async () => {
      setupMetricsMock();
@@ -60627,7 +60798,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]);
-@@ -791,45 +1613,43 @@
+@@ -791,45 +1614,43 @@
        getEventEmitter: () => teamEvents,
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
@@ -60692,7 +60863,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]);
-@@ -866,20 +1686,19 @@
+@@ -866,20 +1687,19 @@
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
      await prepareGoalState('paused');
@@ -60720,7 +60891,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          _signal: AbortSignal,
          _promptId: string,
          sendOptions: { goalPermit?: GoalTurnPermit },
-@@ -896,6 +1715,13 @@
+@@ -896,6 +1716,13 @@
                goalContext: sendOptions.goalPermit,
              },
            },
@@ -60734,7 +60905,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          ]),
      );
  
-@@ -907,17 +1733,168 @@
+@@ -907,17 +1734,168 @@
      );
  
      expect(exitCode).toBe(0);
@@ -60904,7 +61075,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('streams Goal state changes that happen while a headless turn settles', async () => {
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
-@@ -929,16 +1906,15 @@
+@@ -929,16 +1907,15 @@
        await goalRuntime.dispatch({
          action: 'pause',
          expectedGoalId: permit.goalId,
@@ -60924,7 +61095,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          _signal: AbortSignal,
          _promptId: string,
          sendOptions: { goalPermit?: GoalTurnPermit },
-@@ -955,6 +1931,13 @@
+@@ -955,6 +1932,13 @@
                goalContext: sendOptions.goalPermit,
              },
            },
@@ -60938,7 +61109,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          ]),
      );
  
-@@ -989,12 +1972,13 @@
+@@ -989,12 +1973,13 @@
      const finishTurn = vi
        .spyOn(goalRuntime, 'finishTurn')
        .mockResolvedValue(undefined);
@@ -60952,7 +61123,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
-@@ -1002,8 +1986,8 @@
+@@ -1002,8 +1987,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -60963,7 +61134,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -1023,225 +2007,60 @@
+@@ -1023,225 +2008,60 @@
      );
    });
  
@@ -61223,7 +61394,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    expect(exitCode).toBe(53);
 +    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
 +    expect(goalRuntime.getSnapshot().goal?.status).toBe('paused');
-@@ -1344,12 +2163,15 @@
+@@ -1344,12 +2164,15 @@
      { text: 'inspect this image' },
      { inlineData: { mimeType: 'image/png', data: 'AAAA' } },
    ];
@@ -61241,7 +61412,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      },
    ];
-@@ -1393,7 +2215,10 @@
+@@ -1393,7 +2216,10 @@
        { type: GeminiEventType.Content, value: ' World' },
        {
          type: GeminiEventType.Finished,
@@ -61253,7 +61424,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -1417,7 +2242,9 @@
+@@ -1417,7 +2243,9 @@
          submittedPrompt: 'Test input',
        },
      );
@@ -61264,7 +61435,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockShutdownTelemetry).toHaveBeenCalled();
    });
  
-@@ -1429,35 +2256,38 @@
+@@ -1429,35 +2257,38 @@
      });
      const handleWorkflowApproval = vi.fn().mockResolvedValue(undefined);
      const controlService = {
@@ -61326,7 +61497,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        controlService,
      });
  
-@@ -1478,11 +2308,12 @@
+@@ -1478,11 +2309,12 @@
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -61341,7 +61512,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -1504,7 +2335,10 @@
+@@ -1504,7 +2336,10 @@
        createStreamFromEvents([
          {
            type: GeminiEventType.Finished,
@@ -61353,7 +61524,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -1554,7 +2388,10 @@
+@@ -1554,7 +2389,10 @@
        createStreamFromEvents([
          {
            type: GeminiEventType.Finished,
@@ -61365,7 +61536,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -1574,7 +2411,7 @@
+@@ -1574,7 +2412,7 @@
          functionResponse: {
            id: 'call-1',
            name: 'shell',
@@ -61374,7 +61545,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        },
      ]);
-@@ -1590,38 +2427,41 @@
+@@ -1590,38 +2428,41 @@
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
      };
@@ -61441,7 +61612,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -1631,14 +2471,14 @@
+@@ -1631,14 +2472,14 @@
      await vi.waitFor(() =>
        expect(respond).toHaveBeenCalledWith(ToolConfirmationOutcome.Cancel),
      );
@@ -61460,7 +61631,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('describes the active mode when explicit teammate approval cannot be shown', async () => {
-@@ -1651,38 +2491,41 @@
+@@ -1651,38 +2492,41 @@
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
      };
@@ -61527,7 +61698,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -1692,17 +2535,19 @@
+@@ -1692,17 +2536,19 @@
      await vi.waitFor(() =>
        expect(respond).toHaveBeenCalledWith(ToolConfirmationOutcome.Cancel),
      );
@@ -61550,7 +61721,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('cannot be bypassed by YOLO mode'),
      );
    });
-@@ -1725,7 +2570,10 @@
+@@ -1725,7 +2571,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -61562,7 +61733,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1758,7 +2606,10 @@
+@@ -1758,7 +2607,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -61574,7 +61745,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1793,7 +2644,10 @@
+@@ -1793,7 +2645,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -61586,7 +61757,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1812,7 +2666,7 @@
+@@ -1812,7 +2667,7 @@
            functionResponse: {
              id: 'call-1',
              name: 'shell',
@@ -61595,7 +61766,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]);
-@@ -1834,7 +2688,10 @@
+@@ -1834,7 +2689,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -61607,7 +61778,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1859,7 +2716,7 @@
+@@ -1859,7 +2717,7 @@
            functionResponse: {
              id: 'call-1',
              name: 'shell',
@@ -61616,7 +61787,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
          { text: expect.stringContaining(SYSTEM_REMINDER_OPEN) },
-@@ -1883,41 +2740,85 @@
+@@ -1883,41 +2741,85 @@
      });
    });
  
@@ -61719,7 +61890,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        type: GeminiEventType.ToolCallRequest,
        value: {
          callId: 'tool-1',
-@@ -1931,7 +2832,7 @@
+@@ -1931,7 +2833,7 @@
        toolCallEvent,
        {
          type: GeminiEventType.LoopDetected,
@@ -61728,7 +61899,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -1948,7 +2849,7 @@
+@@ -1948,7 +2850,7 @@
      expect(exitCode).toBe(1);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      expect(processStdoutSpy).not.toHaveBeenCalled();
@@ -61737,7 +61908,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Loop detection halted the run'),
      );
    });
-@@ -1987,12 +2888,14 @@
+@@ -1987,12 +2889,14 @@
      // The consecutive guard is always-on, so the headless message must flag it
      // as always-on and must NOT suggest the skipLoopDetection escape hatch,
      // which cannot disable it.
@@ -61754,7 +61925,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining(
          'Set the `model.skipLoopDetection` setting to true',
        ),
-@@ -2033,49 +2936,13 @@
+@@ -2033,49 +2937,13 @@
      // A heuristic loop IS gated by skipLoopDetection, so the message must offer
      // that escape hatch and must NOT claim it is an always-on guard. (Mutation
      // guard: routing all types into the always-on hint would fail here.)
@@ -61808,7 +61979,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 -    );
 -  });
 -
-@@ -2086,7 +2953,7 @@
+@@ -2086,7 +2954,7 @@
        { type: GeminiEventType.Content, value: 'Partial work' },
        {
          type: GeminiEventType.LoopDetected,
@@ -61817,7 +61988,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -2108,17 +2975,1167 @@
+@@ -2108,17 +2976,1220 @@
      expect(typeof lastOutput).toBe('string');
      const parsed = JSON.parse(lastOutput as string) as Array<{
        type?: string;
@@ -61920,6 +62091,59 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    expect(result?.is_error).toBe(false);
 +    expect(result?.subtype).toBe('success');
 +  });
++
++  it.each([
++    { declared: [] as string[], subtype: 'success', exitCode: 0 },
++    {
++      declared: ['summary.md', 'out/report.pdf'],
++      subtype: 'error_missing_deliverables',
++      exitCode: 1,
++    },
++  ])(
++    'checks the declared deliverables only when the run wrote its final message: $subtype',
++    async ({ declared, subtype, exitCode: expectedExit }) => {
++      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
++      (mockConfig.getDeclaredDeliverables as Mock).mockReturnValue(declared);
++      setupMetricsMock();
++      mockGeminiClient.sendMessageStream.mockReturnValue(
++        createStreamFromEvents([
++          { type: GeminiEventType.Content, value: 'Here is the summary.' },
++          {
++            type: GeminiEventType.Finished,
++            value: {
++              reason: FinishReason.STOP,
++              usageMetadata: servedOutputTokens(10),
++            },
++          },
++        ]),
++      );
++
++      const exitCode = await runNonInteractive(
++        mockConfig,
++        mockSettings,
++        'Write the summary',
++        'prompt-declared-deliverables',
++      );
++
++      // The test host has no /artifacts, so every declared path is missing.
++      expect(exitCode).toBe(expectedExit);
++      const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
++      const result = (
++        JSON.parse(output) as Array<Record<string, unknown>>
++      ).find((message) => message['type'] === 'result');
++      expect(result?.['subtype']).toBe(subtype);
++      if (declared.length === 0) {
++        expect(result?.['is_error']).toBe(false);
++        expect(result).not.toHaveProperty('missing_deliverables');
++        return;
++      }
++      expect(result?.['is_error']).toBe(true);
++      expect(result?.['missing_deliverables']).toEqual(declared);
++      expect((result?.['error'] as { message: string }).message).toBe(
++        'The run ended without 2 of its 2 declared deliverables. Each must be a non-empty regular file under /artifacts, reached without following a symbolic link: summary.md (no directory /artifacts); out/report.pdf (no directory /artifacts). What the run did leave is in the session bundle; a new session must write each declared path.',
++      );
++    },
++  );
 +
 +  it('reads the last generation of the run, not an earlier completed one', async () => {
 +    (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
@@ -62986,7 +63210,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock();
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -2126,11 +4143,20 @@
+@@ -2126,11 +4197,20 @@
          { type: GeminiEventType.Content, value: 'Answer' },
          {
            type: GeminiEventType.Finished,
@@ -63008,7 +63232,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      let recordingFailureListener:
        | ((event: { sessionId: string; error: Error }) => void)
        | undefined;
-@@ -2153,48 +4179,564 @@
+@@ -2153,48 +4233,564 @@
          getChatRecordingService: () => {
            finalize: () => void;
            flush: () => Promise<void>;
@@ -63596,7 +63820,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('flushes but does not finalize when the caller owns the stream adapter', async () => {
-@@ -2207,7 +4749,10 @@
+@@ -2207,7 +4803,10 @@
          { type: GeminiEventType.Content, value: 'Answer' },
          {
            type: GeminiEventType.Finished,
@@ -63608,7 +63832,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -2217,13 +4762,13 @@
+@@ -2217,13 +4816,13 @@
        mockConfig as unknown as {
          getChatRecordingService: () => {
            finalize: () => void;
@@ -63623,7 +63847,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -2244,21 +4789,24 @@
+@@ -2244,21 +4843,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -63655,7 +63879,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -2291,18 +4839,21 @@
+@@ -2291,18 +4893,21 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -63680,7 +63904,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      // Verify recordCompletedToolCall is called with the tool name and args.
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledWith(
        'testTool',
-@@ -2363,21 +4914,25 @@
+@@ -2363,21 +4968,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -63708,7 +63932,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        2,
        [{ text: 'Tool response with image' }, { text: 'Skill response' }],
        expect.any(AbortSignal),
-@@ -2441,21 +4996,25 @@
+@@ -2441,21 +5050,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -63736,7 +63960,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
-@@ -2533,8 +5092,8 @@
+@@ -2533,8 +5146,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -63747,7 +63971,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -2569,21 +5128,25 @@
+@@ -2569,21 +5182,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -63775,7 +63999,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        4,
-@@ -2591,15 +5154,42 @@
+@@ -2591,15 +5208,42 @@
        expect.any(AbortSignal),
        'prompt-drain/automatic/3',
        { type: SendMessageType.ToolResult, modelOverride: first },
@@ -63820,7 +64044,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -2620,23 +5210,23 @@
+@@ -2620,23 +5264,23 @@
        }));
      }
  
@@ -63847,7 +64071,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        vi.mocked(mockToolRegistry.getTool).mockImplementation(
          (name: string) =>
            ({
-@@ -2665,13 +5255,13 @@
+@@ -2665,13 +5309,13 @@
            resultDisplay: 'entered plan mode',
          }),
        );
@@ -63862,7 +64086,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
                'p-plan-boundary',
              ),
              ...toolCallEvents(
-@@ -2683,19 +5273,20 @@
+@@ -2683,19 +5327,20 @@
                ['read-after-entry-1', 'read-after-entry-2'],
                ToolNames.READ_FILE,
                'p-plan-boundary',
@@ -63884,7 +64108,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall.mock.calls[0][1]).toMatchObject({
          callId: 'enter-plan',
          name: ToolNames.ENTER_PLAN_MODE,
-@@ -2758,23 +5349,25 @@
+@@ -2758,23 +5403,25 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -63913,7 +64137,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(total);
      });
  
-@@ -2802,19 +5395,19 @@
+@@ -2802,19 +5449,19 @@
                });
            }),
        );
@@ -63938,7 +64162,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
        resolvers['c']();
        resolvers['a']();
-@@ -2826,72 +5419,15 @@
+@@ -2826,72 +5473,15 @@
        const nextTurnParts = mockGeminiClient.sendMessageStream.mock
          .calls[1][0] as Part[];
        const ids = nextTurnParts
@@ -64014,7 +64238,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        setupMetricsMock();
        // Kind.Edit is a mutator: each unsafe call forms its own sequential
        // batch, so call #2 must not start until call #1 has settled.
-@@ -2910,17 +5446,19 @@
+@@ -2910,17 +5500,19 @@
              );
            }),
        );
@@ -64037,7 +64261,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['e1']);
        resolvers[0]();
-@@ -2931,47 +5469,6 @@
+@@ -2931,47 +5523,6 @@
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(2);
      });
  
@@ -64085,7 +64309,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      it('partitions a mixed batch: parallel reads, sequential edit, parallel reads', async () => {
        setupMetricsMock();
        // read → Kind.Read (safe), edit → Kind.Edit (unsafe). The batch
-@@ -2994,21 +5491,23 @@
+@@ -2994,21 +5545,23 @@
                resolve({ responseParts: [{ text: `resp-${req.callId}` }] });
            }),
        );
@@ -64112,7 +64336,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['r1', 'r2']);
        resolvers['r1']();
-@@ -3056,19 +5555,21 @@
+@@ -3056,19 +5609,21 @@
                };
              }),
          );
@@ -64137,7 +64361,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          await new Promise((resolve) => setImmediate(resolve));
          expect(startOrder).toEqual(['c1', 'c2']);
          // Freeing one slot admits the next call, one at a time.
-@@ -3125,19 +5626,21 @@
+@@ -3125,19 +5680,21 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -64162,7 +64386,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // would deadlock.
        expect(started).toBe(total);
        expect(startOrder).toEqual(['s1', 's2']);
-@@ -3146,7 +5649,6 @@
+@@ -3146,7 +5703,6 @@
  
    it('should ignore duplicate provider tool-call ids across rounds', async () => {
      setupMetricsMock();
@@ -64170,7 +64394,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3155,23 +5657,32 @@
+@@ -3155,23 +5711,32 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -64209,7 +64433,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -3192,7 +5703,9 @@
+@@ -3192,7 +5757,9 @@
      expect(duplicateParts[0].functionResponse?.response?.['error']).toContain(
        'Duplicate provider tool call id "tool-1"',
      );
@@ -64220,13 +64444,13 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should stop repeated duplicate provider tool-call responses', async () => {
-@@ -3199,5 +5712,4 @@
+@@ -3199,5 +5766,4 @@
      setupMetricsMock();
 -    vi.mocked(mockConfig.getMaxToolCalls).mockReturnValue(1);
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3228,40 +5740,41 @@
+@@ -3228,40 +5794,41 @@
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(
@@ -64279,7 +64503,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should stop repeated duplicate provider tool-call responses from drain items', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3316,25 +5829,30 @@
+@@ -3316,25 +5883,30 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64312,7 +64536,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(3);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      const drainPromptIds = mockGeminiClient.sendMessageStream.mock.calls
-@@ -3346,14 +5864,15 @@
+@@ -3346,14 +5918,15 @@
  
      const duplicateParts = mockGeminiClient.sendMessageStream.mock
        .calls[2][0] as Part[];
@@ -64330,7 +64554,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should ignore duplicate provider tool-call ids already present in chat history', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3367,20 +5886,24 @@
+@@ -3367,20 +5940,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -64358,7 +64582,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -3404,26 +5927,28 @@
+@@ -3404,26 +5981,28 @@
      expect(duplicateParts[0].functionResponse?.response?.['error']).toContain(
        'Duplicate provider tool call id "tool-history"',
      );
@@ -64390,7 +64614,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const firstToolCall: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3486,21 +6011,26 @@
+@@ -3486,21 +6065,26 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64419,7 +64643,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledTimes(1);
  
-@@ -3515,13 +6045,16 @@
+@@ -3515,13 +6099,16 @@
        'success',
        'error',
      ]);
@@ -64437,7 +64661,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -3530,39 +6063,38 @@
+@@ -3530,39 +6117,38 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -64493,7 +64717,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool error',
-@@ -3573,38 +6105,43 @@
+@@ -3573,38 +6159,43 @@
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
@@ -64550,7 +64774,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should not exit if a tool is not found, and should send error back to model', async () => {
-@@ -3616,30 +6153,39 @@
+@@ -3616,30 +6207,39 @@
          name: 'nonexistentTool',
          args: {},
          isClientInitiated: false,
@@ -64597,7 +64821,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool not found',
-@@ -3648,22 +6194,71 @@
+@@ -3648,22 +6248,71 @@
  
      expect(mockCoreExecuteToolCall).toHaveBeenCalled();
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -64679,7 +64903,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should preprocess @include commands before sending to the model', async () => {
-@@ -3694,7 +6289,10 @@
+@@ -3694,7 +6343,10 @@
        { type: GeminiEventType.Content, value: 'Summary complete.' },
        {
          type: GeminiEventType.Finished,
@@ -64691,7 +64915,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -3717,7 +6315,9 @@
+@@ -3717,7 +6369,9 @@
      );
  
      // 6. Assert the final output is correct
@@ -64702,7 +64926,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('keeps an agent-capable image route for the full headless tool chain', async () => {
-@@ -3738,28 +6338,31 @@
+@@ -3738,28 +6392,31 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -64739,7 +64963,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            ...finishedEvents,
          ]),
        );
-@@ -3771,9 +6374,7 @@
+@@ -3771,9 +6428,7 @@
        'prompt-vision-route',
      );
  
@@ -64750,7 +64974,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(acceptedSameSelector).toBe(true);
      expect(rejectedDifferentSelector).toBe(true);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
-@@ -3786,13 +6387,13 @@
+@@ -3786,13 +6441,13 @@
          modelOverride: selector,
          submittedPrompt: 'inspect @image.png',
        },
@@ -64765,7 +64989,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3800,7 +6401,7 @@
+@@ -3800,7 +6455,7 @@
        expect.any(AbortSignal),
        expect.objectContaining({ runtimeView }),
      );
@@ -64774,7 +64998,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Routing this image turn to vision-agent'),
      );
    });
-@@ -3828,18 +6429,22 @@
+@@ -3828,18 +6483,22 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -64801,7 +65025,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'inspect @image.png',
-@@ -3855,13 +6460,17 @@
+@@ -3855,13 +6514,17 @@
          type: SendMessageType.Notification,
          modelOverride: undefined,
        }),
@@ -64820,7 +65044,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3911,7 +6520,7 @@
+@@ -3911,7 +6574,7 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -64829,7 +65053,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Converted 1 image(s)'),
      );
    });
-@@ -3937,12 +6546,16 @@
+@@ -3937,12 +6600,16 @@
        createStreamFromEvents(finishedEvents),
      );
      const writes: string[] = [];
@@ -64852,7 +65076,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      await runNonInteractive(
        mockConfig,
-@@ -3992,7 +6605,7 @@
+@@ -3992,7 +6659,7 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -64861,7 +65085,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Vision bridge failed; proceeding without the image(s).\n',
      );
    });
-@@ -4030,10 +6643,10 @@
+@@ -4030,10 +6697,10 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -64874,7 +65098,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('were sent to vision-bridge'),
      );
    });
-@@ -4088,18 +6701,18 @@
+@@ -4088,18 +6755,18 @@
      });
      resolveForModel.mockRejectedValue(new Error('route unavailable'));
  
@@ -64905,7 +65129,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).not.toHaveBeenCalled();
    });
  
-@@ -4108,24 +6721,28 @@
+@@ -4108,24 +6775,28 @@
        { type: GeminiEventType.Content, value: 'Hello World' },
        {
          type: GeminiEventType.Finished,
@@ -64936,7 +65160,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.any(AbortSignal),
        'prompt-id-1',
        {
-@@ -4153,13 +6770,16 @@
+@@ -4153,13 +6824,16 @@
      expect(resultMessage).toBeTruthy();
      expect(resultMessage?.result).toBe('Hello World');
      // Get the actual metrics that were used
@@ -64957,7 +65181,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -4167,32 +6787,51 @@
+@@ -4167,32 +6841,51 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -65015,7 +65239,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock({
-@@ -4224,14 +6863,15 @@
+@@ -4224,14 +6917,15 @@
        },
      });
  
@@ -65033,7 +65257,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({ name: 'testTool' }),
-@@ -4240,6 +6880,10 @@
+@@ -4240,6 +6934,10 @@
          outputUpdateHandler: expect.any(Function),
        }),
      );
@@ -65044,7 +65268,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      // JSON adapter emits array of messages, last one is result with stats
      const outputCalls = processStdoutSpy.mock.calls.filter(
-@@ -4257,33 +6901,43 @@
+@@ -4257,33 +6955,43 @@
          msg.type === 'result',
      );
      expect(resultMessage).toBeTruthy();
@@ -65095,7 +65319,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        [{ text: 'Empty response test' }],
        expect.any(AbortSignal),
        'prompt-id-empty',
-@@ -4309,13 +6963,29 @@
+@@ -4309,13 +7017,29 @@
          'type' in msg &&
          msg.type === 'result',
      );
@@ -65130,7 +65354,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should handle errors in JSON format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock();
-@@ -4325,35 +6995,43 @@
+@@ -4325,35 +7049,43 @@
        throw testError;
      });
  
@@ -65203,7 +65427,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle API errors in text mode and exit with error code', async () => {
-@@ -4375,24 +7053,14 @@
+@@ -4375,24 +7107,14 @@
        createStreamFromEvents([apiErrorEvent]),
      );
  
@@ -65236,7 +65460,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      // Verify error was written to stderr
      expect(processStderrSpy).toHaveBeenCalled();
-@@ -4403,16 +7071,14 @@
+@@ -4403,16 +7125,14 @@
    });
  
    it('does not double-wrap or double-format an API error in non-interactive mode', async () => {
@@ -65259,7 +65483,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.TEXT);
      setupMetricsMock();
      const finalize = vi.fn();
-@@ -4421,13 +7087,13 @@
+@@ -4421,13 +7141,13 @@
        mockConfig as unknown as {
          getChatRecordingService: () => {
            finalize: () => void;
@@ -65274,7 +65498,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        value: {
          error: {
            message: '402 Model gpt-oss-120b is not available for billing.',
-@@ -4440,15 +7106,14 @@
+@@ -4440,15 +7160,14 @@
        createStreamFromEvents([apiErrorEvent]),
      );
  
@@ -65298,7 +65522,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(finalize).toHaveBeenCalledOnce();
      expect(flush).toHaveBeenCalledOnce();
  
-@@ -4487,35 +7152,45 @@
+@@ -4487,35 +7206,45 @@
        throw fatalError;
      });
  
@@ -65373,7 +65597,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should execute a slash command that returns a prompt', async () => {
-@@ -4535,7 +7210,10 @@
+@@ -4535,7 +7264,10 @@
        { type: GeminiEventType.Content, value: 'Response from command' },
        {
          type: GeminiEventType.Finished,
@@ -65385,7 +65609,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4561,7 +7239,9 @@
+@@ -4561,7 +7293,9 @@
        },
      );
  
@@ -65396,7 +65620,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle command that requires confirmation by returning early', async () => {
-@@ -4585,7 +7265,7 @@
+@@ -4585,7 +7319,7 @@
      );
  
      // Should write error message through adapter to stdout (TEXT mode goes through JsonOutputAdapter)
@@ -65405,7 +65629,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Shell command confirmation is not supported in non-interactive mode. Use YOLO mode or pre-approve commands.\n',
      );
    });
-@@ -4599,7 +7279,10 @@
+@@ -4599,7 +7333,10 @@
        { type: GeminiEventType.Content, value: 'Response to unknown' },
        {
          type: GeminiEventType.Finished,
@@ -65417,7 +65641,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4625,7 +7308,9 @@
+@@ -4625,7 +7362,9 @@
        },
      );
  
@@ -65428,7 +65652,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle known but unsupported slash commands like /help by returning early', async () => {
-@@ -4647,7 +7332,7 @@
+@@ -4647,7 +7386,7 @@
      );
  
      // Should write error message through adapter to stdout (TEXT mode goes through JsonOutputAdapter)
@@ -65437,7 +65661,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'The command "/help" is not supported in this mode.\n',
      );
    });
-@@ -4672,7 +7357,7 @@
+@@ -4672,7 +7411,7 @@
      );
  
      // Should write error message to stderr
@@ -65446,7 +65670,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Unknown command result type: unhandled\n',
      );
    });
-@@ -4695,7 +7380,10 @@
+@@ -4695,7 +7434,10 @@
        { type: GeminiEventType.Content, value: 'Acknowledged' },
        {
          type: GeminiEventType.Finished,
@@ -65458,7 +65682,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4711,7 +7399,9 @@
+@@ -4711,7 +7453,9 @@
  
      expect(mockAction).toHaveBeenCalledWith(expect.any(Object), 'arg1 arg2');
  
@@ -65469,7 +65693,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should emit stream-json envelopes when output format is stream-json', async () => {
-@@ -4720,20 +7410,25 @@
+@@ -4720,20 +7464,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -65504,7 +65728,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4750,61 +7445,72 @@
+@@ -4750,61 +7499,72 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -65602,7 +65826,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
  
      const envelopes = writes
-@@ -4816,6 +7522,7 @@
+@@ -4816,6 +7576,7 @@
      expect(process.exit).not.toHaveBeenCalled();
      expect(envelopes.at(-1)).toMatchObject({
        type: 'result',
@@ -65610,7 +65834,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        is_error: true,
        error: { message: 'Operation cancelled.' },
      });
-@@ -4832,12 +7539,16 @@
+@@ -4832,12 +7593,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -65633,7 +65857,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockBackgroundTaskRegistry.setRegisterCallback.mockImplementation(
        (callback) => {
          callback?.({
-@@ -4854,8 +7565,8 @@
+@@ -4854,8 +7619,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -65644,7 +65868,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -4894,14 +7605,16 @@
+@@ -4894,14 +7659,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -65669,7 +65893,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const notificationXml =
        '<task-notification>\n' +
-@@ -4963,8 +7676,8 @@
+@@ -4963,8 +7730,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65680,7 +65904,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -4975,8 +7688,8 @@
+@@ -4975,8 +7742,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65691,7 +65915,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5078,8 +7791,8 @@
+@@ -5078,8 +7845,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65702,7 +65926,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5090,8 +7803,8 @@
+@@ -5090,8 +7857,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65713,7 +65937,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5102,8 +7815,8 @@
+@@ -5102,8 +7869,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65724,7 +65948,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5137,26 +7850,32 @@
+@@ -5137,26 +7904,32 @@
      );
    });
  
@@ -65767,7 +65991,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -5202,14 +7921,16 @@
+@@ -5202,14 +7975,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -65792,7 +66016,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const notificationXml =
        '<task-notification>\n' +
-@@ -5239,8 +7960,8 @@
+@@ -5239,8 +8014,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -65803,7 +66027,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -5291,14 +8012,16 @@
+@@ -5291,14 +8066,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -65828,7 +66052,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const firstNotificationXml =
        '<task-notification>\n' +
-@@ -5377,8 +8100,8 @@
+@@ -5377,8 +8154,8 @@
        yield {
          type: GeminiEventType.Finished,
          value: {
@@ -65839,7 +66063,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        };
      }
-@@ -5390,16 +8113,16 @@
+@@ -5390,16 +8167,16 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65859,7 +66083,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Watch the logs',
        'prompt-monitor-cutover',
-@@ -5438,14 +8161,16 @@
+@@ -5438,14 +8215,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -65884,7 +66108,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      let keepBackgroundTaskOpen = true;
      let lateMonitorEventEmitted = false;
-@@ -5535,8 +8260,8 @@
+@@ -5535,8 +8314,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65895,7 +66119,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5547,8 +8272,8 @@
+@@ -5547,8 +8326,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65906,7 +66130,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5594,52 +8319,376 @@
+@@ -5594,52 +8373,376 @@
      });
    });
  
@@ -66303,7 +66527,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      await runNonInteractive(
        mockConfig,
        mockSettings,
-@@ -5655,12 +8704,7 @@
+@@ -5655,12 +8758,7 @@
      const resultEnvelope = envelopes.at(-1);
      expect(resultEnvelope?.type).toBe('result');
      expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);
@@ -66317,7 +66541,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      nowSpy.mockRestore();
    });
-@@ -5671,20 +8715,25 @@
+@@ -5671,20 +8769,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66352,7 +66576,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -5750,14 +8799,16 @@
+@@ -5750,14 +8853,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66377,7 +66601,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -5766,25 +8817,24 @@
+@@ -5766,25 +8871,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -66413,7 +66637,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -5802,24 +8852,36 @@
+@@ -5802,24 +8906,36 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -66461,7 +66685,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -5852,14 +8914,16 @@
+@@ -5852,14 +8968,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66486,7 +66710,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -5868,41 +8932,40 @@
+@@ -5868,41 +8986,40 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -66542,7 +66766,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger error',
-@@ -5936,12 +8999,14 @@
+@@ -5936,12 +9053,14 @@
          block !== null &&
          'type' in block &&
          block.type === 'tool_result',
@@ -66557,7 +66781,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should emit partial messages when includePartialMessages is true', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
-@@ -5949,21 +9014,26 @@
+@@ -5949,21 +9068,26 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66593,7 +66817,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6006,24 +9076,33 @@
+@@ -6006,24 +9130,33 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66637,7 +66861,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6040,38 +9119,40 @@
+@@ -6040,38 +9173,40 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -66700,7 +66924,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCall1: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -6091,32 +9172,37 @@
+@@ -6091,32 +9226,37 @@
          args: { param: 'value2' },
          isClientInitiated: false,
          prompt_id: 'prompt-id-multi',
@@ -66749,7 +66973,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Multiple tools',
        'prompt-id-multi',
-@@ -6125,36 +9211,32 @@
+@@ -6125,36 +9265,32 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -66805,7 +67029,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -6174,12 +9256,16 @@
+@@ -6174,12 +9310,16 @@
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
      const writes: string[] = [];
@@ -66828,7 +67052,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const duplicateToolCall: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -6223,21 +9309,26 @@
+@@ -6223,21 +9363,26 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66857,7 +67081,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({
-@@ -6255,30 +9346,15 @@
+@@ -6255,30 +9400,15 @@
      );
      expect(toolResultParts[1].functionResponse?.id).toBe('dup_id_0001');
      expect(toolResultParts[1].functionResponse?.response?.['error']).toContain(
@@ -66891,7 +67115,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
-@@ -6325,21 +9401,25 @@
+@@ -6325,21 +9455,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66919,7 +67143,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenNthCalledWith(
        1,
        mockConfig,
-@@ -6368,20 +9448,25 @@
+@@ -6368,20 +9502,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66954,7 +67178,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6481,7 +9566,10 @@
+@@ -6481,7 +9620,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -66966,7 +67190,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -6499,31 +9587,27 @@
+@@ -6499,31 +9641,27 @@
        true,
      );
      expect(predicate({ prompt: 'regular cron job' } as CronJob)).toBe(false);
@@ -67013,7 +67237,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          properties: { summary: { type: 'string' } },
        });
        (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
-@@ -6542,14 +9626,16 @@
+@@ -6542,14 +9680,16 @@
        });
  
        const writes: string[] = [];
@@ -67038,7 +67262,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Same turn: the model emits structured_output FIRST, then a second
        // (hypothetical side-effecting) tool. The break must prevent the
-@@ -6573,25 +9659,28 @@
+@@ -6573,25 +9713,28 @@
            args: {},
            isClientInitiated: false,
            prompt_id: 'prompt-id-structured',
@@ -67070,7 +67294,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // should have been skipped because structured output ended the session.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const firstCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6615,44 +9704,25 @@
+@@ -6615,44 +9758,25 @@
          'tool_call',
        );
        expect(
@@ -67124,7 +67348,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6670,14 +9740,16 @@
+@@ -6670,14 +9794,16 @@
        });
  
        const writes: string[] = [];
@@ -67149,7 +67373,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Same turn, reverse order: a side-effecting tool comes BEFORE
        // structured_output. The pre-scan must drop the leading call so the
-@@ -6703,25 +9775,28 @@
+@@ -6703,25 +9829,28 @@
            args: structuredArgs,
            isClientInitiated: false,
            prompt_id: 'prompt-id-leading',
@@ -67181,7 +67405,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // leading side-effect tool must have been suppressed by the pre-scan.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const onlyCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6729,54 +9804,35 @@
+@@ -6729,54 +9858,35 @@
        };
        expect(onlyCallArg.name).toBe('structured_output');
        // No follow-up turn should have been issued.
@@ -67248,7 +67472,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      it('tries multiple structured_output calls in the same turn until one succeeds', async () => {
        // Same-turn batch: [structured_output(bad), structured_output(good)].
-@@ -6802,14 +9858,16 @@
+@@ -6802,14 +9912,16 @@
        });
  
        const writes: string[] = [];
@@ -67273,7 +67497,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const goodArgs = { summary: 'ok' };
        const badStructured: ServerGeminiStreamEvent = {
-@@ -6850,21 +9908,24 @@
+@@ -6850,21 +9962,24 @@
                  name: 'structured_output',
                  response: { error: 'args invalid' },
                },
@@ -67301,7 +67525,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // order; the loop stops at the first success so no third execution.
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string; callId: string }).name,
-@@ -6881,27 +9942,17 @@
+@@ -6881,27 +9996,17 @@
        // No retry turn was needed.
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
        expect(abortAllSpy).toHaveBeenCalledTimes(1);
@@ -67334,7 +67558,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6933,28 +9984,35 @@
+@@ -6933,28 +10038,35 @@
            args: { summary: 'second try' },
            isClientInitiated: false,
            prompt_id: 'prompt-id-retry',
@@ -67380,7 +67604,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Emit structured output',
          'prompt-id-retry',
-@@ -6986,20 +10044,25 @@
+@@ -6986,20 +10098,25 @@
        setupMetricsMock();
  
        const writes: string[] = [];
@@ -67415,7 +67639,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValueOnce(
-@@ -7030,8 +10093,8 @@
+@@ -7030,8 +10147,8 @@
        expect(result?.error?.message).toMatch(/structured_output/);
        expect(endInteractionSpanSpy).toHaveBeenCalledWith('error', {
          promptId: 'prompt-id-plaintext',
@@ -67426,7 +67650,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        });
      });
  
-@@ -7104,17 +10167,22 @@
+@@ -7104,17 +10221,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -67449,7 +67673,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string }).name,
        );
-@@ -7260,17 +10328,22 @@
+@@ -7260,17 +10382,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -67472,7 +67696,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          (call) => (call[1] as { name: string }).name,
        );
        expect(executedNames).toEqual([
-@@ -7334,14 +10407,16 @@
+@@ -7334,14 +10461,16 @@
        setupMetricsMock();
  
        const writes: string[] = [];
@@ -67497,7 +67721,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Inject a monitor notification synchronously when the registry
        // wires up — same trick the existing notification tests use to
-@@ -7386,20 +10461,29 @@
+@@ -7386,20 +10515,29 @@
              {
                type: GeminiEventType.Finished,
                value: {
@@ -67533,7 +67757,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Watch the logs',
          'prompt-drain-struct',
-@@ -7507,14 +10591,16 @@
+@@ -7507,14 +10645,16 @@
        });
  
        const writes: string[] = [];
@@ -67558,7 +67782,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const structuredArgs = { summary: 'done' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -7524,17 +10610,24 @@
+@@ -7524,17 +10664,24 @@
            name: 'structured_output',
            args: structuredArgs,
            isClientInitiated: false,
@@ -67587,7 +67811,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const exitCode = await runNonInteractive(
          mockConfig,
          mockSettings,
-@@ -7603,14 +10696,16 @@
+@@ -7603,14 +10750,16 @@
        });
  
        const writes: string[] = [];
@@ -67612,7 +67836,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const structuredArgs = { summary: 'text-mode-ok' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -7620,17 +10715,24 @@
+@@ -7620,17 +10769,24 @@
            name: 'structured_output',
            args: structuredArgs,
            isClientInitiated: false,
@@ -67641,7 +67865,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockConfig,
          mockSettings,
          'Emit structured output (text mode)',
-@@ -7701,7 +10803,10 @@
+@@ -7701,7 +10857,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -67653,7 +67877,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7742,7 +10847,10 @@
+@@ -7742,7 +10901,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -67665,7 +67889,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7797,7 +10905,10 @@
+@@ -7797,7 +10959,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -67680,7 +67904,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInteractiveCli.ts
 --- a/packages/cli/src/nonInteractiveCli.ts
 +++ b/packages/cli/src/nonInteractiveCli.ts
-@@ -1,37 +1,31 @@
+@@ -1,37 +1,34 @@
 -/**
 - * @license
 - * Copyright 2025 Google LLC
@@ -67720,6 +67944,9 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    shutdownTelemetry,
    isTelemetrySdkInitialized,
 +  AgentTerminateMode,
++  QWEN38_ARTIFACTS_ROOT,
++  missingDeliverables,
++  missingDeliverablesMessage,
    GeminiEventType,
 +  FatalError,
    FatalInputError,
@@ -67735,7 +67962,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    ToolNames,
    uiTelemetryService,
    parseAndFormatApiError,
-@@ -55,7 +49,6 @@
+@@ -55,7 +52,6 @@
    partitionByConcurrencySafety,
    PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,
    ToolErrorType,
@@ -67743,7 +67970,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    clampInlineMediaPart,
    formatFullTurnVisionNotice,
    formatVisionBridgeNotice,
-@@ -64,14 +57,55 @@
+@@ -64,30 +60,67 @@
    runVisionBridge,
    shouldRunVisionBridge,
    splitImageParts,
@@ -67798,11 +68025,15 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +  type PartListUnion,
 +} from '@google/genai';
  import type { CLIUserMessage, PermissionMode } from './nonInteractive/types.js';
-+import { TERMINAL_RESULT_BY_STATE } from './nonInteractive/types.js';
++import {
++  SessionTerminateMode,
++  TERMINAL_RESULT_BY_STATE,
++} from './nonInteractive/types.js';
++import type { ResultEnding } from './nonInteractive/io/BaseJsonOutputAdapter.js';
  import type { JsonOutputAdapterInterface } from './nonInteractive/io/BaseJsonOutputAdapter.js';
  import { JsonOutputAdapter } from './nonInteractive/io/JsonOutputAdapter.js';
  import { StreamJsonOutputAdapter } from './nonInteractive/io/StreamJsonOutputAdapter.js';
-@@ -79,15 +113,7 @@
+ import type { ControlService } from './nonInteractive/control/ControlService.js';
  
  import { handleSlashCommand } from './nonInteractiveCliCommands.js';
  import { handleAtCommand } from './ui/hooks/atCommandProcessor.js';
@@ -67814,24 +68045,23 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -  handleMaxTurnsExceededError,
 -  handleBudgetExceededError,
 -} from './utils/errors.js';
-+import { handleToolError } from './utils/errors.js';
 -import { RunBudgetEnforcer } from './utils/runBudget.js';
++import { handleToolError } from './utils/errors.js';
  import {
    settleChatRecording,
    subscribeToHeadlessChatRecordingFailures,
-@@ -103,6 +129,54 @@
+@@ -103,6 +136,78 @@
      this.name = 'TurnInterruptedError';
    }
  }
-+
+ 
 +/**
 + * How a run ended, as a value. Every path out of {@link runNonInteractive}
 + * produces one, and one emitter turns it into the terminal record, the
 + * process exit code, and the run's telemetry outcome — so a run cannot end
 + * without saying how, and cannot say two different things about it.
 + */
-+interface SessionEnding {
-+  readonly terminateMode: AgentTerminateMode;
++type SessionEnding = ResultEnding & {
 +  /**
 +   * Error text for a failed state, or local text already emitted as a runtime
 +   * assistant message before a successful ending.
@@ -67851,6 +68081,31 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +   * state maps to.
 +   */
 +  readonly exitCode?: number;
++};
++
++/**
++ * The ending a run that wrote its final message reports, once what it was
++ * started owing has been looked for. Only a final message can owe anything:
++ * every other ending is already an error, and the record names that ending
++ * rather than the files it did not reach. Outside the locked agent-service
++ * runtime no deliverables are declared, and the ending stands as it is.
++ */
++function settleDeclaredDeliverables(
++  config: Config,
++  ending: SessionEnding,
++): SessionEnding {
++  const declared = config.getDeclaredDeliverables();
++  if (ending.terminateMode !== AgentTerminateMode.GOAL || !declared) {
++    return ending;
++  }
++  const missing = missingDeliverables(QWEN38_ARTIFACTS_ROOT, declared);
++  const [first, ...rest] = missing.map(({ path }) => path);
++  if (first === undefined) return ending;
++  return {
++    terminateMode: SessionTerminateMode.MISSING_DELIVERABLES,
++    missingDeliverables: [first, ...rest],
++    message: missingDeliverablesMessage(missing, declared.length),
++  };
 +}
 +
 +/**
@@ -67871,10 +68126,10 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +    this.name = 'GoalTurnSettlementError';
 +  }
 +}
- 
++
  const restoredBackgroundAgentSessions = new WeakMap<Config, Set<string>>();
  
-@@ -150,47 +224,19 @@
+@@ -150,47 +255,19 @@
  
  import {
    normalizePartList,
@@ -67928,7 +68183,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -  // per-turn cap is also always-on but has its own knob, so it gets a
 -  // dedicated hint instead of membership in this list.
 +  // setting can't disable them — don't suggest it for those loop types.
-@@ -200,12 +246,9 @@
+@@ -200,12 +277,9 @@
      loopType === LoopType.GLOBAL_TOOL_CALL_DUPLICATE ||
      loopType === LoopType.INVALID_TOOL_PARAMS_STAGNATION ||
      loopType === LoopType.REPEATED_TOOL_EXECUTION_FAILURE;
@@ -67944,7 +68199,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    return `Loop detection halted the run${detail}.${hint}`;
  }
  
-@@ -363,65 +406,49 @@
+@@ -363,65 +437,49 @@
    return true;
  }
  
@@ -68043,7 +68298,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
   * Provides optional overrides for `runNonInteractive` execution.
   *
   * @param abortController - Optional abort controller for cancellation.
-@@ -439,13 +466,6 @@
+@@ -439,13 +497,6 @@
    captureMonitorNotifications?: boolean;
    captureMonitorRegistrations?: boolean;
    onResultEmitted?: () => void;
@@ -68057,7 +68312,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    /**
     * Continue the most recent unfinished turn from chat history instead of
     * submitting `input` (which is ignored). No new user message enters the
-@@ -523,20 +543,20 @@
+@@ -523,20 +574,20 @@
          finalize: ownsAdapter,
        }).then(() => undefined);
        return chatRecordingSettlement;
@@ -68084,7 +68339,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      const sessionId = config.getSessionId();
      const permissionMode = config.getApprovalMode() as PermissionMode;
      const cleanupReviewWorktrees = (gitTimeout?: number) =>
-@@ -551,7 +571,13 @@
+@@ -551,7 +602,13 @@
      );
  
      let turnCount = 0;
@@ -68099,7 +68354,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let totalApiDurationMs = 0;
      const startTime = Date.now();
      let activeInteractionPromptId = prompt_id;
-@@ -609,19 +635,25 @@
+@@ -609,19 +666,25 @@
      const observeGoalRuntime = (runtime: GoalRuntime) => {
        goalRuntimeUnsubscribe ??= runtime.subscribe(emitGoalSnapshot);
      };
@@ -68137,7 +68392,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
        }
      };
      let goalHostUnbind: (() => void) | undefined;
-@@ -678,31 +710,25 @@
+@@ -678,31 +741,25 @@
              return;
            }
  
@@ -68188,7 +68443,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
          } finally {
            if (activeGoalTurn === turn) {
              activeGoalTurn = undefined;
-@@ -716,95 +742,63 @@
+@@ -716,95 +773,63 @@
        return goalTurnSettlement;
      };
      const finishGoalTurn = async (turn: HeadlessGoalTurn): Promise<void> => {
@@ -68334,7 +68589,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      };
  
      interface LocalQueueItem {
-@@ -818,7 +812,7 @@
+@@ -818,7 +843,7 @@
          tool_use_id?: string;
          status: BackgroundTaskStatus;
          usage?: {
@@ -68343,7 +68598,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
            tool_uses: number;
            duration_ms: number;
          };
-@@ -860,13 +854,116 @@
+@@ -860,13 +885,123 @@
        captureMonitorTurnsInLocalQueue = false;
        config.getMonitorRegistry().abortAll();
        flushQueuedNotificationsToSdk(sdkOnlyMonitorQueue);
@@ -68367,7 +68622,8 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +     * through here, which is what makes "the run ended" and "the run said how
 +     * it ended" the same event.
 +     */
-+    const finish = async (ending: SessionEnding): Promise<number> => {
++    const finish = async (reached: SessionEnding): Promise<number> => {
++      const ending = endedWith ? reached : settleDeclaredDeliverables(config, reached);
 +      const terminal = TERMINAL_RESULT_BY_STATE[ending.terminateMode];
 +      const exitCode = ending.exitCode ?? terminal.exitCode;
 +      if (endedWith) {
@@ -68379,7 +68635,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +      endedWith = ending;
 +      let interactionEnded = false;
 +      const reportInteraction = (
-+        mode: AgentTerminateMode,
++        mode: SessionEnding['terminateMode'],
 +        message: string | undefined,
 +      ) => {
 +        if (interactionEnded) return;
@@ -68428,7 +68684,13 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +        );
 +
 +        const emitted = await emitResult({
-+          terminateMode: ending.terminateMode,
++          ...(ending.terminateMode ===
++          SessionTerminateMode.MISSING_DELIVERABLES
++            ? {
++                terminateMode: ending.terminateMode,
++                missingDeliverables: ending.missingDeliverables,
++              }
++            : { terminateMode: ending.terminateMode }),
 +          durationMs: Date.now() - startTime,
 +          apiDurationMs: totalApiDurationMs,
 +          numTurns: turnCount,
@@ -68465,7 +68727,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let pipeBroken = false;
      let workflowApprovalChannelRegistered = false;
      const stdoutErrorHandler = (err: NodeJS.ErrnoException) => {
-@@ -996,2175 +1093,2309 @@
+@@ -996,2175 +1131,2309 @@
      // the regular options.sendMessageType / UserQuery selection applies.
      let continueSendType: SendMessageType | null = null;
  
@@ -150371,7 +150633,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
   *
   * - **Approval gating**: `'project'` (a workspace `.mcp.json`) and `'workspace'`
   *   (a workspace `.qwen/settings.json`) are checked-in / shareable and therefore
-@@ -946,25 +903,26 @@
+@@ -946,25 +903,32 @@
    };
  }
  
@@ -150393,13 +150655,19 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    coreTools?: string[];
 +  strictTools?: string[];
 +  foregroundAgentsOnly?: boolean;
++  /**
++   * The paths, relative to the artifacts root, a locked agent-service run
++   * must leave behind; `undefined` outside that runtime, which names no
++   * artifacts root. An empty list is a run that owes none.
++   */
++  declaredDeliverables?: readonly string[];
    allowedTools?: string[];
    excludeTools?: string[];
    /**
     * Pre-merged list of slash command names that should be hidden from the
     * CLI surface. Matched case-insensitively on the final (post-rename)
     * command name. Sourced from settings (`slashCommands.disabled`, UNION
-@@ -1059,13 +1017,12 @@
+@@ -1059,13 +1023,12 @@
    lspClient?: LspClient;
    userMemory?: string;
    geminiMdFileCount?: number;
@@ -150413,7 +150681,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * remain readable from Config; only the global SDK side effect is deferred.
     */
    deferTelemetryInitialization?: boolean;
-@@ -1110,23 +1067,7 @@
+@@ -1110,23 +1073,7 @@
 -  /**
 -   * Wall-clock budget for an unattended run, in seconds. `-1` (default)
 -   * means no limit. Enforced by the CLI's non-interactive run loop
@@ -150437,7 +150705,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * expiry. Unset or invalid falls back to the 7-day default.
     */
    cronRecurringMaxAgeDays?: number;
-@@ -1191,15 +1132,13 @@
+@@ -1191,15 +1138,13 @@
     * This is used to produce per-field source badges in the UI.
     */
    generationConfigSources?: ContentGeneratorConfigSources;
@@ -150453,7 +150721,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    useRipgrep?: boolean;
    useBuiltinRipgrep?: boolean;
    shouldUseNodePtyShell?: boolean;
-@@ -1207,15 +1146,9 @@
+@@ -1207,15 +1152,9 @@
    preventSystemSleep?: boolean;
 -  skipNextSpeakerCheck?: boolean;
    shellExecutionConfig?: ShellExecutionConfig;
@@ -150469,7 +150737,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * shell tool falls back to its built-in default. See
     * getShellDefaultTimeoutMs.
     */
-@@ -1331,25 +1264,11 @@
+@@ -1331,25 +1270,11 @@
 -   * Dedicated model for chat compression (auto-compaction). Falls back to
 -   * the main model. Corresponds to the `compactionModel` setting
 -   * (configurable via `/model --compaction`).
@@ -150495,7 +150763,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Users with old settings.json containing hooksConfig.enabled should migrate
     * to use disableAllHooks instead (note: inverted logic - enabled:true → disableAllHooks:false).
     */
-@@ -1470,7 +1389,7 @@
+@@ -1470,7 +1395,7 @@
  
  /** Default sub-agent nesting cap (1-based levels). */
  export const DEFAULT_MAX_SUBAGENT_DEPTH = 5;
@@ -150504,7 +150772,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  export const MAX_SUBAGENT_DEPTH_LIMIT = 100;
  
  /**
-@@ -1490,57 +1409,10 @@
+@@ -1490,57 +1415,10 @@
  ): number {
    return value == null || !Number.isFinite(value)
      ? DEFAULT_MAX_SUBAGENT_DEPTH
@@ -150562,7 +150830,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    const raw = process.env[envName];
    if (!raw) {
      return fallback;
-@@ -1737,19 +1609,32 @@
+@@ -1737,19 +1615,32 @@
        error.cause instanceof AggregateError &&
        error.cause.errors.includes(candidate))
    );
@@ -150596,7 +150864,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private goalRestoreActivation?: () => Promise<void>;
    private rejectGoalRestoreActivation?: (reason?: unknown) => void;
    private readonly sessionRuntimeBaseDir: string;
-@@ -1759,12 +1644,13 @@
+@@ -1759,12 +1650,13 @@
      | { lease: SessionWriterLease; promise: Promise<void> }
      | undefined;
    private sessionWriterReclaimPolicy: 'local' | 'never' = 'local';
@@ -150610,7 +150878,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * One-shot notice produced by `setupStartupWorktree` (Phase D-1) when the
     * CLI was launched with `--worktree`. The active entry point (TUI XOR
     * headless) reads it via {@link consumePendingStartupWorktreeNotice} on
-@@ -1822,15 +1708,15 @@
+@@ -1822,15 +1714,15 @@
      | null = null;
    // Skill keys (e.g. "skill:foo") that coreToolScheduler announced inline on a
    // tool result. The client's drain consumes this set so it can mark them as
@@ -150628,7 +150896,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly modelProvidersConfig?: ModelProvidersConfig;
    private readonly providerProtocolConfig?: ProviderProtocolConfig;
    private readonly sandbox: SandboxConfig | undefined;
-@@ -1842,12 +1728,14 @@
+@@ -1842,12 +1734,15 @@
    private readonly includePartialMessages: boolean;
    private readonly question: string | undefined;
    private readonly systemPrompt: string | undefined;
@@ -150637,13 +150905,14 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly coreTools: string[] | undefined;
 +  private readonly strictTools: string[] | undefined;
 +  private readonly foregroundAgentsOnly: boolean;
++  private readonly declaredDeliverables: readonly string[] | undefined;
    private readonly allowedTools: string[] | undefined;
    private readonly excludeTools: string[] | undefined;
    private readonly disabledSlashCommands: readonly string[];
    private readonly disabledSkillNamesProvider:
      | (() => ReadonlySet<string>)
      | null;
-@@ -1944,13 +1832,13 @@
+@@ -1944,13 +1839,13 @@
    };
    private manualPlanExitNoticeCursorState: ManualPlanExitNoticeCursorState = {
      seenVersion: 0,
@@ -150658,7 +150927,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly usageStatisticsEnabled: boolean;
    private readonly fileReadCacheDisabled: boolean;
 +  private activeTodoReminders = new Map<string, string>();
-@@ -1957,6 +1845,5 @@
+@@ -1957,6 +1852,5 @@
 -  private activeTodoReminders = new Map<string, string>();
    private activeTodoWorkChainOwners = new Map<string, string>();
 +  private activeTodoReminderTurns = new Map<string, number>();
@@ -150666,7 +150935,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private geminiClient!: GeminiClient;
    private baseLlmClient!: BaseLlmClient;
    private cronScheduler: CronScheduler | null = null;
-@@ -1966,13 +1853,13 @@
+@@ -1966,13 +1860,13 @@
      customIgnoreFiles: string[];
      enableRecursiveFileSearch: boolean;
      enableFuzzySearch: boolean;
@@ -150681,7 +150950,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * A Goal restore held back because the session writer is not accepting
     * writes yet. Settled by {@link startPendingGoalRestore} once the
     * recorder has its lease, or by {@link settlePendingGoalRestore} when the
-@@ -1988,15 +1875,12 @@
+@@ -1988,15 +1882,12 @@
    private goalTurnHost: GoalTurnHost | undefined;
    private goalTurnHostUnbind: (() => void) | undefined;
    private goalTurnHostGeneration = 0;
@@ -150697,7 +150966,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly explicitIncludeDirectories: string[];
    private readonly bugCommand: BugCommandSettings | undefined;
    private outputLanguageFilePath?: string;
-@@ -2007,7 +1891,3 @@
+@@ -2007,7 +1898,3 @@
  
    private readonly maxSessionTurns: number;
    private readonly maxSubagentDepth: number;
@@ -150705,7 +150974,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -  private readonly maxToolCalls: number;
 -  private readonly clearContextOnIdle: ClearContextOnIdleSettings;
 -  private readonly sessionTokenLimit: number;
-@@ -2014,13 +1894,12 @@
+@@ -2014,13 +1901,12 @@
    private readonly listExtensions: boolean;
    private readonly overrideExtensions?: string[];
  
@@ -150719,7 +150988,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly cronRecurringMaxAgeDays: number;
    private readonly agentTeamEnabled: boolean = false;
    private readonly artifactEnabled: boolean = true;
-@@ -2031,17 +1910,15 @@
+@@ -2031,17 +1917,15 @@
    private workflowsEnabled = false;
    private readonly skipWorkflowUsageWarning: boolean = false;
    private readonly computerUseEnabled: boolean = true;
@@ -150737,12 +151006,12 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly useBuiltinRipgrep: boolean;
    private readonly shouldUseNodePtyShell: boolean;
    private readonly preventSystemSleep: boolean;
-@@ -2048,4 +1925,3 @@
+@@ -2048,4 +1932,3 @@
 -  private readonly skipNextSpeakerCheck: boolean;
    private shellExecutionConfig: ShellExecutionConfig;
    private arenaManager: ArenaManager | null = null;
    private arenaManagerChangeCallback:
-@@ -2060,8 +1936,6 @@
+@@ -2060,8 +1943,6 @@
    private readonly agentsSettings: AgentsCollabSettings;
    private readonly worktreeSettings: WorktreeSettings;
    private readonly skipLoopDetection: boolean;
@@ -150751,7 +151020,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly skipStartupContext: boolean;
    private readonly bareMode: boolean;
    private readonly safeMode: boolean;
-@@ -2078,19 +1952,15 @@
+@@ -2078,19 +1959,15 @@
    private initializationSucceeded = false;
    private initializationSettled = false;
    private shutdownRequested = false;
@@ -150772,7 +151041,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly channel: string | undefined;
    private readonly jsonFd: number | undefined;
    private readonly jsonFile: string | undefined;
-@@ -2116,13 +1986,11 @@
+@@ -2116,13 +1993,11 @@
    private readonly webSearchSettings?: WebSearchSettings;
    private webSearchNoticeEmitted = false;
    private visionModel?: string;
@@ -150786,7 +151055,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly userHooks?: Record<string, unknown>;
    /** Project-level hooks (only loaded in trusted folders) */
    private readonly projectHooks?: Record<string, unknown>;
-@@ -2138,25 +2006,28 @@
+@@ -2138,25 +2013,28 @@
    private readonly ownsModelEnvSlot: boolean = false;
    private readonly settingsWatcher?: { stopWatching(): void };
  
@@ -150816,7 +151085,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.fileSystemService = new StandardFileSystemService();
      this.sandbox = params.sandbox;
      this.targetDir = path.resolve(params.targetDir);
-@@ -2177,12 +2048,14 @@
+@@ -2177,12 +2055,15 @@
      this.outputFormat = normalizedOutputFormat ?? OutputFormat.TEXT;
      this.includePartialMessages = params.includePartialMessages ?? false;
      this.question = params.question;
@@ -150825,13 +151094,14 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.coreTools = params.coreTools;
 +    this.strictTools = params.strictTools;
 +    this.foregroundAgentsOnly = params.foregroundAgentsOnly ?? false;
++    this.declaredDeliverables = params.declaredDeliverables;
      this.allowedTools = params.allowedTools;
      this.excludeTools = params.excludeTools;
      this.disabledSlashCommands = Object.freeze([
        ...(params.disabledSlashCommands ?? []),
      ]);
      this.disabledSkillNamesProvider = params.disabledSkillNamesProvider ?? null;
-@@ -2223,14 +2096,12 @@
+@@ -2223,14 +2104,12 @@
      this.sdkMode = params.sdkMode ?? false;
      this.userMemory = params.userMemory ?? '';
      this.geminiMdFileCount = params.geminiMdFileCount ?? 0;
@@ -150846,7 +151116,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        otlpEndpoint: params.telemetry?.otlpEndpoint,
        otlpProtocol: params.telemetry?.otlpProtocol,
        otlpTracesEndpoint: params.telemetry?.otlpTracesEndpoint,
-@@ -2282,29 +2153,11 @@
+@@ -2282,29 +2161,11 @@
      this.bugCommand = params.bugCommand;
      this.maxSessionTurns = validateMaxSessionTurns(params.maxSessionTurns);
      this.maxSubagentDepth = normalizeMaxSubagentDepth(params.maxSubagentDepth);
@@ -150876,7 +151146,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      );
      this.agentTeamEnabled = params.agentTeamEnabled ?? false;
      this.artifactEnabled = params.artifactEnabled ?? true;
-@@ -2325,22 +2178,13 @@
+@@ -2325,22 +2186,13 @@
      this.folderTrust = params.folderTrust ?? false;
      this.ideMode = params.ideMode ?? false;
      this.modelProvidersConfig = params.modelProvidersConfig;
@@ -150899,14 +151169,14 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    // Whether the user explicitly set the cap (vs. the resolved default). An
 -    // explicit value is honored as a hard cap; the default is adaptive.
 -    this.maxToolCallsPerTurnExplicit = params.maxToolCallsPerTurn !== undefined;
-@@ -2364,6 +2208,5 @@
+@@ -2364,6 +2216,5 @@
      this.shouldUseNodePtyShell =
        params.shouldUseNodePtyShell ?? shouldDefaultToNodePty();
      this.preventSystemSleep = params.preventSystemSleep ?? true;
 -    this.skipNextSpeakerCheck = params.skipNextSpeakerCheck ?? true;
      this.shellExecutionConfig = {
        terminalWidth: params.shellExecutionConfig?.terminalWidth ?? 80,
-@@ -2370,23 +2213,12 @@
+@@ -2370,23 +2221,12 @@
        terminalHeight: params.shellExecutionConfig?.terminalHeight ?? 24,
        showColor: params.shellExecutionConfig?.showColor ?? false,
        pager: params.shellExecutionConfig?.pager,
@@ -150930,7 +151200,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // a negative or fractional value would throw RangeError or silently degrade
      // to a 1ms timeout. Unlike the vision bridge, 0 is valid here and disables
      // the timeout. Reject anything the timer can't take and fall back to the
-@@ -2430,13 +2262,13 @@
+@@ -2430,13 +2270,13 @@
        process.env['QWEN_CODE_PROJECT_DIR'] = this.storage.getProjectDir();
        projectDirEnvClaimed = true;
      }
@@ -150945,7 +151215,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          ? {
              maxConcurrentBackgroundAgents:
                this.agentsSettings.maxParallelAgents,
-@@ -2541,25 +2373,15 @@
+@@ -2541,25 +2381,15 @@
          });
        // Swallow an early rejection so it cannot become an unhandledRejection
        // before initialize() awaits (and surfaces) the stored promise.
@@ -150974,7 +151244,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        enabledExtensionOverrides: this.overrideExtensions,
        isWorkspaceTrusted: this.isTrustedFolder(),
        locale: params.locale,
-@@ -2587,7 +2409,6 @@
+@@ -2587,7 +2417,6 @@
      this.fastModel = params.fastModel || undefined;
      this.webSearchSettings = params.webSearch;
      this.visionModel = params.visionModel || undefined;
@@ -150982,7 +151252,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.imageModel = params.imageModel || undefined;
      // Guard: nothing validates settings.json on the load path, so this is the
      // only real gate. `AbortSignal.timeout()` requires an integer in
-@@ -2599,13 +2420,12 @@
+@@ -2599,13 +2428,12 @@
        params.visionBridgeTimeoutMs !== undefined &&
        Number.isInteger(params.visionBridgeTimeoutMs) &&
        params.visionBridgeTimeoutMs > 0 &&
@@ -150996,7 +151266,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      );
      // Store user and project hooks separately for proper source attribution
      this.userHooks = params.userHooks;
-@@ -2618,45 +2438,50 @@
+@@ -2618,45 +2446,50 @@
  
    /**
     * Must only be called once, throws if called again.
@@ -151063,7 +151333,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          unregisterSessionProjectDir(this.sessionId);
          this.sessionProjectDirRegistered = false;
        }
-@@ -2695,25 +2520,33 @@
+@@ -2695,25 +2528,33 @@
      const explicitExtensionNames = this.isSafeMode()
        ? []
        : (this.overrideExtensions ?? []).filter(
@@ -151099,7 +151369,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
        // Initialize MessageBus for hook execution
        this.messageBus = new MessageBus();
-@@ -2772,13 +2605,13 @@
+@@ -2772,13 +2613,13 @@
                  );
                  break;
                case 'Stop': {
@@ -151114,7 +151384,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
                    (input['stop_hook_active'] as boolean) || false,
                    (input['last_assistant_message'] as string) || '',
                    contextUsageData,
-@@ -2962,13 +2795,13 @@
+@@ -2962,13 +2803,13 @@
        this.debugLogger.debug('Hook system disabled, skipping initialization');
      }
      recordStartupEvent('config_initialize_hooks_end');
@@ -151129,7 +151399,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
              this.getProjectRoot(),
            );
            if (curatorResult.status === 'ran') {
-@@ -3008,13 +2841,17 @@
+@@ -3008,13 +2849,17 @@
      // Load session subagents if they were provided before initialization
      if (this.sessionSubagents.length > 0) {
        this.subagentManager.loadSessionSubagents(this.sessionSubagents);
@@ -151148,7 +151418,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
      recordStartupEvent('config_initialize_hierarchical_memory_start');
      await this.refreshHierarchicalMemory('session_start');
-@@ -3175,28 +3012,36 @@
+@@ -3175,28 +3020,36 @@
            );
          }
        })();
@@ -151190,7 +151460,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          onOwnershipAcquired: (acquiredLease) => {
            lease = acquiredLease;
            this.pendingSessionWriterLease = acquiredLease;
-@@ -3217,16 +3062,12 @@
+@@ -3217,16 +3070,12 @@
        if (location === 'conflict' || location === 'archived') {
          throw new SessionTranscriptChangedError();
        }
@@ -151207,7 +151477,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          authoritative = await this.getSessionService().loadSession(
            this.sessionId,
          );
-@@ -3234,13 +3075,20 @@
+@@ -3234,13 +3083,20 @@
        } else if (location !== undefined) {
          throw new SessionTranscriptChangedError();
        }
@@ -151229,7 +151499,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.sessionData = authoritative;
        recorder.activate(
          lease,
-@@ -3625,39 +3473,12 @@
+@@ -3625,39 +3481,12 @@
      this.getFileReadCache().recordRead(indexPath, indexRead.stats, {
        full: true,
        cacheable: true,
@@ -151269,7 +151539,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      }
  
      if (this.getBareMode()) {
-@@ -3683,15 +3504,19 @@
+@@ -3683,15 +3512,19 @@
    }
  
    getContextRuleExcludes(): string[] {
@@ -151292,7 +151562,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    /**
     * Get the ModelsConfig instance for model-related operations.
     * External code (e.g., CLI) can use this to access model configuration.
-@@ -3736,98 +3561,101 @@
+@@ -3736,98 +3569,101 @@
      this.baseLlmClient?.clearPerModelGeneratorCache();
    }
  
@@ -151474,7 +151744,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getSessionId(): string {
      return this.sessionId;
    }
-@@ -3919,64 +3747,114 @@
+@@ -3919,64 +3755,114 @@
    /**
     * Returns warnings generated during configuration resolution.
     * These warnings are collected from model configuration resolution
@@ -151617,7 +151887,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (process.env) {
        process.env['QWEN_CODE_SESSION_ID'] = this.sessionId;
      }
-@@ -3986,43 +3864,56 @@
+@@ -3986,43 +3872,56 @@
      // model by the new id, miss, and fall back to another session's value.
      // Drop the orphaned entry too — shutdown only unregisters the current id.
      unregisterSessionModel(previousSessionId);
@@ -151680,7 +151950,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          sessionData && isSessionTransition ? previousSessionId : undefined,
        );
      }
-@@ -4118,17 +4009,53 @@
+@@ -4118,17 +4017,53 @@
    }
  
    getImportFormat(): 'tree' | 'flat' {
@@ -151739,7 +152009,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // If contentGeneratorConfigSources is empty (before initializeAuth),
      // get sources from ModelsConfig
      if (
-@@ -4139,13 +4066,13 @@
+@@ -4139,13 +4074,13 @@
      }
      return this.contentGeneratorConfigSources;
    }
@@ -151754,7 +152024,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getCurrentModelRegistryBaseUrl(): string | null | undefined {
      return this.modelsConfig.getCurrentRegistryBaseUrl();
    }
-@@ -4288,65 +4215,1 @@
+@@ -4288,65 +4223,1 @@
      this.visionModel = model || undefined;
 -  }
 -
@@ -151820,7 +152090,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -   */
 -  setCompactionModel(model: string | undefined): void {
 -    this.compactionModel = model || undefined;
-@@ -4360,21 +4223,12 @@
+@@ -4360,21 +4231,12 @@
      this.imageModel = model || undefined;
      if (!this.initialized || !this.isImageGenerationEnabled()) {
        return;
@@ -151842,7 +152112,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Read the active reasoning-effort tier from the live content-generator
     * config. Returns undefined when thinking is disabled (`reasoning: false`) or
     * no tier is set (the model/provider default applies).
-@@ -4476,15 +4330,18 @@
+@@ -4476,15 +4338,18 @@
        // `if (cfg.reasoning)` checks would treat reasoning as active and the
        // pipeline would emit `reasoning: {}` as wire noise.
        cfg.reasoning = Object.keys(next).length > 0 ? next : undefined;
@@ -151863,7 +152133,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      applyEffort(this.modelsConfig?.getGenerationConfig());
    }
  
-@@ -4618,36 +4475,29 @@
+@@ -4618,36 +4483,29 @@
     */
    getVisionBridgeTimeoutMs(): number | undefined {
      return this.visionBridgeTimeoutMs;
@@ -151903,7 +152173,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // Reasoning effort is a global, model-independent preference (set via
      // /effort). Capture it before the rebuild and re-apply after, so switching
      // models never silently drops the user's chosen effort — neither the
-@@ -4655,101 +4505,12 @@
+@@ -4655,101 +4513,12 @@
      // full refresh path (which rebuilds the config from scratch).
      const priorReasoningEffort = this.getReasoningEffort();
  
@@ -152005,7 +152275,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // preceding switchModel() ran applyResolvedModelDefaults(), which overwrote
      // modelsConfig's `reasoning` with the new model's preset (undefined for most
      // models), BEFORE this callback fires. So refreshAuth reads `undefined` and
-@@ -4837,20 +4598,4 @@
+@@ -4837,20 +4606,4 @@
      return this.maxSubagentDepth;
 -  }
 -
@@ -152026,7 +152296,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getEmbeddingModel(): string {
-@@ -4873,135 +4618,20 @@
+@@ -4873,135 +4626,20 @@
    }
  
    getTargetDir(): string {
@@ -152163,7 +152433,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      const targetPath = path.resolve(newDir);
      const expected = expectedCanonicalDir ?? fs.realpathSync(targetPath);
      if (!fs.statSync(targetPath).isDirectory()) {
-@@ -5030,29 +4660,16 @@
+@@ -5030,29 +4668,16 @@
          throw new Error(
            `Realpath mismatch: resolved ${actualCanonical}, expected ${expected}.`,
          );
@@ -152194,7 +152464,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionService = undefined;
      this.fileHistoryService = undefined;
      this.getFileReadCache().clear();
-@@ -5125,51 +4742,44 @@
+@@ -5125,51 +4750,44 @@
    async shutdown(options?: {
      shutdownTelemetry?: boolean;
      skipSessionWriter?: boolean;
@@ -152273,7 +152543,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      waitForInitialization: boolean,
    ): Promise<void> {
      if (waitForInitialization) {
-@@ -5219,67 +4829,67 @@
+@@ -5219,67 +4837,67 @@
      };
      void shutdown.then(clear, clear);
      return shutdown;
@@ -152396,15 +152666,13 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.promptRegistry;
    }
  
-@@ -5313,12 +4923,25 @@
-   /** @deprecated Use getPermissionsAllow() instead. */
-   getCoreTools(): string[] | undefined {
+@@ -5315,10 +4933,31 @@
      if (this.getBareMode()) {
        return DEFAULT_BARE_CORE_TOOLS;
      }
      return this.coreTools;
-+  }
-+
+   }
+ 
 +  /** Universal registry allowlist used by the pinned defensive agent mode. */
 +  getStrictTools(): string[] | undefined {
 +    return this.strictTools;
@@ -152416,13 +152684,21 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 +   */
 +  getForegroundAgentsOnly(): boolean {
 +    return this.foregroundAgentsOnly;
-   }
- 
++  }
++
++  /**
++   * The deliverables a locked agent-service run declared, checked when it
++   * ends with its final message; `undefined` outside that runtime.
++   */
++  getDeclaredDeliverables(): readonly string[] | undefined {
++    return this.declaredDeliverables;
++  }
++
    /**
     * Returns the merged allow-rules for PermissionManager.
     *
     * This merges all sources so that PermissionManager receives a single,
-@@ -6515,16 +6138,12 @@
+@@ -6515,16 +6154,12 @@
    }
  
    getAccessibility(): AccessibilitySettings {
@@ -152439,7 +152715,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    isTelemetryInitializationDeferred(): boolean {
      return this.telemetryInitializationDeferred;
-@@ -6974,13 +6593,13 @@
+@@ -6974,13 +6609,13 @@
        const service = new FileHistoryService(
          this.sessionId,
          this.fileCheckpointingEnabled,
@@ -152454,7 +152730,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        const snapshots = this.sessionData?.fileHistorySnapshots;
        if (snapshots?.length && service.isEnabled()) {
          service.restoreFromSnapshots(snapshots);
-@@ -7031,16 +6650,12 @@
+@@ -7031,16 +6666,12 @@
    }
  
    getExperimentalZedIntegration(): boolean {
@@ -152471,7 +152747,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    getExtensionManager(): ExtensionManager {
      return this.extensionManager;
-@@ -7069,32 +6684,40 @@
+@@ -7069,32 +6700,40 @@
    }
  
    /**
@@ -152515,7 +152791,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7108,13 +6731,13 @@
+@@ -7108,13 +6747,13 @@
     * Whether the daemon/session should auto-sync team memory with the git
     * remote (pull + commit + push). Resolves the `memory.enableTeamMemorySync`
     * setting, with env `QWEN_CODE_MEMORY_TEAM_SYNC` ('0'/'1') as an override.
@@ -152530,7 +152806,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7122,23 +6745,35 @@
+@@ -7122,23 +6761,35 @@
        return true;
      }
      return this.enableTeamMemorySync;
@@ -152569,7 +152845,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Toggle auto-skill for the running session. The startup value is copied from
     * settings, so persisting a settings change alone would not take effect until
     * the next launch; the skill-review scheduler reads `getAutoSkillEnabled()`
-@@ -7149,13 +6784,17 @@
+@@ -7149,13 +6800,17 @@
     */
    setAutoSkillEnabled(enabled: boolean): void {
      this.enableAutoSkill = enabled;
@@ -152588,7 +152864,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Max runtime in minutes for background memory agents (extraction, dream,
     * remember, skill review). Resolves the `memory.agentTimeoutMinutes`
     * setting. Unset → each agent's built-in default; 0 → no time limit.
-@@ -7418,20 +7057,12 @@
+@@ -7418,20 +7073,12 @@
    setFileSystemService(fileSystemService: FileSystemService): void {
      this.fileSystemService = fileSystemService;
    }
@@ -152609,7 +152885,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.interactive;
    }
  
-@@ -7456,10 +7087,6 @@
+@@ -7456,10 +7103,6 @@
      return this.shouldUseNodePtyShell;
    }
  
@@ -152620,7 +152896,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getShellExecutionConfig(): ShellExecutionConfig {
      return this.shellExecutionConfig;
    }
-@@ -7487,26 +7114,4 @@
+@@ -7487,26 +7130,4 @@
    getSkipLoopDetection(): boolean {
      return this.skipLoopDetection;
    }
@@ -152647,7 +152923,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.maxToolCallsPerTurnExplicit;
 -  }
 -
-@@ -7523,26 +7128,6 @@
+@@ -7523,26 +7144,6 @@
     * extensions, skills, MCP servers, rules) for troubleshooting.
     */
    isSafeMode(): boolean {
@@ -152674,7 +152950,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.truncateToolOutputLines;
 -  }
 -
-@@ -7562,52 +7147,25 @@
+@@ -7562,52 +7163,25 @@
     * default). 0 disables heartbeats.
     */
    getShellHeartbeatIntervalMs(): number | undefined {
@@ -152729,7 +153005,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getGoalRuntimeReady(): Promise<GoalRuntime> {
-@@ -7624,15 +7182,12 @@
+@@ -7624,15 +7198,12 @@
      return runtime.getPreparedRestore().then(() => runtime);
    }
  
@@ -152745,7 +153021,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      runtime.dispose();
      this.initializeGoalRuntime(records);
      await this.goalRuntimeReady;
-@@ -7666,20 +7221,15 @@
+@@ -7666,20 +7237,15 @@
      return () => {
        this.chatRecordingFailureListeners.delete(listener);
      };
@@ -152769,7 +153045,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      records?: readonly GoalRecoveryRecord[],
      restoreRuntime?: SessionRuntimeResumeState,
    ): void {
-@@ -7694,35 +7244,25 @@
+@@ -7694,35 +7260,25 @@
      // writer: its records belong to the outgoing session.
      this.settlePendingGoalRestore(
        new GoalPersistenceUnavailableError(
@@ -152807,7 +153083,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          restoreRuntime.goalCheckpointWindow,
        );
        let resolveActivation!: () => void;
-@@ -7737,16 +7277,13 @@
+@@ -7737,16 +7293,13 @@
          void started.then(resolveActivation, rejectActivation);
          return started;
        };
@@ -152825,7 +153101,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.goalRuntimeReady = ready;
      } else {
        this.goalRuntimeReady = runtime
-@@ -7835,34 +7372,32 @@
+@@ -7835,34 +7388,32 @@
      }
    }
  
@@ -152866,7 +153142,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    setSessionWriterReclaimPolicy(policy: 'local' | 'never'): void {
      if (this.initialized) {
        throw new SessionWriterUnavailableError();
-@@ -7879,13 +7414,13 @@
+@@ -7879,13 +7430,13 @@
  
    closeSessionWriter(options?: { handoff?: boolean }): Promise<void> {
      if (options?.handoff && this.sessionWriterTakeoverPolicy === 'certified') {
@@ -152881,7 +153157,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionWriterClosePromise ??= this.closeSessionWriterOnce();
      return this.sessionWriterClosePromise;
    }
-@@ -7898,13 +7433,13 @@
+@@ -7898,13 +7449,13 @@
      } catch (error) {
        if (!(error instanceof SessionWriterShutdownError)) {
          failures.push(error);
@@ -152896,7 +153172,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        failures.push(error);
      }
      const pendingLease = activation
-@@ -8332,7 +7867,10 @@
+@@ -8332,7 +7883,10 @@
        });
        await registerLazy(ToolNames.SHELL, async () => {
          const { ShellTool } = await import('../tools/shell.js');
@@ -152908,7 +153184,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        });
        await registerGoalWorkerTools();
        await registerStructuredOutputIfRequested();
-@@ -8444,7 +7982,10 @@
+@@ -8444,7 +7998,10 @@
      });
      await registerLazy(ToolNames.SHELL, async () => {
        const { ShellTool } = await import('../tools/shell.js');
@@ -226453,7 +226729,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +625,25 @@
+@@ -600,24 +625,26 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -226461,6 +226737,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/runtimeStatus.js';
  export * from './utils/schemaValidator.js';
 +export * from './utils/runtime-stream-contract.js';
++export * from './utils/qwen38-deliverables.js';
 +export { extractRuntimeUserMessageText } from './utils/runtime-user-input.js';
  export * from './utils/sessionIdContext.js';
  export * from './utils/secure-browser-launcher.js';
@@ -226480,7 +226757,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +730,71 @@
+@@ -704,6 +731,71 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -328517,7 +328794,7 @@ diff --git a/packages/core/src/utils/runtime-partial-stream.ts b/packages/core/s
 diff --git a/packages/core/src/utils/runtime-stream-contract.test.ts b/packages/core/src/utils/runtime-stream-contract.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-stream-contract.test.ts
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,241 @@
 +import { readFileSync } from 'node:fs';
 +import { describe, expect, it } from 'vitest';
 +import {
@@ -328673,7 +328950,13 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.test.ts b/packages/
 +    ).toThrow('Terminal record identity is repeated');
 +  });
 +
-+  it.each(RESULT_ERROR_SUBTYPES)(
++  // Only the session's own record can name missing deliverables; the child
++  // record above can carry every other error name.
++  const childErrorSubtypes = RESULT_ERROR_SUBTYPES.filter(
++    (subtype) => subtype !== 'error_missing_deliverables',
++  );
++
++  it.each(childErrorSubtypes)(
 +    '%s requires its actual error outcome',
 +    (subtype) => {
 +      const error = {
@@ -328693,6 +328976,54 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.test.ts b/packages/
 +      }
 +    },
 +  );
++
++  it('error_missing_deliverables belongs to the root alone and always lists what is missing', () => {
++    const missing = {
++      ...success,
++      parent_tool_use_id: null,
++      subtype: 'error_missing_deliverables',
++      is_error: true,
++      duration_ms: 0,
++      duration_api_ms: 0,
++      usage: {
++        requests: 0,
++        usageReports: 0,
++        unfinalizedRequests: 0,
++        unreportedUsageRequests: 0,
++        usage: null,
++      },
++      request_evidence: {
++        journal_id: 'fixture',
++        first_sequence: 1,
++        request_count: 0,
++        open_response_ids: [],
++        open_attempt_ids: [],
++      },
++      error: { message: 'The run ended without 1 of its 1 declared deliverable.' },
++      missing_deliverables: ['summary.md'],
++    } as Record<string, unknown>;
++    delete missing['result'];
++    expect(validateRuntimeStreamRecord(missing)).toBeNull();
++    const { missing_deliverables: _list, ...unlisted } = missing;
++    expect(validateRuntimeStreamRecord(unlisted)).not.toBeNull();
++    for (const list of [[], ['summary.md', 'summary.md'], ['']]) {
++      expect(
++        validateRuntimeStreamRecord({ ...missing, missing_deliverables: list }),
++      ).not.toBeNull();
++    }
++    expect(
++      validateRuntimeStreamRecord({
++        ...missing,
++        subtype: 'error_during_execution',
++      }),
++    ).not.toBeNull();
++    const child: Record<string, unknown> = {
++      ...missing,
++      parent_tool_use_id: 'child',
++    };
++    delete child['request_evidence'];
++    expect(validateRuntimeStreamRecord(child)).not.toBeNull();
++  });
 +
 +  it('refuses a new terminal spelling even with a complete payload', () => {
 +    expect(
@@ -338665,7 +338996,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    // 'error_during_execution' | 'error_timeout' | 'error_max_turns'
 +    // | 'error_loop_detected'
 +    // | 'error_incomplete_generation' | 'error_slipped_final_message'
-+    // | 'error_cancelled'
++    // | 'error_missing_deliverables' | 'error_cancelled'
 +    private String subtype;
      /**
       * The UUID of the message.
@@ -338805,7 +339136,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
    type: 'user';
    uuid?: string;
    session_id: string;
-@@ -136,32 +155,39 @@
+@@ -136,39 +155,49 @@
  export interface SDKResultMessageSuccess {
    type: 'result';
    subtype: 'success';
@@ -338835,6 +339166,7 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
 +    | 'error_loop_detected'
 +    | 'error_incomplete_generation'
 +    | 'error_slipped_final_message'
++    | 'error_missing_deliverables'
 +    | 'error_cancelled';
    uuid: string;
    session_id: string;
@@ -338852,6 +339184,15 @@ diff --git a/packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/
      type?: string;
      message: string;
      [key: string]: unknown;
+   };
++  /** The declared deliverables the run ended without, in declared order. */
++  missing_deliverables?: string[];
+   [key: string]: unknown;
+ }
+ 
+ export type SDKResultMessage = SDKResultMessageSuccess | SDKResultMessageError;
+ 
+ export interface MessageStartStreamEvent {
 diff --git a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/session/SessionTest.java b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/session/SessionTest.java
 --- a/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/session/SessionTest.java
 +++ b/packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/session/SessionTest.java
@@ -338927,7 +339268,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/protocol.py b/packages/sdk-py
      type: Literal["user"]
      session_id: str
      message: APIUserMessage
-@@ -125,35 +135,43 @@
+@@ -125,37 +135,47 @@
  class SDKResultMessageSuccess(TypedDict):
      type: Literal["result"]
      subtype: Literal["success"]
@@ -338960,6 +339301,7 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/protocol.py b/packages/sdk-py
 +        "error_loop_detected",
 +        "error_incomplete_generation",
 +        "error_slipped_final_message",
++        "error_missing_deliverables",
 +        "error_cancelled",
 +    ]
      uuid: str
@@ -338974,10 +339316,13 @@ diff --git a/packages/sdk-python/src/qwen_code_sdk/protocol.py b/packages/sdk-py
 +    usage: GenerationUsageSummary | None
      permission_denials: list[CLIPermissionDenial]
      error: NotRequired[ResultErrorObject]
++    missing_deliverables: NotRequired[list[str]]
  
  
  SDKResultMessage: TypeAlias = SDKResultMessageSuccess | SDKResultMessageError
  
+ 
+ class MessageStartStreamEvent(TypedDict):
 diff --git a/packages/sdk-python/src/qwen_code_sdk/transport.py b/packages/sdk-python/src/qwen_code_sdk/transport.py
 --- a/packages/sdk-python/src/qwen_code_sdk/transport.py
 +++ b/packages/sdk-python/src/qwen_code_sdk/transport.py
@@ -341328,7 +341673,7 @@ diff --git a/packages/sdk-typescript/src/types/protocol.ts b/packages/sdk-typesc
    type: 'user';
    uuid?: string;
    session_id: string;
-@@ -136,32 +141,39 @@
+@@ -136,39 +141,49 @@
  export interface SDKResultMessageSuccess {
    type: 'result';
    subtype: 'success';
@@ -341358,6 +341703,7 @@ diff --git a/packages/sdk-typescript/src/types/protocol.ts b/packages/sdk-typesc
 +    | 'error_loop_detected'
 +    | 'error_incomplete_generation'
 +    | 'error_slipped_final_message'
++    | 'error_missing_deliverables'
 +    | 'error_cancelled';
    uuid: string;
    session_id: string;
@@ -341375,6 +341721,15 @@ diff --git a/packages/sdk-typescript/src/types/protocol.ts b/packages/sdk-typesc
      type?: string;
      message: string;
      [key: string]: unknown;
+   };
++  /** The declared deliverables the run ended without, in declared order. */
++  missing_deliverables?: string[];
+   [key: string]: unknown;
+ }
+ 
+ export type SDKResultMessage = SDKResultMessageSuccess | SDKResultMessageError;
+ 
+ export interface MessageStartStreamEvent {
 diff --git a/packages/sdk-typescript/src/types/queryOptionsSchema.ts b/packages/sdk-typescript/src/types/queryOptionsSchema.ts
 --- a/packages/sdk-typescript/src/types/queryOptionsSchema.ts
 +++ b/packages/sdk-typescript/src/types/queryOptionsSchema.ts
@@ -368629,7 +368984,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 +The shared proxy error redactor constructs native `DOMException` clones so abort
 +classification and diagnostic accessors remain valid after redaction.
 +
-+The stream contract is v17 and the canonical recording is version 21. Response
++The stream contract is v18 and the canonical recording is version 21. Response
 +evidence is structurally separate from conversation messages and cannot
 +advance the parent chain. Readers validate physical ordering, hashes and
 +ownership before projecting a branch. Live checkpoints list unfinished
@@ -377412,7 +377767,7 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +including on inactive branches.
 +
 +The service's `output/events.jsonl` is stdout evidence, under stream
-+contract v17. Its exact provider request and attempt records are evidence of what
++contract v18. Its exact provider request and attempt records are evidence of what
 +was sent and produced; they are not canonical history operations.
 +
 +The assertion establishes both the canonical state and the rendered Chat
@@ -394679,7 +395034,7 @@ diff --git a/packages/core/src/utils/__fixtures__/ordinary-tool-wire.json b/pack
 +    "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
 +    "parent_tool_use_id": null,
 +    "subtype": "stream_start",
-+    "stream_contract_sha256": "74942727156daa24c36f472037aed5dc6257e00e40f7d502b165c343cd525416",
++    "stream_contract_sha256": "906fefad2c4d3f7a41b6cb0949b0bd0bbf18756b6694f56a474e5e34df8c03dc",
 +    "request_evidence_origin": {
 +      "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
 +      "first_sequence": 1
@@ -413237,3 +413592,296 @@ diff --git a/packages/web-shell/client/components/sidebar/WorkspaceSection.test.
              displayName: 'Updated session',
            } as DaemonSessionSummary,
          ],
+diff --git a/packages/core/src/utils/qwen38-deliverables.test.ts b/packages/core/src/utils/qwen38-deliverables.test.ts
+--- /dev/null
++++ b/packages/core/src/utils/qwen38-deliverables.test.ts
+@@ -0,0 +1,133 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import { afterEach, beforeEach, describe, expect, it } from 'vitest';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {
++  QWEN38_ARTIFACTS_ROOT,
++  missingDeliverables,
++  missingDeliverablesMessage,
++  parseDeclaredDeliverables,
++} from './qwen38-deliverables.js';
++
++describe('parseDeclaredDeliverables', () => {
++  it('reads a list of paths relative to the artifacts root, the empty list included', () => {
++    expect(parseDeclaredDeliverables('[]')).toEqual([]);
++    expect(
++      parseDeclaredDeliverables('["summary.md","out/report.pdf","雪/שָׁלוֹם.txt"]'),
++    ).toEqual(['summary.md', 'out/report.pdf', '雪/שָׁלוֹם.txt']);
++    // 255 bytes is the longest component the kernel has, and still a name.
++    const longest = 'x'.repeat(255);
++    expect(parseDeclaredDeliverables(JSON.stringify([longest]))).toEqual([
++      longest,
++    ]);
++  });
++
++  it.each([
++    ['not json', 'it is not JSON'],
++    ['{"summary.md":true}', 'must be a JSON array'],
++    ['"summary.md"', 'must be a JSON array'],
++    ['[1]', 'is not a non-empty string'],
++    ['[""]', 'is not a non-empty string'],
++    ['["/artifacts/summary.md"]', 'is absolute'],
++    ['["a\\u0000b"]', 'contains a NUL byte'],
++    ['["out/"]', 'has an empty path component'],
++    ['["out//a"]', 'has an empty path component'],
++    ['["./a"]', 'has the component "."'],
++    ['["out/../../etc/passwd"]', 'has the component ".."'],
++    [JSON.stringify(['x'.repeat(256)]), 'has a component longer than 255 bytes'],
++    [JSON.stringify(['é'.repeat(128)]), 'has a component longer than 255 bytes'],
++    [
++      JSON.stringify([Array.from({ length: 20 }, () => 'y'.repeat(250)).join('/')]),
++      'is longer than a path can be',
++    ],
++    ['["a.md","a.md"]', 'names "a.md" twice'],
++  ])('refuses %s', (argument, reason) => {
++    expect(() => parseDeclaredDeliverables(argument)).toThrow(reason);
++  });
++
++  it('checks beneath the root the deployment contract names', () => {
++    expect(QWEN38_ARTIFACTS_ROOT).toBe('/artifacts');
++  });
++});
++
++describe('missingDeliverables', () => {
++  let root: string;
++  let outside: string;
++
++  beforeEach(() => {
++    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen38-deliverables-'));
++    root = path.join(base, 'artifacts');
++    outside = path.join(base, 'outside');
++    fs.mkdirSync(root);
++    fs.mkdirSync(outside);
++    fs.writeFileSync(path.join(outside, 'real.md'), 'written elsewhere\n');
++  });
++
++  afterEach(() => {
++    fs.rmSync(path.dirname(root), { recursive: true, force: true });
++  });
++
++  it('accepts only non-empty regular files reached without following a link', () => {
++    fs.writeFileSync(path.join(root, 'summary.md'), '# Summary\n');
++    fs.mkdirSync(path.join(root, 'out'));
++    fs.writeFileSync(path.join(root, 'out', 'report.pdf'), '%PDF');
++    fs.writeFileSync(path.join(root, 'empty.md'), '');
++    fs.mkdirSync(path.join(root, 'dir.md'));
++    fs.symlinkSync(path.join(outside, 'real.md'), path.join(root, 'link.md'));
++    fs.symlinkSync(outside, path.join(root, 'linked'));
++    fs.writeFileSync(path.join(root, 'file'), 'x');
++
++    expect(
++      missingDeliverables(root, [
++        'summary.md',
++        'out/report.pdf',
++        'absent.md',
++        'empty.md',
++        'dir.md',
++        'link.md',
++        'linked/real.md',
++        'file/inside.md',
++        'nowhere/else.md',
++      ]),
++    ).toEqual([
++      { path: 'absent.md', found: 'no such file' },
++      { path: 'empty.md', found: 'an empty file' },
++      { path: 'dir.md', found: 'not a regular file' },
++      { path: 'link.md', found: 'link.md is a symbolic link' },
++      { path: 'linked/real.md', found: 'linked is a symbolic link' },
++      { path: 'file/inside.md', found: 'file is not a directory' },
++      { path: 'nowhere/else.md', found: 'no directory nowhere' },
++    ]);
++    expect(missingDeliverables(root, [])).toEqual([]);
++  });
++
++  it('refuses an artifacts root that is itself a link or absent', () => {
++    const linkedRoot = path.join(path.dirname(root), 'linked-root');
++    fs.symlinkSync(root, linkedRoot);
++    fs.writeFileSync(path.join(root, 'summary.md'), '# Summary\n');
++    expect(missingDeliverables(linkedRoot, ['summary.md'])).toEqual([
++      { path: 'summary.md', found: `${linkedRoot} is a symbolic link` },
++    ]);
++    const absent = path.join(path.dirname(root), 'absent');
++    expect(missingDeliverables(absent, ['summary.md'])).toEqual([
++      { path: 'summary.md', found: `no directory ${absent}` },
++    ]);
++  });
++
++  it('names each missing path, what stands there, and what to do next', () => {
++    expect(
++      missingDeliverablesMessage(
++        [{ path: 'summary.md', found: 'no such file' }],
++        1,
++      ),
++    ).toBe(
++      'The run ended without 1 of its 1 declared deliverable. Each must be a non-empty regular file under /artifacts, reached without following a symbolic link: summary.md (no such file). What the run did leave is in the session bundle; a new session must write each declared path.',
++    );
++  });
++});
+diff --git a/packages/core/src/utils/qwen38-deliverables.ts b/packages/core/src/utils/qwen38-deliverables.ts
+--- /dev/null
++++ b/packages/core/src/utils/qwen38-deliverables.ts
+@@ -0,0 +1,152 @@
++/**
++ * @license
++ * Copyright 2026 Qwen
++ * SPDX-License-Identifier: Apache-2.0
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++
++/**
++ * The directory the locked agent-service runtime keeps at session teardown for
++ * requested deliverables, as its deployment contract tells the model.
++ */
++export const QWEN38_ARTIFACTS_ROOT = '/artifacts';
++
++/** The kernel's longest file-name component, in bytes (NAME_MAX). */
++const NAME_MAX_BYTES = 255;
++/** The kernel's longest path, in bytes, without its terminating NUL (PATH_MAX - 1). */
++const PATH_MAX_BYTES = 4095;
++
++/**
++ * Read the `--deliverables` argument: a JSON array of paths, each relative to
++ * the artifacts root, that the run must leave behind. The service accepted the
++ * list under the same rule and the launcher passed its canonical form, so a
++ * list this refuses names a launcher defect, not a caller's mistake -- and a
++ * run that cannot say which files it owes must not start.
++ */
++export function parseDeclaredDeliverables(argument: string): readonly string[] {
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(argument);
++  } catch (error) {
++    throw new Error(
++      `--deliverables must be a JSON array of paths relative to ${QWEN38_ARTIFACTS_ROOT}; it is not JSON: ${error instanceof Error ? error.message : String(error)}`,
++    );
++  }
++  if (!Array.isArray(parsed)) {
++    throw new Error(
++      `--deliverables must be a JSON array of paths relative to ${QWEN38_ARTIFACTS_ROOT}, and [] when the run owes none`,
++    );
++  }
++  const seen = new Set<string>();
++  for (const entry of parsed) {
++    const refusal = deliverablePathRefusal(entry);
++    if (refusal !== undefined) {
++      throw new Error(
++        `--deliverables entry ${JSON.stringify(entry)} ${refusal}; a deliverable is a path relative to ${QWEN38_ARTIFACTS_ROOT}`,
++      );
++    }
++    if (seen.has(entry as string)) {
++      throw new Error(
++        `--deliverables names ${JSON.stringify(entry)} twice; each deliverable is declared once`,
++      );
++    }
++    seen.add(entry as string);
++  }
++  return Object.freeze([...(parsed as string[])]);
++}
++
++/** Why `entry` is not a deliverable path, or undefined when it is one. */
++function deliverablePathRefusal(entry: unknown): string | undefined {
++  if (typeof entry !== 'string' || entry === '') return 'is not a non-empty string';
++  if (entry.includes('\0')) return 'contains a NUL byte';
++  if (entry.startsWith('/')) return 'is absolute';
++  for (const component of entry.split('/')) {
++    if (component === '') return 'has an empty path component';
++    if (component === '.' || component === '..') {
++      return `has the component ${JSON.stringify(component)}`;
++    }
++    if (Buffer.byteLength(component, 'utf8') > NAME_MAX_BYTES) {
++      return `has a component longer than ${NAME_MAX_BYTES} bytes`;
++    }
++  }
++  if (
++    Buffer.byteLength(`${QWEN38_ARTIFACTS_ROOT}/${entry}`, 'utf8') >
++    PATH_MAX_BYTES
++  ) {
++    return `is longer than a path can be (${PATH_MAX_BYTES} bytes with ${QWEN38_ARTIFACTS_ROOT}/)`;
++  }
++  return undefined;
++}
++
++/** One declared deliverable the run did not leave, and what stands there instead. */
++export interface MissingDeliverable {
++  readonly path: string;
++  readonly found: string;
++}
++
++/**
++ * Every declared deliverable that is not, right now, a non-empty regular file
++ * beneath `root`, in declared order. Each component is examined without
++ * following it: the model can create symbolic links, and one that points out
++ * of the artifacts root would otherwise make a file elsewhere count as
++ * delivered. Existence is all this proves; what the file says is not judged.
++ */
++export function missingDeliverables(
++  root: string,
++  declared: readonly string[],
++): readonly MissingDeliverable[] {
++  const missing: MissingDeliverable[] = [];
++  for (const declaredPath of declared) {
++    const found = deliverableShortfall(root, declaredPath);
++    if (found !== undefined) missing.push({ path: declaredPath, found });
++  }
++  return missing;
++}
++
++function deliverableShortfall(
++  root: string,
++  declaredPath: string,
++): string | undefined {
++  const components = declaredPath.split('/');
++  let current = root;
++  for (let index = -1; index < components.length; index += 1) {
++    if (index >= 0) current = path.posix.join(current, components[index]!);
++    const shown = index < 0 ? root : components.slice(0, index + 1).join('/');
++    let stat: fs.Stats | undefined;
++    try {
++      stat = fs.lstatSync(current, { throwIfNoEntry: false });
++    } catch (error) {
++      const code = (error as NodeJS.ErrnoException).code ?? String(error);
++      return `${shown} cannot be examined (${code})`;
++    }
++    const last = index === components.length - 1;
++    if (stat === undefined) return last ? 'no such file' : `no directory ${shown}`;
++    if (stat.isSymbolicLink()) return `${shown} is a symbolic link`;
++    if (!last) {
++      if (!stat.isDirectory()) return `${shown} is not a directory`;
++      continue;
++    }
++    if (!stat.isFile()) return 'not a regular file';
++    if (stat.size === 0) return 'an empty file';
++  }
++  return undefined;
++}
++
++/**
++ * The terminal message for a run that ended without some of its declared
++ * deliverables: how many of how many, what each should have been, and what
++ * stands at each missing path instead.
++ */
++export function missingDeliverablesMessage(
++  missing: readonly MissingDeliverable[],
++  declaredCount: number,
++): string {
++  const listed = missing.map(({ path: each, found }) => `${each} (${found})`);
++  return (
++    `The run ended without ${missing.length} of its ${declaredCount} declared deliverable${declaredCount === 1 ? '' : 's'}. ` +
++    `Each must be a non-empty regular file under ${QWEN38_ARTIFACTS_ROOT}, reached without following a symbolic link: ` +
++    `${listed.join('; ')}. What the run did leave is in the session bundle; a new session must write each declared path.`
++  );
++}

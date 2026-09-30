@@ -1429,6 +1429,7 @@ fn validate_session_paths(policy: &Policy, session_id: &str) -> Result<(), Strin
     for (leaf, mode) in [
         ("prompt.txt", 0o644),
         ("turn-budget.json", 0o444),
+        ("deliverables.json", 0o444),
         ("start-gate.lock", 0o600),
     ] {
         let path = root.join("control").join(leaf);

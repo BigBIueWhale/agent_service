@@ -10,7 +10,7 @@ mod number;
 mod schema_compiler;
 
 fn main() {
-    let path = "../stream-contract-v17.json";
+    let path = "../stream-contract-v18.json";
     println!("cargo:rerun-if-changed={path}");
     println!(
         "cargo:rustc-env=STREAM_CONTRACT_PATH={}",
@@ -47,6 +47,10 @@ fn main() {
         ));
     }
     generated.push_str("];\n");
+    generated.push_str(&format!(
+        "pub const MISSING_DELIVERABLES_SUBTYPE: &str = {:?};\n",
+        missing_deliverables_subtype(&bytes)
+    ));
     for (name, variants) in &compiled.discriminators {
         generate_enum(&mut generated, name, variants);
     }
@@ -61,6 +65,35 @@ fn main() {
         generated,
     )
     .expect("write generated stream bindings");
+}
+
+/// The one terminal subtype whose record must carry `missing_deliverables`,
+/// read from the terminal result's conditional in the contract, so the name
+/// the certifier reads that list under is the contract's and nowhere restated.
+fn missing_deliverables_subtype(bytes: &[u8]) -> String {
+    let schema: serde_json::Value =
+        serde_json::from_slice(bytes).expect("parse the shared stream contract");
+    let conditions = schema["definitions"]["terminalResult"]["allOf"]
+        .as_array()
+        .expect("terminalResult.allOf");
+    let named = conditions
+        .iter()
+        .filter(|condition| {
+            condition["then"]["required"] == serde_json::json!(["missing_deliverables"])
+        })
+        .map(|condition| {
+            condition["if"]["properties"]["subtype"]["const"]
+                .as_str()
+                .expect("the missing_deliverables condition names one subtype")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        named.len(),
+        1,
+        "the contract must require missing_deliverables for exactly one subtype"
+    );
+    named.into_iter().next().expect("one subtype")
 }
 
 fn generate_enum(generated: &mut String, enum_name: &str, variants: &[String]) {

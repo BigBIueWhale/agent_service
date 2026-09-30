@@ -57,6 +57,8 @@ use tokio::sync::{Mutex, Notify};
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
+use agent_service::deliverables::{Deliverables, MAX_DELIVERABLES_JSON_BYTES};
+
 use crate::config::Config;
 use crate::error::{io_msg, ServiceError, ServiceResult};
 use crate::progress::{ProgressCounters, ProgressEvent, ProgressPhase, ProgressReporter};
@@ -66,12 +68,25 @@ use crate::validation::{self, ValidatedRequest};
 
 // Durable JSON records are bounded independently of available disk/RAM so a
 // corrupted service-owned path cannot make an ordinary GET allocate without
-// limit. Acceptance contains at most one prompt of MAX_PROMPT_BYTES, one canonical
-// host path, and fixed metadata. Terminal state additionally contains at most
-// 4,096 progress messages of 4 KiB each plus the model's bounded final output;
-// 128 MiB leaves ample structural headroom without weakening those semantic
-// limits.
-const MAX_ACCEPTANCE_RECORD_BYTES: u64 = (crate::config::MAX_PROMPT_BYTES as u64) + 65_536;
+// limit. An acceptance record is pretty-printed JSON, and its bound is the most
+// what it holds can serialize to:
+// - one prompt of at most MAX_PROMPT_BYTES, which JSON escaping can write at up
+//   to six bytes per byte (a control character becomes `\u001f`);
+// - one deliverables list of at most MAX_DELIVERABLES_JSON_BYTES compact, which
+//   pretty-printing lengthens by a line break and four spaces before each entry
+//   and a line break and two spaces before its closing bracket. An entry is at
+//   least four compact bytes -- a one-byte path, its quotes and a separator --
+//   so a list has at most a quarter as many entries as compact bytes;
+// - fixed metadata: the session handle, the archive commitment, the release
+//   identity and every key, which 64 KiB covers with room to spare.
+// Terminal state additionally contains at most 4,096 progress messages of 4 KiB
+// each plus the model's bounded final output and the deliverables list; 128 MiB
+// leaves ample structural headroom without weakening those semantic limits.
+const MAX_ACCEPTANCE_RECORD_BYTES: u64 = 6 * (crate::config::MAX_PROMPT_BYTES as u64)
+    + MAX_DELIVERABLES_JSON_BYTES as u64
+    + 5 * (MAX_DELIVERABLES_JSON_BYTES as u64 / 4)
+    + 3
+    + 65_536;
 const MAX_TERMINAL_RECORD_BYTES: u64 = 128 * 1024 * 1024;
 const MAX_CANCEL_INTENT_BYTES: u64 = 4096;
 const MAX_DELETE_INTENT_BYTES: u64 = 4096;
@@ -116,6 +131,11 @@ pub struct SessionBody {
     /// finished session can tell what bound it actually ran under instead of
     /// inferring it from the deployment's current default.
     pub max_session_turns: u32,
+    /// The files the run was asked to leave beneath `/artifacts`, exactly as
+    /// the creation body declared them, and the list the launcher passed to
+    /// Qwen Code. `[]` means none were declared, never that the list is
+    /// unknown.
+    pub deliverables: Deliverables,
     /// The release that accepted this session: its implementation commit,
     /// every component image and the backend it is locked to. Carried
     /// through every state from the acceptance record, so two sessions are
@@ -221,9 +241,24 @@ pub struct AgentResult {
     pub subagent_scopes: Vec<crate::result_parse::AgentScope>,
     pub subagent_scope_count: u64,
     pub subagent_error_count: u64,
+    /// The declared deliverables the run ended without, in declared order,
+    /// from the certified terminal record: present exactly when
+    /// `agent_result_subtype` is `error_missing_deliverables`, and then never
+    /// empty, so a reader lists them without parsing `response`.
+    #[serde(deserialize_with = "required_nullable")]
+    pub missing_deliverables: Option<Vec<String>>,
 }
 
 pub(crate) use agent_service::serde_contract::required_nullable;
+
+/// Whether every entry of `part` appears in `whole`, in the same order: a
+/// terminal's missing deliverables are some of the declared ones, listed as
+/// they were declared.
+pub(crate) fn is_ordered_subset(part: &[String], whole: &[String]) -> bool {
+    let mut remaining = whole.iter();
+    part.iter()
+        .all(|wanted| remaining.any(|declared| declared == wanted))
+}
 
 impl SessionBody {
     /// Enforce the same evidence contract before publication and after every
@@ -337,6 +372,8 @@ impl SessionBody {
                         || scope.subtype.as_ref().is_some_and(|subtype| {
                             if scope.is_error == Some(true) {
                                 !crate::result_parse::ERROR_SUBTYPES.contains(&subtype.as_str())
+                                    // Only the session declares deliverables.
+                                    || subtype == crate::result_parse::MISSING_DELIVERABLES_SUBTYPE
                             } else {
                                 subtype != crate::result_parse::SUCCESS_SUBTYPE
                             }
@@ -360,6 +397,21 @@ impl SessionBody {
                 {
                     return Err(ServiceError::Internal(
                         "terminal agent result has inconsistent certified evidence; inspect the original terminal and scope records".into(),
+                    ));
+                }
+                let names_missing = result.agent_result_subtype
+                    == crate::result_parse::MISSING_DELIVERABLES_SUBTYPE;
+                let consistent = match &result.missing_deliverables {
+                    None => !names_missing,
+                    Some(missing) => {
+                        names_missing
+                            && !missing.is_empty()
+                            && is_ordered_subset(missing, self.deliverables.paths())
+                    }
+                };
+                if !consistent {
+                    return Err(ServiceError::Internal(
+                        "terminal agent result names missing deliverables that disagree with its subtype or with the deliverables the session was accepted with; inspect the captured root result and control/deliverables.json".into(),
                     ));
                 }
             }
@@ -399,6 +451,7 @@ pub struct RunningSnapshot {
     pub model: String,
     pub context_window: u64,
     pub max_session_turns: u32,
+    pub deliverables: Deliverables,
     pub release: crate::config::ReleaseIdentity,
     pub archive_bytes: u64,
     pub archive_sha256: String,
@@ -419,6 +472,7 @@ pub struct AcceptanceRecord {
     pub archive_sha256: String,
     pub prompt: String,
     pub max_session_turns: u32,
+    pub deliverables: Deliverables,
     pub release: crate::config::ReleaseIdentity,
 }
 
@@ -437,6 +491,7 @@ impl AcceptanceRecord {
             archive_sha256: req.archive.sha256.clone(),
             prompt: req.prompt.clone(),
             max_session_turns: req.max_session_turns,
+            deliverables: req.deliverables.clone(),
             release: release.clone(),
         }
     }
@@ -447,12 +502,14 @@ impl AcceptanceRecord {
         archive_bytes: u64,
         archive_sha256: &str,
         max_session_turns: u32,
+        deliverables: &Deliverables,
     ) -> bool {
         self.schema_version == crate::config::RESULT_RECORD_SCHEMA
             && self.archive_bytes == archive_bytes
             && self.archive_sha256 == archive_sha256
             && self.prompt == prompt
             && self.max_session_turns == max_session_turns
+            && &self.deliverables == deliverables
     }
 }
 
@@ -1105,8 +1162,11 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
             )));
         }
     }
-    let expected_control =
-        BTreeSet::from(["prompt.txt".to_string(), "turn-budget.json".to_string()]);
+    let expected_control = BTreeSet::from([
+        "prompt.txt".to_string(),
+        "turn-budget.json".to_string(),
+        "deliverables.json".to_string(),
+    ]);
     if names(&paths.control)? != expected_control {
         return Err(ServiceError::Internal(format!(
             "uncommitted control directory {} differs from the exact pre-commit layout",
@@ -1115,8 +1175,14 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
     }
     let prompt_path = paths.control.join("prompt.txt");
     let turn_budget_path = paths.control.join("turn-budget.json");
+    let deliverables_path = paths.control.join("deliverables.json");
     let prompt = validate_uncommitted_regular_file(&prompt_path, 0o644, 1_048_576)?;
     let turn_budget = validate_uncommitted_regular_file(&turn_budget_path, 0o444, 64)?;
+    let deliverables = validate_uncommitted_regular_file(
+        &deliverables_path,
+        0o444,
+        agent_service::deliverables::MAX_RECORD_BYTES as u64,
+    )?;
     if prompt.is_empty() || prompt.len() > 1_048_576 {
         return Err(ServiceError::Internal(format!(
             "uncommitted prompt {} has invalid byte length {}",
@@ -1130,9 +1196,17 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
             turn_budget_path.display()
         )));
     }
+    if let Err(error) = Deliverables::from_record(&deliverables) {
+        return Err(ServiceError::Internal(format!(
+            "uncommitted deliverables {} is not canonical: {error}",
+            deliverables_path.display()
+        )));
+    }
     if let Some(acceptance) = acceptance {
         let expected_turn_budget = crate::staging::turn_budget_record(acceptance.max_session_turns);
-        if prompt != acceptance.prompt.as_bytes() || turn_budget != expected_turn_budget.as_bytes()
+        if prompt != acceptance.prompt.as_bytes()
+            || turn_budget != expected_turn_budget.as_bytes()
+            || deliverables != acceptance.deliverables.record().as_bytes()
         {
             return Err(ServiceError::Internal(format!(
                 "uncommitted state controls for {} do not exactly match accepted.json.next",
@@ -1306,6 +1380,7 @@ impl Manager {
         session_id: String,
         prompt: String,
         max_session_turns: u32,
+        deliverables: Deliverables,
         archive: crate::validation::SpooledArchive,
     ) -> ServiceResult<SubmitOutcome> {
         let lifecycle = self.lifecycle.start()?;
@@ -1315,7 +1390,13 @@ impl Manager {
             async move {
                 let _lifecycle = lifecycle;
                 manager
-                    .submit_server_owned(session_id, prompt, max_session_turns, archive)
+                    .submit_server_owned(
+                        session_id,
+                        prompt,
+                        max_session_turns,
+                        deliverables,
+                        archive,
+                    )
                     .await
             },
             operation,
@@ -1332,6 +1413,7 @@ impl Manager {
         session_id: String,
         prompt: String,
         max_session_turns: u32,
+        deliverables: Deliverables,
         archive: crate::validation::SpooledArchive,
     ) -> ServiceResult<SubmitOutcome> {
         if !is_safe_session_id(&session_id) {
@@ -1361,6 +1443,7 @@ impl Manager {
                 archive.bytes,
                 &archive.sha256,
                 max_session_turns,
+                &deliverables,
             )?;
             return Ok(SubmitOutcome {
                 body: running_body_for_entry(&self.cfg, &entry)?,
@@ -1375,6 +1458,7 @@ impl Manager {
                 archive.bytes,
                 &archive.sha256,
                 max_session_turns,
+                &deliverables,
             )?;
             return Ok(SubmitOutcome {
                 body: self.get_unfenced(&session_id).await.map_err(|error| {
@@ -1394,7 +1478,12 @@ impl Manager {
         // the deliberately await-free acceptance window below.
         let validation_prompt = prompt.clone();
         let req = tokio::task::spawn_blocking(move || {
-            let req = validation::validate(&validation_prompt, max_session_turns, archive)?;
+            let req = validation::validate(
+                &validation_prompt,
+                max_session_turns,
+                deliverables,
+                archive,
+            )?;
             crate::staging::validate_archive_structure(&req.archive.path).map(drop)?;
             Ok::<_, ServiceError>(req)
         })
@@ -1409,6 +1498,7 @@ impl Manager {
             archive_bytes = req.archive.bytes,
             archive_sha256 = %req.archive.sha256,
             max_session_turns = req.max_session_turns,
+            deliverables = req.deliverables.paths().len(),
             "new operation passed archive-commitment and archive-structure validation"
         );
 
@@ -1424,6 +1514,7 @@ impl Manager {
             model: self.cfg.vllm_model_name.clone(),
             context_window: self.cfg.lock.backend.max_model_len,
             max_session_turns: req.max_session_turns,
+            deliverables: req.deliverables.clone(),
             release: acceptance.release.clone(),
             archive_bytes: req.archive.bytes,
             archive_sha256: req.archive.sha256.clone(),
@@ -1475,6 +1566,7 @@ impl Manager {
         let prompt_preview_for_task = prompt_preview.clone();
         let supervisor_prompt = req.prompt.clone();
         let supervisor_max_session_turns = req.max_session_turns;
+        let supervisor_deliverables = req.deliverables.clone();
         let supervisor_archive_bytes = req.archive.bytes;
         let supervisor_archive_sha256 = req.archive.sha256.clone();
         let supervisor_started_at_unix = started_at_unix;
@@ -1521,6 +1613,7 @@ impl Manager {
                         &supervisor_prompt,
                         &prompt_preview_for_task,
                         supervisor_max_session_turns,
+                        &supervisor_deliverables,
                         supervisor_archive_bytes,
                         &supervisor_archive_sha256,
                         supervisor_started_at_unix,
@@ -2076,6 +2169,7 @@ fn running_body(
         model: s.model.clone(),
         context_window: s.context_window,
         max_session_turns: s.max_session_turns,
+        deliverables: s.deliverables.clone(),
         release: s.release.clone(),
         archive_bytes: s.archive_bytes,
         archive_sha256: s.archive_sha256.clone(),
@@ -2257,6 +2351,7 @@ fn prepare_durable_acceptance(
         state_created = true;
         paths.write_prompt(&acceptance.prompt)?;
         paths.write_turn_budget(acceptance.max_session_turns)?;
+        paths.write_deliverables(&acceptance.deliverables)?;
         place_input_archive(paths, input_archive_spool)?;
 
         std::fs::create_dir(&result_dir).map_err(|error| {
@@ -2555,13 +2650,20 @@ fn require_matching_acceptance(
     archive_bytes: u64,
     archive_sha256: &str,
     max_session_turns: u32,
+    deliverables: &Deliverables,
 ) -> ServiceResult<()> {
-    if acceptance.matches_wire(prompt, archive_bytes, archive_sha256, max_session_turns) {
+    if acceptance.matches_wire(
+        prompt,
+        archive_bytes,
+        archive_sha256,
+        max_session_turns,
+        deliverables,
+    ) {
         return Ok(());
     }
     Err(ServiceError::IdempotencyConflict {
         session_id: acceptance.session_id.clone(),
-        detail: "the supplied Idempotency-Key already owns a different archive commitment, prompt, or max_session_turns value; generate a fresh 32-byte CSPRNG handle for a different operation".to_string(),
+        detail: "the supplied Idempotency-Key already owns a different archive commitment, prompt, max_session_turns value, or deliverables list; generate a fresh 32-byte CSPRNG handle for a different operation".to_string(),
     })
 }
 
@@ -4213,6 +4315,7 @@ fn validate_terminal_resource(
     let acceptance = read_acceptance(&cfg.records_dir(), session_id)?;
     if acceptance.accepted_at_unix != body.started_at_unix
         || acceptance.max_session_turns != body.max_session_turns
+        || acceptance.deliverables != body.deliverables
         || acceptance.release != body.release
         || preview(&acceptance.prompt) != body.prompt_preview
     {
@@ -4319,6 +4422,132 @@ mod tests {
         }
     }
 
+    fn declared(paths: &[&str]) -> agent_service::deliverables::Deliverables {
+        agent_service::deliverables::Deliverables::new(
+            paths.iter().map(|path| path.to_string()).collect(),
+        )
+        .expect("a list the service accepts")
+    }
+
+    /// The acceptance bound is the most a record can serialize to, so the
+    /// largest request the service admits is one it can also read back: the
+    /// longest prompt in the costliest escaping, and a list at its bound made
+    /// of the shortest distinct entries, which pretty-printing lengthens most.
+    #[test]
+    fn the_largest_acceptable_request_fits_its_acceptance_record_bound() {
+        let mut paths = Vec::new();
+        let mut compact = 2usize;
+        for index in 0usize.. {
+            let path = index.to_string();
+            let cost = path.len() + 2 + usize::from(!paths.is_empty());
+            if compact + cost > super::MAX_DELIVERABLES_JSON_BYTES {
+                break;
+            }
+            compact += cost;
+            paths.push(path);
+        }
+        let deliverables = agent_service::deliverables::Deliverables::new(paths)
+            .expect("the list is inside its bound");
+        assert!(deliverables.json().len() + 8 > super::MAX_DELIVERABLES_JSON_BYTES);
+        let record = AcceptanceRecord {
+            schema_version: crate::config::RESULT_RECORD_SCHEMA,
+            session_id: format!("s-{}", "f".repeat(64)),
+            accepted_at_unix: u64::MAX,
+            archive_bytes: u64::MAX,
+            archive_sha256: "f".repeat(64),
+            prompt: "\u{1}".repeat(crate::config::MAX_PROMPT_BYTES),
+            max_session_turns: crate::config::MAX_SESSION_TURNS_CEILING,
+            deliverables,
+            release: crate::config::test_release_identity(),
+        };
+        let mut bytes = serde_json::to_vec_pretty(&record).unwrap();
+        bytes.push(b'\n');
+        assert!(
+            bytes.len() as u64 <= super::MAX_ACCEPTANCE_RECORD_BYTES,
+            "a {}-byte acceptance record exceeds its {}-byte bound",
+            bytes.len(),
+            super::MAX_ACCEPTANCE_RECORD_BYTES
+        );
+        // Neither the prompt's escaping nor the list's pretty-printing is
+        // slack the fixed-metadata allowance could have absorbed.
+        assert!(
+            bytes.len() as u64
+                > crate::config::MAX_PROMPT_BYTES as u64
+                    + super::MAX_DELIVERABLES_JSON_BYTES as u64
+                    + 65_536
+        );
+    }
+
+    #[test]
+    fn a_terminal_names_missing_deliverables_exactly_for_that_ending_and_only_declared_ones() {
+        let missing_subtype = crate::result_parse::MISSING_DELIVERABLES_SUBTYPE;
+        let mut accepted = body("s-4545454545454545454545454545454545454545454545454545454545454545");
+        accepted.deliverables = declared(&["report.md", "out/data.csv", "notes.txt"]);
+        accepted
+            .validate_shape()
+            .expect("a successful run names no missing deliverable");
+        let ending = |subtype: &str, missing: Option<&[&str]>| {
+            let mut body = accepted.clone();
+            let result = body.terminal_mut().agent_result.as_mut().unwrap();
+            result.agent_result_subtype = subtype.to_string();
+            result.missing_deliverables =
+                missing.map(|paths| paths.iter().map(|path| path.to_string()).collect());
+            body
+        };
+        ending(missing_subtype, Some(&["report.md", "notes.txt"]))
+            .validate_shape()
+            .expect("some declared deliverables, in declared order");
+        ending(missing_subtype, Some(&["report.md", "out/data.csv", "notes.txt"]))
+            .validate_shape()
+            .expect("every declared deliverable");
+        for (subtype, missing) in [
+            (missing_subtype, None),
+            (missing_subtype, Some(&[][..])),
+            (missing_subtype, Some(&["other.md"][..])),
+            (missing_subtype, Some(&["notes.txt", "report.md"][..])),
+            (missing_subtype, Some(&["report.md", "report.md"][..])),
+            ("success", Some(&["report.md"][..])),
+            ("error_during_execution", Some(&["report.md"][..])),
+        ] {
+            let error = ending(subtype, missing)
+                .validate_shape()
+                .expect_err(&format!("{subtype} naming {missing:?} was accepted"));
+            assert!(error.to_string().contains("missing deliverables"), "{error}");
+        }
+        // Nothing is missing from a session that declared nothing.
+        let mut undeclared = ending(missing_subtype, Some(&["report.md"]));
+        undeclared.deliverables = declared(&[]);
+        assert!(undeclared.validate_shape().is_err());
+        // Only the session declares deliverables, so no subagent ends this way.
+        let mut child = accepted.clone();
+        let result = child.terminal_mut().agent_result.as_mut().unwrap();
+        result.subagent_scopes = vec![crate::result_parse::AgentScope {
+            tool_use_id: "call".into(),
+            tool_name: "agent".into(),
+            reported_num_turns: Some(1),
+            is_error: Some(true),
+            subtype: Some("error_during_execution".to_string()),
+            error_message: Some("stopped".into()),
+        }];
+        result.subagent_scope_count = 1;
+        result.subagent_error_count = 1;
+        child.observed_subagent_scope_count = Some(1);
+        child
+            .validate_shape()
+            .expect("a child may end in an ordinary error");
+        child.terminal_mut().agent_result.as_mut().unwrap().subagent_scopes[0].subtype =
+            Some(missing_subtype.to_string());
+        assert!(child.validate_shape().is_err());
+        // The field is required and nullable: a record without it is refused.
+        let mut record = serde_json::to_value(&accepted).unwrap();
+        record["terminal"]["agent_result"]
+            .as_object_mut()
+            .unwrap()
+            .remove("missing_deliverables");
+        let error = serde_json::from_value::<SessionBody>(record).unwrap_err();
+        assert!(error.to_string().contains("missing field `missing_deliverables`"), "{error}");
+    }
+
     fn owner(path: &Path) -> (u32, u32) {
         let metadata = std::fs::metadata(path).expect("stat owned fixture");
         (metadata.uid(), metadata.gid())
@@ -4423,6 +4652,14 @@ mod tests {
             ("mode", Some("unsafe type/owner/mode/size")),
             ("no_commitment", Some("no retained commitment")),
             ("effect", Some("nonempty; refusing destructive cleanup")),
+            (
+                "deliverables_drift",
+                Some("do not exactly match accepted.json.next"),
+            ),
+            (
+                "deliverables_missing",
+                Some("differs from the exact pre-commit layout"),
+            ),
         ] {
             let tree = TestTree::new("uncommitted-archive");
             let state = tree.0.join("state");
@@ -4445,6 +4682,7 @@ mod tests {
                     .collect(),
                 prompt: "retained request".into(),
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                deliverables: declared(&["report.md"]),
                 release: crate::config::test_release_identity(),
             };
             paths.create_dirs().unwrap();
@@ -4452,6 +4690,7 @@ mod tests {
             paths
                 .write_turn_budget(acceptance.max_session_turns)
                 .unwrap();
+            paths.write_deliverables(&acceptance.deliverables).unwrap();
             let input = paths.input_archive();
             private_write(&input, archive);
             let result_dir = records.join(session_id);
@@ -4480,9 +4719,11 @@ mod tests {
                 &input,
                 &paths.control.join("prompt.txt"),
                 &paths.control.join("turn-budget.json"),
+                &paths.control.join("deliverables.json"),
             ] {
                 make_service_owned(path);
             }
+            let deliverables_path = paths.control.join("deliverables.json");
             match case {
                 "changed" => std::fs::write(&input, b"modified archive").unwrap(),
                 "short" => std::fs::write(&input, b"short").unwrap(),
@@ -4494,6 +4735,21 @@ mod tests {
                 "mode" => std::fs::set_permissions(&input, std::fs::Permissions::from_mode(0o644))
                     .unwrap(),
                 "effect" => private_write(&paths.staged.join("retained-effect"), b"must survive"),
+                // A canonical record of a list the request did not declare.
+                "deliverables_drift" => {
+                    std::fs::set_permissions(
+                        &deliverables_path,
+                        std::fs::Permissions::from_mode(0o644),
+                    )
+                    .unwrap();
+                    std::fs::write(&deliverables_path, declared(&["other.md"]).record()).unwrap();
+                    std::fs::set_permissions(
+                        &deliverables_path,
+                        std::fs::Permissions::from_mode(0o444),
+                    )
+                    .unwrap();
+                }
+                "deliverables_missing" => std::fs::remove_file(&deliverables_path).unwrap(),
                 _ => {}
             }
             assert!(super::is_exact_uncommitted_acceptance(&result_dir, session_id).unwrap());
@@ -4565,6 +4821,7 @@ mod tests {
             model: "qwen3.8-27b-nvfp4-k8v4".to_string(),
             context_window: 262_144,
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            deliverables: declared(&[]),
             release: crate::config::test_release_identity(),
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
@@ -4603,6 +4860,7 @@ mod tests {
                     subagent_scopes: Vec::new(),
                     subagent_scope_count: 0,
                     subagent_error_count: 0,
+                    missing_deliverables: None,
                 }),
                 bundle: None,
             }),
@@ -4731,6 +4989,7 @@ mod tests {
         let request = crate::validation::ValidatedRequest {
             prompt: "written acceptance fixture".to_string(),
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            deliverables: declared(&["report.md", "out/data.csv"]),
             archive: crate::validation::SpooledArchive {
                 path: PathBuf::from("/written-acceptance-fixture.zip"),
                 bytes: 7,
@@ -4749,9 +5008,39 @@ mod tests {
                 request.archive.bytes,
                 &request.archive.sha256,
                 request.max_session_turns,
+                &request.deliverables,
             ),
             "a replay of the accepted request is not recognised as the same operation"
         );
+        // The same request declaring other deliverables, the same ones in
+        // another order, or none, is another operation.
+        for other in [
+            declared(&["report.md"]),
+            declared(&["out/data.csv", "report.md"]),
+            declared(&[]),
+        ] {
+            assert!(
+                !written.matches_wire(
+                    &request.prompt,
+                    request.archive.bytes,
+                    &request.archive.sha256,
+                    request.max_session_turns,
+                    &other,
+                ),
+                "a replay declaring {:?} was taken for the accepted operation",
+                other.paths()
+            );
+        }
+        let conflict = super::require_matching_acceptance(
+            &written,
+            &request.prompt,
+            request.archive.bytes,
+            &request.archive.sha256,
+            request.max_session_turns,
+            &declared(&[]),
+        )
+        .expect_err("a replay with another deliverables list is a conflict");
+        assert!(conflict.to_string().contains("deliverables list"), "{conflict}");
         let encoded = serde_json::to_value(&written).unwrap();
         assert_eq!(
             encoded["release"]["backend"]
@@ -4786,6 +5075,7 @@ mod tests {
             archive_sha256: "1".repeat(64),
             prompt: "strict acceptance fixture".to_string(),
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            deliverables: declared(&["report.md"]),
             release: crate::config::test_release_identity(),
         };
         let encoded = serde_json::to_value(&current).unwrap();
@@ -4793,6 +5083,14 @@ mod tests {
         unknown["preserve_thinking"] = serde_json::json!(false);
         let mut missing = encoded.clone();
         missing.as_object_mut().unwrap().remove("max_session_turns");
+        // A version-6 record, as the release before the deliverables wrote.
+        let mut undeclared = encoded.clone();
+        undeclared.as_object_mut().unwrap().remove("deliverables");
+        undeclared["schema_version"] = serde_json::json!(6);
+        // A list no request could have declared is refused by the same rule
+        // the creation body is.
+        let mut escaping = encoded.clone();
+        escaping["deliverables"] = serde_json::json!(["../escape.md"]);
         // A version-2 record, as every release before the one that recorded
         // the release wrote.
         let mut unidentified = encoded.clone();
@@ -4808,11 +5106,10 @@ mod tests {
         let launch_profile = backend.remove("launch_profile").unwrap();
         backend.insert("profile".into(), launch_profile);
         // The current shape under the previous version number is a record no
-        // release wrote beside a terminal this release can read -- version 4
-        // wrote an ended session's status as `completed` -- and is refused on
+        // release wrote -- version 6 had no deliverables -- and is refused on
         // its number alone.
         let mut renumbered = encoded.clone();
-        renumbered["schema_version"] = serde_json::json!(4);
+        renumbered["schema_version"] = serde_json::json!(6);
         let path = results.join(session_id).join("accepted.json");
         for (case, record, expected) in [
             ("current", encoded, None),
@@ -4825,6 +5122,16 @@ mod tests {
                 "missing field",
                 missing,
                 Some("missing field `max_session_turns`"),
+            ),
+            (
+                "no deliverables",
+                undeclared,
+                Some("missing field `deliverables`"),
+            ),
+            (
+                "an undeclarable deliverable",
+                escaping,
+                Some("field `deliverables[0]`"),
             ),
             (
                 "no release identity",
@@ -4887,6 +5194,7 @@ mod tests {
             archive_sha256: "a".repeat(64),
             prompt: "p".into(),
             max_session_turns: 1,
+            deliverables: declared(&[]),
             release: crate::config::test_release_identity(),
         };
         assert_eq!(
@@ -4982,6 +5290,7 @@ mod tests {
             archive_sha256: terminal.archive_sha256.clone(),
             prompt: terminal.prompt_preview.clone(),
             max_session_turns: terminal.max_session_turns,
+            deliverables: terminal.deliverables.clone(),
             release: crate::config::test_release_identity(),
         };
         private_write(
@@ -5268,6 +5577,7 @@ mod tests {
             model: "fixture".into(),
             context_window: 262_144,
             max_session_turns: 100,
+            deliverables: declared(&["report.md"]),
             release: crate::config::test_release_identity(),
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
@@ -5371,12 +5681,19 @@ mod tests {
         {
             let mut terminal =
                 body("s-3333333333333333333333333333333333333333333333333333333333333333");
-            terminal
+            // The ending that names missing deliverables carries them, and
+            // they are some of the ones the session declared.
+            let names_missing = subtype == crate::result_parse::MISSING_DELIVERABLES_SUBTYPE;
+            if names_missing {
+                terminal.deliverables = declared(&["report.md", "data.csv"]);
+            }
+            let result = terminal
                 .terminal_mut()
                 .agent_result
                 .as_mut()
-                .expect("parsed result")
-                .agent_result_subtype = subtype.to_string();
+                .expect("parsed result");
+            result.agent_result_subtype = subtype.to_string();
+            result.missing_deliverables = names_missing.then(|| vec!["data.csv".to_string()]);
             let json = serde_json::to_value(&terminal).expect("serialize");
             let restored: SessionBody = serde_json::from_value(json.clone()).expect("deserialize");
             restored.validate_shape().expect("valid restored terminal");
@@ -5542,6 +5859,7 @@ mod tests {
                 model: cfg.vllm_model_name.clone(),
                 context_window: 262_144,
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                deliverables: declared(&[]),
                 release: crate::config::test_release_identity(),
                 archive_bytes: 22,
                 archive_sha256: "0".repeat(64),
@@ -5554,6 +5872,7 @@ mod tests {
                 archive_sha256: "0".repeat(64),
                 prompt: "running-read deadlock regression fixture".to_string(),
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                deliverables: declared(&[]),
                 release: crate::config::test_release_identity(),
             },
             progress,
@@ -5621,6 +5940,7 @@ mod tests {
             archive_sha256: "3".repeat(64),
             prompt: terminal.prompt_preview.clone(),
             max_session_turns: terminal.max_session_turns,
+            deliverables: terminal.deliverables.clone(),
             release: crate::config::test_release_identity(),
         };
         private_write(
@@ -6029,6 +6349,7 @@ mod tests {
                 archive_sha256: "2".repeat(64),
                 prompt: "restart terminal fixture".to_string(),
                 max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+                deliverables: declared(&[]),
                 release: crate::config::test_release_identity(),
             };
             let spool_dir = tree.0.join("spool-fixture");
@@ -6113,6 +6434,7 @@ mod tests {
                 &paths.output,
                 &paths.control.join("prompt.txt"),
                 &paths.control.join("turn-budget.json"),
+                &paths.control.join("deliverables.json"),
                 &records.join(session_id),
                 &records.join(session_id).join("accepted.json"),
                 &archive,

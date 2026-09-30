@@ -344,8 +344,10 @@ class Harness:
         archive = self.root / "input/workspace.zip"
         with zipfile.ZipFile(archive, "x", compression=zipfile.ZIP_STORED) as output:
             output.writestr("proof.txt", self.nonce + "\n")
+        # The fixture's answer is its final message, so it declares no file: `[]`
+        # is written out, as every creation body must.
         self.request = {"prompt": "Read /workspace/proof.txt with read_file and return its exact proof prefixed COMPOSITION_OK.",
-                        "max_session_turns": 4, "archive_bytes": archive.stat().st_size,
+                        "max_session_turns": 4, "deliverables": [], "archive_bytes": archive.stat().st_size,
                         "archive_sha256": digest(archive.read_bytes())}
         save_json(self.root / "input/request.json", self.request)
         save_json(self.root / "input/conflict.json", {**self.request, "prompt": "Conflicting submission must be refused."})
@@ -694,6 +696,8 @@ print(json.dumps(found))
         receipt = json.loads(raw)
         save_json(self.root / "evidence/receipt.json", receipt)
         require(status == 202 and receipt["session_id"] == self.session, "actual HTTP acceptance failed")
+        require(receipt["deliverables"] == self.request["deliverables"],
+                "the accepted session does not echo the declared deliverables")
         if self.case == "cancel_start_gate":
             return self.cancel_start_gate(service, route)
         if self.case == "cancel_held_sse":
@@ -714,6 +718,8 @@ print(json.dumps(found))
         require(end["is_process_error"] is False and end["teardown_diagnostics"] == [], "process/teardown failed")
         require(end["response"] == "COMPOSITION_OK " + self.nonce and end["agent_result"] is not None,
                 "actual output lacks production certification or fresh proof")
+        require(body["deliverables"] == [] and end["agent_result"]["missing_deliverables"] is None,
+                "a run that declared no deliverables names one missing")
         require(body["observed_unaccounted_records"] == 0 and body["observed_usage"]["requests"] == 2 and body["observed_usage"]["usageReports"] == 2 and body["observed_usage"]["usage"]["candidatesTokenCount"] == 16 and
                 body["observed_usage"]["usage"]["thoughtsTokenCount"] == 0 and body["num_turns"] == 2, "served observation mismatch")
         require(end["raw_session_tree_retained"] is False and not (self.root / "state/sessions" / self.session).exists(),
@@ -733,7 +739,8 @@ print(json.dumps(found))
         save(archive, bundle)
         names = self.command(["tar", "--zstd", "-tf", str(archive)]).stdout.decode().splitlines()
         require(all(not name.startswith("/") and ".." not in Path(name).parts for name in names), "bundle paths escaped fixture")
-        for name in ("staged/proof.txt", "control/prompt.txt", "control/turn-budget.json", "output/events.jsonl",
+        for name in ("staged/proof.txt", "control/prompt.txt", "control/turn-budget.json",
+                     "control/deliverables.json", "output/events.jsonl",
                      "output/qwen.stderr", "output/ready.json", "output/qwen-exit-code"):
             require(name in names, f"required bundle evidence missing: {name}")
         events = self.command(["tar", "--zstd", "-xOf", str(archive), "output/events.jsonl"]).stdout
@@ -769,7 +776,7 @@ print(json.dumps(found))
                 "canonical history entered output/events.jsonl; inspect the stdout capture boundary")
         require(not any(record.get("subtype") == "compaction" for record in records),
                 "the two-generation fixture issued no compaction draw; inspect unexpected compaction evidence")
-        schema_hash = digest((self.source / "protocol/stream-contract-v17.json").read_bytes())
+        schema_hash = digest((self.source / "protocol/stream-contract-v18.json").read_bytes())
         require(records[0]["stream_contract_sha256"] == schema_hash, "producer/service source contract pairing changed")
         session_id = records[0]["session_id"]
         require(all(record["session_id"] == session_id for record in records), "captured event ownership changed")

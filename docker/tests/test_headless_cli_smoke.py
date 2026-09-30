@@ -38,11 +38,11 @@ class HeadlessSmokeTests(unittest.TestCase):
                      patch("check_headless_cli.subprocess.Popen") as child:
                     with self.assertRaisesRegex(SmokeFailure, "before provider admission"):
                         check(entry, ROOT / "docker/config/settings.json", ROOT / "src/bin/agent_exec.rs",
-                              Path(temporary) / "unreachable-certifier")
+                              Path(temporary) / "unreachable-certifier", [])
                     server.assert_not_called()
                     child.assert_not_called()
 
-    def run_entry(self, source):
+    def run_entry(self, source, deliverables=()):
         with tempfile.TemporaryDirectory(prefix="headless-gate-negative-") as temporary:
             entry = Path(temporary) / "entry.mjs"
             entry.write_text(source)
@@ -54,7 +54,14 @@ class HeadlessSmokeTests(unittest.TestCase):
                  patch("check_headless_cli.stub_address", return_value=("127.0.0.1", 0)), \
                  patch("check_headless_cli.contract_identity", return_value="0" * 64):
                 return check(entry, ROOT / "docker/config/settings.json", ROOT / "src/bin/agent_exec.rs",
-                             Path(temporary) / "unreachable-certifier")
+                             Path(temporary) / "unreachable-certifier", list(deliverables))
+
+    def test_a_run_owing_deliverables_must_exit_as_the_missing_deliverables_ending(self):
+        # Owing a file nothing writes, the run must end with exit 1; a clean exit is refused
+        # before any event is read, and the launcher's compact list is what the CLI receives.
+        with self.assertRaisesRegex(SmokeFailure, "CLI exited 0, not 1"):
+            self.run_entry("process.stdin.resume(); process.stdin.on('end', () => {});\n",
+                           ["owed.md"])
 
     def test_rejects_zero_exit_without_events(self):
         with self.assertRaisesRegex(SmokeFailure, "CLI emitted no events"):

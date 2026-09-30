@@ -112,20 +112,24 @@ submission_validate_receipt() {
     submission_die "receipt archive is ${archive_bytes} bytes; required range is 1..${SUBMISSION_MAX_ARCHIVE_BYTES}" || return
 
   # `keys` is sorted, so subtracting the one optional field leaves exactly the
-  # three required ones: every required key present, no unknown key admitted,
+  # four required ones: every required key present, no unknown key admitted,
   # and the optional field, when present, of its one accepted type and range.
+  # The deliverables list is checked for its type only; the path rule it must
+  # also satisfy has one definition, the service's, which refuses a list that
+  # breaks it by name before the archive part is spooled.
   jq -e --argjson archive_bytes "${archive_bytes}" \
     --argjson turn_ceiling "${SUBMISSION_MAX_SESSION_TURNS_CEILING}" '
     type == "object" and
     ((keys - ["max_session_turns"]) ==
-      ["archive_bytes", "archive_sha256", "prompt"]) and
+      ["archive_bytes", "archive_sha256", "deliverables", "prompt"]) and
     (.prompt | type == "string" and length > 0) and
+    (.deliverables | type == "array" and all(.[]; type == "string")) and
     (.archive_bytes == $archive_bytes) and
     (.archive_sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
     ((has("max_session_turns") | not) or
      (.max_session_turns | type == "number" and . == floor and . >= 1 and . <= $turn_ceiling))
   ' "${request_file}" >/dev/null ||
-    submission_die "receipt request for ${session_id} violates the one creation-body schema or disagrees with its archive" || return
+    submission_die "receipt request for ${session_id} violates the one creation-body schema (prompt, deliverables, archive_bytes, archive_sha256 and an optional max_session_turns) or disagrees with its archive, so it cannot be replayed; submit the task again with ./run.sh" || return
 
   # The commitment is byte-exact: the archive on disk must still hash to the
   # value the request will declare, on every replay, before it reaches the
@@ -142,8 +146,13 @@ submission_validate_receipt() {
 }
 
 submission_create_receipt() {
-  local session_id="$1" folder="$2" prompt_file="$3" max_session_turns="${4-}"
+  local session_id="$1" folder="$2" prompt_file="$3" deliverables="$4" max_session_turns="${5-}"
   submission_require_handle "${session_id}" || return
+  # The deliverables list is required and never defaulted: `[]` is how a
+  # caller declares that the run is to leave no file in /artifacts.
+  jq -en --argjson deliverables "${deliverables}" \
+    '$deliverables | type == "array" and all(.[]; type == "string")' >/dev/null 2>&1 ||
+    submission_die "deliverables must be one JSON array of path strings relative to /artifacts, such as '[\"report.md\"]', and '[]' declares none; got ${deliverables@Q}" || return
   # The ceiling comes from the stack lock, never a hand-copied mirror, so this
   # client cannot refuse a budget the service admits or offer one it refuses.
   [[ -z "${max_session_turns}" ||
@@ -204,10 +213,11 @@ submission_create_receipt() {
   jq -n --argjson archive_bytes "${archive_bytes}" \
     --arg archive_sha256 "${archive_sha256}" \
     --argjson max_session_turns "${max_session_turns:-null}" \
+    --argjson deliverables "${deliverables}" \
     --rawfile prompt "${prompt_file}" \
     '{prompt:$prompt}
      + (if $max_session_turns == null then {} else {max_session_turns:$max_session_turns} end)
-     + {archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
+     + {deliverables:$deliverables,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' >"${request_next}" ||
     submission_die "cannot serialize exact request receipt for ${session_id}" || return
   chmod 0600 -- "${request_next}" ||
     submission_die "cannot set private mode on receipt for ${session_id}" || return
@@ -260,12 +270,14 @@ submission_response_is_valid() {
     (.status | type == "string") and
     (($statuses | split("|") | index($body.status)) != null)
   ' "${response_file}" >/dev/null 2>&1 &&
-    jq -e --argjson archive_bytes "${declared_bytes}" --arg archive_sha256 "${declared_sha}" '
+    jq -e --argjson archive_bytes "${declared_bytes}" --arg archive_sha256 "${declared_sha}" \
+      --slurpfile receipt "${receipt_dir}/request.json" '
       (.progress_revision | type == "number") and
       (.progress_events | type == "array") and
       (.model | type == "string" and length > 0) and
       (.context_window | type == "number" and . == 262144) and
       (.max_session_turns | type == "number" and . == floor and . >= 1) and
+      (.deliverables == $receipt[0].deliverables) and
       (.archive_bytes == $archive_bytes) and
       (.archive_sha256 == $archive_sha256)
     ' "${response_file}" >/dev/null

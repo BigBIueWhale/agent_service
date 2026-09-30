@@ -485,7 +485,7 @@ The source pins describe this checkout. The independently pinned
 pins does not build, release, or update those images.
 
 The [source transformer](patches/source_patch_v1) applies the reviewed changes to
-that exact upstream tree. It checks source identities, structural landmarks, 34
+that exact upstream tree. It checks source identities, structural landmarks, 35
 semantic concerns, and final identities, including explicit absent identities for
 removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
 mutation refuse application. Failed publication restores original bytes, modes,
@@ -815,8 +815,9 @@ calling and exact served usage are the client's one decode mode.
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's
-assertion that the model wrote its final message to the end. Seven `error_*`
-spellings name the states that stopped a run instead, one name per state:
+assertion that the model wrote its final message to the end and that every file its
+creation body declared is there. Eight `error_*` spellings name the states that ended a
+run instead, one name per state:
 `error_during_execution` when the run failed on its own terms, `error_max_turns`
 when the turn budget ran out, `error_loop_detected` when the loop detector halted
 a run that had stopped making progress, `error_incomplete_generation` when the last
@@ -824,10 +825,12 @@ generation did not end on its own -- its turn refused at its limit on every draw
 a turn is given, or stopped for another reason, which is not asked for again --
 `error_slipped_final_message` when the model ended three
 consecutive turns with a message that was not a final answer after being told
-twice, and `error_cancelled` for an abort from outside. The names, whether each
+twice, `error_missing_deliverables` when the model wrote its final message but a
+file the creation body declared is not in `/artifacts`, and `error_cancelled` for an
+abort from outside. The names, whether each
 is an error, and the exit code a process that ended with each leaves are one
 table in the stream contract, `terminalOutcome` in
-`protocol/stream-contract-v17.json`, which validates a record's pairing and from
+`protocol/stream-contract-v18.json`, which validates a record's pairing and from
 which both the client's and the service's bindings are generated: `success`
 exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
 The table also names `error_timeout`, which no session ends in: only a subagent
@@ -842,12 +845,14 @@ with as that ending, never as a failure of the process. A state earns a name whe
 it names an authority other than the run itself that ended the run, a bound the
 caller set and can raise, or a shape of ending a reader has to tell from the
 others without parsing English; everything else the run did to itself is
-`error_during_execution`, told apart by the error message. Every one of the eight
+`error_during_execution`, told apart by the error message. Every one of the nine
 names is a state the client contains a statement to produce, which the patch
 asserts before it writes a byte. A subagent's own scoped record carries the error
 names from the same list, so a subagent that ran out of turns and one whose tool
 threw are distinguishable without reading English; a scope that finished reports
-its work rather than a terminal state, so `success` is the session's own. In the
+its work rather than a terminal state, so `success` is the session's own, and so is
+`error_missing_deliverables`: only the session declares deliverables, and the
+contract refuses the name, and its list, on any other record. In the
 parent, the call that ran a subagent which stopped before its goal, or could not
 be run, is a failed tool call (`is_error: true`), and the text the parent reads
 is the subagent's labelled partial report, unchanged. The set
@@ -857,7 +862,27 @@ than mapped onto a neighbour, and the client's build refuses to produce a name
 this list does not contain anywhere. A run that never produced a terminal record
 reports no state at all rather than a spelling nothing asserted. Nothing here
 judges whether the work was done, which is not decidable from a stream; it
-reports the shape of the ending, which is.
+reports the shape of the ending, which is, and the one fact about the work a
+caller can state in advance: that the files it named exist.
+
+A creation body declares, in its required `deliverables` field, the files the run
+must leave in `/artifacts`, as paths relative to it; `[]` declares none and is
+written out, never assumed. The launcher passes the list to Qwen Code as one
+argument, and once the model has written its final message the client checks each
+path inside the agent container, where the model left it: it must name a non-empty
+regular file beneath `/artifacts`, reached without following a symbolic link, so a
+link the model made can never lead the check onto another path. A run missing any
+declared file ends as `error_missing_deliverables`, exit 1, never as `success`: its
+error message names every missing path, and its record lists them in declared order
+as `missing_deliverables`, which the service carries to
+`terminal.agent_result.missing_deliverables` -- null for every other ending -- so a
+caller lists them without parsing English. Nothing is said to the model: the prompt
+names the file it asks for, and the deployment contract already says `/artifacts`
+holds requested deliverables. The check proves existence and nothing more. A
+one-byte placeholder passes it, and nothing checks that a declared path agrees with
+the path the prompt names: a caller who declares `report.md` and asks for
+`summary.md` has asked for two different files. The accepted list is recorded in
+the session body's `deliverables` and in the bundle's `control/deliverables.json`.
 
 Orderly run endings, including turn-budget refusal and cancellation, produce
 one of those terminal states. An abrupt process or transport failure can prevent
@@ -971,7 +996,7 @@ ends this way is reported to its parent as unfinished, with the shape of the sli
 and its turn count, in the same form as an exhausted budget or a cut-off
 generation, and its scoped terminal record carries the same name. The name is a
 row of the terminal table, `terminalOutcome` in
-`protocol/stream-contract-v17.json`, which is the one place the vocabulary is
+`protocol/stream-contract-v18.json`, which is the one place the vocabulary is
 written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.
@@ -1115,8 +1140,9 @@ The submitted archive is extracted; the caller's original tree is never seen,
 let alone mutated. Executable semantics are preserved while dangerous mode bits
 are stripped, and symbolic-link entries stage as opaque links that resolve only
 inside the agent's isolated mount namespace. The agent modifies `/workspace`;
-the final workspace, `/artifacts`, prompt record, ready record, complete events,
-stderr, exit code, and final response are placed in a deterministic `bundle.tar.zst`.
+the final workspace, `/artifacts`, the prompt, turn-budget and deliverables records,
+the ready record, complete events, stderr, exit code, and final response are placed
+in a deterministic `bundle.tar.zst`.
 Missing bundle entries, symlinks, read races, or tar errors are process failures.
 There is no `--ignore-failed-read` path.
 
@@ -1400,15 +1426,17 @@ Submit one task. `run.sh` returns as soon as the service has durably accepted it
 the session does not belong to the connection, and `./session.sh <session-id>` reads it later:
 
 ```bash
-./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt
+./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt --deliverables='[]'
 ```
 
-The optional creation-body field is a named option, and omitting it selects
-the deployment default rather than sending it explicitly:
+Each creation-body field is a named option. `--deliverables` is required and has no
+default: `'[]'` declares that the run is to leave no file in `/artifacts`, and a list
+names the files it must leave there. `--max-session-turns` is optional, and omitting
+it selects the deployment default rather than sending it explicitly:
 
 ```bash
 ./run.sh /home/user/Desktop/my_project /home/user/Desktop/task-prompt.txt \
-  --max-session-turns=700
+  --deliverables='["report.md", "figures/summary.png"]' --max-session-turns=700
 ```
 
 Cancel a known session:
@@ -1535,16 +1563,28 @@ does not read fails its request with HTTP 500 `internal`. The list response is
 `{"sessions": [...]}`. See the [session resource contract](docs/session-resource.md).
 
 The creation body is exactly two ordered `multipart/form-data` parts: part 1
-`request` (`application/json` — `{"prompt", "max_session_turns"?,
+`request` (`application/json` — `{"prompt", "max_session_turns"?, "deliverables",
 "archive_bytes", "archive_sha256"}`, at most 2 MiB) and part 2 `archive`
 (`application/zip` — the exact workspace bytes, streamed to a disk spool while
 hashed, bounded only by the explicit 200 GiB + container-overhead archive cap).
 A required caller-generated 256-bit `Idempotency-Key` names the operation. The
 optional field is typed, not a profile name: `max_session_turns` is a JSON
-integer in `1..=2000`. Omitting it selects the locked default of 400 turns; a
-bad value is refused by name before the archive part is spooled, and a replay
-under the same handle must repeat the same values or it is a 409 rather than a
-second operation.
+integer in `1..=2000`. Omitting it selects the locked default of 400 turns.
+`deliverables` is required, with no default: a JSON array of the files the run
+must leave in `/artifacts`, as paths relative to it, and `[]` when it is to leave
+none. Each path is non-empty and relative (no leading `/`) and holds no NUL; every
+`/`-separated component is non-empty, neither `.` nor `..`, and at most 255 bytes,
+Linux's `NAME_MAX`; `/artifacts/` and the path fit Linux's `PATH_MAX`, 4,096 bytes
+with its NUL, so a path is at most 4,084 bytes; and no path repeats. The whole list
+is at most 131,056 bytes as compact JSON. That bound is derived, not chosen: the
+launcher passes the list to Qwen Code as the one argument `--deliverables=<list>`,
+and Linux refuses a single argument longer than `MAX_ARG_STRLEN`, 131,072 bytes
+with its NUL. The rule and its bounds are declared once, in `src/deliverables.rs`,
+which the service and the launcher share and the client's check mirrors. A bad
+value in either field is refused by name -- for a path, its position, the rule it
+breaks and what to write instead -- before the archive part is spooled, and a
+replay under the same handle must repeat the same values or it is a 409 rather
+than a second operation.
 There is no serving-capacity gate: sessions run concurrently, each in its own
 isolated topology, because whether more than one should run at once is a
 placement decision for whatever sits above this service. Concurrent sessions
@@ -1567,7 +1607,9 @@ are bounded by the bytes of its NFC form rather than the bytes it is written
 in, so a prompt not already in NFC is refused with the instruction to normalize
 it, and one in NFC is measured by its length. Prompt bytes enter Qwen through
 text stdin, not a shell argument, so Linux's per-argument limit does not
-invalidate the API contract or expose the prompt in a process listing.
+invalidate the API contract or expose the prompt in a process listing. The
+deliverables list is the one request value that travels as an argument, which
+is why that limit is its bound.
 
 All session endpoints return the [same evidence contract](docs/session-resource.md).
 `session.sh` validates its live/terminal distinction before displaying the JSON;
@@ -1661,8 +1703,9 @@ The accepted pilot's release commit and agent, broker, and service image IDs,
 with exact methodology, limitations, hashes, and results, are in
 [`docs/production-swe-rebench-pilot.md`](docs/production-swe-rebench-pilot.md).
 That harness spoke the API of its own release, `7a329f6`: the folder-path creation
-body and the `/wait` endpoint were removed on 2026-08-18 (`c56cfcb`), so it is kept
-as frozen evidence and cannot be rerun against this service.
+body and the `/wait` endpoint were removed on 2026-08-18 (`c56cfcb`), so it runs only
+against that release and is not part of this tree; git keeps its exact bytes at commit
+`03bbd36`, which recorded the run.
 
 Any future changed input must rerun the affected gates. There is no fallback
 declaration of success.

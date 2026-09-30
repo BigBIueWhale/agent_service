@@ -37,7 +37,7 @@ TOTAL_USAGE = {
 
 def terminal_body():
     return {
-        "status": "ended", "num_turns": None, **dict.fromkeys(OBSERVED),
+        "status": "ended", "num_turns": None, **dict.fromkeys(OBSERVED), "deliverables": [],
         "terminal": {
             "agent_result": None, "bundle": None, "is_process_error": True,
             "response": "", "raw_session_tree_retained": False, "teardown_diagnostics": [],
@@ -56,6 +56,7 @@ def certified_body():
             {"kv_scope": "internal", "usage": copy.deepcopy(INTERNAL_USAGE)},
         ],
         "subagent_scopes": [], "subagent_scope_count": 0, "subagent_error_count": 0,
+        "missing_deliverables": None,
     }
     return body
 
@@ -72,7 +73,7 @@ class SessionReaderTests(unittest.TestCase):
 
     def test_observations_survive_terminal_without_certifying_missing_evidence(self):
         running = {
-            "status": "running", "num_turns": None, "terminal": None,
+            "status": "running", "num_turns": None, "terminal": None, "deliverables": [],
             "observed_usage": copy.deepcopy(EMPTY_USAGE),
             "observed_subagent_scope_count": 0, "observed_unaccounted_records": 0,
         }
@@ -198,6 +199,49 @@ class SessionReaderTests(unittest.TestCase):
         result = subprocess.run(["jq", "-er", ".terminal.bundle.artifacts_file_count"],
                                 input=json.dumps(body), text=True, capture_output=True, check=True)
         self.assertEqual(result.stdout.strip(), "0")
+
+    def test_missing_deliverables_are_listed_only_from_the_declared_ones(self):
+        body = certified_body()
+        body["deliverables"] = ["report.md", "out/data.csv", "notes.txt"]
+        self.validate(body, True)
+        result = body["terminal"]["agent_result"]
+        for missing in (["report.md", "notes.txt"], ["out/data.csv"],
+                        ["report.md", "out/data.csv", "notes.txt"]):
+            with self.subTest(missing=missing):
+                result["missing_deliverables"] = missing
+                self.validate(body, True)
+        for missing in ([], ["other.md"], ["notes.txt", "report.md"],
+                        ["report.md", "report.md"], "report.md", [1]):
+            with self.subTest(missing=missing):
+                invalid = copy.deepcopy(body)
+                invalid["terminal"]["agent_result"]["missing_deliverables"] = missing
+                self.validate(invalid, False)
+        invalid = copy.deepcopy(body)
+        invalid["terminal"]["agent_result"].pop("missing_deliverables")
+        self.validate(invalid, False)
+        # Nothing is missing from a session that declared nothing.
+        invalid = copy.deepcopy(body)
+        invalid["deliverables"] = []
+        invalid["terminal"]["agent_result"]["missing_deliverables"] = ["report.md"]
+        self.validate(invalid, False)
+
+    def test_the_accepted_deliverables_are_required_in_every_state(self):
+        running = {
+            "status": "running", "num_turns": None, "terminal": None,
+            "observed_usage": copy.deepcopy(EMPTY_USAGE),
+            "observed_subagent_scope_count": 0, "observed_unaccounted_records": 0,
+        }
+        for body in (running, terminal_body()):
+            body["deliverables"] = ["report.md"]
+            self.validate(body, True)
+            for deliverables in (None, "report.md", [""], ["a.md", "a.md"], [1]):
+                with self.subTest(status=body["status"], deliverables=deliverables):
+                    invalid = copy.deepcopy(body)
+                    invalid["deliverables"] = deliverables
+                    self.validate(invalid, False)
+            invalid = copy.deepcopy(body)
+            invalid.pop("deliverables")
+            self.validate(invalid, False)
 
     def test_status_names_the_lifecycle_and_never_a_success(self):
         body = terminal_body()

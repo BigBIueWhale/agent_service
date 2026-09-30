@@ -479,6 +479,7 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             'const EVENTS_SOCKET: &str = "/streams/events.sock";',
             'const STDERR_SOCKET: &str = "/streams/stderr.sock";',
             f'const TURN_BUDGET_FILE: &str = "{sealed["turn_budget_path"]}";',
+            f'const DELIVERABLES_FILE: &str = "{sealed["deliverables_path"]}";',
             'const NODE: &str = "/usr/local/bin/node";',
             'const CLI: &str = "/opt/qwen-code/dist/cli.js";',
             'std::path::Path::new("/output").exists()',
@@ -500,6 +501,13 @@ def verify_agent_exec(contract: dict[str, Any], source: str) -> None:
             # resolved config value this flag sets.
             'let max_session_turns = read_session_turn_budget()?;',
             '.arg(format!("--max-session-turns={max_session_turns}"))',
+            # The declared deliverables reach Qwen Code the same way: read from
+            # their own sealed control record, never defaulted, and passed as
+            # exactly one argument right after the turn budget -- `[]` included,
+            # so the client is always told what to check, even when it is none.
+            'let deliverables = read_session_deliverables()?;',
+            '.arg(format!("--max-session-turns={max_session_turns}")) '
+            '.arg(deliverables.argument()),',
         ],
     )
     verify_agent_exec_turn_budget(contract, source)

@@ -49,7 +49,7 @@ COPY patches/qwen-code-0.21.12-agent-service.patch \
   /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch
 COPY patches/source_patch_v1 \
   /opt/agent-artifacts/patches/source_patch_v1
-COPY protocol/stream-contract-v17.json /opt/agent-artifacts/protocol/stream-contract-v17.json
+COPY protocol/stream-contract-v18.json /opt/agent-artifacts/protocol/stream-contract-v18.json
 COPY protocol/test-vectors /opt/agent-artifacts/protocol/test-vectors
 COPY scripts/generate-protocol-bindings.mjs \
   /opt/agent-artifacts/scripts/generate-protocol-bindings.mjs
@@ -174,7 +174,7 @@ COPY --from=qwen-build /src/package.json /opt/qwen-code/package.json
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY protocol protocol
 COPY src/bin/agent_exec.rs src/bin/agent_exec.rs
-COPY src/lib.rs src/error.rs src/result_parse.rs src/serde_contract.rs src/stream_contract.rs src/
+COPY src/lib.rs src/deliverables.rs src/error.rs src/result_parse.rs src/serde_contract.rs src/stream_contract.rs src/
 COPY src/result_parse src/result_parse
 COPY src/container_image.rs src/container_image.rs
 COPY src/bin/event_certifier.rs src/bin/event_certifier.rs

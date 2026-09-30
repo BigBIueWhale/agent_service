@@ -12,6 +12,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use agent_service::deliverables::Deliverables;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tokio_util::sync::CancellationToken;
@@ -34,6 +35,7 @@ struct FailureContext<'a> {
     session_id: &'a str,
     prompt_preview: &'a str,
     max_session_turns: u32,
+    deliverables: &'a Deliverables,
     archive_bytes: u64,
     archive_sha256: &'a str,
     started_at_unix: u64,
@@ -209,6 +211,7 @@ pub async fn run_one(
         session_id,
         prompt_preview: &prompt_preview,
         max_session_turns: req.max_session_turns,
+        deliverables: &req.deliverables,
         archive_bytes: req.archive.bytes,
         archive_sha256: &req.archive.sha256,
         started_at_unix,
@@ -745,6 +748,21 @@ pub async fn run_one(
             "trusted stream capture was not proved complete; refusing complete-result certification".into(),
         ))
     };
+    // The run can only report as missing what it was asked to leave: a
+    // certified list naming anything else did not come from the check the
+    // launcher configured, and certifies nothing.
+    let parsed = parsed.and_then(|result| match &result.missing_deliverables {
+        Some(missing)
+            if !crate::runtime::is_ordered_subset(missing, req.deliverables.paths()) =>
+        {
+            Err(ServiceError::AgentOutputMissing(format!(
+                "the terminal record names {} missing deliverables that are not, in order, among the {} the session declared; inspect the captured root result and control/deliverables.json",
+                missing.len(),
+                req.deliverables.paths().len()
+            )))
+        }
+        _ => Ok(result),
+    });
     let (mut response, agent_result) = match parsed {
         Ok(result) => {
             let agent_result = AgentResult {
@@ -762,6 +780,7 @@ pub async fn run_one(
                     .filter(|scope| scope.is_error == Some(true))
                     .count() as u64,
                 subagent_scopes: result.scopes,
+                missing_deliverables: result.missing_deliverables,
             };
             (result.response, Some(agent_result))
         }
@@ -852,6 +871,7 @@ pub async fn run_one(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         max_session_turns: req.max_session_turns,
+        deliverables: req.deliverables.clone(),
         release: cfg.release.clone(),
         archive_bytes: req.archive.bytes,
         archive_sha256: req.archive.sha256.clone(),
@@ -1033,6 +1053,7 @@ pub async fn recover_after_execution_panic(
     full_prompt: &str,
     prompt_preview: &str,
     max_session_turns: u32,
+    deliverables: &Deliverables,
     archive_bytes: u64,
     archive_sha256: &str,
     started_at_unix: u64,
@@ -1112,6 +1133,11 @@ pub async fn recover_after_execution_panic(
             if let Err(error) = ensure_turn_budget_record(&paths, max_session_turns) {
                 diagnostics.push(format!(
                     "preserve turn budget after execution-task failure: {error}"
+                ));
+            }
+            if let Err(error) = ensure_deliverables_record(&paths, deliverables) {
+                diagnostics.push(format!(
+                    "preserve deliverables after execution-task failure: {error}"
                 ));
             }
             for (path, contents) in [
@@ -1206,6 +1232,7 @@ pub async fn recover_after_execution_panic(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         max_session_turns,
+        deliverables: deliverables.clone(),
         release: cfg.release.clone(),
         archive_bytes,
         archive_sha256: archive_sha256.to_string(),
@@ -1257,6 +1284,7 @@ pub async fn recover_after_service_restart(
     paths.ensure_recovery_dirs()?;
     ensure_prompt_record(&paths, &acceptance.prompt)?;
     ensure_turn_budget_record(&paths, acceptance.max_session_turns)?;
+    ensure_deliverables_record(&paths, &acceptance.deliverables)?;
 
     let status = if cancellation_was_durable {
         SessionStatus::Cancelled
@@ -1376,6 +1404,7 @@ pub async fn recover_after_service_restart(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         max_session_turns: acceptance.max_session_turns,
+        deliverables: acceptance.deliverables.clone(),
         // The release that accepted the session, not the one recovering it.
         release: acceptance.release.clone(),
         archive_bytes: acceptance.archive_bytes,
@@ -1469,8 +1498,45 @@ fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()>
 }
 
 fn ensure_turn_budget_record(paths: &SessionPaths, max_session_turns: u32) -> ServiceResult<()> {
-    let path = paths.control.join("turn-budget.json");
-    let expected = staging::turn_budget_record(max_session_turns);
+    ensure_sealed_control_record(
+        paths,
+        "turn-budget.json",
+        "turn budget",
+        staging::turn_budget_record(max_session_turns).as_bytes(),
+        64,
+        &format!("max_session_turns={max_session_turns}"),
+        || paths.write_turn_budget(max_session_turns),
+    )
+}
+
+fn ensure_deliverables_record(
+    paths: &SessionPaths,
+    deliverables: &Deliverables,
+) -> ServiceResult<()> {
+    ensure_sealed_control_record(
+        paths,
+        "deliverables.json",
+        "deliverables",
+        deliverables.record().as_bytes(),
+        agent_service::deliverables::MAX_RECORD_BYTES as u64,
+        &format!("list of {} deliverables", deliverables.paths().len()),
+        || paths.write_deliverables(deliverables),
+    )
+}
+
+/// Keep one sealed read-only control record through recovery: an existing
+/// record is kept only if it is exactly the accepted one, an absent one is
+/// published from the acceptance, and anything else is refused.
+fn ensure_sealed_control_record(
+    paths: &SessionPaths,
+    name: &str,
+    role: &str,
+    expected: &[u8],
+    max_bytes: u64,
+    accepted: &str,
+    publish: impl FnOnce() -> ServiceResult<std::path::PathBuf>,
+) -> ServiceResult<()> {
+    let path = paths.control.join(name);
     match std::fs::symlink_metadata(&path) {
         Ok(metadata)
             if metadata.is_file()
@@ -1479,30 +1545,32 @@ fn ensure_turn_budget_record(paths: &SessionPaths, max_session_turns: u32) -> Se
                 && metadata.gid() == 1000
                 && metadata.permissions().mode() & 0o777 == 0o444 =>
         {
-            let existing =
-                read_exact_owned_regular_file(&path, 0o444, 64, "panic-recovery turn budget")?;
-            if existing == expected.as_bytes() {
+            let existing = read_exact_owned_regular_file(
+                &path,
+                0o444,
+                max_bytes,
+                &format!("panic-recovery {role}"),
+            )?;
+            if existing == expected {
                 Ok(())
             } else {
                 Err(ServiceError::Internal(format!(
-                    "existing panic-recovery turn budget {} contradicts the accepted max_session_turns={max_session_turns}",
+                    "existing panic-recovery {role} {} contradicts the accepted {accepted}",
                     path.display()
                 )))
             }
         }
         Ok(metadata) => Err(ServiceError::Internal(format!(
-            "{} is not the exact regular 1000:1000 mode-0444 turn-budget record: type={:?} uid={} gid={} mode={:o}",
+            "{} is not the exact regular 1000:1000 mode-0444 {role} record: type={:?} uid={} gid={} mode={:o}",
             path.display(),
             metadata.file_type(),
             metadata.uid(),
             metadata.gid(),
             metadata.permissions().mode() & 0o777
         ))),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            paths.write_turn_budget(max_session_turns).map(|_| ())
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => publish().map(|_| ()),
         Err(error) => Err(ServiceError::Internal(format!(
-            "stat panic-recovery turn budget {}: {error}",
+            "stat panic-recovery {role} {}: {error}",
             path.display()
         ))),
     }
@@ -1906,6 +1974,7 @@ async fn finalize_setup_failure(
         model: cfg.vllm_model_name.clone(),
         context_window: cfg.lock.backend.max_model_len,
         max_session_turns: context.max_session_turns,
+        deliverables: context.deliverables.clone(),
         release: cfg.release.clone(),
         archive_bytes: context.archive_bytes,
         archive_sha256: context.archive_sha256.to_string(),
@@ -2393,6 +2462,52 @@ mod tests {
             "panic recovery repaired or accepted prompt metadata drift"
         );
         std::fs::remove_dir_all(&state).expect("remove panic-prompt fixture");
+    }
+
+    #[test]
+    fn recovery_keeps_publishes_or_refuses_the_sealed_control_records_exactly() {
+        use super::{ensure_deliverables_record, ensure_turn_budget_record, SessionPaths};
+        let state = std::env::temp_dir().join(format!(
+            "qwen38-recovery-records-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(state.join("sessions")).expect("create recovery sessions parent");
+        let paths = SessionPaths::new(&state, "s-98989898989898989898989898989898");
+        paths.create_dirs().expect("create recovery layout");
+        let declared = agent_service::deliverables::Deliverables::new(vec![
+            "report.md".to_string(),
+            "out/data.csv".to_string(),
+        ])
+        .expect("a declared list");
+        let other = agent_service::deliverables::Deliverables::new(vec!["report.md".to_string()])
+            .expect("another declared list");
+        let root_run = unsafe { libc::geteuid() } == 0;
+        // An absent record is published from the acceptance, exactly.
+        ensure_deliverables_record(&paths, &declared).expect("publish the absent record");
+        ensure_turn_budget_record(&paths, 700).expect("publish the absent turn budget");
+        let deliverables_path = paths.control.join("deliverables.json");
+        let turn_budget_path = paths.control.join("turn-budget.json");
+        assert_eq!(std::fs::read(&deliverables_path).unwrap(), declared.record().as_bytes());
+        assert_eq!(std::fs::read(&turn_budget_path).unwrap(), b"{\"max_session_turns\":700}\n");
+        if root_run {
+            for path in [&deliverables_path, &turn_budget_path] {
+                std::os::unix::fs::chown(path, Some(1000), Some(1000))
+                    .expect("assign runtime record ownership in root-run fixture");
+            }
+        }
+        // An exact existing record is kept; one naming anything else is refused.
+        ensure_deliverables_record(&paths, &declared).expect("keep the exact record");
+        ensure_turn_budget_record(&paths, 700).expect("keep the exact turn budget");
+        let error = ensure_deliverables_record(&paths, &other).unwrap_err().to_string();
+        assert!(error.contains("contradicts the accepted list of 1 deliverables"), "{error}");
+        let error = ensure_turn_budget_record(&paths, 400).unwrap_err().to_string();
+        assert!(error.contains("contradicts the accepted max_session_turns=400"), "{error}");
+        // Metadata drift is refused, never repaired.
+        std::fs::set_permissions(&deliverables_path, std::fs::Permissions::from_mode(0o644))
+            .expect("drift deliverables mode");
+        let error = ensure_deliverables_record(&paths, &declared).unwrap_err().to_string();
+        assert!(error.contains("mode-0444 deliverables record"), "{error}");
+        std::fs::remove_dir_all(&state).expect("remove recovery fixture");
     }
 
     #[test]

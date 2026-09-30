@@ -337,6 +337,63 @@ class VerifyRuntimeContractTests(unittest.TestCase):
             ):
                 MODULE.verify(paths)
 
+    def resealed_launcher(self, root: Path, old: str, new: str) -> list[Path]:
+        """Write the launcher with `old` replaced by `new` and reseal the contract to it."""
+        source = self.paths[8].read_text(encoding="utf-8")
+        resealed = source.replace(old, new)
+        self.assertNotEqual(source, resealed)
+        source_path = root / "agent_exec.rs"
+        source_path.write_text(resealed, encoding="utf-8")
+        contract = json.loads(self.paths[0].read_text(encoding="utf-8"))
+        contract["components"]["agent_exec_source_sha256"] = MODULE.sha256(
+            source_path.read_bytes()
+        )
+        contract_path = root / "contract.json"
+        contract_path.write_text(json.dumps(contract, indent=2) + "\n", encoding="utf-8")
+        return [contract_path, *self.paths[1:8], source_path]
+
+    def test_rejects_a_launcher_that_does_not_pass_the_sealed_deliverables(self) -> None:
+        # The declared deliverables reach Qwen Code through exactly one
+        # argument, read from their sealed record and passed right after the
+        # turn budget. A launcher that drops it, passes a fixed list, reads no
+        # record, or moves the argument is refused even when resealed.
+        call = ".arg(deliverables.argument())"
+        budget = '.arg(format!("--max-session-turns={max_session_turns}"))'
+        for old, new in (
+            ("\n            " + call, ""),
+            (call, '.arg("--deliverables=[]")'),
+            ("let deliverables = read_session_deliverables()?;",
+             "let deliverables = Deliverables::new(Vec::new()).unwrap();"),
+            (budget + "\n            " + call, call + "\n            " + budget),
+        ):
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as temporary:
+                paths = self.resealed_launcher(Path(temporary), old, new)
+                with self.assertRaisesRegex(MODULE.ContractError, "missing canonical fragment"):
+                    MODULE.verify(paths)
+
+    def test_rejects_a_launcher_reading_deliverables_the_contract_does_not_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root,
+                lambda value: value["sealed_environment"].__setitem__(
+                    "deliverables_path", "/run/agent/other-deliverables.json"
+                ),
+            )
+            with self.assertRaisesRegex(MODULE.ContractError, "DELIVERABLES_FILE"):
+                MODULE.verify(paths)
+
+    def test_rejects_a_contract_without_a_deliverables_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self.mutated_contract(
+                root, lambda value: value["sealed_environment"].pop("deliverables_path")
+            )
+            # A contract that names no deliverables record cannot be verified
+            # against the launcher's, so verification fails rather than assuming one.
+            with self.assertRaises(KeyError):
+                MODULE.verify(paths)
+
     def test_rejects_a_contract_that_misstates_what_teardown_keeps_even_if_resealed(
         self,
     ) -> None:

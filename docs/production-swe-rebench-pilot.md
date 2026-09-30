@@ -2,8 +2,9 @@
 
 This is the record of a run against release `7a329f6` on 2026-08-17. The API it used —
 a creation body naming a host folder, and the `/wait` endpoint — was removed on
-2026-08-18 (`c56cfcb`), so the harness described here is frozen evidence and cannot be
-rerun against the current service. The harness also sent `preserve_thinking` and ran the
+2026-08-18 (`c56cfcb`), so the harness described here runs only against that release
+and is not part of this tree: it is recorded in git at commit `03bbd36`, the commit that
+recorded this run. The harness also sent `preserve_thinking` and ran the
 task once with each value: the table below is the `false` session, and the tracked result
 holds both. Qwen3.8-27B's `false` is not a working off switch, so this deployment has no
 such setting (see "Thinking, sampling, and context lifetime" in the README).
@@ -143,11 +144,13 @@ the benchmark was accepted.
 
 ## Tracked and local evidence
 
-The exact harness that ran, its benchmark lock, and its structured result are
-tracked under `artifacts/swe-rebench-2026-07-production-service/`. Large production
-bundles, evaluator archives, materialized workspaces, and logs remain in that ignored
-local evidence root; they are not silently deleted or added to Git. The older failure
-bundles and the copies under `.runtime/results/` are no longer present.
+The benchmark lock and the structured result are tracked under
+`artifacts/swe-rebench-2026-07-production-service/`; the exact harness that ran is
+`artifacts/swe-rebench-2026-07-production-service/pilot-production-service.sh` at
+commit `03bbd36`. Large production bundles, evaluator archives, materialized
+workspaces, and logs remain in that ignored local evidence root; they are not silently
+deleted or added to Git. The older failure bundles and the copies under
+`.runtime/results/` are no longer present.
 
 - Executed harness SHA-256:
   `eae987cf91a7ddd37a170d6caea88b9121e55d753811ed981aab74b6e6478ba6`
@@ -156,7 +159,12 @@ bundles and the copies under `.runtime/results/` are no longer present.
 - Result file SHA-256:
   `0bb5d56b4b6e0e33f3b790c56c9fccb255c21b1111126a838f1be63f30cf49b1`
 
-The harness cannot be rerun. It refuses any checkout other than release `7a329f6`, and
-the service no longer offers the folder-path creation body or the `/wait` endpoint it
-depends on. It is kept unchanged, with its benchmark lock and result, as the record of
-exactly what ran; the hashes above identify those bytes.
+The harness runs only against release `7a329f6`: it refuses any other checkout, and it
+depends on the folder-path creation body and the `/wait` endpoint that release offered.
+It is therefore not kept in this tree, where it could only fail. Git keeps its exact
+bytes at commit `03bbd36`, and the hashes above identify them, the benchmark lock and
+the result:
+
+```sh
+git show 03bbd36:artifacts/swe-rebench-2026-07-production-service/pilot-production-service.sh
+```

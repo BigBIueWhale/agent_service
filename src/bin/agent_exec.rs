@@ -17,6 +17,8 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::process::{Command, ExitCode};
 
+use agent_service::deliverables::{self, Deliverables};
+
 const SANDBOX_ID: &str = "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1";
 const EVENTS_SOCKET: &str = "/streams/events.sock";
 const STDERR_SOCKET: &str = "/streams/stderr.sock";
@@ -31,6 +33,12 @@ const TURN_BUDGET_FILE: &str = "/run/agent/turn-budget.json";
 /// The canonical record is one short line; anything larger is malformed by
 /// construction and is refused without being read as a budget.
 const MAX_TURN_BUDGET_BYTES: u64 = 64;
+/// The sole per-session deliverables input: the list the creation body
+/// declared, published by the service beside the turn budget and read here the
+/// same way, for the same reason. The launcher passes it to Qwen Code as one
+/// argument, so the client checks exactly the paths the session was accepted
+/// with, and none when the list is empty.
+const DELIVERABLES_FILE: &str = "/run/agent/deliverables.json";
 /// Session turn budget: the one bound on how long a session may work. Turns,
 /// never wall time -- a wall-clock budget would measure backend generation speed
 /// rather than agent progress. Qwen Code stops itself here and exits 53, an
@@ -146,9 +154,11 @@ fn run() -> Result<std::convert::Infallible, String> {
     if std::path::Path::new("/output").exists() {
         return Err("/output must be absent from the Qwen container mount namespace".into());
     }
-    // Read the session's budget before anything else is set up: a session that
-    // cannot be given an exact bound must not reach the model at all.
+    // Read the session's budget and deliverables before anything else is set
+    // up: a session that cannot be given exactly what it was accepted with must
+    // not reach the model at all.
     let max_session_turns = read_session_turn_budget()?;
+    let deliverables = read_session_deliverables()?;
     require_stream_contract(std::path::Path::new(STREAM_BINDING_MANIFEST))?;
 
     let events = UnixStream::connect(EVENTS_SOCKET)
@@ -199,7 +209,8 @@ fn run() -> Result<std::convert::Infallible, String> {
             .arg("--expose-gc")
             .arg(CLI)
             .args(CLI_ARGS)
-            .arg(format!("--max-session-turns={max_session_turns}")),
+            .arg(format!("--max-session-turns={max_session_turns}"))
+            .arg(deliverables.argument()),
     );
     Err(format!("exec pinned Qwen Code entrypoint: {error}"))
 }
@@ -259,17 +270,59 @@ fn validate_stream_contract_identity(bytes: &[u8]) -> Result<(), String> {
 /// sealed default, because a session that quietly ran on a different budget
 /// than the one it was accepted with would be graded as though it had not.
 fn read_session_turn_budget() -> Result<u32, String> {
-    let metadata = std::fs::symlink_metadata(TURN_BUDGET_FILE)
-        .map_err(|error| format!("stat sealed session turn budget {TURN_BUDGET_FILE}: {error}"))?;
+    let raw = read_sealed_record(
+        std::path::Path::new(TURN_BUDGET_FILE),
+        "session turn budget",
+        MAX_TURN_BUDGET_BYTES,
+    )?;
+    parse_session_turn_budget(&raw)
+}
+
+/// Read the accepted per-session deliverables from the sealed control mount.
+///
+/// Checked exactly as the turn budget is, and never defaulted: an absent or
+/// malformed record fails the session rather than launching it with no
+/// deliverables, because a run that was never asked to check the files its
+/// caller declared would report success on terms nobody set.
+fn read_session_deliverables() -> Result<Deliverables, String> {
+    let raw = read_sealed_record(
+        std::path::Path::new(DELIVERABLES_FILE),
+        "session deliverables",
+        deliverables::MAX_RECORD_BYTES as u64,
+    )?;
+    parse_session_deliverables(&raw)
+}
+
+/// Parse the one canonical record the service writes, with the shared rule
+/// applied again: a list the service could not have accepted is refused here
+/// even if the record is canonical.
+fn parse_session_deliverables(raw: &[u8]) -> Result<Deliverables, String> {
+    Deliverables::from_record(raw).map_err(|error| {
+        format!("{DELIVERABLES_FILE} is not the record of a list the service accepts: {error}")
+    })
+}
+
+/// Read one service-owned control record: a regular file, reached without
+/// following a link, owned 1000:1000, mode 0444, and no larger than the
+/// record's own bound, read from the same open descriptor it was checked on.
+fn read_sealed_record(path: &std::path::Path, role: &str, max_bytes: u64) -> Result<Vec<u8>, String> {
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| format!("open sealed {role} {} without following links: {error}", path.display()))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("stat sealed {role} {}: {error}", path.display()))?;
     if !metadata.is_file()
-        || metadata.file_type().is_symlink()
         || metadata.uid() != 1000
         || metadata.gid() != 1000
         || metadata.permissions().mode() & 0o777 != 0o444
-        || metadata.len() > MAX_TURN_BUDGET_BYTES
+        || metadata.len() > max_bytes
     {
         return Err(format!(
-            "{TURN_BUDGET_FILE} must be a regular non-symlink uid:gid 1000:1000 mode-0444 record of at most {MAX_TURN_BUDGET_BYTES} bytes; observed type={:?} uid={} gid={} mode={:o} bytes={}",
+            "{} must be a regular non-symlink uid:gid 1000:1000 mode-0444 record of at most {max_bytes} bytes; observed type={:?} uid={} gid={} mode={:o} bytes={}",
+            path.display(),
             metadata.file_type(),
             metadata.uid(),
             metadata.gid(),
@@ -277,9 +330,19 @@ fn read_session_turn_budget() -> Result<u32, String> {
             metadata.len()
         ));
     }
-    let raw = std::fs::read(TURN_BUDGET_FILE)
-        .map_err(|error| format!("read sealed session turn budget {TURN_BUDGET_FILE}: {error}"))?;
-    parse_session_turn_budget(&raw)
+    let mut raw = Vec::new();
+    file.take(max_bytes + 1)
+        .read_to_end(&mut raw)
+        .map_err(|error| format!("read sealed {role} {}: {error}", path.display()))?;
+    if raw.len() as u64 != metadata.len() {
+        return Err(format!(
+            "sealed {role} {} changed length while it was read: stat={} read={}",
+            path.display(),
+            metadata.len(),
+            raw.len()
+        ));
+    }
+    Ok(raw)
 }
 
 /// Parse the one canonical spelling of the record and nothing else.
@@ -603,6 +666,81 @@ mod tests {
     }
 
     #[test]
+    fn session_deliverables_records_are_read_exactly_and_never_defaulted() {
+        for paths in [vec![], vec!["report.md".to_string(), "out/summary.json".to_string()]] {
+            let accepted = Deliverables::new(paths).expect("a list the service accepts");
+            let read = parse_session_deliverables(accepted.record().as_bytes())
+                .expect("the canonical record is read back");
+            assert_eq!(read, accepted);
+            // The one argument Qwen Code receives, for an empty list included.
+            assert_eq!(read.argument(), format!("--deliverables={}", accepted.json()));
+        }
+        assert_eq!(
+            parse_session_deliverables(b"{\"deliverables\":[]}\n")
+                .unwrap()
+                .argument(),
+            "--deliverables=[]"
+        );
+        // None of these may launch a session, and none falls back to an empty
+        // list: a run that never checks what its caller declared would report
+        // success on terms nobody set.
+        for malformed in [
+            b"".as_slice(),
+            b"{\"deliverables\":[]}",
+            b"{\"deliverables\": []}\n",
+            b"{\"deliverables\":[\"a.md\",\"a.md\"]}\n",
+            b"{\"deliverables\":[\"/etc/passwd\"]}\n",
+            b"{\"deliverables\":[\"../escape.md\"]}\n",
+            b"{\"max_session_turns\":400}\n",
+        ] {
+            let error = parse_session_deliverables(malformed)
+                .expect_err(&format!("malformed record was accepted: {malformed:?}"));
+            assert!(
+                error.contains(DELIVERABLES_FILE) && error.contains("deliverables"),
+                "refusal does not name the record it read: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn sealed_records_refuse_links_drift_and_oversize_before_reading() {
+        let root = std::env::temp_dir().join(format!("agent-exec-records-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let record = root.join("deliverables.json");
+        let bytes = b"{\"deliverables\":[]}\n";
+        std::fs::write(&record, bytes).unwrap();
+        std::fs::set_permissions(&record, std::fs::Permissions::from_mode(0o444)).unwrap();
+        let owned_by_1000 = std::fs::metadata(&record).unwrap().uid() == 1000
+            && std::fs::metadata(&record).unwrap().gid() == 1000;
+        let read = read_sealed_record(&record, "session deliverables", deliverables::MAX_RECORD_BYTES as u64);
+        if owned_by_1000 {
+            assert_eq!(read.unwrap(), bytes);
+        } else {
+            assert!(read.unwrap_err().contains("uid:gid 1000:1000"));
+        }
+        // Past its bound, a record is refused without being read.
+        let oversize = read_sealed_record(&record, "session deliverables", (bytes.len() - 1) as u64)
+            .unwrap_err();
+        assert!(oversize.contains(&format!("at most {} bytes", bytes.len() - 1)), "{oversize}");
+        // A writable record is not the service's sealed one.
+        std::fs::set_permissions(&record, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(read_sealed_record(&record, "session deliverables", 64)
+            .unwrap_err()
+            .contains("mode-0444"));
+        std::fs::set_permissions(&record, std::fs::Permissions::from_mode(0o444)).unwrap();
+        // A link to a record is never followed.
+        let link = root.join("link.json");
+        std::os::unix::fs::symlink(&record, &link).unwrap();
+        assert!(read_sealed_record(&link, "session deliverables", 64)
+            .unwrap_err()
+            .contains("without following links"));
+        // An absent record is a refusal, not an empty list.
+        assert!(read_sealed_record(&root.join("absent.json"), "session deliverables", 64).is_err());
+        std::fs::set_permissions(&record, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn stream_contract_pairing_rejects_incompatible_or_ambiguous_identity_before_exec() {
         let valid = format!(
             "{{\"schema_sha256\":\"{}\"}}",
@@ -667,6 +805,7 @@ mod tests {
         );
         assert_eq!(NODE, "/usr/local/bin/node");
         assert_eq!(TURN_BUDGET_FILE, "/run/agent/turn-budget.json");
+        assert_eq!(DELIVERABLES_FILE, "/run/agent/deliverables.json");
         assert_eq!(DEFAULT_MAX_SESSION_TURNS, 400);
         assert_eq!(MAX_SESSION_TURNS_CEILING, 2000);
         assert_eq!(CLI, "/opt/qwen-code/dist/cli.js");

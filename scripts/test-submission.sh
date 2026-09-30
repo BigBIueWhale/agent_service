@@ -31,6 +31,7 @@ readonly EMPTY_ID='s-44444444444444444444444444444444444444444444444444444444444
 readonly TAMPER_ID='s-5555555555555555555555555555555555555555555555555555555555555555'
 readonly BUDGET_ID='s-6666666666666666666666666666666666666666666666666666666666666666'
 readonly REFUSED_ID='s-7777777777777777777777777777777777777777777777777777777777777777'
+readonly DECLARED_ID='s-8888888888888888888888888888888888888888888888888888888888888888'
 PROMPT_FILE="${TEST_DIR}/prompt.txt"
 printf 'exact receipt prompt\n' >"${PROMPT_FILE}"
 
@@ -55,7 +56,7 @@ assert_receipt() {
   }
 }
 
-RUNNING_REQUEST="$(submission_create_receipt "${RUNNING_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
+RUNNING_REQUEST="$(submission_create_receipt "${RUNNING_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]')"
 readonly RUNNING_REQUEST
 assert_receipt "${RUNNING_ID}" "${RUNNING_REQUEST}"
 [[ "$(stat -c '%u:%g:%a' "${RUNNING_REQUEST}")" == '1000:1000:600' ]]
@@ -81,6 +82,9 @@ assert_receipt "${RUNNING_ID}" "${RUNNING_REQUEST}"
 TEST_RESPONSE_STATUS='running'
 TEST_HTTP_STATUS=202
 TEST_EXPECTED_ID="${RUNNING_ID}"
+# Unset: the service echoes the deliverables it accepted, which are the ones the
+# receipt declared. Set: a response naming another list.
+TEST_RESPONSE_DELIVERABLES=''
 readonly TEST_MODEL='qwen3.8-27b-nvfp4-k8v4'
 curl() {
   local output='' headers='' id_header='' request_form='' archive_form=''
@@ -127,7 +131,10 @@ curl() {
     --arg model "${TEST_MODEL}" \
     --argjson archive_bytes "${echo_bytes}" \
     --arg archive_sha256 "${echo_sha}" \
-    '{session_id:$id,status:$status,progress_revision:1,progress_events:[],model:$model,context_window:262144,max_session_turns:400,archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' \
+    --slurpfile request "${request_file}" \
+    --argjson other_deliverables "${TEST_RESPONSE_DELIVERABLES:-null}" \
+    '{session_id:$id,status:$status,progress_revision:1,progress_events:[],model:$model,context_window:262144,max_session_turns:400,
+      deliverables:($other_deliverables // $request[0].deliverables),archive_bytes:$archive_bytes,archive_sha256:$archive_sha256}' \
     >"${output}"
   printf '%s' "${TEST_HTTP_STATUS}"
 }
@@ -138,7 +145,7 @@ submission_post_receipt "${RUNNING_ID}" "${RUNNING_REQUEST}" >/dev/null
   exit 1
 }
 
-TERMINAL_REQUEST="$(submission_create_receipt "${TERMINAL_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
+TERMINAL_REQUEST="$(submission_create_receipt "${TERMINAL_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]')"
 readonly TERMINAL_REQUEST
 TEST_RESPONSE_STATUS='ended'
 TEST_HTTP_STATUS=200
@@ -151,7 +158,7 @@ submission_post_receipt "${TERMINAL_ID}" "${TERMINAL_REQUEST}" >/dev/null
 
 # An empty workspace serializes to the canonical 22-byte empty zip container
 # and remains a valid, replayable, hash-committed receipt.
-EMPTY_REQUEST="$(submission_create_receipt "${EMPTY_ID}" "${EMPTY_DIR}" "${PROMPT_FILE}")"
+EMPTY_REQUEST="$(submission_create_receipt "${EMPTY_ID}" "${EMPTY_DIR}" "${PROMPT_FILE}" '[]')"
 readonly EMPTY_REQUEST
 assert_receipt "${EMPTY_ID}" "${EMPTY_REQUEST}"
 [[ "$(stat -c '%s' "${SUBMISSION_RECEIPT_ROOT}/${EMPTY_ID}/archive.zip")" == 22 ]] || {
@@ -165,7 +172,7 @@ submission_post_receipt "${EMPTY_ID}" "${EMPTY_REQUEST}" >/dev/null
 
 # Byte drift between the archive and its recorded commitment must fail
 # closed before any replay reaches the API.
-TAMPER_REQUEST="$(submission_create_receipt "${TAMPER_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
+TAMPER_REQUEST="$(submission_create_receipt "${TAMPER_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]')"
 readonly TAMPER_REQUEST
 chmod 0600 "${SUBMISSION_RECEIPT_ROOT}/${TAMPER_ID}/archive.zip"
 printf 'X' >>"${SUBMISSION_RECEIPT_ROOT}/${TAMPER_ID}/archive.zip"
@@ -179,7 +186,7 @@ rm -rf -- "${SUBMISSION_RECEIPT_ROOT}/${TAMPER_ID}"
 # path: an explicit budget must survive serialization and revalidation
 # byte-exactly, and a budget outside the locked ceiling must be refused before
 # any receipt exists.
-BUDGET_REQUEST="$(submission_create_receipt "${BUDGET_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" 700)"
+BUDGET_REQUEST="$(submission_create_receipt "${BUDGET_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]' 700)"
 readonly BUDGET_REQUEST
 assert_receipt "${BUDGET_ID}" "${BUDGET_REQUEST}"
 [[ "$(jq -r '.max_session_turns' "${BUDGET_REQUEST}")" == 700 ]] || {
@@ -188,7 +195,7 @@ assert_receipt "${BUDGET_ID}" "${BUDGET_REQUEST}"
 }
 rm -rf -- "${SUBMISSION_RECEIPT_ROOT}/${BUDGET_ID}"
 for rejected in 0 -1 "$((SUBMISSION_MAX_SESSION_TURNS_CEILING + 1))" 1.5 abc; do
-  if submission_create_receipt "${REFUSED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" "${rejected}" \
+  if submission_create_receipt "${REFUSED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]' "${rejected}" \
     >/dev/null 2>&1; then
     printf 'turn budget %s was accepted by the client harness\n' "${rejected}" >&2
     exit 1
@@ -199,7 +206,62 @@ for rejected in 0 -1 "$((SUBMISSION_MAX_SESSION_TURNS_CEILING + 1))" 1.5 abc; do
   }
 done
 
-INVALID_REQUEST="$(submission_create_receipt "${INVALID_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}")"
+# The required deliverables list survives serialization and revalidation
+# byte-exactly, is required in every receipt, and must come back as the list
+# the service accepted; anything but one JSON array of strings is refused
+# before any receipt exists.
+DECLARED_REQUEST="$(submission_create_receipt "${DECLARED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" \
+  '["report.md", "out/data \u00e9.csv"]')"
+readonly DECLARED_REQUEST
+assert_receipt "${DECLARED_ID}" "${DECLARED_REQUEST}"
+[[ "$(jq -c '.deliverables' "${DECLARED_REQUEST}")" == '["report.md","out/data é.csv"]' ]] || {
+  printf 'declared deliverables were not recorded in the receipt: %s\n' "$(jq -c '.deliverables' "${DECLARED_REQUEST}")" >&2
+  exit 1
+}
+[[ "$(jq -c 'keys' "${DECLARED_REQUEST}")" == '["archive_bytes","archive_sha256","deliverables","prompt"]' ]]
+TEST_RESPONSE_STATUS='running'
+TEST_HTTP_STATUS=202
+TEST_EXPECTED_ID="${DECLARED_ID}"
+TEST_RESPONSE_DELIVERABLES='["report.md"]'
+if submission_post_receipt "${DECLARED_ID}" "${DECLARED_REQUEST}" >/dev/null 2>&1; then
+  printf 'a response naming other deliverables than the receipt declared was accepted\n' >&2
+  exit 1
+fi
+assert_receipt "${DECLARED_ID}" "${DECLARED_REQUEST}"
+TEST_RESPONSE_DELIVERABLES=''
+submission_post_receipt "${DECLARED_ID}" "${DECLARED_REQUEST}" >/dev/null
+[[ ! -e "${SUBMISSION_RECEIPT_ROOT}/${DECLARED_ID}" ]] || {
+  printf 'accepted declared-deliverables receipt was not removed\n' >&2
+  exit 1
+}
+for rejected in '' 'null' '"report.md"' '[1]' '["a.md", null]' '{"report.md": true}' '[] []' 'not json'; do
+  if submission_create_receipt "${REFUSED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" "${rejected}" \
+    >/dev/null 2>&1; then
+    printf 'deliverables %s were accepted by the client harness\n' "${rejected@Q}" >&2
+    exit 1
+  fi
+  [[ ! -e "${SUBMISSION_RECEIPT_ROOT}/${REFUSED_ID}" ]] || {
+    printf 'refused deliverables left a receipt behind: %s\n' "${rejected@Q}" >&2
+    exit 1
+  }
+done
+# A receipt without the list, or with a list of another type, is not a
+# replayable creation body.
+UNDECLARED_REQUEST="$(submission_create_receipt "${REFUSED_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]')"
+for mutation in 'del(.deliverables)' '.deliverables = null' '.deliverables = ["a.md", 1]'; do
+  chmod 0600 "${UNDECLARED_REQUEST}"
+  jq "${mutation}" "${UNDECLARED_REQUEST}" >"${TEST_DIR}/mutated.json"
+  cat "${TEST_DIR}/mutated.json" >"${UNDECLARED_REQUEST}"
+  if submission_validate_receipt "${REFUSED_ID}" >/dev/null 2>&1; then
+    printf 'a receipt mutated by %s was accepted for replay\n' "${mutation}" >&2
+    exit 1
+  fi
+  jq '.deliverables = []' "${TEST_DIR}/mutated.json" >"${UNDECLARED_REQUEST}"
+  assert_receipt "${REFUSED_ID}" "${UNDECLARED_REQUEST}"
+done
+rm -rf -- "${SUBMISSION_RECEIPT_ROOT}/${REFUSED_ID}"
+
+INVALID_REQUEST="$(submission_create_receipt "${INVALID_ID}" "${FIXTURE_DIR}" "${PROMPT_FILE}" '[]')"
 readonly INVALID_REQUEST
 TEST_RESPONSE_STATUS='ended'
 TEST_HTTP_STATUS=202
@@ -210,4 +272,4 @@ if submission_post_receipt "${INVALID_ID}" "${INVALID_REQUEST}" >/dev/null 2>&1;
 fi
 assert_receipt "${INVALID_ID}" "${INVALID_REQUEST}"
 
-printf 'SUBMISSION_CONTRACT_OK archive-receipt=validated commitment=hash-checked empty-workspace=canonical tamper=fail-closed replay-running=accepted replay-terminal=accepted malformed-202=retained turn-budget=optional-and-bounded\n'
+printf 'SUBMISSION_CONTRACT_OK archive-receipt=validated commitment=hash-checked empty-workspace=canonical tamper=fail-closed replay-running=accepted replay-terminal=accepted malformed-202=retained turn-budget=optional-and-bounded deliverables=required-and-echoed\n'

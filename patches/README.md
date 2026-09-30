@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `fdf4a57ffa99f4d7cdeaeb498d770d0afc88fda344f15d1a7faf016529c81d1e`
+- Review-diff SHA-256: `50f2880679ee4874998af857f867f5b76b5941e5121afdc00d0c62a559361fa5`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4051d25f1948668eb7f8d732fe8a9f1f538cf7a2149e9e63112d92c716c4a489`
+- Transformer-manifest SHA-256: `55b7a463835b04babf6dd1ebd26f43fd0d0d2e150d6be337d85eaced63e98b02`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 34 semantic concerns before changing the private source tree.
+identities, and 35 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -110,6 +110,25 @@ return. The notice reaches the stream as a user record, the session recording as
 a mid-turn user record, and a subagent's transcript under its own input kind; the
 subagent's terminal event carries the shape of the slip and the number of
 notices, and its parent is told the assignment is unfinished.
+
+A locked agent-service run is started owing a declared list of deliverables:
+`--deliverables`, a JSON array of paths relative to `/artifacts`, `[]` when it
+owes none. The locked runtime refuses to start without it, and no other runtime
+accepts it, because outside the deployment no artifacts root is defined. Each
+path is relative, with no empty, `.` or `..` component, no NUL, no component
+past the kernel's 255-byte name limit and no whole path past its 4,095-byte one.
+When the run ends with its final message, and only then, each declared path must
+be a non-empty regular file, every component examined with `lstat` and none
+followed, since the model can create links; the single emitter
+(`settleDeclaredDeliverables`) turns a final message that left any missing into
+the session-only state `SessionTerminateMode.MISSING_DELIVERABLES`,
+`error_missing_deliverables` on the wire with exit code 1, whose record lists
+every missing path in declared order under `missing_deliverables` and whose
+message says what stands at each. It is never a success. Subagents owe nothing
+and share no such state: `AgentTerminateMode` does not name it. The model is told
+nothing new; the prompt names its files and the deployment contract says what
+`/artifacts` keeps. The check proves existence, not quality, and nothing checks
+that a declared path is the one the prompt names.
 
 ## Context and instructions
 
@@ -477,7 +496,7 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream contract v17 exposes these same request records, declares the journal
+Stream contract v18 exposes these same request records, declares the journal
 origin in `system/stream_start`, and accounts for the output window at every root result.
 Complete `system/init` runtime metadata has its own owner and does not reset that
 journal. Each checkpoint lists open response and logical attempt identities.

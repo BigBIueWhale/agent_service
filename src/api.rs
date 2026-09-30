@@ -14,7 +14,7 @@
 //!
 //! - `POST /v1/agent/sessions` — idempotently accept. The body is exactly
 //!   two ordered `multipart/form-data` parts: part 1 `request`
-//!   (`application/json` — `{prompt, max_session_turns?,
+//!   (`application/json` — `{prompt, max_session_turns?, deliverables,
 //!   archive_bytes, archive_sha256}`) and part 2 `archive` (`application/zip` — the exact
 //!   workspace bytes, streamed to a disk spool while hashed). A required
 //!   caller-generated 256-bit `Idempotency-Key` names the operation.
@@ -103,6 +103,11 @@ pub struct CreateRequest {
     /// undifferentiated shape error.
     #[serde(default)]
     pub max_session_turns: Option<serde_json::Number>,
+    /// The files the run must leave beneath `/artifacts`, as paths relative to
+    /// it. Required, with no default: `[]` declares none and is written
+    /// explicitly. Decoded as plain strings so the shared rule, not serde,
+    /// refuses a bad entry by name.
+    pub deliverables: Vec<String>,
     /// Exact byte count of the archive part that follows. The upload is
     /// accepted only if the streamed bytes equal this declaration.
     pub archive_bytes: u64,
@@ -143,22 +148,25 @@ async fn create_session(
     .await?;
     let body: CreateRequest = serde_json::from_slice(&request_bytes).map_err(|error| {
         ServiceError::InvalidRequest(format!(
-            "part `request` must be exactly one JSON object with string prompt, optional integer max_session_turns, integer archive_bytes, and string archive_sha256: {error}"
+            "part `request` must be exactly one JSON object with string prompt, optional integer max_session_turns, required array deliverables (paths relative to /artifacts; [] declares none), integer archive_bytes, and string archive_sha256: {error}"
         ))
     })?;
     crate::validation::validate_archive_commitment(body.archive_bytes, &body.archive_sha256)?;
-    // The turn budget is decided before a single archive byte is spooled: an
-    // unrunnable budget must not cost the caller a 200 GiB upload first.
+    // The turn budget and the deliverables are decided before a single archive
+    // byte is spooled: an unrunnable request must not cost the caller a 200 GiB
+    // upload first.
     let max_session_turns = match &body.max_session_turns {
         Some(value) => crate::validation::validate_max_session_turns(value)?,
         None => crate::config::DEFAULT_MAX_SESSION_TURNS,
     };
+    let deliverables = crate::validation::validate_deliverables(body.deliverables)?;
     tracing::info!(
         session_id,
         prompt_chars = body.prompt.chars().count(),
         archive_bytes = body.archive_bytes,
         archive_sha256 = %body.archive_sha256,
         max_session_turns,
+        deliverables = deliverables.paths().len(),
         "POST /v1/agent/sessions: caller-known handle and archive commitment parsed; streaming the archive part to the spool"
     );
 
@@ -196,6 +204,7 @@ async fn create_session(
             session_id,
             body.prompt,
             max_session_turns,
+            deliverables,
             SpooledArchive {
                 path: spool.archive_path.clone(),
                 bytes: body.archive_bytes,
@@ -2265,8 +2274,8 @@ fn sweep_state_dir(
                 // but that fact alone is not deletion authority for an
                 // arbitrary directory bearing a session-shaped name.  Only
                 // remove the exact, empty pre-acceptance layout created by
-                // our own transaction, including its canonical prompt and
-                // turn-budget controls.  Any copied
+                // our own transaction, including its canonical prompt,
+                // turn-budget and deliverables controls.  Any copied
                 // workspace, output, unexpected entry, mode/owner drift, or
                 // partially written control remains intact and blocks
                 // readiness for explicit recovery instead of being guessed
@@ -3102,6 +3111,8 @@ mod tests {
             archive_bytes: 1,
             archive_sha256: "1".repeat(64),
             max_session_turns: crate::config::DEFAULT_MAX_SESSION_TURNS,
+            deliverables: crate::validation::validate_deliverables(Vec::new())
+                .expect("an empty list declares none"),
             release: crate::config::test_release_identity(),
             prompt_preview: "fixture".to_string(),
             progress_revision: 1,
@@ -3227,7 +3238,7 @@ mod tests {
     #[test]
     fn create_request_rejects_unknown_and_removed_fields() {
         let error = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","fallback":true}"#,
+            r#"{"prompt":"do work","deliverables":[],"archive_bytes":4,"archive_sha256":"aa","fallback":true}"#,
         )
         .expect_err("unknown request fields must fail closed");
         assert!(error.to_string().contains("unknown field `fallback`"));
@@ -3235,16 +3246,74 @@ mod tests {
         // The retired shared-filesystem transport is a removed field, not a
         // silently tolerated compatibility alias.
         let error = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","folder":"/home/user/project","archive_bytes":4,"archive_sha256":"aa"}"#,
+            r#"{"prompt":"do work","folder":"/home/user/project","deliverables":[],"archive_bytes":4,"archive_sha256":"aa"}"#,
         )
         .expect_err("the removed folder transport must fail closed");
         assert!(error.to_string().contains("unknown field `folder`"));
     }
 
     #[test]
+    fn create_request_requires_an_explicit_deliverables_list() {
+        // Absence is refused by name: an empty list is a value the caller
+        // writes, never one the service assumes.
+        let error = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa"}"#,
+        )
+        .expect_err("a body without deliverables must fail closed");
+        assert!(error.to_string().contains("missing field `deliverables`"), "{error}");
+        for shape in [r#"null"#, r#""report.md""#, r#"[1]"#, r#"{"report.md":true}"#] {
+            serde_json::from_str::<CreateRequest>(&format!(
+                r#"{{"prompt":"do work","deliverables":{shape},"archive_bytes":4,"archive_sha256":"aa"}}"#
+            ))
+            .expect_err(&format!("deliverables {shape} is not an array of strings"));
+        }
+
+        let none = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","deliverables":[],"archive_bytes":4,"archive_sha256":"aa"}"#,
+        )
+        .expect("an explicit empty list declares none");
+        assert!(crate::validation::validate_deliverables(none.deliverables)
+            .expect("[] is a legitimate declaration")
+            .paths()
+            .is_empty());
+        let declared = serde_json::from_str::<CreateRequest>(
+            r#"{"prompt":"do work","deliverables":["report.md","out/data.csv"],"archive_bytes":4,"archive_sha256":"aa"}"#,
+        )
+        .expect("a declared list decodes");
+        assert_eq!(
+            crate::validation::validate_deliverables(declared.deliverables)
+                .expect("relative paths beneath /artifacts are admitted")
+                .paths(),
+            ["report.md", "out/data.csv"]
+        );
+
+        // The decoder admits any array of strings so the shared rule, not
+        // serde, names the entry and the rule it breaks.
+        for (rejected, fragment) in [
+            (r#"["/artifacts/report.md"]"#, "starts with \"/\""),
+            (r#"["../report.md"]"#, "\"..\" component"),
+            (r#"["a.md","a.md"]"#, "repeats deliverables[0]"),
+            (r#"[""]"#, "is empty"),
+        ] {
+            let body = serde_json::from_str::<CreateRequest>(&format!(
+                r#"{{"prompt":"do work","deliverables":{rejected},"archive_bytes":4,"archive_sha256":"aa"}}"#
+            ))
+            .expect("an array of strings decodes before it is judged");
+            let error = crate::validation::validate_deliverables(body.deliverables)
+                .expect_err("a list breaking the rule must be refused");
+            assert!(
+                matches!(error, crate::error::ServiceError::InvalidRequest(_))
+                    && error.to_string().contains("field `deliverables[")
+                    && error.to_string().contains(fragment),
+                "refusal of {rejected} does not name the entry and rule: {error}"
+            );
+        }
+    }
+
+    #[test]
     fn create_request_carries_one_optional_typed_turn_budget() {
         let default = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa"}"#,
+            r#"{"prompt":"do work","deliverables":[],"archive_bytes":4,"archive_sha256":"aa"}"#,
         )
         .expect("omission must be accepted");
         assert!(
@@ -3253,7 +3322,7 @@ mod tests {
         );
 
         let requested = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":700}"#,
+            r#"{"prompt":"do work","deliverables":[],"archive_bytes":4,"archive_sha256":"aa","max_session_turns":700}"#,
         )
         .expect("an explicit JSON integer must be accepted by the decoder");
         let requested_budget = requested
@@ -3271,7 +3340,7 @@ mod tests {
         let over_ceiling = (crate::config::MAX_SESSION_TURNS_CEILING + 1).to_string();
         for rejected in ["0", "-1", "1.5", over_ceiling.as_str()] {
             let body = serde_json::from_str::<CreateRequest>(&format!(
-                r#"{{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":{rejected}}}"#
+                r#"{{"prompt":"do work","deliverables":[],"archive_bytes":4,"archive_sha256":"aa","max_session_turns":{rejected}}}"#
             ))
             .expect("a JSON number decodes before it is judged");
             let error = crate::validation::validate_max_session_turns(
@@ -3288,7 +3357,7 @@ mod tests {
 
         // A non-number remains a decoder-level shape error.
         let error = serde_json::from_str::<CreateRequest>(
-            r#"{"prompt":"do work","archive_bytes":4,"archive_sha256":"aa","max_session_turns":"700"}"#,
+            r#"{"prompt":"do work","deliverables":[],"archive_bytes":4,"archive_sha256":"aa","max_session_turns":"700"}"#,
         )
         .expect_err("string turn-budget coercion must fail closed");
         assert!(error.to_string().contains("invalid type"));
@@ -3571,6 +3640,12 @@ mod tests {
         paths
             .write_turn_budget(crate::config::DEFAULT_MAX_SESSION_TURNS)
             .expect("write exact turn budget");
+        paths
+            .write_deliverables(
+                &crate::validation::validate_deliverables(vec!["report.md".into()])
+                    .expect("a declared deliverable"),
+            )
+            .expect("write exact deliverables");
         for path in [
             &paths.root,
             &paths.staged,
@@ -3580,6 +3655,7 @@ mod tests {
             &paths.output,
             &paths.control.join("prompt.txt"),
             &paths.control.join("turn-budget.json"),
+            &paths.control.join("deliverables.json"),
         ] {
             make_service_owned(path);
         }

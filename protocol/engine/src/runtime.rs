@@ -44,10 +44,14 @@ pub struct AgentResult {
     /// Every subagent scope the stream resolved, in order of first
     /// appearance. Empty exactly when the run delegated nothing.
     pub scopes: Vec<AgentScope>,
+    /// The declared deliverables the run ended without, in declared order:
+    /// present exactly when `subtype` is `error_missing_deliverables`, and
+    /// then never empty, so a reader lists them without parsing `response`.
+    pub missing_deliverables: Option<Vec<String>>,
 }
 
 // Public terminal vocabulary is generated from the same schema used by the producer.
-pub use crate::{terminal_exit_code, ERROR_SUBTYPES, SUCCESS_SUBTYPE};
+pub use crate::{terminal_exit_code, ERROR_SUBTYPES, MISSING_DELIVERABLES_SUBTYPE, SUCCESS_SUBTYPE};
 
 /// One resolved subagent scope. Identification follows the Claude Code CLI
 /// convention: a scope is the id of the `tool_use` content block that spawned
@@ -730,6 +734,7 @@ struct Terminal {
     api_duration_ms: Option<u64>,
     num_turns: u64,
     error_message: Option<String>,
+    missing_deliverables: Option<Vec<String>>,
 }
 #[derive(Clone, Default)]
 struct ScopeState {
@@ -1863,6 +1868,7 @@ impl RuntimeContract {
                 })
                 .collect(),
             scopes,
+            missing_deliverables: terminal.missing_deliverables.clone(),
         })
     }
 }
@@ -1927,6 +1933,45 @@ fn terminal(object: Value<'_>, line: usize, root: bool) -> ContractResult<Termin
             "error result lacks non-empty error.message".into(),
         ));
     }
+    // Only the session's own run declares deliverables, so only its terminal
+    // can name the ones it ended without; the list is the record's, never
+    // recovered from the message that also names them.
+    let missing_deliverables = if subtype == MISSING_DELIVERABLES_SUBTYPE {
+        if !root {
+            return Err(ContractError::InvalidRecord(format!(
+                "a subagent result names {MISSING_DELIVERABLES_SUBTYPE}, which only the session's own terminal can report"
+            )));
+        }
+        let list = field(object, "missing_deliverables", line)?
+            .elements()
+            .ok_or_else(|| {
+                ContractError::InvalidRecord(
+                    "missing_deliverables must be an array of paths".into(),
+                )
+            })?
+            .map(|path| {
+                path.as_str().filter(|path| !path.is_empty()).map(str::to_string).ok_or_else(|| {
+                    ContractError::InvalidRecord(
+                        "missing_deliverables holds a path that is not a non-empty string".into(),
+                    )
+                })
+            })
+            .collect::<ContractResult<Vec<_>>>()?;
+        let distinct = list.iter().collect::<std::collections::BTreeSet<_>>();
+        if list.is_empty() || distinct.len() != list.len() {
+            return Err(ContractError::InvalidRecord(
+                "missing_deliverables must name at least one path, each once".into(),
+            ));
+        }
+        Some(list)
+    } else {
+        if object.get("missing_deliverables").is_some() {
+            return Err(ContractError::InvalidRecord(format!(
+                "a {subtype} result carries missing_deliverables"
+            )));
+        }
+        None
+    };
     let response = if is_error {
         error_message.clone()
     } else if root {
@@ -1946,6 +1991,7 @@ fn terminal(object: Value<'_>, line: usize, root: bool) -> ContractResult<Termin
         api_duration_ms,
         num_turns,
         error_message,
+        missing_deliverables,
     })
 }
 fn decode_failure(cause: crate::json::DecodeError, line: usize) -> ContractError {
@@ -2672,6 +2718,46 @@ mod tests {
                 r#"{{"kind":"outcome","status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":1,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
             ),
         )
+    }
+    #[test]
+    fn a_run_without_its_deliverables_names_each_missing_path_in_its_record() {
+        let result = serde_json::json!({
+            "type":"result", "subtype":"error_missing_deliverables", "uuid":"missing", "session_id":"session",
+            "parent_tool_use_id":null, "is_error":true, "duration_ms":0, "duration_api_ms":0, "num_turns":0,
+            "usage":{"requests":0,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":0,"usage":null},
+            "permission_denials":[], "error":{"message":"The run ended without 2 declared deliverables"},
+            "missing_deliverables":["summary.md","out/report.pdf"],
+            "request_evidence":{"journal_id":"fixture","first_sequence":1,"request_count":0,"open_response_ids":[],"open_attempt_ids":[]}
+        });
+        let mut accepted = owner();
+        admit(&mut accepted, &stream_start()).unwrap();
+        admit(&mut accepted, &result.to_string()).unwrap();
+        let certified = accepted.finish().unwrap();
+        assert!(certified.is_error);
+        assert_eq!(certified.subtype, MISSING_DELIVERABLES_SUBTYPE);
+        assert_eq!(
+            certified.missing_deliverables,
+            Some(vec!["summary.md".to_string(), "out/report.pdf".to_string()])
+        );
+        assert_eq!(crate::terminal_exit_code(MISSING_DELIVERABLES_SUBTYPE), Some(1));
+        let refused = |candidate: serde_json::Value| {
+            let mut rejected = owner();
+            admit(&mut rejected, &stream_start()).unwrap();
+            admit(&mut rejected, &candidate.to_string()).unwrap_err()
+        };
+        // The subtype without its list, an empty list, a repeated path, and
+        // the list on any other ending are each refused.
+        let mut without = result.clone();
+        without.as_object_mut().unwrap().remove("missing_deliverables");
+        refused(without);
+        for list in [serde_json::json!([]), serde_json::json!(["a.md", "a.md"]), serde_json::json!([""])] {
+            let mut candidate = result.clone();
+            candidate["missing_deliverables"] = list;
+            refused(candidate);
+        }
+        let mut other = result.clone();
+        other["subtype"] = serde_json::json!("error_during_execution");
+        refused(other);
     }
     #[test]
     fn a_startup_error_requires_stream_identity_but_no_fabricated_runtime() {

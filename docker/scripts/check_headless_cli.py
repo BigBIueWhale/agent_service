@@ -219,7 +219,8 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
             require(body[key] == value, f"generation {index} sends {key}={body[key]!r}, not {value!r}")
 
 
-def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], certifier: Path) -> dict:
+def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], certifier: Path,
+            deliverables: list[str]) -> dict:
     require(bool(stdout.strip()), "CLI emitted no events")
     require(stdout.endswith(b"\n"), "CLI emitted an unterminated event")
     certificate = certify(stdout, certifier, runtime / "events.jsonl")
@@ -248,9 +249,23 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(init[0]["permission_mode"] == "yolo", "launcher approval policy drifted")
     require(all(e["session_id"] == session for e in events), "event ownership drifted")
     result = events[-1]
-    require(result["type"] == "result" and result["subtype"] == "success" and result["is_error"] is False,
-            "CLI did not finish successfully")
-    require(result["result"] == "HEADLESS_SMOKE_OK " + nonce, "final response lost the tool's fresh content")
+    if deliverables:
+        # The model wrote its final message, and nothing wrote the declared paths: the run is not
+        # a success, and its record names every path it owed, in declared order, as the
+        # production certificate does.
+        require(result["type"] == "result" and result["subtype"] == "error_missing_deliverables"
+                and result["is_error"] is True and result["missing_deliverables"] == deliverables
+                and all(path in result["error"]["message"] for path in deliverables),
+                "a final message that left its declared deliverables unwritten was not reported as "
+                "error_missing_deliverables naming each of them")
+        certified = certificate["certification"]["result"]
+        require(certified["subtype"] == "error_missing_deliverables"
+                and certified["missing_deliverables"] == deliverables,
+                "the production certificate lost the missing deliverables")
+    else:
+        require(result["type"] == "result" and result["subtype"] == "success" and result["is_error"] is False
+                and "missing_deliverables" not in result, "CLI did not finish successfully")
+        require(result["result"] == "HEADLESS_SMOKE_OK " + nonce, "final response lost the tool's fresh content")
     require(result["num_turns"] == 2, "CLI did not complete the two-turn tool cycle")
     require(result["usage"] == {
         "requests": 2, "usageReports": 2, "unfinalizedRequests": 0, "unreportedUsageRequests": 0,
@@ -426,7 +441,8 @@ def contract_identity(certifier: Path) -> str:
     return identity
 
 
-def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Path) -> dict:
+def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Path,
+          deliverables: list[str]) -> dict:
     expected_contract = contract_identity(certifier)
     manifest_path = entry.parent / "stream-binding-manifest.json"
     try:
@@ -580,8 +596,10 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                 "PIP_CACHE_DIR": str(runtime / "pip"), "CARGO_HOME": str(runtime / "cargo"),
                 "GOPATH": str(runtime / "go"),
                 "QWEN_STREAM_CONTRACT_SHA256": expected_contract}
-            # The budget a session that names none is launched with.
-            command = [node, "--expose-gc", str(entry), *arguments, f"--max-session-turns={turn_budget}"]
+            # The budget a session that names none is launched with, and the deliverables list in
+            # the one compact form the launcher passes it.
+            command = [node, "--expose-gc", str(entry), *arguments, f"--max-session-turns={turn_budget}",
+                       "--deliverables=" + json.dumps(deliverables, ensure_ascii=False, separators=(",", ":"))]
             prompt = f"Read {fixture} with read_file using offset 0, then reply HEADLESS_SMOKE_OK followed by its exact content.\n"
             try:
                 with subprocess.Popen(
@@ -601,10 +619,12 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                 raise SmokeFailure(
                     f"CLI exceeded 45 seconds; stdout={error.output!r}; stderr={error.stderr!r}"
                 ) from error
-            require(process.returncode == 0, f"CLI exited {process.returncode}; stdout={stdout!r}; stderr={stderr!r}")
+            expected_exit = 1 if deliverables else 0
+            require(process.returncode == expected_exit,
+                    f"CLI exited {process.returncode}, not {expected_exit}; stdout={stdout!r}; stderr={stderr!r}")
             require(not failures, f"provider protocol failed: {failures}")
             require(sealed_digests(sealed_home) == sealed_before, "the run changed a file in the sealed home")
-            result = qualify(stdout, runtime, nonce, requests, certifier)
+            result = qualify(stdout, runtime, nonce, requests, certifier, deliverables)
             require_production_requests(requests, settings, instructions,
                                         os.path.relpath(instructions_path, workspace), output_language,
                                         os.path.relpath(output_language_path, workspace),
@@ -624,7 +644,13 @@ def main() -> None:
     parser.add_argument("launcher_source", type=Path)
     parser.add_argument("certifier", type=Path)
     args = parser.parse_args()
-    print(json.dumps(check(args.entry, args.settings, args.launcher_source, args.certifier), sort_keys=True))
+    # The same two-turn run twice: owing nothing, it succeeds; owing a file nothing writes, it ends
+    # as error_missing_deliverables naming it, and the production certifier agrees.
+    print(json.dumps({
+        "declared_none": check(args.entry, args.settings, args.launcher_source, args.certifier, []),
+        "declared_missing": check(args.entry, args.settings, args.launcher_source, args.certifier,
+                                  ["headless-smoke/owed.md"]),
+    }, sort_keys=True))
 
 
 if __name__ == "__main__":

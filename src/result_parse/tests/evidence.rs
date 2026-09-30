@@ -240,6 +240,11 @@ fn reported_turns_and_terminal_states_survive_without_inferred_request_counts() 
                 ending.map_or(SUCCESS_SUBTYPE, |(name, _)| name)
             );
             assert_eq!(result.response, ending.map_or("ok", |(_, message)| message));
+            assert_eq!(
+                result.missing_deliverables,
+                (result.subtype == MISSING_DELIVERABLES_SUBTYPE)
+                    .then(|| vec!["report.md".to_string()])
+            );
             assert!(result.scopes.is_empty());
         }
     }

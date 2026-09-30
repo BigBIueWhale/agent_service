@@ -9,6 +9,8 @@ use std::path::PathBuf;
 
 use unicode_normalization::is_nfc;
 
+use agent_service::deliverables::Deliverables;
+
 use crate::config::{MAX_ARCHIVE_BYTES, MAX_PROMPT_BYTES, MAX_SESSION_TURNS_CEILING};
 use crate::error::{io_msg, ServiceError, ServiceResult};
 
@@ -33,6 +35,11 @@ pub struct ValidatedRequest {
     /// launcher passes it to Qwen Code, so every foreground subagent this
     /// session starts is bounded by the same number.
     pub max_session_turns: u32,
+    /// The files the run must leave beneath `/artifacts`, exactly as the
+    /// creation body declared them. The launcher passes the list to Qwen Code,
+    /// which ends a run missing any of them as `error_missing_deliverables`;
+    /// an empty list declares none.
+    pub deliverables: Deliverables,
     /// The spooled workspace archive whose structure has been proved against
     /// the archive contract before durable acceptance.
     pub archive: SpooledArchive,
@@ -41,6 +48,7 @@ pub struct ValidatedRequest {
 pub fn validate(
     prompt: &str,
     max_session_turns: u32,
+    deliverables: Deliverables,
     archive: SpooledArchive,
 ) -> ServiceResult<ValidatedRequest> {
     let prompt = validate_prompt(prompt)?;
@@ -49,8 +57,16 @@ pub fn validate(
     Ok(ValidatedRequest {
         prompt,
         max_session_turns,
+        deliverables,
         archive,
     })
+}
+
+/// Admit the creation body's required `deliverables` list under the one rule
+/// the launcher and the client apply too, refusing it by the entry that breaks
+/// it. The list is judged before a single archive byte is spooled.
+pub fn validate_deliverables(paths: Vec<String>) -> ServiceResult<Deliverables> {
+    Deliverables::new(paths).map_err(|error| ServiceError::InvalidRequest(error.to_string()))
 }
 
 fn validate_prompt(prompt: &str) -> ServiceResult<String> {

@@ -33,7 +33,7 @@ the record and the refusal. The collection response is `{"sessions": [...]}`.
 
 | Location | Fields | Meaning |
 |---|---|---|
-| Resource | `session_id`, `status`, `started_at_unix`, `model`, `context_window`, `max_session_turns`, `archive_bytes`, `archive_sha256`, `prompt_preview` | Identity and accepted request facts |
+| Resource | `session_id`, `status`, `started_at_unix`, `model`, `context_window`, `max_session_turns`, `deliverables`, `archive_bytes`, `archive_sha256`, `prompt_preview` | Identity and accepted request facts |
 | Resource | `release` | The release that accepted the session: `implementation_commit`, `images` (`agent`, `relay`, `capture`, `broker`, `service`) and `backend` (`image_id`, `launch_profile`) |
 | Resource | `progress_revision`, `progress_at_unix_ms`, `progress_phase`, `progress_message`, `progress_events` | Durable lifecycle observations, including the complete ordered history |
 | Resource | `staged_bytes`, `staged_entries`, `staged_regular_files`, `output_event_bytes` | Observed work counters, retained at terminal; zero means no such work observed |
@@ -85,7 +85,19 @@ incomplete tail. This rule applies to captured wire output. Canonical session
 journals used to restore or mutate history retain their own strict durability
 and framing requirements.
 
-`release` is recorded in the acceptance record (schema version 6) when the
+`deliverables` is the list the creation body declared, exactly as accepted: the
+files the run must leave in `/artifacts`, as paths relative to it, in declared
+order. `[]` means the caller declared none, never that the list is unknown. The
+service admits a list only under one rule, declared in `src/deliverables.rs` and
+shared with the launcher: each path non-empty, relative, without NUL, every
+component non-empty, neither `.` nor `..` and at most 255 bytes (`NAME_MAX`),
+`/artifacts/` and the path within `PATH_MAX` (so at most 4,084 bytes), no path
+twice, and the whole list at most 131,056 bytes as compact JSON -- the most the
+launcher can pass as the one argument `--deliverables=<list>` under Linux's
+131,072-byte `MAX_ARG_STRLEN`. The same list is in the bundle as
+`control/deliverables.json`.
+
+`release` is recorded in the acceptance record (schema version 7) when the
 session is accepted and carried unchanged into every state of the resource,
 the terminal record included; a terminal read refuses a terminal that names
 another release than its acceptance. Its values are read at startup from the
@@ -122,9 +134,20 @@ The `terminal` object has these required fields:
 An `agent_result` object contains integer `agent_duration_ms`,
 `agent_api_duration_ms`, `num_turns`, `subagent_scope_count`, and
 `subagent_error_count`; strings `agent_result_subtype` and `main_kv_scope`; physical
-`usage`; and arrays `request_scopes` and `subagent_scopes`. The root subtype is
+`usage`; arrays `request_scopes` and `subagent_scopes`; and the required nullable
+`missing_deliverables`. The root subtype is
 verbatim from the closed terminal vocabulary. `main_kv_scope` is the validated
 CLI initialization identity, which is distinct from the service's session handle.
+
+`missing_deliverables` is non-null exactly when `agent_result_subtype` is
+`error_missing_deliverables`: the run wrote its final message, and the client,
+checking each declared path inside the agent container, found no non-empty regular
+file there reached without following a symbolic link. It then lists every such path,
+at least one, in declared order, each one of the resource's `deliverables`; the
+error message names them too, but a reader never has to parse it. The check proves
+existence, not quality -- a one-byte placeholder passes it -- and nothing checks that
+a declared path agrees with the path the prompt names. No subagent scope ends this
+way: only the session declares deliverables.
 
 `request_scopes` contains one `{kv_scope, usage}` row for each request owner. Its
 summaries have the same shape as `observed_usage` and sum exactly to the certified
@@ -172,7 +195,7 @@ jq '.terminal.bundle' session.json
 pending decision from a terminal refusal, then validates accepted bundle metadata
 and the downloaded byte commitment. Neither script turns absent evidence into zero.
 
-The result archive contains the final workspace, artifacts, prompt/budget controls,
+The result archive contains the final workspace, artifacts, prompt/budget/deliverables controls,
 response, event stream, and available output sidecars. `output/qwen-exit-code`
 exists only when Docker wait supplied an actual exit status; its canonical decimal
 integer ends with one newline. No recovery path manufactures that file. An absent

@@ -770,6 +770,10 @@ impl Trace {
             row["is_error"] = json!(true);
             row["error"] = json!({"message":message});
             row.as_object_mut().unwrap().remove("result");
+            // A run that ends without its declared deliverables names them.
+            if subtype == MISSING_DELIVERABLES_SUBTYPE {
+                row["missing_deliverables"] = json!(["report.md"]);
+            }
         }
         self.push(row);
     }

@@ -32,6 +32,18 @@ def sum_request_scopes:
       totalTokenCount: (.totalTokenCount + $s.usage.totalTokenCount)}
     end);
 def nonempty_string: type == "string" and length > 0;
+# The accepted deliverables: paths the service admitted under its one rule, so a
+# reader needs only their shape -- distinct non-empty strings -- to rely on them.
+def declared_paths:
+  type == "array" and all(.[]; nonempty_string) and length == (unique | length);
+# Whether every entry of $part appears in $whole, in the same order.
+def ordered_subset($part; $whole):
+  reduce $part[] as $wanted ({rest: $whole, ok: true};
+    if .ok then
+      (.rest | index([$wanted])) as $at
+      | if $at == null then .ok = false else .rest = .rest[$at + 1:] end
+    else . end)
+  | .ok;
 def valid_child_scope:
   has_only(["tool_use_id", "tool_name", "reported_num_turns", "is_error", "subtype", "error_message"])
   and (.tool_use_id | nonempty_string) and (.tool_name | nonempty_string)
@@ -70,11 +82,17 @@ def certified_observations:
    and ($r.subagent_scopes | length) == $r.subagent_scope_count
    and ([$r.subagent_scopes[] | select(.is_error == true)] | length) == $r.subagent_error_count
    and .observed_subagent_scope_count == $r.subagent_scope_count
+   and ($r | has("missing_deliverables"))
+   and ($r.missing_deliverables == null or
+        (($r.missing_deliverables | type == "array" and length > 0)
+         and ordered_subset($r.missing_deliverables; .deliverables)))
    and (if (.progress_events | type) == "array" and (.progress_events | length) > 0 then
      .progress_events[-1].counters.physical_requests <= $r.usage.requests
    else true end));
 if type != "object" or (has("terminal") | not) or (valid_observations | not) then
   error("session resource lacks consistent physical observations or reported turns; inspect the resource with its matching release")
+elif (has("deliverables") | not) or (.deliverables | declared_paths | not) then
+  error("session resource lacks its accepted deliverables list; inspect the resource with its matching release")
 elif .status == "running" then
   if .terminal == null and .observed_usage != null then .
   else error("running resource must carry live observations and no terminal evidence") end

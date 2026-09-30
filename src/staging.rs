@@ -11,6 +11,7 @@
 //! control/        ← bind-mounted into agent container as /run/agent (ro)
 //!   prompt.txt
 //!   turn-budget.json
+//!   deliverables.json
 //!   start-gate.lock
 //! streams/        ← capture component rw; Qwen container ro
 //!   events.sock
@@ -35,6 +36,8 @@ use std::io::{Read, Write};
 use std::os::unix::ffi::OsStringExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+
+use agent_service::deliverables::Deliverables;
 
 use crate::config::{
     MAX_SESSION_TURNS_CEILING, MAX_STAGED_BYTES, MAX_STAGED_ENTRIES, MAX_STAGED_FILES,
@@ -185,28 +188,45 @@ impl SessionPaths {
     /// permissive document -- and it is bundled, so a completed session can be
     /// read back to see which budget it actually ran under.
     pub fn write_turn_budget(&self, max_session_turns: u32) -> ServiceResult<PathBuf> {
-        let path = self.control.join("turn-budget.json");
-        let contents = turn_budget_record(max_session_turns);
+        self.publish_control_record(
+            "turn-budget.json",
+            turn_budget_record(max_session_turns).as_bytes(),
+        )
+    }
+
+    /// Publish the one canonical per-session deliverables record.
+    ///
+    /// The launcher reads it beside the turn budget and passes the list to
+    /// Qwen Code as its one `--deliverables=` argument, so the files the client
+    /// checks for after the final message are exactly the ones the session was
+    /// accepted with. Like the turn budget it is canonical byte data, and it is
+    /// bundled, so a finished session can be read back to see what it was
+    /// asked to leave.
+    pub fn write_deliverables(&self, deliverables: &Deliverables) -> ServiceResult<PathBuf> {
+        self.publish_control_record("deliverables.json", deliverables.record().as_bytes())
+    }
+
+    /// Publish one read-only control record: created exclusively, never
+    /// clobbered, mode 0444, and durable before it is visible to a reader.
+    fn publish_control_record(&self, name: &str, contents: &[u8]) -> ServiceResult<PathBuf> {
+        let path = self.control.join(name);
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .mode(0o600)
             .open(&path)
-            .map_err(|error| {
-                ServiceError::Staging(io_msg("open turn-budget.json", &path, &error))
-            })?;
-        file.write_all(contents.as_bytes()).map_err(|error| {
-            ServiceError::Staging(io_msg("write turn-budget.json", &path, &error))
-        })?;
+            .map_err(|error| ServiceError::Staging(io_msg(&format!("open {name}"), &path, &error)))?;
+        file.write_all(contents)
+            .map_err(|error| ServiceError::Staging(io_msg(&format!("write {name}"), &path, &error)))?;
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o444)).map_err(
-            |error| ServiceError::Staging(io_msg("chmod 0444 turn-budget.json", &path, &error)),
+            |error| ServiceError::Staging(io_msg(&format!("chmod 0444 {name}"), &path, &error)),
         )?;
         file.flush()
             .and_then(|_| file.sync_all())
             .map_err(|error| {
-                ServiceError::Staging(io_msg("flush/sync turn-budget.json", &path, &error))
+                ServiceError::Staging(io_msg(&format!("flush/sync {name}"), &path, &error))
             })?;
-        sync_directory(&self.control, "sync turn-budget publication")?;
+        sync_directory(&self.control, &format!("sync {name} publication"))?;
         Ok(path)
     }
 
@@ -1187,6 +1207,46 @@ mod tests {
                 "a non-canonical turn-budget record was accepted: {:?}",
                 String::from_utf8_lossy(malformed)
             );
+        }
+    }
+
+    #[test]
+    fn deliverables_records_are_canonical_no_clobber_byte_data() {
+        for paths in [Vec::new(), vec!["report.md".to_string(), "out/\u{e9}t\u{e9}.csv".to_string()]] {
+            let deliverables = agent_service::deliverables::Deliverables::new(paths)
+                .expect("a list the service accepts");
+            let root = std::env::temp_dir().join(format!(
+                "qwen38-deliverables-{}",
+                uuid::Uuid::new_v4().simple()
+            ));
+            std::fs::create_dir_all(root.join("sessions")).expect("create fixed sessions parent");
+            let paths = SessionPaths::new(&root, "s-33333333333333333333333333333333");
+            paths.create_dirs().expect("create fixture layout");
+            let path = paths
+                .write_deliverables(&deliverables)
+                .expect("publish canonical deliverables");
+            let written = std::fs::read(&path).expect("read deliverables");
+            assert_eq!(
+                written,
+                format!("{{\"deliverables\":{}}}\n", deliverables.json()).as_bytes()
+            );
+            assert_eq!(
+                agent_service::deliverables::Deliverables::from_record(&written),
+                Ok(deliverables.clone())
+            );
+            assert_eq!(
+                std::fs::metadata(&path)
+                    .expect("stat deliverables")
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o444
+            );
+            assert!(
+                paths.write_deliverables(&deliverables).is_err(),
+                "deliverables publication silently overwrote an existing record"
+            );
+            std::fs::remove_dir_all(&root).expect("remove fixture");
         }
     }
 

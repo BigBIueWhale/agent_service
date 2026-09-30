@@ -20,7 +20,7 @@ output was accepted into conversation history. That later decision belongs to
 the consumer that commits or rejects it. A complete SDK iteration can still
 produce an abandoned chat attempt.
 
-Stream contract v17 and canonical recording version 21 carry both facts.
+Stream contract v18 and canonical recording version 21 carry both facts.
 Canonical response records are structurally disjoint evidence and never become
 history parents or model turns. Resume reads that canonical history projection; stdout remains
 evidence. Both fake providers require processing completion in addition to

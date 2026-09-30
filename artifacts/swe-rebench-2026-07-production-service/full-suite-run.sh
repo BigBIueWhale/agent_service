@@ -368,7 +368,9 @@ run_once() {
   cp -al -- "${task_dir}/source/." "${composed_ws}/" ||
     { discard_workspace "${composed_ws}"; die "workspace hardlink copy failed for ${task_id}"; }
   cp -- "${env_dir}/task-env.tar.gz" "${composed_ws}/.task-env.tar.gz"
-  request_file="$(submission_create_receipt "${session_id}" "${composed_ws}" "${composed_prompt}")" ||
+  # The benchmark grades the final /workspace as a diff, so the run is asked to
+  # leave no file in /artifacts: its declared deliverables are `[]`.
+  request_file="$(submission_create_receipt "${session_id}" "${composed_ws}" "${composed_prompt}" '[]')" ||
     { discard_workspace "${composed_ws}"; die "receipt construction failed for ${task_id} ${ordinal}"; }
   discard_workspace "${composed_ws}"
   created="${run_dir}/created.json"
@@ -376,7 +378,7 @@ run_once() {
     die "submission failed for ${task_id} ${ordinal}"
   jq -e --arg id "${session_id}" \
     '.session_id == $id and .status == "running" and .model == "qwen3.8-27b-nvfp4-k8v4" and
-     .context_window == 262144' \
+     .context_window == 262144 and .deliverables == []' \
     "${created}" >/dev/null || die 'session creation body violated the locked contract'
   printf 'Production session %s is running (%s run %s); polling the connection-independent resource.\n' \
     "${session_id}" "${task_id}" "${ordinal}" >&2
@@ -384,12 +386,15 @@ run_once() {
   # --- terminal ------------------------------------------------------------
   local terminal="${run_dir}/terminal.json"
   poll_until_terminal "${session_id}" "${terminal}"
+  jq -e -f "${SERVICE_ROOT}/scripts/session-body.jq" "${terminal}" >/dev/null ||
+    die 'production terminal body is not a consistent session resource'
   jq -e --arg id "${session_id}" \
     '.session_id == $id and .status == "ended" and
      .model == "qwen3.8-27b-nvfp4-k8v4" and .context_window == 262144 and
-     .finished_at_unix > 0 and
-     (.bundle_sha256 | test("^[0-9a-f]{64}$")) and .bundle_compressed_bytes > 0 and
-     .bundle_file_count > 0 and .raw_session_tree_retained == false' \
+     .deliverables == [] and
+     .terminal.finished_at_unix > 0 and
+     (.terminal.bundle.sha256 | test("^[0-9a-f]{64}$")) and .terminal.bundle.compressed_bytes > 0 and
+     .terminal.bundle.file_count > 0 and .terminal.raw_session_tree_retained == false' \
     "${terminal}" >/dev/null || die 'production terminal body or required bundle contract failed'
   # Recorded agent failure (is_process_error / non-empty teardown_diagnostics,
   # e.g. Qwen's loop-detection halt) is classifiable evidence for
@@ -421,7 +426,7 @@ run_once() {
   done
   local bundle_sha
   bundle_sha="$(sha256sum -- "${run_dir}/production-bundle.tar.zst" | awk '{print $1}')"
-  require_equal 'downloaded bundle hash' "${bundle_sha}" "$(jq -er '.bundle_sha256' "${terminal}")"
+  require_equal 'downloaded bundle hash' "${bundle_sha}" "$(jq -er '.terminal.bundle.sha256' "${terminal}")"
   printf '%s  production-bundle.tar.zst\n' "${bundle_sha}" >"${run_dir}/production-bundle.sha256"
 
   mkdir -- "${run_dir}/bundle"
@@ -578,10 +583,10 @@ run_once() {
   # done, never an infrastructure failure -- so it is not a process error, and a
   # budget-exhausted session whose patch resolves the task is recorded resolved.
   local turn_budget_exhausted=false
-  jq -e '.agent_exit_code == 53' "${terminal}" >/dev/null && turn_budget_exhausted=true
-  if jq -e '.is_process_error == true
-            or (.agent_exit_code != 0 and .agent_exit_code != 53)
-            or (.container_exit_code != 0 and .container_exit_code != 53)' "${terminal}" >/dev/null; then
+  jq -e '.terminal.agent_exit_code == 53' "${terminal}" >/dev/null && turn_budget_exhausted=true
+  if jq -e '.terminal.is_process_error == true
+            or (.terminal.agent_exit_code != 0 and .terminal.agent_exit_code != 53)
+            or (.terminal.container_exit_code != 0 and .terminal.container_exit_code != 53)' "${terminal}" >/dev/null; then
     classification=production_agent_process_failure
   elif [[ "${reward}" == 1 ]]; then
     classification=resolved

@@ -8,22 +8,36 @@ readonly SCRIPT_DIR
 source "${SCRIPT_DIR}/scripts/submission-common.sh"
 
 usage() {
-  printf 'Usage: ./run.sh /absolute/canonical/folder /absolute/task-prompt.txt [--max-session-turns=N]\n' >&2
+  printf 'Usage: ./run.sh /absolute/canonical/folder /absolute/task-prompt.txt --deliverables=JSON_ARRAY [--max-session-turns=N]\n' >&2
+  printf '  --deliverables       required: a JSON array of the files the run must leave in /artifacts, as paths relative to it, e.g. %s; %s declares none.\n' \
+    "'[\"report.md\"]'" "'[]'" >&2
   printf '  --max-session-turns  turn budget for this session and every subagent it starts, 1..%s; omitted selects the locked default of %s.\n' \
     "${SUBMISSION_MAX_SESSION_TURNS_CEILING}" "${SUBMISSION_DEFAULT_MAX_SESSION_TURNS}" >&2
   exit 2
 }
 
-# The optional creation-body field is named rather than positional: its one
+# The creation-body fields are named rather than positional: each option's one
 # accepted spelling is the field's own name, so a submission reads as what the
-# service receives. Its value is not judged here -- the submission library owns
-# that rule and reads the ceiling from the stack lock, so this client cannot
-# refuse a budget the service admits or offer one it refuses.
+# service receives. Their values are not judged here beyond their JSON type --
+# the submission library reads the turn ceiling from the stack lock, and the
+# service alone applies the deliverables path rule, before it spools a single
+# archive byte -- so this client cannot refuse a request the service admits or
+# offer one it refuses. `--deliverables` has no default: `[]` is written out.
 MAX_SESSION_TURNS=""
+DELIVERABLES=""
+DELIVERABLES_GIVEN=false
 POSITIONAL=()
 while (( $# > 0 )); do
   case "$1" in
     --max-session-turns=*) MAX_SESSION_TURNS="${1#*=}" ;;
+    --deliverables=*)
+      if [[ "${DELIVERABLES_GIVEN}" == true ]]; then
+        printf 'ERROR: --deliverables was given twice; declare every file in one JSON array.\n' >&2
+        usage
+      fi
+      DELIVERABLES="${1#*=}"
+      DELIVERABLES_GIVEN=true
+      ;;
     --*)
       printf 'ERROR: unknown option: %s\n' "$1" >&2
       usage
@@ -32,8 +46,12 @@ while (( $# > 0 )); do
   esac
   shift
 done
-readonly MAX_SESSION_TURNS
+readonly MAX_SESSION_TURNS DELIVERABLES DELIVERABLES_GIVEN
 (( ${#POSITIONAL[@]} == 2 )) || usage
+[[ "${DELIVERABLES_GIVEN}" == true ]] || {
+  printf 'ERROR: --deliverables is required; pass --deliverables='"'"'[]'"'"' when the run is to leave no file in /artifacts.\n' >&2
+  usage
+}
 readonly FOLDER="${POSITIONAL[0]}"
 readonly PROMPT_FILE="${POSITIONAL[1]}"
 
@@ -67,7 +85,7 @@ readonly HANDLE_HEX
 }
 readonly SESSION_ID="s-${HANDLE_HEX}"
 REQUEST_FILE="$(submission_create_receipt "${SESSION_ID}" "${FOLDER}" "${PROMPT_FILE}" \
-  "${MAX_SESSION_TURNS}")"
+  "${DELIVERABLES}" "${MAX_SESSION_TURNS}")"
 readonly REQUEST_FILE
 
 printf 'Session handle: %s\n' "${SESSION_ID}"

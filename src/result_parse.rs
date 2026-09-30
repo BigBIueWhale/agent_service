@@ -2,7 +2,8 @@
 //! runtime_contract owner decides record identity, admission and observations.
 use crate::error::{io_msg, ServiceError, ServiceResult};
 pub use runtime_contract::runtime::{
-    terminal_exit_code, AgentResult, AgentScope, RequestScope, ERROR_SUBTYPES, SUCCESS_SUBTYPE,
+    terminal_exit_code, AgentResult, AgentScope, RequestScope, ERROR_SUBTYPES,
+    MISSING_DELIVERABLES_SUBTYPE, SUCCESS_SUBTYPE,
 };
 pub use runtime_contract::usage::GenerationUsageSummary;
 use runtime_contract::{

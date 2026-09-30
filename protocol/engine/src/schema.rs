@@ -543,6 +543,9 @@ mod tests {
         record["is_error"] = serde_json::json!(true);
         assert!(!accepts(&record));
         for subtype in crate::ERROR_SUBTYPES {
+            if subtype == crate::MISSING_DELIVERABLES_SUBTYPE {
+                continue;
+            }
             record["subtype"] = serde_json::json!(subtype);
             record["error"] = serde_json::json!({"message": "original failure"});
             assert!(accepts(&record), "{subtype}");
@@ -562,6 +565,15 @@ mod tests {
         }
         record["error"] = serde_json::json!({"message": "original failure"});
         record["subtype"] = serde_json::json!("unknown_terminal");
+        assert!(!accepts(&record));
+        // Only the session's own terminal names missing deliverables: a
+        // child's record can carry neither the subtype nor the list, and no
+        // other ending carries the list.
+        record["subtype"] = serde_json::json!(crate::MISSING_DELIVERABLES_SUBTYPE);
+        assert!(!accepts(&record));
+        record["missing_deliverables"] = serde_json::json!(["summary.md"]);
+        assert!(!accepts(&record));
+        record["subtype"] = serde_json::json!("error_during_execution");
         assert!(!accepts(&record));
     }
 
@@ -586,6 +598,7 @@ mod tests {
             ("error_loop_detected", 1),
             ("error_incomplete_generation", 1),
             ("error_slipped_final_message", 1),
+            ("error_missing_deliverables", 1),
             ("error_cancelled", 130),
         ] {
             assert_eq!(
@@ -594,7 +607,8 @@ mod tests {
                 "{subtype}"
             );
         }
-        assert_eq!(crate::TERMINAL_OUTCOMES.len(), 8);
+        assert_eq!(crate::TERMINAL_OUTCOMES.len(), 9);
+        assert_eq!(crate::MISSING_DELIVERABLES_SUBTYPE, "error_missing_deliverables");
         assert_eq!(crate::terminal_exit_code("unknown_terminal"), None);
     }
 

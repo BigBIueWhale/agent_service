@@ -7,6 +7,7 @@
     "marker_value": "1",
     "qwen_home": "/opt/agent",
     "turn_budget_path": "/run/agent/turn-budget.json",
+    "deliverables_path": "/run/agent/deliverables.json",
     "system_prompt_path": "/opt/agent/system.md",
     "deployment_contract_path": "/opt/agent/deployment-contract.md",
     "uid": 1000,
@@ -165,6 +166,6 @@
     "output_language_sha256": "0c61823b23e53d1d056f31d28904e7170e7bb26d76e349598bc2927c8fabd005",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
     "wrapper_sha256": "aa965fa913a378f2ce3ba79a2f37712b6a797ddf95e7383d5344723c716f2825",
-    "agent_exec_source_sha256": "7fd3184292b8d09b9186be15a6f11df4a7599dc0222f42d3e7e8a92ac84ee8aa"
+    "agent_exec_source_sha256": "7bbe8bfbf8b33964d1b0b51e0ac0e7debdba4d6b87b36f37c45701f737fedc61"
   }
 }
