@@ -1036,7 +1036,6 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "appendQwen38SubagentInvocation",
             "getQwen38EngineeringDiscipline",
             "appendQwen38EngineeringDiscipline",
-            "appendQwen38MainSessionFrame",
             "locked agent-service subagent prompt was built outside its invocation frame",
             "Private scratch root:",
         ),
@@ -1061,7 +1060,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         prompts,
         (
             "appendQwen38DeploymentContract",
-            "appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, 'utf8'))",
+            "appendQwen38DeploymentContract(\n      fs.readFileSync(systemMdPath, 'utf8'),",
             "  turnBudget?: Qwen38TurnBudget,\n): string {",
             "      contextPartition,\n      turnBudget,\n    );",
         ),
@@ -1120,9 +1119,8 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n    ],",
             "refuseRestatedQuantities(prompt, context.quantities);",
             "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
-            "'- A `read_file` page and the statement that leads it are one inline block together.",
+            "'- A `read_file` page and the statement that leads it are one inline block together.',",
             "a declared snapshot of at most one inline block plus the original inputs verbatim,",
-            "while the child spends its own turn budget, as many turns as yours.",
             # The model is told what happens at the turn's limit: the turn is
             # refused rather than truncated, kept nowhere and run in no part,
             # asked for again as the next turn, and how many refusals in a
@@ -1135,7 +1133,12 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
     # which the scheduler seam never does; the page size restated in bytes;
     # delegation stated a second time in `## Context`; a child's budget called
     # the parent's own; a turn's limit described as a stop rather than a
-    # refusal.
+    # refusal. And text that corrected nothing upstream says and told the
+    # model to delegate or to read less -- the main session's frame and its
+    # advice to prefer narrow reads -- which worked against tasks that forbid
+    # subagents or require reading everything, while foreground-only and
+    # depth 1 are enforced in code; and the invocation timestamp, a third
+    # statement of a date the startup context and its reminder already give.
     for retired in (
         "Nothing is lost and nothing is silently shortened",
         "the notice that replaces it",
@@ -1144,6 +1147,12 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         "while the child spends its own turn budget. ",
         "Reaching it ends the session rather than truncating the turn",
         "it is a hard stop and not a budget to spend",
+        "## This session",
+        "Delegate generously",
+        "the most important thing in AI",
+        "narrow read",
+        "CLI invocation started",
+        "new Date().toISOString()",
     ):
         forbid_text(state, prompt, retired, label=label)
     require_text(
@@ -1163,6 +1172,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         label=label,
     )
     forbid_text(state, agent_tool, "It runs under the same turn budget you do", label=label)
+    forbid_text(state, agent_tool, "Use liberally", label=label)
     _require_all(
         state,
         "packages/core/src/tools/shell.ts",
@@ -1188,7 +1198,7 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
     for case in (
         "states every budget once, as a number of bytes, tokens or turns, and nothing else as one",
         "refuses a prompt that states a budget twice or one its ## Context section does not declare",
-        "states the bound on a tool result as the code applies it, and delegation once",
+        "states the bound on a tool result as the code applies it, and nothing about delegation",
     ):
         require_text(
             state, "packages/core/src/core/qwen38-deployment-prompt.test.ts", case, label=label
@@ -1602,32 +1612,6 @@ def _validate_behavioral_evidence_after(state: State) -> None:
     }
     for path, needles in required_evidence.items():
         _require_all(state, path, needles, label=label)
-
-
-def _validate_session_time_before(state: State) -> None:
-    label = "session time-anchor precondition"
-    prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
-    # The deployment-prompt module is created by this patch set; in the
-    # pristine tree there is nothing to check.
-    if prompt in state:
-        forbid_text(state, prompt, "QWEN38_SESSION_STARTED_AT_UTC", label=label)
-
-
-def _validate_session_time_after(state: State) -> None:
-    label = "CLI invocation time anchor result"
-    prompt = "packages/core/src/core/qwen38-deployment-prompt.ts"
-    require_text(
-        state,
-        prompt,
-        "const QWEN38_INVOCATION_STARTED_AT_UTC = new Date().toISOString();",
-        label=label,
-    )
-    require_text(
-        state,
-        prompt,
-        "CLI invocation started: ${QWEN38_INVOCATION_STARTED_AT_UTC}",
-        label=label,
-    )
 
 
 def _validate_stream_evidence_before(state: State) -> None:
@@ -11763,18 +11747,6 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_compaction_read_evidence_before,
         validate_after=_validate_compaction_read_evidence_after,
-    ),
-    SemanticConcern(
-        name="cli-invocation-time-anchor",
-        rationale=(
-            "A single process-start timestamp labels the CLI invocation and keeps the deployment prompt "
-            "stable. It is not represented as a persisted session start time."
-        ),
-        removal_condition=(
-            "Upstream supplies an equivalent correctly named stable invocation timestamp."
-        ),
-        validate_before=_validate_session_time_before,
-        validate_after=_validate_session_time_after,
     ),
     SemanticConcern(
         name="required-read-offset",

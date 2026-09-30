@@ -135,10 +135,11 @@ process.stdin.on('end', () => {
 
 class StatedQuantityTests(unittest.TestCase):
     CONTEXT = ("## Context\n\n- The context window is 262144 tokens.\n"
-               "- One inline block is at most 32768 bytes.\n\nCLI invocation started: now")
+               "- One inline block is at most 32768 bytes.")
 
-    def system(self, before="", context=None):
-        return f"discipline{before}\n\n---\n\ncontract\n\n{context or self.CONTEXT}\n\n---\n\ninstructions"
+    def system(self, before="", context=None, after=""):
+        return (f"discipline{before}\n\n---\n\ncontract\n\n{context or self.CONTEXT}"
+                f"\n\n---\n\ninstructions{after}")
 
     def test_accepts_each_budget_stated_once_inside_the_context_section(self):
         require_quantities_stated_once(self.system(), [{"function": {"description": "one inline block"}}])
@@ -147,9 +148,15 @@ class StatedQuantityTests(unittest.TestCase):
         for before in (" Pages hold 32768 bytes.", " Pages hold 32,443 bytes.", " Runs 400 turns."):
             with self.subTest(before=before), self.assertRaisesRegex(SmokeFailure, "outside its ## Context section"):
                 require_quantities_stated_once(self.system(before), [])
+            with self.subTest(after=before), self.assertRaisesRegex(SmokeFailure, "outside its ## Context section"):
+                require_quantities_stated_once(self.system(after=before), [])
+
+    def test_refuses_a_context_section_that_nothing_follows(self):
+        with self.assertRaisesRegex(SmokeFailure, "not followed by the next part"):
+            require_quantities_stated_once(f"discipline\n\n---\n\ncontract\n\n{self.CONTEXT}", [])
 
     def test_refuses_a_budget_stated_twice_inside_the_context_section(self):
-        context = self.CONTEXT.replace("bytes.\n", "bytes.\n- Pages hold at most 32768 bytes.\n")
+        context = self.CONTEXT + "\n- Pages hold at most 32768 bytes."
         with self.assertRaisesRegex(SmokeFailure, "states a budget twice"):
             require_quantities_stated_once(self.system(context=context), [])
 

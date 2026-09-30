@@ -135,7 +135,9 @@ def stub_address(settings: dict) -> tuple[str, int]:
 # A number of bytes, tokens or turns, as the preamble writes one.
 STATED_QUANTITY = re.compile(r"\b(\d[\d,]*) (bytes|tokens|turns)\b")
 CONTEXT_HEADING = "\n## Context\n"
-CONTEXT_END = "\n\nCLI invocation started: "
+# The section closes the deployment contract; the next part of the system message
+# begins after the separator the client puts between parts.
+CONTEXT_END = "\n\n---\n\n"
 
 
 def require_quantities_stated_once(system: str, tools: list) -> None:
@@ -145,7 +147,7 @@ def require_quantities_stated_once(system: str, tools: list) -> None:
     the preamble can give two values for one."""
     require(system.count(CONTEXT_HEADING) == 1, "the system message does not carry one ## Context section")
     start = system.index(CONTEXT_HEADING)
-    require(CONTEXT_END in system[start:], "the ## Context section is not followed by the invocation line")
+    require(CONTEXT_END in system[start:], "the ## Context section is not followed by the next part of the system message")
     end = system.index(CONTEXT_END, start)
     stated = []
     for match in STATED_QUANTITY.finditer(system):

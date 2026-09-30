@@ -215806,7 +215806,7 @@ diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/pro
 diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.ts
 --- a/packages/core/src/core/prompts.ts
 +++ b/packages/core/src/core/prompts.ts
-@@ -11,12 +11,18 @@
+@@ -11,12 +11,17 @@
  import process from 'node:process';
  import { isGitRepository } from '../utils/gitUtils.js';
  import { QWEN_DIR } from '../config/storage.js';
@@ -215815,7 +215815,6 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
  import { createDebugLogger } from '../utils/debugLogger.js';
 +import {
 +  appendQwen38DeploymentContract,
-+  appendQwen38MainSessionFrame,
 +  type Qwen38TurnBudget,
 +} from './qwen38-deployment-prompt.js';
 +import type { ContextPartition } from './tokenLimits.js';
@@ -215825,7 +215824,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
  export type SystemPromptInteractionMode = 'interactive' | 'headless' | 'acp';
  
  /**
-@@ -248,5 +254,8 @@
+@@ -248,5 +253,8 @@
   * @param appendInstruction - Back-compat convenience slot for the append prompt.
   *   @deprecated Prefer the `appendPrompt` slot of `assembleSystemPrompt`.
   * @param interactionMode - Interactive vs. headless prompt variant.
@@ -215834,7 +215833,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 + *   place left empty in the form the startup proof counts.
   */
  export function getCoreSystemPrompt(
-@@ -253,8 +262,10 @@
+@@ -253,8 +261,10 @@
    userMemory?: string,
    model?: string,
    appendInstruction?: string,
@@ -215847,7 +215846,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
    // if QWEN_SYSTEM_MD is set (and not 0|false), override system prompt from file
    // default path is .qwen/system.md (project-level), can be overridden via QWEN_SYSTEM_MD
    let systemMdEnabled = false;
-@@ -286,13 +297,17 @@
+@@ -286,13 +296,17 @@
    // runs). `appendInstruction` below still applies in both branches.
    //
    // `QWEN_SYSTEM_IDENTITY_MD` only applies on the default-prompt branch and is
@@ -215856,7 +215855,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
    if (systemMdEnabled) {
 -    basePrompt = fs.readFileSync(systemMdPath, 'utf8');
 +    basePrompt = appendQwen38DeploymentContract(
-+      appendQwen38MainSessionFrame(fs.readFileSync(systemMdPath, 'utf8')),
++      fs.readFileSync(systemMdPath, 'utf8'),
 +      contextPartition,
 +      turnBudget,
 +    );
@@ -215866,7 +215865,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
        getDefaultCoreIdentitySentence(interaction.role);
      basePrompt = `
  ${coreIdentity}
-@@ -336,7 +351,6 @@
+@@ -336,7 +350,6 @@
  **Key Principle:** Start with a reasonable approach based on available information, then adapt as you learn. Users prefer seeing progress quickly rather than waiting for perfect understanding.
  
  - Tool results and user messages may include <system-reminder> tags. <system-reminder> tags contain useful information and reminders. They are NOT part of the user's provided input or the tool result.
@@ -215874,7 +215873,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
  
  ## New Applications
  
-@@ -537,73 +551,34 @@
+@@ -537,73 +550,34 @@
  - Actions visible to others or that affect shared state: pushing code, creating/closing/commenting on PRs or issues, sending messages (Slack, email, GitHub), posting to external services, modifying shared infrastructure or permissions
  - Uploading content to third-party web tools (diagram renderers, pastebins, gists) publishes it - consider whether it could be sensitive before sending, since it may be cached or indexed even if later deleted.
  
@@ -215963,7 +215962,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
-@@ -0,0 +1,479 @@
+@@ -0,0 +1,456 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -215980,7 +215979,6 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +  QWEN38_TURN_BUDGET_LEFT_OUT,
 +  appendQwen38DeploymentContract,
 +  appendQwen38EngineeringDiscipline,
-+  appendQwen38MainSessionFrame,
 +  appendQwen38SubagentInvocation,
 +  getQwen38DeploymentContract,
 +  getQwen38EngineeringDiscipline,
@@ -216044,7 +216042,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    expect(
 +      appendQwen38DeploymentContract('role prompt', PARTITION, TURN_BUDGET),
 +    ).toMatch(
-+      /^role prompt\n\n---\n\nLOCKED_DEPLOYMENT_CONTRACT_V1\n\n## Context\n[\s\S]+\n\nCLI invocation started: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
++      /^role prompt\n\n---\n\nLOCKED_DEPLOYMENT_CONTRACT_V1\n\n## Context\n[\s\S]+\n- Do not reconstruct or persist hidden reasoning outside model history\.$/,
 +    );
 +  });
 +
@@ -216160,7 +216158,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    );
 +  });
 +
-+  it('states the bound on a tool result as the code applies it, and delegation once', () => {
++  it('states the bound on a tool result as the code applies it, and nothing about delegation', () => {
 +    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
 +    vi.stubEnv('QWEN_SYSTEM_MD', QWEN38_LOCKED_SYSTEM_PROMPT_PATH);
 +    vi.stubEnv(
@@ -216176,7 +216174,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    );
 +
 +    const rendered = appendQwen38DeploymentContract(
-+      appendQwen38MainSessionFrame('discipline'),
++      'discipline',
 +      PARTITION,
 +      TURN_BUDGET,
 +    );
@@ -216188,12 +216186,10 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    );
 +    expect(rendered).not.toContain('Nothing is lost');
 +    expect(rendered).not.toContain('the notice that replaces it');
-+    expect(
-+      rendered.split('Subagents run one at a time, in the foreground.'),
-+    ).toHaveLength(2);
-+    expect(rendered).toContain(
-+      'while the child spends its own turn budget, as many turns as yours.',
-+    );
++    // How to use subagents is the agent tool's to say, and it says only what
++    // the runtime enforces; the prompt neither restates it nor urges it.
++    expect(rendered).not.toContain('ubagent');
++    expect(rendered).not.toContain('elegat');
 +  });
 +
 +  it('states the turn limit, that a turn reaching it is refused and asked for again, and what ends the session', () => {
@@ -216389,26 +216385,6 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +    );
 +  });
 +
-+  it('layers only session-specific framing on top of the shared discipline', () => {
-+    expect(appendQwen38MainSessionFrame('discipline')).toBe('discipline');
-+
-+    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
-+    const framed = appendQwen38MainSessionFrame('discipline');
-+    expect(framed).toContain('## This session');
-+    expect(framed).toContain('you own the final response');
-+    expect(framed).toContain('Delegate generously');
-+    expect(framed).toContain(
-+      'Context length is the most important thing in AI',
-+    );
-+    expect(framed).toContain('Short reports can delay compaction');
-+    expect(framed).toContain(
-+      'cache eviction can require prefix processing again',
-+    );
-+    expect(framed).toContain(
-+      'Delegation still consumes child tokens, computation, and time',
-+    );
-+  });
-+
 +  it('requires and appends the unique invocation scratch in locked subagents', () => {
 +    vi.stubEnv(QWEN38_LOCKED_RUNTIME_ENV, '1');
 +    const prompt = appendQwen38SubagentInvocation('role and contract', {
@@ -216446,7 +216422,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,256 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -216506,11 +216482,6 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +  return readRequiredRegularFile(contractPath, 'deployment contract');
 +}
 +
-+// Computed once at process start so the system prompt is byte-stable for
-+// the whole session (prefix-cache friendly) while anchoring the model to
-+// absolute time; live time stays observable through the `date` command.
-+const QWEN38_INVOCATION_STARTED_AT_UTC = new Date().toISOString();
-+
 +/**
 + * The deployment's engineering discipline. This is the same sealed text for the
 + * main session and for every foreground subagent: honest verification, scope,
@@ -216540,15 +216511,6 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +  const discipline = getQwen38EngineeringDiscipline();
 +  if (!discipline) return base;
 +  return `${base.trim()}\n\n---\n\n${discipline}`;
-+}
-+
-+/**
-+ * The only framing that is genuinely specific to the owning session, layered on
-+ * top of the shared discipline.
-+ */
-+export function appendQwen38MainSessionFrame(base: string): string {
-+  if (!isQwen38LockedAgentServiceRuntime()) return base;
-+  return `${base.trim()}\n\n## This session\n\n- You are the main agent in one long-lived session, and you own the final response.\n- Context length is the most important thing in AI, and it is immoral to waste it. Reading is what wastes it: material you open once to learn one fact stays in this thread for the rest of the session and drags you toward compaction.\n- That is what subagents are for. A subagent's reading never enters your context; only its report comes back, so the invocation consumes one parent turn while the child spends its own turn budget, as many turns as yours. Short reports can delay compaction of the parent conversation.\n- Delegate generously, then, to a foreground \`general-purpose\` or \`Explore\` subagent: broad searches, surveying unfamiliar code, reproducing a failure, converting documents -- any bounded work whose useful output is short but takes a lot of reading. The backend can retain your KV cache in DDR5 while the child runs, but cache eviction can require prefix processing again. Delegation still consumes child tokens, computation, and time; bound the assignment and verify the report.\n- Subagents run one at a time, in the foreground. Give it a self-contained assignment; it cannot see this conversation. Treat its report as evidence to verify, not a conclusion.\n- Keep the design decisions, the edits, and the final verification yourself.\n- Lead the final response with the outcome, then the material files, verification, and unresolved risks.`;
 +}
 +
 +/** The `## Context` section with the turn budget's number left out. */
@@ -216615,7 +216577,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +    `- This session may run at most ${turns}. Reaching that number ends the session.`,
 +    '- One tool call per turn. There is no parallel dispatch; issue independent work as successive turns.',
 +    `- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \`read_file\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,
-+    '- A `read_file` page and the statement that leads it are one inline block together. Prefer one narrow read or search over a broad one you will have to page back.',
++    '- A `read_file` page and the statement that leads it are one inline block together.',
 +    `- At ${trigger} the next send compacts the conversation: the prompt the last turn was issued against becomes a declared snapshot of at most one inline block plus the original inputs verbatim, that turn is carried verbatim behind it, and the work continues.`,
 +    '- Do not reconstruct or persist hidden reasoning outside model history.',
 +  ].join('\n');
@@ -216695,7 +216657,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +    );
 +  }
 +  const context = qwen38ContextSection(partition, turnBudget);
-+  const prompt = `${base.trim()}\n\n---\n\n${contract}\n\n${context.text}\n\nCLI invocation started: ${QWEN38_INVOCATION_STARTED_AT_UTC}`;
++  const prompt = `${base.trim()}\n\n---\n\n${contract}\n\n${context.text}`;
 +  refuseRestatedQuantities(prompt, context.quantities);
 +  return prompt;
 +}
@@ -217457,18 +217419,27 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
  export const DEFAULT_OUTPUT_TOKEN_LIMIT: TokenCount = 32_000; // 32K tokens
  
 -export const ESCALATED_MAX_TOKENS: TokenCount = 64_000;
--
--/**
++/** Default output request ceiling for models without a dedicated policy. */
++export const OUTPUT_TOKEN_CEILING: TokenCount = 64_000;
+ 
+ /**
 - * Ceiling on the auto (non-user-configured) output request. Models
 - * advertising output limits above this are clipped down; users who
 - * genuinely need more set max_tokens explicitly (respected up to the
 - * model's real limit). Same value as the MAX_TOKENS escalation target —
 - * escalation-on-truncation raises the request up to this ceiling, never
 - * past it.
-- */
++ * Provider-specific output-budget keys that stand in for `max_tokens` on the
++ * wire (e.g. GPT-5 / o-series use `max_completion_tokens`). A samplingParams
++ * that carries one of them has declared an output budget under another name.
+  */
 -export const OUTPUT_TOKEN_CEILING: TokenCount = ESCALATED_MAX_TOKENS;
--
--/**
++export const PROVIDER_OUTPUT_BUDGET_KEYS = [
++  'max_completion_tokens',
++  'max_new_tokens',
++] as const;
+ 
+ /**
 - * Floor applied to the window ROOM when clamping an output request: when the
 - * prompt has (nearly) filled the window, still ask for at least this much
 - * rather than max_tokens <= 0 — compaction/hard-rescue owns that regime. An
@@ -217476,59 +217447,19 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 - * bounds the room, not the ceiling). Must stay below ~5K so that
 - * `margin + MIN_CLAMPED_OUTPUT_TOKENS` fits inside the headroom compaction
 - * leaves free (15% of a 100K window); see the window-clamp design doc.
-- */
++ * The environment variable an operator may set to cap ordinary output on
++ * providers that take a fixed limit. The vLLM route refuses it: a turn there
++ * is issued with the room this partition derives, and nothing else bounds it.
+  */
 -export const MIN_CLAMPED_OUTPUT_TOKENS: TokenCount = 4_000;
--
--/**
++export const OUTPUT_CEILING_ENV = 'QWEN_CODE_MAX_OUTPUT_TOKENS';
+ 
+ /**
 - * Safety headroom subtracted from the window before sizing the output
 - * request: absorbs prompt-estimation error plus system/tool/schema overhead
 - * not captured by the API-reported prompt count. Deliberately conservative —
 - * a generous margin only trims output in the final approach to compaction,
 - * while an under-sized one reintroduces the #5950 400s.
-- */
--export function outputClampMargin(contextWindowSize: number): TokenCount {
--  return Math.max(10_000, Math.round(0.05 * contextWindowSize));
--}
--
--/**
-- * Size an output request to the room actually left in the context window:
-- * `min(ceiling, window − prompt − margin)`, floored at
-- * MIN_CLAMPED_OUTPUT_TOKENS. Makes `prompt + max_tokens ≤ window` an
-- * invariant on every main-turn request (issue #5950 becomes structurally
-- * impossible), which is what lets compaction thresholds run against the
-- * full window with no output reservation.
-- *
-- * @param outputCeiling - Upper bound on the request: the user's explicit
-- *   max_tokens when set, else `min(tokenLimit(model,'output'),
-- *   OUTPUT_TOKEN_CEILING)`.
-- * @param contextWindowSize - The configured context window.
-- * @param promptTokens - Estimated prompt size; use the API-authoritative
-- *   count where available (a fresh chars/4 estimate under-counts CJK and
-- *   tool-heavy prompts, which is the one way a residual 400 could return).
-- */
--export function clampOutputTokensToWindow(
--  outputCeiling: number,
-+/** Default output request ceiling for models without a dedicated policy. */
-+export const OUTPUT_TOKEN_CEILING: TokenCount = 64_000;
-+
-+/**
-+ * Provider-specific output-budget keys that stand in for `max_tokens` on the
-+ * wire (e.g. GPT-5 / o-series use `max_completion_tokens`). A samplingParams
-+ * that carries one of them has declared an output budget under another name.
-+ */
-+export const PROVIDER_OUTPUT_BUDGET_KEYS = [
-+  'max_completion_tokens',
-+  'max_new_tokens',
-+] as const;
-+
-+/**
-+ * The environment variable an operator may set to cap ordinary output on
-+ * providers that take a fixed limit. The vLLM route refuses it: a turn there
-+ * is issued with the room this partition derives, and nothing else bounds it.
-+ */
-+export const OUTPUT_CEILING_ENV = 'QWEN_CODE_MAX_OUTPUT_TOKENS';
-+
-+/**
 + * The served context window, spent exactly, from four declared quantities.
 + *
 + * `D`, the static preamble. The system prompt and the tool declarations are
@@ -217621,7 +217552,9 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * comes. The fit's margin, `T - 1 - (D + 3(M + F) + (C + F))`, is
 + * `W - 5M - 2R - 2D - 4F - 1`: a byte of `M` costs it five tokens, a token of
 + * `R` or `D` two, a byte of `F` four.
-+ */
+  */
+-export function outputClampMargin(contextWindowSize: number): TokenCount {
+-  return Math.max(10_000, Math.round(0.05 * contextWindowSize));
 +export interface ContextPartition {
 +  /** The served context window, as the tokenizer reports it. */
 +  readonly window: number;
@@ -217635,9 +217568,15 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  readonly turnGeneration: number;
 +  /** `T`: the rendered-request size at which the next send compacts. */
 +  readonly compactionTrigger: number;
-+}
-+
-+/**
+ }
+ 
+ /**
+- * Size an output request to the room actually left in the context window:
+- * `min(ceiling, window − prompt − margin)`, floored at
+- * MIN_CLAMPED_OUTPUT_TOKENS. Makes `prompt + max_tokens ≤ window` an
+- * invariant on every main-turn request (issue #5950 becomes structurally
+- * impossible), which is what lets compaction thresholds run against the
+- * full window with no output reservation.
 + * The window divides into this many shares. `D`, `M` and `R` are shares of it
 + * rather than constants, because 512K and 1M are the next served tiers and a
 + * budget that did not scale would quietly stop describing them.
@@ -217650,9 +217589,10 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,992 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,848 of system message,
-+ * 4,899 of tool declarations and 245 of the template's own text. Counting
++ * turn budget's number left out, at 7,245 tokens, counted whole by the served
++ * tokenizer. By where each token starts, that is 2,163 of system message,
++ * 4,836 of tool declarations (each from the first character of its line to
++ * the last) and 246 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
 + * the whole: a token can span two pieces, so pieces counted one at a time
 + * need not add up to the count that governs. The startup context opens every
@@ -217661,7 +217601,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * holds around its blocks -- the snapshot's resume trailer and the
 + * acknowledgement turn, with the blocks left out: 59 more; and so is the
 + * todo reminder, of which at most one stands in the request a compaction
-+ * leaves, with one character for its list: 51 more, for 8,148.
++ * leaves, with one character for its list: 51 more, for 7,401.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's branch line, status and commits,
@@ -217671,14 +217611,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * digits of one token each (`QWEN38_TURN_BUDGET_BYTES`), and the todo
 + * reminder's list and truncation mark, 800 + 12 = 812
 + * (`activeTodoReminderBound`). That is a bound of
-+ * 12,192 that no repository, workspace, budget or todo list changes. The 96
++ * 11,445 that no repository, workspace, budget or todo list changes. The 843
 + * tokens left are headroom for the prompt and the declarations to grow into
-+ * -- less than a tenth of one more declaration the size of
-+ * `run_shell_command`, the largest at 1,457. Exceeding it is a startup
-+ * refusal, not a silent overrun.
++ * -- less than one more declaration the size of `run_shell_command`, the
++ * largest at 1,456. Exceeding it is a startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 12,192 at a 260,096-token window, so no smaller window holds this
++ * reaches 11,445 at a 244,160-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
@@ -217722,13 +217661,23 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +
 +/**
 + * Derive every context budget from the served window.
-+ *
+  *
+- * @param outputCeiling - Upper bound on the request: the user's explicit
+- *   max_tokens when set, else `min(tokenLimit(model,'output'),
+- *   OUTPUT_TOKEN_CEILING)`.
+- * @param contextWindowSize - The configured context window.
+- * @param promptTokens - Estimated prompt size; use the API-authoritative
+- *   count where available (a fresh chars/4 estimate under-counts CJK and
+- *   tool-heavy prompts, which is the one way a residual 400 could return).
 + * The shares round down and `T` takes what is left, so the three terms sum to
 + * the window exactly at every window size rather than only at multiples of
 + * the denominator.
-+ */
+  */
+-export function clampOutputTokensToWindow(
+-  outputCeiling: number,
 +export function partitionContextWindow(
    contextWindowSize: number,
+-  promptTokens: number,
 +): ContextPartition {
 +  if (
 +    !Number.isSafeInteger(contextWindowSize) ||
@@ -217797,7 +217746,6 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + */
 +export function turnOutputLimit(
 +  partition: ContextPartition,
--  promptTokens: number,
  ): TokenCount {
 -  const room =
 -    contextWindowSize - promptTokens - outputClampMargin(contextWindowSize);
@@ -290919,7 +290867,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  Forks are cheap because they share your prompt cache. Don't set \`model\` on a fork — a different model can't reuse the parent's cache. Pass a short \`name\` (one or two words, lowercase) so the user can track the fork.
  
  **Don't peek.** For a background fork, do not read or tail its output unless the user explicitly asks for a progress check. You get a completion notification; trust it. Reading the transcript mid-flight pulls the fork's tool noise into your context, which defeats the point of forking.
-@@ -1001,14 +980,54 @@
+@@ -1001,14 +980,52 @@
  Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
  </commentary>
  assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -290929,8 +290877,6 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 -    // Update description using object property assignment since it's readonly
 -    (this as { description: string }).description = baseDescription;
 +    const foregroundOnlyDescription = `Delegate a bounded piece of work to one built-in subagent and wait for its report.
-+
-+Use liberally: the subagent's reading and dead ends stay out of your context and only its report returns, so one that spends sixty turns costs you a single turn. Good for locating code across many files, surveying an unfamiliar subsystem, reproducing a failure, and converting or extracting documents.
 +
 +- **general-purpose**: bounded research or implementation with the inherited tool surface.
 +- **Explore**: evidence-oriented investigation with private scratch and journaled workspace effects.
@@ -290976,7 +290922,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        properties?: {
          model?: {
            type: string;
-@@ -1032,24 +1051,30 @@
+@@ -1032,24 +1049,30 @@
          delete schema.properties.read_only;
        }
  
@@ -291008,7 +290954,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (
        !params.description ||
        typeof params.description !== 'string' ||
-@@ -1070,12 +1095,40 @@
+@@ -1070,12 +1093,40 @@
        params.todo_id !== undefined &&
        (typeof params.todo_id !== 'string' ||
          params.todo_id.trim() === '' ||
@@ -291049,7 +290995,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        if (
          typeof params.subagent_type !== 'string' ||
          params.subagent_type.trim() === ''
-@@ -1281,13 +1334,28 @@
+@@ -1281,13 +1332,28 @@
          if (params.plan_mode_required === true) {
            return 'Parameters "read_only" and "plan_mode_required" cannot be used together.';
          }
@@ -291079,7 +291025,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1372,22 +1440,12 @@
+@@ -1372,22 +1438,12 @@
      return {
        status: 'cancelled',
        terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
@@ -291102,7 +291048,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
    // `error`/`errorType` so endSubagentSpan sets standard OTel exception
    // attributes instead of a generic `'subagent failed'` placeholder.
-@@ -1416,19 +1474,26 @@
+@@ -1416,19 +1472,26 @@
      // through getFinalText()). Setting this explicitly keeps attribute
      // shape symmetric with the success-path derive so dashboards filtering
      // on result_summary_present don't silently exclude failed runs.
@@ -291129,7 +291075,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      private readonly subagentManager: SubagentManager,
      params: AgentParams,
      private readonly forkProfile?: ForkProfile,
-@@ -1436,26 +1501,36 @@
+@@ -1436,26 +1499,36 @@
      super(params);
    }
  
@@ -291167,7 +291113,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        updateOutput(this.currentDisplay);
      }
    }
-@@ -1484,25 +1559,25 @@
+@@ -1484,25 +1557,25 @@
     * Sets up event listeners for real-time subagent progress updates
     */
    private setupEventListeners(
@@ -291195,7 +291141,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        this.updateDisplay(
          {
-@@ -1519,13 +1594,13 @@
+@@ -1519,13 +1592,13 @@
        );
        if (toolCallIndex >= 0) {
          this.currentToolCalls![toolCallIndex] = {
@@ -291210,7 +291156,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
              ? { resultDisplay: event.resultDisplay }
              : {}),
          };
-@@ -1549,53 +1624,82 @@
+@@ -1549,53 +1622,82 @@
            },
            updateOutput,
          );
@@ -291315,7 +291261,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        AgentEventType.TOOL_WAITING_APPROVAL,
        (...args: unknown[]) => {
          const event = args[0] as AgentApprovalRequestEvent;
-@@ -1605,18 +1709,15 @@
+@@ -1605,18 +1707,15 @@
          if (idx >= 0) {
            this.currentToolCalls![idx] = {
              ...this.currentToolCalls![idx],
@@ -291337,7 +291283,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          pendingConfirmationCallId = event.callId;
          const details: ToolCallConfirmationDetails = {
            ...(event.confirmationDetails as Omit<
-@@ -1702,12 +1803,13 @@
+@@ -1702,12 +1801,13 @@
      agentConfig: Config,
      eventEmitter: AgentEventEmitter = this.eventEmitter,
    ): Promise<{
@@ -291351,7 +291297,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const generationConfig = geminiClient?.getChat().getGenerationConfig();
      const parentToolNames = generationConfig?.systemInstruction
        ? extractParentToolNames(generationConfig)
-@@ -1762,17 +1864,16 @@
+@@ -1762,17 +1862,16 @@
              forkTurns,
            ),
          ];
@@ -291371,7 +291317,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          const forkedMessages = buildForkedMessages(
            this.params.prompt,
            lastMessage,
-@@ -1789,22 +1890,20 @@
+@@ -1789,22 +1888,20 @@
                role: 'model' as const,
                parts: [{ text: 'Understood. Executing directive now.' }],
              },
@@ -291396,7 +291342,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // Default: directive with fork boilerplate as task_prompt
      if (!taskPrompt) {
        taskPrompt = buildChildMessage(
-@@ -1840,12 +1939,13 @@
+@@ -1840,12 +1937,13 @@
  
        promptConfig = {
          renderedSystemPrompt: generationConfig.systemInstruction as
@@ -291410,7 +291356,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          executionAllowedTools: resolveForkExecutionAllowedTools(
            parentToolNames,
            buildForkExecutionAllowlist(
-@@ -1859,33 +1959,44 @@
+@@ -1859,33 +1957,44 @@
          .getToolRegistry()
          .getAllToolNames()
          .filter((toolName) => !EXCLUDED_TOOLS_FOR_SUBAGENTS.has(toolName));
@@ -291456,7 +291402,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // the reason back and re-executes until the configured cap prevents a
    // misconfigured hook from looping forever.
    private async runSubagentStopHookLoop(
-@@ -2171,17 +2282,22 @@
+@@ -2171,17 +2280,22 @@
        }
  
        // Get the results
@@ -291481,7 +291427,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // still reach telemetry instead of being clobbered by the catch
        // branch's exception derivation. Review wenshao @ #4410.
        //
-@@ -2196,28 +2312,40 @@
+@@ -2196,28 +2310,40 @@
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -291527,7 +291473,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2230,13 +2358,16 @@
+@@ -2230,13 +2356,16 @@
          error instanceof Error ? error.message : String(error);
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
@@ -291545,7 +291491,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        );
        return undefined;
      }
-@@ -2256,16 +2387,16 @@
+@@ -2256,16 +2385,16 @@
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -291566,7 +291512,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2273,13 +2404,22 @@
+@@ -2273,13 +2402,22 @@
          status: 'failed' as const,
          terminateReason,
        },
@@ -291590,7 +291536,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (this.params.plan_mode_required === true) {
        if (
          !this.params.name ||
-@@ -2557,26 +2697,42 @@
+@@ -2557,26 +2695,42 @@
      // Hoisted so the outer catch can restore parent PermissionManager
      // state when an exception lands between `createApprovalModeOverride`
      // and the fg / bg / fork inner finallys (e.g. worktree provisioning
@@ -291633,7 +291579,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Forking is explicit: `subagent_type: "fork"` selects a fork. Any other
        // value — or an omitted subagent_type — resolves to a regular subagent
        // (general-purpose by default). Its execution mode is decided separately
-@@ -2600,19 +2756,12 @@
+@@ -2600,19 +2754,12 @@
          return this.buildSpawnBlockedResult(
            'Error: run_in_background: true is not supported from within a sub-agent. Run this agent in the foreground by omitting run_in_background or setting it to false.',
            'Background execution is not supported from a nested sub-agent',
@@ -291653,7 +291599,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        let subagentConfig: SubagentConfig;
  
        if (isFork) {
-@@ -2654,62 +2803,28 @@
+@@ -2654,62 +2801,28 @@
          this.params.model,
          subagentConfig,
        );
@@ -291730,7 +291676,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // agent — the caller could reap the worktree while the detached agent
          // is still running in it. validateToolParams rejects an explicit
          // run_in_background up front; this covers the other route into the
-@@ -2738,13 +2853,13 @@
+@@ -2738,13 +2851,13 @@
            subagentConfig.model,
            buildModelIdContext(this.config),
          );
@@ -291745,7 +291691,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentRuntimeAuthOverrides = authType
            ? {
                authType,
-@@ -3022,38 +3137,35 @@
+@@ -3022,38 +3135,35 @@
          updateOutput,
        };
  
@@ -291787,7 +291733,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Per-spawn cleanup the subagent manager returns. The caller MUST
        // invoke this in the same `finally` block that wraps `execute()` —
        // see SubagentManager.createAgentHeadless's JSDoc for the leak
-@@ -3066,32 +3178,55 @@
+@@ -3066,32 +3176,55 @@
          const fork = await this.createForkSubagent(
            subagentRuntimeConfig as Config,
            backgroundEventEmitter,
@@ -291846,7 +291792,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // operating in an isolated worktree. The mechanical isolation
        // above guarantees correctness; the notice reduces user-visible
        // surprises when the model summarises file paths.
-@@ -3113,16 +3248,41 @@
+@@ -3113,16 +3246,41 @@
            ? buildPinnedWorktreeNotice(worktreeIsolation.path)
            : buildWorktreeNotice(
                this.config.getTargetDir(),
@@ -291889,7 +291835,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        // ── Background (async) execution path ──────────────────────
        if (shouldRunInBackground) {
-@@ -3150,47 +3310,23 @@
+@@ -3150,47 +3308,23 @@
          }
  
          // Create an independent AbortController — background agents
@@ -291940,7 +291886,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            hookOpts.agentId,
          );
          try {
-@@ -3259,12 +3395,13 @@
+@@ -3259,12 +3393,13 @@
              );
            }
  
@@ -291954,7 +291900,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            );
            void agentConfig
              .getToolRegistry()
-@@ -3272,25 +3409,22 @@
+@@ -3272,25 +3407,22 @@
              .catch((stopError) => {
                debugLogger.warn(
                  `[Agent] ToolRegistry stop after background registration failure failed: ${stopError}`,
@@ -291983,7 +291929,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            toolUseId: this.callId,
            // Populated when a subagent (whose reasoning loop is wrapped in
            // runWithAgentContext below) launches a nested agent. Null at
-@@ -3341,14 +3475,13 @@
+@@ -3341,14 +3473,13 @@
          let liveToolCallCount = 0;
          const refreshLiveStats = () => {
            const entry = registry.get(hookOpts.agentId);
@@ -291999,7 +291945,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
          const onToolCall = (event: AgentToolCallEvent) => {
            liveToolCallCount += 1;
-@@ -3393,14 +3526,13 @@
+@@ -3393,14 +3524,13 @@
            this.config.getMonitorRegistry().hasRunningForOwner(hookOpts.agentId),
          );
  
@@ -292015,7 +291961,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
  
          // Some launch modes have resources whose lifecycle cannot safely span
-@@ -3422,43 +3554,47 @@
+@@ -3422,43 +3552,47 @@
          let currentAbortController: AbortController | undefined =
            bgAbortController;
          let currentTurnPromise: Promise<void> | undefined;
@@ -292082,7 +292028,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // Fire-and-forget: start the subagent without blocking the parent.
          // For forks, wrap the body in runInForkContext so the recursive-fork
          // guard in execute() fires if the fork child's model calls `agent`
-@@ -3533,15 +3669,14 @@
+@@ -3533,15 +3667,14 @@
                  );
                }
  
@@ -292100,7 +292046,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                const hadWorktreeIsolation = worktreeIsolation !== null;
                const recordTerminalOutcome = () =>
                  recordSpanOutcome(
-@@ -3617,21 +3752,13 @@
+@@ -3617,21 +3750,13 @@
                  patchAgentMeta(metaPath, {
                    status: 'completed',
                    lastUpdatedAt: new Date().toISOString(),
@@ -292123,7 +292069,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                    completionStats,
                  );
                  persistBackgroundCancellation(
-@@ -3711,16 +3838,19 @@
+@@ -3711,16 +3836,19 @@
                  lastUpdatedAt: new Date().toISOString(),
                  lastError: errorMsg,
                });
@@ -292147,7 +292093,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // frame. The depth override is load-bearing for hot continuations:
          // send_message runs from the top level, but the continued agent must
          // retain the nesting budget it had when it was created.
-@@ -3737,12 +3867,13 @@
+@@ -3737,12 +3865,13 @@
                  isFork ? 'fork' : 'background',
                ),
                turnAbortController.signal,
@@ -292161,7 +292107,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                        turnAbortController,
                        recordOutcome,
                        fireStartHook,
-@@ -3825,12 +3956,13 @@
+@@ -3825,12 +3954,13 @@
            registry.registerResidentAgent(hookOpts.agentId, residentController);
            residentRegistered = true;
          }
@@ -292175,7 +292121,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            false,
          );
          currentTurnPromise.catch(reportUnexpectedBackgroundError);
-@@ -3850,89 +3982,12 @@
+@@ -3850,89 +3980,12 @@
        }
  
        // Same agent-identity frame as the background path: a foreground
@@ -292265,7 +292211,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Parent abort still propagates down (so ESC at the parent kills
        // the subagent), but child abort does NOT propagate up.
        const fgAbortController = new AbortController();
-@@ -3941,27 +3996,66 @@
+@@ -3941,27 +3994,66 @@
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -292339,7 +292285,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // skip XML notification and headless-holdback (see the registry for
        // the gating logic).
        //
-@@ -3970,32 +4064,18 @@
+@@ -3970,32 +4062,18 @@
        // as their backgrounded counterparts. Without this, post-mortem of a
        // cancelled / crashed foreground subagent has no on-disk evidence
        // beyond what made it into the parent's tool result.
@@ -292373,7 +292319,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            (input) => registry.queueExternalInput(hookOpts.agentId, input),
            () => registry.wakeExternalInputWaiters(hookOpts.agentId),
          );
-@@ -4024,14 +4104,13 @@
+@@ -4024,14 +4102,13 @@
        let fgLiveToolCallCount = 0;
        const refreshFgLiveStats = () => {
          const entry = registry.get(hookOpts.agentId);
@@ -292389,7 +292335,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        };
        const onFgToolCall = (...args: unknown[]) => {
          const event = args[0] as AgentToolCallEvent;
-@@ -4046,191 +4125,217 @@
+@@ -4046,191 +4123,217 @@
        const onFgUsageMetadata = () => {
          refreshFgLiveStats();
        };
@@ -292775,7 +292721,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // happened between provisioning and the inner try (e.g. inside
        // `createApprovalModeOverride`, the agent constructor, or
        // anywhere else upstream of the foreground/background try blocks
-@@ -4257,21 +4362,33 @@
+@@ -4257,21 +4360,33 @@
        } catch (restoreError) {
          debugLogger.warn(
            `[AgentTool] restoreParentPM after error failed: ${restoreError}`,

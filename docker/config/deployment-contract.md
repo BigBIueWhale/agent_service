@@ -11,17 +11,6 @@
   transient computation. `/tmp` is discarded at session teardown, as is anything
   written outside `/workspace` and `/artifacts`; anything that must survive
   belongs in one of them.
-- `/output` is not mounted in this container. A separate fixed, trusted capture
-  component is its sole mount owner and durably records this process's stdout
-  stream-JSON and stderr through one-use Unix sockets under the read-only
-  `/streams` mount. Do not probe, reconnect, replace, or use those sockets as
-  task storage. Readiness, exit status, final response, bundles, and terminal
-  state are produced by trusted components outside Qwen and its descendants.
-- The agent runs as uid:gid 1000:1000 with a read-only container root. It has no
-  GPU, Docker socket, host Qwen/Claude/Codex state, or writeable operator source.
-- Docker supplies the agent's isolated PID namespace and devpts instance. The
-  Landlock policy grants `/dev/pts` only `WRITE_FILE`, solely so the native
-  `run_shell_command` implementation can allocate and use its pseudoterminal.
 
 ## Network and dependencies
 
@@ -49,26 +38,18 @@
   or extract PDFs, unpack archives, build local probes, create databases/indexes,
   convert media, write scratch, create explicit artifacts, and modify staged
   workspace files when the investigation genuinely requires it.
-- Explore workspace/artifact state is content-hashed before and after the child.
-  Its trusted result metadata lists changes and names the exact hashed manifest.
-  Journal failure makes the tool call fail; changes are never silently reverted.
 
 ## Full-quality vision and document work
 
 - At most fifteen images may exist in one rendered
   request. Video and audio are disabled.
-- Accepted RGBA is server-composited onto pinned white.
-- Tool-result text/image/text remains in the originating tool message and exact
-  chronological position. Never clump an old image into the newest turn.
 - PDF handling is local computation, not direct PDF vision. Poppler/QPDF/Pandoc/
   ImageMagick may extract or deliberately render pages into scratch. A derived
   image enters `read_file` only after it satisfies the exact PNG contract. A
   failed extraction/conversion is reported; it never triggers an online or
   silent lossy fallback.
-- Compaction removes old raw pixels with the summarized history rather than
-  relocating them to a false recent turn.
 
 ## Failure and completion semantics
 
-- Scratch quota exhaustion, journal failure, or cleanup failure is explicit.
-  Never redirect silently into project, artifact, host, or network state.
+- Scratch quota exhaustion or cleanup failure is explicit. Never redirect
+  silently into project, artifact, host, or network state.

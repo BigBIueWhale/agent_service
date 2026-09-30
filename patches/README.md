@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `8a6eee4d63eb79c8917a96e3f79b7f2a82d414ae1a0df4fbbcb1dc7be6579e7a`
+- Review-diff SHA-256: `fdf4a57ffa99f4d7cdeaeb498d770d0afc88fda344f15d1a7faf016529c81d1e`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `c06bd819f4fe3d0aac6dbe6dd2a7e35b37207949685816b949fae52f6c7df5da`
+- Transformer-manifest SHA-256: `4051d25f1948668eb7f8d732fe8a9f1f538cf7a2149e9e63112d92c716c4a489`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 35 semantic concerns before changing the private source tree.
+identities, and 34 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -654,9 +654,9 @@ policy. It admits only the advertised general-purpose and Explore variants and
 refuses unsupported invocation parameters. Immutable distributor instructions,
 per-invocation scratch ownership, and effect journaling govern this deployment.
 Generic host prompts describe the workspace and permissions actually provided;
-a report does not prove attribution of concurrent effects. The deployment frame
-names its timestamp as the CLI invocation time and does not promise indefinite
-cache residency. Every number of bytes, tokens or turns the deployment prompt
+a report does not prove attribution of concurrent effects. The deployment prompt
+carries no advice on when to delegate or how much to read, and no timestamp; the
+date is the startup context's. Every number of bytes, tokens or turns the deployment prompt
 states is rendered once, in its `## Context` section, from the partition or the
 turn budget that enforces it, and is named rather than restated everywhere
 else -- "one inline block"; a prompt that states one twice, or states one the

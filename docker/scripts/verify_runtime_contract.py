@@ -243,8 +243,7 @@ def verify_prompts(
             # system.md is the deployment's shared engineering discipline: the
             # main session and every foreground subagent are given this exact
             # text, so the integrity rules cannot apply to one and not the
-            # other. Session-specific framing lives in the runtime's own
-            # main-session frame, deliberately not here.
+            # other.
             "They apply\nidentically to the main session and to every foreground subagent",
             "Do not weaken a test, invariant, security boundary, or validation",
             "not permission to fabricate a conclusion",
@@ -260,7 +259,6 @@ def verify_prompts(
             "The agent has `--network none`",
             contract["network"]["model_base_url"],
             "Explore is investigative in purpose, not mechanically read-only.",
-            "Journal failure makes the tool call fail; changes are never silently reverted.",
             "PDF handling is local computation, not direct PDF vision.",
             # Where the model puts its notes and deliverables decides whether
             # they outlive the session, so what teardown keeps is stated in
