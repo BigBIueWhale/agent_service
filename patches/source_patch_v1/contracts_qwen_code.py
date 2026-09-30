@@ -11711,7 +11711,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "consumers accept attempt metadata and continue through ordinary replies. Thought events "
             "retain exact raw reasoning while bounded UI state uses a separate display projection. "
             "A streamed tool result is exactly the tool message text the next request gives the "
-            "model for that call, with no display fallback and no stream-only cut."
+            "model for that call, with no display fallback and no stream-only cut. Its is_error "
+            "flag cannot be bound to model input, which renders an output and an error as the "
+            "same text; it stays the client's claim, which a reader judging a run by failed "
+            "calls must trust and which a forged stream can flip without refusal."
         ),
         removal_condition=(
             "Upstream emits equivalent scoped generation evidence through callback-settled output "

@@ -800,8 +800,14 @@ with no displayed row is not refused, and the recorded request body is the
 authority for everything the model received. Upstream 0.21.12's own
 65,536-byte stream-only cut of textual tool results
 (`headless-tool-result-text-projection.ts` in the pinned upstream archive) is
-not shipped: the stream shows what the model saw. `is_error` is display-only and is not bound, because
-nothing the model sees depends on it; that is a stated limit of the
+not shipped: the stream shows what the model saw. `is_error` is not bound, and
+cannot be: the tool message renders a function response's output and its error
+as the same bare text, so no byte of any request tells a failed call from a
+successful one, and carrying the difference to the model would put text its
+template never renders into its input. That leaves the flag, and the result's
+`permission_denials` built from the same error, as the client's own claims: a
+reader that judges a run by its failed calls trusts the client for them, and a
+forged stream that flips one still certifies. It is a stated limit of the
 certificate.
 
 The service certifies a captured stream in two passes over the same bytes. The

@@ -14,7 +14,7 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Patch: `qwen-code-0.21.12-agent-service.patch`
 - Review-diff SHA-256: `3d09bf957e0a302a8a26b01bff793d4b426620a5a31a5fb9405931296e3682f0`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `0d12196f1ef73b6db52d5cfdd374d3eacabc79b1aa8dca9217bb90ac50833109`
+- Transformer-manifest SHA-256: `6d5eee90535f9d06c28cda8a985a68b05f69f0b0065eec381f8a660b75eb75e4`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -764,9 +764,17 @@ these needs model serving, a provider session, a release or a GPU, and none is
 live provider or session verification.
 
 Three points are not verified by any gate. Desktop's suites run under Bun and
-are excluded from the test selection. `is_error` on a displayed tool result is
-display-only and is not bound to the model's input, because nothing the model
-sees depends on it. The browser transcript reader validates record structure
+are excluded from the test selection. `is_error` on a displayed tool result
+cannot be bound to the model's input, because nothing in that input carries it:
+the tool message renders a function response's `output` and its `error` as the
+same bare text, and the served template frames every tool response alike, so no
+byte of any request tells a failed call from a successful one. Carrying the
+distinction to the model would put text its template never renders into its
+input. What that leaves open is real: the flag, and the result record's
+`permission_denials` built from the same error, are the client's own claims, so
+a reader that judges a run by its failed calls -- a harness counting tool errors
+-- trusts the client for them, and a client defect or a forged stream that flips
+one still certifies. The browser transcript reader validates record structure
 with Core's pure preparation but does not re-verify record digests; only node
 readers do.
 
