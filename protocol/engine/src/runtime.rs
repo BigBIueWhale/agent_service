@@ -2506,7 +2506,7 @@ mod tests {
     }
     fn fixture() -> Vec<serde_json::Value> {
         let mut rows: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+            serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
         // Runtime metadata is authored from this test's manifest. The physical
         // and generation evidence retain their captured producer bytes.
         let mut metadata: serde_json::Value = serde_json::from_str(&init()).unwrap();
@@ -3414,7 +3414,7 @@ mod tests {
     #[test]
     fn the_wire_fixture_is_a_complete_stream_of_the_compiled_contract() {
         let rows: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+            serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
         assert_eq!(rows[0]["stream_contract_sha256"], STREAM_CONTRACT_SHA256);
         // The captured turn shows itself at once after its completion, and
         // nothing in the stream names an output origin.

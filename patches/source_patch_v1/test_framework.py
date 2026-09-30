@@ -1165,7 +1165,7 @@ class SourceVectorTransactionTests(unittest.TestCase):
     callback; source-vector byte agreement and transaction refusal stay real.
     """
 
-    vector_names = ("goal-state-v1", "partial-stream-v2")
+    vector_names = ("goal-state-v1", "partial-stream-v2", "ordinary-tool-wire")
 
     @classmethod
     def setUpClass(cls) -> None:

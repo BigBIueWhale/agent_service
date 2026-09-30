@@ -183,7 +183,7 @@ outputs.set(
   ) + "\n",
 );
 
-for (const name of ["goal-state-v1", "partial-stream-v2"]) {
+for (const name of ["goal-state-v1", "partial-stream-v2", "ordinary-tool-wire"]) {
   const expected = readRegular(
     resolve(root, `protocol/test-vectors/${name}.json`),
   );

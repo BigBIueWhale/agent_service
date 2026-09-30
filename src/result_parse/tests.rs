@@ -279,7 +279,7 @@ impl Trace {
     fn chat_with(&mut self, parent: Option<&str>, call: Option<&str>, delta: bool) {
         let call_id = call.unwrap_or("answer-without-call");
         let captured: Vec<Value> = serde_json::from_str(include_str!(
-            "../../protocol/engine/src/fixtures/ordinary-tool-wire.json"
+            "../../protocol/test-vectors/ordinary-tool-wire.json"
         ))
         .unwrap();
         let original_session = captured[0]["session_id"].as_str().unwrap();

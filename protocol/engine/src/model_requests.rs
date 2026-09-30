@@ -2902,7 +2902,7 @@ mod tests {
     #[test]
     fn chat_request_cannot_follow_its_normalization_seed() {
         let rows: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+            serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
         let mut state = ModelRequests::default();
         let start = Document::decode(rows[0].to_string().as_bytes(), LIMITS).unwrap();
         let origin = state
@@ -2964,7 +2964,7 @@ mod tests {
     #[test]
     fn only_the_final_physical_retry_can_deliver_chat_output() {
         let rows: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+            serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
         let original_generation = rows
             .iter()
             .find(|row| row["type"] == "model_generation")
@@ -3407,7 +3407,7 @@ mod tests {
     #[test]
     fn captured_physical_and_logical_closure_requires_exact_terminal_usage() {
         let rows: Vec<serde_json::Value> =
-            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+            serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
         let mut state = ModelRequests::default();
         for row in rows {
             let raw = row.to_string();
@@ -3521,7 +3521,7 @@ mod tests {
                 .to_string()
                 .contains("acceptance precedes generation"));
             let rows: Vec<serde_json::Value> =
-                serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+                serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
             let generation = rows
                 .iter()
                 .find(|row| row["type"] == "model_generation")

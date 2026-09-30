@@ -16,7 +16,7 @@ from check_headless_cli import SmokeFailure, check, require_quantities_stated_on
 
 class HeadlessSmokeTests(unittest.TestCase):
     def test_projects_seeded_call_and_thought_from_generation(self):
-        rows = json.loads((ROOT / "protocol/engine/src/fixtures/ordinary-tool-wire.json").read_text())
+        rows = json.loads((ROOT / "protocol/test-vectors/ordinary-tool-wire.json").read_text())
         generation = next(row["generation"] for row in rows if row["type"] == "model_generation")
         self.assertEqual(smoke_assistant_content({"generation": generation}), {
             "role": "model",

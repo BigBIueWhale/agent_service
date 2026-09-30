@@ -37,7 +37,7 @@ def build_patchset(artifact_root: Path) -> PatchSet:
     # before the Qwen build; the publisher checks the complete output.
     vectors = {
         name: (artifact_root / f"protocol/test-vectors/{name}.json").read_bytes()
-        for name in ("goal-state-v1", "partial-stream-v2")
+        for name in ("goal-state-v1", "partial-stream-v2", "ordinary-tool-wire")
     }
 
     def validate_bound_final(state: dict[str, str]) -> None:
