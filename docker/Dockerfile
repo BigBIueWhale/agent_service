@@ -262,6 +262,7 @@ COPY docker/tests/test_verify_runtime_contract.py /tmp/runtime-contract-tests/do
 COPY docker/scripts/check_headless_cli.py /tmp/runtime-contract-tests/docker/scripts/check_headless_cli.py
 COPY docker/scripts/request_evidence.py /tmp/runtime-contract-tests/docker/scripts/request_evidence.py
 COPY docker/tests/test_headless_cli_smoke.py /tmp/runtime-contract-tests/docker/tests/test_headless_cli_smoke.py
+COPY protocol/test-vectors/ordinary-tool-wire.json /tmp/runtime-contract-tests/protocol/test-vectors/ordinary-tool-wire.json
 COPY docker/tests/test_request_evidence.py /tmp/runtime-contract-tests/docker/tests/test_request_evidence.py
 COPY docker/scripts/verify_toolchain.py /tmp/toolchain-tests/docker/scripts/verify_toolchain.py
 COPY docker/tests/test_verify_toolchain.py /tmp/toolchain-tests/docker/tests/test_verify_toolchain.py
