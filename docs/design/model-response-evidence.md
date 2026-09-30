@@ -1,20 +1,24 @@
 # Exact observed provider responses
 
 The shared client records a physical generation request before dispatch, then
-records the returned HTTP body before the provider SDK parses it. These are fetch entity-body bytes after
-transport content decoding, including decompression when present. This location
-preserves malformed JSON/SSE and literal tool-argument bytes while keeping each
-provider's existing fetch implementation, proxy and retry ownership intact.
+records the returned HTTP body before the provider SDK parses it. These are
+fetch entity-body bytes after transport content decoding, including
+decompression when present. This location preserves malformed JSON/SSE and
+literal tool-argument bytes while keeping each provider's existing fetch
+implementation, proxy and retry ownership intact.
 
-Each response has a request identity and consecutive local sequence. A header
-record precedes all body records. Body records contain canonical base64 and an
-exact byte offset. The transport end declares EOF, cancellation, failure or an
-undispatched intent, with the complete observed byte count and SHA-256. EOF
-establishes transport completion, never conversation acceptance. A cancelled or
-failed response establishes only its observed prefix. A separate processing
-outcome records SDK/converter completion, failure, or cancellation, including
-failures that occur after transport EOF. Neither fact establishes acceptance
-into conversation history.
+Each response has a request identity and consecutive local sequence. An `http`
+record with the status and content type precedes all body records. Body
+records contain canonical base64 and an exact byte offset. The `end` record
+declares EOF, cancellation, failure or an undispatched intent, with the
+complete observed byte count and SHA-256. EOF establishes transport
+completion, never conversation acceptance. A cancelled or failed response
+establishes only its observed prefix. A separate processing `outcome` then
+records whether SDK parsing and conversion completed, failed or were
+cancelled, including a failure after transport EOF, together with the served
+usage it observed. Completed processing requires a 2xx status and an EOF or
+cancelled transport end. The chat's history decision, or a utility caller's
+delivery receipt, is a further record of its own.
 
 One pull-through stream writes before delivering bytes to the SDK. A persistence
 quantum bounds each temporary encoded record, without a total response limit.
@@ -35,23 +39,17 @@ evidence remains mandatory even if cancellation precedes network dispatch.
 The shared proxy error redactor constructs native `DOMException` clones so abort
 classification and diagnostic accessors remain valid after redaction.
 
-Stream and canonical formats are version 4. Response evidence is structurally
-separate from conversation messages and cannot advance the parent chain. Readers
-validate physical ordering, hashes and ownership before projecting a branch.
-Live checkpoints list unfinished responses; this supports background agents in
-ordinary multi-turn sessions. Complete native certification additionally requires
-all responses to have both a transport end and a processing outcome. The two fake-provider harnesses compare captured
-request and response bytes with those actually received and served.
+The stream contract is v17 and the canonical recording is version 21. Response
+evidence is structurally separate from conversation messages and cannot
+advance the parent chain. Readers validate physical ordering, hashes and
+ownership before projecting a branch. Live checkpoints list unfinished
+responses, so a background agent in an ordinary multi-turn session leaves a
+readable live prefix. Complete certification requires every response to have
+both a transport end and a processing outcome. The fake providers of the
+headless qualification and the composition check compare the captured request
+and response bytes with those they actually received and served.
 
-Source tests cover malformed wire, Unicode, server errors, cancellation, large
-bodies, durable-write refusal, concurrent requests, slow local recording, unknown
-fields, sequence/offset/hash corruption, title cancellation and writer handoff,
-and exact full/indexed/fork restoration.
-Native and full launcher/image qualification remains a release-owner step under
-the implement-only brief; no build or deployment is implied by source checks.
-
-This corrects client-owned omissions for every user of the shared generation
-pipeline. Direct vLLM callers do not run this client recorder. Output omitted by
-a backend parser, tokens never transmitted, and semantic accepted/abandoned
-attempt attribution require evidence from their actual owning layers and remain
-separate work in the standing completeness goal.
+This serves every user of the shared generation pipeline. Direct vLLM callers
+do not run this client recorder. Output a backend parser omitted and tokens
+never transmitted are not visible at this boundary; they belong to the layer
+that produced them.

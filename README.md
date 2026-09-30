@@ -496,7 +496,9 @@ the same reviewed source changes; it is not a second application mechanism.
 The Docker build starts from a fresh extraction, tests the transformer,
 installs the exact upstream dependency lock, applies upstream's own package
 patches, builds the CLI, and runs the unit test selection derived from retained
-changed files and adjacent tests, with each suite in its package directory. Provider
+changed files and adjacent tests, with each suite in its package directory.
+Desktop's suites run under Bun (`bun:test`), which the image does not carry, so
+they are excluded from that selection and no gate runs them. Provider
 integration scenarios require their own environment; the final smoke supplies the
 controlled provider protocol for build-time CLI qualification. The metadata
 generator derives the pinned version, commit, and timestamp from verified inputs. The final agent stage then runs the
@@ -619,16 +621,16 @@ checkpoint. Every failure status is named, absent counts are refused, and comple
 user and hook directives reach exact admission. A later finalization failure
 retains the committed checkpoint and blocks further chat use until restoration
 with a new client. The [source contract](patches/README.md) describes the boundaries
-and qualification limits. CPU-only native TypeScript builds and targeted runtime
-checks cover the shared formatter, ACP recording and delivery, and browser SDK.
-The browser SDK retains its upstream size assertion and shares exact scalar-count
-validation with Core.
+and qualification limits. The image's test selection covers the shared formatter
+and ACP recording and delivery. The browser SDK's transcript reader uses Core's
+pure record preparation, so it validates record structure without node
+builtins; it does not re-verify record digests, which only node readers do.
 
 Six broader implementation obligations remain open: operational daemon metrics,
 provider-stream lifetime, reasoning stored by reference, prompt-hook failure
 policy, atomic speculative file/history acceptance, and resident background
-AgentTool settlement. Review-worktree ownership was deliberately excluded from
-this round because fetch-pr and PR worktrees are not used. Compaction and child
+AgentTool settlement. Review-worktree ownership is deliberately excluded
+because fetch-pr and PR worktrees are not used. Compaction and child
 reasoning remain inline and fully retained; output settlement and surviving
 terminal observations do not close the reasoning-reference requirement.
 
@@ -761,18 +763,55 @@ Absent served usage remains null; an explicit zero report remains a report.
 
 Accepted generation completion grants executable tool authority. Every
 attempt's decoded generation remains evidence, including abandoned retries and
-incomplete calls. Displayed child generations have the issued call's conversation
-scope; internal work has an explicit internal output scope and does not invent a
-subagent. A compaction record retains each draw's reasoning, text, decoded provider
-response objects, incomplete calls and measured counts. The HTTP byte journal
-owns the exact response bytes. These records are evidence; canonical
-history decides what resume restores.
+incomplete calls. After a conversation generation's `model_attempt_completion`
+with disposition `accepted` or `refused`, the stream shows that generation as
+upstream-shaped `assistant` rows (`{id, type: "message", role, model, content,
+stop_reason, usage}`): one block kind per message in production order --
+`thinking`, `text`, `tool_use` with the call's arguments verbatim,
+`incomplete_tool_use` -- with usage on the last message only and `stop_reason`
+`"tool_use"` exactly when every block is a call. The rows are derived from the
+admitted generation, and the native certifier refuses any row that differs, is
+missing, is extra or is out of place. A `refused` turn is one the provider completed at its output limit
+with no executable call: it never enters history and is drawn again. An
+`abandoned` attempt is evidence only and shows no row. Assistant rows and
+partial `stream_event`s carry no origin field; a partial belongs to the latest
+chat request in its scope. A runtime-authored answer is a
+`system/runtime_operation` receipt followed by a text-only assistant row with
+null `stop_reason` and `usage`. Displayed child generations have the issued
+call's conversation scope; internal work has an explicit internal output scope
+and does not invent a subagent. A compaction record retains each draw's
+reasoning, text, decoded provider values (`sdkValuesJson`), incomplete calls and
+measured counts; those values must equal the ones decoded from the draw's
+recorded response bodies, which binds the draw to the bytes the provider sent.
+The stream's compaction record carries the committed post-compaction history as
+evidence; the canonical recording stores it once, as the checkpoint's
+`compressedHistory`. The HTTP byte journal owns the exact response bytes. These
+records are evidence; canonical history decides what resume restores.
 
-The generation/completion migration in the current source remains unverified by
-native compilation or runtime execution. The [audit disposition](docs/design/stream-completeness-audit.md)
-and [generation design](docs/design/generation-authority.md) distinguish executed
-source tests, source inspection, remaining implementation work and pending owner
-gates. The described record rules do not establish whole-goal completion.
+A `user` row's `tool_result` content is exactly the tool message text the model
+receives in its next request. The native certifier binds every displayed tool
+result and notice to the next chat request in its display scope (the same
+`tool_call_id` and text; the same user text), refuses a call an accepted
+generation issued without its displayed result before that request, and
+refuses a displayed row that request does not carry, carries out of order or
+carries with other text. The binding runs one way: the runtime also adds input
+it does not display (reminders, the date, the todo list), so a request message
+with no displayed row is not refused, and the recorded request body is the
+authority for everything the model received. Upstream 0.21.12's own
+65,536-byte stream-only cut of textual tool results
+(`headless-tool-result-text-projection.ts` in the pinned upstream archive) is
+not shipped: the stream shows what the model saw. `is_error` is display-only and is not bound, because
+nothing the model sees depends on it; that is a stated limit of the
+certificate.
+
+The service certifies a captured stream in two passes over the same bytes. The
+native engine admits every record; the pinned client's `dist/record-verifier.js`
+then replays every generation and compaction draw from its recorded response
+bytes, bound to the native pass's byte count and SHA-256, and a refusal keeps
+the verifier's stated reason. Every record variant is closed, `system/init` and
+served usage (exactly five counts) included, and every request's decode policy
+states `strict_tool_calling` and `exact_token_counting` as `true`: strict tool
+calling and exact served usage are the client's one decode mode.
 
 The envelope names which terminal state ended the run, and the service carries that
 name through to the caller as `terminal.agent_result.agent_result_subtype`. `success` is the agent's
@@ -937,9 +976,42 @@ written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.
 
-The [implementation review](docs/model-output-handling-review.md) records the
-client/wire checks and the correction ensuring every notification-drain
-continuation consumes a turn and reports its terminal through the awaited queue.
+The [slip-handling map](docs/model-output-handling-review.md) ties each slip
+obligation to the code that meets it, including every notification-drain
+continuation consuming a turn and reporting its terminal through the awaited
+queue.
+
+The design notes state each record rule, its reason and its limits:
+
+- [Generation authority](docs/design/generation-authority.md): attempts,
+  the generation envelope, dispositions, shown turns, ordering and usage
+  populations.
+- [Physical output provenance](docs/design/physical-output-provenance.md):
+  why generations are replayed from response bytes, and which reader does it.
+- [Canonical recording](docs/design/canonical-recording.md): version refusal,
+  scans, what resume restores, closed and live readers, and stated limits.
+- [Shared stream gate](docs/design/shared-stream-gate.md): the one contract,
+  the certifier, and displayed-input binding.
+- [Stream contract identity](docs/design/stream-contract-identity.md): how the
+  contract's `$id` and SHA-256 bind producer and reader.
+- [Exact observed responses](docs/design/model-response-evidence.md),
+  [provider processing outcome](docs/design/provider-processing-outcome.md),
+  [processing and transport agreement](docs/design/model-response-outcomes.md)
+  and [served usage](docs/design/physical-response-usage.md): the physical
+  response records.
+- [Admitted attempts without a stream](docs/design/acquisition-failure-recording.md)
+  and [terminal settlement](docs/design/chat-attempt-settlement.md): when an
+  attempt's generation and history decision are recorded.
+- [Compaction draw boundaries](docs/design/compaction-normalization-boundary.md):
+  bytes, SDK values and converted draws.
+- [Subagent attempt disposition](docs/design/subagent-attempt-disposition.md),
+  [child attempt provenance](docs/design/child-attempt-provenance.md) and
+  [child replay refusal](docs/design/child-transcript-replay-refusal.md):
+  children's attempts, live sidecar and virtual sessions.
+- [Delivered output and cancellation](docs/design/cancelled-output-observations.md)
+  and [complete ACP tool results](docs/design/acp-tool-result-completeness.md).
+- [Recording progress](docs/design/session-recording-progress.md): the
+  one-minute storage and cleanup budget and what it cannot bound.
 
 ## Prefix caching evidence
 

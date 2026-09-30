@@ -20,24 +20,8 @@ This applies to every consumer of virtual child sessions, for ordinary and
 long conversations. It does not apply to direct vLLM callers: the backend does
 not read or convert Qwen's child transcript files. The error originates in the
 shared client reader, which owns the refusal. ACP and workspace transcript
-page endpoints already expose the adapter's explicit partial result; this
-change does not alter those response shapes.
+page endpoints expose the adapter's explicit partial result instead.
 
-The resume path continues to read the canonical `agent-<id>.jsonl` history.
-This change writes no records, alters no model text, and does not change which
-records resume admits or their order. `output/events.jsonl`, provider request
-bodies, the stream schema, and the fake-provider contracts in
-`docker/tests/check_composition.py` and `docker/scripts/check_headless_cli.py`
-are unaffected.
-
-Regression tests exercise actual canonical conversion failures on initial and
-repeated snapshots, for running and completed tasks. A live subscription must
-receive a single refusal and close without seeing the failed page's prefix,
-its canonical suffix, or its sidecar suffix. Ordinary snapshots and replay
-pagination retain their existing tests. Source tests and transformer checks
-are permitted; builds, releases, deployments, and pushes are not.
-
-Attempt identity and disposition in child live output, strict sidecar
-admission, writer failures, and accepted-output duplication remain separate
-work under the standing completeness goal. This refusal does not repair or
-certify those paths.
+The resume path reads the canonical `agent-<id>.jsonl` history. The refusal
+writes no records, alters no model text, and does not change which records
+resume admits or their order.

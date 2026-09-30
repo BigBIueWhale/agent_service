@@ -20,21 +20,19 @@ output was accepted into conversation history. That later decision belongs to
 the consumer that commits or rejects it. A complete SDK iteration can still
 produce an abandoned chat attempt.
 
-The wire contract and canonical recording are version 4. Canonical response
-records remain structurally disjoint evidence and never become history parents
-or model turns. Resume reads that canonical history projection; stdout remains
+Stream contract v17 and canonical recording version 21 carry both facts.
+Canonical response records are structurally disjoint evidence and never become
+history parents or model turns. Resume reads that canonical history projection; stdout remains
 evidence. Both fake providers require processing completion in addition to
 byte-exact response accounting.
 
-This change belongs to the shared client provider layer. Every client caller
+This belongs to the shared client provider layer. Every client caller
 receives the same recording behavior, with no benchmark or configuration path.
 vLLM cannot observe SDK parsing, iterator cancellation, or client conversion;
-its own generation accounting must be audited in its backend layer separately.
+its own generation accounting belongs to its backend layer.
 Normal streaming stays pull-driven and records no extra copy of the body.
 
-Verification uses source tests with the real SDK for malformed batch JSON,
+Source tests use the real SDK for malformed batch JSON,
 malformed SSE, conversion failure after EOF, iterator cancellation (including
 before its first read), and concurrent ordinary streams. Reader tests refuse
-missing, repeated, reordered, or malformed outcomes. Native Rust checks are
-source-only because the owner forbids builds. These checks do not certify the
-remaining logical-attempt attribution or backend obligations.
+missing, repeated, reordered, or malformed outcomes.

@@ -23,7 +23,9 @@ identities, and 35 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
-retained final files plus their existing adjacent tests.
+retained final files plus their existing adjacent tests, each run with Vitest in
+its owning package. Desktop's suites run under Bun (`bun:test`); they are
+excluded from that selection and no gate runs them.
 
 ## Generation and ownership
 
@@ -47,9 +49,8 @@ provider terminal. Recorded processing completion also requires captured 2xx
 HTTP and a committed EOF or cancelled transport ending. Empty responses and
 successful parsing followed by cancellation remain valid at this layer;
 processing failure and history abandonment remain separate decisions. The
-shared recorder, replay, native certifier, SDK readers and fake-provider
-verifier enforce this relationship. Native and Java execution remain unverified
-pending owner gates; see `docs/design/model-response-outcomes.md` for evidence.
+shared recorder, replay, native certifier and fake-provider verifier enforce
+this relationship; see `docs/design/model-response-outcomes.md`.
 A fresh bounded retry is permitted only before answer content
 has been delivered. Text, whitespace, and literal protocol-like XML remain
 verbatim. Transport failures, invalid usage, malformed calls, and post-terminal
@@ -275,15 +276,20 @@ Each compaction draw records converted text and reasoning alongside
 `sdkValuesJson`: JSON serializations of SDK-parsed provider values captured
 before Core conversion. These values preserve argument strings even when they
 are malformed or cut off; they are not the provider's HTTP response bytes.
-The physical byte journal is separate, and compaction draws do not yet carry a
-binding to those bytes. Every draw states its measured candidate token
+Each draw names the utility operation that produced it and states its physical
+request count; its `sdkValuesJson` must equal the values decoded from that
+operation's recorded response bodies, in order, so the draw is bound to the
+bytes the provider sent. Every draw states its measured candidate token
 count and snapshot byte count, using null when that measurement was not reached.
 Rejected draws retain these fields alongside the final draw. The committed
-post-compaction history is a separate field with exact part boundaries and
-filled retained inputs. The runtime installs that same history and writes it
-to the canonical chat checkpoint; model output is never replaced by an
-empty-slot rendering of the snapshot. The shared schema and native certifier
-refuse missing or unknown evidence fields.
+post-compaction history has exact part boundaries and filled retained inputs.
+The runtime installs that history and stores it once, as the canonical chat
+checkpoint's `compressedHistory`; a canonical compaction record that also
+carries `postCompactionHistory` is refused, because a second copy could only
+disagree with the first. The stream's compaction record carries
+`postCompactionHistory` as evidence of the committed composition. Model output
+is never replaced by an empty-slot rendering of the snapshot. The shared schema
+and native certifier refuse missing or unknown evidence fields.
 
 The snapshot is declared, not described. Its sections are upstream's: the nine
 elements of the `<state_snapshot>` block upstream's compression prompt asks for,
@@ -349,11 +355,17 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 15`, independently
-of the client release string. Missing or unknown versions, unknown record kinds
-or subtypes, malformed JSON, invalid UTF-8, and unterminated records refuse
+Every physical canonical chat record carries `recordingVersion: 21`, independently
+of the client release string. A record with any other version, or none, is
+refused with the file location, what the record declares (a version, or no
+version), and the action: open it with the client release that wrote it, or
+start a new session; the file is left unchanged. Unknown record kinds or
+subtypes, malformed JSON, invalid UTF-8, and unterminated records also refuse
 restoration. Root, indexed, child, fork, usage, IDE, and title readers use this
-admission rule. An inactive branch cannot hide an unsupported record. Live child
+admission rule. Scans over many recordings (session list, title lookup, resume
+by title, IDE readers) keep every readable result and report each unreadable
+file, so one unreadable file never takes a listing down. An inactive branch
+cannot hide an unsupported record. Live child
 read failures reach subscribers as a terminal error and remain refusals on later
 loads. Title metadata is selected from a complete validated scan with memory
 holding the current physical record and the request replay state; title writes
@@ -365,8 +377,8 @@ Each Chat generation records the tool-call identities present when its
 normalizer starts, before it consumes the provider stream. The seed is bound
 to the final physical request, and admitting readers derive normalized call
 identities from it. Canonical root and child readers compare local seeds with
-their replayed histories; a mirrored child seed in the root still needs
-cross-file proof against its sidechain.
+their replayed histories, and complete child admission compares a child's
+seeds with their root mirrors while joining the root's physical proof.
 
 Canonical resume replays explicit runtime history checkpoints and splices with
 positioned assistant commits. Display inputs and request/response evidence cannot
@@ -374,13 +386,10 @@ be supplied to the typed history accumulator. Checkpoints include the image
 payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
-this state and are refused; inspect them with their matching client or begin a
-new session. They are not promoted into complete version 16 histories.
+this state and are refused with the action above. They are not promoted into
+complete version 21 histories.
 The complete-record evidence replay and the resume reader use the same
-projection for runtime checkpoints, compaction, and rewind. A focused source
-test passed for a compaction followed by another generation: full restore,
-indexed restore, and fork returned the same exact Content sequence. This is
-source-test evidence; owner build and release gates have not run.
+projection for runtime checkpoints, compaction, and rewind.
 Adopted and realtime conversation records must carry content with the role
 declared by their record type; non-object parts and invalid image-reference
 identities are refused even on inactive branches. The same admission runs
@@ -388,14 +397,7 @@ before writing and in full and indexed readers.
 Those presentation records cannot claim locally served model usage. Full and
 indexed resume select served usage only from committed local model generations;
 the canonical reader refuses an adopted or realtime assistant with a fabricated
-usage report. Source tests exercise that refusal and compare full and indexed
-served usage after a physically recorded generation. Owner gates remain pending.
-The SessionService and transcript-preparation source fixtures now use version 16
-stored record shapes. Fork cases read their temporary JSONL files through the
-complete canonical reader; unit projection cases supply already admitted rows.
-Four focused source suites passed 224 tests, including refusal of a legacy
-assistant without generation evidence and refusal of an obsolete
-generation-failure subtype. These tests do not qualify a packaged resume run.
+usage report.
 
 Catalog pages retain readable sessions and required per-file refusal metadata.
 Refusals name the original file and physical location when available; directory
@@ -412,15 +414,14 @@ VS Code uses the ACP catalog and its existing canonical offline message reader;
 there is no alternate permissive catalog or JSONL branch. Inspect all returned
 refusals with `qwen sessions list --json`, following its cursor hints and using
 `--archive-state archived` for archived recordings. Live startup context labels
-partial recent-session discovery. These are source behaviors; compilation,
-native and application qualification remain pending owner gates. The
-[checked audit disposition](../docs/design/stream-completeness-audit.md) records
-executed evidence and outstanding work.
+partial recent-session discovery. The
+[canonical recording note](../docs/design/canonical-recording.md) states these
+rules and their limits.
 
 Fresh canonical generations carry the producing chat attempt's exact origin.
-Accepted output is one complete assistant commit; abandoned output is generation
-evidence and cannot enter resume history. Child live fragments use version 2
-and settle against the same origin with literal prefix checks. Shared ACP replay,
+Accepted output is one complete assistant commit; refused and abandoned output
+is generation evidence and cannot enter resume history. Child live fragments
+use version 2 and settle against the same origin with literal prefix checks. Shared ACP replay,
 SDK reduction, compaction, browser presentation and exports retain dispositions
 and served usage without merging retries or changing model text. A retired
 sidecar must be complete and settled before its cursor can be discarded.
@@ -444,12 +445,15 @@ Every request declares chat-attempt or utility ownership outside the model body.
 Chat responses retain separate transport completion, processing outcome, and
 history disposition. Only the chat consumer can accept history, after its durable
 commit. A failed physical retry remains abandoned when a subsequent physical
-request succeeds. Root and child generation records and partial blocks name
-their producing attempt and generation scope. The shared readers resolve
-those references and refuse unknown attempts, foreign scopes, repeated acceptance,
-or a complete certificate with an unsettled response. Runtime-authored assistant
-replies declare runtime origin. Main retries close the prior partial turn and
-preserve its exact reasoning as a separately owned observation.
+request succeeds. Root and child generation records name their producing
+attempt and generation scope, and the shared readers refuse unknown attempts,
+foreign scopes, repeated acceptance, or a complete certificate with an
+unsettled response. Stream assistant rows and partial blocks carry no origin: a
+partial belongs to the latest chat request in its scope, and a settled turn's
+assistant rows are derived from its generation. A runtime-authored reply
+follows a `system/runtime_operation` receipt naming its identity, scope, byte
+length and SHA-256. A retried attempt keeps its exact output, reasoning
+included, in its own generation as evidence.
 
 Canonical evidence does not join the conversation parent chain. A live or
 interrupted canonical file can retain an open response while exposing its durable
@@ -466,15 +470,15 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream format 7 exposes these same request records, declares the journal origin
-in `system/stream_start`, and accounts for the output window at every root result.
+Stream contract v17 exposes these same request records, declares the journal
+origin in `system/stream_start`, and accounts for the output window at every root result.
 Complete `system/init` runtime metadata has its own owner and does not reset that
 journal. Each checkpoint lists open response and logical attempt identities.
 An ordinary turn may finish while a background child remains active; complete
-EOF admission requires both populations to close. Native certifier source
-requires every request's response to have a transport end and a processing outcome. Native
-certification and SDK admission replay message deltas, verify byte lengths and
-hashes, and refuse missing, repeated, reordered, foreign, or unknown evidence.
+EOF admission requires both populations to close. The native certifier
+requires every request's response to have a transport end and a processing
+outcome. Native certification replays message deltas, verifies byte lengths and
+hashes, and refuses missing, repeated, reordered, foreign, or unknown evidence.
 Physical requests, logical attempts and reported turns are separate populations;
 generation completion binds every physical member and its history disposition.
 The composition and headless harnesses compare reconstructed bodies with the
@@ -508,20 +512,20 @@ one pull-through stream; it durably writes each bounded record before parser
 delivery. The record quantum never truncates a response. Active stdout renderers
 drain each admitted record before generation proceeds. Detached renderers release
 their window without poisoning the canonical writer. Recorder waits are excluded
-from the request's start, idle and generation clocks. A hung storage write can
-still defeat session deadlines; the shared write/cancellation correction remains
-open in the [audit disposition](../docs/design/stream-completeness-audit.md).
+from the request's start, idle and generation clocks, so the recorder bounds
+itself: the asynchronous canonical writer and response cancellation refuse
+after one minute without progress
+([recording progress](../docs/design/session-recording-progress.md)).
+Synchronous child-transcript file I/O cannot be preempted by that budget and is
+unbounded.
 
-Canonical format 14 structurally excludes response evidence from messages,
-conversation branches and the active parent chain. Full, indexed and live readers
+Canonical recording version 21 structurally excludes response evidence from
+messages, conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix
-as a complete record set. Native certifier source refuses missing response and
-logical completion. Native behavior remains unverified pending owner gates. Both fake
-providers compare recorded bytes with their actual response body, including
-malformed SSE and cancelled prefixes. Exact full/indexed/fork resume behavior
-still needs the owner's complete gates; focused source tests do not establish
-that end-to-end result.
+as a complete record set. The native certifier refuses missing response and
+logical completion. Both fake providers compare recorded bytes with their
+actual response body, including malformed SSE and cancelled prefixes.
 
 Each response outcome also records how many SDK values reached conversion and
 how many decoded outputs crossed the shared pipeline. A chat attempt completion
@@ -532,18 +536,18 @@ by the final physical response. An abandoned attempt may retain a shorter
 consumer prefix. Readers require earlier retry requests to deliver no decoded
 output and bind every observation to the final physical request. These
 boundaries distinguish early cancellation from a complete response body and a
-diagnostic expansion from one SDK value. TypeScript root readers now replay
-the retained OpenAI response with the selected decoder and compare raw Chat
-observations before admission. Native, Python and Java readers still need the
-same byte-to-observation proof. Normalized call IDs still need independent
-verification. Every utility request names the logical operation shared by its
-retries and ends with a separate receipt for the exact decoded prefix returned
+diagnostic expansion from one SDK value. The native certifier checks these
+counts, the served usage and the byte identity of every response, but does not
+decode chat observations from response bytes. The pinned client's
+`dist/record-verifier.js` then replays each retained OpenAI response with the
+selected decoder and normalizer and compares the raw observations and
+normalized call IDs with the generation. Every utility request names the
+logical operation shared by its retries and ends with a separate receipt for the exact decoded prefix returned
 to the shared client. A stream returned before its first read still closes its
-physical iterator and writes a zero-output receipt. The TypeScript, native,
-Python and Java readers require that receipt after the processing outcome,
-reject duplicate or excessive counts, and leave a missing receipt open at EOF.
-The fake-provider harness makes the same check. These are source and focused
-test findings; native and Java execution remains unverified pending owner gates.
+physical iterator and writes a zero-output receipt. The client readers and the
+native certifier require that receipt after the processing outcome, reject
+duplicate or excessive counts, and leave a missing receipt open at EOF. The
+fake-provider harness makes the same check.
 
 These records cover the HTTP response observed by every shared-client generation,
 including side queries and children. They cannot establish tokens generated but
@@ -579,8 +583,8 @@ presentations.
 A served usage report contains five safe nonnegative integer counts: prompt,
 output, reasoning, cached prompt, and total. Total equals prompt plus output;
 reasoning is included in output and cached prompt is included in prompt. A
-complete all-zero report is valid. An absent report is not that value. Wire and
-SDK declarations preserve the full report, observed aggregates, missing and
+complete all-zero report is valid. An absent report is not that value. Wire
+declarations preserve the full report, observed aggregates, missing and
 unfinalized counts, and unavailable child durations.
 
 Child rounds and compactions retain their owning scope, including failures and
@@ -696,8 +700,8 @@ its writer before creating chat; every interactive, headless and ACP generation
 therefore meets the same recording obligation. Workspace replay and MCP discovery
 use explicit service initialization without acquiring a session writer or opening
 chat. Hidden memory operations keep their bootstrap owner; UI telemetry suppression
-does not suppress canonical request evidence. Source settings, CLI arguments,
-SDK reservations and daemon feature negotiation expose that single contract.
+does not suppress canonical request evidence. Source settings, CLI arguments
+and daemon feature negotiation expose that single contract.
 
 The final agent image stage runs its installed CLI as UID/GID 1000 through a private
 protocol fixture. The smoke consumes the same fixed Rust launcher argument vector,
@@ -719,14 +723,23 @@ provider settlement, compaction recovery or semantic preservation.
 
 ## Verification scope and remaining limits
 
-CPU-only native package builds and regression tests qualify the browser SDK,
-shared compaction formatter, ACP result recording and delivery, and affected
-persistence and presentation boundaries. Python transformer and manifest checks
-verify exact source reconstruction; Cargo checks cover the harness. These checks
-are separate from live provider or session verification. No model serving,
-provider session, release or GPU workload is needed for this qualification.
+The gates that run are the Rust `cargo test` suites, the client typecheck
+(the CLI build's `tsc --build`), the image's test selection (every patched test
+file and the test beside every patched source file, run with Vitest in its
+package), and the headless qualification (`docker/scripts/check_headless_cli.py`,
+a fake provider driving the real client and certifying its stream). Python
+transformer and manifest checks verify exact source reconstruction. None of
+these needs model serving, a provider session, a release or a GPU, and none is
+live provider or session verification.
 
-Compaction reasoning and child reasoning still appear inline in recorded
+Three points are not verified by any gate. Desktop's suites run under Bun and
+are excluded from the test selection. `is_error` on a displayed tool result is
+display-only and is not bound to the model's input, because nothing the model
+sees depends on it. The browser transcript reader validates record structure
+with Core's pure preparation but does not re-verify record digests; only node
+readers do.
+
+Compaction reasoning and child reasoning appear inline in recorded
 content. Persisting these by reference remains open: a complete change needs a
 stored-content representation, durable encoding through both canonical writers,
 strict reconstruction for model history and exports, and reference-aware daemon
@@ -758,9 +771,8 @@ must coordinate observation admission, per-frame mutation, measurement failure
 and staleness, checked interval arithmetic, and immutable publication. Sampled
 operational readings are distinct from complete session generation accounting.
 That whole lifecycle remains open; the session summary corrections do not close
-it. Fresh CPU-only tests reproduce all ten ring defects. Source review also
-confirms that UI retention drops closed-session observations, nested observation
-objects remain mutable, and optional telemetry catches can suppress admission
+it. Source review also confirms that UI retention drops closed-session
+observations, nested observation objects remain mutable, and optional telemetry catches can suppress admission
 failures. A whole repair needs source-owned observation retention, acknowledged
 channel publication and explicit resource measurement states. CPU qualification
 is feasible; the unimplemented coordinated protocol is the remaining limit.
@@ -791,10 +803,8 @@ can hide an independent cleanup failure. Guards disabled and guards enabled also
 follow different iterator ownership paths. A complete fix must own the stream
 from acquisition through completion, abandonment, cancellation, and pending-read
 settlement, preserving primary and cleanup failures. Strict configuration
-admission does not establish that lifetime contract. CPU-only tests using the
-installed OpenAI SDK and in-memory SSE/ReadableStream sources reproduce hidden
-cancellation failures, unstarted-generator leaks and unjoined pending reads.
-The whole scoped-consumption migration remains unimplemented; it does not require
+admission does not establish that lifetime contract. The whole
+scoped-consumption migration remains unimplemented; it does not require
 live model access to qualify.
 
 ## Manual compaction ownership and presentation
@@ -826,6 +836,7 @@ User and hook directives are supplied whole to exact sizing; no reasoning budget
 output budget, reserve or payload retention rule changes.
 
 The compaction factory satisfies its shared history type while preserving the
-inferred object shape required by canonical recording. Native CLI compilation,
-all formatter cases and held ACP recording/delivery controls qualify this seam.
+inferred object shape required by canonical recording. The client typecheck and
+the image's test selection (every formatter case and the held ACP
+recording/delivery controls) qualify this seam.
 These checks do not establish general extended-session correctness.

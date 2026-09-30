@@ -1,722 +1,113 @@
 # Physical output provenance
 
-The headless terminal producer now reads its output window before emitting a
-success result. If a physical response or logical attempt remains open, both
-JSON output modes emit `error_during_execution` with the open counts, and the
-headless runner takes its exit status and telemetry outcome from that emitted
-error. The native certifier still refuses the incomplete record set; an error
-result makes the failure visible on the live wire but does not make missing
-evidence complete. This behavior follows from source reading and authored
-tests. TypeScript execution, native execution and deployed behavior remain
-unverified pending the owner's gates.
+The response journal keeps the exact HTTP body bytes a provider returned; the
+generation envelope keeps the decoded observations chat built history from.
+They are distinct authorities, and a hash supplied by the same mutable envelope
+cannot prove how one relates to the other. A generation is admitted only when
+its observations are derived again from the recorded bytes of the physical
+request that produced them.
 
-The response journal retains exact HTTP body bytes and the generation envelope
-retains decoded observations used to construct model history. Those are distinct
-authorities. TypeScript root readers now replay OpenAI response bytes through
-the selected decoder and compare raw Chat observations before admission.
-The native, Python and Java readers still bind declared ownership and usage
-without independently establishing that byte-to-observation relation. Native
-and Python source now also count the SDK values available from each retained
-physical response: complete outcomes must claim the exact count, and failed or
-cancelled outcomes cannot claim a value beyond the available prefix. This
-narrows impossible processing claims but does not prove that a particular
-decoded observation, tool argument or usage report came from those values.
-The selected HTTP status and content type also determine that count. The
-pinned OpenAI SDK rejects a non-2xx response before parsing, returns `null`
-for nonstreaming HTTP 204, parses JSON only for its JSON media types, and
-otherwise returns response text as one value, even when empty. A local probe
-executed that installed SDK against JSON, text, absent media type, 204 and
-malformed-JSON responses. The TypeScript replay owner and native and Python
-count sources now use those transport facts. Focused TypeScript parser,
-pipeline, response replay and writer-lease source tests passed; the native
-Rust tests were authored but not run. Neither source tests nor code reading
-prove a deployed provider or native execution; those remain unverified pending
-the owner's gates. The Python
-reader's focused generation and retry suite passed 70 cases after its count
-check was added. The 64 previously failing Python unit cases were traced to
-three stale authored fixtures: an accepted history decision before its
-generation and a missing normalization seed, a Chat seed copied into a utility
-request, and a stale normalized-call ID and generation hash. The fixture owners
-now construct producer-valid evidence while retaining their original usage,
-projection and refusal assertions. All 761 Python unit cases passed in the
-authoring source. This does not qualify the SDK's packaged execution, the
-native certifier, or deployed output.
+## Why the relation must be replayed, not counted
 
-An additional executed probe of the installed OpenAI SDK 5.11 returned a
-JavaScript string for a successful HTTP `text/plain` completion. Source reading
-shows the nonstreaming pipeline records that value after usage inspection and
-before Core conversion; conversion can then fail while `ProviderOutput` retains
-the JSON string in a compaction draw. The native compaction validator formerly
-required every `sdkValuesJson` member to decode to an object, although the v14
-schema requires only a string holding JSON and the SDK can yield a scalar.
-It now checks that each member is decodable JSON without imposing the object
-shape. The authored native fixture pairs the string with a `text/plain`
-physical response and a failed, zero-delivery outcome. That native test has
-not been executed. This removes a false refusal of a truthful failed draw;
-it does not link the draw's declared value to the physical body, which remains
-the larger provenance requirement.
+The OpenAI SDK and the shared converter are stateful. The SDK's SSE reader
+yields a value only after a blank-line boundary (`\n\n`, `\r\r` or
+`\r\n\r\n`), flushes its residual bytes only at transport EOF, drops one
+leading UTF-8 byte-order mark per line, ignores `[DONE]`, and can stop before
+the rest of a body after a parser or caller failure. Its nonstreaming path
+follows HTTP status and media type: a non-2xx response is rejected before
+parsing, HTTP 204 yields `null`, JSON media types go through `Response.json()`
+and any other type returns its text as one value. The converter then suppresses
+cumulative content and reasoning prefixes, splits tagged thinking, buffers
+content behind reasoning, assembles fragmented tool arguments, remaps
+colliding call indices, holds the terminal until the finish reason and usage
+arrive, and can expand one failed value into several diagnostics.
 
-An executed probe of the installed OpenAI SDK 5.11 yielded one JSON value for
-an SSE `data:` line beginning with a UTF-8 byte order mark, including when that
-line followed a completed earlier event. Two consecutive marks at one line's
-start yielded no value. Its line decoder calls a fresh `TextDecoder` for each
-physical line, so each line loses exactly one leading mark. The native value
-counter now removes one mark from each buffered line; the Python counter uses
-`utf-8-sig` for each line; and the TypeScript replay decodes the body while
-retaining marks, then removes one from each line. Focused TypeScript SDK
-differential tests passed for the initial, later and doubled cases, and the
-focused Python generation test module passed 70 cases. Native behavior follows
-from source inspection and an authored Rust test; it remains unverified by
-execution pending the owner's gates. This is SDK value-count parity, not full
-physical-to-generation proof.
+So neither equality of event and observation counts nor presence of bytes in
+the body establishes an observation: a cumulative or fragmented stream has
+fewer observations than events, and a failed conversion leaves recorded events
+that never reached the converter. A cancelled caller is not determined by the
+body either: two cancellations after different deliveries can leave identical
+HTTP, body, end and outcome records. Each response outcome therefore records
+how many SDK values reached conversion and how many decoded outputs the
+pipeline delivered, and the chat's completion records how many it
+incorporated. Replay reads exactly that prefix.
 
-The installed SDK's nonstreaming path calls `Response.json()` for JSON media
-types and `Response.text()` otherwise. An executed local SDK probe on the pinned
-Node 22 runtime accepted JSON bodies with one or two leading UTF-8 byte order
-marks and rejected a third; `Response.text()` likewise removed two marks. The
-TypeScript replay now removes the second mark after `TextDecoder`, and the
-native and Python JSON value counters remove up to two before parsing. The
-focused TypeScript suites passed 36 cases, including actual-SDK comparisons for
-JSON and text marks; the Python generation module passed 72 cases. The native
-source test was authored but not run. These observations establish the pinned
-runtime's parsing boundary, not provider behavior or full generation provenance.
+## The decoder is fixed at dispatch
 
-Generation-envelope counters also require exact numeric interpretation. A
-rehashed envelope could spell an observed count as
-`12.00000000000000001`: Java and native source retain the nonzero fraction,
-while JavaScript and Python floating-point parsing round it to `12` before
-admission. The TypeScript generation reader and Python SDK now refuse a decimal
-whose exact value differs from the safe integer they decoded. A focused Python
-reproducer admitted the rehashed fixture with its prior numeric interpretation
-and refused it with the new one; focused TypeScript and Python source tests
-passed. Java and native behavior is established by reading their decimal
-parsers, not by executing their gates. This closes the numeric interpretation
-gap for safe integer envelope values; it does not prove a generation came from
-the retained physical response bytes.
+Decoding depends on facts the request body does not fully carry: the same
+request and response bytes decode to literal `<think>` text or to separate
+thought and answer parts depending on the tagged-thinking choice. Every
+durable model request therefore carries its selected decode policy: stream
+mode, the model named by the final request body, `strict_tool_calling` and
+`exact_token_counting` (both `const true`), the named tool choice and the
+tagged-thinking rule. Readers require the body's `stream` flag and model to
+match the policy. A generation cannot choose its own decoding profile after
+the fact.
 
-A successful `structured_result` is an exception to matching the terminal
-`result` against visible model text: the headless producer takes the first
-successful `structured_output` tool submission as the terminal value. The
-native certifier and the TypeScript, Python and Java readers now require that
-the terminal value equal the accepted generation's arguments for that returned
-tool call, and that the terminal `result` decode to the same JSON value. An
-executed Python source probe admitted the valid authored stream and refused a
-missing return, failed return, changed value, changed result text and omitted
-structured field. The native, Java and TypeScript code and tests have been
-reviewed as source only; their gates remain unrun. This tightens admission of
-the existing v10 record shape; the producer and resume recording format do not
-change.
+Strict tool calling and exact served usage are the client's one decode mode:
+`validateModelConfig` refuses any route other than the OpenAI-compatible vLLM
+route with both set, and the OpenAI converter has no lenient branch. A
+streamed call the provider served without an ID receives one derived from the
+terminal response ID and parser slot, with collisions against provider IDs in
+the same response resolved deterministically, so replay reproduces it.
 
-The v7 source reproducer at
-`/tmp/codex-output-disposition-review/baseline/REPORT.md` keeps every physical
-request, response byte, processing outcome, history decision and usage total
-unchanged. It changes only `generation_json`, its own hash and the completion
-reference. The Python v7 reader and the TypeScript replay/partial owners admit
-erased, replaced and duplicated accepted text, and a swap between accepted and
-abandoned attempts with equal usage. The accepted SDK view follows the changed
-envelope. Native source has the same missing comparison; native code was not
-executed. This is a certifier and reader defect, not evidence that the backend
-omitted bytes in an ordinary response.
+## Replay
 
-A current v11 Python admission probe at
-`/tmp/codex-stream-probes/current-v11-physical-forgery.py` uses the complete
-`root_accepted` fixture (SHA-256
-`85cfacbb9bbdbc8b8d19813bd801daca2fbbb0659d5e2afe76eb5346a544c319`).
-The original and two rehashed variants all passed the Python reader. One
-variant changed an accepted thought; the other changed visible text and the
-terminal result. Both updated the generation and completion hashes while
-leaving the 827-byte SSE response body and every physical response record
-unchanged (body SHA-256
-`59afe7bb2f0442c4ebcc4c3611e79f69e2e3b799a06fe19025659bc34ed9b2c1`).
-The exact output is retained at
-`/tmp/codex-current-v11-physical-forgery-report.json`. This executed probe
-establishes that the current Python reader still admits this particular
-byte-to-observation contradiction; it does not execute the native or Java
-readers or a deployed provider.
+For each physical response, the verifier parses the stored bytes with the
+pinned SDK's SSE or nonstreaming semantics under the recorded transport end,
+replays the selected converter and pipeline state over the recorded value
+prefix, applies `GenerationObservationNormalizer` from the attempt's recorded
+normalization seed, and compares the complete result with the generation:
+parts, incomplete calls, provider preparation identities, normalized call
+IDs, terminal reason and served usage. A successful empty response is valid.
+Every observation names the final physical request of its attempt; earlier
+retry requests must have delivered nothing. Verification state is one response
+at a time, so long sessions do not accumulate bodies.
 
-The repair must make physical response decoding and generation construction one
-verifiable chain. A verifier must reconstruct provider events from each exact
-recorded body, including SSE frame boundaries and nonstreaming JSON; identify
-which physical retry produced each decoded observation; and check the same
-normalization of thought, text, calls, terminal reasons and served usage that
-the producer applies. Failed and partly decoded responses still retain their
-observed bytes and valid prefixes. A successful empty response is valid, so a
-nonempty-output rule cannot establish this relation. Optional stream partials
-are projections and cannot be made a second output authority. A hash supplied
-by the same mutable generation envelope cannot prove its relation to the body.
+Complete child admission joins the root: a child's generations are verified
+against the physical records in the root journal, which must be the unique
+active or archived parent recording for that child. A missing, ambiguous or
+mismatched root is a refusal.
 
-## Source boundaries the repair must cross
+## Utility work
 
-`ModelResponseRecorder` persists HTTP headers and exact body chunks before the
-OpenAI SDK consumes them. `ModelResponseReplay` now retains the current
-response body until TypeScript admission compares it with decoded observations;
-the Python and native response owners still discard the body after checking
-its byte count and SHA-256. The OpenAI SDK's SSE
-reader parses `data:` frames into JSON values, ignores `[DONE]`, and can stop
-before consuming a remaining body after a parser or caller failure. The
-nonstreaming path follows the HTTP status and media type to return one parsed
-JSON, text or no-content value. A response digest proves the
-retained body, not which of its events reached the converter.
+`GenerationClient` wraps each non-chat call in `UtilityDelivery`. Every
+physical request of the operation carries one operation ID, created before
+`retryWithBackoff`'s attempt loop, and a `utility` owner. The wrapper counts an
+output only when it crosses its return or iterator boundary and records that
+count after the response outcome; a request that returns nothing records zero.
+Readers require the receipt and refuse a count beyond the recorded pipeline
+prefix. A compaction draw's `sdkValuesJson` must equal the values decoded from
+its operation's recorded response bodies, in order, and its converted fields
+are replayed from them.
 
-The converter is stateful. It can suppress cumulative content and reasoning
-prefixes, split tagged thought text, buffer content behind reasoning, assemble
-fragmented tool arguments, remap colliding call indices, and defer terminal
-publication. A generated observation can also be emitted as a diagnostic after
-conversion failure. The frozen baseline invented a `createTime` from the local
-clock when the provider supplied zero or omitted `created`; the current source
-removes that fallback.
-`RequestContext` supplies strict-call behavior, a forced tool name, exact usage
-requirements and provider parsing options. The request body contains some but
-not all of those facts. Source inspection therefore cannot justify a verifier
-that reparses response bytes using only `model_request.body`. The frozen probe
-also found a non-strict streamed tool call without a provider ID received a
-clock-and-random ID. The converter now derives that client ID from the served
-terminal response ID and remapped parser slot, resolving collisions with IDs
-the provider supplied in the same response. Its 252 source converter tests
-passed, including repeated decoding and an ID collision. This removes local
-randomness from that conversion; a verifier must still distinguish the derived
-client ID from a provider-supplied ID.
+The receipt proves delivery across the shared client boundary, not what a
+caller then decided. `PromptHookRunner` races its provider promise against
+timeout and cancellation, so a losing request can finish after the hook has
+returned; a content-retry choice or hook judgement would need evidence from the
+caller that makes it. Compaction records its own draws and acceptance.
 
-A frozen-source probe at `/tmp/codex-physical-decoded-review/baseline/REPORT.md`
-ran the actual OpenAI SDK, selected provider, converter, chat generation owner
-and canonical recording writer/reader against local SSE. The Default and MiniMax
-cases have identical request-body bytes (SHA-256
-`e213bf922d8c7ae881bf88b16fe51fa076fce1b5f0d5c864e4e0a11bdda55508`)
-and identical 540-byte response bodies
-(SHA-256 `a1b129ce98bd6ff0a74e9dbeda67a6b96850c8e363e1af91c4518acbe9a9f476`).
-Default retains literal `<think>` text; MiniMax's tagged-thinking option turns
-it into thought and visible-answer parts. The provider parsing choice is not
-recorded in either physical body. All three fixture cases passed at this
-source boundary; the outer CLI, service certifier and generated wire were not
-executed. The same probe found that provider `created: 0` became a local
-wall-clock `createTime` in the persisted generation. The converter now retains
-`"0"` and leaves an absent provider time absent; its 251 source converter
-tests passed. This only removes one invented metadata field, not the missing
-raw-to-decoded proof.
+## Where each reader stands
 
-The canonical root chat recording also contains physical request/response
-records and generation evidence. Child artifacts copy generation evidence but
-do not carry their own root-owned physical response records. Standalone child
-evidence cannot claim verified raw-to-decoded membership unless it includes the
-required physical proof or is explicitly verified against its root artifact.
-Resume reads the canonical chat recording, not `output/events.jsonl`, so stdout
-admission alone cannot establish resume's output provenance.
+The service certifies a captured stream in two passes over the same bytes. The
+native engine admits every record: it replays request bodies, verifies each
+response's byte count and SHA-256, counts the SDK values each body can yield,
+derives served usage from those values, checks the generation envelope,
+completion, shown rows and displayed inputs, and hashes the exact LF-terminated
+bytes it read. It does not decode chat observations from response bytes.
+`dist/record-verifier.js`, built from the pinned client's converter and
+normalizer, then rereads the file, requires the native-read byte count and
+SHA-256, and replays every generation and compaction draw from its recorded
+responses. The service runs it only for a complete native result and keeps the
+verifier's stated reason in its refusal; a missing verifier is a refusal, not a
+weaker mode.
 
-The child completion check counts a recorded normalization seed until its
-generation and completion have been committed. A child checkpoint and seed
-with no generation therefore cannot pass as a closed artifact. A completed
-child generation also cannot be certified by its self-hash alone: the physical
-request and response remain in the root recording.
+## Stated limits
 
-Complete child admission now performs that join. The child reader validates its
-own history seed, generation and completion, then streams the root's complete
-JSONL prefix through the physical replay verifier. It requires the same seed,
-generation identity, history disposition and completion for each child attempt
-in the root. The TypeScript root reader checks the generation's raw
-observations against the recorded response bytes before the child can be
-called complete. The root file must be the unique
-active or archived parent recording for the child path and session ID; a
-missing, ambiguous or mismatched root is a refusal with a recovery action.
-The virtual child reader checks this before publishing a terminal page, while
-in-flight pages remain live prefixes. A child that ends before a model attempt
-needs no physical generation proof.
-
-Executed source fixtures used the real request pipeline and both canonical
-writers: an unchanged child passed, while a rehashed child answer, a seed
-pointing to another request and a root seed stripped of child placement were
-refused. Async resume and synchronous complete readers accepted a proven child
-when the root had an unterminated tail or was uniquely archived; both refused
-a missing or duplicated root.
-The repeated-call canonical fixture was removed because it substituted
-untracked synthetic decoded chunks after consuming a real SDK response, so it
-never supplied physical proof for its claimed output. The separate observation
-normalizer tests retain its repeated-call behavior. These source tests do not
-establish a packaged client, native or Java behavior, or owner-gate results.
-
-An implementable single authority needs to freeze the effective response decoder
-context at dispatch and bind it to the selected runtime/provider configuration.
-A reader cannot let a mutable generation choose whichever valid profile makes
-its output pass. It must reconstruct the contributing source-event history for
-each observation within its physical request, including events that advance
-converter state without yielding an observation and observations that combine
-several events. A stored one-to-one event pointer is neither required nor a
-correct model of this pipeline. Every output-bearing source event must be
-consumed, suppressed by a defined conversion rule, or outside a proved processed
-prefix. Readers must derive or check the resulting text, thought, tool
-arguments, finish reason and usage from that source, rather than accept an
-unconstrained converter assertion. The root and any independently readable
-child artifact need the same proof. Verification state should be scoped to the
-current physical response and generation, not accumulate all response bodies
-for a long session. The TypeScript source now implements the raw observation
-comparison for its root readers; the remaining readers and normalization
-mapping still need the same proof.
-
-A deterministic source differential test compared the retained-response SSE
-parser with the pinned OpenAI SDK on 1,044 combinations of complete, trailing,
-mixed-newline, malformed and byte-order-mark frames. All three cases passed;
-no parser divergence was observed in that bounded corpus. This supports the
-TypeScript frame boundary used by replay but does not prove converter
-equivalence for every provider value, physical output membership in
-native/Python/Java, or a deployed response.
-
-## Executed event-attribution cases
-
-The focused source run at
-`/tmp/codex-physical-decoded-review/event-attribution/REPORT.md` used the
-installed OpenAI SDK 5.11, the actual request and response recorder, selected
-provider, converter, Chat generation owner and canonical writer/complete reader
-with local in-memory SSE responses. Three cases passed. It did not run the outer
-CLI, native or Java reader, cancellation races, deployed provider or build gates.
-The fixture's pre-conversion observer is at the pipeline boundary, not inside
-the SDK JSON parser; its counts are SDK objects reaching conversion.
-
-| Case | Recorded JSON SSE events | Objects reaching conversion | Generation observations | Consequence |
-| --- | ---: | ---: | ---: | --- |
-| Cumulative reasoning and text | 5 | 5 | 3 | A rewind yields nothing; trailing usage merges into a held terminal. |
-| Fragmented tool arguments | 4 | 4 | 3 | An argument fragment yields nothing, but advances the parser used by the terminal call. |
-| Conversion failure after a prefix | 3 | 2 | 3 | A failing event yields two diagnostics; a later recorded event never reaches conversion. |
-
-The failed response recorded all 1,009 body bytes. The physical transport ended
-cancelled, processing failed and history was abandoned. Its third JSON event
-is in the recorded body but absent from both the pipeline observer and the
-generation. The first two events produced one prefix and two diagnostics. An
-admission rule that equates body presence with converter consumption would
-falsely admit the suffix; one that equates event and observation counts would
-reject valid cumulative and fragmented streams. The deterministic malformed-call
-failure can be replayed to infer this particular stop point. A separate caller
-cancellation case below proves that replay cannot infer every stop point from
-the existing physical records.
-
-The terminal observation in the cumulative case combines text from the fourth
-event and usage from the fifth. The tool-call observation in the fragmented
-case depends on all four events, including one that produced no observation.
-The preparation-only observation has no Parts but is still evidence. Physical
-usage is billed once through the outcome even when a failed generation repeats
-the same cumulative usage in its prefix and diagnostics. These are executed
-source-level facts; they do not establish complete physical-to-decoded
-verification.
-
-## Executed caller-cancellation ambiguity
-
-The source-level reproducer at
-`/tmp/codex-physical-decoded-review/cancellation-boundary/REPORT.md` passed
-with the same SDK, recorder, pipeline, Chat and complete canonical reader. A
-469-byte SSE body contains `A`, `B`, terminal `C` and `[DONE]`. Closing Chat's
-generator after one delivery or after two gives identical physical `http`,
-`body`, `end` and `outcome` events: the whole body is recorded, transport and
-processing are cancelled, and history is abandoned in both. The first closed
-generation retains only `A`; the second retains `A` and `B`. Both are valid
-prefixes. The test compares the actual physical event values and the distinct
-SDK objects that reached conversion, and the capture preserves the exact
-generations and body. It did not exercise a deployed provider, the outer CLI
-or a terminal-holding cancellation race.
-
-The existing body, termination, processing outcome and disposition therefore
-cannot independently determine what a cancelled caller received. The shared
-producer must durably bind its processing progress to the physical response,
-and every admitting reader must check that bound while replaying the exact
-body. Progress must identify the SDK values admitted to conversion and the
-observations delivered to Chat, or an equivalent boundary with those semantics.
-The pipeline can hold a terminal pending EOF and expand a failed conversion
-into diagnostics, so an SDK-object count alone is not established as sufficient.
-This source-level result rules out a body-only replay check for cancellation;
-the producer and reader migration still needs a versioned implementation.
-
-## Executed diagnostic-delivery ambiguity
-
-The local actual-SDK case at
-`/tmp/codex-physical-decoded-review/cancellation-refactor/tests/diagnostic-boundary.test.ts`
-passed against the current authoring source. Its exact capture is retained in
-`docs/design/fixtures/physical-diagnostic-boundary.json`.
-One 1,133-byte SSE body (SHA-256
-`f2ef93330a5a9b1a7ed3976306f4f55961c4934ad2996900b8df3dfd691033c8`)
-contains a valid prefix, a malformed tool-call terminal and an unprocessed
-suffix. Conversion of the second SDK value yields more than one diagnostic.
-The test closes Chat after the first versus second diagnostic. Both runs have
-identical HTTP, body, cancelled end and cancelled outcome evidence, the same
-two SDK values reaching the pipeline, and abandoned history. Their canonical
-generations contain two versus three observations, respectively.
-
-Thus an SDK-value count is also insufficient to determine a cancelled
-generation. The producer needs a separate durable boundary for observations
-Chat actually incorporated, associated with the physical response that yielded
-them. A reader must check both boundaries against replay, including diagnostics
-from one failed source value. This is established by the executed local case;
-native and Python admission, terminal-holding cancellation, the outer CLI and
-deployed provider were not exercised by it.
-
-## Consumer closure follows response processing
-
-History settlement has two valid publication paths. Failed Chat response
-cleanup records `abandoned` immediately after its processing outcome, so that
-decision can precede the attempt's generation. `accepted` is written by
-`ModelResponseRecorder.finishHistory`, which `ChatAttempt.finish` calls after
-attempting generation publication. A failed publication can leave an incomplete
-fragment; a complete accepted attempt has its generation first. The native,
-TypeScript, Python and Java admission paths now refuse
-accepted history before that generation without refusing early abandonment.
-Authored accepted fixtures were moved into this producer order. A Python source
-probe admitted all 24 fixture sets and refused 23 reorderings that put an
-accepted history row before its generation; the native, TypeScript and Java
-tests were authored but not executed here. This ordering check does not prove
-the generation observations came from the physical response bytes.
-
-Source inspection establishes another constraint on where that boundary can be
-recorded. `ContentGenerationPipeline.executeWithErrorHandling` calls
-`responseEvidence.finish({ status: 'completed', error: null })` before it returns
-a nonstreaming result. `BaseLlmClient.generateText` receives that result later
-and only then projects its text, thought, calls, usage and terminal reason. In
-the streaming path it incorporates each yielded chunk into a partial result and
-preserves that partial on failure. `GeminiChat.processStreamResponse` separately
-incorporates yielded chunks into its generation observations and normalizes tool
-identities there. Utility calls and Chat therefore have distinct consumer sites;
-neither a Chat-only marker nor a downstream-consumption count frozen into the
-response `outcome` covers both correctly.
-
-The physical response owner records the count of SDK values admitted to
-conversion and decoded outputs delivered by the pipeline in each response
-outcome. Chat records a separate receipt count after incorporating each output
-into its generation; the attempt completion binds that count to the generation's
-observation count and the outcomes of its physical requests. An accepted
-completion must consume every pipeline output; an abandoned completion can
-retain a shorter prefix when cancellation interrupts delivery. Stream contract v11
-and canonical recording version 13 also require each generation observation to
-name its physical request. The TypeScript and Python source tests exercised the
-counts and per-request attribution, including early cancellation and a conversion
-failure that emits several diagnostics. Native and Java source includes the same
-admission checks but has not been compiled or executed here. At this v11
-checkpoint, a utility consumer still had no corresponding receipt, and these
-counts did not themselves prove that decoded values came from retained bytes.
-
-The utility boundary now has that receipt. `GenerationClient` wraps each
-non-Chat call in `UtilityDelivery`; `ModelRequestJournal.capture` attaches
-every physical OpenAI request with an operation ID and a `utility` owner.
-The pipeline tags each decoded output with its physical request ID. The
-wrapper counts a value only when it crosses its return or iterator boundary,
-then `ModelResponseRecorder.recordUtilityDelivery` persists that count after
-the response outcome. An attached request that returns no output gets a
-zero delivery. The admitting readers require a receipt and refuse a count
-larger than the recorded pipeline output prefix. The service's Qwen verifier
-separately replays that prefix from captured response bytes; a direct
-structural reader alone does not establish conversion from those bytes.
-
-`retryWithBackoff` creates one operation ID before its attempt loop and
-carries it in `RetryAttemptContext`. `UtilityDelivery` uses that ID for each
-physical attempt in the loop; a direct call gets its own ID. This is a
-source-reading conclusion about the current producer and readers, not an
-executed retry or packaged-provider test. It supersedes the earlier
-checkpoint's claim that delivery and a stable retry identity were absent.
-
-The receipt proves delivery across the shared generation-client boundary.
-It does not prove that `BaseLlmClient`, `PromptHookRunner`, ACP generation or
-`GeminiClient` incorporated a returned value into a later decision. For
-example, `PromptHookRunner` races its provider promise against timeout and
-cancellation; a losing request can finish after the hook has returned. A
-content-retry choice, hook judgement or other downstream use needs evidence
-from the caller that makes that choice if the record claims it. Compaction
-has its own draw and acceptance records. The general caller-decision
-relation remains open; it must not be inferred from a response or receipt.
-
-The deployed agent's pinned settings select the OpenAI-compatible local
-vLLM generator, and its network-none runtime admits only the local model
-path. The Qwen package also contains an opt-in `WebSearchTool` that directly
-calls a DashScope Responses endpoint, outside `GenerationClient` and the
-model request journal. That tool is neither enabled by the pinned settings
-nor reachable from the agent's network-none namespace. This source
-inventory does not claim that a standalone Qwen session using WebSearch
-records that side model call. The vLLM backend never receives that DashScope
-request. Other provider generators likewise need evidence at their own
-physical boundaries before wider Qwen coverage can be claimed.
-
-## Decoder proof required at admission
-
-The dispatch owner must bind the selected provider and every effective option
-that affects decoding: strict tool-call handling, forced tool name, exact usage
-handling and tagged-thinking parsing among the current `RequestContext` choices.
-The request JSON cannot supply all of them. The proven Default/MiniMax example
-above has identical request and response bytes but different correct thought
-and text parts. A generation envelope cannot choose its own decoding profile
-after the fact. A changed required wire field needs a new stream-contract and
-canonical-recording identity, with all producers and admitting readers changed
-together. The policy and progress fields use stream contract v11 and canonical
-recording version 13. A source-only migration cannot claim that generated
-bindings or native gates have run.
-
-For each physical response, a verifier must parse the exact stored bytes with
-the pinned SDK's relevant SSE or nonstreaming semantics, replay the selected
-converter and pipeline state, and compare the complete resulting observations
-with the generation that Chat recorded. This includes parser preparations,
-incomplete calls, normalized IDs, terminal holding, usage-only frames and
-failure diagnostics, not just rendered text. It must account for successful
-empty output, retries and failed prefixes without admitting later raw events
-that conversion did not process. The response recorder writes bytes before
-delivering them to the SDK, so its chunk boundary alone cannot prove a consumed
-event prefix. For nonstreaming responses the SDK also has a distinct JSON/text
-path; treating every body as SSE would be unsound.
-
-The live pipeline uses the response decoder module for both nonstreaming
-conversion and streamed conversion with terminal holding and failure-diagnostic
-expansion. The module also exposes the pure served-usage observation applied
-before either conversion path. Before each response attempt the pipeline selects
-a validated JSON-shaped decode policy and creates fresh parser state from it.
-Chat now applies `GenerationObservationNormalizer` to every delivered response;
-that shared routine preserves the raw observation, normalizes tool identities
-against the active history, records preparation mappings and removes executable
-calls from the provisional delivered chunk. The TypeScript root readers now
-replay the selected decoder from retained bytes and compare the raw response,
-incomplete calls and provider preparation identities. Stream contract v11
-records the exact history call-ID set at the Chat normalizer's start boundary.
-The TypeScript root reader replays the same normalizer against the retained
-physical response and that seed. TypeScript logical replay also derives the
-expected duplicate suffixes and generated IDs from the seed before admitting
-a generation, including when it cannot access a physical response. Native,
-Python and Java admission derive those IDs too, but still do not decode
-physical response bytes. These are source-level findings; the v11
-build and native gates remain unrun in this workspace.
-Source inspection narrows the required seed boundary. `processStreamResponse`
-constructs `GenerationObservationNormalizer(this.history)` before consuming
-the response stream, whereas the canonical generation record is committed
-after consumption. `GeminiChat.addHistory` can append a versioned history splice
-while a response is in flight. A reader using the history at the later
-generation record could therefore derive a different duplicate suffix and
-refuse an ordinary valid session. The dispatched OpenAI request is also not a
-substitute: request curation and orphan cleanup can omit IDs still present in
-Chat history. The v11 producer writes that seed before consuming the stream,
-and root canonical admission compares it with replayed history at the same
-record position. Child sidechains compare their local seed with their own
-replayed history; complete child admission also compares it with the root's
-mirrored seed and physically verified generation. The concurrent history-splice
-case has not been executed against a live client.
-An executed source test decoded identical provider content with tagged-thinking
-parsing off and on and obtained the two corresponding part sequences after a
-policy JSON round trip. The earlier converter, pipeline and policy source suites
-passed 443 cases; four local actual-SDK attribution and cancellation cases also
-passed against their authoring source.
-
-The selected policy is now required on every durable model request. The producer
-checks that provider decoration preserved the selected stream mode before
-recording. Request replay requires an explicit boolean `stream` in the exact
-body and the matching policy mode, and evidence rejects an absent, malformed or
-unknown policy. The v11 schema requires the same closed policy shape in stdout,
-Python and Java resources; the canonical runtime file uses version 13.
-Provider decoration can override the final OpenAI request model through
-`extra_body`. The selected response policy now takes its model from that final
-request, and TypeScript, Python, Java, native and fake-provider request readers
-require the retained body's model to equal the policy's model. The producer
-still sends the same request bytes; the relation fixes which model's response
-decoder interprets them for every OpenAI-compatible caller. Focused TypeScript
-source tests, the Python admission suite and the shared harness test exercised
-this binding. The focused 27-case pipeline response suite passed against the
-authoring source. Its progressing-write case holds each body write for half
-the 60-second storage deadline while total storage time exceeds the 240-second
-stream idle guard. The full TypeScript suite was not run for this change.
-Native and Java cases were authored but not executed; the
-model binding alone does not prove decoded observations came from physical
-bytes.
-Canonical files from before that identity lack required evidence; the version 13
-reader refuses them with a matching-client or new-session action. Source reading
-shows that this change adds evidence beside runtime history and does not change
-the conversation parts or their order; complete version 13 resume remains
-unverified pending the owner's gates. The Rust and Java refusal cases were
-authored but not executed. The installed TypeScript
-wire validator is still generated from v5 and rejects `stream_start` before
-these new records; its full-wire tests cannot qualify v11 until the owner's
-generation and build gates run. TypeScript root stream and canonical readers
-now use the selected policy to replay retained bytes and compare raw Chat
-observations. Native, Python and Java admission still need equivalent decoding
-and comparison; the policy binding alone does not provide it.
-
-The completion's physical request membership and each observation's
-`source_request_id` identify the declared retry. The live Chat path only retries
-before a stream is returned; later stream failure ends that attempt. Admission
-therefore requires every observation to name the final physical request and
-requires earlier requests to have delivered no decoded output. This was checked
-against the actual SDK retry test and the TypeScript and Python source readers;
-Java and native implementations remain unexecuted. The rule still does not prove
-that the final request's bytes produced an observation. Replay must derive each
-observation from the processed
-prefix of that response. The accepted Chat history and displayed stream
-projections then need to be checked against
-that replayed generation and their declared disposition. Utility generations
-need a consumer receipt bound to their physical response; complete child
-evidence now depends explicitly on root verification. A self-hash of decoded
-SDK objects is not a substitute. This is one shared proof rule for ordinary and
-long sessions,
-bounded by one response at a time. It belongs at common producer and admission
-boundaries, not in a benchmark profile or a client-only presentation patch.
-
-The implementation must keep one output mode and bounded verification state for
-ordinary and long sessions. The shared client decoding boundary is where the
-observations are created, and every certifier/reader that admits a typed
-generation must verify the physical relation before deriving accepted history.
-The executed local fixtures supply bytes at the HTTP boundary, so they do not
-demonstrate a vLLM omission. Changing backend response content or adding a
-client presentation rule would not fix this admission gap. Canonical resume
-continues to use the separate versioned runtime transcript, but any replay of
-its generation evidence needs verified physical membership before it can claim
-the model's exact output.
-
-The TypeScript verifier passed focused source tests for streamed and nonstreamed
-responses, early cancellation, malformed-call diagnostics and rehashed text or
-body substitutions. A deterministic 600-body local parser probe matched the
-pinned SDK's SSE value boundaries; it is not a proof for every transport shape.
-The real failed-Chat fixture writes abandoned physical history before its
-generation. The canonical TypeScript reader had discarded the response body at
-that history record, so its later physical replay refused a valid session.
-It now retains that closed response until generation verification, or checks and
-releases it when the same attempt issues a retry. The three producer-backed
-session-view source tests and the 63 response-evidence source tests passed; the
-retry test also refused a forged decoded count against the retained body. One
-session-view test now carries an accepted physical generation through a
-post-compaction checkpoint, then compares the exact composed history after
-load, indexed restore and fork. These tests do not establish complete resume
-behavior across every session shape. A broader transcript-reader run failed 89
-cases because its synthetic assistant fixtures omit the required generation
-envelope; those fixtures must use canonical generations before they can serve
-as resume evidence.
-The native result-parse fixture now gives utility requests the required stream
-mode and selected decoder, a complete nonstreaming response body and explicit
-SDK/delivery counts. Its captured Chat branch rebases the normalization seed,
-physical tool-call ID, source request ID, generation, completion and displayed
-tool ID together, then reseals the changed response and generation bytes. The
-terminal result comes from the accepted generation's visible text. A Python
-source reader admitted the intended rebased Chat and utility vectors, and the
-TypeScript physical verifier accepted the rebased Chat bytes and observations.
-These cross-checks exercise the intended vector, not the Rust test helper; no
-native test or build was run, and this fixture repair does not add native
-byte-to-observation admission.
-At this point in the source sequence, the native certifier, Python and Java
-readers, utility consumer receipts and standalone child proof remained open.
-The earlier local rehashed replacement of
-a preparation's normalized ID and its matching call mapping exposed the
-TypeScript logical reader's missing seed derivation. The current source uses
-the live normalizer for that check and has authored prepared and generated-ID
-forgery tests. Its focused TypeScript suite passed 17 cases with the official
-prebuilt Node 22.16.0 runtime; the adjacent logical completion and retained
-response replay suites passed 68 more cases after a stale EOF fixture was
-corrected to use a failed outcome and abandoned history. This
-does not establish the byte-to-observation relation for readers without
-physical response replay. No compiler, native certifier, deployed provider or
-release gate has verified the full repair.
-
-## Provider coverage at the request boundary
-
-The patched Qwen client can select OpenAI-compatible, Qwen OAuth, Anthropic,
-Gemini and Vertex generators. Qwen OAuth inherits the OpenAI generator. In the
-current source, the only production call to `modelRequests.capture` is in the
-OpenAI pipeline. `AnthropicContentGenerator` and `GeminiContentGenerator` build
-their own requests and call their SDKs without admitting a model request or
-attaching a response recorder to `request.chatAttempt`. The shared logging
-wrapper passes the request through; it does not admit one. `GeminiChat` then
-reads `attempt.journalId` while freezing the generation, and `ChatAttempt`
-requires at least one attached physical request. By code inspection, those
-provider paths cannot produce a completed, request-owned chat generation in
-the current implementation. A local source execution passed a provider that
-returned an ordinary source-less response through `GenerationContext.bind()`
-and `generateContent()`; the shared utility wrapper refused it with `decoded
-output has no physical request`. This executes the utility boundary with a
-fake provider, not an Anthropic or Gemini SDK call. The chat-path conclusion
-remains a source-reading inference.
-
-The provider transports do not expose one common interception point in the
-installed SDKs. The Anthropic SDK accepts a custom `fetch` function. The
-Google Gen AI SDK's `ApiClient.apiCall` calls the global `fetch` and its
-`GoogleGenAIOptions` type has no fetch option for this models path. Capturing
-the logical `GenerateContentParameters` before either SDK transforms it would
-claim exact provider bytes that the recorder has not seen. A complete repair
-must admit the actual dispatched body and response at each provider's
-transport boundary, select a provider-specific decoder policy before dispatch,
-and attach every chat retry to the common attempt journal. The journal and
-admitting readers must retain one shared completeness rule while interpreting
-each provider's distinct wire format.
-
-The sealed `agent_service` deployment is narrower than the patched client's
-provider menu. `docker/config/settings.json` enforces `openai` authentication
-and names only its local vLLM provider; `docker/scripts/verify_runtime_contract.py`
-refuses a settings file with any other provider set. An OpenAI response proof
-therefore covers every model session admitted by this deployment, including
-ordinary and long sessions. The other generators remain a separate client
-coverage defect if the patched Qwen package is used outside the sealed service.
-
-This finding also limits the existing physical-output proof plan. A verifier
-for OpenAI SSE is necessary for the vLLM deployment but cannot be described as
-end-to-end proof for Anthropic, Gemini or Vertex. No provider transport, build
-or release gate was run for this section. The source execution above establishes
-the shared utility wrapper's behavior for a source-less result; provider wire
-behavior and the chat-path consequence remain unverified by execution.
-
-## SSE transport-end admission
-
-The pinned OpenAI SDK yields SSE chunks only after `\n\n`, `\r\r`, or
-`\r\n\r\n`. At transport EOF it also yields the remaining bytes and flushes
-its line decoder. If transport fails before EOF, that residual chunk is not
-delivered. A final carriage return in a yielded chunk remains pending until
-another byte or EOF reaches the line decoder. TypeScript replay, the Python
-reader, and native admission now use the recorded termination to apply these
-same boundaries. This is a common record interpretation rule for ordinary and
-long sessions; it does not change provider bytes or model behavior.
-
-Source tests for the authored TypeScript and Python readers passed. A
-deterministic 1,800-body corpus compared their EOF and failed-transport value
-counts with the installed SDK and found zero differences; the corpus includes
-mixed line endings, byte order marks, malformed bytes, and unfinished frames.
-This is evidence for those specific cases, not a proof of all possible byte
-streams or of which values a caller consumed before cancellation. The native
-case is authored and formatted but unexecuted; no build or release gate ran.
-
-## Service physical generation certification
-
-The production service snapshot reader now requires the patched client's
-physical response replay after its native protocol pass has accepted a complete
-stream. The client bundle exposes that existing converter and normalizer as a
-record verifier. It rereads the captured JSONL, checks the same stream contract,
-requires the native-read byte count and SHA-256, and compares each generation's
-observations with those derived from its recorded response. The native pass
-hashes the exact LF-terminated bytes it read; a replacement or append between
-passes cannot satisfy both digests. Verification runs only for a semantically
-complete native result, so live progress reads of incomplete streams retain
-their prior behavior. A missing verifier is a refusal, not a weaker mode.
-
-A source-level verifier test accepted the complete ordinary tool fixture and
-refused a rehashed thought with unchanged response bytes and a changed file
-with a stale digest. The adjacent response replay tests passed. The Rust
-integration refusal case is authored but unexecuted, and the bundle, Docker
-stage, native binary and service image remain unverified pending the owner's
-gates. This service repair applies to every session through the same snapshot
-reader; it does not change model requests or responses.
-
-## SDK physical generation verification
-
-Python and Java SDK process transports now send each exact LF-committed stdout
-record to the matching CLI's stream verifier before returning that record. The verifier
-reuses the Core request/response converter and normalizer through
-`ModelRequestStreamReplay`, acknowledges the line number and SHA-256 of the
-original bytes, and requires stream completion at EOF. Python and Java require
-the same contract digest in the verifier handshake and refuse absent, changed
-or refusing acknowledgments. The ordinary CLI entry point and the service's
-bundled `cli.js` both route this mode to the same source implementation. The
-model request and response are not altered. This applies to ordinary and long
-SDK process sessions alike; no vLLM backend change belongs to this reader
-boundary. A dead Java CLI process cannot be replaced on the same transport
-until its prior record stream completed, so restart cannot discard unread
-evidence.
-
-The streaming Core verifier's six focused source tests passed, including an
-accepted and an abandoned child generation and a rehashed thought that the
-physical response did not produce. The full Python unit suite passed 768
-cases; its transport tests check exact byte acknowledgments before delivery.
-The CLI source suite passed 54 tests after its bundle-entry assertion was
-updated to describe the actual separate CLI and file-verifier entries.
-The Java byte-reader verification hook and its test are established by reading
-only. Java compilation and tests, the CLI bundle, the process-to-process
-integration, native execution and owner gates have not run. Direct construction
-of the Python and Java admission classes outside their SDK process transports
-still lacks this physical verifier and cannot be described as full generation
-certification. Utility consumer receipts remain separate work. Complete child
-admission now requires the root's physical proof as described above.
-
-The standalone `event_certifier` imports the service's `read_event_snapshot`,
-which now calls physical response replay for a structurally certified result.
-Thus the earlier source-level claim that this certifier was independent of the
-physical gate is false. Its executable behavior remains unverified under the
-no-build rule.
+The proof covers the OpenAI-compatible pipeline, the only route the client
+admits for generation. The opt-in `web_search` tool calls a DashScope endpoint
+directly, outside `GenerationClient` and the request journal, so a standalone
+Qwen session using it does not record that side call; the sealed deployment
+neither enables the tool nor can reach that endpoint. Bytes the backend never
+transmitted and parser omissions inside the backend are outside what a client
+record can show.

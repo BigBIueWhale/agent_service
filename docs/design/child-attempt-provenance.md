@@ -1,41 +1,61 @@
-# Preserve the producing attempt through child recording and presentation
+# The producing attempt through child recording and presentation
 
-## Ownership and format
+A child's retried or cancelled draw must stay distinguishable from its
+accepted turn everywhere the child's output is recorded or shown. The client
+decides whether a draw entered history; the backend cannot know, so this
+belongs to the shared client recorders and presentation layers.
 
-This change addresses the shared client recording and presentation of generation attempts. It closes the abandoned-child-retry ambiguity in item 11 of the record-completeness brief. The broader record-completeness goal remains active beyond this change.
+## Origin and canonical records
 
-ChatAttempt owns the immutable model origin `(kind: model, kv_scope, attempt_id)`. GeminiChat passes that exact origin to every complete accepted assistant commit and abandoned generation_failure commit. The canonical recording is version 6; fresh assistant output requires an origin, while explicitly adopted/realtime records do not fabricate a chat attempt. generation_failure is system evidence with its complete parts inside systemPayload and no top-level message. Unknown versions and malformed origins refuse. Shared physical evidence admission rejects duplicate generation origins and generation UUIDs; an accepted or abandoned generation is one complete atomic commit. Non-generation fragmentation retains its existing contract.
+`ChatAttempt` owns the immutable model origin `{kind: "model", kv_scope,
+attempt_id}`. `GeminiChat` passes that exact origin to the accepted assistant
+commit and to every other generation it records; adopted and realtime records
+do not invent a chat attempt. Admission refuses malformed origins and
+duplicate generation origins or identities, and each generation is one
+complete atomic commit. Resume reads the canonical recording under the
+runtime directory, never the live sidecar or the service's stdout copy;
+generations other than accepted ones are evidence and cannot become history.
 
-Resume reads the canonical recording under the runtime directory. It never consumes transient live sidecars or the service's stdout copy. Accepted assistant parts retain their history position and text. Abandoned output remains non-history evidence; required origin metadata does not change resumed content. Canonical readers and recording fixtures use version 7, whose runtime-history checkpoints and edits determine resume state. The separate stdout contract remains version 5, and no request shape or backend behavior changes here.
+## The live sidecar
 
-These are client-owned acceptance, publication and interpretation defects. A backend cannot decide whether Qwen later accepted a draw. The change serves the shared Qwen recorders, direct ACP, daemon/virtual child sessions, TypeScript SDK, CLI exports, webui, and web-shell source consumers. The image builds webui; web-shell checks establish source behavior, not deployment or image adoption. It neither changes nor repairs direct vLLM recording. Backend-owned omissions remain a separate required audit.
+`AgentCore` emits each nonempty text or thought fragment with its origin, run
+ID, round and attempt to `agent-<id>.jsonl.stream`, a transient file with a
+strict version-2 record of exactly those fields. The writer creates it
+exclusively without following symlinks, completes short writes, syncs the file
+and any newly created directories, and latches timer, write and close
+failures. Batching bounds I/O granularity, not output length. Live fragments
+are flushed before the matching canonical commit, and the writer removes only
+its own file, only after every observed attempt has a durable disposition;
+failure or unresolved output keeps the evidence and refuses cleanup.
 
-## Live evidence and failure ownership
+The virtual child reader captures canonical bounds before and after the
+sidecar and retries until identity, size and terminal status are stable
+across that capture. It keeps one live descriptor between refreshes, so an
+unlinked inode cannot be reused before its evidence is drained. Retirement
+requires every observed origin to have its canonical commit, and a partially
+retired record refuses. Pending fragments are matched by exact origin and must
+be literal prefixes of the final canonical text or thought; only missing
+suffixes are emitted.
 
-AgentCore emits each nonempty text/thought fragment with the real origin, run ID, round and attempt. The transient `.jsonl.stream` contract is strict version 2 with exact fields. The shared writer opens exclusively without following symlinks, completes short writes, syncs the file and newly created directory ancestry, and latches timer/write/close failures. Batching bounds I/O granularity, not output length. It flushes live fragments before the corresponding canonical commit and removes only its own matching file after all observed attempts have durable dispositions. Failure or unresolved output preserves evidence and refuses cleanup.
+## Publication and presentation
 
-The virtual reader opens and captures canonical bounds before and after capturing the sidecar. It retries acquisition before changing replay state unless canonical identity/size and terminal status stay stable across that capture. Both public and private snapshot readers use the same captured handles and sizes. One live descriptor remains open between refreshes so an unlinked inode cannot be reused before old evidence is drained. Retirement requires every observed origin to have its canonical commit, and partial retired records refuse. After a fully settled retirement the physical cursor is cleared, so a later sidecar may safely reuse the old inode. Pending fragments are matched by exact origin and checked as literal prefixes of final canonical text/thought. Only missing suffixes are emitted; tools, usage and empty final dispositions remain. Timestamp and round guesses are removed.
+The direct ACP tracker owns one serialized publication queue; listener setup
+rolls back partially installed listeners, and publication, decoding and
+cleanup failures reach the prompt owner instead of becoming successful tool
+results. `AgentCore` publishes served usage per observed attempt, including
+cancelled and abandoned ones, with its origin and disposition.
 
-The direct ACP tracker owns one serialized publication queue. Listener setup rolls back partially installed listeners. Publication, decoding and cleanup failures propagate through Session's prompt owner; they cannot become recoverable successful tool results. AgentCore publishes served usage per observed attempt, including cancellation and abandoned retries, with producing origin and disposition.
+ACP replay marks parts with versioned `qwenGenerationAttempt` metadata. The
+shared reducer applies monotonic disposition checks across usage, thought and
+answer, and refuses contradictory or post-terminal output. Transcript
+compaction merges only equal origins and dispositions. Labels live outside the
+verbatim model text; shared SDK daemon views, CLI exports and browser
+components keep the attribution and show abandoned output separately.
 
-## Presentation and exports
+## Stated limits
 
-ACP replay emits versioned qwenGenerationAttempt metadata on accepted/abandoned parts and a separate empty final text update. Served usage also uses an empty text carrier but is normalized as usage, not text completion: canonical multipart records can carry usage before a tool and more text. The reducer shares monotonic disposition checks across usage, thought and answer, retains final status across kind changes, and refuses contradictory or post-terminal nonempty output. Identical empty final status is idempotent. Its immutable origin index avoids scanning all blocks on ordinary text deltas; retirement of trimmed/rewound blocks prunes the index. Usage remains on an assistant observation attributed to the exact attempt, including a reasoning-only cancellation, because browser totals aggregate assistant usage.
-
-Compaction merges only equal origins and dispositions and preserves each child's text-kind, source-record and status boundaries. An empty terminal ends child slot ownership. It cannot move later pending/final text into an older slot and erase the evidence a reader needs to refuse. Browser adapters keep separate attempts for nested children. Labels live outside verbatim model text. Shared static/terminal SDK exports, CLI Markdown/JSON/JSONL/HTML exports and browser components retain attribution and show abandoned output separately.
-
-Export buffers capture their source UUID/timestamp when created and flush on record changes. Empty usage carriers are retained once by the collector, including reasoning-only and tool-only attempts. Tool normalization does not reconstruct or duplicate generation usage. Multiple projections can share one canonical UUID, so presentation keys include the projection ordinal. The generic shared tool renderer displays short results alongside their operation title.
-
-Standalone Desktop and VSCode legacy aggregation paths still discard attempt metadata. They are not built or shipped by agent_service's Dockerfile (`--cli-only` plus webui), and are not claimed repaired. Deployed channel bridges omit child message chunks; channel renderers subscribe only to textChunk and do not consume the daemon's unattributed thoughtChunk event. A direct subscriber to that unused event still lacks attribution. These limits remain explicit follow-up work; metadata alone does not make those consumers correct.
-
-## Verification
-
-Source tests exercise canonical admission, actual writer/reader reconciliation, resume history, direct ACP publication, SDK transitions and compaction, exports, and mounted browser components. The ordinary, retry, cancellation, zero-usage and absent-usage cases are distinct controls. No test invokes a provider or changes the deployed model.
-
-Permanent runs cover 1,083 core tests for recording, canonical readers, child execution and workflow ownership; the adjacent GeminiChat and AgentCore suites contain 311 and 61 cases. The final CLI run covers 870 cases, including Session failure ownership and 88 virtual-reader cases. The export follow-up covers 26 collector and six normalization cases. The SDK run covers 359 cases, ACP replay/compaction 189, web-shell 145 and webui eight. These are focused source checks, not a full repository test or packaged application claim.
-
-The independent test engineer reproduced writer/admission failures, direct ACP failures, browser/compaction/export failures, and file-retirement races before checking the corrections. Four retirement defects reproduce against a frozen reader: false shrink after inode reuse, silent first-fragment loss, and retired partial tails with and without prior observation. The correction passes 41 distinct independent reader cases. Same-inode tests alter reader stat identity only after proving the old descriptor has closed; bytes, writes and canonical replay remain real. Independent browser controls include actual ordinary/retry/cancel traces, both attempts' exact served totals, multipart text/tool/text, source UUID/timestamp and rendered output. Export follow-up reproduces omitted usage and duplicate usage from the old normalizer using actual canonical writer/reader paths; its final 43-case run preserves every reported attempt’s five counters once through collection, normalization and JSON/JSONL/HTML, with missing usage still missing.
-
-Full core no-emit TypeScript checking reports zero diagnostics. CLI, SDK and web-shell checks compare the candidate with the sealed baseline under identical source aliases: no new diagnostics; existing source-only environment and baseline diagnostics are not claimed fixed. CLI fixture return types remove 24 baseline diagnostics. SOURCE_DATE_EPOCH is fixed at 1786725153. No build, package output, release, deployment, push, provider/GPU or container operation is performed.
-
-The authoritative landmark stage and reviewed diff must describe exactly the same final source. Integration includes the canonical-version fake providers, the existing 35 semantic concerns, authenticated manifest and stack lock, a fresh application of the pinned upstream archive, complete final-file identity comparison and all derived protocol-binding comparisons. The release-owned build-input and release locks remain untouched. Release and final-image qualification belong to the owner.
+Standalone Desktop and the VS Code legacy aggregation paths discard
+attempt metadata; the service image does not build or ship them. Channel
+bridges omit child message chunks, and the daemon's `thoughtChunk` event
+carries no attribution, so a direct subscriber to it cannot tell attempts
+apart.
