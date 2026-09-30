@@ -509,7 +509,13 @@ def _validate_exact_tokens_after(state: State) -> None:
         content,
         (
             "OwnedGenerationRequest as GenerateContentParameters",
-            "countRequestTokens?(",
+            # Every generator counts exactly: both counts are required members
+            # of the interface, so a generator that cannot count does not
+            # typecheck rather than being refused when it is asked.
+            "  countRequestTokens(\n    request: GenerateContentParameters,\n"
+            "    userPromptId: string,\n  ): Promise<ExactRequestTokenCount>;",
+            "  countTextTokens(\n    request: TextTokenCountRequest,\n"
+            "    userPromptId: string,\n  ): Promise<ExactRequestTokenCount>;",
             "config.authType !== AuthType.USE_OPENAI",
             "config.exactTokenCounting !== 'vllm'",
             "config.strictToolCalling !== true",
@@ -653,13 +659,18 @@ def _validate_stream_commit_after(state: State) -> None:
             "  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';",
             "choice.finish_reason !== callTerminal &&",
             "choice.finish_reason !== 'length'",
-            "JSON.parse(toolCall.function.arguments)",
-            "tool arguments are not an object",
-            "typeof toolCall.function.arguments !== 'string'",
+            # A call's arguments are read by one rule on both transports: the
+            # served text parsed once, which must be an object; an empty or
+            # non-string one states none and is refused.
+            "import { parseToolCallArguments } from './streamingToolCallParser.js';",
+            "          typeof served === 'string'\n"
+            "            ? parseToolCallArguments(served)\n"
+            "            : undefined;",
             "Model response completed the tool branch without a tool call.",
             "toolCallParser.hasInvalidToolCallIndex()",
             "toolCallParser.hasConflictingToolCallIdentity()",
-            "toolCallParser.hasInvalidToolCallArguments()",
+            "        ? toolCallParser.getCompletedToolCalls()\n",
+            "      endedToolCalls === undefined;",
             # Strict completion is the only decode mode: a streamed call is
             # complete only on its terminal, identified and, when forced, named.
             "    const completedToolCalls =\n"
@@ -732,12 +743,23 @@ def _validate_stream_commit_after(state: State) -> None:
             "getBufferedToolCalls(): IncompleteToolCall[] {",
             "name: this.toolCallMeta.get(index)?.name ?? null,",
             "arguments: this.buffers.get(index) ?? '',",
+            "export function parseToolCallArguments(",
+            "const args = parseToolCallArguments(buffer);",
         ),
         label=label,
     )
+    # No buffer is repaired anywhere in the parser: a call's arguments are
+    # its buffer parsed once, and a stopped call's are the buffer exactly as
+    # it arrived, not even parsed.
+    for rewrite in ("safeJsonParse", "jsonrepair", "+ '\"'"):
+        _require(
+            rewrite not in parser_source,
+            f"{label}: {parser} uses {rewrite!r}; a call's arguments are its "
+            "buffer as served, parsed once and never repaired.",
+        )
     buffered = parser_source[parser_source.index("getBufferedToolCalls(): IncompleteToolCall[] {"):]
     buffered = buffered[: buffered.index("\n  }\n")]
-    for rewrite in ("JSON.parse", "safeJsonParse", "trim()", "+ '\"'"):
+    for rewrite in ("JSON.parse", "trim()"):
         _require(
             rewrite not in buffered,
             f"{label}: {parser} getBufferedToolCalls uses {rewrite!r}; the "
@@ -1582,7 +1604,6 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         ),
         "packages/core/src/core/geminiChat.test.ts": (
             "gives every turn the same room, whatever its prompt",
-            "refuses when the request cannot be counted at all",
             "resamples one invalid pre-content stream",
             "never resamples an invalid stream after visible output escaped",
             "refuses a draw its limit stopped: publishes its terminal, keeps none of it and issues nothing more",
@@ -1593,6 +1614,11 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "maps maxRetries zero to one outer establishment attempt",
             "literal-with-structure",
         ),
+        # A generator that cannot count is not one: the typecheck refuses it.
+        "packages/core/src/core/contentGenerator.test.ts": (
+            "has no generator that cannot count exactly",
+            "// @ts-expect-error countRequestTokens and countTextTokens are required",
+        ),
         "packages/core/src/services/chatCompressionService.test.ts": (
             "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
             "rejects unusable summary output",
@@ -1601,7 +1627,6 @@ def _validate_behavioral_evidence_after(state: State) -> None:
         ),
         "packages/core/src/core/baseLlmClient.test.ts": (
             "uses the authoritative tokenizer and forwards the identical rendered-request options",
-            "fails closed when exact counting is required but the generator lacks it",
             "returns the terminal streaming finish reason",
         ),
         "packages/core/src/core/openaiContentGenerator/converter.test.ts": (
@@ -2073,6 +2098,8 @@ def _validate_compaction_event_after(state: State) -> None:
     # One projection carries each draw's verbatim output and measured size,
     # and the exact committed history separately. Main and child sessions
     # use the same fields; an empty-slot rendering cannot stand in for either.
+    # The committed history travels beside the accounting, never in it, so
+    # the accounting has no field that a writer must strip or a reader add.
     _require_all(
         state,
         turn,
@@ -2082,7 +2109,11 @@ def _validate_compaction_event_after(state: State) -> None:
             "export function toCompactionRecord(",
             "succeeded: info.compressionStatus === CompressionStatus.COMPRESSED,",
             "ServerGeminiChatCompactionEvent",
-            "postCompactionHistory: info.postCompactionHistory ?? null,",
+            "export interface SettledCompaction {",
+            "readonly committedHistory: readonly Content[] | null;",
+            "}: SettledCompaction): CompactionRecord {",
+            "postCompactionHistory: committedHistory,",
+            "readonly compaction: SettledCompaction,",
             "sdkValuesJson: readonly string[];",
             "newTokenCount: number | null;",
             "snapshotBytes: number | null;",
@@ -2114,16 +2145,19 @@ def _validate_compaction_event_after(state: State) -> None:
         "private historyRevision = Symbol()",
         "this.installHistory(replacedHistory, true)",
         "historyRevision !== this.historyRevision",
-        "COMPRESSION_FAILED_HISTORY_CHANGED", "delete info.postCompactionHistory",
+        "COMPRESSION_FAILED_HISTORY_CHANGED",
         "options?.precomputedEffectiveTokens?.historyRevision",
     ), label=label)
+    for path in (turn, chat, "packages/core/src/core/model-request-evidence.ts"):
+        forbid_text(state, path, "info.postCompactionHistory", label=label)
     _require_ordered(_source(state, chat, label=label), (
         "const historyRevision =",
         "`${promptId}:compaction-input`",
         "historyRevision !== this.historyRevision",
         "service.compress(this, {",
         "const historyChanged = historyRevision !== this.historyRevision",
-        "info.postCompactionHistory = structuredClone(committedHistory);",
+        "const compaction: SettledCompaction = {",
+        "? Object.freeze([...committedHistory])",
         "const commit = this.chatRecordingService.recordChatCompression({",
         "this.pendingCheckpoint = previousHistory;",
         "this.history = committedHistory;",
@@ -2184,7 +2218,7 @@ def _validate_compaction_event_after(state: State) -> None:
     )
     _require(
         chat_source.count(
-            "if (compressionInfo.compressionStatus !== CompressionStatus.NOOP) {"
+            "if (compaction.info.compressionStatus !== CompressionStatus.NOOP) {"
         )
         == 1,
         f"{label}: {chat} no longer reports failed pre-stream compactions",
@@ -4695,7 +4729,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "            promptTokensForClamp + turnOutputLimit(partition) >\n            partition.window",
             "maxOutputTokens: turnOutputLimit(partition),",
             "} else {",
-            "compressionInfo = await this.tryCompress(",
+            "compaction = await this.tryCompress(",
         ),
         label=label,
         location=chat,
@@ -5929,7 +5963,7 @@ def _validate_compaction_accounting_after(state: State) -> None:
     ), label=label)
     _require_ordered(_source(state, "packages/core/src/core/geminiChat.ts", label=label), (
         "await candidate.afterCommit()",
-        "throw new CompactionFinalizationError(info, error)",
+        "throw new CompactionFinalizationError(compaction, error)",
     ), label=label, location="packages/core/src/core/geminiChat.ts")
     _require_all(
         state,
@@ -7965,7 +7999,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
         (
             "assertToolResponsesBounded(\n            userContent.parts ?? [],\n            partition.inlineBlockBytes,\n          );",
             "const effectiveTokens = await countExactRequestTokens(",
-            "compressionInfo = await this.tryCompress(",
+            "compaction = await this.tryCompress(",
         ),
         label=label,
         location=chat,
@@ -9397,8 +9431,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "Cannot present partial Qwen history for session",
     ), label=label)
     # A runtime without the history extension is refused; no standard-load
-    # fallback presents history the runtime did not admit.
-    for retired in ("response.updates.filter(isRecord)", "useStandardLoad", "legacyOnly", "historyCollectors"):
+    # fallback presents history the runtime did not admit, and every reader
+    # of a loaded session's transcript is handed the admitted records rather
+    # than reading the file again unverified.
+    for retired in ("response.updates.filter(isRecord)", "useStandardLoad", "legacyOnly", "historyCollectors",
+                    "transcriptRecords ??", "transcriptRecords?:"):
         forbid_text(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts",
                     retired, label=label)
     _require_all(state, "packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts", (
@@ -9432,26 +9469,29 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     # The record shapes are structural and live in the pure module canonical
     # readers share. A compaction's committed composition is stored once, as
-    # compressedHistory: a canonical record carrying a second copy is refused,
-    # and both writers strip the in-memory copy the stream record carries.
+    # compressedHistory, and its info is read as a closed field set: a
+    # canonical record carrying a second copy, or any other field its
+    # accounting does not have, is refused. The writers store the payload as
+    # given, since the accounting has no field for a copy.
     _require_all(state, core + "services/runtime-history-records.ts", (
         "export interface RuntimeHistoryState", "imagePayloads: StoredImagePayload[]",
         "export type RuntimeHistoryCommit",
         "history: value['compressedHistory'],",
-        "if (info['postCompactionHistory'] !== undefined)",
-        "compaction record repeats its committed composition outside compressedHistory",
+        "} satisfies Record<keyof ChatCompressionInfo, true>),",
+        "(field) => !COMPACTION_INFO_FIELDS.has(field),",
+        "its committed composition is stored once, as compressedHistory",
         "export function requireRuntimeConversationContent(",
         "requireRuntimeConversationContent(value, 'model')",
     ), label=label)
     _require_all(state, core + "services/chatRecordingService.ts", (
-        "export function storedCompressionPayload(",
-        "const { postCompactionHistory: _committed, ...info } =",
-        "info: Omit<ChatCompressionInfo, 'postCompactionHistory'>;",
-        "systemPayload: storedCompressionPayload(payload),",
+        "  info: ChatCompressionInfo;",
+        "      subtype: 'chat_compression',\n      systemPayload: payload,",
     ), label=label)
     require_text(state, core + "agents/agent-transcript.ts",
-                 "recordSystem('chat_compression', () => storedCompressionPayload(record));",
+                 "recordSystem('chat_compression', () => record);",
                  label=label)
+    for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
+        forbid_text(state, path, "storedCompressionPayload", label=label)
     _require_all(state, core + "services/session-api-history.ts", (
         "add(commit: RuntimeHistoryCommit)",
         "record.subtype === 'runtime_history'", "record.historyLength!",
@@ -10283,7 +10323,8 @@ def _validate_manual_compaction_after(state: State) -> None:
     # A NOOP attempted nothing, so it has no compaction record; every outcome
     # is reported by the runtime answer.
     _require_ordered(manual, ("if (info.compressionStatus !== CompressionStatus.NOOP) {",
-        "adapter.emitSystemMessage(", "'compaction'", "toCompactionRecord(info)",
+        "adapter.emitSystemMessage(", "'compaction'",
+        "toCompactionRecord({ info, committedHistory })",
         "recordRuntimeOperation(", "emitFinalAssistantMessage"),
         label=label, location="headless command event")
     _require_all(state, cli + "acp-integration/session/Session.ts", (
