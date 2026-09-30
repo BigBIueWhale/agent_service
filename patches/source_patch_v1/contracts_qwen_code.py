@@ -3349,6 +3349,19 @@ def _validate_literal_response_after(state: State) -> None:
         label="one model-part sequence for recording and live history",
         location=chat_path,
     )
+    # Upstream's two redactions stay removed, and fidelity to upstream is not
+    # a reason to restore them. The approved-plan redaction replaces the
+    # model's own `plan` argument with runtime pointer text in live history
+    # and again when history is loaded; the structured_output redaction
+    # replaces a call's arguments in the on-disk record. Both substitute
+    # runtime text into the model's own call -- the class of rewrite the model
+    # imitated in 20 of 26 later writes when a finished write's content was
+    # displaced by a pointer. Neither can fire in the service's deployment in
+    # any case: the fixed argv's `--strict-tools` list gates out both
+    # exit_plan_mode and structured_output, `--approval-mode=yolo` never
+    # enters plan mode, no `--json-schema` is passed, and the service has no
+    # resume operation. These five names are every definition and call site
+    # upstream gives the two redactions, all in these two files.
     for symbol in (
         "redactStructuredOutputArgsForRecording",
         "redactApprovedPlansFromLoadedHistory",

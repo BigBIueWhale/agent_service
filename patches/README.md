@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `04b5eed41a8be6a9f536de8d7a2a348350f777711e32fc5e82bff78ad1970cb2`
+- Review-diff SHA-256: `8a6eee4d63eb79c8917a96e3f79b7f2a82d414ae1a0df4fbbcb1dc7be6579e7a`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `bd1631dc59842b62b6544eb48e8ae0d7071ce8f2b48ccce6aaf3cdd06e5e0cc7`
+- Transformer-manifest SHA-256: `c06bd819f4fe3d0aac6dbe6dd2a7e35b37207949685816b949fae52f6c7df5da`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -325,13 +325,20 @@ out the block it asks for, with nothing escaped, and its `all_user_messages`
 holds the retained original inputs verbatim, as the parts they are, so their
 provenance survives the next compaction. The block is bounded at acceptance with
 that element empty; the inputs are bounded where they were submitted. The history a compaction
-commits is composed in upstream's order: the startup context, the snapshot with
-its resume trailer as a user message, a standalone acknowledgement in upstream's
-words before attachments, the attachments -- the state reminders, each block set
-off from the next -- as one user message, then the carried turn. When nothing is
-attached, the carried model turn answers the snapshot directly. Its parts are
-kept whole and unchanged, reasoning included; runtime words never prefix them.
-With no carried turn, a standalone acknowledgement answers the snapshot.
+commits opens with the startup context and the snapshot with its resume trailer
+as a user message. When there are attachments -- the state reminders, each block
+set off from the next, as one user message -- a standalone acknowledgement in
+upstream's words stands between the snapshot and them and the carried turn
+follows: upstream's four-message order. The headless deployment attaches
+nothing (plan mode cannot be entered under its fixed argv, and foreground-only
+subagents leave none running at a compaction), so there the carried model turn
+answers the snapshot directly, and that is not upstream's shape: upstream folds
+the carried turn into its acknowledgement and keeps only its calls, deleting the
+model's reasoning and text, and an acknowledgement placed before the turn would
+reach the server fused onto the model's text, because the converter joins
+consecutive assistant messages with nothing between. The carried turn's parts
+are kept whole and unchanged, reasoning included; runtime words never prefix
+them. With no carried turn, a standalone acknowledgement answers the snapshot.
 The trailer is upstream's own, word for word. The carried turn follows the
 snapshot in time as well as in the history -- the snapshot is the state as of
 the prompt that turn was issued against, and the turn is the step taken next --

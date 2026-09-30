@@ -237983,7 +237983,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
          },
        };
      }
-@@ -512,616 +476,737 @@
+@@ -512,616 +476,756 @@
          // client.ts) — keep it consistent.
          const merged = result?.getAdditionalContext();
          if (merged && merged.trim().length > 0) {
@@ -237997,9 +237997,22 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
          }
        } catch (err) {
 -        config.getDebugLogger().warn(`PreCompact hook failed: ${err}`);
--      }
--    }
--
++        config
++          .getDebugLogger()
++          .warn(`PreCompact hook failed; preserving original history: ${err}`);
++        return {
++          newHistory: null,
++          info: {
++            originalTokenCount,
++            newTokenCount: originalTokenCount,
++            compressionStatus:
++              CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++            rejectedAttempts,
++          },
++        };
+       }
+     }
+ 
 -    // A tool result is still pending when automatic compaction runs before
 -    // sendMessageStream commits the current user turn to chat history. Include
 -    // it in the side-query so Anthropic-compatible providers see it immediately
@@ -238031,7 +238044,15 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -    const systemInstruction = buildCompressionSystemPrompt(
 -      opts.customInstructions,
 -      hookExtraInstructions,
--    );
++    // The prompt the last turn was issued against, rendered as that request
++    // was, and the turn recorded after it. The prompt was admitted below the
++    // compaction trigger when it was issued, so the request that summarises
++    // it has its room whatever the turn went on to generate; the turn itself
++    // is never part of what this request carries, and `partitionContextWindow`
++    // shows why it cannot be.
++    const split = chat.renderIssuedTurnSplit(
++      config.getEffectiveInputModalities(),
+     );
 -
 -    // Guard: if the compaction model's context window is too small for the
 -    // slimmed payload, fall back to the main model for this compression only.
@@ -238072,20 +238093,65 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -          effectiveCompactionModel = config.getModel();
 -        }
 -      }
--    }
--
++    if (!split) {
++      config
++        .getDebugLogger()
++        .warn(
++          '[chat-compression] refusing: no turn has been issued against this history, so there is no issued prompt to summarise.',
++        );
++      return {
++        newHistory: null,
++        info: {
++          originalTokenCount,
++          newTokenCount: originalTokenCount,
++          compressionStatus:
++            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          rejectedAttempts,
++        },
++      };
+     }
++    const issuedPrompt = split.prompt;
++    let turn = split.turn;
+ 
 -    const abortSignal = signal ?? new AbortController().signal;
 -    abortSignal.throwIfAborted();
 -    const runColdCompression = () => {
 -      const slim = getColdInput();
 -      if (slim.stats.imagesStripped > 0 || slim.stats.documentsStripped > 0) {
++    // A manual compaction can begin after a confirmed tool call whose result
++    // was lost. Close that transaction with an explicitly unknown outcome
++    // before the turn is carried forward. Cancellation is not rollback, so
++    // the closure must never tell the model to blindly retry the operation.
++    let closure: Content | undefined;
++    const trailing = turn.at(-1);
++    if (
++      compactTrigger === 'manual' &&
++      trailing?.role === 'model' &&
++      trailing.parts?.some((part) => part.functionCall)
++    ) {
++      const functionCalls = trailing.parts
++        .map((part) => part.functionCall)
++        .filter((call) => call !== undefined);
++      if (functionCalls.some((call) => !call.id)) {
          config
            .getDebugLogger()
 -          .debug(
 -            `[chat-compression] slimmed ${slim.stats.imagesStripped} image(s) ` +
 -              `and ${slim.stats.documentsStripped} document(s) from side-query payload`,
--          );
--      }
++          .warn(
++            '[chat-compression] refusing manual compaction: a trailing confirmed tool call has no id and cannot be closed safely.',
+           );
++        return {
++          newHistory: null,
++          info: {
++            originalTokenCount,
++            newTokenCount: originalTokenCount,
++            compressionStatus:
++              CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++            rejectedAttempts,
++          },
++        };
+       }
 -      return runSideQuery(config, {
 -        purpose: 'chat-compression',
 -        skipOutputLanguagePreference: true,
@@ -238113,15 +238179,13 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -                text: COMPRESSION_REQUEST_DIRECTIVE,
 -              },
 -            ],
-+          .warn(`PreCompact hook failed; preserving original history: ${err}`);
-+        return {
-+          newHistory: null,
-+          info: {
-+            originalTokenCount,
-+            newTokenCount: originalTokenCount,
-+            compressionStatus:
-+              CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+            rejectedAttempts,
++      closure = {
++        role: 'user',
++        parts: functionCalls.map((call) => ({
++          functionResponse: {
++            id: call.id!,
++            name: call.name ?? 'unknown',
++            response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
            },
 -        ],
 -        // Compression output is bounded by maxOutputTokens to guarantee a predictable
@@ -238136,7 +238200,17 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -        promptId,
 -      });
 -    };
--
++        })),
++      };
++      turn = [...turn, closure];
++    }
++    // What the next request carries before compaction: the whole curated
++    // history, plus the closure when one was added. It is what the exact
++    // original count measures and what the file restores are chosen from.
++    const historyBeforeCompaction = closure
++      ? [...curatedHistory, closure]
++      : curatedHistory;
+ 
 -    let summaryResult: GenerateTextResult | undefined;
 -    let usedCacheSharing = false;
 -    const sharedRequestText =
@@ -238148,22 +238222,18 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      originalTokenCount + (chat.getLastOutputTokenCount?.() ?? 0);
 -    const sharedDirectiveTokenCount = Math.ceil(
 -      sharedRequestText.length / CHARS_PER_TOKEN,
-+        };
-+      }
-+    }
-+
-+    // The prompt the last turn was issued against, rendered as that request
-+    // was, and the turn recorded after it. The prompt was admitted below the
-+    // compaction trigger when it was issued, so the request that summarises
-+    // it has its room whatever the turn went on to generate; the turn itself
-+    // is never part of what this request carries, and `partitionContextWindow`
-+    // shows why it cannot be.
-+    const split = chat.renderIssuedTurnSplit(
-+      config.getEffectiveInputModalities(),
++    const systemInstruction = buildCompressionSystemPrompt(
++      opts.customInstructions,
++      hookExtraInstructions,
      );
 -    const usesMainModel = effectiveCompactionModel === config.getModel();
--    const providerSupportsCacheSharing =
--      supportsCompressionCacheSharing(config);
++    const abortSignal = signal ?? new AbortController().signal;
++    abortSignal.throwIfAborted();
++    // Compaction runs on the session's model, so the shared prompt-cache
++    // prefix is the session's own; what is left to establish is that the
++    // provider preserves it and that the counts are exact.
+     const providerSupportsCacheSharing =
+       supportsCompressionCacheSharing(config);
 -    // The anchor must be provider-reported, not merely non-zero: an
 -    // estimate-derived count misses the ~15-20K system/tools overhead the
 -    // shared request actually carries, so `sharedRequestFits` could approve
@@ -238296,11 +238366,13 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -      compressionUsageMetadata?.promptTokenCount;
 -    let compressionOutputTokenCount =
 -      compressionUsageMetadata?.candidatesTokenCount;
--    if (
+     if (
 -      compressionOutputTokenCount === undefined &&
 -      typeof compressionUsageMetadata?.totalTokenCount === 'number' &&
 -      typeof compressionInputTokenCount === 'number'
--    ) {
++      !providerSupportsCacheSharing ||
++      contentGeneratorConfig.exactTokenCounting !== 'vllm'
+     ) {
 -      compressionOutputTokenCount = Math.max(
 -        0,
 -        compressionUsageMetadata.totalTokenCount - compressionInputTokenCount,
@@ -238311,16 +238383,29 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -        summary,
 -        slimmingConfig.imageTokenEstimate,
 -      );
-+    if (!split) {
++      const reason = !providerSupportsCacheSharing
++        ? 'the active provider cannot preserve the main prompt-cache prefix'
++        : 'exactTokenCounting=vllm is not active';
        config
          .getDebugLogger()
          .warn(
 -          `[chat-compression] compression side-query omitted usage metadata; ` +
 -            `using local estimate for summary output token count ` +
 -            `(${compressionOutputTokenCount}).`,
--        );
--    }
--
++          `[chat-compression] refusing alternate compaction mode: ${reason}.`,
+         );
++      return {
++        newHistory: null,
++        info: {
++          originalTokenCount,
++          newTokenCount: originalTokenCount,
++          compressionStatus:
++            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
++          rejectedAttempts,
++        },
++      };
+     }
+ 
 -    // Defensive guard: if the dedicated side-query hit
 -    // COMPACT_MAX_OUTPUT_TOKENS, the summary is likely truncated mid-content
 -    // and unsafe to persist. Drop it and surface as a failure so the
@@ -238329,351 +238414,6 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -    // trying after MAX_CONSECUTIVE_FAILURES strikes rather than burn an API
 -    // call on every send. Reactive overflow still catches the catastrophic
 -    // case. See docs/design/auto-compaction-threshold-redesign.md risk #2.
--    //
--    // TODO(finish_reason): the current `>= cap` check is a heuristic that
--    // false-positives on legitimate summaries that happen to land exactly at
--    // the cap. The proper signal is `finish_reason === 'length'` (OpenAI) /
--    // `MAX_TOKENS` (Gemini), but `runSideQuery` doesn't surface it today.
--    // Plumb it through and tighten this guard when that's available.
--    if (
--      !usedCacheSharing &&
--      !isSummaryEmpty &&
--      typeof compressionOutputTokenCount === 'number' &&
--      compressionOutputTokenCount >= COMPACT_MAX_OUTPUT_TOKENS
--    ) {
--      config
--        .getDebugLogger()
--        .warn(
--          `[chat-compression] summary output reached the ` +
--            `COMPACT_MAX_OUTPUT_TOKENS cap (${COMPACT_MAX_OUTPUT_TOKENS}); ` +
--            `dropping potentially-truncated result. This counts as a ` +
--            `compression failure for the per-chat circuit breaker.`,
--        );
--      return {
--        newHistory: null,
--        info: {
--          originalTokenCount,
--          newTokenCount: originalTokenCount,
--          // Distinct from EMPTY_SUMMARY so telemetry / logs can tell a
--          // prompt-quality failure (empty summary → tune prompt / splitter)
--          // apart from a capacity failure (output cap hit → raise cap or
--          // shrink splitter input). isCompressionFailureStatus() treats both
--          // as failures so the persistence behaviour is unchanged. (R5.2)
--          compressionStatus:
--            CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
--        },
--      };
--    }
--
--    let newTokenCount = originalTokenCount;
--    let extraHistory: Content[] = [];
--    let canCalculateNewTokenCount = false;
--
--    if (!isSummaryEmpty) {
--      // Manual /compress has no pending functionResponse, so a trailing
--      // model+functionCall is an ORPHAN (e.g. an interrupted/cancelled tool
--      // call). Preserving it emits model[functionCall] immediately followed
--      // by the next user TEXT turn, which the API rejects (a functionCall
--      // must be followed by its functionResponse). Strip it for manual;
--      // auto-compaction keeps it because the pending functionResponse pairs
--      // with it (trailingFunctionCallContent).
--      const lastCurated = curatedHistory[curatedHistory.length - 1];
--      const historyForCompose =
--        compactTrigger === 'manual' &&
--        lastCurated?.role === 'model' &&
--        lastCurated.parts?.some((p) => !!p.functionCall)
--          ? curatedHistory.slice(0, -1)
--          : curatedHistory;
--
--      // Use the new composer — assembles summary + ack + file restores +
--      // image restore. No tail preservation, no continuation bridge.
--      try {
--        extraHistory = await composePostCompactHistory(
--          historyForCompose,
--          summary,
--          {
--            workspaceRoot: config.getTargetDir(),
--            signal,
--            maxFiles: tuning.maxRecentFiles,
--            maxImages: tuning.maxRecentImages,
--            // Restore plan-mode reminder + running-subagent snapshot so the
--            // post-compact agent does not lose either piece of mid-session
--            // state. Both reduce to no-ops when the corresponding source is
--            // empty.
--            planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
--            runningSubagents: collectActiveSubagents(config),
--          },
--        );
--      } catch (err) {
--        // The summary side-query already succeeded; only restoration
--        // assembly (disk I/O, history walking) failed. Degrade to
--        // summary + ack rather than letting the throw escape to
--        // sendMessageStream — an uncaught error there crashes the active
--        // turn AND bypasses the COMPRESSION_FAILED breaker. The summary
--        // still reduces context, so this is a degraded success, not a
--        // compression failure.
--        config
--          .getDebugLogger()
--          .warn(`[chat-compression] composePostCompactHistory failed: ${err}`);
--        // Fold a trailing model+functionCall into the ack so a pending
--        // functionResponse (auto-compaction mid-tool-loop) keeps its matching
--        // call — otherwise the next request has an orphaned functionResponse
--        // → 400. (Manual orphans were already stripped above.) Folding into
--        // the ack avoids a model→model adjacency.
--        const trailingFc = historyForCompose[historyForCompose.length - 1];
--        const fcParts =
--          trailingFc?.role === 'model'
--            ? (trailingFc.parts ?? []).filter((p) => !!p.functionCall)
--            : [];
--        // Re-apply the SAME plan-mode + subagent reminders the normal path
--        // injects. These builders are pure (no disk I/O / history walking),
--        // so the failure that took out composePostCompactHistory can't take
--        // them out too — and dropping them here would silently lose plan-mode
--        // enforcement and the subagent roster on the degraded path.
--        const reminderParts = buildStateReminderParts({
--          planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
--          runningSubagents: collectActiveSubagents(config),
--        });
--        extraHistory = [
--          {
--            role: 'user',
--            parts: [{ text: postProcessSummary(summary) }, ...reminderParts],
--          },
--          {
--            role: 'model',
--            parts: [
--              { text: 'Got it. Thanks for the additional context!' },
--              ...fcParts,
--            ],
--          },
--        ];
--      }
--
--      // Best-effort token math using model-reported token counts when
--      // available. Some OpenAI-compatible providers omit usage for the
--      // compression side-query; in that case, fall back to the same local
--      // content estimator used by the auto-compaction gate so a valid summary
--      // can still shrink the history instead of failing with a token-count
--      // error.
--      //
--      // The cache-sharing request also includes the main system and tools, so
--      // its input count cannot isolate visible history with a fixed subtraction;
--      // that path uses the local visible-history delta below. On the cold path,
--      // compressionInputTokenCount includes the entire compression
--      // system prompt (the <state_snapshot> instructions, ~900 tokens) PLUS
--      // the short kick-off user turn ("First, reason in your <analysis>
--      // block. Then, produce the <state_snapshot> XML.", ~20 tokens) — the
--      // "approx. 1000 tokens" subtracted below is for that combined fixed
--      // overhead, not for any single instruction.
--      // compressionOutputTokenCount reflects the raw model response (i.e.
--      // <analysis> + <state_snapshot>); the <analysis> block is stripped
--      // by postProcessSummary before the summary enters history, so the
--      // real cost in newHistory is slightly lower than this count
--      // suggests. We accept that inaccuracy in favor of avoiding local
--      // token estimation.
--      if (
--        !usedCacheSharing &&
--        typeof compressionInputTokenCount === 'number' &&
--        compressionInputTokenCount > 0 &&
--        typeof compressionOutputTokenCount === 'number' &&
--        compressionOutputTokenCount > 0
--      ) {
--        canCalculateNewTokenCount = true;
--        const compressedHistoryTokenCount = Math.max(
--          0,
--          compressionInputTokenCount - 1000 - pendingToolResultTokenCount,
--        );
--        newTokenCount = Math.max(
--          0,
--          originalTokenCount -
--            compressedHistoryTokenCount +
--            compressionOutputTokenCount,
--        );
--        // The composer injects file-restoration blocks (up to
--        // maxRecentFiles × 5K tokens) and an image-restoration block (up to
--        // maxRecentImages images) that are NOT in
--        // compressionOutputTokenCount. Estimate their cost locally so the
--        // inflation guard below fires when attachments dominate the
--        // post-compact size.
--        const restorationChars = extraHistory
--          .slice(2) // skip [summary, model ack]
--          .reduce(
--            (acc, c) =>
--              acc + estimateContentChars(c, slimmingConfig.imageTokenEstimate),
--            0,
--          );
--        newTokenCount += Math.ceil(restorationChars / CHARS_PER_TOKEN);
--      } else {
--        const estimatedOriginalVisibleTokenCount = estimateContentTokens(
--          curatedHistory,
--          slimmingConfig.imageTokenEstimate,
--        );
--        const estimatedNewVisibleTokenCount = estimateContentTokens(
--          extraHistory,
--          slimmingConfig.imageTokenEstimate,
--        );
--        if (
--          estimatedOriginalVisibleTokenCount > 0 &&
--          estimatedNewVisibleTokenCount > 0
--        ) {
--          const estimatedNonVisibleTokenCount = Math.max(
--            0,
--            originalTokenCount - estimatedOriginalVisibleTokenCount,
--          );
--          // Keep the API-reported system/tool/prompt remainder intact. The
--          // local estimator is only used for the visible conversation delta, so
--          // missing usage metadata cannot replace the authoritative total with
--          // a much smaller visible-history-only estimate.
--          newTokenCount =
--            estimatedNonVisibleTokenCount + estimatedNewVisibleTokenCount;
--          canCalculateNewTokenCount = true;
--          config
--            .getDebugLogger()
--            .debug(
--              `[chat-compression] ${
--                usedCacheSharing
--                  ? 'cache-sharing token accounting'
--                  : 'usage metadata missing'
--              }; estimated ` +
--                `post-compression token count by preserving the ` +
--                `API-reported non-visible remainder ` +
--                `(${estimatedNonVisibleTokenCount}) and replacing the ` +
--                `visible-history estimate (${estimatedOriginalVisibleTokenCount} -> ` +
--                `${estimatedNewVisibleTokenCount}).`,
--            );
--        }
--      }
--    }
--
--    logChatCompression(
--      config,
--      makeChatCompressionEvent({
--        tokens_before: originalTokenCount,
--        tokens_after: newTokenCount,
--        compression_input_token_count: compressionInputTokenCount,
--        compression_output_token_count: compressionOutputTokenCount,
--        cache_sharing_attempted: canShareCache,
--        cache_sharing_used: usedCacheSharing,
--      }),
--    );
--
--    if (isSummaryEmpty) {
--      return {
--        newHistory: null,
--        info: {
--          originalTokenCount,
--          newTokenCount: originalTokenCount,
--          compressionStatus: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
--        },
--      };
--    } else if (!canCalculateNewTokenCount) {
-+          '[chat-compression] refusing: no turn has been issued against this history, so there is no issued prompt to summarise.',
-+        );
-       return {
-         newHistory: null,
-         info: {
-           originalTokenCount,
-           newTokenCount: originalTokenCount,
-           compressionStatus:
--            CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
-+            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+          rejectedAttempts,
-         },
-       };
--    } else if (newTokenCount > originalTokenCount) {
-+    }
-+    const issuedPrompt = split.prompt;
-+    let turn = split.turn;
-+
-+    // A manual compaction can begin after a confirmed tool call whose result
-+    // was lost. Close that transaction with an explicitly unknown outcome
-+    // before the turn is carried forward. Cancellation is not rollback, so
-+    // the closure must never tell the model to blindly retry the operation.
-+    let closure: Content | undefined;
-+    const trailing = turn.at(-1);
-+    if (
-+      compactTrigger === 'manual' &&
-+      trailing?.role === 'model' &&
-+      trailing.parts?.some((part) => part.functionCall)
-+    ) {
-+      const functionCalls = trailing.parts
-+        .map((part) => part.functionCall)
-+        .filter((call) => call !== undefined);
-+      if (functionCalls.some((call) => !call.id)) {
-+        config
-+          .getDebugLogger()
-+          .warn(
-+            '[chat-compression] refusing manual compaction: a trailing confirmed tool call has no id and cannot be closed safely.',
-+          );
-+        return {
-+          newHistory: null,
-+          info: {
-+            originalTokenCount,
-+            newTokenCount: originalTokenCount,
-+            compressionStatus:
-+              CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+            rejectedAttempts,
-+          },
-+        };
-+      }
-+      closure = {
-+        role: 'user',
-+        parts: functionCalls.map((call) => ({
-+          functionResponse: {
-+            id: call.id!,
-+            name: call.name ?? 'unknown',
-+            response: { error: ORPHAN_TOOL_USE_REPAIR_REASON },
-+          },
-+        })),
-+      };
-+      turn = [...turn, closure];
-+    }
-+    // What the next request carries before compaction: the whole curated
-+    // history, plus the closure when one was added. It is what the exact
-+    // original count measures and what the file restores are chosen from.
-+    const historyBeforeCompaction = closure
-+      ? [...curatedHistory, closure]
-+      : curatedHistory;
-+
-+    const systemInstruction = buildCompressionSystemPrompt(
-+      opts.customInstructions,
-+      hookExtraInstructions,
-+    );
-+    const abortSignal = signal ?? new AbortController().signal;
-+    abortSignal.throwIfAborted();
-+    // Compaction runs on the session's model, so the shared prompt-cache
-+    // prefix is the session's own; what is left to establish is that the
-+    // provider preserves it and that the counts are exact.
-+    const providerSupportsCacheSharing =
-+      supportsCompressionCacheSharing(config);
-+    if (
-+      !providerSupportsCacheSharing ||
-+      contentGeneratorConfig.exactTokenCounting !== 'vllm'
-+    ) {
-+      const reason = !providerSupportsCacheSharing
-+        ? 'the active provider cannot preserve the main prompt-cache prefix'
-+        : 'exactTokenCounting=vllm is not active';
-+      config
-+        .getDebugLogger()
-+        .warn(
-+          `[chat-compression] refusing alternate compaction mode: ${reason}.`,
-+        );
-       return {
-         newHistory: null,
-         info: {
-           originalTokenCount,
--          newTokenCount,
-+          newTokenCount: originalTokenCount,
-           compressionStatus:
--            CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
-+            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
-+          rejectedAttempts,
-         },
-       };
--    } else {
--      // Fire PostCompact event after successful compression
-+    }
-+
 +    const generationConfig = {
 +      ...chat.getGenerationConfig(),
 +      ...opts.requestGenerationConfig,
@@ -238706,6 +238446,36 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    // snapshot is what lets the engine hold the sections to their
 +    // declared shape while it decodes, and forcing it by name is what keeps
 +    // the answer to that one call rather than to any declared tool.
+     //
+-    // TODO(finish_reason): the current `>= cap` check is a heuristic that
+-    // false-positives on legitimate summaries that happen to land exactly at
+-    // the cap. The proper signal is `finish_reason === 'length'` (OpenAI) /
+-    // `MAX_TOKENS` (Gemini), but `runSideQuery` doesn't surface it today.
+-    // Plumb it through and tighten this guard when that's available.
+-    if (
+-      !usedCacheSharing &&
+-      !isSummaryEmpty &&
+-      typeof compressionOutputTokenCount === 'number' &&
+-      compressionOutputTokenCount >= COMPACT_MAX_OUTPUT_TOKENS
+-    ) {
++    // The shape is kept although it costs the draw the conversation's cached
++    // prefix. The served template renders the tool declarations before the
++    // history -- the vendor's own order, so reordering them would be a
++    // divergence and would still leave the declarations first -- and a tool
++    // cannot be forced without being declared: the backend refuses that in
++    // its request validator, in XGrammar's tool-choice normalisation and in
++    // its Qwen structural-tag builder. Declaring the snapshot on every turn
++    // instead would cost about 558 tokens of the static preamble on every
++    // request and put a tool upstream does not have in front of the model on
++    // every turn. What it would buy is small: in the measured long run the
++    // draws spent their wall time decoding, not prefilling, and a shared
++    // prefix would have saved about 4 minutes of a 116-minute draw budget; a
++    // redraw under the same scope already matched 176,800 of its 177,689
++    // prompt tokens. If the prefix ever matters, the one candidate is
++    // upstream's own draw shape -- the turn's tools unchanged, tool choice
++    // none, and the call constrained by a structural tag the client sends --
++    // which is untested here and must first be proved by a backend unit test
++    // that the tag holds the answer to one snapshot call.
 +    const turnTools = generationConfig.tools ?? [];
 +    const requestOptions = {
 +      model: sessionModel,
@@ -238830,24 +238600,55 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      // history, directive and window refuse the same way every time. Nothing
 +      // a fresh sample could produce changes it, so it is named and stops here
 +      // rather than being resampled.
-+      config
-+        .getDebugLogger()
-+        .warn(
+       config
+         .getDebugLogger()
+         .warn(
+-          `[chat-compression] summary output reached the ` +
+-            `COMPACT_MAX_OUTPUT_TOKENS cap (${COMPACT_MAX_OUTPUT_TOKENS}); ` +
+-            `dropping potentially-truncated result. This counts as a ` +
+-            `compression failure for the per-chat circuit breaker.`,
 +          `[chat-compression] compaction preflight refused: ${String(error)}`,
-+        );
-+      return {
-+        newHistory: null,
-+        info: {
+         );
+       return {
+         newHistory: null,
+         info: {
+-          originalTokenCount,
+-          newTokenCount: originalTokenCount,
+-          // Distinct from EMPTY_SUMMARY so telemetry / logs can tell a
+-          // prompt-quality failure (empty summary → tune prompt / splitter)
+-          // apart from a capacity failure (output cap hit → raise cap or
+-          // shrink splitter input). isCompressionFailureStatus() treats both
+-          // as failures so the persistence behaviour is unchanged. (R5.2)
 +          originalTokenCount: exactOriginalTokenCount,
 +          newTokenCount: exactOriginalTokenCount,
-+          compressionStatus:
+           compressionStatus:
+-            CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
 +            CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +          rejectedAttempts,
 +          tokenMeasurements,
-+        },
-+      };
-+    }
-+
+         },
+       };
+     }
+ 
+-    let newTokenCount = originalTokenCount;
+-    let extraHistory: Content[] = [];
+-    let canCalculateNewTokenCount = false;
+-
+-    if (!isSummaryEmpty) {
+-      // Manual /compress has no pending functionResponse, so a trailing
+-      // model+functionCall is an ORPHAN (e.g. an interrupted/cancelled tool
+-      // call). Preserving it emits model[functionCall] immediately followed
+-      // by the next user TEXT turn, which the API rejects (a functionCall
+-      // must be followed by its functionResponse). Strip it for manual;
+-      // auto-compaction keeps it because the pending functionResponse pairs
+-      // with it (trailingFunctionCallContent).
+-      const lastCurated = curatedHistory[curatedHistory.length - 1];
+-      const historyForCompose =
+-        compactTrigger === 'manual' &&
+-        lastCurated?.role === 'model' &&
+-        lastCurated.parts?.some((p) => !!p.functionCall)
+-          ? curatedHistory.slice(0, -1)
+-          : curatedHistory;
 +    // What one candidate produced, beside the transition's declared ceiling.
 +    type AttemptAccounting = Omit<CompactionRejectedAttempt, 'status'>;
 +    const drawOperationId = (result: GenerateTextResult): string => {
@@ -238920,16 +238721,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    ): Promise<AttemptOutcome> => {
 +      let summaryResult: GenerateTextResult;
 +      let summaryUsage: ServedUsage;
-       try {
--        const postCompactTrigger =
--          compactTrigger === 'manual'
--            ? PostCompactTrigger.Manual
--            : PostCompactTrigger.Auto;
--        // Pass the stripped summary (Finding 8a) so hook consumers see
--        // the same text that lands in history — not the raw side-query
--        // output with the <analysis> scratchpad still attached. The
--        // resume trailer is NOT included; it is wrapper decoration for
--        // the next agent turn, not state for downstream consumers.
++      try {
 +        summaryResult = await compactionDrawContext.run(true, () =>
 +          config.getBaseLlmClient().generateText({
 +            ...sideQueryOptions,
@@ -239073,7 +238865,9 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          accounting,
 +        };
 +      }
-+
+ 
+-      // Use the new composer — assembles summary + ack + file restores +
+-      // image restore. No tail preservation, no continuation bridge.
 +      // The startup context opens the new history as it opened the old one:
 +      // kept whole, never summarized and rebuilt, so the candidate counted
 +      // below is the request the next turn sends, and nothing after this
@@ -239085,20 +238879,72 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      const startupContext = chat.getStartupContext();
 +      let extraHistory: Content[];
 +      let renderedSnapshot: string;
-+      try {
+       try {
+-        extraHistory = await composePostCompactHistory(
+-          historyForCompose,
+-          summary,
 +        const composed = composePostCompactHistory(
 +          historyBeforeCompaction,
 +          acceptance.snapshot,
-+          {
-+            planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
-+            runningSubagents: collectActiveSubagents(config),
+           {
+-            workspaceRoot: config.getTargetDir(),
+-            signal,
+-            maxFiles: tuning.maxRecentFiles,
+-            maxImages: tuning.maxRecentImages,
+-            // Restore plan-mode reminder + running-subagent snapshot so the
+-            // post-compact agent does not lose either piece of mid-session
+-            // state. Both reduce to no-ops when the corresponding source is
+-            // empty.
+             planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
+             runningSubagents: collectActiveSubagents(config),
 +            turn,
-+          },
-+        );
-+        extraHistory = [
+           },
+         );
+-      } catch (err) {
+-        // The summary side-query already succeeded; only restoration
+-        // assembly (disk I/O, history walking) failed. Degrade to
+-        // summary + ack rather than letting the throw escape to
+-        // sendMessageStream — an uncaught error there crashes the active
+-        // turn AND bypasses the COMPRESSION_FAILED breaker. The summary
+-        // still reduces context, so this is a degraded success, not a
+-        // compression failure.
+-        config
+-          .getDebugLogger()
+-          .warn(`[chat-compression] composePostCompactHistory failed: ${err}`);
+-        // Fold a trailing model+functionCall into the ack so a pending
+-        // functionResponse (auto-compaction mid-tool-loop) keeps its matching
+-        // call — otherwise the next request has an orphaned functionResponse
+-        // → 400. (Manual orphans were already stripped above.) Folding into
+-        // the ack avoids a model→model adjacency.
+-        const trailingFc = historyForCompose[historyForCompose.length - 1];
+-        const fcParts =
+-          trailingFc?.role === 'model'
+-            ? (trailingFc.parts ?? []).filter((p) => !!p.functionCall)
+-            : [];
+-        // Re-apply the SAME plan-mode + subagent reminders the normal path
+-        // injects. These builders are pure (no disk I/O / history walking),
+-        // so the failure that took out composePostCompactHistory can't take
+-        // them out too — and dropping them here would silently lose plan-mode
+-        // enforcement and the subagent roster on the degraded path.
+-        const reminderParts = buildStateReminderParts({
+-          planModeActive: config.getApprovalMode?.() === ApprovalMode.PLAN,
+-          runningSubagents: collectActiveSubagents(config),
+-        });
+         extraHistory = [
+-          {
+-            role: 'user',
+-            parts: [{ text: postProcessSummary(summary) }, ...reminderParts],
+-          },
+-          {
+-            role: 'model',
+-            parts: [
+-              { text: 'Got it. Thanks for the additional context!' },
+-              ...fcParts,
+-            ],
+-          },
 +          ...(startupContext ? [startupContext] : []),
 +          ...composed,
-+        ];
+         ];
 +        renderedSnapshot = composed[0]!
 +          .parts!.map((part) => part.text ?? '')
 +          .join('');
@@ -239116,12 +238962,81 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          status: CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +          accounting,
 +        };
-+      }
-+
+       }
+ 
+-      // Best-effort token math using model-reported token counts when
+-      // available. Some OpenAI-compatible providers omit usage for the
+-      // compression side-query; in that case, fall back to the same local
+-      // content estimator used by the auto-compaction gate so a valid summary
+-      // can still shrink the history instead of failing with a token-count
+-      // error.
+-      //
+-      // The cache-sharing request also includes the main system and tools, so
+-      // its input count cannot isolate visible history with a fixed subtraction;
+-      // that path uses the local visible-history delta below. On the cold path,
+-      // compressionInputTokenCount includes the entire compression
+-      // system prompt (the <state_snapshot> instructions, ~900 tokens) PLUS
+-      // the short kick-off user turn ("First, reason in your <analysis>
+-      // block. Then, produce the <state_snapshot> XML.", ~20 tokens) — the
+-      // "approx. 1000 tokens" subtracted below is for that combined fixed
+-      // overhead, not for any single instruction.
+-      // compressionOutputTokenCount reflects the raw model response (i.e.
+-      // <analysis> + <state_snapshot>); the <analysis> block is stripped
+-      // by postProcessSummary before the summary enters history, so the
+-      // real cost in newHistory is slightly lower than this count
+-      // suggests. We accept that inaccuracy in favor of avoiding local
+-      // token estimation.
+-      if (
+-        !usedCacheSharing &&
+-        typeof compressionInputTokenCount === 'number' &&
+-        compressionInputTokenCount > 0 &&
+-        typeof compressionOutputTokenCount === 'number' &&
+-        compressionOutputTokenCount > 0
+-      ) {
+-        canCalculateNewTokenCount = true;
+-        const compressedHistoryTokenCount = Math.max(
+-          0,
+-          compressionInputTokenCount - 1000 - pendingToolResultTokenCount,
+-        );
+-        newTokenCount = Math.max(
+-          0,
+-          originalTokenCount -
+-            compressedHistoryTokenCount +
+-            compressionOutputTokenCount,
+-        );
+-        // The composer injects file-restoration blocks (up to
+-        // maxRecentFiles × 5K tokens) and an image-restoration block (up to
+-        // maxRecentImages images) that are NOT in
+-        // compressionOutputTokenCount. Estimate their cost locally so the
+-        // inflation guard below fires when attachments dominate the
+-        // post-compact size.
+-        const restorationChars = extraHistory
+-          .slice(2) // skip [summary, model ack]
+-          .reduce(
+-            (acc, c) =>
+-              acc + estimateContentChars(c, slimmingConfig.imageTokenEstimate),
+-            0,
+-          );
+-        newTokenCount += Math.ceil(restorationChars / CHARS_PER_TOKEN);
+-      } else {
+-        const estimatedOriginalVisibleTokenCount = estimateContentTokens(
+-          curatedHistory,
+-          slimmingConfig.imageTokenEstimate,
+-        );
+-        const estimatedNewVisibleTokenCount = estimateContentTokens(
 +      let newTokenCount: number;
 +      try {
 +        const candidateCount = await measured('candidate', () => chat.countRequestTokensForCandidateHistory(
-+          extraHistory,
+           extraHistory,
+-          slimmingConfig.imageTokenEstimate,
+-        );
+-        if (
+-          estimatedOriginalVisibleTokenCount > 0 &&
+-          estimatedNewVisibleTokenCount > 0
+-        ) {
+-          const estimatedNonVisibleTokenCount = Math.max(
+-            0,
+-            originalTokenCount - estimatedOriginalVisibleTokenCount,
 +          opts.pendingUserMessage,
 +          `${promptId}:post-compact`,
 +          opts.requestGenerationConfig,
@@ -239129,8 +239044,29 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        if (candidateCount.maxModelLen !== contextLimit) {
 +          throw new Error(
 +            `candidate /tokenize max_model_len=${candidateCount.maxModelLen}, expected ${contextLimit}`,
-+          );
-+        }
+           );
+-          // Keep the API-reported system/tool/prompt remainder intact. The
+-          // local estimator is only used for the visible conversation delta, so
+-          // missing usage metadata cannot replace the authoritative total with
+-          // a much smaller visible-history-only estimate.
+-          newTokenCount =
+-            estimatedNonVisibleTokenCount + estimatedNewVisibleTokenCount;
+-          canCalculateNewTokenCount = true;
+-          config
+-            .getDebugLogger()
+-            .debug(
+-              `[chat-compression] ${
+-                usedCacheSharing
+-                  ? 'cache-sharing token accounting'
+-                  : 'usage metadata missing'
+-              }; estimated ` +
+-                `post-compression token count by preserving the ` +
+-                `API-reported non-visible remainder ` +
+-                `(${estimatedNonVisibleTokenCount}) and replacing the ` +
+-                `visible-history estimate (${estimatedOriginalVisibleTokenCount} -> ` +
+-                `${estimatedNewVisibleTokenCount}).`,
+-            );
+         }
 +        newTokenCount = candidateCount.totalTokens;
 +        accounting.newTokenCount = newTokenCount;
 +      } catch (error) {
@@ -239147,8 +239083,20 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          status: CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
 +          accounting,
 +        };
-+      }
-+
+       }
+-    }
+ 
+-    logChatCompression(
+-      config,
+-      makeChatCompressionEvent({
+-        tokens_before: originalTokenCount,
+-        tokens_after: newTokenCount,
+-        compression_input_token_count: compressionInputTokenCount,
+-        compression_output_token_count: compressionOutputTokenCount,
+-        cache_sharing_attempted: canShareCache,
+-        cache_sharing_used: usedCacheSharing,
+-      }),
+-    );
 +      if (newTokenCount >= exactOriginalTokenCount) {
 +        return {
 +          kind: 'resampleable',
@@ -239182,14 +239130,32 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +          newTokenCount,
 +        };
 +      }
-+
-+      return {
+ 
+-    if (isSummaryEmpty) {
+-      return {
+-        newHistory: null,
+-        info: {
+-          originalTokenCount,
+-          newTokenCount: originalTokenCount,
+-          compressionStatus: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
+-        },
+-      };
+-    } else if (!canCalculateNewTokenCount) {
+       return {
+-        newHistory: null,
+-        info: {
+-          originalTokenCount,
+-          newTokenCount: originalTokenCount,
+-          compressionStatus:
+-            CompressionStatus.COMPRESSION_FAILED_TOKEN_COUNT_ERROR,
+-        },
 +        kind: 'accepted',
 +        accounting,
 +        extraHistory,
 +        renderedSnapshot,
 +        newTokenCount,
-+      };
+       };
+-    } else if (newTokenCount > originalTokenCount) {
 +    };
 +
 +    // The bound is on draws, not on wall time, and it is the bound every
@@ -239228,9 +239194,13 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      // names which rule was failed last; `rejectedAttempts` carries what the
 +      // draws before it already spent, and `output` is absent exactly when the
 +      // last of them never issued a request.
-+      return {
-+        newHistory: null,
-+        info: {
+       return {
+         newHistory: null,
+         info: {
+-          originalTokenCount,
+-          newTokenCount,
+-          compressionStatus:
+-            CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
 +          originalTokenCount: exactOriginalTokenCount,
 +          newTokenCount: outcome.newTokenCount ?? exactOriginalTokenCount,
 +          compressionStatus: outcome.status,
@@ -239239,8 +239209,20 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +            ? { output: accountingFor(outcome.accounting) }
 +            : {}),
 +          rejectedAttempts,
-+        },
-+      };
+         },
+       };
+-    } else {
+-      // Fire PostCompact event after successful compression
+-      try {
+-        const postCompactTrigger =
+-          compactTrigger === 'manual'
+-            ? PostCompactTrigger.Manual
+-            : PostCompactTrigger.Auto;
+-        // Pass the stripped summary (Finding 8a) so hook consumers see
+-        // the same text that lands in history — not the raw side-query
+-        // output with the <analysis> scratchpad still attached. The
+-        // resume trailer is NOT included; it is wrapper decoration for
+-        // the next agent turn, not state for downstream consumers.
 +    }
 +
 +    const { extraHistory, newTokenCount, renderedSnapshot } = outcome;
@@ -254395,17 +254377,18 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
  }): Part[] {
    const parts: Part[] = [];
    if (options.planModeActive) {
-@@ -766,89 +210,74 @@
+@@ -766,89 +210,92 @@
      const snap = buildSubagentSnapshotPart(options.runningSubagents);
      if (snap) parts.push(snap);
    }
    return parts;
  }
  
+-export async function composePostCompactHistory(
 +/**
 + * Assemble the complete post-compact history from the pre-compact
 + * `history`, the snapshot the side-query model declared, and the turn the
-+ * snapshot does not cover, in the order upstream composes one:
++ * snapshot does not cover:
 + *
 + *   1. The snapshot with its resume trailer, as a user message, the retained
 + *      original inputs verbatim in its `all_user_messages`: that element is
@@ -254419,12 +254402,29 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 + *      call, when one was added). It is what the next request's pending user
 + *      content pairs with.
 + *
-+ * A carried model turn answers the snapshot directly when nothing is attached.
-+ * Its reasoning, visible text, calls and part boundaries are model output;
-+ * composing runtime context cannot add to or rewrite any of them. This also
-+ * keeps model turns alternating with user messages without a synthetic prefix.
++ * With attachments this is upstream's four-message order. Without them a
++ * carried model turn answers the snapshot directly, and that is deliberately
++ * not upstream's shape. Upstream folds the carried turn into its
++ * acknowledgement and keeps only the turn's calls, deleting the model's
++ * reasoning and visible text -- a rewrite of the model's own output. Nor can
++ * an acknowledgement stand before the carried turn: the OpenAI converter
++ * merges consecutive assistant messages and joins their text with nothing
++ * between (`mergeConsecutiveAssistantMessages`), so the server would receive
++ * the acknowledgement fused onto the model's own text. Its reasoning, visible
++ * text, calls and part boundaries are model output; composing runtime context
++ * cannot add to or rewrite any of them.
++ *
++ * Nothing is attached in the headless deployment, so this is the only shape a
++ * compaction there commits: plan mode cannot be entered under
++ * `--approval-mode=yolo` and `--strict-tools`, and `--foreground-agents-only`
++ * leaves no subagent running while a compaction runs. Adopting upstream's
++ * four-message shape for it would take a user message between the
++ * acknowledgement and the carried turn -- an attachment that does not exist,
++ * so runtime text invented to hold the turns apart -- or a converter that
++ * keeps adjacent assistant messages apart, which the served template renders
++ * as two assistant turns the model never produced. Either changes the request
++ * the model reads; neither is a matter of how the history is recorded.
 + */
--export async function composePostCompactHistory(
 +export function composePostCompactHistory(
    history: Content[],
 -  summary: string,
@@ -254436,20 +254436,25 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -    signal,
 -    maxFiles = POST_COMPACT_MAX_FILES_TO_RESTORE,
 -    maxImages = POST_COMPACT_MAX_IMAGES_TO_RESTORE,
--    planModeActive,
--    runningSubagents,
++): Content[] {
++  const { planModeActive, runningSubagents, turn = [] } = options;
++
++  const reminderParts = buildStateReminderParts({
+     planModeActive,
+     runningSubagents,
 -  } = options;
 -
 -  // Workspace-boundary filter on the extracted file paths (Finding 4).
 -  const filePaths = extractRecentFilePaths(history, maxFiles).filter((p) =>
 -    isInsideWorkspace(p, workspaceRoot),
--  );
++  });
++  const attachments: Part[] = reminderParts.flatMap((part, index) =>
++    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],
+   );
 -  const fileBlocks = await buildFileRestorationBlocks(filePaths, signal);
 -
 -  const images = extractRecentImages(history, maxImages);
 -  const imageBlock = buildImageRestorationBlock(images);
-+): Content[] {
-+  const { planModeActive, runningSubagents, turn = [] } = options;
  
 -  // Merge every file restoration block AND the image block into a
 -  // single user Content (Finding 2). Pushing them as separate user
@@ -254466,21 +254471,28 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -  // attachment still sees the plan-mode constraint and task pointers before
 -  // it gets to file bodies.
 -  const postAckParts: Part[] = [
-+  const reminderParts = buildStateReminderParts({
-+    planModeActive,
-+    runningSubagents,
-+  });
 -    ...buildStateReminderParts({ planModeActive, runningSubagents }),
 -  ];
-+  const attachments: Part[] = reminderParts.flatMap((part, index) =>
-+    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],
-+  );
 -  for (const block of fileBlocks) {
 -    for (const part of block.parts ?? []) postAckParts.push(part);
--  }
++  const snapshot = snapshotMessage(declared, retainedInstructionParts(history));
++  const acknowledgement: Part = { text: COMPACTION_ACKNOWLEDGEMENT };
++  const carried = turn.map((content) => ({ ...content }));
++  if (attachments.length > 0) {
++    return [
++      snapshot,
++      { role: 'model', parts: [acknowledgement] },
++      { role: 'user', parts: attachments },
++      ...carried,
++    ];
+   }
 -  if (imageBlock) {
 -    for (const part of imageBlock.parts ?? []) postAckParts.push(part);
--  }
++  if (carried[0]?.role === 'model') {
++    return [snapshot, ...carried];
+   }
++  return [snapshot, { role: 'model', parts: [acknowledgement] }, ...carried];
++}
  
 -  // Preserve trailing model+functionCall so a pending functionResponse
 -  // has a matching call (Finding 3). Place it AFTER any merged
@@ -254497,7 +254509,19 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -
 -  const out: Content[] = [
 -    { role: 'user', parts: [{ text: postProcessSummary(summary) }] },
--  ];
++/**
++ * The widest fixed text a compacted history carries around its blocks, with
++ * the blocks left out: the resume trailer after the snapshot, and a standalone
++ * acknowledgement when needed. The startup proof counts it with the
++ * rest of the static preamble; the blocks it frames are bounded where they
++ * are made -- the snapshot, its element tags included, at acceptance, and the
++ * retained inputs its `all_user_messages` holds each when it was submitted.
++ */
++export function compactionFrame(): Content[] {
++  return [
++    { role: 'user', parts: [{ text: `\n\n${RESUME_TRAILER}` }] },
++    { role: 'model', parts: [{ text: COMPACTION_ACKNOWLEDGEMENT }] },
+   ];
 -
 -  if (postAckParts.length > 0) {
 -    out.push({ role: 'model', parts: ackParts });
@@ -254517,37 +254541,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.ts b/packages/cor
 -  }
 -
 -  return out;
-+  const snapshot = snapshotMessage(declared, retainedInstructionParts(history));
-+  const acknowledgement: Part = { text: COMPACTION_ACKNOWLEDGEMENT };
-+  const carried = turn.map((content) => ({ ...content }));
-+  if (attachments.length > 0) {
-+    return [
-+      snapshot,
-+      { role: 'model', parts: [acknowledgement] },
-+      { role: 'user', parts: attachments },
-+      ...carried,
-+    ];
-+  }
-+  if (carried[0]?.role === 'model') {
-+    return [snapshot, ...carried];
-+  }
-+  return [snapshot, { role: 'model', parts: [acknowledgement] }, ...carried];
  }
-+
-+/**
-+ * The widest fixed text a compacted history carries around its blocks, with
-+ * the blocks left out: the resume trailer after the snapshot, and a standalone
-+ * acknowledgement when needed. The startup proof counts it with the
-+ * rest of the static preamble; the blocks it frames are bounded where they
-+ * are made -- the snapshot, its element tags included, at acceptance, and the
-+ * retained inputs its `all_user_messages` holds each when it was submitted.
-+ */
-+export function compactionFrame(): Content[] {
-+  return [
-+    { role: 'user', parts: [{ text: `\n\n${RESUME_TRAILER}` }] },
-+    { role: 'model', parts: [{ text: COMPACTION_ACKNOWLEDGEMENT }] },
-+  ];
-+}
 diff --git a/packages/core/src/services/recorded-generation-observations.test.ts b/packages/core/src/services/recorded-generation-observations.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/recorded-generation-observations.test.ts
@@ -313651,15 +313645,17 @@ diff --git a/packages/core/src/utils/environmentContext.test.ts b/packages/core/
    it('is 2 for rewind when a real prompt follows a compressed prefix', () => {
      const history: Content[] = [
        {
-@@ -836,6 +997,43 @@
+@@ -834,8 +995,45 @@
+     expect(getStartupContextLength(history, { includeCompressed: true })).toBe(
+       4,
      );
    });
  
 +  it('counts the whole compacted prefix a compaction composes, retained input included', () => {
-+    // The composer's own output after a startup context: the snapshot with
-+    // the retained authored input in its all_user_messages, and the
-+    // acknowledgement leading the carried turn, are all structural, none of
-+    // them a prompt the user typed afterwards.
++    // The composer's own output after a startup context -- the snapshot,
++    // holding the retained authored input in its all_user_messages, answered
++    // directly by the carried turn -- is the compacted prefix: none of it is
++    // a prompt the user typed afterwards.
 +    const startup: Content = {
 +      role: 'user',
 +      parts: [{ text: '<system-reminder>\nstartup\n</system-reminder>' }],
