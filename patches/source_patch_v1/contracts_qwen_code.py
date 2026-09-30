@@ -406,6 +406,36 @@ def _validate_exact_tokens_after(state: State) -> None:
         label="captured generation owner precedence",
         location="packages/core/src/core/generation-context.ts",
     )
+    # A side query owns a fresh ID; nothing binds one to the scope of the
+    # conversation that asked for it by default.
+    label = "side queries own their scope"
+    core = "packages/core/src/"
+    _require_all(state, core + "core/generation-context.ts", (
+        "export function sideQueryGenerationContext(): GenerationContext {",
+        "  return new GenerationContext(randomUUID(), { kind: 'internal' });",
+    ), label=label)
+    require_text(state, core + "utils/sideQuery.ts",
+                 "generationContext: sideQueryGenerationContext(),", count=2, label=label)
+    base_source = _source(state, core + "core/baseLlmClient.ts", label=label)
+    _require(
+        base_source.count("  generationContext: GenerationContext;\n") == 2
+        and base_source.count(
+            "const contentGenerator = options.generationContext.bind(route.provider);"
+        ) == 3,
+        f"{label}: BaseLlmClient's side-query methods do not each run under the scope "
+        "their caller names",
+    )
+    _require_all(state, core + "core/client.ts", (
+        "const contentGenerator = sideQueryGenerationContext().bind(",
+    ), label=label)
+    require_text(state, core + "services/chatCompressionService.ts",
+                 "      generationContext: config.getGenerationContext(),", label=label)
+    _require_all(state, core + "core/baseLlmClient.test.ts", (
+        "runs under the scope it is given, never the conversation it serves",
+    ), label=label)
+    _require_all(state, core + "core/client.test.ts", (
+        "uses the active model under a fresh scope of its own, never the conversation it serves",
+    ), label=label)
     label = "owned server-authoritative generation result"
     context = "packages/core/src/core/generation-context.ts"
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
@@ -11463,7 +11493,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="exact-rendered-request-tokenization",
         rationale=(
             "Every generation and exact count requires a captured invocation owner at the raw provider "
-            "seam. The final request writes that owner after provider decoration. Configuration admits "
+            "seam. The final request writes that owner after provider decoration. A side query is a "
+            "line of its own and runs under a fresh, never-used ID, so it neither matches as nor "
+            "replaces the context the backend keeps for the conversation that asked for it; the "
+            "compaction draw, whose snapshot becomes that conversation's history, is the one request "
+            "outside the conversation's own turns that runs under its ID. Configuration admits "
             "only an explicit OpenAI-compatible vLLM route, strict calls, exact sizing, and a positive "
             "declared window; selection failure rolls back the route."
         ),

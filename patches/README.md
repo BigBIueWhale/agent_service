@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `50f2880679ee4874998af857f867f5b76b5941e5121afdc00d0c62a559361fa5`
+- Review-diff SHA-256: `3d09bf957e0a302a8a26b01bff793d4b426620a5a31a5fb9405931296e3682f0`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `55b7a463835b04babf6dd1ebd26f43fd0d0d2e150d6be337d85eaced63e98b02`
+- Transformer-manifest SHA-256: `0d12196f1ef73b6db52d5cfdd374d3eacabc79b1aa8dca9217bb90ac50833109`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -37,7 +37,12 @@ previous selection.
 
 A required `GenerationContext` owns every chat and side request. The main scope
 is the conversation's session ID. A tool-launched child owns its spawning call
-ID; workflow and utility invocations own distinct IDs. Child launch hooks,
+ID; workflow and utility invocations own distinct IDs. A side query -- a goal
+check, a fetched page's summary, an image described for a text model, a one-shot
+generation -- owns a fresh, never-used ID (`sideQueryGenerationContext`), so it
+neither matches as nor replaces the context the backend keeps for the
+conversation that asked for it; the compaction draw, whose snapshot becomes that
+conversation's history, runs under the conversation's ID. Child launch hooks,
 resumption, and alternate model selection preserve that identity. The common
 provider seam writes `kv_scope` after request decoration, including batch,
 stream, JSON side queries, and exact counting. Count requests and generation
