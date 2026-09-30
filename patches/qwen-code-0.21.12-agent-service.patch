@@ -47397,7 +47397,37 @@ diff --git a/packages/cli/src/i18n/locales/ca.js b/packages/cli/src/i18n/locales
    Free: 'Lliure',
    'Autocompact buffer': 'Memòria intermèdia de compactació automàtica',
    'Usage by category': 'Ús per categoria',
-@@ -2426,8 +2404,6 @@
+@@ -1876,14 +1854,12 @@
+   'MCP tools': 'MCP tools',
+   'Memory files': 'Fitxers de memòria',
+   Skills: 'Habilitats',
+   Messages: 'Missatges',
+   'Run /context detail for per-item breakdown.':
+     'Executeu /context detail per a un desglossament per element.',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'Mostrar el desglossament de l\'ús de la finestra de context. Useu "/context detail" per a un desglossament per element.',
+   'body loaded': 'cos carregat',
+   memory: 'memòria',
+   '{{region}} configuration updated successfully.':
+     "La configuració de {{region}} s'ha actualitzat correctament.",
+   'Authenticated successfully with {{region}}. API key and model configs saved to settings.json.':
+     "S'ha autenticat correctament amb {{region}}. La API Key i les configuracions del model s'han desat a settings.json.",
+@@ -2037,14 +2013,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena iniciada amb {{count}} agents a la tasca: "{{task}}"\nModels:\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     "Els panells d'Arena s'estan executant a tmux. Adjunteu-vos amb: `{{command}}`",
+   '[{{label}}] failed: {{error}}': '[{{label}}] ha fallat: {{error}}',
+   'Loading suggestions...': "S'estan carregant els suggeriments...",
+-  'Show per-item context usage breakdown.':
+-    "Mostrar el desglossament de l'ús del context per element.",
+   'Lock release warning': "Avís d'alliberament del bloqueig",
+   'Metadata write warning': "Avís d'escriptura de metadades",
+   "Subsequent dreams may be skipped as locked until the next session's staleness sweep cleans the file.":
+     'Els dreams posteriors es poden ometre com a bloquejats fins que la propera neteja de sessions obsoletes elimini el fitxer.',
+   "The scheduler gate did not see this dream's timestamp; the next dream cycle may re-fire sooner than usual.":
+     "La porta del planificador no ha vist la marca de temps d'aquest dream; el proper cicle de dream es pot tornar a executar abans del normal.",
+@@ -2426,8 +2400,6 @@
      'mostra els camins dels fitxers i registres de la sessió actual',
    'Move this session to a new working directory':
      'Mou aquesta sessió a un directori de treball nou',
@@ -47484,6 +47514,23 @@ diff --git a/packages/cli/src/i18n/locales/de.js b/packages/cli/src/i18n/locales
    Free: 'Frei',
    'Autocompact buffer': 'Autokomprimierungs-Puffer',
    'Usage by category': 'Verwendung nach Kategorie',
+@@ -2044,16 +2021,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena mit {{count}} Agents für Aufgabe "{{task}}" gestartet\nModelle:\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     'Arena-Panels laufen in tmux. Verbinden mit: `{{command}}`',
+   '[{{label}}] failed: {{error}}': '[{{label}}] fehlgeschlagen: {{error}}',
+   'Loading suggestions...': 'Vorschläge werden geladen...',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'Die Aufschlüsselung der Nutzung des Kontextfensters anzeigen. Für Details pro Element "/context detail" verwenden.',
+-  'Show per-item context usage breakdown.':
+-    'Die Aufschlüsselung der Kontextnutzung pro Element anzeigen.',
+ 
+   // === Missing key backfill ===
+   'for shell mode': 'für Shell-Modus',
+   'for commands': 'für Befehle',
+   'for file paths': 'für Dateipfade',
+   'to clear input': 'zum Leeren der Eingabe',
 diff --git a/packages/cli/src/i18n/locales/en.js b/packages/cli/src/i18n/locales/en.js
 --- a/packages/cli/src/i18n/locales/en.js
 +++ b/packages/cli/src/i18n/locales/en.js
@@ -47611,6 +47658,36 @@ diff --git a/packages/cli/src/i18n/locales/en.js b/packages/cli/src/i18n/locales
    Free: 'Free',
    'Autocompact buffer': 'Autocompact buffer',
    'Usage by category': 'Usage by category',
+@@ -2365,14 +2332,12 @@
+   'MCP tools': 'MCP tools',
+   'Memory files': 'Memory files',
+   Skills: 'Skills',
+   Messages: 'Messages',
+   'Run /context detail for per-item breakdown.':
+     'Run /context detail for per-item breakdown.',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'Show context window usage breakdown. Use "/context detail" for per-item breakdown.',
+   'body loaded': 'body loaded',
+   memory: 'memory',
+   '{{region}} configuration updated successfully.':
+     '{{region}} configuration updated successfully.',
+   'Authenticated successfully with {{region}}. API key and model configs saved to settings.json.':
+     'Authenticated successfully with {{region}}. API key and model configs saved to settings.json.',
+@@ -2569,14 +2534,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     'Arena panes are running in tmux. Attach with: `{{command}}`',
+   '[{{label}}] failed: {{error}}': '[{{label}}] failed: {{error}}',
+   'Loading suggestions...': 'Loading suggestions...',
+-  'Show per-item context usage breakdown.':
+-    'Show per-item context usage breakdown.',
+   'No compression needed.': 'No compression needed.',
+ 
+   // ============================================================================
+   // Stats
+   // ============================================================================
+ 
 diff --git a/packages/cli/src/i18n/locales/fr.js b/packages/cli/src/i18n/locales/fr.js
 --- a/packages/cli/src/i18n/locales/fr.js
 +++ b/packages/cli/src/i18n/locales/fr.js
@@ -47690,6 +47767,23 @@ diff --git a/packages/cli/src/i18n/locales/fr.js b/packages/cli/src/i18n/locales
    'Autocompact buffer': 'Tampon de compaction automatique',
    'Usage by category': 'Utilisation par catégorie',
    'System prompt': 'Invite système',
+@@ -2050,16 +2026,12 @@
+     "Les panneaux Arena sont en cours d'exécution dans tmux. Attachez avec : `{{command}}`",
+   '[{{label}}] failed: {{error}}': '[{{label}}] a échoué : {{error}}',
+   'Loading suggestions...': 'Chargement des suggestions...',
+   'Open the memory manager.': 'Ouvrir le gestionnaire de mémoire.',
+   'Save a durable memory to the memory system.':
+     'Enregistrer une mémoire durable dans le système de mémoire.',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'Afficher le détail de l’utilisation de la fenêtre de contexte. Utilisez "/context detail" pour le détail par élément.',
+-  'Show per-item context usage breakdown.':
+-    'Afficher le détail de l’utilisation du contexte par élément.',
+ 
+   // === Missing key backfill ===
+   'to expand details': 'pour développer les détails',
+   'The name of the extension to update.':
+     "Le nom de l'extension à mettre à jour.",
+   'Session (temporary)': 'Session (temporaire)',
 diff --git a/packages/cli/src/i18n/locales/ja.js b/packages/cli/src/i18n/locales/ja.js
 --- a/packages/cli/src/i18n/locales/ja.js
 +++ b/packages/cli/src/i18n/locales/ja.js
@@ -47764,6 +47858,23 @@ diff --git a/packages/cli/src/i18n/locales/ja.js b/packages/cli/src/i18n/locales
    Free: '空き',
    'Autocompact buffer': '自動圧縮バッファ',
    'Usage by category': 'カテゴリ別の使用量',
+@@ -1627,16 +1608,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena が {{count}} エージェントでタスク "{{task}}" を開始しました\nモデル:\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     'Arena ペインが tmux で実行中です。次のコマンドで接続: `{{command}}`',
+   '[{{label}}] failed: {{error}}': '[{{label}}] 失敗: {{error}}',
+   'Loading suggestions...': '提案を読み込み中...',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'コンテキストウィンドウ使用量の内訳を表示します。項目ごとの内訳は "/context detail" を使用してください。',
+-  'Show per-item context usage breakdown.':
+-    '項目ごとのコンテキスト使用量の内訳を表示します。',
+ 
+   // === Missing key backfill ===
+   Status: 'ステータス',
+   'Qwen Code': 'Qwen Code',
+   Runtime: 'ランタイム',
+   OS: 'OS',
 diff --git a/packages/cli/src/i18n/locales/pt.js b/packages/cli/src/i18n/locales/pt.js
 --- a/packages/cli/src/i18n/locales/pt.js
 +++ b/packages/cli/src/i18n/locales/pt.js
@@ -47840,6 +47951,23 @@ diff --git a/packages/cli/src/i18n/locales/pt.js b/packages/cli/src/i18n/locales
    Free: 'Livre',
    'Autocompact buffer': 'Buffer de autocompactação',
    'Usage by category': 'Uso por categoria',
+@@ -2027,16 +2006,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena iniciada com {{count}} agentes na tarefa: "{{task}}"\nModelos:\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     'Os painéis Arena estão em execução no tmux. Anexar com: `{{command}}`',
+   '[{{label}}] failed: {{error}}': '[{{label}}] falhou: {{error}}',
+   'Loading suggestions...': 'Carregando sugestões...',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'Mostrar o detalhamento do uso da janela de contexto. Use "/context detail" para ver o detalhamento por item.',
+-  'Show per-item context usage breakdown.':
+-    'Mostrar o detalhamento do uso de contexto por item.',
+ 
+   // === Missing key backfill ===
+   '↑ to manage attachments': '↑ para gerenciar anexos',
+   '← → select, Delete to remove, ↓ to exit':
+     '← → selecionar, Delete para remover, ↓ para sair',
+   'Attachments: ': 'Anexos: ',
 diff --git a/packages/cli/src/i18n/locales/ru.js b/packages/cli/src/i18n/locales/ru.js
 --- a/packages/cli/src/i18n/locales/ru.js
 +++ b/packages/cli/src/i18n/locales/ru.js
@@ -47917,6 +48045,23 @@ diff --git a/packages/cli/src/i18n/locales/ru.js b/packages/cli/src/i18n/locales
    Free: 'Свободно',
    'Autocompact buffer': 'Буфер автоупаковки',
    'Usage by category': 'Использование по категориям',
+@@ -2034,16 +2012,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena запущена с {{count}} агентами на задаче: "{{task}}"\nМодели:\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     'Панели Arena запущены в tmux. Подключитесь с помощью: `{{command}}`',
+   '[{{label}}] failed: {{error}}': '[{{label}}] ошибка: {{error}}',
+   'Loading suggestions...': 'Загрузка предложений...',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    'Показать разбивку использования окна контекста. Используйте "/context detail" для детализации по элементам.',
+-  'Show per-item context usage breakdown.':
+-    'Показать разбивку использования контекста по элементам.',
+ 
+   // === Missing key backfill ===
+   'Updating...': 'Обновление...',
+   Unknown: 'Неизвестно',
+   Error: 'Ошибка',
+   'Version:': 'Версия:',
 diff --git a/packages/cli/src/i18n/locales/zh-TW.js b/packages/cli/src/i18n/locales/zh-TW.js
 --- a/packages/cli/src/i18n/locales/zh-TW.js
 +++ b/packages/cli/src/i18n/locales/zh-TW.js
@@ -48043,6 +48188,40 @@ diff --git a/packages/cli/src/i18n/locales/zh-TW.js b/packages/cli/src/i18n/loca
    Free: '空閒',
    'Autocompact buffer': '自動壓縮緩衝區',
    'Usage by category': '分類用量',
+@@ -1929,14 +1901,16 @@
+   'MCP tools': 'MCP tools',
+   'Memory files': '記憶檔案',
+   Skills: '技能',
+   Messages: '消息',
+   'Run /context detail for per-item breakdown.':
+     '運行 /context detail 查看詳細分解。',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    '顯示上下文窗口使用情況分解。輸入 "/context detail" 查看詳細分解。',
++  'Count the rendered request exactly. Use /context detail for the tool schema inventory.':
++    '精確統計渲染後的請求。使用 /context detail 查看工具 schema 清單。',
++  'Show exact request sizing and the tool schema inventory.':
++    '顯示請求的精確大小和工具 schema 清單。',
+   'body loaded': '內容已加載',
+   memory: '記憶',
+   '{{region}} configuration updated successfully.': '{{region}} 配置更新成功。',
+   'Authenticated successfully with {{region}}. API key and model configs saved to settings.json.':
+     '成功通過 {{region}} 認證。API Key 和模型配置已保存至 settings.json。',
+   'Tip: Use /model to switch between available Coding Plan models.':
+@@ -2103,14 +2077,12 @@
+   'Arena started with {{count}} agents on task: "{{task}}"\nModels:\n{{modelList}}':
+     'Arena 已啟動 {{count}} 個代理處理任務："{{task}}"\n模型：\n{{modelList}}',
+   'Arena panes are running in tmux. Attach with: `{{command}}`':
+     'Arena 面板正在 tmux 中執行。使用以下命令附加：`{{command}}`',
+   '[{{label}}] failed: {{error}}': '[{{label}}] 失敗：{{error}}',
+   'Loading suggestions...': '正在載入建議...',
+-  'Show per-item context usage breakdown.':
+-    '顯示每個項目的上下文使用情況細分。',
+   'Manage extension settings': '管理擴展設置',
+   'Background tasks': '背景任務',
+   'No tasks currently running': '目前沒有正在執行的任務',
+   'No entry to show.': '沒有可顯示的項目。',
+   'needs approval': '待審批',
+   'rejected — edit config to re-approve': '已拒絕 — 編輯設定以重新審批',
 diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales/zh.js
 --- a/packages/cli/src/i18n/locales/zh.js
 +++ b/packages/cli/src/i18n/locales/zh.js
@@ -48136,7 +48315,26 @@ diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales
    "Voice model '{{modelName}}' is ambiguous. Configure a unique model id before using /model --voice.":
      "语音模型 '{{modelName}}' 不唯一。请先配置唯一的模型 ID，再使用 /model --voice。",
    "Image model '{{modelName}}' matches multiple configured endpoints. Run /model --image without an argument and choose the exact endpoint.":
-@@ -1911,15 +1883,15 @@
+@@ -1882,14 +1854,16 @@
+   'Context is almost full! Run /compress now or start /new to continue.':
+     '上下文即将用满！请立即执行 /compress 或使用 /new 开启新会话。',
+   'Context is getting full. Use /compress to free up space.':
+     '上下文空间不足，用 /compress 释放空间。',
+   'Long conversation? /compress summarizes history to free context.':
+     '对话太长？用 /compress 总结历史，释放上下文。',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.':
+-    '显示上下文窗口使用情况明细。使用 "/context detail" 查看逐项明细。',
++  'Count the rendered request exactly. Use /context detail for the tool schema inventory.':
++    '精确统计渲染后的请求。使用 /context detail 查看工具 schema 清单。',
++  'Show exact request sizing and the tool schema inventory.':
++    '显示请求的精确大小和工具 schema 清单。',
+ 
+   // ============================================================================
+   // Exit Screen / Stats
+   // ============================================================================
+   'Agent powering down. Goodbye!': 'Qwen Code 正在关闭，再见！',
+   'To continue this session, run': '要继续此会话，请运行',
+@@ -1911,15 +1885,15 @@
    'API Time:': 'API 时间：',
    'Tool Time:': '工具时间：',
    'Session Stats': '会话统计',
@@ -48155,7 +48353,7 @@ diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales
    'Tool Stats For Nerds': '工具统计（技术细节）',
    Metric: '指标',
    API: 'API',
-@@ -2135,15 +2107,12 @@
+@@ -2135,15 +2109,12 @@
    'Built-in tools': '内置工具',
    'MCP tools': 'MCP tools',
    'Memory files': '记忆文件',
@@ -48171,6 +48369,20 @@ diff --git a/packages/cli/src/i18n/locales/zh.js b/packages/cli/src/i18n/locales
    memory: '记忆',
    '{{region}} configuration updated successfully.': '{{region}} 配置更新成功。',
    'Authenticated successfully with {{region}}. API key and model configs saved to settings.json.':
+@@ -2298,13 +2269,12 @@
+     '回滚成功。请重启终端以使用上一个版本。',
+   'Rollback failed:': '回滚失败：',
+   'Rollback on Windows requires manual intervention. Rename qwen-code.old to qwen-code in your installation directory.':
+     '在 Windows 上回滚需要手动操作。请将安装目录中的 qwen-code.old 重命名为 qwen-code。',
+   'Save a durable memory to the memory system.':
+     '将一条持久记忆保存到记忆系统。',
+-  'Show per-item context usage breakdown.': '显示按项目划分的上下文使用详情。',
+   'Manage extension settings': '管理扩展设置',
+ 
+   // === Core: added from PR #3328 ===
+   'Background tasks': '后台任务',
+   'No tasks currently running': '当前没有正在运行的任务',
+   'No entry to show.': '没有可显示的条目。',
 diff --git a/packages/cli/src/nonInteractive/control/controllers/systemController.ts b/packages/cli/src/nonInteractive/control/controllers/systemController.ts
 --- a/packages/cli/src/nonInteractive/control/controllers/systemController.ts
 +++ b/packages/cli/src/nonInteractive/control/controllers/systemController.ts
@@ -84677,7 +84889,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/ui/commands/contextCommand.ts
 --- a/packages/cli/src/ui/commands/contextCommand.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.ts
-@@ -1,626 +1,87 @@
+@@ -1,626 +1,93 @@
  /**
   * @license
 - * Copyright 2025 Qwen
@@ -84710,8 +84922,11 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 -  computeThresholds,
 -  type CompactionThresholds,
 -} from '@qwen-code/qwen-code-core';
--import { t } from '../../i18n/index.js';
--
++import type { ServeSessionContextUsage } from '@qwen-code/acp-bridge';
++import { partitionContextWindow, type Config } from '@qwen-code/qwen-code-core';
++import { type SlashCommand, CommandKind } from './types.js';
+ import { t } from '../../i18n/index.js';
+ 
 -/**
 - * Classify a token count against the three-tier compaction ladder. Mirrors
 - * the gating logic in `chatCompressionService` / `geminiChat` so the
@@ -84780,10 +84995,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 -
 -  return results;
 -}
-+import type { ServeSessionContextUsage } from '@qwen-code/acp-bridge';
-+import { partitionContextWindow, type Config } from '@qwen-code/qwen-code-core';
-+import { type SlashCommand, CommandKind } from './types.js';
- 
+-
  export async function collectContextData(
 -  config: import('@qwen-code/qwen-code-core').Config,
 +  config: Config,
@@ -84813,17 +85025,16 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 -  const apiCachedTokens = uiTelemetryService.getLastCachedContentTokenCount();
 -
 -  const systemPromptText = getCoreSystemPrompt(
+-    undefined,
+-    modelName,
 +): Promise<ServeSessionContextUsage> {
 +  const chat = config.getGeminiClient().getChat();
 +  const history = chat.getHistory(true);
 +  const measured = await chat.countRequestTokensForCandidateHistory(
 +    history,
      undefined,
--    modelName,
--    undefined,
 -    resolveInteractionMode(config),
-+    'context-inspection',
-   );
+-  );
 -  const systemPromptTokens = estimateTokens(systemPromptText);
 -
 -  const toolRegistry = config.getToolRegistry();
@@ -84937,7 +85148,8 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 -  const mcpToolsTotalTokens = mcpTools.reduce(
 -    (sum, tool) => sum + tool.tokens,
 -    0,
--  );
++    'context-inspection',
+   );
 -
 -  let totalTokens: number;
 -  let displaySystemPrompt: number;
@@ -85284,13 +85496,12 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
  
  export const contextCommand: SlashCommand = {
    name: 'context',
--  get description() {
--    return t(
+   get description() {
+     return t(
 -      'Show context window usage breakdown. Use "/context detail" for per-item breakdown.',
--    );
--  },
-+  description:
-+    'Count the rendered request exactly. Use /context detail for the tool schema inventory.',
++      'Count the rendered request exactly. Use /context detail for the tool schema inventory.',
+     );
+   },
    kind: CommandKind.BUILT_IN,
    supportedModes: ['interactive', 'non_interactive', 'acp'] as const,
 -  action: async (context: CommandContext, args?: string) => {
@@ -85338,10 +85549,10 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
    subCommands: [
      {
        name: 'detail',
--      get description() {
+       get description() {
 -        return t('Show per-item context usage breakdown.');
--      },
-+      description: 'Show exact request sizing and the tool schema inventory.',
++        return t('Show exact request sizing and the tool schema inventory.');
+       },
        kind: CommandKind.BUILT_IN,
        supportedModes: ['interactive', 'non_interactive', 'acp'] as const,
 -      action: async (context: CommandContext) => {
@@ -154331,6 +154542,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -134,13 +133,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -161,18 +160,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -239,13 +238,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154345,6 +154593,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -355,13 +353,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -382,18 +380,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -455,13 +453,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154359,6 +154644,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -550,13 +547,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -577,18 +574,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -650,13 +647,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154373,6 +154695,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -745,13 +741,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -772,18 +768,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -845,13 +841,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154387,6 +154746,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -940,13 +935,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -967,18 +962,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -1040,13 +1035,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154401,6 +154797,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -1135,13 +1129,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -1162,18 +1156,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -1235,13 +1229,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154415,6 +154848,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -1330,13 +1323,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -1357,18 +1350,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -1430,13 +1423,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154429,6 +154899,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -1525,13 +1517,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -1552,18 +1544,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -1625,13 +1617,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154443,6 +154950,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -1720,13 +1711,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -1747,18 +1738,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 @@ -1820,13 +1811,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154457,6 +155001,47 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -1923,13 +1913,13 @@
+ {"name": "read_file", "arguments": {"file_path": "/path/to/tests/test_auth.py", "offset": 0, "limit": 10}}
+ </tool_call>
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/requirements.txt"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/requirements.txt", "offset": 0}}
+ </tool_call>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+@@ -1956,22 +1946,22 @@
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.ts"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.ts", "offset": 0}}
+ </tool_call>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/existingTest.test.ts"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/existingTest.test.ts", "offset": 0}}
+ </tool_call>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.test.ts"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.test.ts", "offset": 0}}
+ </tool_call>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <tool_call>
+ {"name": "write_file", "arguments": {"file_path": "/path/to/someFile.test.ts", "content": "(test code content)"}}
+ </tool_call>
+ I've written the tests. Now I'll run the project's test command to verify them.
 @@ -2040,13 +2030,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
@@ -154471,7 +155056,62 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
-@@ -2330,13 +2319,12 @@
+@@ -2168,12 +2157,15 @@
+ I'll also confirm 'requests' is a dependency.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/requirements.txt
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+@@ -2219,29 +2211,38 @@
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/someFile.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/existingTest.test.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/someFile.test.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <tool_call>
+ <function=write_file>
+ <parameter=file_path>
+@@ -2330,13 +2331,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
  
@@ -154485,7 +155125,48 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
-@@ -2550,13 +2538,12 @@
+@@ -2433,13 +2433,13 @@
+ {"name": "read_file", "arguments": {"file_path": "/path/to/tests/test_auth.py", "offset": 0, "limit": 10}}
+ </tool_call>
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/requirements.txt"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/requirements.txt", "offset": 0}}
+ </tool_call>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+@@ -2466,22 +2466,22 @@
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.ts"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.ts", "offset": 0}}
+ </tool_call>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/existingTest.test.ts"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/existingTest.test.ts", "offset": 0}}
+ </tool_call>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+ <tool_call>
+-{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.test.ts"}}
++{"name": "read_file", "arguments": {"file_path": "/path/to/someFile.test.ts", "offset": 0}}
+ </tool_call>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <tool_call>
+ {"name": "write_file", "arguments": {"file_path": "/path/to/someFile.test.ts", "content": "(test code content)"}}
+ </tool_call>
+ I've written the tests. Now I'll run the project's test command to verify them.
+@@ -2550,13 +2550,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
  
@@ -154499,7 +155180,62 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
-@@ -2836,13 +2823,12 @@
+@@ -2678,12 +2677,15 @@
+ I'll also confirm 'requests' is a dependency.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/requirements.txt
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+@@ -2729,29 +2731,38 @@
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/someFile.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/existingTest.test.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+ <tool_call>
+ <function=read_file>
+ <parameter=file_path>
+ /path/to/someFile.test.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <tool_call>
+ <function=write_file>
+ <parameter=file_path>
+@@ -2836,13 +2847,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
  
@@ -154513,7 +155249,44 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
-@@ -3031,13 +3017,12 @@
+@@ -2931,13 +2941,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -2958,18 +2968,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
+@@ -3031,13 +3041,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
  
@@ -154527,7 +155300,44 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
-@@ -3226,13 +3211,12 @@
+@@ -3126,13 +3135,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: glob for pattern 'tests/test_auth.py']
+ [tool_call: read_file for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: read_file for file_path '/path/to/requirements.txt']
++[tool_call: read_file for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -3153,18 +3162,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: read_file for file_path '/path/to/someFile.ts']
++[tool_call: read_file for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: read_file for file_path '/path/to/existingTest.test.ts']
++[tool_call: read_file for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: read_file for file_path '/path/to/someFile.test.ts']
++[tool_call: read_file for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: write_file for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: run_shell_command for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
+@@ -3226,13 +3235,12 @@
  - **Verify (Standards):** When your task involves a code or system change, execute the project-specific build, linting and type-checking commands (e.g., 'tsc', 'npm run lint', 'ruff check .') that you have identified for this project (or obtained from the user). This ensures code quality and adherence to standards. Read-only or explanatory turns do not require verification.
  - **Report outcomes faithfully:** If tests fail, say so with the relevant output. If you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress failing checks to manufacture a green result, and never characterize incomplete or broken work as done.
  
@@ -154541,6 +155351,43 @@ diff --git a/packages/core/src/core/__snapshots__/prompts.test.ts.snap b/package
  When a user wants to create a new application, project, website, game, or library from scratch, use the 'skill' tool with skill="new-app" to load the detailed workflow and tech-stack guidance.
  
  # Operational Guidelines
+@@ -3321,13 +3329,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ <|tool_call>call:glob{pattern:<|"|>tests/test_auth.py<|"|>}<tool_call|>
+ <|tool_call>call:read_file{file_path:<|"|>/path/to/tests/test_auth.py<|"|>,offset:0,limit:10}<tool_call|>
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-<|tool_call>call:read_file{file_path:<|"|>/path/to/requirements.txt<|"|>}<tool_call|>
++<|tool_call>call:read_file{file_path:<|"|>/path/to/requirements.txt<|"|>,offset:0}<tool_call|>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -3348,18 +3356,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-<|tool_call>call:read_file{file_path:<|"|>/path/to/someFile.ts<|"|>}<tool_call|>
++<|tool_call>call:read_file{file_path:<|"|>/path/to/someFile.ts<|"|>,offset:0}<tool_call|>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-<|tool_call>call:read_file{file_path:<|"|>/path/to/existingTest.test.ts<|"|>}<tool_call|>
++<|tool_call>call:read_file{file_path:<|"|>/path/to/existingTest.test.ts<|"|>,offset:0}<tool_call|>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-<|tool_call>call:read_file{file_path:<|"|>/path/to/someFile.test.ts<|"|>}<tool_call|>
++<|tool_call>call:read_file{file_path:<|"|>/path/to/someFile.test.ts<|"|>,offset:0}<tool_call|>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <|tool_call>call:write_file{file_path:<|"|>/path/to/someFile.test.ts<|"|>,content:<|"|>(test code content)<|"|>}<tool_call|>
+ I've written the tests. Now I'll run the project's test command to verify them.
+ <|tool_call>call:run_shell_command{command:<|"|>npm run test<|"|>}<tool_call|>
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 diff --git a/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts b/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts
 --- a/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts
 +++ b/packages/core/src/core/__tests__/openaiTimeoutHandling.test.ts
@@ -216556,6 +217403,176 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
  /**
   * Provides the system prompt for generating project summaries in markdown format.
   * This prompt instructs the model to create a structured markdown summary
+@@ -657,13 +631,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ [tool_call: ${ToolNames.GLOB} for pattern 'tests/test_auth.py']
+ [tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/tests/test_auth.py' with offset 0 and limit 10]
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/requirements.txt']
++[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/requirements.txt' with offset 0]
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -684,18 +658,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/someFile.ts']
++[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/someFile.ts' with offset 0]
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/existingTest.test.ts']
++[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/existingTest.test.ts' with offset 0]
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/someFile.test.ts']
++[tool_call: ${ToolNames.READ_FILE} for file_path '/path/to/someFile.test.ts' with offset 0]
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ [tool_call: ${ToolNames.WRITE_FILE} for file_path '/path/to/someFile.test.ts' with content '(test code content)']
+ I've written the tests. Now I'll run the project's test command to verify them.
+ [tool_call: ${ToolNames.SHELL} for 'npm run test']
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
+@@ -769,12 +743,15 @@
+ I'll also confirm 'requests' is a dependency.
+ <tool_call>
+ <function=${ToolNames.READ_FILE}>
+ <parameter=file_path>
+ /path/to/requirements.txt
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+@@ -820,29 +797,38 @@
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+ <tool_call>
+ <function=${ToolNames.READ_FILE}>
+ <parameter=file_path>
+ /path/to/someFile.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+ <tool_call>
+ <function=${ToolNames.READ_FILE}>
+ <parameter=file_path>
+ /path/to/existingTest.test.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+ <tool_call>
+ <function=${ToolNames.READ_FILE}>
+ <parameter=file_path>
+ /path/to/someFile.test.ts
+ </parameter>
++<parameter=offset>
++0
++</parameter>
+ </function>
+ </tool_call>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <tool_call>
+ <function=${ToolNames.WRITE_FILE}>
+ <parameter=file_path>
+@@ -913,13 +899,13 @@
+ {"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/tests/test_auth.py", "offset": 0, "limit": 10}}
+ </tool_call>
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+ <tool_call>
+-{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/requirements.txt"}}
++{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/requirements.txt", "offset": 0}}
+ </tool_call>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+@@ -946,22 +932,22 @@
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+ <tool_call>
+-{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/someFile.ts"}}
++{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/someFile.ts", "offset": 0}}
+ </tool_call>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+ <tool_call>
+-{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/existingTest.test.ts"}}
++{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/existingTest.test.ts", "offset": 0}}
+ </tool_call>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+ <tool_call>
+-{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/someFile.test.ts"}}
++{"name": "${ToolNames.READ_FILE}", "arguments": {"file_path": "/path/to/someFile.test.ts", "offset": 0}}
+ </tool_call>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <tool_call>
+ {"name": "${ToolNames.WRITE_FILE}", "arguments": {"file_path": "/path/to/someFile.test.ts", "content": "(test code content)"}}
+ </tool_call>
+ I've written the tests. Now I'll run the project's test command to verify them.
+@@ -1009,13 +995,13 @@
+ First, I'll analyze the code and check for a test safety net before planning any changes.
+ <|tool_call>call:${ToolNames.GLOB}{pattern:<|"|>tests/test_auth.py<|"|>}<tool_call|>
+ <|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/tests/test_auth.py<|"|>,offset:0,limit:10}<tool_call|>
+ (After analysis)
+ Great, 'tests/test_auth.py' exists and covers the core authentication logic. With this safety net in place, I can safely plan the refactoring.
+ I'll also confirm 'requests' is a dependency.
+-<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/requirements.txt<|"|>}<tool_call|>
++<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/requirements.txt<|"|>,offset:0}<tool_call|>
+ (After analysis)
+ Looks good, 'requests' is available.
+ 
+ Here's the plan:
+ 1.  Replace the 'urllib' calls with 'requests'.
+ 2.  Add proper 'try...except' error handling for the new network calls.
+@@ -1036,18 +1022,18 @@
+ </example>
+ 
+ <example>
+ user: Write tests for someFile.ts
+ model:
+ Okay, I can write those tests. First, I'll read someFile.ts to understand its functionality.
+-<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/someFile.ts<|"|>}<tool_call|>
++<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/someFile.ts<|"|>,offset:0}<tool_call|>
+ Now I'll look for existing or related test files to understand current testing conventions and dependencies.
+-<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/existingTest.test.ts<|"|>}<tool_call|>
++<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/existingTest.test.ts<|"|>,offset:0}<tool_call|>
+ (After reviewing existing tests and the file content)
+ I'll check whether the intended test file already exists.
+-<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/someFile.test.ts<|"|>}<tool_call|>
++<|tool_call>call:${ToolNames.READ_FILE}{file_path:<|"|>/path/to/someFile.test.ts<|"|>,offset:0}<tool_call|>
+ (After read_file reports that /path/to/someFile.test.ts does not exist)
+ <|tool_call>call:${ToolNames.WRITE_FILE}{file_path:<|"|>/path/to/someFile.test.ts<|"|>,content:<|"|>(test code content)<|"|>}<tool_call|>
+ I've written the tests. Now I'll run the project's test command to verify them.
+ <|tool_call>call:${ToolNames.SHELL}{command:<|"|>npm run test<|"|>}<tool_call|>
+ (After verification passes)
+ All checks passed. This is a stable checkpoint.
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
@@ -414146,3 +415163,490 @@ diff --git a/packages/core/src/utils/qwen38-deliverables.ts b/packages/core/src/
 +    `${listed.join('; ')}. What the run did leave is in the session bundle; a new session must write each declared path.`
 +  );
 +}
+diff --git a/packages/cli/src/acp-integration/session/Session.review-lease.test.ts b/packages/cli/src/acp-integration/session/Session.review-lease.test.ts
+--- a/packages/cli/src/acp-integration/session/Session.review-lease.test.ts
++++ b/packages/cli/src/acp-integration/session/Session.review-lease.test.ts
+@@ -80,12 +80,13 @@
+       }),
+       addHistory: vi.fn(),
+       getHistory: vi.fn().mockReturnValue([]),
+       setHistory: vi.fn(),
+       truncateHistory: vi.fn(),
+       stripThoughtsFromHistory: vi.fn(),
++      getUserContentPushCount: vi.fn(() => 0),
+     } as unknown as GeminiChat;
+ 
+     const mockGeminiClient = {
+       getChat: vi.fn().mockReturnValue(mockChat),
+       tryCompressChat: vi.fn().mockResolvedValue({
+         originalTokenCount: 0,
+@@ -133,13 +134,12 @@
+       getEnableRecursiveFileSearch: vi.fn().mockReturnValue(false),
+       getTargetDir: vi.fn().mockReturnValue('/tmp'),
+       getProjectRoot: vi.fn().mockReturnValue(PROJECT_ROOT),
+       getDebugMode: vi.fn().mockReturnValue(false),
+       getAuthType: vi.fn().mockReturnValue(AuthType.USE_OPENAI),
+       isCronEnabled: vi.fn().mockReturnValue(false),
+-      getSessionTokenLimit: vi.fn().mockReturnValue(0),
+       getGeminiClient: vi.fn().mockReturnValue(mockGeminiClient),
+       getDisableAllHooks: vi.fn().mockReturnValue(true),
+       hasHooksForEvent: vi.fn().mockReturnValue(false),
+       getMessageBus: vi.fn().mockReturnValue(undefined),
+       getStopHookBlockingCap: vi.fn().mockReturnValue(0),
+       getBackgroundTaskRegistry: vi.fn().mockReturnValue({
+diff --git a/packages/cli/src/acp-integration/session/Session.worktree.test.ts b/packages/cli/src/acp-integration/session/Session.worktree.test.ts
+--- a/packages/cli/src/acp-integration/session/Session.worktree.test.ts
++++ b/packages/cli/src/acp-integration/session/Session.worktree.test.ts
+@@ -90,12 +90,13 @@
+         ),
+       addHistory: vi.fn(),
+       getHistory: vi.fn().mockReturnValue([]),
+       setHistory: vi.fn(),
+       truncateHistory: vi.fn(),
+       stripThoughtsFromHistory: vi.fn(),
++      getUserContentPushCount: vi.fn(() => 0),
+     } as unknown as GeminiChat;
+ 
+     const mockGeminiClient = {
+       getChat: vi.fn().mockReturnValue(mockChat),
+       tryCompressChat: vi.fn().mockResolvedValue({
+         originalTokenCount: 0,
+@@ -149,13 +150,12 @@
+       // The prompt turn's finally sweeps review-worktree leases against the
+       // project root (see Session.review-lease.test.ts).
+       getProjectRoot: vi.fn().mockReturnValue('/tmp'),
+       getDebugMode: vi.fn().mockReturnValue(false),
+       getAuthType: vi.fn().mockReturnValue(AuthType.USE_OPENAI),
+       isCronEnabled: vi.fn().mockReturnValue(false),
+-      getSessionTokenLimit: vi.fn().mockReturnValue(0),
+       getGeminiClient: vi.fn().mockReturnValue(mockGeminiClient),
+       getDisableAllHooks: vi.fn().mockReturnValue(true),
+       hasHooksForEvent: vi.fn().mockReturnValue(false),
+       getMessageBus: vi.fn().mockReturnValue(undefined),
+       // Added on main after the test was written; Session.prompt's stop-hook
+       // loop reads this so the mock has to provide it.
+@@ -324,17 +324,37 @@
+     const notice = 'Recovered agents are available.';
+     session.pendingRecoveredAgentsNotice = notice;
+ 
+     await session.prompt(makePromptRequest('/testcommand'));
+     await session.prompt(makePromptRequest('ordinary prompt'));
+ 
+-    expect(capturedMessages[0]).toEqual([{ text: 'Prompt from command' }]);
++    expect(capturedMessages[0]).toEqual([
++      {
++        text: 'Prompt from command',
++        authoredInstructions: [
++          {
++            id: expect.any(String),
++            author: 'user',
++            parts: [{ text: '/testcommand' }],
++          },
++        ],
++      },
++    ]);
+     expect(capturedMessages[1]).toEqual(
+       expect.arrayContaining([
+         { text: expect.stringContaining(notice) as string },
+-        { text: 'ordinary prompt' },
++        {
++          text: 'ordinary prompt',
++          authoredInstructions: [
++            {
++              id: expect.any(String),
++              author: 'user',
++              parts: [{ text: 'ordinary prompt' }],
++            },
++          ],
++        },
+       ]),
+     );
+     expect(session.pendingRecoveredAgentsNotice).toBeNull();
+   });
+ 
+   it('does not consume a recovered-agents notice on an interrupted-turn continuation', async () => {
+diff --git a/packages/cli/src/i18n/mustTranslateKeys.ts b/packages/cli/src/i18n/mustTranslateKeys.ts
+--- a/packages/cli/src/i18n/mustTranslateKeys.ts
++++ b/packages/cli/src/i18n/mustTranslateKeys.ts
+@@ -54,14 +54,12 @@
+   'Exited plan mode. Previous approval mode restored.',
+   'Enabled plan mode. The agent will analyze and plan without executing tools.',
+   'Already in plan mode. Use "/plan exit" to exit plan mode.',
+   'Not in plan mode. Use "/plan" to enter plan mode first.',
+   'Open the memory manager.',
+   'Save a durable memory to the memory system.',
+-  'Show context window usage breakdown. Use "/context detail" for per-item breakdown.',
+-  'Show per-item context usage breakdown.',
+   'Manage extensions',
+   'Manage installed extensions',
+   'Install an extension from a git repo or local path',
+   'Disable an extension',
+   'Enable an extension',
+   'Uninstall an extension',
+diff --git a/packages/cli/src/serve/workspace-agents.test.ts b/packages/cli/src/serve/workspace-agents.test.ts
+--- a/packages/cli/src/serve/workspace-agents.test.ts
++++ b/packages/cli/src/serve/workspace-agents.test.ts
+@@ -994,13 +994,16 @@
+     const longName = 'a'.repeat(65);
+     const res = await request(app).delete(`/workspace/agents/${longName}`);
+     expect(res.status).toBe(400);
+     expect(res.body.code).toBe('invalid_agent_type');
+   });
+ 
+-  it('returns 500 agent_delete_partial when one level unlink silently fails', async () => {
++  // Root ignores directory permission bits, so the EACCES this test makes
++  // by locking a directory cannot happen for it; the image build runs its test
++  // selection as root. The test is reported as skipped there, not passed.
++  it.skipIf(process.getuid?.() === 0)('returns 500 agent_delete_partial when one level unlink silently fails', async () => {
+     // Windows ignores Unix-style permission bits passed to
+     // `fs.chmod` — the user-agents directory stays writable, the
+     // unlink succeeds, and the partial-delete path this test
+     // exercises is unreachable. SubagentManager's `unlink` import
+     // (`import * as fs from 'fs/promises'`) creates a sealed
+     // namespace object that vitest can't `spyOn`, so a per-platform
+diff --git a/packages/cli/src/serve/workspace-agents.ts b/packages/cli/src/serve/workspace-agents.ts
+--- a/packages/cli/src/serve/workspace-agents.ts
++++ b/packages/cli/src/serve/workspace-agents.ts
+@@ -2209,28 +2209,32 @@
+   if (config.hooks) detail.hooks = config.hooks;
+   return detail;
+ }
+ 
+ /**
+  * Build a CRUD-scoped `SubagentManager` for the daemon. The
+- * underlying manager only touches five `Config` methods on its
++ * underlying manager only touches six `Config` methods on its
+  * read/write paths (`getSdkMode`, `getProjectRoot`,
+- * `getActiveExtensions`, `isSafeMode`, `getAgentsSettings`); a `Proxy` makes
+- * any future expansion of that surface throw immediately rather than silently
+- * produce incorrect data. The CRUD catalog has no session settings context,
+- * so built-in agents use their registry defaults here.
++ * `getActiveExtensions`, `isSafeMode`, `getForegroundAgentsOnly`,
++ * `getAgentsSettings`); a `Proxy` makes any future expansion of that surface
++ * throw immediately rather than silently produce incorrect data. The CRUD
++ * catalog has no session settings context, so built-in agents use their
++ * registry defaults here. The daemon is never the locked agent-service
++ * configuration (`--foreground-agents-only` is a session flag), so the catalog
++ * it edits is the on-disk one.
+  */
+ export function createDaemonSubagentManager(
+   boundWorkspace: string,
+   safeMode = false,
+ ): SubagentManager {
+   const stub = {
+     getSdkMode: () => false,
+     getProjectRoot: () => boundWorkspace,
+     getActiveExtensions: () => [],
+     isSafeMode: () => safeMode,
++    getForegroundAgentsOnly: () => false,
+     getAgentsSettings: () => ({}),
+   } as unknown as Record<string | symbol, unknown>;
+   const guarded = new Proxy(stub, {
+     get(target, prop) {
+       if (prop in target) {
+         return (target as Record<string | symbol, unknown>)[prop];
+diff --git a/packages/cli/src/ui/commands/btwCommand.test.ts b/packages/cli/src/ui/commands/btwCommand.test.ts
+--- a/packages/cli/src/ui/commands/btwCommand.test.ts
++++ b/packages/cli/src/ui/commands/btwCommand.test.ts
+@@ -42,13 +42,16 @@
+   }),
+ );
+ const mockBuildBtwPrompt = vi.hoisted(() =>
+   vi.fn().mockImplementation((q: string) => `<system-reminder>...\n${q}`),
+ );
+ 
+-vi.mock('@qwen-code/qwen-code-core', () => ({
++vi.mock('@qwen-code/qwen-code-core', async (importOriginal) => ({
++  ToolCallDecision: (
++    await importOriginal<typeof import('@qwen-code/qwen-code-core')>()
++  ).ToolCallDecision,
+   BTW_MAX_INPUT_LENGTH: 4096,
+   runForkedAgent: mockRunForkedAgent,
+   getCacheSafeParams: mockGetCacheSafeParams,
+   buildBtwCacheSafeParams: mockBuildBtwCacheSafeParams,
+   buildBtwPrompt: mockBuildBtwPrompt,
+ }));
+diff --git a/packages/cli/src/ui/commands/forkCommand.test.ts b/packages/cli/src/ui/commands/forkCommand.test.ts
+--- a/packages/cli/src/ui/commands/forkCommand.test.ts
++++ b/packages/cli/src/ui/commands/forkCommand.test.ts
+@@ -19,13 +19,16 @@
+       );
+     }
+     return key;
+   },
+ }));
+ 
+-vi.mock('@qwen-code/qwen-code-core', () => ({
++vi.mock('@qwen-code/qwen-code-core', async (importOriginal) => ({
++  ToolCallDecision: (
++    await importOriginal<typeof import('@qwen-code/qwen-code-core')>()
++  ).ToolCallDecision,
+   createDebugLogger: () => ({ debug: () => undefined }),
+   ToolNames: { AGENT: 'agent' },
+   FORK_SUBAGENT_TYPE: 'fork',
+ }));
+ 
+ describe('forkCommand', () => {
+diff --git a/packages/cli/src/ui/hooks/atCommandProcessor.session.test.ts b/packages/cli/src/ui/hooks/atCommandProcessor.session.test.ts
+--- a/packages/cli/src/ui/hooks/atCommandProcessor.session.test.ts
++++ b/packages/cli/src/ui/hooks/atCommandProcessor.session.test.ts
+@@ -67,12 +67,13 @@
+         getDirectories: () => [testRootDir],
+       }),
+       getMcpServers: () => ({}),
+       getActiveExtensions: () => [],
+       getToolRegistry: () => ({}),
+       getDebugMode: () => false,
++      getChatRecordingService: () => ({ recordAtCommand: vi.fn() }),
+       getFileExclusions: () => ({
+         getCoreIgnorePatterns: () => COMMON_IGNORE_PATTERNS,
+         getReadManyFilesExcludes: () => [],
+       }),
+     } as unknown as Config;
+   });
+@@ -105,13 +106,16 @@
+     expect(
+       result.toolDisplays?.some((d) => d.name === 'Referenced Session'),
+     ).toBe(true);
+   });
+ 
+   it('resolves a title to a single session', async () => {
+-    mockFindSessionsByTitle.mockResolvedValue([{ sessionId: UUID }]);
++    mockFindSessionsByTitle.mockResolvedValue({
++      matches: [{ sessionId: UUID }],
++      refusals: [],
++    });
+     mockResolve.mockResolvedValue({
+       text: '--- Referenced session "My Chat" (slimmed, read-only) ---\nUser: hi',
+       meta: {
+         sessionId: UUID,
+         title: 'My Chat',
+         messageCount: 1,
+@@ -133,13 +137,16 @@
+     expect(JSON.stringify(result.processedQuery)).toContain('User: hi');
+   });
+ 
+   it.skipIf(process.platform === 'win32')(
+     'preserves a literal escaped shell special after parsing',
+     async () => {
+-      mockFindSessionsByTitle.mockResolvedValue([{ sessionId: UUID }]);
++      mockFindSessionsByTitle.mockResolvedValue({
++        matches: [{ sessionId: UUID }],
++        refusals: [],
++      });
+       mockResolve.mockResolvedValue({
+         text: '--- Referenced session "a\\&b" (slimmed, read-only) ---',
+         meta: {
+           sessionId: UUID,
+           title: 'a\\&b',
+           messageCount: 1,
+@@ -162,13 +169,16 @@
+   );
+ 
+   it('normalizes escaped Windows session titles in prompt text', async () => {
+     const platformSpy = vi
+       .spyOn(process, 'platform', 'get')
+       .mockReturnValue('win32');
+-    mockFindSessionsByTitle.mockResolvedValue([{ sessionId: UUID }]);
++    mockFindSessionsByTitle.mockResolvedValue({
++      matches: [{ sessionId: UUID }],
++      refusals: [],
++    });
+     mockResolve.mockResolvedValue({
+       text: '--- Referenced session "a&b" (slimmed, read-only) ---',
+       meta: {
+         sessionId: UUID,
+         title: 'a&b',
+         messageCount: 1,
+@@ -218,16 +228,16 @@
+           d.name === 'Referenced Session' && d.status === ToolCallStatus.Error,
+       ),
+     ).toBe(true);
+   });
+ 
+   it('reports an ambiguous title without guessing', async () => {
+-    mockFindSessionsByTitle.mockResolvedValue([
+-      { sessionId: UUID },
+-      { sessionId: 'other' },
+-    ]);
++    mockFindSessionsByTitle.mockResolvedValue({
++      matches: [{ sessionId: UUID }, { sessionId: 'other' }],
++      refusals: [],
++    });
+     const result = await handleAtCommand({
+       query: '@session:Ambiguous',
+       config: mockConfig,
+       addItem: mockAddItem,
+       onDebugMessage: mockOnDebugMessage,
+       messageId: 4,
+@@ -288,13 +298,16 @@
+     );
+     expect(card).toBeDefined();
+     expect(card!.resultDisplay).toContain('corrupted JSONL');
+   });
+ 
+   it('deduplicates cross-form refs (UUID + title) resolving to the same session', async () => {
+-    mockFindSessionsByTitle.mockResolvedValue([{ sessionId: UUID }]);
++    mockFindSessionsByTitle.mockResolvedValue({
++      matches: [{ sessionId: UUID }],
++      refusals: [],
++    });
+     mockResolve.mockResolvedValue({
+       text: '--- Referenced session "s1" (slimmed, read-only) ---\nUser: hi',
+       meta: { sessionId: UUID, title: 's1', messageCount: 1, approxTokens: 5 },
+       truncated: false,
+     });
+     const result = await handleAtCommand({
+diff --git a/packages/core/src/config/config.safe-mode.test.ts b/packages/core/src/config/config.safe-mode.test.ts
+--- a/packages/core/src/config/config.safe-mode.test.ts
++++ b/packages/core/src/config/config.safe-mode.test.ts
+@@ -158,13 +158,14 @@
+ }));
+ 
+ vi.mock('../telemetry/loggers.js', () => ({
+   logRipgrepFallback: vi.fn(),
+ }));
+ 
+-vi.mock('../telemetry/types.js', () => ({
++vi.mock('../telemetry/types.js', async (importOriginal) => ({
++  ...(await importOriginal<typeof import('../telemetry/types.js')>()),
+   RipgrepFallbackEvent: vi.fn(),
+   StartSessionEvent: vi.fn(),
+ }));
+ 
+ vi.mock('../core/toolHookTriggers.js', () => ({
+   fireNotificationHook: vi.fn(),
+diff --git a/packages/core/src/subagents/subagent-manager-override.test.ts b/packages/core/src/subagents/subagent-manager-override.test.ts
+--- a/packages/core/src/subagents/subagent-manager-override.test.ts
++++ b/packages/core/src/subagents/subagent-manager-override.test.ts
+@@ -1,20 +1,21 @@
+ /**
+  * @license
+  * Copyright 2025 Qwen
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+-import { describe, it, expect } from 'vitest';
++import { describe, it, expect, onTestFinished, vi } from 'vitest';
+ import { Config, ApprovalMode } from '../config/config.js';
+ import { SubagentManager } from './subagent-manager.js';
+ import type { SubagentConfig } from './types.js';
+ import { ToolNames } from '../tools/tool-names.js';
+ import { EditTool } from '../tools/edit.js';
+ import { ReadFileTool } from '../tools/read-file.js';
+ import { createApprovalModeOverride } from '../tools/agent/agent.js';
++import { ToolRegistry } from '../tools/tool-registry.js';
+ 
+ /**
+  * Companion to `tools/agent/agent-override.test.ts`. Same regression:
+  * Object.create(parent) by itself is not enough to isolate a subagent's
+  * core tools from the parent's bound `EditTool` / `WriteFileTool` /
+  * `ReadFileTool`. The subagent path (which flows through
+@@ -229,12 +230,20 @@
+       // bareMode skips for us.
+       parent.addMcpServers({
+         'session-only': { type: 'stdio', command: 'node-a' } as never,
+         shared: { type: 'stdio', command: 'session-version' } as never,
+       });
+ 
++      // A per-agent server that fails discovery refuses the subagent
++      // (subagent-manager.test.ts covers that); this test is about the merge,
++      // so its fixture servers are discovered.
++      const discover = vi
++        .spyOn(ToolRegistry.prototype, 'discoverToolsForServer')
++        .mockResolvedValue(undefined);
++      onTestFinished(() => discover.mockRestore());
++
+       const manager = new SubagentManager(parent);
+       const child = await callBuildOverride(manager, parent, {
+         mcpServers: {
+           'agent-only': { type: 'stdio', command: 'node-b' },
+           shared: { type: 'stdio', command: 'agent-version' },
+         },
+diff --git a/packages/core/src/utils/subagentGenerator.test.ts b/packages/core/src/utils/subagentGenerator.test.ts
+--- a/packages/core/src/utils/subagentGenerator.test.ts
++++ b/packages/core/src/utils/subagentGenerator.test.ts
+@@ -193,25 +193,7 @@
+ 
+     // Check that system prompt is passed correctly
+     expect(callParams.systemInstruction).toContain(
+       'You are an elite AI agent architect',
+     );
+   });
+-
+-  it('should throw error for null response from generateJson', async () => {
+-    const userDescription = 'security auditing';
+-    (mockClient.generateJson as Mock).mockResolvedValue(null);
+-
+-    await expect(
+-      subagentGenerator(userDescription, mockConfig, abortSignal),
+-    ).rejects.toThrow('Invalid response from LLM: missing required fields');
+-  });
+-
+-  it('should throw error for undefined response from generateJson', async () => {
+-    const userDescription = 'api documentation';
+-    (mockClient.generateJson as Mock).mockResolvedValue(undefined);
+-
+-    await expect(
+-      subagentGenerator(userDescription, mockConfig, abortSignal),
+-    ).rejects.toThrow('Invalid response from LLM: missing required fields');
+-  });
+ });
+diff --git a/packages/core/src/utils/subagentGenerator.ts b/packages/core/src/utils/subagentGenerator.ts
+--- a/packages/core/src/utils/subagentGenerator.ts
++++ b/packages/core/src/utils/subagentGenerator.ts
+@@ -122,36 +122,25 @@
+     throw new Error('User description cannot be empty');
+   }
+ 
+   const userPrompt = createUserPrompt(userDescription);
+   const contents: Content[] = [{ role: 'user', parts: [{ text: userPrompt }] }];
+ 
+-  try {
+-    return await runSideQuery<SubagentGeneratedContent>(config, {
+-      contents,
+-      schema: RESPONSE_SCHEMA,
+-      abortSignal,
+-      systemInstruction: SYSTEM_PROMPT,
+-      purpose: 'subagent-generator',
+-      // Subagent specs are user-facing artifacts that get reused indefinitely.
+-      // Pin to the main model and keep reasoning on — quality matters more
+-      // than the cost of a one-shot generation.
+-      model: config.getModel(),
+-      config: {
+-        thinkingConfig: { includeThoughts: true },
+-      },
+-      validate: (response) =>
+-        !response.name || !response.description || !response.systemPrompt
+-          ? 'Invalid response from LLM: missing required fields'
+-          : null,
+-    });
+-  } catch (error) {
+-    if (
+-      error instanceof Error &&
+-      (error.message.startsWith('Invalid side query response:') ||
+-        error.message === 'Value of params must be an object')
+-    ) {
+-      throw new Error('Invalid response from LLM: missing required fields');
+-    }
+-    throw error;
+-  }
++  return runSideQuery<SubagentGeneratedContent>(config, {
++    contents,
++    schema: RESPONSE_SCHEMA,
++    abortSignal,
++    systemInstruction: SYSTEM_PROMPT,
++    purpose: 'subagent-generator',
++    // Subagent specs are user-facing artifacts that get reused indefinitely.
++    // Pin to the main model and keep reasoning on — quality matters more
++    // than the cost of a one-shot generation.
++    model: config.getModel(),
++    config: {
++      thinkingConfig: { includeThoughts: true },
++    },
++    validate: (response) =>
++      !response.name || !response.description || !response.systemPrompt
++        ? 'Invalid response from LLM: missing required fields'
++        : null,
++  });
+ }
