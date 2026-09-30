@@ -65,6 +65,10 @@ COPY docker/config/output-language.md \
 # The pinned upstream tarball comes from the base image, which fetched it once
 # at an exact digest; its digest is proved again here, so this build trusts the
 # base's bytes no further than it trusts anything else it is given.
+# The build then runs, with Vitest in its owning package, every patched test
+# file and the test beside every patched source file. Desktop is not part of
+# this image and its suites run under Bun (`bun:test`), which the image does
+# not carry, so they are not selected; nothing in this build executes them.
 RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
       "${QWEN_SOURCE_ARCHIVE_SHA256}" \
  && test "$(sha256sum /opt/agent-artifacts/patches/qwen-code-0.21.12-agent-service.patch | cut -d' ' -f1)" = \
@@ -135,7 +139,8 @@ RUN test "$(sha256sum /opt/upstream/qwen-code.tar.gz | cut -d' ' -f1)" = \
         test -f "/src/$f" && echo "$f"; \
       done < /tmp/adjacent-tests.txt || true; } > /tmp/adjacent-present.txt \
  && sort -u /tmp/patched-tests.txt /tmp/adjacent-present.txt \
-      | grep -v '^integration-tests/' > /tmp/qwen-test-files.txt \
+      | grep -v -e '^integration-tests/' -e '^packages/desktop/' \
+      > /tmp/qwen-test-files.txt \
  && test -s /tmp/qwen-test-files.txt \
  && echo "executing $(wc -l < /tmp/qwen-test-files.txt) test files in full:" \
  && cat /tmp/qwen-test-files.txt \
@@ -170,6 +175,7 @@ COPY Cargo.toml Cargo.lock build.rs ./
 COPY protocol protocol
 COPY src/bin/agent_exec.rs src/bin/agent_exec.rs
 COPY src/lib.rs src/error.rs src/result_parse.rs src/serde_contract.rs src/stream_contract.rs src/
+COPY src/result_parse src/result_parse
 COPY src/container_image.rs src/container_image.rs
 COPY src/bin/event_certifier.rs src/bin/event_certifier.rs
 COPY config/stack.lock.json config/agent-runtime-contract-v1.json config/

@@ -256,18 +256,17 @@ mod tests {
         }
     }
 
-    fn partial(state: &mut PartialStreamState, event: Value, root: bool) -> ContractResult<()> {
-        let mut record = serde_json::json!({"type":"stream_event", "uuid":"fixture",
+    /// A partial record as the producer writes it: no origin. The owning
+    /// producer is positional, so the scope's origin is set by the caller the
+    /// way the runtime sets it from the latest chat request or receipt.
+    fn record(event: &Value, root: bool) -> Value {
+        serde_json::json!({"type":"stream_event", "uuid":"fixture",
             "session_id":"session", "parent_tool_use_id": if root { Value::Null } else { Value::String("tool".into()) },
-            "event":event});
-        if !matches!(
-            record["event"]["type"].as_str(),
-            Some("tool_progress" | "active_goal" | "goal_state")
-        ) {
-            record["origin"] =
-                serde_json::json!({"kind":"runtime","operation_id":"local-operation"});
-        }
-        let document = document(&record);
+            "event":event})
+    }
+
+    fn partial(state: &mut PartialStreamState, event: Value, root: bool) -> ContractResult<()> {
+        let document = document(&record(&event, root));
         let decoded = DecodedRecord::decode(
             document.root(),
             ValidationLimits {
@@ -275,24 +274,63 @@ mod tests {
             },
             1,
         )?;
-        if let Some(origin) = document.root().get("origin") {
-            state.observe_origin(origin, 1)?;
-        }
         state.observe(decoded.partial().unwrap(), root, 1)
     }
 
+    fn runtime_scope() -> PartialStreamState {
+        let mut state = PartialStreamState::default();
+        state
+            .set_origin(crate::partial_stream::OutputOrigin::Runtime, 1)
+            .unwrap();
+        state
+    }
+
+    fn message_start(id: &str) -> Value {
+        serde_json::json!({"type":"message_start", "message":{
+            "id":id, "role":"assistant", "model":"fixture-model", "content":[]}})
+    }
+
     #[test]
-    fn partials_follow_explicit_root_and_child_group_boundaries() {
+    fn partials_carry_no_origin_of_their_own() {
+        for event in [
+            message_start("group"),
+            serde_json::json!({"type":"content_block_start", "index":0,
+                "content_block":{"type":"text", "text":""}}),
+            serde_json::json!({"type":"message_stop"}),
+            serde_json::json!({"type":"active_goal", "active_goal":null}),
+        ] {
+            let root = true;
+            fixture_decode(&record(&event, root)).unwrap();
+            for origin in [
+                serde_json::json!({"kind":"runtime","operation_id":"local-operation"}),
+                serde_json::json!({"kind":"model","attempt_id":"attempt","kv_scope":"session"}),
+            ] {
+                let mut labelled = record(&event, root);
+                labelled["origin"] = origin;
+                assert!(
+                    fixture_decode(&labelled)
+                        .unwrap_err()
+                        .to_string()
+                        .contains("violates stream contract"),
+                    "{labelled}"
+                );
+            }
+        }
+        let mut unowned = PartialStreamState::default();
+        assert!(partial(&mut unowned, message_start("group"), true)
+            .unwrap_err()
+            .to_string()
+            .contains("no producing origin"));
+    }
+
+    #[test]
+    fn partials_follow_upstream_root_groups_and_bare_child_blocks() {
         for root in [true, false] {
-            let mut state = PartialStreamState::default();
+            let mut state = runtime_scope();
             for id in ["first", "second"] {
-                partial(
-                    &mut state,
-                    serde_json::json!({"type":"message_start", "message":{
-                    "id":id, "role":"assistant", "content":[]}}),
-                    root,
-                )
-                .unwrap();
+                if root {
+                    partial(&mut state, message_start(id), root).unwrap();
+                }
                 partial(
                     &mut state,
                     serde_json::json!({"type":"content_block_start", "index":0,
@@ -312,6 +350,7 @@ mod tests {
                     .unwrap_err()
                     .to_string()
                     .contains("unclosed"));
+                assert!(state.finish(2).is_err(), "an open block is unfinished");
                 partial(
                     &mut state,
                     serde_json::json!({"type":"content_block_stop", "index":0}),
@@ -319,68 +358,111 @@ mod tests {
                 )
                 .unwrap();
                 state.complete_message("observed content", 3).unwrap();
-                assert!(state.finish(4).is_err());
-                partial(&mut state, serde_json::json!({"type":"message_stop"}), root).unwrap();
+                if root {
+                    assert!(state.finish(4).is_err(), "an open root group is unfinished");
+                    partial(&mut state, serde_json::json!({"type":"message_stop"}), root).unwrap();
+                }
                 state.finish(5).unwrap();
+            }
+            if !root {
+                // A subagent scope has no group markers at all.
+                assert!(partial(&mut state, message_start("third"), root)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("a subagent scope has no message group"));
+                assert!(partial(&mut runtime_scope(), serde_json::json!({"type":"message_stop"}), root)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("message group stops"));
             }
         }
     }
 
     #[test]
+    fn a_block_index_restarts_only_once_every_block_is_closed() {
+        for root in [true, false] {
+            let text = |index: u64| {
+                serde_json::json!({"type":"content_block_start", "index":index,
+                    "content_block":{"type":"text", "text":""}})
+            };
+            let stop = |index: u64| serde_json::json!({"type":"content_block_stop", "index":index});
+            let mut state = runtime_scope();
+            if root {
+                partial(&mut state, message_start("group"), root).unwrap();
+            }
+            // The next message of a turn restarts at zero once all blocks close.
+            partial(&mut state, text(0), root).unwrap();
+            partial(&mut state, stop(0), root).unwrap();
+            partial(&mut state, text(0), root).unwrap();
+            // A restart while a block is open is not the next message index.
+            assert!(partial(&mut state, text(0), root)
+                .unwrap_err()
+                .to_string()
+                .contains("not the next message index"));
+            partial(&mut state, text(1), root).unwrap();
+            partial(&mut state, stop(1), root).unwrap();
+            partial(&mut state, stop(0), root).unwrap();
+            // Every block of the restarted message is closed: indices restart again.
+            partial(&mut state, text(0), root).unwrap();
+            partial(&mut state, stop(0), root).unwrap();
+            assert!(partial(&mut state, stop(1), root)
+                .unwrap_err()
+                .to_string()
+                .contains("absent or closed"), "a restart forgets the previous message");
+            state.complete_message("", 1).unwrap();
+            if root {
+                partial(&mut state, serde_json::json!({"type":"message_stop"}), root).unwrap();
+            }
+            state.finish(1).unwrap();
+        }
+    }
+
+    #[test]
     fn partials_refuse_unissued_closed_or_contradictory_deltas() {
-        let mut state = PartialStreamState::default();
-        let delta = serde_json::json!({"type":"content_block_delta", "index":0,
-            "delta":{"type":"text_delta", "text":"value"}});
-        assert!(partial(&mut state, delta.clone(), false)
+        for root in [true, false] {
+            let mut state = runtime_scope();
+            let delta = serde_json::json!({"type":"content_block_delta", "index":0,
+                "delta":{"type":"text_delta", "text":"value"}});
+            if root {
+                partial(&mut state, message_start("group"), root).unwrap();
+            }
+            assert!(partial(&mut state, delta.clone(), root)
+                .unwrap_err()
+                .to_string()
+                .contains("absent or closed"));
+            partial(
+                &mut state,
+                serde_json::json!({"type":"content_block_start", "index":0,
+                "content_block":{"type":"text", "text":""}}),
+                root,
+            )
+            .unwrap();
+            assert!(partial(
+                &mut state,
+                serde_json::json!({"type":"content_block_delta", "index":0,
+                "delta":{"type":"thinking_delta", "thinking":"value"}}),
+                root
+            )
             .unwrap_err()
             .to_string()
-            .contains("absent or closed"));
-        partial(
-            &mut state,
-            serde_json::json!({"type":"message_start", "message":{
-            "id":"group", "role":"assistant", "content":[]}}),
-            false,
-        )
-        .unwrap();
-        partial(
-            &mut state,
-            serde_json::json!({"type":"content_block_start", "index":0,
-            "content_block":{"type":"text", "text":""}}),
-            false,
-        )
-        .unwrap();
-        assert!(partial(
-            &mut state,
-            serde_json::json!({"type":"content_block_delta", "index":0,
-            "delta":{"type":"thinking_delta", "thinking":"value"}}),
-            false
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("contradicts"));
-        partial(
-            &mut state,
-            serde_json::json!({"type":"content_block_stop", "index":0}),
-            false,
-        )
-        .unwrap();
-        assert!(partial(&mut state, delta, false)
-            .unwrap_err()
-            .to_string()
-            .contains("closed"));
+            .contains("contradicts"));
+            partial(
+                &mut state,
+                serde_json::json!({"type":"content_block_stop", "index":0}),
+                root,
+            )
+            .unwrap();
+            assert!(partial(&mut state, delta, root)
+                .unwrap_err()
+                .to_string()
+                .contains("closed"));
+        }
     }
 
     #[test]
     fn mathematical_integer_spellings_survive_partial_admission_and_observation() {
         for token in ["0", "0.0", "0e0", "-0.0"] {
-            let mut owner = PartialStreamState::default();
-            partial(
-                &mut owner,
-                serde_json::json!({"type":"message_start", "message":{
-                "id":"numeric-group", "role":"assistant", "content":[]}}),
-                false,
-            )
-            .unwrap();
+            let mut owner = runtime_scope();
             for (kind, spelling) in [
                 ("content_block_start", token),
                 ("content_block_stop", "0.0"),
@@ -391,7 +473,7 @@ mod tests {
                     ""
                 };
                 let bytes = format!(
-                    r#"{{"type":"stream_event","origin":{{"kind":"runtime","operation_id":"local-operation"}},"uuid":"fixture","session_id":"session","parent_tool_use_id":"tool","event":{{"type":"{kind}","index":{spelling}{block}}}}}"#
+                    r#"{{"type":"stream_event","uuid":"fixture","session_id":"session","parent_tool_use_id":"tool","event":{{"type":"{kind}","index":{spelling}{block}}}}}"#
                 );
                 let document = Document::decode(
                     bytes.as_bytes(),
@@ -425,12 +507,6 @@ mod tests {
                 owner.observe(record.partial().unwrap(), false, 1).unwrap();
             }
             owner.complete_message("", 3).unwrap();
-            partial(
-                &mut owner,
-                serde_json::json!({"type":"message_stop"}),
-                false,
-            )
-            .unwrap();
             owner.finish(4).unwrap();
         }
     }
@@ -440,21 +516,19 @@ mod tests {
         let vectors: Value =
             serde_json::from_str(include_str!("../../test-vectors/partial-stream-v2.json"))
                 .unwrap();
-        for case in vectors["cases"].as_array().unwrap() {
-            let mut owner = PartialStreamState::default();
-            let origin =
-                document(&serde_json::json!({"kind":"runtime","operation_id":"local-operation"}));
-            owner.observe_origin(origin.root(), 1).unwrap();
+        assert_eq!(vectors["v"], 2);
+        let cases = vectors["cases"].as_array().unwrap();
+        assert!(cases.iter().any(|case| case["root"] == true));
+        assert!(cases.iter().any(|case| case["root"] == false));
+        for case in cases {
+            let root = case["root"].as_bool().unwrap();
+            let mut owner = runtime_scope();
             let outcome = case["actions"]
                 .as_array()
                 .unwrap()
                 .iter()
                 .try_for_each(|action| match action["kind"].as_str().unwrap() {
-                    "partial" => partial(
-                        &mut owner,
-                        action["event"].clone(),
-                        case["root"].as_bool().unwrap(),
-                    ),
+                    "partial" => partial(&mut owner, action["event"].clone(), root),
                     "message_complete" => {
                         owner.complete_message(action["text"].as_str().unwrap_or(""), 1)
                     }
@@ -464,6 +538,7 @@ mod tests {
             if case["expected"]["state"] == "accepted" {
                 assert!(outcome.is_ok(), "case {}: {outcome:?}", case["name"]);
             } else {
+                assert_eq!(case["expected"]["state"], "rejected", "case {}", case["name"]);
                 let cause = outcome.unwrap_err().to_string();
                 assert!(
                     cause.contains(case["expected"]["cause"].as_str().unwrap()),

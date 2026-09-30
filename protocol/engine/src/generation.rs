@@ -79,6 +79,24 @@ pub(crate) struct IncompleteCall {
     pub arguments: String,
 }
 
+/// One non-thought part of the history an accepted generation commits, in order.
+#[derive(Clone, Debug)]
+enum Shown {
+    Text(String),
+    Call(usize),
+    /// A part no headless assistant block represents.
+    Unshowable,
+}
+
+/// One upstream-shaped assistant message a settled turn shows.
+#[derive(Clone, Debug)]
+pub(crate) struct DisplayMessage {
+    /// The exact `content` array, as JSON text with call arguments verbatim.
+    pub content_json: String,
+    pub tool_use_only: bool,
+    pub usage: Option<ServedUsage>,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct Generation {
     pub journal: String,
@@ -86,6 +104,7 @@ pub(crate) struct Generation {
     pub hash: String,
     pub origin: Origin,
     pub output_scope: OutputScope,
+    pub model: String,
     pub usage: Option<ServedUsage>,
     pub finish: Option<String>,
     pub observation_count: u64,
@@ -96,6 +115,8 @@ pub(crate) struct Generation {
     pub calls: Vec<Call>,
     pub incomplete: Vec<IncompleteCall>,
     accepted_images_valid: bool,
+    shown_thinking: String,
+    shown: Vec<Shown>,
 }
 
 fn values(value: Option<Value<'_>>) -> Vec<Value<'_>> {
@@ -252,6 +273,7 @@ impl Generation {
             hash: hash.into(),
             origin: Origin::read(field(envelope, "origin", line)?, line)?,
             output_scope: OutputScope::read(field(envelope, "output_scope", line)?, line)?,
+            model: text(envelope, "model", line)?.into(),
             usage: if usage.is_null() {
                 None
             } else {
@@ -268,6 +290,8 @@ impl Generation {
             calls: Vec::new(),
             incomplete: Vec::new(),
             accepted_images_valid: true,
+            shown_thinking: String::new(),
+            shown: Vec::new(),
         };
         if let OutputScope::Conversation {
             parent: Some(parent),
@@ -427,10 +451,16 @@ impl Generation {
                     // Thought consolidation discards nontext fields. Adjacent
                     // plain text merges retain only the earlier Part metadata.
                     if truthy(part.get("thought")) {
+                        generation
+                            .shown_thinking
+                            .push_str(part.get("text").and_then(Value::as_str).unwrap_or(""));
                         continue;
                     }
                     let plain = plain_text(part);
                     if previous_plain_nonempty && plain {
+                        if let Some(Shown::Text(last)) = generation.shown.last_mut() {
+                            last.push_str(part.get("text").and_then(Value::as_str).unwrap_or(""));
+                        }
                         continue;
                     }
                     if !valid_part(part) {
@@ -446,6 +476,15 @@ impl Generation {
                             object_arguments: call
                                 .get("args")
                                 .is_some_and(|args| args.as_object().is_some()),
+                        });
+                        generation.shown.push(Shown::Call(generation.calls.len() - 1));
+                    } else {
+                        let text_only = part.members().is_some_and(|mut members| {
+                            members.all(|(key, _)| matches!(key, "text" | "thoughtSignature"))
+                        });
+                        generation.shown.push(match part.get("text").and_then(Value::as_str) {
+                            Some(text) if text_only => Shown::Text(text.to_string()),
+                            _ => Shown::Unshowable,
                         });
                     }
                 }
@@ -467,6 +506,97 @@ impl Generation {
             return Err(refusal("summary contradicts complete observations"));
         }
         Ok(generation)
+    }
+
+    /// A refused draw is a turn the provider completed at its output limit; a
+    /// length stop serves any call it was writing as text, so it has none.
+    pub fn require_refused(&self) -> ContractResult<()> {
+        if self.usage.is_none() || self.finish.as_deref() != Some("MAX_TOKENS") || !self.calls.is_empty()
+        {
+            return Err(refusal(
+                "a refused draw must stop at its output limit without a call",
+            ));
+        }
+        Ok(())
+    }
+
+    /// The assistant messages a settled turn shows, in upstream's headless
+    /// grouping: one block kind per message, in the order the model produced
+    /// them, the turn's served usage on the last message. The client derives
+    /// the same messages from the same generation (`generationDisplay`).
+    pub fn display(&self, refused: bool) -> ContractResult<Vec<DisplayMessage>> {
+        let quote = |value: &str| serde_json::to_string(value).expect("string JSON");
+        let mut blocks: Vec<(&'static str, String)> = Vec::new();
+        if !self.shown_thinking.is_empty() {
+            blocks.push((
+                "thinking",
+                format!(r#"{{"type":"thinking","thinking":{}}}"#, quote(&self.shown_thinking)),
+            ));
+        }
+        for shown in &self.shown {
+            match shown {
+                Shown::Text(text) if text.is_empty() => {}
+                Shown::Text(text) => blocks.push((
+                    "text",
+                    format!(r#"{{"type":"text","text":{}}}"#, quote(text)),
+                )),
+                Shown::Call(index) => {
+                    let call = &self.calls[*index];
+                    let (Some(name), Some(arguments), false) =
+                        (&call.name, &call.arguments, refused)
+                    else {
+                        return Err(refusal("a displayed turn carries a call it cannot have made"));
+                    };
+                    blocks.push((
+                        "tool_use",
+                        format!(
+                            r#"{{"type":"tool_use","id":{},"name":{},"input":{}}}"#,
+                            quote(&call.id),
+                            quote(name),
+                            arguments
+                        ),
+                    ));
+                }
+                Shown::Unshowable => {
+                    return Err(refusal(
+                        "a displayed turn carries a model part no assistant block represents",
+                    ))
+                }
+            }
+        }
+        for call in &self.incomplete {
+            blocks.push((
+                "incomplete_tool_use",
+                format!(
+                    r#"{{"type":"incomplete_tool_use","name":{},"arguments":{}}}"#,
+                    call.name.as_deref().map_or_else(|| "null".to_string(), quote),
+                    quote(&call.arguments)
+                ),
+            ));
+        }
+        let mut groups: Vec<Vec<(&'static str, String)>> = Vec::new();
+        for block in blocks {
+            match groups.last_mut() {
+                Some(group) if group[0].0 == block.0 => group.push(block),
+                _ => groups.push(vec![block]),
+            }
+        }
+        if groups.is_empty() {
+            groups.push(Vec::new());
+        }
+        let last = groups.len() - 1;
+        Ok(groups
+            .into_iter()
+            .enumerate()
+            .map(|(index, group)| DisplayMessage {
+                tool_use_only: !group.is_empty() && group.iter().all(|(kind, _)| *kind == "tool_use"),
+                content_json: format!(
+                    "[{}]",
+                    group.into_iter().map(|(_, json)| json).collect::<Vec<_>>().join(",")
+                ),
+                usage: if index == last { self.usage } else { None },
+            })
+            .collect())
     }
 
     pub fn require_accepted(&self) -> ContractResult<()> {

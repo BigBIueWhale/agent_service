@@ -6509,11 +6509,14 @@ mod tests {
         for (sequence, id, scope, output, thoughts) in
             [(1, "main", "a", 9, 6), (2, "utility", "internal", 8, 4)]
         {
-            let body = serde_json::json!({"kv_scope":scope,"messages":[]}).to_string();
+            let body = serde_json::json!({"kv_scope":scope,"model":"fixture","stream":false,"messages":[]}).to_string();
             let request = serde_json::json!({"type":"model_request","uuid":format!("request-{id}"),
             "session_id":"a","parent_tool_use_id":null,"request":{
                 "journal_id":"fixture","request_id":id,"sequence":sequence,"kv_scope":scope,
-                "segment_id":format!("segment-{id}"),"prompt_id":"test","owner":{"kind":"utility"},
+                "segment_id":format!("segment-{id}"),"prompt_id":"test",
+                "owner":{"kind":"utility","operation_id":format!("operation-{id}"),"purpose":"other"},
+                "decode_policy":{"mode":"nonstream","model":"fixture","strict_tool_calling":true,
+                    "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
                 "body_bytes":body.len(),"body_sha256":hash(body.as_bytes()),"body":{"kind":"full","json":body}
             }});
             bytes.push_str(&request.to_string());
@@ -6523,7 +6526,8 @@ mod tests {
                 serde_json::json!({"kind":"end","termination":"eof","body_bytes":0,"body_sha256":hash(b""),"error":null}),
                 serde_json::json!({"kind":"outcome","status":"completed","error":null,"served_usage":{
                     "promptTokenCount":0,"candidatesTokenCount":output,"thoughtsTokenCount":thoughts,
-                    "cachedContentTokenCount":0,"totalTokenCount":output}}),
+                    "cachedContentTokenCount":0,"totalTokenCount":output},
+                    "sdk_values_seen":1,"pipeline_outputs_delivered":0}),
             ].into_iter().enumerate() {
                 let response = serde_json::json!({"type":"model_response","uuid":format!("response-{id}-{index}"),
                     "session_id":"a","parent_tool_use_id":null,"response":{

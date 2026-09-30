@@ -2,7 +2,7 @@
   "v": 2,
   "cases": [
     {
-      "name": "root message groups reset indices only after explicit closure",
+      "name": "root groups each message and restarts indices once every block closes",
       "root": true,
       "actions": [
         {
@@ -12,6 +12,7 @@
             "message": {
               "id": "first",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -62,6 +63,7 @@
             "message": {
               "id": "second",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -114,18 +116,37 @@
       }
     },
     {
-      "name": "child message groups reset indices only after explicit closure",
-      "root": false,
+      "name": "root index restarts at zero for the next message inside one group",
+      "root": true,
       "actions": [
         {
           "kind": "partial",
           "event": {
             "type": "message_start",
             "message": {
-              "id": "first",
+              "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
           }
         },
         {
@@ -167,17 +188,99 @@
             "type": "message_stop"
           }
         },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "root indices may continue within one message",
+      "root": true,
+      "actions": [
         {
           "kind": "partial",
           "event": {
             "type": "message_start",
             "message": {
-              "id": "second",
+              "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
         },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 1,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 1
+          }
+        },
+        {
+          "kind": "message_complete",
+          "text": "exact delivered content"
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        },
+        {
+          "kind": "scope_complete"
+        }
+      ],
+      "expected": {
+        "state": "accepted"
+      }
+    },
+    {
+      "name": "child streams bare blocks and restarts indices once every block closes",
+      "root": false,
+      "actions": [
         {
           "kind": "partial",
           "event": {
@@ -214,8 +317,35 @@
         {
           "kind": "partial",
           "event": {
-            "type": "message_stop"
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
           }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete",
+          "text": "exact delivered content"
         },
         {
           "kind": "scope_complete"
@@ -279,7 +409,29 @@
       }
     },
     {
-      "name": "child block requires its message group",
+      "name": "child has no message group to open",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "model": "fixture-model",
+              "content": []
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "a subagent scope has no message group"
+      }
+    },
+    {
+      "name": "child has no message group to open after its blocks",
       "root": false,
       "actions": [
         {
@@ -292,11 +444,30 @@
               "text": ""
             }
           }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "model": "fixture-model",
+              "content": []
+            }
+          }
         }
       ],
       "expected": {
         "state": "rejected",
-        "cause": "message group"
+        "cause": "a subagent scope has no message group"
       }
     },
     {
@@ -310,6 +481,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -321,38 +493,7 @@
             "message": {
               "id": "second",
               "role": "assistant",
-              "content": []
-            }
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "already open"
-      }
-    },
-    {
-      "name": "child cannot open a second message group",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "second",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -380,9 +521,66 @@
       }
     },
     {
-      "name": "child cannot stop an unstarted group",
+      "name": "child has no message group to stop",
       "root": false,
       "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_stop"
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "message group stops"
+      }
+    },
+    {
+      "name": "root group stop requires all blocks to close",
+      "root": true,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "message_start",
+            "message": {
+              "id": "group",
+              "role": "assistant",
+              "model": "fixture-model",
+              "content": []
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
         {
           "kind": "partial",
           "event": {
@@ -406,6 +604,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -434,17 +633,6 @@
         {
           "kind": "partial",
           "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
             "type": "content_block_start",
             "index": 1,
             "content_block": {
@@ -460,7 +648,7 @@
       }
     },
     {
-      "name": "root indices cannot reset inside an open group",
+      "name": "root indices cannot restart while a block is open",
       "root": true,
       "actions": [
         {
@@ -470,6 +658,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -483,13 +672,6 @@
               "type": "text",
               "text": ""
             }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_stop",
-            "index": 0
           }
         },
         {
@@ -510,8 +692,40 @@
       }
     },
     {
-      "name": "child indices cannot reset inside an open group",
+      "name": "child indices cannot restart while a block is open",
       "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "index"
+      }
+    },
+    {
+      "name": "root indices cannot skip within a message",
+      "root": true,
       "actions": [
         {
           "kind": "partial",
@@ -520,6 +734,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -546,7 +761,39 @@
           "kind": "partial",
           "event": {
             "type": "content_block_start",
+            "index": 2,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "index"
+      }
+    },
+    {
+      "name": "child indices cannot skip within a message",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
             "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 2,
             "content_block": {
               "type": "text",
               "text": ""
@@ -570,38 +817,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": {
-              "type": "text_delta",
-              "text": "exact delivered content"
-            }
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "absent or closed"
-      }
-    },
-    {
-      "name": "child delta requires an issued block",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -634,34 +850,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_stop",
-            "index": 0
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "absent or closed"
-      }
-    },
-    {
-      "name": "child block stop requires an issued block",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -690,49 +879,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": {
-              "type": "text",
-              "text": ""
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": {
-              "type": "thinking_delta",
-              "thinking": "exact delivered content"
-            }
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "contradicts"
-      }
-    },
-    {
-      "name": "child delta kind must match the issued block",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -776,56 +923,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": {
-              "type": "text",
-              "text": ""
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_stop",
-            "index": 0
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_delta",
-            "index": 0,
-            "delta": {
-              "type": "text_delta",
-              "text": "exact delivered content"
-            }
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "absent or closed"
-      }
-    },
-    {
-      "name": "child closed blocks cannot receive more deltas",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -876,52 +974,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": {
-              "type": "text",
-              "text": ""
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_stop",
-            "index": 0
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_stop",
-            "index": 0
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "absent or closed"
-      }
-    },
-    {
-      "name": "child closed blocks cannot stop twice",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -968,6 +1021,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -994,20 +1048,153 @@
       }
     },
     {
-      "name": "child full runtime message requires all blocks to close",
+      "name": "child delta requires an issued block",
       "root": false,
       "actions": [
         {
           "kind": "partial",
           "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
-              "content": []
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child block stop requires an issued block",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child delta kind must match the issued block",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
             }
           }
         },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "thinking_delta",
+              "thinking": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "contradicts"
+      }
+    },
+    {
+      "name": "child closed blocks cannot receive more deltas",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child closed blocks cannot stop twice",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "text",
+              "text": ""
+            }
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "absent or closed"
+      }
+    },
+    {
+      "name": "child full runtime message requires all blocks to close",
+      "root": false,
+      "actions": [
         {
           "kind": "partial",
           "event": {
@@ -1040,6 +1227,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -1076,23 +1264,12 @@
       }
     },
     {
-      "name": "child scope completion requires a group stop",
+      "name": "child scope completion requires every block to close",
       "root": false,
       "actions": [
         {
           "kind": "partial",
           "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
             "type": "content_block_start",
             "index": 0,
             "content_block": {
@@ -1100,17 +1277,6 @@
               "text": ""
             }
           }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_stop",
-            "index": 0
-          }
-        },
-        {
-          "kind": "message_complete",
-          "text": ""
         },
         {
           "kind": "scope_complete"
@@ -1122,7 +1288,7 @@
       }
     },
     {
-      "name": "root group stop requires all blocks to close",
+      "name": "root runtime text must equal its full assistant message",
       "root": true,
       "actions": [
         {
@@ -1132,6 +1298,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -1150,18 +1317,34 @@
         {
           "kind": "partial",
           "event": {
-            "type": "message_stop"
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {
+              "type": "text_delta",
+              "text": "exact delivered content"
+            }
           }
+        },
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "message_complete",
+          "text": "altered"
         }
       ],
       "expected": {
         "state": "rejected",
-        "cause": "message group stops"
+        "cause": "no matching full assistant message"
       }
     },
     {
-      "name": "child group stop requires all blocks to close",
-      "root": false,
+      "name": "root runtime group requires its full assistant message",
+      "root": true,
       "actions": [
         {
           "kind": "partial",
@@ -1170,6 +1353,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -1188,13 +1372,20 @@
         {
           "kind": "partial",
           "event": {
+            "type": "content_block_stop",
+            "index": 0
+          }
+        },
+        {
+          "kind": "partial",
+          "event": {
             "type": "message_stop"
           }
         }
       ],
       "expected": {
         "state": "rejected",
-        "cause": "message group stops"
+        "cause": "no full assistant message"
       }
     },
     {
@@ -1208,38 +1399,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": {
-              "type": "thinking",
-              "thinking": ""
-            }
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "model thought"
-      }
-    },
-    {
-      "name": "child runtime output cannot claim model thought",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -1272,40 +1432,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
-              "content": []
-            }
-          }
-        },
-        {
-          "kind": "partial",
-          "event": {
-            "type": "content_block_start",
-            "index": 0,
-            "content_block": {
-              "type": "tool_use",
-              "id": "call",
-              "name": "tool",
-              "input": {}
-            }
-          }
-        }
-      ],
-      "expected": {
-        "state": "rejected",
-        "cause": "accepted generation completion"
-      }
-    },
-    {
-      "name": "child runtime output cannot issue model calls",
-      "root": false,
-      "actions": [
-        {
-          "kind": "partial",
-          "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -1340,6 +1467,7 @@
             "message": {
               "id": "group",
               "role": "assistant",
+              "model": "fixture-model",
               "content": []
             }
           }
@@ -1363,20 +1491,53 @@
       }
     },
     {
-      "name": "child runtime output cannot claim incomplete model calls",
+      "name": "child runtime output cannot claim model thought",
       "root": false,
       "actions": [
         {
           "kind": "partial",
           "event": {
-            "type": "message_start",
-            "message": {
-              "id": "group",
-              "role": "assistant",
-              "content": []
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "thinking",
+              "thinking": ""
             }
           }
-        },
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "model thought"
+      }
+    },
+    {
+      "name": "child runtime output cannot issue model calls",
+      "root": false,
+      "actions": [
+        {
+          "kind": "partial",
+          "event": {
+            "type": "content_block_start",
+            "index": 0,
+            "content_block": {
+              "type": "tool_use",
+              "id": "call",
+              "name": "tool",
+              "input": {}
+            }
+          }
+        }
+      ],
+      "expected": {
+        "state": "rejected",
+        "cause": "accepted generation completion"
+      }
+    },
+    {
+      "name": "child runtime output cannot claim incomplete model calls",
+      "root": false,
+      "actions": [
         {
           "kind": "partial",
           "event": {

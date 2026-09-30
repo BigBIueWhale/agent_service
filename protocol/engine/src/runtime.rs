@@ -1,7 +1,9 @@
 //! One pure owner for stream identity, semantic admission and independent
 //! observations. Physical capture, storage and process receipts remain external.
 use crate::{
-    generation::{Generation, OutputScope},
+    generation::{DisplayMessage, Generation, Origin, OutputScope},
+    model_requests::Disposition,
+    partial_stream::OutputOrigin,
     json::{Document, Limits, Value},
     schema::ValidationLimits,
     stream::{field, text, unsigned},
@@ -10,7 +12,7 @@ use crate::{
     SAFE_INTEGER, STREAM_CONTRACT_SHA256,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
 fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
@@ -511,6 +513,75 @@ fn validate_compaction_event(
 /// the main session, any other value is the owning `agent` tool-call id. Only
 /// null-or-absent is read as the main session, so a value of any other shape
 /// can only ever exclude an event from the main thread, never admit one to it.
+/// The text a request message gives the model: string content, or its text
+/// parts in order. Media parts reach the model beside the text.
+fn message_text(message: Value<'_>) -> Option<String> {
+    let content = message.get("content")?;
+    if let Some(text) = content.as_str() {
+        return Some(text.to_string());
+    }
+    let mut joined = String::new();
+    for part in content.elements()? {
+        if part.get("type").and_then(Value::as_str) == Some("text") {
+            joined.push_str(part.get("text")?.as_str()?);
+        }
+    }
+    Some(joined)
+}
+
+/// Every user row a scope displayed since its previous chat request is input
+/// the model received in the next one: after the last assistant message, in
+/// the displayed order, a tool result as the tool message for its call and a
+/// notice as a user message, each with exactly the displayed text. Input the
+/// model received but nobody displayed (reminders, context) may sit between.
+fn bind_displayed_inputs(
+    inputs: &[DisplayedInput],
+    messages: &[String],
+    limits: Limits,
+    line: usize,
+) -> ContractResult<()> {
+    if inputs.is_empty() {
+        return Ok(());
+    }
+    let mut tail = Vec::new();
+    for raw in messages.iter().rev() {
+        let document = Document::decode(raw.as_bytes(), limits)
+            .map_err(|cause| decode_failure(cause, line))?;
+        if document.root().get("role").and_then(Value::as_str) == Some("assistant") {
+            break;
+        }
+        tail.push(document);
+    }
+    tail.reverse();
+    let mut candidates = tail.iter().map(Document::root);
+    for input in inputs {
+        let found = candidates.by_ref().any(|message| {
+            let role = message.get("role").and_then(Value::as_str);
+            let content = message_text(message);
+            match input {
+                DisplayedInput::ToolResult { id, text } => {
+                    role == Some("tool")
+                        && message.get("tool_call_id").and_then(Value::as_str) == Some(id)
+                        && content.as_deref() == Some(text)
+                }
+                DisplayedInput::Notice(text) => {
+                    role == Some("user") && content.as_deref() == Some(text)
+                }
+            }
+        });
+        if !found {
+            return Err(ContractError::InvalidRecord(format!(
+                "events.jsonl line {line} sends a request that does not carry displayed input {}; the displayed user rows must be what the model received",
+                match input {
+                    DisplayedInput::ToolResult { id, .. } => format!("tool result {id:?}"),
+                    DisplayedInput::Notice(_) => "notice".to_string(),
+                }
+            )));
+        }
+    }
+    Ok(())
+}
+
 fn required_scope<'a>(object: Value<'a>, line: usize) -> ContractResult<Option<&'a str>> {
     match object.get("parent_tool_use_id") {
         None => Ok(None),
@@ -662,7 +733,6 @@ struct Terminal {
 }
 #[derive(Clone, Default)]
 struct ScopeState {
-    attempts: BTreeSet<String>,
     id: Option<String>,
     terminal: Option<Terminal>,
     partial: PartialStreamState,
@@ -677,6 +747,20 @@ struct RuntimeOperation {
     id: String,
     output_sha256: String,
     output_bytes: u64,
+}
+/// A user row the model is shown as input: a tool result or a runtime notice.
+/// Each must reach the model in the scope's next chat request.
+#[derive(Clone, Debug)]
+enum DisplayedInput {
+    ToolResult { id: String, text: String },
+    Notice(String),
+}
+/// The assistant messages a settled turn owes before any other record.
+#[derive(Clone)]
+struct OwedDisplay {
+    scope: Option<String>,
+    model: String,
+    messages: VecDeque<DisplayMessage>,
 }
 struct ToolUse {
     name: String,
@@ -702,6 +786,10 @@ struct AdmissionPlan {
     additions: BTreeMap<String, ToolUse>,
     returns: BTreeSet<String>,
     runtime_operation_id: Option<String>,
+    owed: Option<OwedDisplay>,
+    displayed: Vec<DisplayedInput>,
+    bound_display_scope: Option<Option<String>>,
+    partial_origin: Option<(Option<String>, OutputOrigin)>,
     prefix: u64,
 }
 struct PendingAdmission {
@@ -736,6 +824,9 @@ pub struct RuntimeContract {
     scope_rows: BTreeMap<String, usize>,
     tool_uses: BTreeMap<String, ToolUse>,
     runtime_operation_ids: BTreeSet<String>,
+    owed: Option<OwedDisplay>,
+    displayed_inputs: BTreeMap<Option<String>, Vec<DisplayedInput>>,
+    partial_origins: BTreeMap<Option<String>, OutputOrigin>,
     pending: Option<PendingAdmission>,
 }
 impl RuntimeContract {
@@ -760,6 +851,9 @@ impl RuntimeContract {
             scope_rows: BTreeMap::new(),
             tool_uses: BTreeMap::new(),
             runtime_operation_ids: BTreeSet::new(),
+            owed: None,
+            displayed_inputs: BTreeMap::new(),
+            partial_origins: BTreeMap::new(),
             pending: None,
         }
     }
@@ -1077,6 +1171,20 @@ impl RuntimeContract {
         if let Some(id) = plan.runtime_operation_id {
             self.runtime_operation_ids.insert(id);
         }
+        self.owed = plan.owed;
+        if !plan.displayed.is_empty() {
+            let scope = self.scope_states[plan.row].id.clone();
+            self.displayed_inputs
+                .entry(scope)
+                .or_default()
+                .extend(plan.displayed);
+        }
+        if let Some(scope) = plan.bound_display_scope {
+            self.displayed_inputs.remove(&scope);
+        }
+        if let Some((scope, origin)) = plan.partial_origin {
+            self.partial_origins.insert(scope, origin);
+        }
         self.prefix = plan.prefix;
         token.sequence = None;
         Ok(())
@@ -1146,56 +1254,32 @@ impl RuntimeContract {
                 id: scope.map(str::to_string),
                 ..ScopeState::default()
             });
-        if let Some(origin) = object.get("origin") {
-            if text(origin, "kind", line)? == "runtime" {
-                if self
-                    .requests
-                    .has_chat_attempt_in_scope(scope.unwrap_or(text(object, "session_id", line)?))
-                {
-                    return Err(ContractError::InvalidRecord(format!(
-                        "events.jsonl line {line} claims runtime assistant output after a chat attempt in the same scope; inspect the original generation and its output origin"
-                    )));
-                }
-                let operation_id = text(origin, "operation_id", line)?;
-                let pending = state
-                    .runtime_operation
-                    .as_ref()
-                    .map(|operation| operation.id.as_str())
-                    == Some(operation_id);
-                let closing = matches!(record.kind(), EventKind::StreamEvent)
-                    && object
-                        .get("event")
-                        .and_then(|event| event.get("type"))
-                        .and_then(Value::as_str)
-                        == Some("message_stop")
-                    && state.completed_runtime_operation.as_deref() == Some(operation_id);
-                if !pending && !closing {
-                    return Err(ContractError::InvalidRecord(format!(
-                        "events.jsonl line {line} claims runtime output without its local operation receipt in the same scope; retain the complete original stream"
-                    )));
-                }
+        // A settled turn owes exactly its assistant messages before any other
+        // record; the messages derive from its generation, so a shown turn and
+        // its generation cannot disagree.
+        let mut owed = self.owed.clone();
+        let mut shown_turn = false;
+        if let Some(pending) = &mut owed {
+            if record.kind() != EventKind::Assistant || scope != pending.scope.as_deref() {
+                return Err(ContractError::InvalidRecord(format!(
+                    "events.jsonl line {line} precedes the assistant messages its settled turn in {} shows; retain the complete original stream",
+                    scope_display(pending.scope.as_deref())
+                )));
             }
-            if text(origin, "kind", line)? == "model"
-                && text(origin, "kv_scope", line)?
-                    != scope.unwrap_or(text(object, "session_id", line)?)
-            {
-                return Err(ContractError::InvalidRecord("Assistant output belongs to another session scope; inspect its request ownership".into()));
+            let expected = pending
+                .messages
+                .pop_front()
+                .expect("an owed turn has a message");
+            self.require_shown_message(object, &expected, &pending.model, line)?;
+            if pending.messages.is_empty() {
+                owed = None;
             }
-            if let Some(attempt) = self.requests.validate_output_origin(origin, line)? {
-                if self
-                    .scope_states
-                    .iter()
-                    .enumerate()
-                    .any(|(index, state)| index != row && state.attempts.contains(&attempt))
-                {
-                    return Err(ContractError::InvalidRecord(
-                        "Chat output changes assistant scope; inspect its request ownership".into(),
-                    ));
-                }
-                state.attempts.insert(attempt);
-            }
-            state.partial.observe_origin(origin, line)?;
+            shown_turn = true;
         }
+        let scope_key = scope.map(str::to_string);
+        let mut displayed = Vec::new();
+        let mut bound_display_scope = None;
+        let mut partial_origin = None;
         let mut request = None;
         let mut utility_request = None;
         let mut utility_completion = None;
@@ -1217,10 +1301,52 @@ impl RuntimeContract {
                     )));
                 }
                 let admission = self.requests.plan(object, line, self.limits.json)?;
-                if admission.is_chat_attempt() && state.runtime_text.is_some() {
-                    return Err(ContractError::InvalidRecord(format!(
-                        "events.jsonl line {line} dispatches a chat attempt after runtime assistant output in the same scope; inspect the original local result and request"
-                    )));
+                if let Some(attempt) = admission.attempt() {
+                    // The display scope a chat request renders for: the root for
+                    // the session's own scope, a subagent scope for the call that
+                    // spawned it; any other scope is internal and shows nothing.
+                    let kv_scope = admission.scope();
+                    let display = if Some(kv_scope) == self.session_id.as_deref() {
+                        Some(None)
+                    } else if self.tool_uses.contains_key(kv_scope) {
+                        Some(Some(kv_scope.to_string()))
+                    } else {
+                        None
+                    };
+                    if let Some(display) = display {
+                        if display == scope_key && state.runtime_text.is_some() {
+                            return Err(ContractError::InvalidRecord(format!(
+                                "events.jsonl line {line} dispatches a chat attempt after runtime assistant output in the same scope; inspect the original local result and request"
+                            )));
+                        }
+                        if let Some((id, _)) = self
+                            .tool_uses
+                            .iter()
+                            .find(|(_, tool)| tool.scope == display && !tool.returned)
+                        {
+                            return Err(ContractError::InvalidRecord(format!(
+                                "events.jsonl line {line} sends the next request in {} without the displayed result of call {id:?}; retain the complete original stream",
+                                scope_display(display.as_deref())
+                            )));
+                        }
+                        bind_displayed_inputs(
+                            self.displayed_inputs
+                                .get(&display)
+                                .map(Vec::as_slice)
+                                .unwrap_or_default(),
+                            admission.messages(),
+                            self.limits.json,
+                            line,
+                        )?;
+                        partial_origin = Some((
+                            display.clone(),
+                            OutputOrigin::Model(Origin {
+                                attempt: attempt.to_string(),
+                                scope: kv_scope.to_string(),
+                            }),
+                        ));
+                        bound_display_scope = Some(display);
+                    }
                 }
                 request = Some(admission);
             }
@@ -1262,10 +1388,21 @@ impl RuntimeContract {
             EventKind::ModelAttemptCompletion => {
                 let admission = self.requests.plan_completion(object, line)?;
                 if self.conversation_generation(&admission.generation, scope)? {
+                    let accepted = admission.disposition == Disposition::Accepted;
                     state
                         .partial
-                        .observe_completion(&admission.generation.origin, admission.accepted)?;
-                    if admission.accepted {
+                        .observe_completion(&admission.generation.origin, accepted)?;
+                    if admission.disposition != Disposition::Abandoned {
+                        owed = Some(OwedDisplay {
+                            scope: scope_key.clone(),
+                            model: admission.generation.model.clone(),
+                            messages: admission
+                                .generation
+                                .display(admission.disposition == Disposition::Refused)?
+                                .into(),
+                        });
+                    }
+                    if accepted {
                         if scope.is_none() {
                             state.model_text =
                                 Some(Arc::from(admission.generation.display_text.as_str()));
@@ -1300,8 +1437,25 @@ impl RuntimeContract {
                 }
                 completion = Some(admission);
             }
+            EventKind::Assistant if shown_turn => {}
             EventKind::Assistant => {
-                let content = field(field(object, "message", line)?, "content", line)?
+                if self
+                    .requests
+                    .has_chat_attempt_in_scope(scope.unwrap_or(text(object, "session_id", line)?))
+                {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} claims runtime assistant output after a chat attempt in the same scope; inspect the original generation and its output"
+                    )));
+                }
+                let message = field(object, "message", line)?;
+                if !field(message, "stop_reason", line)?.is_null()
+                    || !field(message, "usage", line)?.is_null()
+                {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} claims model stop or usage on runtime assistant output; inspect its producing operation"
+                    )));
+                }
+                let content = field(message, "content", line)?
                     .elements()
                     .ok_or_else(|| ContractError::InvalidRecord(format!(
                         "events.jsonl line {line} has no runtime assistant content; inspect the original recording"
@@ -1336,32 +1490,58 @@ impl RuntimeContract {
                 }
             }
             EventKind::User => {
-                if let Some(blocks) = field(object, "message", line)?
-                    .get("content")
-                    .and_then(Value::elements)
-                {
-                    for block in blocks {
-                        if block.get("type").and_then(Value::as_str) != Some("tool_result") {
-                            continue;
+                let blocks = field(field(object, "message", line)?, "content", line)?
+                    .elements()
+                    .ok_or_else(|| {
+                        ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} has user content that is not an array"
+                        ))
+                    })?
+                    .collect::<Vec<_>>();
+                let results = blocks
+                    .iter()
+                    .filter(|block| {
+                        block.get("type").and_then(Value::as_str) == Some("tool_result")
+                    })
+                    .count();
+                if results == 0 {
+                    let mut notice = String::new();
+                    for block in &blocks {
+                        notice.push_str(text(*block, "text", line)?);
+                    }
+                    displayed.push(DisplayedInput::Notice(notice));
+                } else if results != blocks.len() {
+                    return Err(ContractError::InvalidRecord(format!(
+                        "events.jsonl line {line} mixes tool results with other user content"
+                    )));
+                }
+                for block in blocks.iter().copied() {
+                    if block.get("type").and_then(Value::as_str) != Some("tool_result") {
+                        continue;
+                    }
+                    let id = text(block, "tool_use_id", line)?;
+                    displayed.push(DisplayedInput::ToolResult {
+                        id: id.to_string(),
+                        text: text(block, "content", line)?.to_string(),
+                    });
+                    self.require_tool_owner(id, scope, line)?;
+                    if block.get("is_error").and_then(Value::as_bool) == Some(false) {
+                        let tool = self.tool_uses.get(id).expect("checked tool owner");
+                        if tool.name == "structured_output" && state.structured_input.is_none() {
+                            state.structured_input = tool.structured_input.clone();
                         }
-                        let id = text(block, "tool_use_id", line)?;
-                        self.require_tool_owner(id, scope, line)?;
-                        if block.get("is_error").and_then(Value::as_bool) == Some(false) {
-                            let tool = self.tool_uses.get(id).expect("checked tool owner");
-                            if tool.name == "structured_output" && state.structured_input.is_none()
-                            {
-                                state.structured_input = tool.structured_input.clone();
-                            }
-                        }
-                        if !returns.insert(id.to_string()) {
-                            return Err(ContractError::InvalidRecord(format!(
-                                "events.jsonl line {line} repeats tool result {id:?}"
-                            )));
-                        }
+                    }
+                    if !returns.insert(id.to_string()) {
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} repeats tool result {id:?}"
+                        )));
                     }
                 }
             }
             EventKind::StreamEvent => {
+                if let Some(origin) = self.partial_origins.get(&scope_key) {
+                    state.partial.set_origin(origin.clone(), line)?;
+                }
                 state.partial.observe(
                     record.partial().expect("decoded stream event"),
                     scope.is_none(),
@@ -1409,6 +1589,8 @@ impl RuntimeContract {
                         });
                         state.completed_runtime_operation = None;
                         runtime_operation_id = Some(id.to_string());
+                        state.partial.set_origin(OutputOrigin::Runtime, line)?;
+                        partial_origin = Some((scope_key.clone(), OutputOrigin::Runtime));
                     },
                     SystemKind::SessionRecordingDegraded | SystemKind::TurnCleanupFailed | SystemKind::VisionBridgeFailed => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} reports operational failure {}: {}", subtype.wire(), field(object, "data", line)?.raw()))),
                     SystemKind::SessionStart | SystemKind::SessionEnd => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} declares transport ownership inside an already owned invocation"))),
@@ -1526,8 +1708,64 @@ impl RuntimeContract {
             additions,
             returns,
             runtime_operation_id,
+            owed,
+            displayed,
+            bound_display_scope,
+            partial_origin,
             prefix: add(self.prefix, 1, "certified prefix")?,
         })
+    }
+    /// One assistant message of a settled turn, exactly as its generation
+    /// shows it; only the message identity is the writer's.
+    fn require_shown_message(
+        &self,
+        object: Value<'_>,
+        expected: &DisplayMessage,
+        model: &str,
+        line: usize,
+    ) -> ContractResult<()> {
+        let refuse = |what: &str| {
+            ContractError::InvalidRecord(format!(
+                "events.jsonl line {line} shows a settled turn with {what} its generation does not have; the assistant messages derive from the generation record"
+            ))
+        };
+        let message = field(object, "message", line)?;
+        if text(message, "model", line)? != model {
+            return Err(refuse("a model"));
+        }
+        let stop = field(message, "stop_reason", line)?;
+        let stop_ok = if expected.tool_use_only {
+            stop.as_str() == Some("tool_use")
+        } else {
+            stop.is_null()
+        };
+        if !stop_ok {
+            return Err(refuse("a stop reason"));
+        }
+        let shown = Document::decode(expected.content_json.as_bytes(), self.limits.json)
+            .map_err(|cause| decode_failure(cause, line))?;
+        if field(message, "content", line)? != shown.root() {
+            return Err(refuse("content"));
+        }
+        let usage = field(message, "usage", line)?;
+        match &expected.usage {
+            None if usage.is_null() => {}
+            Some(served) if !usage.is_null() => {
+                for (key, value) in [
+                    ("input_tokens", served.prompt),
+                    ("output_tokens", served.output),
+                    ("cache_read_input_tokens", served.cached),
+                    ("reasoning_output_tokens", served.thoughts),
+                    ("total_tokens", served.total),
+                ] {
+                    if unsigned(field(usage, key, line)?, key, SAFE_INTEGER)? != value {
+                        return Err(refuse("usage"));
+                    }
+                }
+            }
+            _ => return Err(refuse("usage")),
+        }
+        Ok(())
     }
     fn require_tool_owner(&self, id: &str, scope: Option<&str>, line: usize) -> ContractResult<()> {
         let tool = self.tool_uses.get(id).ok_or_else(|| {
@@ -1557,6 +1795,12 @@ impl RuntimeContract {
             return Err(ContractError::InvalidRecord(
                 "events.jsonl contains no events".into(),
             ));
+        }
+        if let Some(owed) = &self.owed {
+            return Err(ContractError::InvalidRecord(format!(
+                "events.jsonl ends before the assistant messages of a settled turn in {}; retain the complete original stream",
+                scope_display(owed.scope.as_deref())
+            )));
         }
         if let Some(state) = self
             .scope_states
@@ -1790,13 +2034,9 @@ mod tests {
             "tool_call_preparations":[{"callId":"snapshot-call","toolName":"state_snapshot"}]
         })
     }
-    fn record_compaction_tokenizer(
-        owner: &mut RuntimeContract,
-        role: &str,
-        sequence: u64,
-        count: u64,
-        model: &str,
-    ) {
+    /// One completed chat tokenizer operation: its request, physical
+    /// response and completion records.
+    fn tokenizer_records(role: &str, sequence: u64, count: u64, model: &str) -> Vec<String> {
         let operation_id = format!("token-{role}");
         let request_id = format!("token-request-{role}");
         let body = serde_json::json!({"model":model,"messages":[],"add_generation_prompt":true})
@@ -1808,7 +2048,7 @@ mod tests {
                 "requested_model":model,"requested_input_count":null,"expected_max_model_len":100,
                 "request_url":"http://fixture.invalid/tokenize","body_json":body,
                 "body_bytes":body.len(),"body_sha256":crate::generation::sha256(body.as_bytes())}});
-        admit(owner, &request.to_string()).unwrap();
+        let mut records = vec![request.to_string()];
         let result = serde_json::json!({"count":count,"max_model_len":100}).to_string();
         let events = [
             serde_json::json!({"kind":"http","status":200,"content_type":"application/json"}),
@@ -1820,11 +2060,7 @@ mod tests {
             serde_json::json!({"kind":"delivery","outputs_delivered":0}),
         ];
         for (index, event) in events.iter().enumerate() {
-            admit(
-                owner,
-                &response(&request_id, (index + 1) as u64, &event.to_string()),
-            )
-            .unwrap();
+            records.push(response(&request_id, (index + 1) as u64, &event.to_string()));
         }
         let completion = serde_json::json!({"type":"model_utility_completion",
             "uuid":format!("{operation_id}-completion"),"session_id":"session","parent_tool_use_id":null,
@@ -1832,7 +2068,19 @@ mod tests {
                 "kv_scope":"session","kind":"tokenize_chat","requested_model":model,
                 "requested_input_count":null,"expected_max_model_len":100,"request_ids":[request_id],
                 "result":{"kind":"token_count","total_tokens":count,"max_model_len":100},"error":null}});
-        admit(owner, &completion.to_string()).unwrap();
+        records.push(completion.to_string());
+        records
+    }
+    fn record_compaction_tokenizer(
+        owner: &mut RuntimeContract,
+        role: &str,
+        sequence: u64,
+        count: u64,
+        model: &str,
+    ) {
+        for record in tokenizer_records(role, sequence, count, model) {
+            admit(owner, &record).unwrap();
+        }
     }
     fn with_compaction_transport() -> RuntimeContract {
         let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
@@ -1885,95 +2133,73 @@ mod tests {
                 "kv_scope":"session", "segment_id":"compaction-segment", "prompt_id":"compaction-prompt",
                 "owner":{"kind":"utility","operation_id":"compaction-operation","purpose":"compaction"},
                 "body":{"kind":"full","json":body},
-                "decode_policy":{"mode":"stream","model":"fixture-model","strict_tool_calling":false,
-                    "named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},
+                "decode_policy":{"mode":"stream","model":"fixture-model","strict_tool_calling":true,
+                    "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
                 "body_bytes":body_bytes, "body_sha256":body_hash
             }
         });
         admit(&mut owner, &request.to_string()).unwrap();
-        admit(
-            &mut owner,
-            &response(
-                "compaction-physical",
-                1,
-                r#"{"kind":"http","status":200,"content_type":"text/event-stream"}"#,
-            ),
-        )
-        .unwrap();
-        let chunk = serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes)});
-        admit(
-            &mut owner,
-            &response("compaction-physical", 2, &chunk.to_string()),
-        )
-        .unwrap();
-        let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),
-            "body_sha256":crate::generation::sha256(bytes),"error":null});
-        admit(
-            &mut owner,
-            &response("compaction-physical", 3, &end.to_string()),
-        )
-        .unwrap();
-        let outcome_sequence = if completed {
-            let decoded = compaction_decoded().to_string();
-            let chunk = serde_json::json!({"kind":"decoded_body","role":"utility","index":0,
-                "offset":0,"base64":STANDARD.encode(decoded.as_bytes())});
+        let mut sequence = 0;
+        let mut next = |owner: &mut RuntimeContract, event: serde_json::Value| {
+            sequence += 1;
             admit(
-                &mut owner,
-                &response("compaction-physical", 4, &chunk.to_string()),
+                owner,
+                &response("compaction-physical", sequence, &event.to_string()),
             )
             .unwrap();
-            let end = serde_json::json!({"kind":"decoded_end","role":"utility","index":0,
-                "body_bytes":decoded.len(),"body_sha256":crate::generation::sha256(decoded.as_bytes())});
-            admit(
-                &mut owner,
-                &response("compaction-physical", 5, &end.to_string()),
-            )
-            .unwrap();
-            6
-        } else {
-            4
         };
-        let outcome = serde_json::json!({"kind":"outcome",
-            "status":if completed { "completed" } else { "failed" },
-            "error":if completed { serde_json::Value::Null } else { serde_json::json!("conversion failed") },
-            "sdk_values_seen":sdk_values_seen,
-            "pipeline_outputs_delivered":if completed { 1 } else { 0 },
-            "served_usage":if completed {
-                serde_json::json!({"promptTokenCount":24,"candidatesTokenCount":4,
-                    "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28})
-            } else { serde_json::Value::Null }});
-        admit(
+        next(
             &mut owner,
-            &response(
-                "compaction-physical",
-                outcome_sequence,
-                &outcome.to_string(),
-            ),
-        )
-        .unwrap();
-        let delivery = serde_json::json!({"kind":"delivery", "outputs_delivered":delivered});
-        admit(
+            serde_json::json!({"kind":"http","status":200,"content_type":"text/event-stream"}),
+        );
+        // A response that delivered no bytes has no body chunk.
+        if !bytes.is_empty() {
+            next(
+                &mut owner,
+                serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes)}),
+            );
+        }
+        next(
             &mut owner,
-            &response(
-                "compaction-physical",
-                outcome_sequence + 1,
-                &delivery.to_string(),
-            ),
-        )
-        .unwrap();
+            serde_json::json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),
+                "body_sha256":crate::generation::sha256(bytes),"error":null}),
+        );
+        if completed {
+            let decoded = compaction_decoded().to_string();
+            next(
+                &mut owner,
+                serde_json::json!({"kind":"decoded_body","role":"utility","index":0,
+                    "offset":0,"base64":STANDARD.encode(decoded.as_bytes())}),
+            );
+            next(
+                &mut owner,
+                serde_json::json!({"kind":"decoded_end","role":"utility","index":0,
+                    "body_bytes":decoded.len(),"body_sha256":crate::generation::sha256(decoded.as_bytes())}),
+            );
+        }
+        next(
+            &mut owner,
+            serde_json::json!({"kind":"outcome",
+                "status":if completed { "completed" } else { "failed" },
+                "error":if completed { serde_json::Value::Null } else { serde_json::json!("conversion failed") },
+                "sdk_values_seen":sdk_values_seen,
+                "pipeline_outputs_delivered":if completed { 1 } else { 0 },
+                "served_usage":if completed {
+                    serde_json::json!({"promptTokenCount":24,"candidatesTokenCount":4,
+                        "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28})
+                } else { serde_json::Value::Null }}),
+        );
+        next(
+            &mut owner,
+            serde_json::json!({"kind":"delivery", "outputs_delivered":delivered}),
+        );
         if completed {
             record_compaction_tokenizer(&mut owner, "candidate", 5, 12, models[3]);
         }
         owner
     }
-    #[test]
-    fn compaction_status_and_retained_count_agree_with_the_history_decision() {
-        let measurement = |role: &str| {
-            serde_json::json!({
-                "role": role, "operationId": format!("token-{role}")
-            })
-        };
-        let failed = serde_json::json!({
+    fn compaction_failed() -> serde_json::Value {
+        serde_json::json!({
             "type":"system", "subtype":"compaction", "uuid":"compaction",
             "session_id":"session", "parent_tool_use_id":null,
             "data":{
@@ -1983,9 +2209,15 @@ mod tests {
                 "output":null, "rejectedAttempts":[],
                 "tokenMeasurements":[]
             }
-        });
-        admit(&mut initialized(), &failed.to_string()).unwrap();
-        let mut success = failed.clone();
+        })
+    }
+    fn compaction_success() -> serde_json::Value {
+        let measurement = |role: &str| {
+            serde_json::json!({
+                "role": role, "operationId": format!("token-{role}")
+            })
+        };
+        let mut success = compaction_failed();
         success["data"]["status"] = serde_json::json!("COMPRESSED");
         success["data"]["succeeded"] = serde_json::json!(true);
         success["data"]["newTokenCount"] = serde_json::json!(12);
@@ -2009,6 +2241,13 @@ mod tests {
                 "thoughtsTokenCount":0,"cachedContentTokenCount":0,
                 "totalTokenCount":28}
         });
+        success
+    }
+    #[test]
+    fn compaction_status_and_retained_count_agree_with_the_history_decision() {
+        let failed = compaction_failed();
+        admit(&mut initialized(), &failed.to_string()).unwrap();
+        let success = compaction_success();
         admit(&mut with_compaction_transport(), &success.to_string()).unwrap();
         let mut forged_decoded_call = success.clone();
         forged_decoded_call["data"]["output"]["functionCalls"] = serde_json::json!([]);
@@ -2183,23 +2422,17 @@ mod tests {
         forged["data"]["rejectedAttempts"] = serde_json::json!([rejected]);
         assert!(admit(&mut initialized(), &forged.to_string()).is_err());
     }
+    /// A partial as the producer writes it: no origin. The runtime owns the
+    /// producer positionally (latest chat request or operation receipt).
     fn partial(id: &str, event: &str) -> String {
-        let parsed: serde_json::Value = serde_json::from_str(event).unwrap();
-        let origin = if matches!(
-            parsed["type"].as_str(),
-            Some("tool_progress" | "active_goal" | "goal_state")
-        ) {
-            ""
-        } else {
-            r#""origin":{"kind":"runtime","operation_id":"local-operation"},"#
-        };
         format!(
-            r#"{{"type":"stream_event",{origin}"uuid":"{id}","session_id":"session","parent_tool_use_id":null,"event":{event}}}"#
+            r#"{{"type":"stream_event","uuid":"{id}","session_id":"session","parent_tool_use_id":null,"event":{event}}}"#
         )
     }
+    /// A runtime answer: text only, no model stop or usage, no origin.
     fn assistant(id: &str, scope: &str, content: &str) -> String {
         format!(
-            r#"{{"type":"assistant","origin":{{"kind":"runtime","operation_id":"local-operation"}},"uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"id":"presentation-{id}","type":"message","role":"assistant","content":{content},"stop_reason":null,"usage":null}}}}"#
+            r#"{{"type":"assistant","uuid":"{id}","session_id":"session","parent_tool_use_id":{scope},"message":{{"id":"presentation-{id}","type":"message","role":"assistant","model":"model","content":{content},"stop_reason":null,"usage":null}}}}"#
         )
     }
     fn local_operation(scope: Option<&str>, text: &str) -> String {
@@ -2236,16 +2469,20 @@ mod tests {
         rows.last_mut().unwrap()["result"] = serde_json::json!("before  after");
         rows
     }
+    /// The fixture through its accepted completion and the assistant messages
+    /// that completion owes, before any partial or result.
     fn issued_owner() -> RuntimeContract {
         let mut owner = owner();
+        let mut completed = false;
         for record in fixture() {
-            let completed = record["type"] == "model_attempt_completion";
-            admit(&mut owner, &record.to_string()).unwrap();
-            if completed {
+            if completed && record["type"] != "assistant" {
                 break;
             }
+            completed |= record["type"] == "model_attempt_completion";
+            admit(&mut owner, &record.to_string()).unwrap();
         }
         assert!(owner.tool_uses.contains_key("provider__qwen_dup_2"));
+        assert!(owner.owed.is_none());
         owner
     }
     #[test]
@@ -2326,7 +2563,7 @@ mod tests {
     fn incomplete_owner(
         name: serde_json::Value,
         arguments: &str,
-    ) -> (RuntimeContract, serde_json::Value) {
+    ) -> RuntimeContract {
         let mut records = fixture();
         let generation = records
             .iter_mut()
@@ -2350,7 +2587,8 @@ mod tests {
         evidence["generation_json"] = serde_json::json!(bytes);
         let mut owner = owner();
         for mut record in records {
-            if matches!(record["type"].as_str(), Some("stream_event" | "result")) {
+            // An abandoned attempt is not a turn: it shows no assistant message.
+            if matches!(record["type"].as_str(), Some("stream_event" | "assistant" | "result")) {
                 continue;
             }
             if record["type"] == "model_response"
@@ -2365,16 +2603,11 @@ mod tests {
             }
             admit(&mut owner, &record.to_string()).unwrap();
         }
-        (owner, envelope["origin"].clone())
+        owner
     }
-    fn model_partial(
-        owner: &RuntimeContract,
-        origin: &serde_json::Value,
-        id: &str,
-        event: serde_json::Value,
-    ) -> String {
+    fn model_partial(owner: &RuntimeContract, id: &str, event: serde_json::Value) -> String {
         serde_json::json!({"type":"stream_event","uuid":id,"session_id":owner.session_id,
-            "parent_tool_use_id":null,"origin":origin,"event":event})
+            "parent_tool_use_id":null,"event":event})
         .to_string()
     }
     fn utility_request(id: &str, sequence: u64) -> String {
@@ -2385,8 +2618,8 @@ mod tests {
                 "journal_id":"fixture", "request_id":id, "sequence":sequence,
                 "kv_scope":"internal-utility", "segment_id":format!("utility-segment-{id}"), "prompt_id":"utility-prompt",
                 "owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"}, "body":{"kind":"full","json":body},
-                "decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,
-                    "named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},
+                "decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":true,
+                    "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
                 "body_bytes":body.len(), "body_sha256":crate::generation::sha256(body.as_bytes())
             }
         }).to_string()
@@ -2419,11 +2652,22 @@ mod tests {
         let end = serde_json::json!({"kind":"end","termination":"eof","body_bytes":body.len(),
             "body_sha256":crate::generation::sha256(body.as_bytes()),"error":null});
         admit(owner, &response(id, 3, &end.to_string())).unwrap();
+        // The one output the utility delivers is recorded as its decoded observation.
+        let decoded = serde_json::json!({"response":{"candidates":[{"content":{"parts":[],
+            "role":"model"},"index":0,"finishReason":"STOP"}]},
+            "incomplete_tool_calls":[],"tool_call_preparations":[]})
+        .to_string();
+        let chunk = serde_json::json!({"kind":"decoded_body","role":"utility","index":0,
+            "offset":0,"base64":STANDARD.encode(decoded.as_bytes())});
+        admit(owner, &response(id, 4, &chunk.to_string())).unwrap();
+        let end = serde_json::json!({"kind":"decoded_end","role":"utility","index":0,
+            "body_bytes":decoded.len(),"body_sha256":crate::generation::sha256(decoded.as_bytes())});
+        admit(owner, &response(id, 5, &end.to_string())).unwrap();
     }
     fn outcome(id: &str, output: &str) -> String {
         response(
             id,
-            4,
+            6,
             &format!(
                 r#"{{"kind":"outcome","status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":1,"served_usage":{{"promptTokenCount":0,"candidatesTokenCount":{output},"thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":{output}}}}}"#
             ),
@@ -2572,7 +2816,11 @@ mod tests {
     fn physical_history_cannot_replace_logical_completion() {
         let mut owner = owner();
         for record in fixture() {
-            if record["type"] == "model_attempt_completion" || record["type"] == "stream_event" {
+            // The assistant messages derive from the completion, so they go too.
+            if matches!(
+                record["type"].as_str(),
+                Some("model_attempt_completion" | "assistant" | "stream_event")
+            ) {
                 continue;
             }
             let terminal = record["type"] == "result";
@@ -2592,7 +2840,7 @@ mod tests {
             ),
             (serde_json::Value::Null, ""),
         ] {
-            let (mut owner, origin) = incomplete_owner(name.clone(), arguments);
+            let mut owner = incomplete_owner(name.clone(), arguments);
             for (id, event) in [
                 (
                     "start",
@@ -2603,7 +2851,7 @@ mod tests {
                     serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"incomplete_tool_use","name":name,"arguments":arguments}}),
                 ),
             ] {
-                let raw = model_partial(&owner, &origin, id, event);
+                let raw = model_partial(&owner, id, event);
                 admit(&mut owner, &raw).unwrap();
             }
             assert!(owner.tool_uses.is_empty());
@@ -2611,7 +2859,6 @@ mod tests {
             assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 7);
             let delta = model_partial(
                 &owner,
-                &origin,
                 "delta",
                 serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"more"}}),
             );
@@ -2627,17 +2874,15 @@ mod tests {
             serde_json::json!({"type":"incomplete_tool_use","name":"write_file","arguments":{}}),
             serde_json::json!({"type":"incomplete_tool_use","name":"write_file","arguments":"","input":{}}),
         ] {
-            let (mut owner, origin) = incomplete_owner(serde_json::json!("write_file"), "");
+            let mut owner = incomplete_owner(serde_json::json!("write_file"), "");
             let start = model_partial(
                 &owner,
-                &origin,
                 "start",
                 serde_json::json!({"type":"message_start","message":{"id":"message","role":"assistant","model":"model","content":[]}}),
             );
             admit(&mut owner, &start).unwrap();
             let raw = model_partial(
                 &owner,
-                &origin,
                 "block",
                 serde_json::json!({"type":"content_block_start","index":0,"content_block":block}),
             );
@@ -2649,7 +2894,7 @@ mod tests {
         let parts = [
             (
                 "start",
-                r#"{"type":"message_start","message":{"id":"runtime","role":"assistant","content":[]}}"#,
+                r#"{"type":"message_start","message":{"id":"runtime","role":"assistant","model":"model","content":[]}}"#,
             ),
             (
                 "block",
@@ -2724,7 +2969,7 @@ mod tests {
         assert!(admit(&mut missing, &full)
             .unwrap_err()
             .to_string()
-            .contains("without its local operation receipt"));
+            .contains("without a local operation receipt"));
 
         let mut altered = initialized();
         admit(&mut altered, &local_operation(None, "different")).unwrap();
@@ -2924,7 +3169,7 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("repeats event uuid"));
-        let repeated = raw.replace("response-served-4", "another-outcome");
+        let repeated = raw.replace("response-served-6", "another-outcome");
         assert!(admit(&mut owner, &repeated).is_err());
         assert_eq!(owner.observations.observed_usage.usage.unwrap().output, 1);
         assert_eq!(owner.observations.observed_unaccounted_records, 3);
@@ -2947,7 +3192,7 @@ mod tests {
             serde_json::json!({
             "type":"user", "uuid":id, "session_id":owner.session_id,
             "parent_tool_use_id":scope,
-            "message":{"content":[{"type":"tool_result","tool_use_id":"provider__qwen_dup_2","content":"done"}]}
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"provider__qwen_dup_2","content":"done","is_error":false}]}
         }).to_string()
         };
         let mut owner = issued_owner();
@@ -2983,5 +3228,595 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("exact integer range"));
+    }
+    // ---- The amended stream contract: shown turns, refused draws, closed records ----
+
+    /// Admit rows in order; the first refusal (row index, cause) or, when
+    /// every row is admitted, the semantic completion's.
+    fn first_refusal(rows: &[serde_json::Value]) -> Result<AgentResult, (usize, String)> {
+        let mut reader = owner();
+        for (index, row) in rows.iter().enumerate() {
+            admit(&mut reader, &row.to_string()).map_err(|cause| (index, cause.to_string()))?;
+        }
+        reader.finish().map_err(|cause| (rows.len(), cause.to_string()))
+    }
+    fn position(rows: &[serde_json::Value], kind: &str) -> usize {
+        rows.iter().position(|row| row["type"] == kind).unwrap()
+    }
+    fn shown_rows(rows: &[serde_json::Value]) -> Vec<usize> {
+        let completion = position(rows, "model_attempt_completion");
+        (completion + 1..rows.len())
+            .take_while(|index| rows[*index]["type"] == "assistant")
+            .collect()
+    }
+    /// Rewrite the fixture's generation envelope and bind its evidence and
+    /// completion to the changed bytes.
+    fn rewrite_generation(rows: &mut [serde_json::Value], edit: impl FnOnce(&mut serde_json::Value)) {
+        let generation = position(rows, "model_generation");
+        let evidence = &mut rows[generation]["generation"];
+        let mut envelope: serde_json::Value =
+            serde_json::from_str(evidence["generation_json"].as_str().unwrap()).unwrap();
+        edit(&mut envelope);
+        let bytes = envelope.to_string();
+        let hash = crate::generation::sha256(bytes.as_bytes());
+        evidence["generation_bytes"] = serde_json::json!(bytes.len());
+        evidence["generation_sha256"] = serde_json::json!(hash);
+        evidence["generation_json"] = serde_json::json!(bytes);
+        let completion = position(rows, "model_attempt_completion");
+        rows[completion]["completion"]["generation_sha256"] = serde_json::json!(hash);
+    }
+    fn shown(
+        session: &serde_json::Value,
+        id: &str,
+        content: serde_json::Value,
+        stop: serde_json::Value,
+        usage: serde_json::Value,
+    ) -> serde_json::Value {
+        serde_json::json!({"type":"assistant","uuid":id,"session_id":session,
+            "parent_tool_use_id":null,"message":{"id":id,"type":"message","role":"assistant",
+            "model":"test","content":content,"stop_reason":stop,"usage":usage}})
+    }
+    fn fixture_usage() -> serde_json::Value {
+        serde_json::json!({"input_tokens":12,"output_tokens":7,"cache_read_input_tokens":4,
+            "reasoning_output_tokens":2,"total_tokens":19})
+    }
+    const CUT_CALL: &str = "{\"file_path\":\"a.md\",\"content\":\"cut";
+    /// The fixture's turn as a draw the provider completed at its output limit:
+    /// the call it was writing is served as incomplete text, the runtime refuses
+    /// the turn, and the turn shows what the model wrote, ending in the
+    /// incomplete call. A refused turn is fatal, so the root ends in error.
+    fn refused_draw() -> Vec<serde_json::Value> {
+        let mut rows = fixture();
+        rows.retain(|row| row["type"] != "stream_event");
+        rewrite_generation(&mut rows, |envelope| {
+            envelope["finish_reason"] = serde_json::json!("MAX_TOKENS");
+            let observations = envelope["observations"].as_array_mut().unwrap();
+            observations[1]["tool_call_preparations"] = serde_json::json!([]);
+            let last = &mut observations[2];
+            last["response"]["candidates"][0]["content"]["parts"] =
+                serde_json::json!([{"text":" after"}]);
+            last["response"]["candidates"][0]["finishReason"] = serde_json::json!("MAX_TOKENS");
+            last["call_ids"] = serde_json::json!([]);
+            last["incomplete_tool_calls"] =
+                serde_json::json!([{"name":"write_file","arguments":CUT_CALL}]);
+        });
+        let history = rows
+            .iter()
+            .position(|row| row["response"]["event"]["kind"] == "history")
+            .unwrap();
+        rows[history]["response"]["event"]["disposition"] = serde_json::json!("abandoned");
+        let completion = position(&rows, "model_attempt_completion");
+        rows[completion]["completion"]["disposition"] = serde_json::json!("refused");
+        let session = rows[0]["session_id"].clone();
+        let display = shown_rows(&rows);
+        rows.splice(
+            display[0]..=display[display.len() - 1],
+            [
+                shown(&session, "refused-0", serde_json::json!([{"type":"thinking","thinking":"  **raw thought**\n"}]), serde_json::Value::Null, serde_json::Value::Null),
+                shown(&session, "refused-1", serde_json::json!([{"type":"text","text":"before  after"}]), serde_json::Value::Null, serde_json::Value::Null),
+                shown(&session, "refused-2", serde_json::json!([{"type":"incomplete_tool_use","name":"write_file","arguments":CUT_CALL}]), serde_json::Value::Null, fixture_usage()),
+            ],
+        );
+        let terminal = rows.last_mut().unwrap();
+        terminal.as_object_mut().unwrap().remove("result");
+        terminal["subtype"] = serde_json::json!("error_incomplete_generation");
+        terminal["is_error"] = serde_json::json!(true);
+        terminal["error"] = serde_json::json!({"message":"the model reached its output limit"});
+        rows
+    }
+
+    #[test]
+    fn the_wire_fixture_is_a_complete_stream_of_the_compiled_contract() {
+        let rows: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+        assert_eq!(rows[0]["stream_contract_sha256"], STREAM_CONTRACT_SHA256);
+        // The captured turn shows itself at once after its completion, and
+        // nothing in the stream names an output origin.
+        let display = shown_rows(&rows);
+        assert_eq!(display.len(), 3);
+        assert!(rows.iter().all(|row| row.get("origin").is_none()));
+        let result = first_refusal(&fixture()).unwrap();
+        assert_eq!(result.response, "before  after");
+    }
+
+    #[test]
+    fn an_accepted_turn_shows_exactly_its_generation_display() {
+        let rows = fixture();
+        let completion = position(&rows, "model_attempt_completion");
+        let display = shown_rows(&rows);
+        assert_eq!(display, [completion + 1, completion + 2, completion + 3]);
+        first_refusal(&rows).unwrap();
+        let session = rows[0]["session_id"].clone();
+        let late_result = serde_json::json!({"type":"user","uuid":"early-result","session_id":session,
+            "parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result",
+            "tool_use_id":"provider__qwen_dup_2","content":"done","is_error":false}]}});
+        type Mutation = Box<dyn Fn(&mut Vec<serde_json::Value>)>;
+        let (thinking, text, call) = (display[0], display[1], display[2]);
+        let cases: Vec<(&str, Mutation, usize, &str)> = vec![
+            ("forged text", Box::new(move |rows| rows[text]["message"]["content"][0]["text"] = serde_json::json!("FORGED")), text, "with content its generation does not have"),
+            ("forged thought", Box::new(move |rows| rows[thinking]["message"]["content"][0]["thinking"] = serde_json::json!("FORGED")), thinking, "with content"),
+            ("changed call arguments", Box::new(move |rows| rows[call]["message"]["content"][0]["input"] = serde_json::json!({"value":2})), call, "with content"),
+            ("changed call identity", Box::new(move |rows| rows[call]["message"]["content"][0]["id"] = serde_json::json!("provider")), call, "with content"),
+            ("changed usage", Box::new(move |rows| rows[call]["message"]["usage"]["output_tokens"] = serde_json::json!(8)), call, "with usage"),
+            ("usage on an earlier message", Box::new(move |rows| rows[thinking]["message"]["usage"] = fixture_usage()), thinking, "with usage"),
+            ("usage missing from the last message", Box::new(move |rows| rows[call]["message"]["usage"] = serde_json::Value::Null), call, "with usage"),
+            ("dropped tool_use stop reason", Box::new(move |rows| rows[call]["message"]["stop_reason"] = serde_json::Value::Null), call, "with a stop reason"),
+            ("claimed tool_use stop reason", Box::new(move |rows| rows[text]["message"]["stop_reason"] = serde_json::json!("tool_use")), text, "with a stop reason"),
+            ("changed model", Box::new(move |rows| rows[thinking]["message"]["model"] = serde_json::json!("other-model")), thinking, "with a model"),
+            ("reordered messages", Box::new(move |rows| rows.swap(thinking, text)), thinking, "with content"),
+            ("merged messages", Box::new(move |rows| {
+                let merged = serde_json::json!([rows[thinking]["message"]["content"][0], rows[text]["message"]["content"][0]]);
+                rows[thinking]["message"]["content"] = merged;
+                rows.remove(text);
+            }), thinking, "with content"),
+            ("dropped first message", Box::new(move |rows| { rows.remove(thinking); }), thinking, "with content"),
+            ("dropped last message", Box::new(move |rows| { rows.remove(call); }), call, "precedes the assistant messages its settled turn in the main session shows"),
+            ("dropped display", Box::new(move |rows| { rows.drain(thinking..=call); }), completion + 1, "precedes the assistant messages"),
+            ("extra message", Box::new(move |rows| {
+                let mut extra = rows[call].clone();
+                extra["uuid"] = serde_json::json!("extra-assistant");
+                extra["message"]["id"] = serde_json::json!("extra-assistant");
+                rows.insert(call + 1, extra);
+            }), call + 1, "runtime assistant output after a chat attempt"),
+            ("record before the display", Box::new(move |rows| rows.insert(completion + 1, late_result.clone())), completion + 1, "precedes the assistant messages"),
+            ("origin label", Box::new(move |rows| rows[text]["origin"] = serde_json::json!({"kind":"model","attempt_id":"a","kv_scope":"s"})), text, "violates stream contract"),
+            ("stream ends before the display", Box::new(move |rows| rows.truncate(completion + 1)), completion + 1, "ends before the assistant messages of a settled turn"),
+        ];
+        for (name, mutate, line, cause) in cases {
+            let mut mutant = rows.clone();
+            mutate(&mut mutant);
+            let (index, refusal) = first_refusal(&mutant).expect_err(name);
+            assert_eq!(index, line, "{name}: {refusal}");
+            assert!(refusal.contains(cause), "{name}: {refusal}");
+        }
+    }
+
+    #[test]
+    fn a_refused_draw_shows_its_incomplete_call_and_certifies() {
+        let rows = refused_draw();
+        let result = first_refusal(&rows).unwrap();
+        assert!(result.is_error);
+        assert_eq!(result.subtype, "error_incomplete_generation");
+        assert_eq!(result.usage.usage.unwrap().output, 7);
+        let mut reader = owner();
+        for row in &rows {
+            admit(&mut reader, &row.to_string()).unwrap();
+        }
+        assert!(reader.tool_uses.is_empty(), "a refused draw issues no tool");
+
+        // The same draw with its partials in upstream's root framing: text
+        // streams before the generation, the incomplete call after its turn.
+        let mut streamed = rows.clone();
+        let session = streamed[0]["session_id"].clone();
+        let partial = |id: &str, event: serde_json::Value| {
+            serde_json::json!({"type":"stream_event","uuid":id,"session_id":session,
+                "parent_tool_use_id":null,"event":event})
+        };
+        let generation = position(&streamed, "model_generation");
+        streamed.splice(
+            generation..generation,
+            [
+                partial("refused-start", serde_json::json!({"type":"message_start","message":{"id":"refused","role":"assistant","model":"test","content":[]}})),
+                partial("refused-text", serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":"before "}})),
+                partial("refused-text-more", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" after"}})),
+                partial("refused-text-stop", serde_json::json!({"type":"content_block_stop","index":0})),
+            ],
+        );
+        let last_shown = *shown_rows(&streamed).last().unwrap();
+        streamed.splice(
+            last_shown + 1..last_shown + 1,
+            [
+                partial("refused-call", serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"incomplete_tool_use","name":"write_file","arguments":CUT_CALL}})),
+                partial("refused-call-stop", serde_json::json!({"type":"content_block_stop","index":0})),
+                partial("refused-stop", serde_json::json!({"type":"message_stop"})),
+            ],
+        );
+        first_refusal(&streamed).unwrap();
+        // A refused draw cannot stream an executable claim.
+        let mut claimed = streamed.clone();
+        let call = claimed.iter().position(|row| row["uuid"] == "refused-call").unwrap();
+        claimed[call]["event"]["content_block"] = serde_json::json!({"type":"tool_use","id":"provider__qwen_dup_2","name":"write_file","input":{}});
+        let (index, refusal) = first_refusal(&claimed).unwrap_err();
+        assert_eq!(index, call);
+        assert!(refusal.contains("tool claim precedes accepted generation completion"), "{refusal}");
+
+        // What a refused turn shows is its generation's: the incomplete call is
+        // shown as served and never as a call.
+        let display = shown_rows(&rows);
+        let last = *display.last().unwrap();
+        type Mutation = Box<dyn Fn(&mut Vec<serde_json::Value>)>;
+        let cases: Vec<(&str, Mutation, &str)> = vec![
+            (
+                "changed incomplete arguments",
+                Box::new(move |rows| rows[last]["message"]["content"][0]["arguments"] = serde_json::json!("{}")),
+                "with content",
+            ),
+            (
+                "incomplete call shown as a call",
+                Box::new(move |rows| {
+                    rows[last]["message"]["content"] = serde_json::json!([{"type":"tool_use","id":"cut","name":"write_file","input":{}}]);
+                    rows[last]["message"]["stop_reason"] = serde_json::json!("tool_use");
+                }),
+                "with a stop reason",
+            ),
+            (
+                "dropped incomplete call",
+                Box::new(move |rows| { rows.remove(last); }),
+                "precedes the assistant messages",
+            ),
+        ];
+        for (name, mutate, cause) in cases {
+            let mut mutant = rows.clone();
+            mutate(&mut mutant);
+            let (index, refusal) = first_refusal(&mutant).expect_err(name);
+            assert_eq!(index, last, "{name}: {refusal}");
+            assert!(refusal.contains(cause), "{name}: {refusal}");
+        }
+    }
+
+    #[test]
+    fn a_refused_completion_requires_a_complete_draw_stopped_at_its_output_limit() {
+        let completion = |rows: &[serde_json::Value]| position(rows, "model_attempt_completion");
+        // The provider finished the turn: it was not stopped at its limit.
+        let mut stopped = refused_draw();
+        rewrite_generation(&mut stopped, |envelope| {
+            envelope["finish_reason"] = serde_json::json!("STOP");
+            envelope["observations"][2]["response"]["candidates"][0]["finishReason"] =
+                serde_json::json!("STOP");
+        });
+        // A draw at its limit that still made an executable call.
+        let mut called = fixture();
+        rewrite_generation(&mut called, |envelope| {
+            envelope["finish_reason"] = serde_json::json!("MAX_TOKENS");
+            envelope["observations"][2]["response"]["candidates"][0]["finishReason"] =
+                serde_json::json!("MAX_TOKENS");
+        });
+        let history = called
+            .iter()
+            .position(|row| row["response"]["event"]["kind"] == "history")
+            .unwrap();
+        called[history]["response"]["event"]["disposition"] = serde_json::json!("abandoned");
+        let index = completion(&called);
+        called[index]["completion"]["disposition"] = serde_json::json!("refused");
+        // The consumer received fewer outputs than the response delivered.
+        let mut partial_delivery = refused_draw();
+        let index = completion(&partial_delivery);
+        partial_delivery[index]["completion"]["consumer_observations"] = serde_json::json!(2);
+        // Served usage differs from the final physical response's.
+        let mut other_usage = refused_draw();
+        rewrite_generation(&mut other_usage, |envelope| {
+            let usage = serde_json::json!({"totalTokenCount":20,"promptTokenCount":12,
+                "candidatesTokenCount":8,"thoughtsTokenCount":2,"cachedContentTokenCount":4});
+            envelope["usage"] = usage.clone();
+            envelope["observations"][2]["response"]["usageMetadata"] = usage;
+        });
+        // A refused turn never entered history.
+        let mut accepted_history = refused_draw();
+        let history = accepted_history
+            .iter()
+            .position(|row| row["response"]["event"]["kind"] == "history")
+            .unwrap();
+        accepted_history[history]["response"]["event"]["disposition"] = serde_json::json!("accepted");
+        for (name, rows, cause) in [
+            ("finished turn", stopped, "a refused draw must stop at its output limit without a call"),
+            ("executable call", called, "a refused draw must stop at its output limit without a call"),
+            ("partial delivery", partial_delivery, "consumer receipt contradicts"),
+            ("other usage", other_usage, "completed turn usage contradicts its physical response"),
+            ("history acceptance", accepted_history, "logical disposition contradicts physical history decisions"),
+        ] {
+            let (index, refusal) = first_refusal(&rows).expect_err(name);
+            assert_eq!(index, completion(&rows), "{name}: {refusal}");
+            assert!(refusal.contains(cause), "{name}: {refusal}");
+        }
+    }
+
+    #[test]
+    fn an_abandoned_attempt_shows_no_turn() {
+        let owner_after = || incomplete_owner(serde_json::json!("write_file"), CUT_CALL);
+        let mut owner = owner_after();
+        assert!(owner.owed.is_none(), "an abandoned attempt owes no display");
+        let session = owner.session_id.clone().unwrap();
+        for content in [
+            serde_json::json!([{"type":"incomplete_tool_use","name":"write_file","arguments":CUT_CALL}]),
+            serde_json::json!([{"type":"text","text":"before  after"}]),
+        ] {
+            let row = serde_json::json!({"type":"assistant","uuid":"abandoned-shown",
+                "session_id":session,"parent_tool_use_id":null,"message":{"id":"abandoned-shown",
+                "type":"message","role":"assistant","model":"test","content":content,
+                "stop_reason":null,"usage":fixture_usage()}});
+            let refusal = admit(&mut owner_after(), &row.to_string()).unwrap_err().to_string();
+            assert!(
+                refusal.contains("claims runtime assistant output after a chat attempt"),
+                "{refusal}"
+            );
+        }
+        // Without a display, the abandoned attempt ends its stream cleanly.
+        let mut terminal = fixture().last().unwrap().clone();
+        terminal.as_object_mut().unwrap().remove("result");
+        terminal["subtype"] = serde_json::json!("error_during_execution");
+        terminal["is_error"] = serde_json::json!(true);
+        terminal["error"] = serde_json::json!({"message":"the attempt was abandoned"});
+        admit(&mut owner, &terminal.to_string()).unwrap();
+        owner.finish().unwrap();
+    }
+
+    #[test]
+    fn partials_in_the_upstream_root_framing_certify_against_their_positional_generation() {
+        let mut rows = fixture();
+        rows.retain(|row| row["type"] != "stream_event");
+        let session = rows[0]["session_id"].clone();
+        let partial = |id: &str, event: serde_json::Value| {
+            serde_json::json!({"type":"stream_event","uuid":id,"session_id":session,
+                "parent_tool_use_id":null,"event":event})
+        };
+        let generation = position(&rows, "model_generation");
+        // One group for the attempt; each message's blocks restart at zero.
+        rows.splice(
+            generation..generation,
+            [
+                partial("start", serde_json::json!({"type":"message_start","message":{"id":"turn","role":"assistant","model":"test","content":[]}})),
+                partial("thought", serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}})),
+                partial("thought-delta", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"  **raw thought**\n"}})),
+                partial("thought-stop", serde_json::json!({"type":"content_block_stop","index":0})),
+                partial("text", serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}})),
+                partial("text-delta", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"before "}})),
+                partial("text-more", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" after"}})),
+                partial("text-stop", serde_json::json!({"type":"content_block_stop","index":0})),
+            ],
+        );
+        let last_shown = *shown_rows(&rows).last().unwrap();
+        rows.splice(
+            last_shown + 1..last_shown + 1,
+            [
+                partial("call", serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"provider__qwen_dup_2","name":"audit_probe","input":{}}})),
+                partial("call-delta", serde_json::json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{ \"value\" : 1e0 }"}})),
+                partial("call-stop", serde_json::json!({"type":"content_block_stop","index":0})),
+                partial("stop", serde_json::json!({"type":"message_stop"})),
+            ],
+        );
+        assert_eq!(first_refusal(&rows).unwrap().response, "before  after");
+
+        let at = |rows: &[serde_json::Value], id: &str| {
+            rows.iter().position(|row| row["uuid"] == id).unwrap()
+        };
+        // Partials are owned by the scope's latest chat request: its
+        // generation binds every byte they claim, before or after it arrives.
+        let mut forged = rows.clone();
+        let index = at(&forged, "text-more");
+        forged[index]["event"]["delta"]["text"] = serde_json::json!(" AFTER");
+        let (line, refusal) = first_refusal(&forged).unwrap_err();
+        assert_eq!(line, position(&forged, "model_generation"));
+        assert!(refusal.contains("partial text changes or repeats observed generation bytes"), "{refusal}");
+        let mut forged_call = rows.clone();
+        let index = at(&forged_call, "call-delta");
+        forged_call[index]["event"]["delta"]["partial_json"] = serde_json::json!("{\"value\":2}");
+        let (line, refusal) = first_refusal(&forged_call).unwrap_err();
+        assert_eq!(line, index);
+        assert!(refusal.contains("tool argument bytes contradict the generation"), "{refusal}");
+        // A block index restarts only once every block of the message closed.
+        let mut overlapping = rows.clone();
+        let index = at(&overlapping, "thought-stop");
+        let stop = overlapping.remove(index);
+        let text_stop = at(&overlapping, "text-stop");
+        overlapping.insert(text_stop, stop);
+        let (line, refusal) = first_refusal(&overlapping).unwrap_err();
+        assert_eq!(line, at(&overlapping, "text"));
+        assert!(refusal.contains("not the next message index"), "{refusal}");
+        // The root scope brackets its output: a group left open never closes.
+        let mut unclosed = rows.clone();
+        unclosed.remove(at(&unclosed, "stop"));
+        let (line, refusal) = first_refusal(&unclosed).unwrap_err();
+        assert_eq!(line, unclosed.len() - 1);
+        assert!(refusal.contains("unfinished partial groups"), "{refusal}");
+    }
+
+    #[test]
+    fn a_runtime_answer_is_a_receipt_and_a_plain_text_row() {
+        let mut reader = initialized();
+        admit(&mut reader, &local_operation(None, "local answer")).unwrap();
+        admit(
+            &mut reader,
+            &assistant("local", "null", r#"[{"type":"text","text":"local answer"}]"#),
+        )
+        .unwrap();
+        admit(&mut reader, &runtime_result("local answer")).unwrap();
+        assert_eq!(reader.finish().unwrap().response, "local answer");
+
+        let answer: serde_json::Value = serde_json::from_str(&assistant(
+            "local",
+            "null",
+            r#"[{"type":"text","text":"local answer"}]"#,
+        ))
+        .unwrap();
+        for (name, field, value, cause) in [
+            ("model stop", "stop_reason", serde_json::json!("tool_use"), "claims model stop or usage on runtime assistant output"),
+            ("model usage", "usage", fixture_usage(), "claims model stop or usage on runtime assistant output"),
+            ("thought", "content", serde_json::json!([{"type":"thinking","thinking":"local answer"}]), "non-text runtime assistant output"),
+        ] {
+            let mut changed = answer.clone();
+            changed["message"][field] = value;
+            let mut reader = initialized();
+            admit(&mut reader, &local_operation(None, "local answer")).unwrap();
+            let refusal = admit(&mut reader, &changed.to_string()).unwrap_err().to_string();
+            assert!(refusal.contains(cause), "{name}: {refusal}");
+        }
+        let mut labelled = answer;
+        labelled["origin"] = serde_json::json!({"kind":"runtime","operation_id":"local-operation"});
+        let mut reader = initialized();
+        admit(&mut reader, &local_operation(None, "local answer")).unwrap();
+        assert!(admit(&mut reader, &labelled.to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("violates stream contract"));
+    }
+
+    #[test]
+    fn a_runtime_operation_receipt_belongs_to_the_root() {
+        // Even a scope an accepted generation issued cannot carry a receipt:
+        // local operations run only in the root session.
+        let mut issued = issued_owner();
+        let child = "provider__qwen_dup_2";
+        let mut receipt: serde_json::Value =
+            serde_json::from_str(&local_operation(Some(child), "local answer")).unwrap();
+        receipt["session_id"] = serde_json::json!(issued.session_id);
+        let refusal = admit(&mut issued, &receipt.to_string()).unwrap_err().to_string();
+        assert!(refusal.contains("violates stream contract"), "{refusal}");
+        for parent in [serde_json::json!("child"), serde_json::json!(child)] {
+            receipt["parent_tool_use_id"] = parent;
+            let mut reader = initialized();
+            receipt["session_id"] = serde_json::json!("session");
+            let refusal = admit(&mut reader, &receipt.to_string()).unwrap_err().to_string();
+            assert!(refusal.contains("violates stream contract"), "{refusal}");
+        }
+        let mut root = initialized();
+        admit(&mut root, &local_operation(None, "local answer")).unwrap();
+    }
+
+    #[test]
+    fn every_record_kind_is_closed_at_its_top_level_and_message() {
+        let unknown = |row: &serde_json::Value, pointer: &str| {
+            let mut changed = row.clone();
+            changed
+                .pointer_mut(pointer)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .insert("unowned_field".into(), serde_json::json!(true));
+            changed
+        };
+        let refused_at = |rows: &[serde_json::Value], index: usize, changed: serde_json::Value| {
+            let mut reader = owner();
+            for row in &rows[..index] {
+                admit(&mut reader, &row.to_string()).unwrap();
+            }
+            admit(&mut reader, &changed.to_string()).unwrap_err().to_string()
+        };
+        // Every kind the captured stream carries, including its shown turn.
+        let rows = fixture();
+        let mut kinds = BTreeSet::new();
+        for (index, row) in rows.iter().enumerate() {
+            kinds.insert(row["type"].as_str().unwrap().to_string());
+            let mut pointers = vec![""];
+            if row["type"] == "assistant" {
+                pointers.push("/message");
+            }
+            for pointer in pointers {
+                let refusal = refused_at(&rows, index, unknown(row, pointer));
+                assert!(refusal.contains("violates stream contract"), "{index}{pointer}: {refusal}");
+            }
+        }
+        // A tool result row and its message.
+        let mut issued = issued_owner();
+        let result = serde_json::json!({"type":"user","uuid":"returned","session_id":issued.session_id,
+            "parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result",
+            "tool_use_id":"provider__qwen_dup_2","content":"done","is_error":false}]}});
+        for pointer in ["", "/message", "/message/content/0"] {
+            let refusal = admit(&mut issued_owner(), &unknown(&result, pointer).to_string())
+                .unwrap_err()
+                .to_string();
+            assert!(refusal.contains("violates stream contract"), "user{pointer}: {refusal}");
+        }
+        admit(&mut issued, &result.to_string()).unwrap();
+        kinds.insert("user".into());
+        // A runtime operation receipt and its answer.
+        let receipt: serde_json::Value =
+            serde_json::from_str(&local_operation(None, "local answer")).unwrap();
+        let answer: serde_json::Value = serde_json::from_str(&assistant(
+            "local",
+            "null",
+            r#"[{"type":"text","text":"local answer"}]"#,
+        ))
+        .unwrap();
+        assert!(admit(&mut initialized(), &unknown(&receipt, "").to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("violates stream contract"));
+        let mut reader = initialized();
+        admit(&mut reader, &receipt.to_string()).unwrap();
+        assert!(admit(&mut reader, &unknown(&answer, "/message").to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("violates stream contract"));
+        // Utility work.
+        let utility = tokenizer_records("original", 1, 24, "fixture-model");
+        for (index, row) in utility.iter().enumerate() {
+            let mut reader = initialized();
+            for earlier in &utility[..index] {
+                admit(&mut reader, earlier).unwrap();
+            }
+            let row: serde_json::Value = serde_json::from_str(row).unwrap();
+            kinds.insert(row["type"].as_str().unwrap().to_string());
+            assert!(admit(&mut reader, &unknown(&row, "").to_string())
+                .unwrap_err()
+                .to_string()
+                .contains("violates stream contract"));
+        }
+        // Every record kind of the contract was probed.
+        for kind in [
+            "system", "user", "assistant", "result", "stream_event", "model_request",
+            "model_utility_request", "model_utility_completion", "model_response",
+            "model_normalization_seed", "model_generation", "model_attempt_completion",
+        ] {
+            assert!(EventKind::from_wire(kind).is_some(), "{kind}");
+            assert!(kinds.contains(kind), "{kind} was not probed");
+        }
+    }
+
+    #[test]
+    fn served_usage_is_closed_wherever_it_is_reported() {
+        let extra = |usage: &mut serde_json::Value| {
+            usage["unownedTokenCount"] = serde_json::json!(0);
+        };
+        let rows = fixture();
+        // The physical outcome and the terminal summary.
+        let outcome = rows
+            .iter()
+            .position(|row| row["response"]["event"]["kind"] == "outcome")
+            .unwrap();
+        let terminal = rows.len() - 1;
+        for (index, pointer) in [
+            (outcome, "/response/event/served_usage"),
+            (terminal, "/usage/usage"),
+        ] {
+            let mut mutant = rows.clone();
+            extra(mutant[index].pointer_mut(pointer).unwrap());
+            let (line, refusal) = first_refusal(&mutant).unwrap_err();
+            assert_eq!(line, index, "{pointer}: {refusal}");
+            assert!(refusal.contains("violates stream contract"), "{pointer}: {refusal}");
+        }
+        // The generation envelope's summary, bound to consistent bytes.
+        let mut mutant = rows.clone();
+        rewrite_generation(&mut mutant, |envelope| extra(&mut envelope["usage"]));
+        let (line, refusal) = first_refusal(&mutant).unwrap_err();
+        assert_eq!(line, position(&mutant, "model_generation"));
+        assert!(refusal.contains("violates stream contract"), "{refusal}");
+        // A compaction draw.
+        let mut draw = compaction_success();
+        extra(&mut draw["data"]["output"]["usage"]);
+        assert!(admit(&mut with_compaction_transport(), &draw.to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("violates stream contract"));
+        admit(&mut with_compaction_transport(), &compaction_success().to_string()).unwrap();
     }
 }

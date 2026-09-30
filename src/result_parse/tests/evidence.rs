@@ -6,6 +6,7 @@ fn rehashed_generation_thought_cannot_certify_without_its_physical_source() {
     trace.chat(None, "call-x");
     trace.terminal(None, 1, None);
     trace.certify();
+    let untouched = trace.clone();
 
     let generation = trace
         .rows
@@ -13,11 +14,12 @@ fn rehashed_generation_thought_cannot_certify_without_its_physical_source() {
         .find(|row| row["type"] == "model_generation")
         .unwrap();
     let evidence = &mut generation["generation"];
-    let mut envelope: Value =
-        serde_json::from_str(evidence["generation_json"].as_str().unwrap()).unwrap();
-    envelope["observations"][0]["response"]["candidates"][0]["content"]["parts"][0]["text"] =
-        json!("  **forged thought**\\n");
-    let text = envelope.to_string();
+    // Only the thought changes; every other captured lexeme, including the
+    // call's raw arguments, keeps its bytes.
+    let raw = evidence["generation_json"].as_str().unwrap();
+    assert_eq!(raw.matches("**raw thought**").count(), 1);
+    let text = raw.replace("**raw thought**", "**forged thought**");
+    let envelope: Value = serde_json::from_str(&text).unwrap();
     let digest = hash(text.as_bytes());
     evidence["generation_json"] = json!(text);
     evidence["generation_bytes"] = json!(text.len());
@@ -28,8 +30,57 @@ fn rehashed_generation_thought_cannot_certify_without_its_physical_source() {
         .find(|row| row["type"] == "model_attempt_completion")
         .unwrap();
     completion["completion"]["generation_sha256"] = json!(digest);
+    // The settled turn shows what its generation holds, so the shown thought
+    // follows the rehashed envelope and every native binding still agrees.
+    let shown = trace
+        .rows
+        .iter_mut()
+        .find(|row| row["type"] == "assistant" && row["message"]["content"][0]["type"] == "thinking")
+        .unwrap();
+    shown["message"]["content"][0]["thinking"] =
+        envelope["observations"][0]["response"]["candidates"][0]["content"]["parts"][0]["text"]
+            .clone();
 
-    assert_refused_at(&trace, "physical response replay refused");
+    // Natively every record, hash and display agrees: only the physical
+    // replay of the recorded provider bytes can tell the thought was forged.
+    trace.certify();
+    let cause = full_snapshot_bytes(trace.text().as_bytes())
+        .unwrap()
+        .certified
+        .unwrap_err()
+        .to_string();
+    let verifier = ["/usr/local/bin/node", "/opt/qwen-code/dist/record-verifier.js"]
+        .iter()
+        .all(|path| Path::new(path).is_file());
+    if verifier {
+        // The same verifier admits the untouched stream, so its refusal
+        // belongs to the forged thought.
+        if let Err(error) = full_snapshot_bytes(untouched.text().as_bytes())
+            .unwrap()
+            .certified
+        {
+            panic!("the physical replay refuses the untouched stream: {error}");
+        }
+        assert!(cause.contains("physical response replay refused"), "{cause}");
+        // The verifier's own refusal reason is the certificate's answer.
+        let reason = cause
+            .split_once(" with status ")
+            .and_then(|(_, rest)| {
+                let rest = rest
+                    .strip_prefix("exit status: ")
+                    .or_else(|| rest.strip_prefix("signal: "))?;
+                let (_, rest) = rest.split_once(": ")?;
+                rest.split_once("; inspect the original recording")
+            })
+            .map(|(reason, _)| reason.trim())
+            .unwrap_or_default();
+        assert!(!reason.is_empty(), "{cause}");
+    } else {
+        assert!(
+            cause.contains("cannot start the pinned physical response verifier"),
+            "{cause}"
+        );
+    }
 }
 
 #[test]
@@ -289,12 +340,14 @@ fn child_generations_keep_global_physical_evidence_and_local_tool_ancestry() {
     let mut trace = Trace::new();
     trace.chat(None, "child");
     trace.chat(Some("child"), "grandchild");
-    trace.presentation(Some("grandchild"));
-    trace.terminal(Some("grandchild"), 0, None);
+    // The grandchild's own model answer: one more physical request, owned by
+    // its own KV scope and displayed in the grandchild scope.
+    trace.answer(Some("grandchild"), false);
+    trace.terminal(Some("grandchild"), 1, None);
     trace.terminal(Some("child"), 1, None);
     trace.terminal(None, 1, None);
     let result = trace.certify();
-    assert_eq!(result.usage.requests, 2);
+    assert_eq!(result.usage.requests, 3);
     assert_eq!(result.scopes.len(), 2);
     assert_eq!(result.scopes[0].tool_use_id, "child");
     assert_eq!(result.scopes[1].tool_use_id, "grandchild");
@@ -304,7 +357,7 @@ fn child_generations_keep_global_physical_evidence_and_local_tool_ancestry() {
             .iter()
             .map(|row| row.kv_scope.as_str())
             .collect::<Vec<_>>(),
-        vec!["a", "child"]
+        vec!["a", "child", "grandchild"]
     );
     assert!(trace
         .rows
@@ -322,10 +375,11 @@ fn independent_children_keep_distinct_nullable_terminal_claims() {
     trace.chat(None, "call-a");
     trace.utility("call-a", ordinary_usage());
     trace.terminal(Some("call-a"), 5, None);
+    trace.tool_result(None, "call-a", "subagent a finished");
     trace.chat(None, "call-b");
     trace.utility("call-b", ordinary_usage());
     trace.utility("call-b", ordinary_usage());
-    trace.presentation(Some("call-b"));
+    trace.notice(Some("call-b"), "The subagent is still working.");
     trace.terminal(None, 2, None);
     let result = trace.certify();
     assert_eq!(result.scopes.len(), 2);
@@ -358,11 +412,11 @@ fn orphan_and_future_child_owners_are_refused_at_their_first_reference() {
     Trace::delegated().certify();
     for future in [false, true] {
         let mut trace = Trace::new();
-        trace.presentation(Some("child"));
+        trace.notice(Some("child"), "A notice for an unissued child.");
         let orphan_line = trace
             .rows
             .iter()
-            .position(|row| row["subtype"] == "runtime_operation")
+            .position(|row| row["type"] == "user")
             .unwrap()
             + 1;
         if future {
@@ -387,7 +441,7 @@ fn terminal_scope_and_root_boundaries_refuse_later_events() {
         if second_result {
             trace.terminal(Some("child"), 3, None);
         } else {
-            trace.presentation(Some("child"));
+            trace.notice(Some("child"), "A notice after the child ended.");
         }
         trace.terminal(None, 1, None);
         assert_refused_at(
@@ -415,11 +469,13 @@ fn terminal_scope_and_root_boundaries_refuse_later_events() {
 fn duplicate_accepted_tool_ids_are_refused_across_generations() {
     let mut control = Trace::new();
     control.chat(None, "first");
+    control.tool_result(None, "first", "done");
     control.chat(None, "second");
     control.terminal(None, 2, None);
     control.certify();
     let mut trace = Trace::new();
     trace.chat(None, "duplicate");
+    trace.tool_result(None, "duplicate", "done");
     trace.chat(None, "duplicate");
     trace.terminal(None, 2, None);
     assert_refused_at(&trace, "re-issues tool_use id \"duplicate\"");
@@ -428,7 +484,7 @@ fn duplicate_accepted_tool_ids_are_refused_across_generations() {
 #[test]
 fn malformed_parent_identity_is_never_a_scope() {
     let mut complete = Trace::new();
-    complete.presentation(None);
+    complete.presentation();
     complete.terminal(None, 0, None);
     complete.certify();
     for bad in [json!(0), json!(""), json!([]), json!(false), json!({})] {
@@ -449,9 +505,10 @@ fn request_usage_is_partitioned_by_kv_owner_without_billing_presentation() {
     trace.chat(None, "child"); // Captured report: 7 output, 2 thoughts.
     trace.utility("a", served(100, 99, 73, 0));
     trace.utility("child", served(900, 40, 33, 896));
-    trace.presentation(Some("child"));
+    // A displayed row in the child scope bills nothing.
+    trace.notice(Some("child"), "Displayed, never billed.");
     trace.utility("child", served(1200, 25, 0, 1200));
-    trace.utility("internal", Value::Null);
+    trace.unserved("internal");
     trace.terminal(None, 2, None);
     let result = trace.certify();
     for (scope, output, thoughts) in [("a", 106, 75), ("child", 65, 33)] {
@@ -478,6 +535,8 @@ fn request_usage_is_partitioned_by_kv_owner_without_billing_presentation() {
 
 #[test]
 fn no_dispatch_zero_usage_unknown_usage_and_pending_are_distinct() {
+    // Unknown usage is a finalized request that served none: the client
+    // completes a generation only with its served usage, so it did not complete.
     for usage in [
         None,
         Some(Value::Null),
@@ -485,8 +544,10 @@ fn no_dispatch_zero_usage_unknown_usage_and_pending_are_distinct() {
         Some(ordinary_usage()),
     ] {
         let mut trace = Trace::new();
-        if let Some(usage) = usage {
-            trace.utility("a", usage);
+        match usage {
+            None => {}
+            Some(Value::Null) => trace.unserved("a"),
+            Some(usage) => trace.utility("a", usage),
         }
         trace.terminal(None, 0, None);
         let snapshot = trace.snapshot();
@@ -741,11 +802,8 @@ fn terminal_summary_requires_a_complete_object_and_valid_partition() {
         }
     }
     for bad in invalid_usage_cases() {
-        // Terminal served metadata is open; an unknown count in a physical
-        // outcome is closed and is covered by the outcome test above.
-        if bad.get("unrecognized").is_some() {
-            continue;
-        }
+        // A served usage is closed wherever it appears: an unknown count is
+        // refused in the terminal summary as in a physical outcome.
         let mut summary = reported_generation_summary();
         summary["usage"] = bad;
         cases.push(summary);

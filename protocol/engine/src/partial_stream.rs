@@ -1,6 +1,5 @@
 use crate::{
     generation::{refusal, Generation, IncompleteCall, Origin},
-    json::Value,
     stream::{field, text, unsigned},
     ContractResult, PartialKind, PartialRecord, SAFE_INTEGER,
 };
@@ -10,8 +9,10 @@ use std::{
     sync::Arc,
 };
 
+/// The producer of a scope's partial events: the scope's latest chat request,
+/// or the local operation whose receipt precedes its runtime text.
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum OutputOrigin {
+pub(crate) enum OutputOrigin {
     Runtime,
     Model(Origin),
 }
@@ -69,7 +70,11 @@ struct Block {
     call: Option<PartialCall>,
 }
 
-/// Group markers own indexes; generation completion owns executable claims.
+/// The partial events of one display scope in upstream's framing: the root
+/// scope brackets each attempt's output in `message_start`/`message_stop`, a
+/// subagent scope streams bare content blocks, and a block index restarts at
+/// zero when a turn moves on to its next message. Generation completion owns
+/// executable claims.
 #[derive(Clone, Default)]
 pub struct PartialStreamState {
     origin: Option<OutputOrigin>,
@@ -86,7 +91,7 @@ pub struct PartialStreamState {
 }
 
 impl PartialStreamState {
-    fn set_origin(&mut self, origin: OutputOrigin, line: usize) -> ContractResult<()> {
+    pub(crate) fn set_origin(&mut self, origin: OutputOrigin, line: usize) -> ContractResult<()> {
         if self.origin.as_ref() == Some(&origin) {
             return Ok(());
         }
@@ -98,17 +103,6 @@ impl PartialStreamState {
             ..Self::default()
         };
         Ok(())
-    }
-
-    pub fn observe_origin(&mut self, origin: Value<'_>, line: usize) -> ContractResult<()> {
-        self.set_origin(
-            if text(origin, "kind", line)? == "runtime" {
-                OutputOrigin::Runtime
-            } else {
-                OutputOrigin::Model(Origin::read(origin, line)?)
-            },
-            line,
-        )
     }
 
     pub(crate) fn observe_generation(
@@ -157,7 +151,7 @@ impl PartialStreamState {
     pub fn observe(
         &mut self,
         partial: PartialRecord<'_>,
-        _root: bool,
+        root: bool,
         line: usize,
     ) -> ContractResult<()> {
         let event = partial.value();
@@ -174,6 +168,9 @@ impl PartialStreamState {
         }
         match kind {
             PartialKind::MessageStart => {
+                if !root {
+                    return Err(refusal("a subagent scope has no message group"));
+                }
                 if self.group_open || !self.blocks.is_empty() {
                     return Err(refusal("message group is already open"));
                 }
@@ -184,12 +181,15 @@ impl PartialStreamState {
                 }
             }
             PartialKind::ContentBlockStart => {
-                if !self.group_open {
+                if root && !self.group_open {
                     return Err(refusal("content block precedes its message group"));
                 }
                 let index = unsigned(field(event, "index", line)?, "partial index", SAFE_INTEGER)?;
+                if index == 0 && self.blocks.values().all(|block| !block.open) {
+                    self.blocks.clear();
+                }
                 if usize::try_from(index).ok() != Some(self.blocks.len()) {
-                    return Err(refusal("content block index is not the next group index"));
+                    return Err(refusal("content block index is not the next message index"));
                 }
                 let content = field(event, "content_block", line)?;
                 let kind = text(content, "type", line)?;
@@ -336,7 +336,7 @@ impl PartialStreamState {
                 }
             }
             PartialKind::MessageStop => {
-                if !self.group_open || self.blocks.values().any(|block| block.open) {
+                if !root || !self.group_open || self.blocks.values().any(|block| block.open) {
                     return Err(refusal("message group stops before all its blocks close"));
                 }
                 if !model && !self.runtime_message_seen {
@@ -378,7 +378,7 @@ impl PartialStreamState {
     }
 
     pub fn finish(&self, _line: usize) -> ContractResult<()> {
-        if self.group_open || !self.blocks.is_empty() {
+        if self.group_open || self.blocks.values().any(|block| block.open) {
             return Err(refusal("scope has unfinished partial groups"));
         }
         if matches!(self.origin, Some(OutputOrigin::Model(_)))

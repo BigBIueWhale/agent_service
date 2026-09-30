@@ -25,8 +25,12 @@ import threading
 import urllib.parse
 
 from verify_runtime_contract import cli_arguments
-from request_evidence import require_request_evidence, require_response_evidence, require_output_ownership
+from request_evidence import require_request_evidence, require_response_evidence
 
+# The canonical recording format this release's client writes
+# (`CHAT_RECORDING_VERSION` in its transcript records); a recording of any
+# other version is one this client refuses to resume.
+CHAT_RECORDING_VERSION = 21
 WORKSPACE = Path("/workspace")
 # The client's own system-scope settings files. Production names no override for them and
 # the image carries neither, so the sealed settings are the one source; a host that had
@@ -221,7 +225,6 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(not any(event.get("type", "").startswith("control_") for event in events),
             "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
     request_evidence = require_request_evidence(events, requests)
-    require_output_ownership(events)
     normalization_seeds = [event["normalization_seed"] for event in events
                            if event["type"] == "model_normalization_seed"]
     require(len(normalization_seeds) == 2 and
@@ -278,7 +281,7 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     raw = transcripts[0].read_bytes()
     require(bool(raw) and raw.endswith(b"\n"), "canonical transcript is empty or torn")
     records = [json.loads(line) for line in raw.splitlines()]
-    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == 20 for r in records),
+    require(all(type(r.get("recordingVersion")) is int and r["recordingVersion"] == CHAT_RECORDING_VERSION for r in records),
             "canonical recording version is missing or unknown; inspect the runtime writer before testing resume")
     require(all(all(field not in event for field in
                     ("recordingVersion", "checkpointVersion", "historyRevision", "afterCommit"))
@@ -399,8 +402,14 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
                       for part in smoke_assistant_content(record)["parts"] if "functionCall" in part]
     require(recorded_calls == [{"id": uses[0]["id"], "name": uses[0]["name"], "args": uses[0]["input"]}],
             "canonical history rewrote the model's call; inspect assistant recording before testing resume")
-    require(records[-1]["type"] == "assistant" and smoke_assistant_content(records[-1])["parts"] ==
+    # The final turn's completion evidence follows its commit; the last turn of
+    # the conversation is the final answer.
+    turns = [r for r in records if r["type"] in ("user", "assistant", "tool_result", "system")]
+    require(turns[-1]["type"] == "assistant" and smoke_assistant_content(turns[-1])["parts"] ==
             [{"text": "HEADLESS_SMOKE_OK " + nonce}], "final response was not recorded before exit")
+    require(records[-1]["type"] == "model_attempt_completion" and
+            records[-1]["completion"]["disposition"] == "accepted",
+            "the final turn's completion was not recorded before exit")
     return {"check": "headless_cli", "status": "passed", "events": len(events),
             "transcript_records": len(records), "served_requests": 2, "real_tool_calls": 1,
             "production_certificate": certificate}

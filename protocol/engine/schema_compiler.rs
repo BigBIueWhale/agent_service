@@ -764,30 +764,178 @@ mod tests {
             .contains("unsupported nested schema resource identity"));
     }
 
+    /// An independent Draft-07 reading of the owned definition: every schema
+    /// position the vocabulary's applicators name, with its JSON Pointer.
+    #[derive(Default)]
+    struct Reading {
+        objects: usize,
+        falses: usize,
+        trues: usize,
+        keywords: BTreeMap<String, usize>,
+        first_use: BTreeMap<String, String>,
+        references: Vec<(String, String)>,
+        paths: Vec<String>,
+    }
+
+    fn read_schema(value: &serde_json::Value, path: &str, reading: &mut Reading) {
+        let pointer = |base: &str, name: &str| format!("{base}/{}", escaped(name));
+        reading.paths.push(path.to_string());
+        let members = match value {
+            serde_json::Value::Bool(true) => return reading.trues += 1,
+            serde_json::Value::Bool(false) => return reading.falses += 1,
+            serde_json::Value::Object(members) => members,
+            other => panic!("schema position {path} is {other}, not a schema"),
+        };
+        reading.objects += 1;
+        for keyword in members.keys() {
+            *reading.keywords.entry(keyword.clone()).or_default() += 1;
+            reading
+                .first_use
+                .entry(keyword.clone())
+                .or_insert_with(|| path.to_string());
+        }
+        if let Some(definitions) = members.get("definitions") {
+            for (name, schema) in definitions.as_object().unwrap() {
+                read_schema(schema, &pointer(&pointer(path, "definitions"), name), reading);
+            }
+        }
+        if let Some(target) = members.get("$ref") {
+            let target = target.as_str().unwrap();
+            reading.references.push((
+                path.to_string(),
+                target.strip_prefix('#').unwrap().to_string(),
+            ));
+            return;
+        }
+        if let Some(properties) = members.get("properties") {
+            for (name, schema) in properties.as_object().unwrap() {
+                read_schema(schema, &pointer(&pointer(path, "properties"), name), reading);
+            }
+        }
+        for keyword in ["additionalProperties", "items", "if", "then", "else"] {
+            if let Some(schema) = members.get(keyword) {
+                read_schema(schema, &pointer(path, keyword), reading);
+            }
+        }
+        for keyword in ["allOf", "anyOf", "oneOf"] {
+            if let Some(branches) = members.get(keyword) {
+                for (index, schema) in branches.as_array().unwrap().iter().enumerate() {
+                    read_schema(schema, &format!("{path}/{keyword}/{index}"), reading);
+                }
+            }
+        }
+    }
+
+    fn consts(variants: &serde_json::Value, key: &str) -> Vec<String> {
+        variants
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|variant| {
+                variant["properties"][key]["const"]
+                    .as_str()
+                    .unwrap()
+                    .to_string()
+            })
+            .collect()
+    }
+
     #[test]
     fn owned_vocabulary_inventory_is_complete() {
+        let source: serde_json::Value = serde_json::from_slice(SOURCE).unwrap();
         let compiled = compile(SOURCE).unwrap();
         let inventory: serde_json::Value = serde_json::from_str(&compiled.inventory).unwrap();
-        assert_eq!(inventory["object_schemas"], 691);
-        assert_eq!(inventory["false_schemas"], 100);
-        assert_eq!(inventory["keywords"].as_object().unwrap().len(), 25);
-        assert_eq!(inventory["references"].as_array().unwrap().len(), 48);
+        let mut reading = Reading::default();
+        read_schema(&source, "", &mut reading);
+
+        // Every schema position of the definition is compiled exactly once.
+        assert_eq!(inventory["object_schemas"], reading.objects);
+        assert_eq!(inventory["false_schemas"], reading.falses);
+        assert_eq!(inventory["true_schemas"], reading.trues);
+        let mut compiled_paths = inventory["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|node| node["path"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>();
+        compiled_paths.sort();
+        reading.paths.sort();
+        assert_eq!(compiled_paths, reading.paths);
+        for (path, _) in &reading.references {
+            assert!(source.pointer(path).is_some(), "{path} is not a JSON Pointer");
+        }
+
+        // The keyword inventory is the definition's own vocabulary, counted.
+        let keywords: BTreeMap<String, usize> =
+            serde_json::from_value(inventory["keywords"].clone()).unwrap();
+        assert_eq!(keywords, reading.keywords);
+        // Every compiled keyword is individually in the compiler's known set:
+        // the same position under an unowned spelling is refused by name.
+        for (keyword, path) in &reading.first_use {
+            if path.is_empty() {
+                // Root identity keywords are checked before the vocabulary.
+                continue;
+            }
+            let mut changed = source.clone();
+            let object = changed.pointer_mut(path).unwrap().as_object_mut().unwrap();
+            let value = object.remove(keyword).unwrap();
+            let unowned = format!("{keyword}Unowned");
+            object.insert(unowned.clone(), value);
+            let error = compile(&serde_json::to_vec(&changed).unwrap()).err().unwrap();
+            assert!(
+                error.contains(&format!("{path}/{unowned}"))
+                    && error.contains("unsupported schema keyword"),
+                "{keyword} at {path}: {error}"
+            );
+        }
+
+        // Every local reference is inventoried and resolves to a definition.
+        let mut references = inventory["references"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|reference| {
+                (
+                    reference["source"].as_str().unwrap().to_string(),
+                    reference["target"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        references.sort();
+        reading.references.sort();
+        assert_eq!(references, reading.references);
+        for (_, target) in &reading.references {
+            assert!(target.starts_with("/definitions/"), "{target}");
+            assert!(source.pointer(target).is_some(), "{target} is unresolved");
+        }
         assert!(!compiled.rust.is_empty());
-        assert_eq!(
-            compiled.discriminators["EventKind"],
-            [
-                "system",
-                "user",
-                "assistant",
-                "result",
-                "stream_event",
-                "model_request",
-                "model_response",
-                "model_normalization_seed",
-                "model_generation",
-                "model_attempt_completion",
-            ]
-        );
+
+        // The generated discriminators are the definition's own constants,
+        // in the definition's order, and the generated enums read them back.
+        let events = consts(&source["oneOf"], "type");
+        let system = source["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|variant| variant["properties"]["type"]["const"] == "system")
+            .unwrap();
+        let systems = consts(&system["oneOf"], "subtype");
+        let partials = consts(&source["definitions"]["streamEvent"]["oneOf"], "type");
+        assert_eq!(compiled.discriminators["EventKind"], events);
+        assert_eq!(compiled.discriminators["SystemKind"], systems);
+        assert_eq!(compiled.discriminators["PartialKind"], partials);
+        assert_eq!(compiled.discriminators.len(), 3);
+        for name in &events {
+            assert_eq!(crate::EventKind::from_wire(name).map(crate::EventKind::wire), Some(name.as_str()));
+        }
+        for name in &systems {
+            assert_eq!(crate::SystemKind::from_wire(name).map(crate::SystemKind::wire), Some(name.as_str()));
+        }
+        for name in &partials {
+            assert_eq!(crate::PartialKind::from_wire(name).map(crate::PartialKind::wire), Some(name.as_str()));
+        }
+        assert_eq!(crate::EventKind::from_wire("unowned_record"), None);
+
         assert_eq!(compiled.success_subtype, crate::SUCCESS_SUBTYPE);
         assert_eq!(compiled.error_subtypes, crate::ERROR_SUBTYPES);
         assert_eq!(
@@ -976,9 +1124,21 @@ mod tests {
                 .unwrap()
                 .contains("unsupported generated discriminator"));
         }
+        // The system alternatives are found by their discriminator, not by
+        // their position among the record variants.
+        let system = source["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|variant| variant["properties"]["type"]["const"] == "system")
+            .unwrap()
+            .clone();
         let mut reordered = source;
         reordered["oneOf"].as_array_mut().unwrap().reverse();
         let compiled = compile(&serde_json::to_vec(&reordered).unwrap()).unwrap();
-        assert_eq!(compiled.discriminators["SystemKind"].len(), 15);
+        assert_eq!(
+            compiled.discriminators["SystemKind"],
+            consts(&system["oneOf"], "subtype")
+        );
     }
 }

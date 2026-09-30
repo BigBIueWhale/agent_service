@@ -760,9 +760,18 @@ pub(crate) struct GenerationAdmission {
     pub generation: Arc<Generation>,
 }
 
+/// How a logical attempt settled; only an accepted attempt entered history.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Disposition {
+    Accepted,
+    /// A turn the provider completed at its output limit and the runtime refused.
+    Refused,
+    Abandoned,
+}
+
 pub(crate) struct CompletionAdmission {
     pub generation: Arc<Generation>,
-    pub accepted: bool,
+    pub disposition: Disposition,
 }
 
 #[derive(Clone)]
@@ -798,8 +807,16 @@ pub(crate) struct RequestAdmission {
 }
 
 impl RequestAdmission {
-    pub(crate) fn is_chat_attempt(&self) -> bool {
-        self.attempt.is_some()
+    /// The chat attempt this request belongs to, when it has one.
+    pub(crate) fn attempt(&self) -> Option<&str> {
+        self.attempt.as_deref()
+    }
+    pub(crate) fn scope(&self) -> &str {
+        &self.scope
+    }
+    /// The exact JSON text of each message the model receives, in order.
+    pub(crate) fn messages(&self) -> &[String] {
+        &self.body.messages
     }
 }
 
@@ -1209,7 +1226,10 @@ impl ModelRequests {
                         let decoded =
                             f32::from_le_bytes(chunk.try_into().expect("four-byte chunk"));
                         if !decoded.is_finite()
-                            || values[position].as_f64() != Some(f64::from(decoded))
+                            || values[position]
+                                .as_number()
+                                .and_then(|number| number.token().parse::<f64>().ok())
+                                != Some(f64::from(decoded))
                         {
                             return Err(refusal(
                                 "embedding result differs from physical float32 bytes",
@@ -1926,6 +1946,13 @@ impl ModelRequests {
                         "served usage differs from processed physical response bytes",
                     ));
                 }
+                // Exact served usage is the client's only decode mode: a
+                // generation response (chat or utility-owned; `state.utility`
+                // marks a tokenizer or embedding call, which serves none)
+                // completes only with the usage its bytes served.
+                if completed && state.utility.is_none() && recorded_usage.is_none() {
+                    return Err(refusal("completes a generation response that served no usage"));
+                }
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
                     usage: recorded_usage,
@@ -2138,23 +2165,6 @@ impl ModelRequests {
         }
     }
 
-    pub(crate) fn validate_output_origin(
-        &self,
-        origin: Value<'_>,
-        line: usize,
-    ) -> ContractResult<Option<String>> {
-        if text(origin, "kind", line)? == "runtime" {
-            return Ok(None);
-        }
-        let id = text(origin, "attempt_id", line)?;
-        if self.attempts.get(id).is_none_or(|attempt| {
-            Some(attempt.scope.as_str()) != origin.get("kv_scope").and_then(Value::as_str)
-        }) {
-            return Err(refusal("assistant output has no matching chat request"));
-        }
-        Ok(Some(id.to_string()))
-    }
-
     pub(crate) fn has_chat_attempt_in_scope(&self, scope: &str) -> bool {
         self.attempts.values().any(|attempt| attempt.scope == scope)
     }
@@ -2207,10 +2217,12 @@ impl ModelRequests {
     }
 
     pub(crate) fn commit_seed(&mut self, admission: SeedAdmission) {
-        self.attempts
-            .get_mut(&admission.seed.origin.attempt)
-            .expect("planned normalization seed owner")
-            .seed = Some(admission.seed);
+        let SeedAdmission { seed } = admission;
+        let owner = self
+            .attempts
+            .get_mut(&seed.origin.attempt)
+            .expect("planned normalization seed owner");
+        owner.seed = Some(seed);
     }
 
     pub(crate) fn scope_usage(&self, scope: &str) -> GenerationUsageSummary {
@@ -2316,7 +2328,14 @@ impl ModelRequests {
                 "completion omits, repeats or misattributes attempt evidence",
             ));
         }
-        let accepted = text(completion, "disposition", line)? == "accepted";
+        let disposition = match text(completion, "disposition", line)? {
+            "accepted" => Disposition::Accepted,
+            "refused" => Disposition::Refused,
+            "abandoned" => Disposition::Abandoned,
+            _ => return Err(refusal("completion has an unknown disposition")),
+        };
+        let accepted = disposition == Disposition::Accepted;
+        let turn = disposition != Disposition::Abandoned;
         let selected: Vec<_> = attempt
             .settled
             .iter()
@@ -2360,23 +2379,25 @@ impl ModelRequests {
             .ok_or_else(|| refusal("final physical request has no processing outcome"))?;
         if consumer_observations != generation.observation_count
             || consumer_observations > final_outcome.pipeline_outputs_delivered
-            || (accepted && consumer_observations != final_outcome.pipeline_outputs_delivered)
+            || (turn && consumer_observations != final_outcome.pipeline_outputs_delivered)
         {
             return Err(refusal(
                 "consumer receipt contradicts decoded output or generation observations",
             ));
         }
-        if accepted {
-            generation.require_accepted()?;
-            if !final_outcome.completed || final_outcome.usage != generation.usage {
-                return Err(refusal(
-                    "accepted generation usage contradicts its physical response",
-                ));
-            }
+        match disposition {
+            Disposition::Accepted => generation.require_accepted()?,
+            Disposition::Refused => generation.require_refused()?,
+            Disposition::Abandoned => {}
+        }
+        if turn && (!final_outcome.completed || final_outcome.usage != generation.usage) {
+            return Err(refusal(
+                "completed turn usage contradicts its physical response",
+            ));
         }
         Ok(CompletionAdmission {
             generation: Arc::clone(generation),
-            accepted,
+            disposition,
         })
     }
 
@@ -2612,7 +2633,7 @@ mod tests {
         depth: 100,
     };
     fn request(sequence: u64, id: &str, body: serde_json::Value, json: &str) -> String {
-        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":false,"named_tool_choice":null,"exact_token_counting":false,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
+        json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":true,"named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
     }
     fn admit(state: &mut ModelRequests, json: &str) -> ContractResult<()> {
         let document = Document::decode(json.as_bytes(), LIMITS).unwrap();
@@ -2954,11 +2975,19 @@ mod tests {
             .find(|row| row["type"] == "model_attempt_completion")
             .unwrap()["completion"]
             .clone();
-        for (name, first_source, earlier_outputs, extra_final_output, accepted) in [
-            ("final response", false, 0, false, true),
-            ("earlier response", true, 3, false, false),
-            ("unclaimed earlier output", false, 1, false, false),
-            ("unclaimed final output", false, 0, true, false),
+        for (name, first_source, earlier_outputs, extra_final_output, refusal) in [
+            ("final response", false, 0, false, None),
+            ("earlier response", true, 3, false, Some("final physical request")),
+            ("unclaimed earlier output", false, 1, false, Some("final physical request")),
+            // The final response delivered an output no generation observation
+            // claims; the consumer receipt cannot match both.
+            (
+                "unclaimed final output",
+                false,
+                0,
+                true,
+                Some("consumer receipt contradicts decoded output"),
+            ),
         ] {
             let mut evidence = original_generation.clone();
             let mut envelope: serde_json::Value =
@@ -2996,6 +3025,7 @@ mod tests {
                 generation.origin.attempt.clone(),
                 AttemptState {
                     scope: generation.origin.scope.clone(),
+                    seed: None,
                     requests: vec!["r1".into(), "r2".into()],
                     settled: BTreeMap::from([("r1".into(), false), ("r2".into(), true)]),
                     outcomes: BTreeMap::from([
@@ -3026,29 +3056,51 @@ mod tests {
                 },
             );
             let result = state.plan_completion(document.root(), 1);
-            if accepted {
-                assert!(result.is_ok(), "{name}");
-            } else {
-                let error = result.err().expect("forged retry was admitted");
-                assert!(
-                    error.to_string().contains("final physical request"),
-                    "{name}"
-                );
+            match refusal {
+                None => assert!(result.is_ok(), "{name}"),
+                Some(cause) => {
+                    let error = result.err().expect("forged retry was admitted");
+                    assert!(error.to_string().contains(cause), "{name}: {error}");
+                }
             }
         }
     }
+    /// A nonstream provider body that serves its usage, and that usage as
+    /// the client records it.
+    fn usage_body() -> (String, serde_json::Value) {
+        (
+            json!({"id":"served","object":"chat.completion","created":1,"model":"fixture-model",
+                "choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"stop"}],
+                "usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8,
+                    "prompt_tokens_details":{"cached_tokens":1},
+                    "completion_tokens_details":{"reasoning_tokens":2}}})
+            .to_string(),
+            json!({"promptTokenCount":5,"candidatesTokenCount":3,"totalTokenCount":8,
+                "cachedContentTokenCount":1,"thoughtsTokenCount":2}),
+        )
+    }
     #[test]
     fn processing_completion_requires_successful_http_and_compatible_transport() {
-        for (http_status, termination, can_complete) in [
-            (None, "not_dispatched", false),
-            (None, "failed", false),
-            (None, "cancelled", false),
-            (Some(200), "eof", true),
-            (Some(204), "eof", true),
-            (Some(299), "cancelled", true),
-            (Some(300), "eof", false),
-            (Some(503), "cancelled", false),
-            (Some(200), "failed", false),
+        // How a completed outcome over each transport is decided: admitted,
+        // refused for its transport, or refused because the generation served
+        // no usage (No Content carries no body, so it can serve none).
+        #[derive(Clone, Copy, PartialEq)]
+        enum Completion {
+            Admitted,
+            Transport,
+            Unserved,
+        }
+        let (served_body, served_usage) = usage_body();
+        for (http_status, termination, completion) in [
+            (None, "not_dispatched", Completion::Transport),
+            (None, "failed", Completion::Transport),
+            (None, "cancelled", Completion::Transport),
+            (Some(200), "eof", Completion::Admitted),
+            (Some(204), "eof", Completion::Unserved),
+            (Some(299), "cancelled", Completion::Admitted),
+            (Some(300), "eof", Completion::Transport),
+            (Some(503), "cancelled", Completion::Transport),
+            (Some(200), "failed", Completion::Transport),
         ] {
             for status in ["completed", "failed", "cancelled"] {
                 let mut state = ModelRequests::default();
@@ -3059,20 +3111,33 @@ mod tests {
                     &request(1, "r", json!({"kind":"full","json":body}), body),
                 )
                 .unwrap();
+                // A successful response other than No Content serves its usage.
+                let bytes = if http_status.is_some_and(|code| (200..300).contains(&code) && code != 204) {
+                    served_body.as_str()
+                } else {
+                    ""
+                };
                 let mut events = Vec::new();
                 if let Some(http_status) = http_status {
                     events.push(json!({
-                        "kind": "http", "status": http_status, "content_type": null
+                        "kind": "http", "status": http_status,
+                        "content_type": if bytes.is_empty() { json!(null) } else { json!("application/json") }
                     }));
+                }
+                if !bytes.is_empty() {
+                    events.push(json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes.as_bytes())}));
                 }
                 events.push(json!({
                     "kind": "end", "termination": termination,
-                    "body_bytes": 0, "body_sha256": sha256(""),
+                    "body_bytes": bytes.len(), "body_sha256": sha256(bytes),
                     "error": if termination == "failed" { json!("read failed") } else { json!(null) }
                 }));
+                let completed = status == "completed";
                 events.push(json!({
-                    "kind": "outcome", "served_usage": null, "status": status,
-                    "sdk_values_seen": if status == "completed" { 1 } else { 0 }, "pipeline_outputs_delivered": 0,
+                    "kind": "outcome",
+                    "served_usage": if completed && !bytes.is_empty() { served_usage.clone() } else { json!(null) },
+                    "status": status,
+                    "sdk_values_seen": if completed { 1 } else { 0 }, "pipeline_outputs_delivered": 0,
                     "error": if status == "failed" { json!("processing failed") } else { json!(null) }
                 }));
                 for (index, event) in events.iter().enumerate() {
@@ -3083,18 +3148,24 @@ mod tests {
                     .to_string();
                     let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                     let admission = state.plan_response(doc.root(), 1);
-                    if event["kind"] == "outcome" && status == "completed" && !can_complete {
+                    let refused = match completion {
+                        _ if event["kind"] != "outcome" || !completed => None,
+                        Completion::Admitted => None,
+                        Completion::Transport => Some("successful HTTP transport"),
+                        Completion::Unserved => Some("completes a generation response that served no usage"),
+                    };
+                    if let Some(cause) = refused {
                         let error = admission
                             .err()
                             .expect("contradictory completion was admitted");
-                        assert!(error.to_string().contains("successful HTTP transport"));
+                        assert!(error.to_string().contains(cause), "{http_status:?}/{termination}: {error}");
                         assert_eq!(state.responses.len(), 1);
                     } else {
                         state.commit_response(admission.unwrap());
                     }
                 }
                 assert!(!state.responses.is_empty(), "outcome is not delivery");
-                if status != "completed" || can_complete {
+                if !completed || completion == Completion::Admitted {
                     let raw = json!({"response": {
                         "journal_id": "j", "request_id": "r",
                         "sequence": events.len() + 1,
@@ -3110,6 +3181,96 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+    #[test]
+    fn completed_generation_response_requires_served_usage() {
+        let owners = [
+            json!({"kind":"chat","attempt_id":"attempt"}),
+            json!({"kind":"utility","operation_id":"generation","purpose":"other"}),
+        ];
+        // A 2xx, fully read body that serves no usage, in each decode mode.
+        let unserved_stream = "data: {\"id\":\"reply\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"fixture-model\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n";
+        let unserved_json = r#"{"id":"reply","object":"chat.completion","created":1,"model":"fixture-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#;
+        for owner in &owners {
+            for (stream, bytes, content_type) in [
+                (true, unserved_stream, "text/event-stream"),
+                (false, unserved_json, "application/json"),
+            ] {
+                for status in ["completed", "failed"] {
+                    let mut state = ModelRequests::default();
+                    let body = json!({"kv_scope":"owner","model":"fixture-model","stream":stream,"messages":[]}).to_string();
+                    let mut record: serde_json::Value = serde_json::from_str(&request(
+                        1,
+                        "r",
+                        json!({"kind":"full","json":body}),
+                        &body,
+                    ))
+                    .unwrap();
+                    record["request"]["owner"] = owner.clone();
+                    record["request"]["decode_policy"]["mode"] =
+                        json!(if stream { "stream" } else { "nonstream" });
+                    admit(&mut state, &record.to_string()).unwrap();
+                    let events = [
+                        json!({"kind":"http","status":200,"content_type":content_type}),
+                        json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes.as_bytes())}),
+                        json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),"body_sha256":sha256(bytes),"error":null}),
+                    ];
+                    for (index, event) in events.into_iter().enumerate() {
+                        let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
+                        let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+                        let plan = state.plan_response(doc.root(), 1).unwrap();
+                        state.commit_response(plan);
+                    }
+                    let outcome = json!({"response":{"journal_id":"j","request_id":"r","sequence":4,
+                        "event":{"kind":"outcome","status":status,"served_usage":null,
+                            "error":if status == "failed" { json!("processing failed") } else { json!(null) },
+                            "sdk_values_seen":1,"pipeline_outputs_delivered":0}}})
+                    .to_string();
+                    let doc = Document::decode(outcome.as_bytes(), LIMITS).unwrap();
+                    let plan = state.plan_response(doc.root(), 1);
+                    let label = format!("{owner}/stream={stream}/{status}");
+                    if status == "completed" {
+                        let error = plan.err().expect(&label).to_string();
+                        assert!(
+                            error.contains("completes a generation response that served no usage"),
+                            "{label}: {error}"
+                        );
+                    } else {
+                        assert!(plan.is_ok(), "{label}: {:?}", plan.err());
+                    }
+                }
+            }
+        }
+        // A tokenizer call is not a generation: it completes without usage.
+        let mut state = ModelRequests::default();
+        state.commit_origin(RequestOrigin {
+            journal_id: "j".into(),
+            first_sequence: 1,
+        });
+        let body = json!({"model":"selected","prompt":"text","add_special_tokens":false}).to_string();
+        let request = json!({"utility_request":{
+            "journal_id":"j","sequence":1,"request_id":"physical-1",
+            "operation_id":"count-1","kv_scope":"root","kind":"tokenize_text",
+            "requested_model":"selected","requested_input_count":null,
+            "expected_max_model_len":4096,"request_url":"https://fixture.invalid/tokenize",
+            "body_json":body,"body_bytes":body.len(),"body_sha256":sha256(&body)
+        }})
+        .to_string();
+        let document = Document::decode(request.as_bytes(), LIMITS).unwrap();
+        let admission = state.plan_utility_request(document.root(), 1, LIMITS).unwrap();
+        state.commit_utility_request(admission);
+        let raw = json!({"count":2,"max_model_len":4096}).to_string();
+        for (position, event) in [
+            json!({"kind":"http","status":200,"content_type":"application/json"}),
+            json!({"kind":"body","offset":0,"base64":STANDARD.encode(raw.as_bytes())}),
+            json!({"kind":"end","termination":"eof","body_bytes":raw.len(),"body_sha256":sha256(&raw),"error":null}),
+            json!({"kind":"outcome","status":"completed","error":null,"served_usage":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+        ].into_iter().enumerate() {
+            let response = json!({"response":{"journal_id":"j","request_id":"physical-1","sequence":position+1,"event":event}}).to_string();
+            let document = Document::decode(response.as_bytes(), LIMITS).unwrap();
+            let admission = state.plan_response(document.root(), 1).unwrap();
+            state.commit_response(admission);
         }
     }
     #[test]
@@ -3134,11 +3295,23 @@ mod tests {
                     "total_tokens":8,"prompt_tokens_details":{"cached_tokens":1},
                     "completion_tokens_details":{"reasoning_tokens":2}}})
                 .to_string();
-                for (index, event) in [
+                let mut events = vec![
                     json!({"kind":"http","status":200,"content_type":"application/json"}),
                     json!({"kind":"body","offset":0,"base64":STANDARD.encode(physical.as_bytes())}),
                     json!({"kind":"end","termination":"eof","body_bytes":physical.len(),"body_sha256":sha256(&physical),"error":null}),
-                ].into_iter().enumerate() {
+                ];
+                if status == "completed" {
+                    // A delivered utility output is recorded as its decoded observation.
+                    let decoded = json!({"response":{"candidates":[]},
+                        "incomplete_tool_calls":[],"tool_call_preparations":[]})
+                    .to_string();
+                    events.push(json!({"kind":"decoded_body","role":"utility","index":0,
+                        "offset":0,"base64":STANDARD.encode(decoded.as_bytes())}));
+                    events.push(json!({"kind":"decoded_end","role":"utility","index":0,
+                        "body_bytes":decoded.len(),"body_sha256":sha256(&decoded)}));
+                }
+                let outcome_sequence = events.len() + 1;
+                for (index, event) in events.into_iter().enumerate() {
                     let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
                     let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                     let plan = state.plan_response(doc.root(), 1).unwrap();
@@ -3165,10 +3338,10 @@ mod tests {
                     "negative" => event["served_usage"]["thoughtsTokenCount"] = json!(-1),
                     _ => {}
                 }
-                let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":4,"event":event}}).to_string();
+                let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":outcome_sequence,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                 let plan = state.plan_response(doc.root(), 1);
-                assert_eq!(plan.is_ok(), defect == "valid", "{status}/{defect}");
+                assert_eq!(plan.is_ok(), defect == "valid", "{status}/{defect}: {:?}", plan.err());
                 assert_eq!(
                     state.responses.len(),
                     1,
@@ -3193,8 +3366,10 @@ mod tests {
         admit(&mut state, &a).unwrap();
         admit(&mut state, &b).unwrap();
         assert!(admit(&mut state, &b).is_err());
+        // Both requests complete generations, so both serve their usage.
+        let (served_body, served_usage) = usage_body();
         let terminal = Document::decode(
-            br#"{"request_evidence":{"journal_id":"j","first_sequence":3,"request_count":2,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":2,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":2,"usage":null}}"#,
+            br#"{"request_evidence":{"journal_id":"j","first_sequence":3,"request_count":2,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":2,"usageReports":2,"unfinalizedRequests":0,"unreportedUsageRequests":0,"usage":{"promptTokenCount":10,"candidatesTokenCount":6,"totalTokenCount":16,"cachedContentTokenCount":2,"thoughtsTokenCount":4}}}"#,
             LIMITS,
         )
         .unwrap();
@@ -3202,14 +3377,14 @@ mod tests {
         for id in ["a", "b"] {
             for (sequence,event) in [
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
-                json!({"kind":"body","offset":0,"base64":"e30="}),
-                json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","served_usage":null,"status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+                json!({"kind":"body","offset":0,"base64":STANDARD.encode(served_body.as_bytes())}),
+                json!({"kind":"end","termination":"eof","body_bytes":served_body.len(),"body_sha256":sha256(&served_body),"error":null}),
+                json!({"kind":"outcome","served_usage":served_usage,"status":"completed","error":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
                 json!({"kind":"delivery","outputs_delivered":0}),
             ].into_iter().enumerate() {
                 if id == "b" && event["kind"] == "outcome" {
                     assert!(state.validate_summary(terminal.root(), 3).is_err());
-                    let late_body = json!({"response":{"journal_id":"j","request_id":id,"sequence":sequence+1,"event":{"kind":"body","offset":2,"base64":"e30="}}}).to_string();
+                    let late_body = json!({"response":{"journal_id":"j","request_id":id,"sequence":sequence+1,"event":{"kind":"body","offset":served_body.len(),"base64":"e30="}}}).to_string();
                     let doc = Document::decode(late_body.as_bytes(), LIMITS).unwrap();
                     assert!(state.plan_response(doc.root(), 1).is_err());
                 }
@@ -3291,7 +3466,8 @@ mod tests {
                     let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                     assert!(state.validate_summary(document.root(), 1).is_err());
                 }
-                "stream_event" => {}
+                // Presentation derives from the completion; it is not request evidence.
+                "stream_event" | "assistant" => {}
                 kind => panic!("unhandled fixture record {kind}"),
             }
         }
@@ -3300,7 +3476,7 @@ mod tests {
         assert_eq!(state.all_usage().usage.unwrap().output, 7);
     }
     #[test]
-    fn chat_processing_requires_one_history_decision_and_a_matching_origin() {
+    fn chat_processing_requires_one_history_decision() {
         for status in ["completed", "failed"] {
             let mut state = ModelRequests::default();
             let body =
@@ -3310,23 +3486,66 @@ mod tests {
                     .unwrap();
             value["request"]["owner"] = json!({"kind":"chat","attempt_id":"attempt"});
             admit(&mut state, &value.to_string()).unwrap();
+            // A completed chat response serves its usage; a failed one here
+            // delivered a body without any.
+            let completed = status == "completed";
+            let (served_body, served_usage) = usage_body();
+            let bytes = if completed { served_body } else { "{}".to_string() };
             for (index, event) in [
                 json!({"kind":"http","status":200,"content_type":"application/json"}),
-                json!({"kind":"body","offset":0,"base64":"e30="}),
-                json!({"kind":"end","termination":"eof","body_bytes":2,"body_sha256":sha256("{}"),"error":null}),
-                json!({"kind":"outcome","served_usage":null,"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)},"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+                json!({"kind":"body","offset":0,"base64":STANDARD.encode(bytes.as_bytes())}),
+                json!({"kind":"end","termination":"eof","body_bytes":bytes.len(),"body_sha256":sha256(&bytes),"error":null}),
+                json!({"kind":"outcome","served_usage":if completed { served_usage } else { json!(null) },"status":status,"error":if status == "failed" {json!("failure")} else {json!(null)},"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
             ].into_iter().enumerate() {
                 let raw = json!({"response":{"journal_id":"j","request_id":"r","sequence":index+1,"event":event}}).to_string();
                 let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
                 let plan = state.plan_response(doc.root(), 1).unwrap();
                 state.commit_response(plan);
             }
-            let terminal = Document::decode(br#"{"request_evidence":{"journal_id":"j","first_sequence":1,"request_count":1,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":1,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":1,"usage":null}}"#, LIMITS).unwrap();
+            let summary = if completed {
+                r#"{"requests":1,"usageReports":1,"unfinalizedRequests":0,"unreportedUsageRequests":0,"usage":{"promptTokenCount":5,"candidatesTokenCount":3,"totalTokenCount":8,"cachedContentTokenCount":1,"thoughtsTokenCount":2}}"#
+            } else {
+                r#"{"requests":1,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":1,"usage":null}"#
+            };
+            let terminal = format!(r#"{{"request_evidence":{{"journal_id":"j","first_sequence":1,"request_count":1,"open_response_ids":[],"open_attempt_ids":[]}},"usage":{summary}}}"#);
+            let terminal = Document::decode(terminal.as_bytes(), LIMITS).unwrap();
             assert!(state.validate_summary(terminal.root(), 1).is_err());
             let accepted = json!({"response":{"journal_id":"j","request_id":"r","sequence":5,"event":{"kind":"history","disposition":"accepted"}}}).to_string();
             let doc = Document::decode(accepted.as_bytes(), LIMITS).unwrap();
+            // History acceptance follows the attempt's generation and a
+            // completed response; neither alone is a turn.
+            assert!(state
+                .plan_response(doc.root(), 1)
+                .err()
+                .expect("acceptance before generation")
+                .to_string()
+                .contains("acceptance precedes generation"));
+            let rows: Vec<serde_json::Value> =
+                serde_json::from_str(include_str!("fixtures/ordinary-tool-wire.json")).unwrap();
+            let generation = rows
+                .iter()
+                .find(|row| row["type"] == "model_generation")
+                .unwrap()
+                .to_string();
+            let generation = Document::decode(generation.as_bytes(), LIMITS).unwrap();
+            let generation = Generation::read(
+                field(generation.root(), "generation", 1).unwrap(),
+                1,
+                LIMITS,
+                ValidationLimits {
+                    operations: 1_000_000,
+                },
+                |_| Ok(vec!["provider".to_string()]),
+            )
+            .unwrap();
+            state.attempts.get_mut("attempt").unwrap().generation = Some(Arc::new(generation));
             if status == "failed" {
-                assert!(state.plan_response(doc.root(), 1).is_err());
+                assert!(state
+                    .plan_response(doc.root(), 1)
+                    .err()
+                    .expect("acceptance of a failed response")
+                    .to_string()
+                    .contains("no completed response"));
             }
             let history = accepted.replace(
                 "accepted",
@@ -3344,15 +3563,6 @@ mod tests {
                 state.validate_summary(terminal.root(), 1).is_err(),
                 "physical settlement cannot replace generation completion"
             );
-            for (id, scope, valid) in [
-                ("attempt", "owner", true),
-                ("unknown", "owner", false),
-                ("attempt", "foreign", false),
-            ] {
-                let raw = json!({"kind":"model","attempt_id":id,"kv_scope":scope}).to_string();
-                let doc = Document::decode(raw.as_bytes(), LIMITS).unwrap();
-                assert_eq!(state.validate_output_origin(doc.root(), 1).is_ok(), valid);
-            }
         }
     }
 }

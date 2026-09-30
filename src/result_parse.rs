@@ -132,20 +132,40 @@ fn verify_physical_generations(path: &Path, bytes: u64, digest: &str) -> Service
         .arg(MAX_EVENT_RECORD_BYTES.to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()
         .map_err(|error| ServiceError::AgentOutputMissing(format!(
             "cannot start the pinned physical response verifier for {}: {error}; inspect the service image and the retained recording, then retry",
             path.display(),
         )))?;
+    // The verifier names the record it refused and why on stderr. That reason
+    // is the certificate's answer, so it is read concurrently (a full pipe
+    // must never stall the verifier) and kept up to a bound that holds its
+    // one-line refusal; anything past the bound is drained unkept.
+    const VERIFIER_REASON_BYTES: u64 = 16 * 1024;
+    let mut stderr = child.stderr.take().expect("piped verifier stderr");
+    let reason = std::thread::spawn(move || {
+        let mut kept = Vec::new();
+        let _ = (&mut stderr).take(VERIFIER_REASON_BYTES).read_to_end(&mut kept);
+        let _ = std::io::copy(&mut stderr, &mut std::io::sink());
+        String::from_utf8_lossy(&kept)
+            .trim()
+            .trim_end_matches('.')
+            .to_string()
+    });
     let started = Instant::now();
     loop {
         match child.try_wait() {
             Ok(Some(status)) if status.success() => return Ok(()),
-            Ok(Some(status)) => return Err(ServiceError::AgentOutputMissing(format!(
-                "physical response replay refused {} with status {status}; inspect the original recording with its matching client or start a new session",
-                path.display(),
-            ))),
+            Ok(Some(status)) => {
+                let reason = reason
+                    .join()
+                    .unwrap_or_else(|_| "the verifier's refusal reason could not be read".into());
+                return Err(ServiceError::AgentOutputMissing(format!(
+                    "physical response replay refused {} with status {status}: {reason}; inspect the original recording with its matching client or start a new session",
+                    path.display(),
+                )));
+            }
             Ok(None) if started.elapsed() < deadline => std::thread::sleep(Duration::from_millis(20)),
             Ok(None) => {
                 let _ = child.kill();

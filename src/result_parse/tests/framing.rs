@@ -135,7 +135,7 @@ fn unreadable_records_preserve_physical_observations_on_both_sides() {
     trace.chat(None, "child");
     let split = trace.rows.len();
     trace.utility("child", ordinary_usage());
-    trace.presentation(Some("child"));
+    trace.notice(Some("child"), "Child scope notice.");
     trace.terminal(None, 1, None);
     trace.certify();
     for damage in [
@@ -213,7 +213,7 @@ fn full_snapshot_drains_oversized_records_without_losing_adjacent_usage() {
     let first = trace.summary(None);
     let split = trace.rows.len();
     trace.utility("child", ordinary_usage());
-    trace.presentation(Some("child"));
+    trace.notice(Some("child"), "Child scope notice.");
     trace.terminal(None, 1, None);
     trace.certify();
     for (terminated, initialized) in [(false, true), (true, true), (true, false)] {

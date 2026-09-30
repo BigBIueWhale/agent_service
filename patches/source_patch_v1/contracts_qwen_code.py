@@ -570,7 +570,8 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         label=label,
     )
-    # A generation a length terminal stopped is refused, not committed: it is
+    # A generation a length terminal stopped is refused, not committed: its
+    # attempt settles `refused` (which history reads as `abandoned`), it is
     # recorded as a draw that committed no turn, nothing of it enters the
     # history a request is rendered from, and it names the message it was
     # issued on so the turn can be drawn again. Anything else is committed.
@@ -592,7 +593,7 @@ def _validate_stream_commit_after(state: State) -> None:
             "attempt.commitGeneration(generation);",
             "recorded = true;",
             "syncFunctionCallsField(terminal, committedCalls)",
-            "historyDisposition: refused ? 'abandoned' : 'accepted',",
+            "attemptDisposition: refused ? 'refused' : 'accepted',",
         ),
         label=label,
         location=chat,
@@ -629,22 +630,38 @@ def _validate_stream_commit_after(state: State) -> None:
             "toolCallParser.hasInvalidToolCallIndex()",
             "toolCallParser.hasConflictingToolCallIdentity()",
             "toolCallParser.hasInvalidToolCallArguments()",
-            "            Boolean(toolCall.id) &&\n            (named === undefined || toolCall.name === named),",
-            "JSON.stringify([chunk.id, toolCall.index])",
-            "occupiedIds.add(id);",
+            # Strict completion is the only decode mode: a streamed call is
+            # complete only on its terminal, identified and, when forced, named.
+            "    const completedToolCalls =\n"
+            "      choice.finish_reason === callTerminal &&\n"
+            "      parsedToolCalls.every(\n"
+            "        (toolCall) =>\n"
+            "          Boolean(toolCall.id) &&\n"
+            "          (named === undefined || toolCall.name === named),\n"
+            "      )\n"
+            "        ? parsedToolCalls\n"
+            "        : [];",
+            # A completed call carries the provider's id; none is derived.
+            "          functionCall: {\n"
+            "            id: toolCall.id,\n"
+            "            name: toolCall.name,\n"
+            "            args: toolCall.args,\n"
+            "          },",
         ),
         label=label,
     )
     forbid_text(state, converter, "Math.random()", label=label)
+    forbid_text(state, converter, "occupiedIds", label=label)
+    forbid_text(state, converter, "requestContext.strictToolCalling", label=label)
     require_text(
         state,
         "packages/core/src/core/openaiContentGenerator/converter.test.ts",
-        "derives missing tool call IDs from the served response and parser slot",
+        "refuses a tool call the served response did not identify, deriving no ID for it",
         label=label,
     )
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
-        "for (const response of decoder.finish()) {",
+        "const final = decoder.finish();",
         "ResponseObservationError",
     ), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/responseDecoder.ts", (
@@ -717,7 +734,7 @@ def _validate_stream_commit_after(state: State) -> None:
         (
             "const incompleteToolCalls: IncompleteToolCall[] = [];",
             "incompleteToolCalls.push(...takeIncompleteToolCalls(chunk));",
-            "yield { value: chunk, historyDisposition: null };",
+            "yield { value: chunk, attemptDisposition: null };",
             "generation = freezeModelGeneration(attempt.journalId, {",
             "observations,",
             "await this.chatRecordingService.recordGeneration({",
@@ -727,7 +744,7 @@ def _validate_stream_commit_after(state: State) -> None:
             "this.history.push(accepted);",
             "await committed;",
             "setIncompleteToolCalls(terminal, incompleteToolCalls);",
-            "historyDisposition: refused ? 'abandoned' : 'accepted',",
+            "attemptDisposition: refused ? 'refused' : 'accepted',",
             "generation ??= freezeModelGeneration(attempt.journalId, {",
             "observations,",
             "await this.chatRecordingService.recordGeneration({",
@@ -783,7 +800,7 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         (
             "packages/core/src/services/chatRecordingService.test.ts",
-            "[stopped-call] keeps a call the output limit stopped on its assistant record",
+            "[stopped-call] keeps a call the output limit stopped on its refused generation, never in replayable history",
         ),
     ):
         require_text(state, path, name, label=label)
@@ -1631,11 +1648,15 @@ def _validate_stream_evidence_after(state: State) -> None:
     label = "headless stream-evidence result"
     adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
     adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
-    # The provider request owns exact model input. The tool_result block is
-    # display text that retains response-part detail and distinct errors;
-    # a short resultDisplay is used only when neither is available.
+    # The provider request owns exact model input, and the tool_result block
+    # carries exactly the text of the tool message that request gives the
+    # model for the call: the one function response answering it, spelled by
+    # the renderer's own text rule. Nothing meant for a person (resultDisplay,
+    # an error message, a notice) stands in for it or is added to it.
     adapter_source = _source(state, adapter, label=label)
-    require_text(state, adapter, "block.content = content;", label=label)
+    require_text(
+        state, adapter, "content: toolResultContent(request, response),", label=label
+    )
     require_text(
         state,
         adapter,
@@ -1654,10 +1675,18 @@ def _validate_stream_evidence_after(state: State) -> None:
         "const textContent = functionResponseContent(response.response);",
         label=label,
     )
-    require_text(
+    _require_all(
         state,
         "packages/core/src/utils/function-response-content.ts",
-        "return JSON.stringify(response) ?? String(response);",
+        (
+            "return JSON.stringify(response) ?? String(response);",
+            "export function toolMessageText(response: {",
+            "    functionResponseContent(response.response),\n"
+            "    ...(response.parts ?? []).map((part) =>\n"
+            "      'text' in part && typeof part.text === 'string' ? part.text : '',\n"
+            "    ),\n"
+            "  ].join('');",
+        ),
         label=label,
     )
     require_text(
@@ -1713,38 +1742,37 @@ def _validate_stream_evidence_after(state: State) -> None:
     _require_ordered(
         adapter_source,
         (
-            "const partsContent = response.responseParts?.length",
-            "functionResponsePartsToString(response.responseParts)",
-            "checkResponsePartsForError(response.responseParts)",
-            "if (content) lines.push(content);",
-            "response.error.message !== embeddedError",
-            "typeof response.resultDisplay === 'string'",
+            "export function toolResultContent(\n"
+            "  request: ToolCallRequestInfo,\n"
+            "  response: ToolCallResponseInfo,\n"
+            "): string {",
+            "(part) => part.functionResponse?.id === request.callId,",
+            "if (answers.length !== 1)",
+            "return toolMessageText(answers[0]!.functionResponse!);",
         ),
         label=label,
         location=adapter,
     )
+    tool_result = adapter_source.split("export function toolResultContent(", 1)[-1]
+    tool_result = tool_result.split("\n}\n", 1)[0]
+    for display in (
+        "resultDisplay",
+        "response.error",
+        "visionBridgeNotice",
+        "checkResponsePartsForError",
+        "functionResponsePartsToString",
+        ".slice(",
+    ):
+        _require(
+            display not in tool_result,
+            f"{label}: {adapter} toolResultContent uses {display!r}; a tool "
+            "result is the model-facing tool message text and nothing else",
+        )
+    forbid_text(state, adapter, "functionResponsePartsToString", label=label)
     require_text(
         state,
         adapter_test,
         "displays response-part text rather than the shorter display banner",
-        label=label,
-    )
-    require_text(
-        state,
-        adapter_test,
-        "falls back to display text when no response parts exist",
-        label=label,
-    )
-    require_text(
-        state,
-        adapter_test,
-        "retains partial tool output before a top-level error",
-        label=label,
-    )
-    require_text(
-        state,
-        adapter_test,
-        "retains an embedded error when its response part also has output",
         label=label,
     )
 
@@ -3275,12 +3303,19 @@ def _validate_literal_response_after(state: State) -> None:
         ),
         label=label,
     )
+    # The observation shape is structural, in the pure envelope module the
+    # canonical reader shares; the normalizer that fills it stays in node code.
+    require_text(
+        state,
+        "packages/core/src/core/generation-envelope.ts",
+        "'source_request_id' | 'tool_call_preparations' | 'call_ids'",
+        label=label,
+    )
     _require_all(
         state,
         "packages/core/src/core/model-generation.ts",
         (
             "export class GenerationObservationNormalizer",
-            "'source_request_id' | 'tool_call_preparations' | 'call_ids'",
             "const snapshot = structuredClone(observed)",
             "normalizeModelToolCallIds(",
             "provider_call_id: observed.tool_call_preparations[index]!.callId",
@@ -3822,14 +3857,17 @@ def _validate_subagent_progress_before(state: State) -> None:
 
 def _validate_subagent_progress_after(state: State) -> None:
     label = "subagent terminal-progress result"
+    # The settling chunk carries how the attempt settled (accepted, refused
+    # or abandoned); the subagent reads history's view of it through the one
+    # mapping, so a refused draw is never an accepted round.
     _require_all(state, "packages/core/src/core/geminiChat.ts", (
-        "export type { ChatHistoryDisposition } from './chat-attempt.js';",
-        "historyDisposition: ChatHistoryDisposition | null;",
+        "export type {\n  AttemptDisposition,\n  ChatHistoryDisposition,\n} from './chat-attempt.js';",
+        "attemptDisposition: AttemptDisposition | null;",
         "yield { type: StreamEventType.CHUNK, ...chunk };",
     ), label=label)
     _require_all(state, "packages/core/src/agents/runtime/agent-core.ts", (
-        "if (streamEvent.historyDisposition !== null)",
-        "historyDisposition = streamEvent.historyDisposition;",
+        "if (streamEvent.attemptDisposition !== null)",
+        "historyDisposition = historyDispositionOf(\n                streamEvent.attemptDisposition,\n              );",
         "finishReason: observedFinishReason,",
         "event.historyDisposition === 'accepted'",
         ": 'generation_attempt';",
@@ -5628,7 +5666,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         openai_dir + "converter.ts",
         (
             "  return requestContext.namedToolChoice === undefined ? 'tool_calls' : 'stop';",
-            "            (named === undefined || toolCall.name === named),",
+            "          (named === undefined || toolCall.name === named),",
             "      choice.finish_reason !== callTerminal &&",
             "`Model response called another function than the ${requestContext.namedToolChoice} its request forced.`",
         ),
@@ -5675,6 +5713,9 @@ def _validate_compaction_accounting_before(state: State) -> None:
 
 def _validate_compaction_accounting_after(state: State) -> None:
     label = "compaction output-accounting result"
+    # The client's own stream admission refuses a compaction record whose
+    # status contradicts whether history was replaced; the SDKs are upstream's
+    # and admit nothing of their own.
     _require_all(
         state,
         "packages/core/src/utils/runtime-stream-contract.ts",
@@ -5682,24 +5723,6 @@ def _validate_compaction_accounting_after(state: State) -> None:
             "validateCompactionOutcome(",
             "Compaction status contradicts whether history was replaced",
             "Compaction rejected attempt does not name a resampleable rule",
-        ),
-        label=label,
-    )
-    _require_all(
-        state,
-        "packages/sdk-python/src/qwen_code_sdk/record_admission.py",
-        (
-            "_compaction_outcome(record[\"data\"])",
-            "compaction status contradicts whether history was replaced",
-        ),
-        label=label,
-    )
-    _require_all(
-        state,
-        "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/protocol/RecordAdmission.java",
-        (
-            "compactionOutcome(data)",
-            "compaction status contradicts whether history was replaced",
         ),
         label=label,
     )
@@ -7003,13 +7026,26 @@ def _validate_terminal_state_after(state: State) -> None:
         ),
         label="callback-owned output settlement",
     )
+    # The first failure is kept even when its value is falsy, and every write,
+    # drain and owner check after it throws that same failure: nothing is
+    # admitted to an output that can no longer deliver it.
     require_text(
         state,
         writer_path,
         "if (this.failure) throw this.failure.error;",
-        count=3,
+        count=2,
         label="falsy output failure retention",
     )
+    _require_all(state, writer_path, (
+        "requireOpen(): void {",
+        "    this.requireOpen();",
+    ), label="falsy output failure retention")
+    require_text(state, "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts",
+                 "this.writer.requireOpen();", count=3,
+                 label="failed output admits nothing after it")
+    _require_all(state, "packages/cli/src/nonInteractive/io/JsonOutputAdapter.ts", (
+        "this.stdout.requireOpen();", "this.stderr.requireOpen();",
+    ), label="failed output admits nothing after it")
     _require_all(
         state,
         "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.ts",
@@ -8486,8 +8522,6 @@ def _validate_served_accounting_after(state: State) -> None:
         "candidate?.segmentId === evidenceSegmentId ? candidate : undefined;",
         "body: previous", "base_request_id: previous.id",
         "added_messages: body.messages.slice(retained)",
-        "readonly decode_policy: OpenAIResponseDecodePolicy;",
-        "requireOpenAIResponseDecodePolicy(value['decode_policy'])",
         "decode_policy: selectedPolicy,",
         "typeof parsed['stream'] !== 'boolean'",
         "body.stream !== (evidence.decode_policy.mode === 'stream')",
@@ -8501,6 +8535,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "refusal('compaction system record has no scope or object data')",
         "this.claimCompaction(data as CompactionRecord, scope);",
         "this.utilities.claimTokenCount(id, owner)",
+    ), label=label)
+    # The closed record shape, with the decode policy it was dispatched under,
+    # is read by the pure record module that browser bundles share.
+    _require_all(state, core + "core/model-evidence-records.ts", (
+        "readonly decode_policy: OpenAIResponseDecodePolicy;",
+        "requireOpenAIResponseDecodePolicy(value['decode_policy'])",
     ), label=label)
     _require_ordered(_source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label), (
         "request.chatAttempt?.assertRequestContents(request.contents);",
@@ -8653,16 +8693,26 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.stderr.subscribeProgress(progress)",
     ), label=label)
     _require_all(state, core + "core/model-response-evidence.ts", (
-        "readonly served_usage: ServedUsage | null", "observeUsage(usage: ServedUsage)",
+        "observeUsage(usage: ServedUsage)",
         "served usage follows response processing completion",
-        "SERVED_USAGE_FIELDS.map((field) => [field, counts[field]])",
-        "!keys(event, [",
-        "'sdk_values_seen'", "'pipeline_outputs_delivered'",
+        "this.servedUsage = servedUsageCounts(counts);",
         "observeSdkValue(): void", "observePipelineOutput(response: GenerateContentResponse): void",
         "recordGenerationSource(response, this.requestId)",
-        "requireServedUsage(event['served_usage'], 'recorded response usage')",
         "state.contentType = event.content_type",
         "content_type: state.contentType",
+    ), label=label)
+    require_text(
+        state,
+        core + "core/served-usage.ts",
+        "    SERVED_USAGE_FIELDS.map((field) => [field, usage[field]]),",
+        label=label,
+    )
+    # The closed outcome record is read by the pure record module.
+    _require_all(state, core + "core/model-evidence-records.ts", (
+        "readonly served_usage: ServedUsage | null",
+        "!keys(event, [",
+        "'sdk_values_seen'", "'pipeline_outputs_delivered'",
+        "requireServedUsage(event['served_usage'], 'recorded response usage')",
     ), label=label)
     pipeline_usage = _source(state, core + "core/openaiContentGenerator/pipeline.ts", label=label)
     _require_ordered(pipeline_usage.split("const openaiResponse =", 1)[1], (
@@ -8673,11 +8723,29 @@ def _validate_served_accounting_after(state: State) -> None:
         "decoder.observeUsage(usage)", "providerOutput?.observe(chunk)",
         "decoder.accept(chunk, usage)",
     ), label=label, location="stream physical usage before conversion")
+    # Strict tool calling and exact served usage are the only decode mode: the
+    # recorded policy admits no other value, the selector writes the constants,
+    # and a request context has no switch for either.
+    decode_policy = core + "core/openaiContentGenerator/response-decode-policy.ts"
+    _require_all(state, decode_policy, (
+        "export interface OpenAIResponseDecodePolicy",
+        "  readonly strict_tool_calling: true;",
+        "  readonly exact_token_counting: true;",
+        "export function requireOpenAIResponseDecodePolicy(",
+        "policy['strict_tool_calling'] !== true ||",
+        "policy['exact_token_counting'] !== true ||",
+        "Inspect the selected provider configuration and retry with a matching client.",
+    ), label=label)
+    for mode_switch in ("strictToolCalling", "exactTokenCounting"):
+        forbid_text(state, core + "core/openaiContentGenerator/types.ts", mode_switch, label=label)
+        forbid_text(state, core + "core/openaiContentGenerator/converter.ts",
+                    "requestContext." + mode_switch, label=label)
     response_decoder = core + "core/openaiContentGenerator/responseDecoder.ts"
     _require_all(state, response_decoder, (
-        "export interface OpenAIResponseDecodePolicy",
-        "export function requireOpenAIResponseDecodePolicy(",
-        "Inspect the selected provider configuration and retry with a matching client.",
+        "export {\n  requireOpenAIResponseDecodePolicy,\n  type OpenAIResponseDecodePolicy,\n"
+        "} from './response-decode-policy.js';",
+        "    strict_tool_calling: true,",
+        "    exact_token_counting: true,",
         "export function selectOpenAIResponseDecodePolicy(",
         "typeof options.taggedThinkingTags !== 'boolean'",
         "export function createOpenAIResponseDecodeContext(",
@@ -8765,33 +8833,17 @@ def _validate_served_accounting_after(state: State) -> None:
         "STREAM_CONTRACT_SHA256",
         "await verifyPhysicalModelRecords({",
     ), label=label)
-    _require_all(state, core + "core/record-verifier-stream.ts", (
-        "export async function verifyRecordStream(",
-        "new ModelRequestStreamReplay()",
-        "state.replay.observeResponse(record['response'])",
-        "state.replay.observeGeneration(record['generation'])",
-        "state.replay.claimCompactionSystemRecord(record)",
-        "state.replay.finishStream()",
-        "sha256: createHash('sha256').update(raw).update('\\n').digest('hex')",
-        "export async function runRecordStreamVerifier(): Promise<void>",
-    ), label=label)
-    _require_all(state, core + "core/record-verifier-stream.test.ts", (
-        "acknowledges exact physical records through fragmented input before completion",
-        "refuses a rehashed generation whose thought differs from its response bytes",
-        "keeps a %s generation tied to its response through both terminals",
-        "keeps a dual output window open until session_end after a root result",
-        "never acknowledges blank records or unterminated suffixes",
-        "acknowledges a failed physical compaction draw only after its system record",
-    ), label=label)
-    require_text(state, "packages/core/package.json", '"./recordVerifierStream"', label=label)
-    require_text(state, "packages/cli/index.ts", "void runCliOrVerifierEntryPoint();", label=label)
-    _require_all(state, "packages/cli/src/cli.ts", (
-        "export async function runCliOrVerifierEntryPoint()",
-        "process.argv[2] === '--verify-record-stream'",
-        "await runRecordStreamVerifier();",
-    ), label=label)
-    require_text(state, "packages/cli/vitest.config.ts",
-                 "'@qwen-code/qwen-code-core/recordVerifierStream'", label=label)
+    # The SDKs are upstream's and admit no records, so the CLI has one entry
+    # point: no stream-verifier mode, package export or test alias ships.
+    for retired in (
+        core + "core/record-verifier-stream.ts",
+        core + "core/record-verifier-stream.test.ts",
+    ):
+        _require(retired not in state, f"{label}: retired SDK stream verifier {retired} still ships")
+    forbid_text(state, "packages/core/package.json", '"./recordVerifierStream"', label=label)
+    for retired in ("runCliOrVerifierEntryPoint", "--verify-record-stream", "runRecordStreamVerifier"):
+        forbid_text(state, "packages/cli/src/cli.ts", retired, label=label)
+    forbid_text(state, "packages/cli/vitest.config.ts", "recordVerifierStream", label=label)
     _require_all(state, "packages/cli/src/cli.test.ts", (
         "bundles the bootstrap and physical verifier as separate production entries",
         "'record-verifier': 'packages/core/src/core/record-verifier.ts'",
@@ -8813,7 +8865,12 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
-        "for (const response of decoder.finish()) {",
+        # A stopped stream's outcome is the final outputs it delivered: the
+        # last output after EOF marks it delivered, and a failure is known
+        # before any diagnostic is handed out.
+        "const final = decoder.finish();",
+        "if (index === final.length - 1) stop.delivered();",
+        "stop.failed(error);",
         "for (const diagnostic of decoder.diagnostics()) {",
         "responseEvidence.observeSdkValue();",
         "responseEvidence.observePipelineOutput(response);",
@@ -8846,9 +8903,10 @@ def _validate_served_accounting_after(state: State) -> None:
         "restores and forks a post-compaction carried turn from a physical generation",
         "expect(carried.parts?.some((part) => part.thought && part.text)).toBe(true);",
         "expect(carried.parts?.some((part) => part.functionCall)).toBe(true);",
-        "expect(composed).toHaveLength(2);",
-        "await fixture.service.forkSession(fixture.session, fork, {",
-        "expect(indexed!.runtime.apiHistory.at(-1)).toEqual(carried);",
+        "record.type === 'system' && record.subtype === 'chat_compression',",
+        "expect(history.slice(1)).toEqual([\n      carried,",
+        "await service.forkSession(session, fork, { sourceLease: live.lease });",
+        "expect(indexed!.runtime.apiHistory[1]).toEqual(carried);",
     ), label=label)
     forbid_text(state, core + "core/model-response-evidence.ts",
                 "policy?: OpenAIResponseDecodePolicy", label=label)
@@ -8895,9 +8953,25 @@ def _validate_served_accounting_after(state: State) -> None:
                  label=label)
     forbid_text(state, pipeline, "request.chatAttempt?.attach(responseEvidence)", label=label)
     require_text(state, core + "core/geminiChat.ts", "this.generationContext.startRequestSegment()", label=label)
+    # An attempt settles accepted, refused (a completed turn its output limit
+    # refused) or abandoned; only an accepted attempt's requests are committed
+    # to history, through the one mapping every reader shares.
+    # The disposition and its history mapping live in the import-free attempt
+    # module, so the replay and every browser reader share the one mapping.
+    _require_all(state, core + "core/generation-attempt-meta.ts", (
+        "export type AttemptDisposition = 'accepted' | 'refused' | 'abandoned';",
+        "  return disposition === 'accepted' ? 'accepted' : 'abandoned';",
+    ), label=label)
+    require_text(
+        state,
+        core + "core/model-request-evidence.ts",
+        "recorded!.disposition !== historyDispositionOf(completion.disposition) ||",
+        label=label,
+    )
     _require_all(state, core + "core/chat-attempt.ts", (
         "export class ChatAttempt", "readonly id = randomUUID()", "kind: 'chat'",
-        "response.finishHistory(disposition)", "Promise.allSettled",
+        "async finish(disposition: AttemptDisposition): Promise<void> {",
+        "response.finishHistory(historyDispositionOf(disposition))", "Promise.allSettled",
         "get hasRequests(): boolean", "return this.responses.length > 0;", "assertOpen(): void",
         "get finalRequestId(): string",
         "assertCanIssueRequest(): void", "this.assertCanIssueRequest();",
@@ -8908,22 +8982,27 @@ def _validate_served_accounting_after(state: State) -> None:
     attempt_source = _source(state, core + "core/chat-attempt.ts", label=label)
     _require_ordered(attempt_source.split("async finish(disposition:", 1)[1], (
         "await this.publishGeneration(this.generation, disposition)",
-        "response.finishHistory(disposition)",
+        "response.finishHistory(historyDispositionOf(disposition))",
         "if (failures.length > 1)",
         "if (!this.generation)",
         "await this.complete({", "generation_sha256: this.generation.generation_sha256",
         "request_ids: this.responses.map((response) => response.requestId)",
         "consumer_observations: this.consumerObservations",
     ), label=label, location="generation publication and complete physical population before logical completion")
+    # The seed and envelope shapes, and the exact integer spelling an envelope
+    # is read with, are structural: the pure envelope module canonical readers
+    # share holds them.
+    _require_all(state, core + "core/generation-envelope.ts", (
+        "export function requireModelNormalizationSeed(",
+        "exactIntegerLexeme(source)",
+        "a decoded integer differs from its recorded JSON spelling",
+    ), label=label)
     _require_all(state, core + "core/model-generation.ts", (
         "export class ModelGenerationReplay", "readModelGeneration(value)",
-        "export function requireModelNormalizationSeed(",
         "observeSeed(value: unknown): ModelNormalizationSeed",
         "generation has no recorded normalization seed",
         "requireRecordedNormalization(envelope, attempt.seed)",
         "generation normalization contradicts its recorded history seed",
-        "exactIntegerLexeme(source)",
-        "a decoded integer differs from its recorded JSON spelling",
         "takeGenerationSource(chunk)",
         "export function serializeDeliveredObservation(",
         "attempt.generation.evidence.generation_sha256 !==",
@@ -8987,10 +9066,10 @@ def _validate_served_accounting_after(state: State) -> None:
     chat_stream = _source(state, core + "core/geminiChat.ts", label=label).split(
         "const attempt = new ChatAttempt(", 1)[1]
     _require_ordered(chat_stream, (
-        "let disposition: ChatHistoryDisposition | null = null;",
+        "let disposition: AttemptDisposition | null = null;",
         "const settle = () =>",
-        "if (chunk.historyDisposition !== null)",
-        "disposition = chunk.historyDisposition;", "await settle();",
+        "if (chunk.attemptDisposition !== null)",
+        "disposition = chunk.attemptDisposition;", "await settle();",
         "yield { type: StreamEventType.CHUNK, ...chunk };", "}, settle);",
     ), label=label, location=core + "core/geminiChat.ts")
     acquisition = _source(state, core + "core/geminiChat.ts", label=label).split(
@@ -9032,12 +9111,26 @@ def _validate_served_accounting_after(state: State) -> None:
         "before reading terminal evidence",
         "A result summary cannot replace accepted model text",
     ), label=label)
+    # Displayed rows and partials carry no origin label. A partial's owner is
+    # read from the records that own it: a chat request's attempt in the
+    # scope its kv_scope names, or a local operation's receipt. A settled
+    # conversation turn is followed by exactly the assistant messages its
+    # generation shows, in its scope; any other assistant row is runtime
+    # output that its operation receipt must match.
     _require_all(state, core + "utils/runtime-contract-admission.ts", (
-        "origin.kv_scope !== (scope ?? wire.session_id)", "requests.observeOrigin(origin, scope)",
-        "partial.observeOrigin(origin)", "partial.completeMessage(text)",
+        "request.kv_scope === wire.session_id",
+        "completion.issuedTools.has(request.kv_scope)",
+        "partialFor(owner).observeOrigin({",
+        "partial.observeOrigin({ kind: 'runtime', operation_id: id });",
+        "const shown = generationDisplay(",
+        "scope !== owed.scope ||",
+        "A settled turn is not followed by exactly the assistant messages its generation shows",
+        "EOF omits the assistant messages of a settled turn",
+        "if (wire.type === 'assistant' && !owed) {",
+        "partial.completeMessage(text)",
         "partial.verifyTerminalResult(", "session.clear();",
         "completion.lastAssistantText = generationParts(",
-        "completion.runtimeOperations.get(scope)?.id",
+        "const receipt = completion.runtimeOperations.get(scope);",
         "Runtime assistant text contradicts its local operation receipt",
         "Successful result contradicts accepted model text",
         "Structured result has no successful accepted structured_output submission",
@@ -9071,28 +9164,35 @@ def _validate_served_accounting_after(state: State) -> None:
         "const clone = cloneErrorForRedaction(error);", "error instanceof DOMException",
         "new DOMException('', error.name)",
     ), label=label)
-    for path in (core + "utils/transcript-records.ts", core + "services/chat-recording-io.ts", core + "services/session-transcript-reader.ts"):
+    # Canonical reading is layered: transcript-records.ts reads structure
+    # only, and every node reader admits through transcript-admission.ts,
+    # which supplies the digest checks and the physical replay.
+    for path in (core + "utils/transcript-admission.ts", core + "services/chat-recording-io.ts", core + "services/session-transcript-reader.ts"):
         require_text(state, path, "new ModelEvidenceReplay()", label=label)
+    _require_all(state, core + "utils/transcript-admission.ts", (
+        "generation: verifyModelGenerationIntegrity,",
+        "utilityRequestBody: verifyModelUtilityRequestBody,",
+        "runtimeHistory: RUNTIME_HISTORY_PAYLOADS,",
+        "export function admitStoredTranscriptRecord(",
+        "    TRANSCRIPT_RECORD_INTEGRITY,\n  );",
+        "export function admitTranscriptRecords(",
+        "integrity: TRANSCRIPT_RECORD_INTEGRITY,",
+        "observe: (record) => replay.observe(record),",
+    ), label=label)
+    forbid_text(state, core + "utils/transcript-records.ts", "ModelEvidenceReplay()", label=label)
+    _require_all(state, core + "core/model-generation.ts", (
+        "evidence.generation_sha256 !== sha256(evidence.generation_json)",
+        "return readGenerationEnvelope(input, verifyModelGenerationIntegrity);",
+    ), label=label)
     _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
         "messagesWithRequestEvidence", "request_evidence_origin", "terminalEvidence()",
         "closeRequestEvidence", "this.takeModelEvidence()", "requestOutput.setDrain",
     ), label=label)
     sdk = "packages/sdk-typescript/"
-    _require_all(state, sdk + "src/query/Query.ts", (
-        "this.recordAdmission.admit(", "this.sessionIdLocked ? this.sessionId : undefined",
-        "this.assertOpen();", "this.recordAdmission.finish();",
-        "this.activeInputSources !== 0", "this.recordFailure(cause)",
-        "await this.finishTransportRead(failure)", "this.closePromise",
-        "!this.recordAdmission.hasPendingInput()", "this.submittedTurn();",
-        "extractRuntimeUserMessageText(message)",
-        "pending.subtype === ControlRequestType.CONTINUE_LAST_TURN",
-        "pending.subtype === ControlRequestType.INITIALIZE",
-        "CLI initialization omits its selected session",
-        "this.inputEndReadyResolve?.();", "await this.close();",
-        "if (this.closed || this.transportReadFinalized)",
-        "throw this.inputStream.hasError;",
-        "this.inputStream.hasError === undefined",
-    ), label=label)
+    # The SDKs are upstream's and admit no record of their own. The client's
+    # shared admission is the one reader that settles a stream: its evidence
+    # closes, every submitted input is answered, and a terminal identity is
+    # never repeated.
     _require_all(state, core + "utils/runtime-contract-admission.ts", (
         "finish(): void", "hasPendingInput(): boolean", "this.pendingInputs !== 0",
         "!session.started || session.needsResult", "finishStream()",
@@ -9106,228 +9206,8 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     forbid_text(state, "packages/cli/src/nonInteractive/session.ts",
                 "function extractUserMessageText", label=label)
-    forbid_text(state, sdk + "src/query/createQuery.ts", "transport.write(", label=label)
-    _require_all(state, sdk + "src/query/createQuery.ts", (
-        "continue: options.continue", "session_id: queryInstance.getSessionId()",
-    ), label=label)
-    for path in ("src/query/Query.ts", "src/types/types.ts", "src/types/queryOptionsSchema.ts"):
-        forbid_text(state, sdk + path, "streamClose", label=label)
-    _require_all(state, sdk + "src/types/queryOptionsSchema.ts", (
-        "export function validateQueryOptions(", "TimeoutConfigSchema", ".strict()",
-        "Remove these unsupported options before retrying.",
-    ), label=label)
-    for path in ("src/query/Query.ts", "src/query/createQuery.ts"):
-        require_text(state, sdk + path, "validateQueryOptions(options)", label=label)
-    _require_all(state, sdk + "src/utils/jsonLines.ts", (
-        "chunks: AsyncIterable<Uint8Array>", "fatal: true, ignoreBOM: true",
-        "chunk.indexOf(0x0a, start)", "Buffer.concat(fragments, length)",
-        "expected an object with a string type", "invalid UTF-8", "invalid JSON",
-        "refuseFrame(context, physicalLine, 'blank record')",
-        "unterminated record at EOF", "invalid JSONL record at line ${line}",
-    ), label=label)
-    forbid_text(state, sdk + "src/utils/jsonLines.ts", "parseJsonLineSafe", label=label)
-    forbid_text(state, sdk + "src/transport/ProcessTransport.ts", "readline", label=label)
-    require_text(state, sdk + "src/transport/ProcessTransport.ts",
-                 "yield* parseJsonLinesStream(this.childStdout, 'ProcessTransport');", label=label)
-    _require_all(state, sdk + "test/unit/recordFraming.test.ts", (
-        "retains the prefix and refuses corruption before success",
-        "keeps valid Unicode records and completes at clean EOF",
-        "rejects pending controls and first-result input waits with the same framing error",
-        "refuses waiting input after framing failure, including later abort",
-        "keeps a valid live query open for subsequent controls",
-        "preserves framing refusal when transport cleanup also fails",
-    ), label=label)
-    _require_all(state, sdk + "test/unit/jsonLines.test.ts", (
-        "preserves Unicode and CRLF across every split and single-byte chunks",
-        "refuses a blank physical record %j before the next message",
-        "refuses invalid record %j without reading the next chunk",
-        "refuses an uncommitted EOF suffix %j",
-        "keeps a large inline result exact across fragmented input",
-    ), label=label)
-    python_sdk = "packages/sdk-python/"
-    _require_all(state, python_sdk + "src/qwen_code_sdk/json_lines.py", (
-        'frame.decode("utf-8")', "reader.read(io.DEFAULT_BUFFER_SIZE)",
-        'chunk.find(b"\\n", start)', "parse_constant=_reject_constant",
-        "parse_float=parse_float", "math.isfinite(number)",
-        "Decimal(value) != Decimal(int(number))",
-        "expected an object with a string type", "unterminated record at EOF",
-        '"blank record"', 'await verify_frame(bytes(frame) + b"\\n")',
-        "invalid JSONL record at line {line}",
-    ), label=label)
-    _require_all(state, python_sdk + "src/qwen_code_sdk/transport.py", (
-        'self._process.stdout, "ProcessTransport", self._verify_frame',
-        '"--verify-record-stream"', 'await self._start_verifier()',
-        'await self._finish_verifier()', 'hashlib.sha256(raw).hexdigest()',
-        '"contract": STREAM_CONTRACT_SHA256', 'yield record',
-    ), label=label)
-    forbid_text(state, python_sdk + "src/qwen_code_sdk/transport.py",
-                "self._process.stdout.readline()", label=label)
-    _require_all(state, python_sdk + "src/qwen_code_sdk/query.py", (
-        "self._assert_open()", "self._input_end_ready_event.set()",
-        "await asyncio.shield(self._cleanup_task)", "self._record_failure(error)",
-        "self._message_queue.put_nowait(error)", "raise self._failure from None",
-        "self._input_senders.add(sender)", "self._input_senders.discard(sender)",
-        "tasks |= self._input_senders - {initiator}", "self._record_failure(result)",
-        "if not self._started and self._cleanup_task is None:",
-        "self._record_admission.finish()", "self._record_admission.submitted_input()",
-        "message, self._session_id if self._session_id_locked else None",
-    ), label=label)
-    _require_ordered(
-        _source(state, python_sdk + "src/qwen_code_sdk/query.py", label=label).split(
-            "async def _route_message(self, message: Any) -> None:", 1
-        )[1].split("def _maybe_update_session_id", 1)[0],
-        ("self._record_admission.admit(", "if is_control_request(message):",
-         "self._maybe_update_session_id(message)",
-         "view = accepted_generation_view(admitted)",
-         "self._message_queue.put_nowait(cast(SDKMessage, message))",
-         "self._message_queue.put_nowait(view)"),
-        label=label, location=python_sdk + "src/qwen_code_sdk/query.py",
-    )
-    _require_all(state, python_sdk + "src/qwen_code_sdk/stream_schema.py", (
-        'joinpath("stream-contract-v17.json").read_bytes()', "Draft7Validator(SCHEMA)",
-        "hashlib.sha256(SCHEMA_BYTES).hexdigest()",
-    ), label=label)
-    _require_all(state, python_sdk + "src/qwen_code_sdk/record_admission.py", (
-        "from .stream_schema import (",
-        "require_json_values(record)", "raise self._failure", "expected_session",
-        'identity["stream_contract_sha256"] == STREAM_CONTRACT_SHA256',
-        'session.requests.observe_request(record["request"])',
-        'session.requests.observe_response(record["response"])',
-        'session.requests.claim_compaction(',
-        'session.requests.summary(record["request_evidence"])',
-        'record["uuid"] not in session.terminal_ids', "partial.observe_origin(origin)",
-        "session.requests.finish()", "partial.finish()", "self._pending_inputs == 0",
-        "session.partials.clear()", "partial.complete_message(",
-        "partial.verify_terminal_result(",
-        "session.last_assistant_text = generation.display_text()",
-        "successful result contradicts accepted model text",
-        "structured result has no successful accepted structured_output submission",
-        "structured result contradicts the accepted tool submission or result text",
-    ), label=label)
-    _require_all(state, python_sdk + "src/qwen_code_sdk/model_generation.py", (
-        "def display_text(self) -> str:",
-        'if not truthy(part.get("thought"))',
-        "parse_json_line(raw, exact_integer_floats=True)",
-        "preparation does not follow the recorded history seed",
-        "call mapping does not follow the recorded history seed",
-    ), label=label)
-    _require_all(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", (
-        "parse_json_line(body)", "decoder.raw_decode(body, at)",
-        'self.line.decode("utf-8-sig", "replace")',
-        'pending: bytearray = field(default_factory=bytearray)',
-        'transport_eof: bool,',
-        'values._feed(pending)',
-        '.removeprefix("\\ufeff")',
-        'hashlib.sha256(raw).hexdigest() == request["body_sha256"]',
-        'stream == (request["decode_policy"]["mode"] == "stream")',
-        'model == request["decode_policy"]["model"]',
-        'previous.request_id == representation["base_request_id"]',
-        'previous.segment_id == request["segment_id"]',
-        'previous.segment_id != request["segment_id"]',
-        "full body repeats an active invocation segment",
-        'record["sequence"] == state.sequence + 1',
-        'base64.b64decode(event["base64"], validate=True)',
-        'event["body_sha256"] == state.digest.hexdigest()',
-        'state.processing_status = event["status"]', "not attempt.accepted",
-        'if kind == "delivery":',
-        'event["outputs_delivered"] <= state.pipeline_outputs',
-        "200 <= state.http_status < 300", 'state.termination in ("eof", "cancelled")',
-        'state.termination = event["termination"]',
-        'if event["served_usage"] is not None:', '_served_usage(event["served_usage"])',
-        'event["sdk_values_seen"]', 'event["pipeline_outputs_delivered"]',
-        'state.values.require_prefix(',
-        'def _openai_served_usage(value: Any)',
-        'usage_reports: list[tuple[int, dict[str, int]]]',
-        '{"event": name, "data": _sdk_json_value(value)}',
-        'def observed_usage(',
-        'event["served_usage"]\n                == state.values.observed_usage(',
-        'served usage differs from processed physical response bytes',
-        'state.content_type = event["content_type"]',
-        'state.values.push(raw)',
-        'SDK value count claims an impossible physical response prefix',
-        'compaction_id not in self.claimed_compactions',
-        'operation.values[record["request_id"]] = values[:sdk_values]',
-        'if kind in ("decoded_body", "decoded_end"):',
-        'response outcome omits or misattributes decoded observations',
-        'completed response contains a failed decode observation',
-        'compaction draw differs from its recorded delivered output',
-        'def claim_compaction(self, data: dict[str, Any], scope: str) -> None:',
-        'compaction SDK values differ from physical response bytes',
-        'compaction draw claims a completed candidate without delivered output',
-        'compaction draw claims decoded output without an SDK value',
-        'compaction tokenizer measurements use different models',
-        'compaction tokenizer model differs from physical draw model',
-        'terminal leaves physical compaction draws unclaimed',
-        'completion["consumer_observations"]',
-        'or consumed == final_outcome["pipeline_outputs_delivered"]',
-        'observation["source_request_id"]',
-        'a Chat attempt received decoded output before its final physical request',
-        "accepted history decision precedes generation",
-        "completed processing has no successful HTTP transport completion",
-        "generation has no recorded normalization seed",
-        "not self.responses", "not self.group_open and not self.blocks",
-        "runtime partial group has no full assistant message",
-        "runtime partial text has no matching full assistant message",
-        "terminal result contradicts runtime assistant text",
-    ), label=label)
-    _require_ordered(
-        _source(state, python_sdk + "src/qwen_code_sdk/record_evidence.py", label=label)
-        .split("def observe_origin(self, origin:", 1)[1]
-        .split("def has_chat_attempt_in_scope", 1)[0],
-        ("attempt.output_scope is None or attempt.output_scope == (scope,)",
-         "attempt.output_scope = (scope,)"),
-        label=label, location=python_sdk + "src/qwen_code_sdk/record_evidence.py",
-    )
-    _require_all(state, python_sdk + "tests/unit/test_generation_completion_v11.py", (
-        "test_physical_stream_bounds_declared_sdk_progress",
-        "test_sse_unterminated_line_flushes_only_after_transport_eof",
-        "test_streamed_sdk_values_follow_complete_sse_frames_and_error_boundary",
-        "test_nonstream_sdk_value_count_follows_http_status_and_media_type",
-        "test_nonstream_json_parse_failure_has_no_sdk_value",
-    ), label=label)
-    require_text(state, python_sdk + "src/qwen_code_sdk/json_lines.py",
-                 "object_pairs_hook=_object", label=label)
-    _require_all(state, python_sdk + "tests/unit/test_record_admission.py", (
-        "test_authoritative_request_response_streams", "test_shared_goal_vectors",
-        "test_physical_usage_is_explicit_and_valid",
-        "if defect is None:",
-        '"model_normalization_seed",',
-        "test_full_body_requires_a_new_segment_for_its_scope",
-        "test_shared_partial_vectors", "test_request_replay_preserves_raw_json_spelling",
-        "test_delivered_record_mutation_cannot_change_response_owner",
-        "test_duplicate_terminal_cannot_settle_queued_input",
-        "test_structured_result_binds_to_successful_accepted_submission",
-        "test_utility_response_requires_its_delivery_receipt",
-        "test_chat_output_cannot_change_assistant_scope",
-    ), label=label)
-    _require_all(state, python_sdk + "tests/unit/test_compaction_physical.py", (
-        "test_settled_failed_compaction_draw_is_admitted",
-        "test_compaction_request_is_streamed_and_claimed_in_its_scope",
-        "test_compaction_draw_requires_its_physical_work",
-        "test_compaction_sdk_value_must_match_recorded_response_bytes",
-        "test_compaction_without_sdk_value_cannot_claim_decoded_output",
-        "test_successful_compaction_requires_a_delivered_physical_output",
-        '"thread.message",',
-        "test_failed_compaction_claims_only_the_sdk_values_it_consumed",
-        "test_compaction_tokenizer_uses_one_physical_draw_model",
-    ), label=label)
-    _require_all(state, python_sdk + "tests/unit/test_root_physical_usage.py", (
-        '"prompt_tokens": usage["promptTokenCount"]',
-        "seed_row[\"normalization_seed\"].update(",
-        "*responses[:-1]",
-        "responses[-1]",
-        "test_accepts_exact_cumulative_physical_usage",
-    ), label=label)
-    _require_all(state, python_sdk + "tests/unit/test_accepted_generation_view.py", (
-        "EXPECTED_CALL_ID = \"provider-call__qwen_dup_2\"",
-        'result["generation"] = copy.deepcopy(',
-        'row["normalization_seed"].update(',
-        "test_accepted_internal_retains_generation_without_assistant",
-    ), label=label)
     require_text(state, core + "utils/runtime-contract-admission.ts",
                  "Terminal record identity is repeated", label=label)
-    require_text(state, sdk + "src/query/Query.ts",
-                 "this.recordAdmission.admitOutboundControl(message);", count=3, label=label)
     _require_all(state, cli + "nonInteractive/io/BaseJsonOutputAdapter.ts", (
         "private requestOriginPublished = false;", "if (!this.requestOriginPublished)",
         "request_evidence_origin: origin", "this.requestOriginPublished = true;",
@@ -9338,199 +9218,12 @@ def _validate_served_accounting_after(state: State) -> None:
         ("adapter.emitResult({", "await adapter.flush();", "await runExitCleanup();", "process.exit(1);"),
         label=label, location=cli + "validateNonInterActiveAuth.ts",
     )
-    _require_all(state, python_sdk + "tests/unit/test_transport.py", (
-        "test_read_messages_refuses_malformed_json_after_valid_prefix",
-        "test_byte_framing_retains_prefix_and_refuses_invalid_record",
-        "test_byte_framing_refuses_blank_records",
-        "test_byte_framing_refuses_every_nonempty_eof_suffix",
-        "test_byte_framing_preserves_unicode_across_every_read_boundary",
-        "test_transport_preserves_records_larger_than_reader_buffer",
-        "test_transport_delivers_only_bytes_acknowledged_by_matching_verifier",
-        "test_transport_refuses_a_verifier_acknowledging_different_bytes",
-    ), label=label)
-    _require_all(state, python_sdk + "tests/unit/test_query_core.py", (
-        "test_slow_reader_keeps_prefix_and_first_error_through_cleanup",
-        "test_router_cancellation_during_cleanup_keeps_original_error",
-        "test_input_cleanup_failure_precedes_end_of_output",
-        "test_input_source_error_survives_iterator_close_error",
-        "test_close_joins_pending_start_without_launching_query_tasks",
-        "test_input_iterator_can_join_query_close_during_its_own_cleanup",
-        "test_refused_input_after_clean_close_does_not_change_terminal_output",
-        "test_input_failure_precedes_iterator_cleanup",
-    ), label=label)
-    java_cli = "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/cli/"
-    _require_all(state, java_cli + "transport/process/JsonLineReader.java", (
-        "new BufferedInputStream(input)", "value != '\\n'", "frame.size() != 0",
-        "StandardCharsets.UTF_8.newDecoder()", "CodingErrorAction.REPORT",
-        "unterminated record at EOF", "Capture the CLI stdout", "throw failure;",
-        'throw refusal("blank record", null)', "verifier.verify(committed)",
-        "verifier.finish()",
-    ), label=label)
-    _require_all(state, java_cli + "transport/process/FrameVerifier.java", (
-        "interface FrameVerifier", "void verify(byte[] committed)", "void finish()",
-    ), label=label)
-    _require_all(state, java_cli + "transport/process/RecordVerifier.java", (
-        "final class RecordVerifier implements FrameVerifier, Closeable",
-        "StreamSchema.SHA256", "sha256(committed)",
-        '"complete".equals(ack.get("status"))',
-    ), label=label)
-    _require_all(state, java_cli + "transport/process/ProcessTransport.java", (
-        "protected JsonLineReader processOutput", "StandardCharsets.UTF_8.newEncoder()",
-        "synchronized (inputLock)", "reading.compareAndSet(false, true)",
-        "public synchronized void start()", "public synchronized void close()",
-        "ThreadPoolConfig.execute(task)", "failure.compareAndSet(null, error)",
-        "process.destroyForcibly()", "return primaryFailure()",
-        "CLI stdout ended before the requested response completed",
-        '"--verify-record-stream"', "new JsonLineReader(process.getInputStream(), recordVerifier)",
-        "recordStreamFinished = true;",
-        "Previous CLI record stream was not completed",
-    ), label=label)
-    java_wait = _source(state, java_cli + "transport/process/ProcessTransport.java", label=label).split(
-        "private <T> T waitForRead", 1
-    )[1].split("private String readRecord", 1)[0]
-    _require_ordered(java_wait, ("throw fail(e)", "finally", "task.cancel(true)"),
-                     label=label, location=java_cli + "transport/process/ProcessTransport.java")
-    _require_all(state, java_cli + "utils/MyConcurrentUtils.java", (
-        "FutureTask<T>", "ThreadPoolConfig.execute(future)", "future.cancel(true)",
-        "Thread.currentThread().interrupt()", "throw (RuntimeException) cause",
-        "future.whenComplete(errorCallback)",
-    ), label=label)
-    forbid_text(state, java_cli + "utils/MyConcurrentUtils.java", 'log.warn("Operation error"', label=label)
-    _require_all(state, java_cli + "utils/ThreadPoolConfig.java", (
-        "public static void execute(Runnable task)", "executor.isShutdown()",
-        "Thread.currentThread() == caller", "SDK executor cannot admit asynchronous work",
-    ), label=label)
-    java_tests = "packages/sdk-java/qwencode/src/test/java/com/alibaba/qwen/code/cli/"
-    _require_all(state, java_cli + "protocol/RecordAdmission.java", (
-        "StrictJson.parseObject", "StreamSchema.validate(record)", "observe(record)",
-        "new StreamRecord(json, record, generation)", "public synchronized void finish()",
-        "session.requests.finish()", "partial.finish()", "terminal record identity is repeated",
-        "session.partials.clear()", "partial.completeMessage(rendered.toString())",
-        "partial.verifyTerminalResult(",
-        "session.runtimeOperations.get(scope)",
-        "runtime assistant text contradicts its local operation receipt",
-        "session.lastAssistantText = generation.displayText;",
-        "successful result contradicts accepted model text",
-        "structured result has no successful accepted structured_output submission",
-        "structured result contradicts the accepted tool submission or result text",
-        "session.requests.claimCompaction(data, scope == null ? sessionId : scope)",
-    ), label=label)
-    _require_all(state, java_cli + "protocol/GenerationEvidence.java", (
-        "final String displayText;", "displayText = display.toString();",
-        "preparation does not follow the recorded history seed",
-        "call mapping does not follow the recorded history seed",
-    ), label=label)
-    _require_all(state, java_cli + "protocol/PartialOutput.java", (
-        "runtime partial group has no full assistant message",
-        "runtime partial text has no matching full assistant message",
-        "terminal result contradicts runtime assistant text",
-    ), label=label)
-    _require_all(state, java_cli + "protocol/RequestEvidence.java", (
-        "StreamSchema.sha256(bytes)", "slices.messages.equals(expected)",
-        "full body repeats an active invocation segment",
-        "slices.stream == \"stream\".equals(policy.get(\"mode\"))",
-        "new ArrayList<>(responses.keySet())", "state.digest.update(bytes)",
-        "processingStatus", "EOF omits a response completion",
-        "state.httpStatus >= 200 && state.httpStatus < 300",
-        '"eof".equals(state.termination) || "cancelled".equals(state.termination)',
-        'state.termination = (String) event.get("termination")',
-        'RequestUsage.served(event.get("served_usage"))',
-        'physicalServedUsage(state, sdkValues, "completed".equals(event.get("status")))',
-        'private static Map<String, Long> openaiServedUsage(Object value)',
-        'private static Map<String, Long> physicalServedUsage(Response state',
-        'new SseValues(compactionId != null)',
-        'wrapped.put("data", sdkValue)',
-        'event.get("sdk_values_seen")', 'event.get("pipeline_outputs_delivered")',
-        '"delivery".equals(kind)',
-        'delivered <= state.pipelineOutputs',
-        'completion.get("consumer_observations")',
-        '(!isAccepted || consumed == finalOutcome.pipelineOutputs)',
-        'object(item).get("source_request_id")',
-        'a Chat attempt received decoded output before its final physical request',
-        "accepted chat history precedes generation",
-        "completed processing has no successful HTTP transport completion",
-        "generation has no recorded normalization seed",
-        "compaction draw has no settled physical operation in its scope",
-        "compaction SDK values differ from physical response bytes",
-        "compaction draw claims a completed candidate without delivered output",
-        "compaction draw claims decoded output without an SDK value",
-        '"decoded_body".equals(kind) || "decoded_end".equals(kind)',
-        'response outcome omits or misattributes decoded observations',
-        'completed response contains a failed decode observation',
-        'compaction draw differs from its recorded delivered output',
-        "state.values.values.subList(0, (int) sdkValues)",
-        "compaction tokenizer measurements use different models",
-        "compaction tokenizer model differs from physical draw model",
-        "tokenizer result differs from physical bytes or selected context limit",
-        "terminal leaves physical compaction draws unclaimed",
-    ), label=label)
-    _require_all(state, java_cli + "protocol/StreamSchema.java", (
-        'getResourceAsStream("/stream-contract-v17.json")', "unsupported packaged schema keyword",
-        "Deque<Task>", "checkReferenceCycle", "longValueExact()",
-    ), label=label)
-    _require_all(state, "packages/sdk-java/qwencode/src/main/java/com/alibaba/qwen/code/shared/StrictJson.java", (
-        "public static Object parseSdk(", "SDK_FACTORY", "STRICT_DUPLICATE_DETECTION",
-    ), label=label)
-    _require_all(state, java_cli + "session/Session.java", (
-        "implements AutoCloseable", "admission.admit(line, expectedSession)",
-        "getResumeSessionId()", "controls.remove(id)", "record.isRootResult()",
-        "target.onRecord(this, record)", "response.attachStreamRecord(record)",
-        "transport.finish(this::receive)", "admission.finish()", "cancelled.cancel()",
-        "RecordViews.project", "failure.compareAndSet(null, primary)",
-    ), label=label)
-    forbid_text(state, java_cli + "session/Session.java", "onOtherMessage", label=label)
-    _require_all(state, java_cli + "transport/process/ProcessTransport.java", (
-        "public void finish(Consumer<String> records)", "inputEnded.set(true)",
-        "records.accept(line)", "process.waitFor()", "if (exit != 0)",
-    ), label=label)
-    _require_all(state, java_cli + "QwenCodeCli.java", (
-        "try (Session session = newSession(transportOptions))",
-        "Query did not complete; inspect the original cause",
-    ), label=label)
-    _require_all(state, java_tests + "protocol/RecordAdmissionTest.java", (
-        "replaysAuthoredEvidenceIncludingResumedAndLiveWindows", "refusesEveryIncompletePrefixAtEof",
-        "fullBodyRequiresANewSegmentForItsScope",
-        "utilityResponseRequiresDeliveryAfterProcessing",
-        "structuredResultRequiresTheSuccessfulAcceptedSubmission",
-        "refusesMissingResponseBytesAndForgedRequestBodiesBeforeDelivery",
-        "compactionDrawClaimsSettledPhysicalRequestAndTokenizerBytes",
-        "successfulCompactionRequiresDeliveredPhysicalOutput",
-        'put("text", "forged text")',
-        "compactionSdkValuesMustComeFromRecordedSseBytes",
-        'streamedCompaction("null", "thread.message")',
-        "failedCompactionClaimsOnlyConsumedSdkValuePrefix",
-        '"valid".equals(defect)',
-        "compactionTokenizerModelMustMatchEveryPhysicalDraw",
-    ), label=label)
-    _require_all(state, java_tests + "session/SessionRecordTest.java", (
-        "initializationAndOrdinaryTurnsDeliverCompleteEvidenceInOrder", "childTerminalDoesNotFinishRootPrompt",
-        "shutdownDrainsOpenEvidenceAndRefusesItsTruncatedPrefix", "resumeRejectsAnotherSessionBeforeDeliveringItsInitialization",
-        "cancellationKeepsReadingAndSuppressesALatePermissionReply", "typedToolValuesPreserveNullMembersAndDeepJson",
-        "admittedStatusEventsAndLargeIntegersKeepTheirTypedValues",
-        "concurrentCloseCannotSucceedWhileCompletenessIsStillPending",
-    ), label=label)
-    _require_all(state, java_tests + "transport/process/JsonLineReaderTest.java", (
-        "preservesLargeUnicodeRecordsAcrossEveryFragmentSize", "preservesPrefixThenLatchesMalformedUtf8",
-        "refusesBlankRecordsBetweenValidLines",
-        "verifiesExactCommittedBytesBeforeReturningEachLineAndFinishesAtEof",
-        "refusesEveryNonemptyEofSuffix", "bareCarriageReturnDoesNotCommitARecord",
-    ), label=label)
-    require_text(state, java_tests + "transport/process/ProcessTransportRecordTest.java",
-                 "deadProcessCannotReplaceAnUndrainedRecordStream", label=label)
-    _require_all(state, java_tests + "transport/process/ProcessTransportRecordTest.java", (
-        "successfulTurnBoundaryKeepsNextTurnAvailable", "callbackFailureClosesAdmissionAndKeepsOriginalFailure",
-        "corruptRecordRetainsPrefixAndRefusesSuccess", "timedOutCallbackCannotConsumeNextRecordAfterInterruption",
-    ), label=label)
-    _require_all(state, java_tests + "utils/MyConcurrentUtilsTest.java", (
-        "runnableFailureIsTheOriginalException", "interruptedCallerFailsAndRetainsInterruptFlag",
-        "asyncFailureReachesErrorCallback", "saturatedCallerRunsExecutorCannotBypassWaitOwnership",
-    ), label=label)
     for path in (core + "services/chatRecordingService.ts", core + "agents/agent-transcript.ts"):
         require_text(state, path, "recordingVersion: CHAT_RECORDING_VERSION", label=label)
     _require_all(
         state,
         core + "services/chat-recording-io.ts",
-        ("decodeJsonlRecord<unknown>", "requireStoredTranscriptRecord(value)",
+        ("decodeJsonlRecord<unknown>", "admitStoredTranscriptRecord(value)",
          "Unterminated JSONL record", "export function* iterateCanonicalChatRecordsSync"),
         label=label,
     )
@@ -9549,7 +9242,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "{ cause }", "with its matching client or start a new session",
     ), label=label)
     _require_all(state, core + "services/sessionService.ts", (
-        "refusals: SessionListRefusal[]", "fileSessionId: path.basename(name, '.jsonl')",
+        "refusals: SessionListRefusal[]", "fileSessionId: path.basename(filePath, '.jsonl')",
+        "sessionRecordingRefusal(path.join(chatsDir, name), mtime, cause)",
         "requireUnambiguousSessionSelection", "refusal.mtime >= selected.mtime",
         "refuse(file.name, file.mtime, error)", "refuse(file.name, null, file.error)",
         "unscannedMtime = file.mtime", "file.mtime === lastProcessedMtime",
@@ -9585,12 +9279,15 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts", (
         "response.partial !== undefined", "response.replayError !== undefined",
         "error instanceof RequestError && error.code === -32601",
-        "if (!useStandardLoad)",
+        "does not provide qwen/session/loadUpdates, so its history cannot be admitted",
         "!response.updates.every(isRecord)",
         "Cannot present partial Qwen history for session",
     ), label=label)
-    forbid_text(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts",
-                "response.updates.filter(isRecord)", label=label)
+    # A runtime without the history extension is refused; no standard-load
+    # fallback presents history the runtime did not admit.
+    for retired in ("response.updates.filter(isRecord)", "useStandardLoad", "legacyOnly", "historyCollectors"):
+        forbid_text(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts",
+                    retired, label=label)
     _require_all(state, "packages/desktop/packages/shared/src/agent/__tests__/qwen-agent-slash-history.test.ts", (
         "refuses a partial history reply without falling back to another reader",
         "recording refusal", "RequestError.methodNotFound('qwen/session/loadUpdates')",
@@ -9613,17 +9310,35 @@ def _validate_served_accounting_after(state: State) -> None:
     forbid_text(state, "packages/vscode-ide-companion/src/services/qwenAgentManager.ts",
                 "readJsonlMessages", label=label)
     _require_all(state, core + "services/runtime-history.ts", (
-        "export interface RuntimeHistoryState", "imagePayloads: StoredImagePayload[]",
         "export class RuntimeHistoryReplay", "beforeLength !== this.length",
         "historyLength !== this.length", "no initial history checkpoint",
-        "export type RuntimeHistoryCommit", "export class RuntimeHistoryCursor",
+        "export class RuntimeHistoryCursor",
         "ownedImageReferenceIds", "runtimeHistoryPosition",
         "requireRuntimeCompaction", "applyCompaction(",
         "failed compaction changes retained history",
-        "compaction checkpoint differs from committed composition",
+    ), label=label)
+    # The record shapes are structural and live in the pure module canonical
+    # readers share. A compaction's committed composition is stored once, as
+    # compressedHistory: a canonical record carrying a second copy is refused,
+    # and both writers strip the in-memory copy the stream record carries.
+    _require_all(state, core + "services/runtime-history-records.ts", (
+        "export interface RuntimeHistoryState", "imagePayloads: StoredImagePayload[]",
+        "export type RuntimeHistoryCommit",
+        "history: value['compressedHistory'],",
+        "if (info['postCompactionHistory'] !== undefined)",
+        "compaction record repeats its committed composition outside compressedHistory",
         "export function requireRuntimeConversationContent(",
         "requireRuntimeConversationContent(value, 'model')",
     ), label=label)
+    _require_all(state, core + "services/chatRecordingService.ts", (
+        "export function storedCompressionPayload(",
+        "const { postCompactionHistory: _committed, ...info } =",
+        "info: Omit<ChatCompressionInfo, 'postCompactionHistory'>;",
+        "systemPayload: storedCompressionPayload(payload),",
+    ), label=label)
+    require_text(state, core + "agents/agent-transcript.ts",
+                 "recordSystem('chat_compression', () => storedCompressionPayload(record));",
+                 label=label)
     _require_all(state, core + "services/session-api-history.ts", (
         "add(commit: RuntimeHistoryCommit)",
         "record.subtype === 'runtime_history'", "record.historyLength!",
@@ -9649,7 +9364,7 @@ def _validate_served_accounting_after(state: State) -> None:
     require_text(state, core + "services/session-writer-lease.test.ts",
                  "restores and forks exact canonical history after a compaction segment", label=label)
     require_text(state, core + "services/session-writer-lease.test.ts",
-                 "expect(indexed?.runtime.resumeServedUsage).toEqual(generationUsage)", label=label)
+                 "expect(indexed?.runtime.resumeServedUsage).toEqual(liveWireUsage)", label=label)
     _require_all(state, core + "services/session-transcript-reader.ts", (
         "runtimeHistoryPosition: runtimeHistoryPosition(historyCommit)",
         "historyCursor.apply(entry.runtimeHistoryPosition)",
@@ -9687,7 +9402,8 @@ def _validate_served_accounting_after(state: State) -> None:
     for path in ("packages/acp-bridge/src/bridgeTypes.ts", "packages/sdk-typescript/src/daemon/types.ts"):
         require_text(state, path, "provisional?: true;", label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
-        "readModelGeneration(value['generation'])", "export function resolveTranscriptRecord(",
+        "readGenerationEnvelope(\n        value['generation'],\n        integrity?.generation,\n      );",
+        "export function resolveTranscriptRecord(",
         "generationHistory(envelope)", "Stored generation records cannot contain derived history or presentation fields",
         "requireRuntimeConversationContent(value['message'], 'model')",
         "requireRuntimeConversationContent(value['message'], 'user')",
@@ -9759,7 +9475,7 @@ def _validate_served_accounting_after(state: State) -> None:
     recorder_admission = _source(state, core + "services/chatRecordingService.ts", label=label).split(
         "private enqueueRecordWrite(", 1)[1].split("const pendingWrite =", 1)[0]
     _require_ordered(recorder_admission, (
-        "try {", "requireStoredTranscriptRecord(record)", "record = structuredClone(record)",
+        "try {", "admitStoredTranscriptRecord(record)", "record = structuredClone(record)",
         "this.enterWriteFailure(cause, this.getSessionId(), 'record_admission')",
     ), label=label, location="root canonical record admission")
     require_text(state, core + "services/chatRecordingService.test.ts",
@@ -9777,13 +9493,15 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label, location="root runtime history admission")
     _require_all(state, core + "services/runtime-history.ts", (
         "export function fingerprintRuntimeHistory(",
+        "assertFingerprint(expected: string): void",
+        "history assertion differs from the recorded conversation",
+    ), label=label)
+    _require_all(state, core + "services/runtime-history-records.ts", (
         "export function requireRequestRenderSelection(",
         "export function requireRuntimeHistoryAssertion(",
         "export function requireRuntimeHistoryBinding(",
         "readonly renderId: string;",
         "readonly attemptId: string;",
-        "assertFingerprint(expected: string): void",
-        "history assertion differs from the recorded conversation",
     ), label=label)
     _require_all(state, core + "services/chatRecordingService.ts", (
         "async recordHistoryAssertion(",
@@ -9938,12 +9656,14 @@ def _validate_served_accounting_after(state: State) -> None:
         "this.enterWriteFailure(cause, this.getSessionId(), 'attribution_snapshot')",
         "Cannot serialize an attribution snapshot",
     ), label=label)
-    _require_all(state, core + "services/commitAttribution.ts", (
+    _require_all(state, core + "services/attribution-snapshot.ts", (
         "export function requireAttributionSnapshot(",
         "object['version'] !== ATTRIBUTION_SNAPSHOT_VERSION",
         "committed > count",
         "Object.entries(states)",
         "/^[a-f0-9]{64}$/.test(contentHash)",
+    ), label=label)
+    _require_all(state, core + "services/commitAttribution.ts", (
         "process.env['QWEN_CODE_ENTRYPOINT'] || 'cli'",
     ), label=label)
     _require_all(state, core + "utils/transcript-records.ts", (
@@ -9984,7 +9704,7 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, "packages/cli/src/acp-integration/acpAgent.ts", (
         "rewindResult = await session.rewindToTurn(",
     ), label=label)
-    _require_all(state, core + "services/fileHistoryService.ts", (
+    _require_all(state, core + "services/file-history-snapshots.ts", (
         "deserializeSnapshots(arr: unknown)",
         "date.toISOString() !== value",
         "File history snapshots must be an array",
@@ -10062,10 +9782,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses an incomplete canonical replay for %s (reload: %s)",
         "latches a canonical replay failure before publishing its partial page or live suffix",
     ), label=label)
-    _require_all(state, core + "core/model-output-origin.ts", (
+    _require_all(state, core + "core/generation-attempt-meta.ts", (
         "export function requireModelGenerationOrigin(", "Object.keys(value).length !== 3",
-        "value.kind !== 'model'", "export function canonicalGenerationOrigin(",
+        "value.kind !== 'model'",
     ), label=label)
+    require_text(state, core + "core/model-output-origin.ts",
+                 "export function canonicalGenerationOrigin(", label=label)
     _require_all(state, core + "core/model-request-evidence.ts", (
         "canonicalGenerationOrigin(record)", "this.generations.has(origin.attempt_id)",
         "this.generationRecords.has(generation.generation_id)", "multiple canonical generations",
@@ -10082,8 +9804,12 @@ def _validate_served_accounting_after(state: State) -> None:
         "Model evidence cannot contain a conversation message or system payload",
         "A conversation record cannot contain model evidence",
     ), label=label)
+    require_text(state, core + "core/generation-attempt-meta.ts",
+                 "export function requireGenerationAttemptMeta(", label=label)
     _require_all(state, core + "agents/agent-stream-records.ts", (
-        "v: 2;", "requireAgentStreamRecord(", "requireGenerationAttemptMeta(",
+        "v: 2;", "requireAgentStreamRecord(",
+        "  requireGenerationAttemptMeta,\n  sameGenerationAttempt,\n  type GenerationAttemptMeta,\n"
+        "} from '../core/generation-attempt-meta.js';",
         "export class AgentAttemptTextReplay", "output or a second disposition followed a committed attempt",
         "!final.text.startsWith(state.text)", "!final.thoughtText.startsWith(state.thoughtText)",
         "requireDispositions(committing: ReadonlySet<string>)", "readGenerationAttemptCommit(",
@@ -10096,7 +9822,7 @@ def _validate_served_accounting_after(state: State) -> None:
     ), label=label)
     child_admission = writer.split("const append =", 1)[1].split("const clearStreamTimer", 1)[0]
     _require_ordered(child_admission, (
-        "assertOpen();", "try {", "const record = create()", "requireStoredTranscriptRecord(record)",
+        "assertOpen();", "try {", "const record = create()", "admitStoredTranscriptRecord(record)",
         "const descriptor = ensureOpen()", "writeFailure = { error }",
     ), label=label, location="child canonical record admission")
     require_text(state, core + "agents/agent-transcript.test.ts",
@@ -10227,7 +9953,8 @@ def _validate_served_accounting_after(state: State) -> None:
              and "readSessionView" not in load_updates,
              f"{label}: ACP complete history must use closed canonical evidence")
     _require_all(state, "packages/desktop/packages/shared/src/agent/qwen-agent.ts", (
-        "readQwenTranscriptRecords(sessionId, cwd, true)",
+        "        : readQwenTranscriptRecords(\n            sessionId,\n            cwd,\n            {\n"
+        "              sha256: response.transcriptSha256 as string,",
         "bytes.subarray(0, expectedSnapshot.byteLength)",
         "response.transcriptSha256 === null",
         "response.transcriptByteLength === null",
@@ -10256,9 +9983,13 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses ambiguous active and archived roots for one child",
     ), label=label)
     insight = cli + "services/insight/generators/DataProcessor.ts"
+    # One unreadable recording is refused with its path and cause, and the
+    # report excludes its session rather than stopping.
     _require_all(state, insight, (
         "readCompleteCanonicalConversation(filePath)",
-        "Cannot generate a complete insight from", "this.readConversationRecords(fileInfo.path)",
+        "Cannot read insight recording ${filePath}", "The report excludes its session",
+        "this.readConversationRecords(\n          fileInfo.path,\n          refusals,\n        );",
+        "refuseRecording(refusals, filePath, cause);",
     ), label=label)
     forbid_text(state, insight, "read as readJsonlFile", label=label)
     for path in (core + "config/config.ts", core + "services/chatRecordingService.ts"):
@@ -10336,7 +10067,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "replayRecordedOpenAIObservations(",
         "new GenerationObservationNormalizer([], [])",
         "type: 'model_normalization_seed'",
-        "message.type !== 'model_normalization_seed'",
+        ".filter((message) => !isTranscriptEvidenceRecord(message))",
         "binds admitted resume bytes to the owned transcript snapshot",
         "refuses to activate a resume whose admitted digest differs from the owned bytes",
     ), label=label)
@@ -10410,8 +10141,12 @@ def _validate_manual_compaction_after(state: State) -> None:
         "error instanceof CompactionFinalizationError", "finalizationFailure: error.message",
     ), label=label)
     forbid_text(state, outcome_path, "?? 0", label=label)
-    turn = _source(state, core + "core/turn.ts", label=label)
-    statuses = set(re.findall(r"^\s+(COMPRESSED|NOOP|COMPRESSION_FAILED_[A-Z_]+)\b", turn, re.M))
+    # The status enum lives in its own import-free module, which canonical
+    # transcript reading shares with the turn engine; turn.ts re-exports it.
+    status_path = core + "core/compression-status.ts"
+    require_text(state, status_path, "export enum CompressionStatus {", label=label)
+    status_source = _source(state, status_path, label=label)
+    statuses = set(re.findall(r"^\s+(COMPRESSED|NOOP|COMPRESSION_FAILED_[A-Z_]+)\b", status_source, re.M))
     _require("COMPRESSION_FAILED_INSUFFICIENT_ROOM" in statuses, label + ": missing room rejection")
     for status in statuses:
         _require("case CompressionStatus." + status + ":" in outcome,
@@ -10432,8 +10167,11 @@ def _validate_manual_compaction_after(state: State) -> None:
     ), label=label)
     headless = _source(state, cli + "nonInteractiveCli.ts", label=label)
     manual = headless.split("case 'compression':", 1)[1].split("case 'submit_prompt':", 1)[0]
-    _require_ordered(manual, ("adapter.emitSystemMessage(", "'compaction'",
-        "toCompactionRecord(slashCommandResult.info)", "emitFinalAssistantMessage"),
+    # A NOOP attempted nothing, so it has no compaction record; every outcome
+    # is reported by the runtime answer.
+    _require_ordered(manual, ("if (info.compressionStatus !== CompressionStatus.NOOP) {",
+        "adapter.emitSystemMessage(", "'compaction'", "toCompactionRecord(info)",
+        "recordRuntimeOperation(", "emitFinalAssistantMessage"),
         label=label, location="headless command event")
     _require_all(state, cli + "acp-integration/session/Session.ts", (
         "case 'compression':", "createCompressionHistoryItem(outcome)", "await recorder.flush()",
@@ -11662,9 +11400,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "executable calls. A generation a length terminal stopped is refused rather than "
             "committed: the call it stopped is never made, nothing of it enters the history a request "
             "is rendered from, and what the provider served of it is carried, as the text it was "
-            "served as, to every record of the generation."
-            " Provider-omitted non-strict tool-call IDs derive from the served terminal "
-            "and parser slot, without local clock or random state."
+            "served as, to every record of the generation. Strict tool calling is the only "
+            "decode mode: a streamed call completes only on its terminal with a provider ID "
+            "(and, when forced, the forced name). The converter's derivation of an omitted "
+            "tool-call ID uses the served terminal and parser slot, never local clock or random "
+            "state."
         ),
         removal_condition=(
             "Upstream provides equivalent batch/stream call grammar, terminal and durable commit "
@@ -11852,7 +11592,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "delivery is acknowledged. Cancellation preserves every field of a delivered chunk, "
             "including terminal usage, before preventing another pull or tool execution. Interactive "
             "consumers accept attempt metadata and continue through ordinary replies. Thought events "
-            "retain exact raw reasoning while bounded UI state uses a separate display projection."
+            "retain exact raw reasoning while bounded UI state uses a separate display projection. "
+            "A streamed tool result is exactly the tool message text the next request gives the "
+            "model for that call, with no display fallback and no stream-only cut."
         ),
         removal_condition=(
             "Upstream emits equivalent scoped generation evidence through callback-settled output "
@@ -12155,17 +11897,23 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Canonical decoding retains physical location and cause for syntax, version and evidence "
             "refusals. Session catalogs isolate rejected files without claiming absence, preserve "
             "timestamp ties and unscanned boundaries, and refuse ambiguous automatic selection. "
-            "Required diagnostics survive cached daemon/ACP pages, SDKs and visible client selectors; "
+            "Required diagnostics survive cached daemon/ACP pages, the TypeScript daemon catalog "
+            "and visible client selectors; "
             "array conveniences refuse discarded diagnostics and Desktop reconciles absence only "
             "after a complete scan without refusals. Catalog admission is not full resume certification. "
-            "Canonical version 15 binds complete generation bytes and their completion to the real "
+            "The canonical recording binds complete generation bytes and their completion to the real "
             "chat attempt and its full physical request population; abandoned output cannot become "
-            "resume history. Stored generation evidence excludes derived message fields. Background recovery "
+            "resume history. An attempt settles accepted, refused or abandoned, and only an accepted "
+            "attempt's requests enter history. Stored generation evidence excludes derived message "
+            "fields. Canonical reading is layered: pure modules read record structure, and every node "
+            "reader admits records through one owner that verifies digests and replays physical "
+            "evidence. Background recovery "
             "replays explicit runtime history checkpoints, edits and positioned assistant commits, "
             "including image payload state, without inferring admission from display records. "
             "A chat request or compaction draw cannot precede the runtime history checkpoint it needs for replay; "
             "Other utility requests remain independent of chat history. "
-            "Successful compaction checkpoints equal the committed composition; failed compactions "
+            "A compaction record stores its committed composition once; a second copy is refused, "
+            "and failed compactions "
             "preserve exact retained history in both full and indexed restore. Tool "
             "restore snapshots carry the same complete state, validate before file rewind, and "
             "publish UI success and tool replay only after the replacement is durable. Recovery "
@@ -12178,23 +11926,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Direct ACP, SDK reduction and compaction, source browser consumers and shared exports "
             "retain attempt boundaries and label abandoned output outside the model's text. "
             "Export usage has one owner at collection, including empty and reasoning-only output. "
-            "TypeScript and Python SDK byte framing preserves whole records independent of I/O "
-            "buffer size and refuses malformed or uncommitted records before admission. A "
-            "finalized query cannot accept more work or hide refusal behind abort or cleanup; "
-            "Python startup and input cleanup settle before successful reader termination. "
-            "TypeScript EOF uses shared Core completion to require identified closed windows, "
-            "closed responses and partial messages, and all submitted inputs or accepted "
-            "continuations; unfinished input sources, pending controls and cleanup prevent "
-            "success. Selected identities bind admission. Query termination is cancellation; "
-            "end-input and natural EOF verify completion. One Core input extraction preserves "
-            "CLI no-op semantics, and every queued root result precedes input closure without "
-            "a timer closing the active control channel. Fork and continue identity comes "
-            "from CLI initialization before input envelopes; resume keeps its selected ID. "
-            "The Python SDK admits the exact bound schema, replays request bytes and response "
-            "lifetimes, preserves evidence envelopes, and checks partial ownership before delivery. "
-            "Natural EOF refuses open evidence and unmet input/result counts; this count is a "
-            "lower bound, not queued-input causal correlation. Both SDKs validate controls, and "
-            "shared Core admission refuses repeated terminal identities."
+            "The SDKs are upstream's and admit no records of their own; the client's shared Core "
+            "admission is the one stream reader. Its EOF requires closed evidence windows, closed "
+            "responses and partial messages, and every submitted input answered; a selected session "
+            "identity binds it, and it refuses repeated terminal identities. Displayed rows and "
+            "partials carry no origin label: a partial's owner is read from the chat request or local "
+            "operation receipt that owns it, and each settled conversation turn is followed by "
+            "exactly the assistant messages its generation shows. One Core input extraction "
+            "preserves CLI no-op semantics."
             " Shared JSON writers publish a stream_start journal header before startup errors "
             "or other first data, independently of complete runtime init; authentication exits await "
             "output flush. Dual channel ends account for all physical, logical and partial evidence "
@@ -12202,19 +11941,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "and closure before a new header and handshake. "
             "A replacement output window omits completions owned wholly by a closed window "
             "and refuses a utility retry split across both windows. "
-            "Java CLI stdout uses strict UTF-8 and LF commitment with no record-size cap. "
-            "Its shared task helper propagates failures; transport reads latch the first "
-            "failure before cancellation and refuse later work. Executor dispatch must be "
-            "asynchronous, and startup rejection closes the owned process. Java admission uses "
-            "the exact bound schema, replays original request spellings and response lifetimes, "
-            "binds compaction draws to settled requests, decoded response bytes and tokenizer "
-            "responses in the same scope, "
-            "and preserves complete immutable records before typed views and callbacks. "
-            "Initialization and controls match owned identities; child results cannot finish "
-            "root prompts. Closing ends input, drains evidence and checks complete EOF before "
-            "success; convenience queries propagate that refusal. Resume restarts only after "
-            "the prior process ends and binds the requested session identity. Shared Java JSON "
-            "parsing rejects ambiguous or non-scalar records without parser buffer caps."
+            "Strict tool calling and exact served usage are the only decode mode: a recorded "
+            "decode policy admits no other value and a request context has no switch for either."
         ),
         removal_condition=(
             "Upstream supplies durable owned observations, required canonical writers, strict replay, "

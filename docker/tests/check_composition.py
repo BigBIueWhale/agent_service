@@ -32,7 +32,7 @@ import zipfile
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from request_evidence import require_request_evidence, require_response_evidence, require_output_ownership
+from request_evidence import require_request_evidence, require_response_evidence
 
 
 class GateFailure(RuntimeError):
@@ -745,7 +745,6 @@ print(json.dumps(found))
         client_requests = [request for request in self.stub.requests if "raw_body" in request
                            and request["body"].get("prompt") != "agent-service-tokenizer-preflight"]
         request_evidence = require_request_evidence(records, client_requests)
-        require_output_ownership(records)
         seeds = [record["normalization_seed"] for record in records
                  if record["type"] == "model_normalization_seed"]
         require(len(seeds) == 2 and
@@ -756,11 +755,10 @@ print(json.dumps(found))
                 "Chat normalization seeds lost the physical request or active call history")
         expected_attempts = {(evidence["kv_scope"], evidence["owner"]["attempt_id"])
                              for evidence in request_evidence if evidence["owner"]["kind"] == "chat"}
-        observed_attempts = {(record["origin"]["kv_scope"], record["origin"]["attempt_id"])
-                             for record in records if record["type"] == "assistant"
-                             and record["origin"]["kind"] == "model"}
-        require(observed_attempts == expected_attempts,
-                "a generation disappeared or changed attempt identity in the published record; inspect shared output publication")
+        settled_attempts = {(record["completion"]["origin"]["kv_scope"], record["completion"]["origin"]["attempt_id"])
+                            for record in records if record["type"] == "model_attempt_completion"}
+        require(settled_attempts == expected_attempts,
+                "a chat attempt has no settled generation in the published record; inspect shared output publication")
         responses = require_response_evidence(records, client_requests)
         require(all(response["event"]["status"] == "completed" for response in responses if response["event"]["kind"] == "outcome"),
                 "ordinary provider responses did not complete decoding; inspect processing outcomes")
@@ -1311,14 +1309,12 @@ print(json.dumps(found))
         client_requests = [request for request in self.stub.requests if "raw_body" in request
                            and request["body"].get("prompt") != "agent-service-tokenizer-preflight"]
         request_evidence = require_request_evidence(records, client_requests)
-        require_output_ownership(records)
         expected_attempts = {(evidence["kv_scope"], evidence["owner"]["attempt_id"])
                              for evidence in request_evidence if evidence["owner"]["kind"] == "chat"}
-        observed_attempts = {(record["origin"]["kv_scope"], record["origin"]["attempt_id"])
-                             for record in records if record["type"] == "assistant"
-                             and record["origin"]["kind"] == "model"}
-        require(observed_attempts == expected_attempts,
-                "a generation disappeared or changed attempt identity in the published record; inspect shared output publication")
+        settled_attempts = {(record["completion"]["origin"]["kv_scope"], record["completion"]["origin"]["attempt_id"])
+                            for record in records if record["type"] == "model_attempt_completion"}
+        require(settled_attempts == expected_attempts,
+                "a chat attempt has no settled generation in the published record; inspect shared output publication")
         responses = require_response_evidence(records, client_requests)
         require([response["event"]["status"] for response in responses if response["event"]["kind"] == "outcome"] == ["failed"],
                 "provider refusal lost its processing failure; inspect the pipeline outcome")

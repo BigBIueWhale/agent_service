@@ -1,20 +1,31 @@
 use super::*;
 
+/// The provider's final include_usage chunk reporting `usage`.
+fn usage_chunk(usage: &Value) -> String {
+    json!({"choices":[],"usage":wire_usage(usage)}).to_string()
+}
+
+/// A truncated candidate: the provider completed the draw at its ceiling while
+/// the snapshot call was still being written.
 fn output() -> Value {
-    json!({"maxOutputTokens":49152,"requestAttempts":2,
+    let usage = served(233926, 49152, 49152, 100);
+    json!({"maxOutputTokens":COMPACTION_BUDGET,"physicalRequests":2,
+        "operationId":"named-when-recorded","functionCalls":[],
         "text":"  partial snapshot","reasoning":"Observed reasoning.  ",
-        "sdkValuesJson":["{\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"name\":\"state_snapshot\",\"arguments\":\"{\\\"intent\\\":\"}}]}}]}"],
+        "sdkValuesJson":["{\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"name\":\"state_snapshot\",\"arguments\":\"{\\\"intent\\\":\"}}]}}]}", usage_chunk(&usage)],
         "newTokenCount":null,"snapshotBytes":null,
         "incompleteToolCalls":[{"name":"state_snapshot","arguments":"{\"intent\": \"Summarise the corpus \\u2014 cut"}],
-        "finishReason":"MAX_TOKENS","usage":served(233926, 49152, 49152, 100)})
+        "finishReason":"MAX_TOKENS","usage":usage})
 }
 
 fn rejected() -> Value {
-    json!({"status":"COMPRESSION_FAILED_EMPTY_SUMMARY","requestAttempts":1,
+    let usage = served(233926, 40, 40, 100);
+    json!({"status":"COMPRESSION_FAILED_EMPTY_SUMMARY","physicalRequests":1,
+        "operationId":"named-when-recorded","functionCalls":[],
         "text":"","reasoning":"Reasoning that produced nothing.",
-        "sdkValuesJson":["{\"choices\":[{\"delta\":{\"reasoning_content\":\"Reasoning that produced nothing.\"}}]}"],
+        "sdkValuesJson":["{\"choices\":[{\"delta\":{\"reasoning_content\":\"Reasoning that produced nothing.\"}}]}", usage_chunk(&usage)],
         "newTokenCount":null,"snapshotBytes":null,"incompleteToolCalls":[],
-        "finishReason":"STOP","usage":served(233926, 40, 40, 100)})
+        "finishReason":"STOP","usage":usage})
 }
 
 fn record(output: Value, rejected: Value) -> Value {
@@ -24,43 +35,48 @@ fn record(output: Value, rejected: Value) -> Value {
             "output":output,"postCompactionHistory":null,"rejectedAttempts":rejected}})
 }
 
-/// Field-validation fixtures carry explicit physical draws. Their synthetic
-/// utility requests are not evidence for the production compactor's ownership
-/// or for resumed history; those paths need their own producer/replay tests.
+fn snapshot_sections() -> Value {
+    json!({
+        "primary_request_and_intent":"None", "key_technical_concepts":"None",
+        "files_and_code_sections":"None", "errors_and_fixes":"None",
+        "problem_solving":"None", "pending_tasks":"None", "current_work":"None",
+        "next_step":"None"
+    })
+}
+
+/// A committed replacement: the accepted draw is one complete state_snapshot
+/// call whose rendered size and measured count the transition reports.
+fn committed(history: Value) -> Value {
+    let usage = served(233926, 4, 0, 100);
+    let sections = snapshot_sections();
+    let provider = json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"snapshot-call",
+        "type":"function","function":{"name":"state_snapshot","arguments":sections.to_string()}}]},
+        "finish_reason":"tool_calls"}]})
+    .to_string();
+    let draw = json!({"maxOutputTokens":COMPACTION_BUDGET,"physicalRequests":1,
+        "operationId":"named-when-recorded",
+        "functionCalls":[{"id":"snapshot-call","name":"state_snapshot","args":sections}],
+        "text":"","reasoning":"","sdkValuesJson":[provider, usage_chunk(&usage)],
+        "newTokenCount":12,"snapshotBytes":588,"incompleteToolCalls":[],
+        "finishReason":"STOP","usage":usage});
+    let mut record = record(draw, json!([]));
+    record["data"]["status"] = json!("COMPRESSED");
+    record["data"]["succeeded"] = json!(true);
+    record["data"]["newTokenCount"] = json!(12);
+    record["data"]["postCompactionHistory"] = history;
+    record
+}
+
+/// Field-validation fixtures carry explicit physical draws, preflight and
+/// candidate tokenizer measurements recorded in the compaction's own scope.
+/// Their synthetic requests are not evidence for the production compactor's
+/// ownership or for resumed history; those paths need their own tests.
 fn trace_with(record: Value, child: bool) -> Trace {
     let mut trace = Trace::new();
     if child {
         trace.chat(None, "child");
     }
-    for draw in record["data"]["rejectedAttempts"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .chain(
-            record["data"]["output"]
-                .as_object()
-                .map(|_| &record["data"]["output"]),
-        )
-    {
-        let attempts = draw["requestAttempts"].as_u64().unwrap();
-        for attempt in 0..attempts {
-            trace.utility(
-                if child {
-                    "child-compaction"
-                } else {
-                    "root-compaction"
-                },
-                if attempt + 1 == attempts {
-                    draw["usage"].clone()
-                } else {
-                    Value::Null
-                },
-            );
-        }
-    }
-    let mut record = record;
-    record["parent_tool_use_id"] = if child { json!("child") } else { Value::Null };
-    trace.push(record);
+    trace.compaction(child.then_some("child"), record);
     trace.terminal(None, u64::from(child), None);
     trace
 }
@@ -87,22 +103,16 @@ fn assert_compaction_refusal(trace: &Trace, expected: &str) {
     assert!(error.contains(expected), "expected {expected:?}: {error}");
 }
 
-fn commit_history(trace: &mut Trace, history: Value) {
-    let data = data(trace);
-    data["succeeded"] = json!(true);
-    data["status"] = json!("COMPRESSED");
-    data["output"]["finishReason"] = json!("STOP");
-    data["output"]["incompleteToolCalls"] = json!([]);
-    data["output"]["text"] = json!("accepted snapshot");
-    data["output"]["sdkValuesJson"] = json!(["{\"choices\":[{\"message\":{\"content\":\"accepted snapshot\"},\"finish_reason\":\"stop\"}]}"]);
-    data["postCompactionHistory"] = history;
-}
+/// The schema's refusal of the whole record variant.
+const SCHEMA: &str = "schema rule /oneOf";
 
 #[test]
 fn compaction_preserves_served_interrupted_and_unattempted_observations() {
     let mut interrupted = output();
     interrupted["usage"] = Value::Null;
     interrupted["finishReason"] = Value::Null;
+    // The stream ended before the provider's usage report.
+    interrupted["sdkValuesJson"].as_array_mut().unwrap().pop();
     for observation in [output(), interrupted, Value::Null] {
         let trace = trace_with(record(observation, json!([])), false);
         trace.certify();
@@ -123,10 +133,9 @@ fn unknown_retained_counts_require_unsuccessful_compaction() {
             trace.certify();
         }
         // Use a complete drawn candidate before testing a successful history.
-        let mut success = trace_with(record(output(), json!([])), child);
-        commit_history(
-            &mut success,
-            json!([{"role":"user","parts":[{"text":"accepted snapshot"}]}]),
+        let mut success = trace_with(
+            committed(json!([{"role":"user","parts":[{"text":"accepted snapshot"}]}])),
+            child,
         );
         success.certify();
         data(&mut success)["newTokenCount"] = Value::Null;
@@ -143,31 +152,27 @@ fn unknown_retained_counts_require_unsuccessful_compaction() {
 fn compaction_draws_require_content_measurements_and_decodable_provider_values() {
     let complete = trace_with(record(output(), json!([])), false);
     complete.certify();
+    // Every draw field is required by the shared definition.
     for field in [
         "sdkValuesJson",
         "text",
         "newTokenCount",
         "snapshotBytes",
         "usage",
-        "requestAttempts",
+        "physicalRequests",
         "finishReason",
+        "operationId",
+        "functionCalls",
     ] {
         let mut trace = complete.clone();
         data(&mut trace)["output"]
             .as_object_mut()
             .unwrap()
             .remove(field);
-        assert_compaction_refusal(
-            &trace,
-            if ["sdkValuesJson", "text", "newTokenCount", "snapshotBytes"].contains(&field) {
-                "schema rule /oneOf"
-            } else {
-                field
-            },
-        );
+        assert_compaction_refusal(&trace, SCHEMA);
     }
     for (responses, expected) in [
-        (json!([]), "schema rule /oneOf"),
+        (json!([]), SCHEMA),
         (json!(["not JSON"]), "undecodable SDK value JSON"),
     ] {
         let mut trace = complete.clone();
@@ -181,28 +186,34 @@ fn compaction_draws_require_content_measurements_and_decodable_provider_values()
 
 #[test]
 fn compaction_retains_a_non_json_sdk_value_when_conversion_fails() {
+    // The stream yielded one scalar SDK value the converter could not use:
+    // the draw keeps it verbatim and claims no decoded output.
     let value = "provider spoke plain text";
-    let mut trace = Trace::new();
-    trace.utility_text_failure("a", value);
     let mut draw = output();
-    draw["requestAttempts"] = json!(1);
+    draw["physicalRequests"] = json!(1);
     draw["sdkValuesJson"] = json!([serde_json::to_string(value).unwrap()]);
     draw["usage"] = Value::Null;
     draw["text"] = json!("");
     draw["reasoning"] = json!("");
     draw["incompleteToolCalls"] = json!([]);
     draw["finishReason"] = Value::Null;
-    trace.push(record(draw, json!([])));
-    trace.terminal(None, 0, None);
+    let trace = trace_with(record(draw, json!([])), false);
+    let outcome = trace
+        .rows
+        .iter()
+        .rfind(|row| row["response"]["event"]["kind"] == "outcome")
+        .unwrap();
+    assert_eq!(outcome["response"]["event"]["status"], "failed");
+    assert_eq!(outcome["response"]["event"]["sdk_values_seen"], 1);
+    assert_eq!(outcome["response"]["event"]["pipeline_outputs_delivered"], 0);
     trace.certify();
 }
 
 #[test]
 fn compaction_history_is_required_exactly_when_committed() {
-    let mut trace = trace_with(record(output(), json!([])), false);
-    trace.certify();
-    commit_history(&mut trace, Value::Null);
-    assert_compaction_refusal(&trace, "schema rule /oneOf");
+    trace_with(record(output(), json!([])), false).certify();
+    let mut trace = trace_with(committed(Value::Null), false);
+    assert_compaction_refusal(&trace, SCHEMA);
     data(&mut trace)["postCompactionHistory"] = json!([
         {"role":"user","parts":[{"text":"<all_user_messages>\n"},
             {"text":"Original user text, verbatim.\n"},{"text":"</all_user_messages>"}]},
@@ -211,7 +222,7 @@ fn compaction_history_is_required_exactly_when_committed() {
     trace.certify();
     data(&mut trace)["succeeded"] = json!(false);
     data(&mut trace)["status"] = json!("COMPRESSION_FAILED_HISTORY_CHANGED");
-    assert_compaction_refusal(&trace, "schema rule /oneOf");
+    assert_compaction_refusal(&trace, SCHEMA);
 }
 
 #[test]
@@ -226,9 +237,9 @@ fn refused_candidates_require_their_rule_attempts_and_stopped_calls() {
     let complete = trace_with(record(output(), json!([rejected()])), false);
     complete.certify();
     for (field, value, expected) in [
-        ("status", Value::Null, "status"),
-        ("requestAttempts", json!(0), "reports no request attempt"),
-        ("incompleteToolCalls", Value::Null, "incompleteToolCalls"),
+        ("status", Value::Null, "does not name a resampleable rule"),
+        ("physicalRequests", json!(0), SCHEMA),
+        ("incompleteToolCalls", Value::Null, SCHEMA),
         ("usage", served(233926, 49153, 40, 100), "does not nest"),
     ] {
         let mut trace = complete.clone();
@@ -241,7 +252,7 @@ fn refused_candidates_require_their_rule_attempts_and_stopped_calls() {
             .as_object_mut()
             .unwrap()
             .remove(field);
-        assert_compaction_refusal(&trace, field);
+        assert_compaction_refusal(&trace, SCHEMA);
     }
     for (bad, expected) in [
         (json!([7]), "rejected attempt 0 is not an object"),
@@ -264,12 +275,12 @@ fn compaction_output_refuses_malformed_fields_and_inconsistent_usage() {
     let complete = trace_with(record(output(), json!([])), false);
     complete.certify();
     for (field, value, expected) in [
-        ("reasoning", Value::Null, "reasoning"),
-        ("text", Value::Null, "text"),
-        ("requestAttempts", json!(0), "reports no request attempt"),
-        ("maxOutputTokens", json!(0), "positive budget"),
-        ("usage", json!(7), "usage"),
-        ("incompleteToolCalls", Value::Null, "incompleteToolCalls"),
+        ("reasoning", Value::Null, SCHEMA),
+        ("text", Value::Null, SCHEMA),
+        ("physicalRequests", json!(0), SCHEMA),
+        ("maxOutputTokens", json!(0), SCHEMA),
+        ("usage", json!(7), SCHEMA),
+        ("incompleteToolCalls", Value::Null, SCHEMA),
         (
             "incompleteToolCalls",
             json!([{"name":"","arguments":""}]),
@@ -309,7 +320,7 @@ fn compaction_output_refuses_malformed_fields_and_inconsistent_usage() {
         .as_object_mut()
         .unwrap()
         .remove("promptTokenCount");
-    assert_compaction_refusal(&trace, "promptTokenCount");
+    assert_compaction_refusal(&trace, SCHEMA);
 }
 
 #[test]
@@ -322,7 +333,7 @@ fn compaction_counts_refuse_unsafe_integers_in_root_and_child_scopes() {
             "originalTokenCount",
             "newTokenCount",
             "maxOutputTokens",
-            "requestAttempts",
+            "physicalRequests",
             "promptTokenCount",
             "candidatesTokenCount",
             "cachedContentTokenCount",
@@ -333,7 +344,7 @@ fn compaction_counts_refuse_unsafe_integers_in_root_and_child_scopes() {
             let data = data(&mut trace);
             if ["originalTokenCount", "newTokenCount"].contains(&field) {
                 data[field] = json!(unsafe_count);
-            } else if ["maxOutputTokens", "requestAttempts"].contains(&field) {
+            } else if ["maxOutputTokens", "physicalRequests"].contains(&field) {
                 data["output"][field] = json!(unsafe_count);
             } else {
                 let output = &mut data["output"];
@@ -366,20 +377,24 @@ fn compaction_counts_refuse_unsafe_integers_in_root_and_child_scopes() {
 
 #[test]
 fn compaction_measurement_and_budget_counts_accept_exact_safe_boundaries() {
+    // Each count is bound to its physical source: the original and candidate
+    // counts to their tokenizer responses and the ceiling to the request's
+    // own output ceiling, so the boundary is recorded there as well.
     let max = runtime_contract::SAFE_INTEGER;
     for child in [false, true] {
-        let mut trace = trace_with(record(output(), json!([])), child);
-        let data = data(&mut trace);
-        data["originalTokenCount"] = json!(max);
-        data["newTokenCount"] = json!(max);
-        data["output"]["maxOutputTokens"] = json!(max);
-        data["output"]["newTokenCount"] = json!(max);
-        data["output"]["snapshotBytes"] = json!(max);
-        trace.certify();
+        let mut draw = output();
+        draw["maxOutputTokens"] = json!(max);
+        draw["newTokenCount"] = json!(max);
+        let mut boundary = record(draw, json!([]));
+        boundary["data"]["originalTokenCount"] = json!(max);
+        boundary["data"]["newTokenCount"] = json!(max);
+        trace_with(boundary, child).certify();
     }
+    let usage = served(max - 1, 1, 1, max - 1);
     let mut draw = output();
-    draw["requestAttempts"] = json!(1);
+    draw["physicalRequests"] = json!(1);
     draw["maxOutputTokens"] = json!(max);
-    draw["usage"] = served(max - 1, 1, 1, max - 1);
+    draw["sdkValuesJson"][1] = json!(usage_chunk(&usage));
+    draw["usage"] = usage;
     trace_with(record(draw, json!([])), false).certify();
 }

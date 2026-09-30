@@ -100,7 +100,8 @@ def require_request_evidence(events: list[dict], received: list[dict]) -> list[d
             raise ValueError("Chat request reached another provider route")
         actual_body = actual.get("raw_body")
         owner = request["owner"]
-        if not ((set(owner) == {"kind", "operation_id"} and owner["kind"] == "utility" and isinstance(owner["operation_id"], str) and owner["operation_id"])
+        if not ((set(owner) == {"kind", "operation_id", "purpose"} and owner["kind"] == "utility" and isinstance(owner["operation_id"], str) and owner["operation_id"]
+                 and owner["purpose"] in ("compaction", "other"))
                 or (set(owner) == {"kind", "attempt_id"} and owner["kind"] == "chat" and isinstance(owner["attempt_id"], str) and owner["attempt_id"])):
             raise ValueError("request ownership is unknown; inspect the matching client")
         representation = request["body"]
@@ -389,38 +390,3 @@ def require_utility_completions(events: list[dict], states: dict[str, dict]) -> 
             completed.add(operation_id)
     if operations:
         raise ValueError("physical utility operation has no completion; retain the complete stream")
-
-
-def require_output_ownership(events: list[dict]) -> None:
-    """Every model output fragment resolves to one chat attempt and decision."""
-    attempts = {}
-    requests = {}
-    for envelope in events:
-        if envelope.get("type") == "model_request":
-            request = envelope["request"]
-            requests[request["request_id"]] = request
-            owner = request["owner"]
-            if owner["kind"] == "chat":
-                previous = attempts.setdefault(owner["attempt_id"], {"scope": request["kv_scope"], "accepted": False, "output_scope": []})
-                if previous["scope"] != request["kv_scope"] or previous["accepted"]:
-                    raise ValueError("chat attempt changes scope or continues after acceptance")
-        if envelope.get("type") == "model_response" and envelope["response"]["event"]["kind"] == "history":
-            response = envelope["response"]
-            attempt = attempts[requests[response["request_id"]]["owner"]["attempt_id"]]
-            if response["event"]["disposition"] == "accepted":
-                if attempt["accepted"]:
-                    raise ValueError("chat attempt accepts multiple physical responses")
-                attempt["accepted"] = True
-        content = envelope.get("type") == "assistant" or (envelope.get("type") == "stream_event" and envelope["event"]["type"] not in ("goal_state", "active_goal", "tool_progress"))
-        if not content:
-            continue
-        origin = envelope["origin"]
-        if origin == {"kind": "runtime"}:
-            continue
-        if set(origin) != {"kind", "attempt_id", "kv_scope"} or origin["kind"] != "model":
-            raise ValueError("assistant output has unknown ownership")
-        attempt = attempts.get(origin["attempt_id"])
-        scope = envelope.get("parent_tool_use_id")
-        if origin["kv_scope"] != (scope or envelope["session_id"]) or attempt is None or attempt["scope"] != origin["kv_scope"] or (attempt["output_scope"] and attempt["output_scope"] != [scope]):
-            raise ValueError("assistant output has no matching request owner")
-        attempt["output_scope"] = [scope]

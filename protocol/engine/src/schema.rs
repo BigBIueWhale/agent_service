@@ -461,38 +461,66 @@ mod tests {
     };
 
     #[test]
-    fn partial_event_condition_selects_runtime_or_model_origin_obligations() {
-        let entry = NODES
+    fn partial_event_condition_binds_notices_to_the_root_and_no_partial_names_an_origin() {
+        // The conditional of the stream_event variant: goal and tool-progress
+        // notices belong to the root; content partials may be in any scope.
+        let conditional = NODES
             .iter()
             .position(|node| node.path == "/oneOf/4/allOf/0")
-            .expect("the owned partial-event origin conditional");
+            .expect("the owned partial-event scope conditional");
         for event in [
             "goal_state",
             "active_goal",
             "tool_progress",
             "message_start",
+            "content_block_start",
         ] {
             for parent in [serde_json::Value::Null, serde_json::json!("child")] {
-                for has_origin in [false, true] {
-                    let mut value = serde_json::json!({
-                        "event": {"type": event}, "parent_tool_use_id": parent,
-                    });
-                    if has_origin {
-                        value["origin"] =
-                            serde_json::json!({"kind":"runtime","operation_id":"local-operation"});
-                    }
-                    let input = document(&value.to_string());
-                    let expected = if event == "message_start" {
-                        has_origin
-                    } else {
-                        !has_origin && parent.is_null()
-                    };
-                    assert_eq!(
-                        validate(NODES, entry, input.root(), LIMITS).is_ok(),
-                        expected,
-                        "{value}"
-                    );
-                }
+                let value = serde_json::json!({
+                    "event": {"type": event}, "parent_tool_use_id": parent,
+                });
+                let input = document(&value.to_string());
+                let expected = event.starts_with("message") || event.starts_with("content") || parent.is_null();
+                assert_eq!(
+                    validate(NODES, conditional, input.root(), LIMITS).is_ok(),
+                    expected,
+                    "{value}"
+                );
+            }
+        }
+        // The owning producer is positional: the whole record is closed, so a
+        // runtime or model origin label is refused on every partial kind.
+        let variant = NODES
+            .iter()
+            .position(|node| node.path == "/oneOf/4")
+            .expect("the owned stream_event variant");
+        for (event, parent) in [
+            (
+                serde_json::json!({"type":"message_start","message":{"id":"m","role":"assistant","model":"fixture-model","content":[]}}),
+                serde_json::Value::Null,
+            ),
+            (
+                serde_json::json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
+                serde_json::json!("child"),
+            ),
+            (
+                serde_json::json!({"type":"active_goal","active_goal":null}),
+                serde_json::Value::Null,
+            ),
+        ] {
+            let mut value = serde_json::json!({
+                "type": "stream_event", "uuid": "partial", "session_id": "session",
+                "parent_tool_use_id": parent, "event": event,
+            });
+            let input = document(&value.to_string());
+            assert!(validate(NODES, variant, input.root(), LIMITS).is_ok(), "{value}");
+            for origin in [
+                serde_json::json!({"kind":"runtime","operation_id":"local-operation"}),
+                serde_json::json!({"kind":"model","attempt_id":"attempt","kv_scope":"session"}),
+            ] {
+                value["origin"] = origin;
+                let input = document(&value.to_string());
+                assert!(validate(NODES, variant, input.root(), LIMITS).is_err(), "{value}");
             }
         }
     }
