@@ -108,16 +108,73 @@ const SCHEMA: &str = "schema rule /oneOf";
 
 #[test]
 fn compaction_preserves_served_interrupted_and_unattempted_observations() {
-    let mut interrupted = output();
-    interrupted["usage"] = Value::Null;
-    interrupted["finishReason"] = Value::Null;
-    // The stream ended before the provider's usage report.
-    interrupted["sdkValuesJson"].as_array_mut().unwrap().pop();
-    for observation in [output(), interrupted, Value::Null] {
-        let trace = trace_with(record(observation, json!([])), false);
+    // The stream ended before the provider's usage report: a request that
+    // broke, which the transition ended on.
+    for (observation, status) in [
+        (output(), "COMPRESSION_FAILED_OUTPUT_TRUNCATED"),
+        (interrupted(), "COMPRESSION_FAILED_TRANSPORT_ERROR"),
+        (interrupted(), "COMPRESSION_FAILED_PROTOCOL_ERROR"),
+        (Value::Null, "COMPRESSION_FAILED_OUTPUT_TRUNCATED"),
+    ] {
+        let mut record = record(observation, json!([]));
+        record["data"]["status"] = json!(status);
+        let trace = trace_with(record, false);
         trace.certify();
         assert_eq!(observed_usage(&trace.snapshot()), trace.summary(None));
     }
+}
+
+/// The truncated candidate, cut off before its finish and its usage report:
+/// a request whose transport failed after it had streamed part of a draw.
+fn interrupted() -> Value {
+    let mut interrupted = output();
+    interrupted["usage"] = Value::Null;
+    interrupted["finishReason"] = Value::Null;
+    interrupted["sdkValuesJson"].as_array_mut().unwrap().pop();
+    interrupted
+}
+
+#[test]
+fn a_draw_whose_request_failed_in_transport_is_kept_and_issued_again() {
+    // The request broke before the draw had an answer: kept with what it had
+    // streamed, named by the fault, and followed by the same request issued
+    // again, whose draw settles the transition.
+    let history = json!([{"role":"user","parts":[{"text":"accepted snapshot"}]}]);
+    let mut faulted = interrupted();
+    faulted.as_object_mut().unwrap().remove("maxOutputTokens");
+    faulted["status"] = json!("COMPRESSION_FAILED_TRANSPORT_ERROR");
+    let mut record = committed(history);
+    record["data"]["rejectedAttempts"] = json!([faulted.clone()]);
+    trace_with(record.clone(), false).certify();
+    // An answer refused by a rule and a request that broke are different
+    // things, and each is held to the physical request it names: a fault its
+    // request completed, and a refusal its request never finished, are both
+    // refused.
+    let mut completed = rejected();
+    completed["status"] = json!("COMPRESSION_FAILED_TRANSPORT_ERROR");
+    let mut forged = record.clone();
+    forged["data"]["rejectedAttempts"] = json!([completed]);
+    assert_physical_refusal(
+        &trace_with(forged, false),
+        "claims a transport fault its physical request did not have",
+    );
+    let mut unfinished = faulted;
+    unfinished["status"] = json!("COMPRESSION_FAILED_OUTPUT_TRUNCATED");
+    let mut forged = record;
+    forged["data"]["rejectedAttempts"] = json!([unfinished]);
+    assert_physical_refusal(
+        &trace_with(forged, false),
+        "claims an answer its physical request did not complete and deliver",
+    );
+}
+
+/// A refusal of what a compaction draw claims of its physical request, which
+/// the request evidence names rather than the record's line.
+fn assert_physical_refusal(trace: &Trace, expected: &str) {
+    let snapshot = trace.snapshot();
+    assert_eq!(observed_usage(&snapshot), trace.summary(None));
+    let error = snapshot.certified.unwrap_err().to_string();
+    assert!(error.contains(expected), "expected {expected:?}: {error}");
 }
 
 #[test]
@@ -197,7 +254,11 @@ fn compaction_retains_a_non_json_sdk_value_when_conversion_fails() {
     draw["reasoning"] = json!("");
     draw["incompleteToolCalls"] = json!([]);
     draw["finishReason"] = Value::Null;
-    let trace = trace_with(record(draw, json!([])), false);
+    // A draw the converter could not read ended the transition on a fault
+    // outside the model's answer.
+    let mut record = record(draw, json!([]));
+    record["data"]["status"] = json!("COMPRESSION_FAILED_PROTOCOL_ERROR");
+    let trace = trace_with(record, false);
     let outcome = trace
         .rows
         .iter()
@@ -237,7 +298,7 @@ fn refused_candidates_require_their_rule_attempts_and_stopped_calls() {
     let complete = trace_with(record(output(), json!([rejected()])), false);
     complete.certify();
     for (field, value, expected) in [
-        ("status", Value::Null, "does not name a resampleable rule"),
+        ("status", Value::Null, "names neither a rule its answer failed nor a transport fault"),
         ("physicalRequests", json!(0), SCHEMA),
         ("incompleteToolCalls", Value::Null, SCHEMA),
         ("usage", served(233926, 49153, 40, 100), "does not nest"),

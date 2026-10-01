@@ -389,7 +389,14 @@ compacted and cannot continue: the run ends as `error_during_execution`, and its
 message names why the compaction failed -- every draw's refusal, in the clause
 each redraw was told it in, or the fault outside the model's answer that its
 last draw ended on, or what its preflight refused -- beside the compaction
-record that holds what each draw produced. A turn's room is what the fit charges for the
+record that holds what each draw produced. A draw whose request failed in
+transport before the model had answered is no refused answer and spends no
+draw: it is kept in the record, named `COMPRESSION_FAILED_TRANSPORT_ERROR`,
+with what it had received, and the same request is issued again, untold, once,
+as a turn's broken stream is; a fresh request that fails the same way ends the
+compaction with that status, naming both faults. The record says which each
+draw was, and both certifiers hold it to its physical request: an answer, refused
+or accepted, completed and was delivered; a transport fault did not complete. A turn's room is what the fit charges for the
 turn a compaction carries; a draw's answer is never carried, only the snapshot
 it declares, so it can be given whatever the window has left. The request is
 counted with that number at its widest, the window, and the served tokenizer
@@ -882,7 +889,7 @@ file the creation body declared is not in `/artifacts`, and `error_cancelled` fo
 abort from outside. The names, whether each
 is an error, and the exit code a process that ended with each leaves are one
 table in the stream contract, `terminalOutcome` in
-`protocol/stream-contract-v18.json`, which validates a record's pairing and from
+`protocol/stream-contract-v19.json`, which validates a record's pairing and from
 which both the client's and the service's bindings are generated: `success`
 exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
 The table also names `error_timeout`, which no session ends in: only a subagent
@@ -1048,7 +1055,7 @@ ends this way is reported to its parent as unfinished, with the shape of the sli
 and its turn count, in the same form as an exhausted budget or a cut-off
 generation, and its scoped terminal record carries the same name. The name is a
 row of the terminal table, `terminalOutcome` in
-`protocol/stream-contract-v18.json`, which is the one place the vocabulary is
+`protocol/stream-contract-v19.json`, which is the one place the vocabulary is
 written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.

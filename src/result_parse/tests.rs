@@ -572,7 +572,9 @@ impl Trace {
     /// nothing; the final request streams exactly the draw's SDK values, and
     /// the client delivers the decoded observation its content projects from.
     /// A redraw's request is its draw's request with the refusal notice for
-    /// the draw before it after the directive, as the client builds it.
+    /// the draw before it after the directive, as the client builds it; a
+    /// request issued again after a transport fault is the request it
+    /// replaces, notice and all.
     fn compaction_draw(
         &mut self,
         kv: &str,
@@ -706,12 +708,14 @@ impl Trace {
                 None,
             ));
         }
-        for (ordinal, (draw, operation, index)) in draws.into_iter().enumerate() {
+        let mut told = false;
+        for (draw, operation, index) in draws {
             match index {
                 Some(index) => record["data"]["rejectedAttempts"][index]["operationId"] = json!(operation),
                 None => record["data"]["output"]["operationId"] = json!(operation),
             }
-            self.compaction_draw(&kv, &operation, budget, &draw, ordinal > 0);
+            self.compaction_draw(&kv, &operation, budget, &draw, told);
+            told |= index.is_some() && draw["status"] != "COMPRESSION_FAILED_TRANSPORT_ERROR";
             if let Some(count) = draw["newTokenCount"].as_u64() {
                 let measured = self.tokenizer(&kv, "candidate", count);
                 measurements.push(json!({"role":"candidate","operationId":measured}));

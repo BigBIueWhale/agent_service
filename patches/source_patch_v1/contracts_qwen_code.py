@@ -595,11 +595,25 @@ def _validate_stream_commit_after(state: State) -> None:
     chat = "packages/core/src/core/geminiChat.ts"
     converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    # A request whose transport fails before it has an answer is issued again
+    # once, fresh: one bound and one transport test, declared beside the
+    # retryable codes, for a turn and a compaction draw alike.
+    _require_all(
+        state,
+        "packages/core/src/core/stream-transport-retry.ts",
+        (
+            "export const FRESH_RESAMPLE_MAX_RETRIES = 1;",
+            "export function retryableStreamTransportCode(",
+            "RETRYABLE_STREAM_TRANSPORT_CODES.has(classification.transportCode)",
+        ),
+        label=label,
+    )
     source = _require_all(
         state,
         chat,
         (
-            "FRESH_RESAMPLE_MAX_RETRIES = 1",
+            "  FRESH_RESAMPLE_MAX_RETRIES,\n  retryableStreamTransportCode,\n} from './stream-transport-retry.js';",
+            "            transportRetries < FRESH_RESAMPLE_MAX_RETRIES",
             "let deliveredContent = false;",
             "private readonly chatRecordingService: ChatCommitRecorder",
             "requireServedUsage(usageMetadata, 'completed chat stream')",
@@ -5288,8 +5302,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         service,
         (
-            "      outcome.kind === 'resampleable' &&",
-            "      rejectedAttempts.length + 1 < MAX_GENERATION_DRAWS",
+            "        outcome.kind === 'resampleable' &&",
+            "        refusals.length + 1 < MAX_GENERATION_DRAWS",
             # Why a draw was refused is said once: the notice the next draw is
             # told opens with it, and the ending a compaction that ran out of
             # draws forces names every draw's.
@@ -5297,12 +5311,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             "      return limitReached(\n        refusal.limit,\n        `its ${STATE_SNAPSHOT_FUNCTION_NAME} call`,\n      );",
             "      return 'Reason more briefly, and make the call within the limit.';",
             "  return `${REFUSED_ANSWER} ${drawRefusalReason(refusal)}. ${drawRefusalAdvice(refusal)}`;",
-            "`draw ${index + 1} because ${drawRefusalReason(refusal)}`",
+            "`${drawName(index + 1)} because ${drawRefusalReason(refusal)}`",
             # A fault outside the model's answer ends the compaction on its
             # draw, and its cause is carried, not only logged.
             "      failure: string | null;",
             "          cause: string;",
-            "`its draw ${drawn} ended on a fault outside the model's answer, so no further draw was taken: ${outcome.cause}`",
+            "`its ${drawName(drawn)} ended on a fault outside the model's answer, so no further draw was taken: ${outcome.cause}`",
         ),
         label=label,
     )
@@ -5314,14 +5328,17 @@ def _validate_compaction_budget_after(state: State) -> None:
         )
     # The first draw is the counted request; each redraw is that request and
     # one notice about the draw just before it, never an accumulation and
-    # never the refused draw itself, which would not fit the proved room.
+    # never the refused draw itself, which would not fit the proved room. A
+    # request issued again after a transport fault is the request it replaces.
     _require_ordered(
         service_source,
         (
-            "let outcome = await drawCandidate(sideQueryOptions.contents);",
+            "let contents = sideQueryOptions.contents;",
+            "let outcome = await drawCandidate(contents);",
             "const notice = drawRefusalNotice(outcome.refusal);",
             "rejectedAttempts.push({",
-            "outcome = await drawCandidate([\n        ...sideQueryOptions.contents,\n        { role: 'user', parts: [{ text: notice }] },\n      ]);",
+            "contents = [\n          ...sideQueryOptions.contents,\n          { role: 'user', parts: [{ text: notice }] },\n        ];",
+            "outcome = await drawCandidate(contents);",
         ),
         label=label,
         location=service,
@@ -5935,7 +5952,66 @@ def _validate_compaction_accounting_after(state: State) -> None:
         (
             "validateCompactionOutcome(",
             "Compaction status contradicts whether history was replaced",
-            "Compaction rejected attempt does not name a resampleable rule",
+            "    ...ANSWER_REFUSAL_STATUSES,\n    CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,",
+            "Compaction rejected attempt names neither a rule its answer failed nor a transport fault",
+        ),
+        label=label,
+    )
+    # A draw followed by another is an answer a rule refused or a request that
+    # failed in transport before it had an answer, and the record says which.
+    # A transport fault spends no draw: it is issued again, fresh and untold,
+    # once, under the bound a turn's broken stream is issued again under, and
+    # a second in a row ends the compaction with that status. Every reader
+    # holds each draw to the physical request its status names.
+    _require_all(
+        state,
+        "packages/core/src/core/compression-status.ts",
+        (
+            "  COMPRESSION_FAILED_TRANSPORT_ERROR,\n}",
+            "export const ANSWER_REFUSAL_STATUSES: ReadonlySet<CompressionStatus> = new Set([",
+            "export function compactionDrawKind(",
+        ),
+        label=label,
+    )
+    _require_ordered(
+        _source(state, "packages/core/src/services/chatCompressionService.ts", label=label),
+        (
+            "kind: 'faulted';",
+            "const transportCode = retryableStreamTransportCode(",
+            "if (accounting && transportCode !== undefined) {",
+            "kind: 'faulted',",
+            "status: CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,",
+            "freshRetries < FRESH_RESAMPLE_MAX_RETRIES",
+            "outcome = await drawCandidate(contents);",
+            "refusals.length + 1 < MAX_GENERATION_DRAWS",
+            "freshRetries = 0;",
+            "outcome = await drawCandidate(contents);",
+            "and so did the fresh request issued in its place",
+        ),
+        label=label,
+        location="packages/core/src/services/chatCompressionService.ts",
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/model-response-evidence.ts",
+        (
+            "kind: compactionDrawKind(statusOf(draw.status)),",
+            "kind: compactionDrawKind(statusOf(record.status)),",
+            "physical.completed = event.status === 'completed';",
+            "if (kind === 'answer' && (last.completed !== true || delivered === 0))",
+            "compaction draw claims an answer its physical request did not complete and deliver",
+            "if (kind === 'fault' && last.completed !== false)",
+            "compaction draw claims a transport fault its physical request did not have",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/chatCompressionService.test.ts",
+        (
+            "issues a draw whose request failed in transport again, fresh, and keeps the broken one",
+            "spends a broken request's retry, never one of the ${MAX_GENERATION_DRAWS} draws",
+            "ends the compaction when the request issued again fails in transport too, naming both faults",
         ),
         label=label,
     )
@@ -8764,7 +8840,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 21;",
+            "export const CHAT_RECORDING_VERSION = 22;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",

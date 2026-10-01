@@ -1,7 +1,7 @@
 # Shared captured-stream gate and producer contract
 
 One versioned JSON definition, agent_service's
-`protocol/stream-contract-v18.json`, owns every accepted top-level and nested
+`protocol/stream-contract-v19.json`, owns every accepted top-level and nested
 record variant and its structural constraints. Build-time generators derive
 the Rust discriminators and the client's TypeScript validators from that exact
 definition, and producer and reader agree on the SHA-256 of its bytes. Every

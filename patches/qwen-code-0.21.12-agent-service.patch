@@ -4566,7 +4566,7 @@ diff --git a/docs/design/shared-stream-gate.md b/docs/design/shared-stream-gate.
 +# Shared captured-stream gate and producer contract
 +
 +One versioned JSON definition, agent_service's
-+`protocol/stream-contract-v18.json`, owns every accepted top-level and nested
++`protocol/stream-contract-v19.json`, owns every accepted top-level and nested
 +record variant and its structural constraints. Build-time generators derive
 +the Rust discriminators and the client's TypeScript validators from that exact
 +definition, and producer and reader agree on the SHA-256 of its bytes. Every
@@ -59517,7 +59517,7 @@ diff --git a/packages/cli/src/nonInteractive/types.ts b/packages/cli/src/nonInte
 + * The stream contract's terminal table, read from its generated binding:
 + * every result subtype, whether it is an error, and the exit code a process
 + * that ended with it leaves. It is stated once, in
-+ * `protocol/stream-contract-v18.json`, and nowhere in this client.
++ * `protocol/stream-contract-v19.json`, and nowhere in this client.
 + */
 +type TerminalOutcomes = typeof TERMINAL_OUTCOMES;
 +
@@ -114989,7 +114989,7 @@ diff --git a/packages/cli/src/utils/cleanup.ts b/packages/cli/src/utils/cleanup.
 diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/src/utils/compression-result.test.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/compression-result.test.ts
-@@ -0,0 +1,168 @@
+@@ -0,0 +1,173 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -115057,6 +115057,11 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 +      CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED,
 +      'error',
 +      'conversation changed',
++    ],
++    [
++      CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,
++      'error',
++      'failed in transport twice in a row',
 +    ],
 +  ] as const)('names status %s', (compressionStatus, messageType, reason) => {
 +    const output = formatCompressionResult({ ...completed, compressionStatus });
@@ -115161,7 +115166,7 @@ diff --git a/packages/cli/src/utils/compression-result.test.ts b/packages/cli/sr
 diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/utils/compression-result.ts
 --- /dev/null
 +++ b/packages/cli/src/utils/compression-result.ts
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,142 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -115245,6 +115250,10 @@ diff --git a/packages/cli/src/utils/compression-result.ts b/packages/cli/src/uti
 +    case CompressionStatus.COMPRESSION_FAILED_HISTORY_CHANGED:
 +      content =
 +        'Compaction was refused because the conversation changed while it was being prepared. Retry compaction after the current turn finishes.';
++      break;
++    case CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR:
++      content =
++        "Compaction failed because a draw's request failed in transport twice in a row, before the model had answered.";
 +      break;
 +    default: {
 +      const unhandled: never = status;
@@ -200056,9 +200065,13 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -116,42 +139,25 @@
+@@ -116,42 +139,28 @@
  } from './prompts.js';
- import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
+-import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
++import {
++  FRESH_RESAMPLE_MAX_RETRIES,
++  retryableStreamTransportCode,
++} from './stream-transport-retry.js';
  import {
 -  collectToolCallIdsFromHistory,
 -  normalizeModelToolCallIds,
@@ -200110,7 +200123,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   */
  function hasNonThoughtCandidateParts(
    response: GenerateContentResponse,
-@@ -163,242 +169,10 @@
+@@ -163,242 +172,10 @@
    );
  }
  
@@ -200356,7 +200369,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /** A regular content chunk from the API. */
    CHUNK = 'chunk',
    /** A signal that a retry is about to happen. The UI should discard any partial
-@@ -409,64 +183,48 @@
+@@ -409,64 +186,48 @@
     * agent UI, subagent loop) can surface it without each call site running
     * its own compaction step. */
    COMPRESSED = 'compressed',
@@ -200443,7 +200456,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -  /**
     * Forwarded to the compression side-query system prompt. Sourced from
     * `/compress <text>` invocation arg; appended after the base prompt as
-@@ -476,561 +234,9 @@
+@@ -476,561 +237,8 @@
    customInstructions?: string;
  }
  
@@ -201002,13 +201015,12 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -  }
 -  return -1;
 -}
-+const FRESH_RESAMPLE_MAX_RETRIES = 1;
 +const INVALID_STREAM_RETRY_DELAY_MS = 2000;
 +const TRANSPORT_STREAM_RETRY_DELAY_MS = 1000;
  
  /**
   * Options for retrying on rate-limit throttling errors returned as stream content.
-@@ -1089,71 +295,6 @@
+@@ -1089,71 +297,6 @@
        resolveRef();
      },
    };
@@ -201080,7 +201092,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  }
  
  /**
-@@ -1175,66 +316,12 @@
+@@ -1175,66 +318,12 @@
   *
   * @remarks
   * The model may sometimes generate invalid or empty contents(e.g., due to safety
@@ -201147,7 +201159,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    const parts = content.parts.filter((part) => !(part as Part).thought);
-@@ -1248,111 +335,41 @@
+@@ -1248,111 +337,41 @@
    };
  }
  
@@ -201292,7 +201304,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  }
  
  /**
-@@ -1363,78 +380,7 @@
+@@ -1363,78 +382,7 @@
   * `onAllToolCallsComplete` was a single-shot that already fired into an
   * `isResponding` early-return).
   */
@@ -201372,7 +201384,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
  /**
   * Walk `history` left-to-right and close every dangling
-@@ -1594,7 +540,11 @@
+@@ -1594,7 +542,11 @@
    });
    for (const loc of removals) {
      const turnParts = history[loc.turnIdx].parts;
@@ -201385,7 +201397,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    // (2) Drop now-empty user turns within [modelIdx + 2, scanEnd).
-@@ -1615,11 +565,14 @@
+@@ -1615,11 +567,14 @@
      const existing = next.parts ?? [];
      const firstNonFr = existing.findIndex((part) => !part.functionResponse);
      const insertAt = firstNonFr === -1 ? existing.length : firstNonFr;
@@ -201405,7 +201417,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return { insertedBefore: 0 };
    }
    history.splice(adjacentIdx, 0, { role: 'user', parts: partsToInject });
-@@ -1680,6 +633,15 @@
+@@ -1680,6 +635,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -201421,7 +201433,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1715,68 +677,36 @@
+@@ -1715,68 +679,36 @@
    // model.
    private sendPromise: Promise<void> = Promise.resolve();
  
@@ -201520,7 +201532,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    /**
     * Monotonically counts user-content pushes that survived into history.
-@@ -1789,31 +719,16 @@
+@@ -1789,31 +721,16 @@
     */
    private userContentPushCount = 0;
    private manualPlanExitNoticesEnabled = false;
@@ -201562,7 +201574,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    /**
     * Creates a new GeminiChat instance.
-@@ -1821,21 +736,78 @@
+@@ -1821,21 +738,78 @@
     * @param config - The configuration object.
     * @param generationConfig - Optional generation configuration.
     * @param history - Optional initial conversation history.
@@ -201646,7 +201658,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    enableManualPlanExitNotices(): void {
-@@ -1843,19 +815,11 @@
+@@ -1843,19 +817,11 @@
    }
  
    /**
@@ -201671,7 +201683,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -1866,275 +830,584 @@
+@@ -1866,275 +832,584 @@
     * Public history readers still use {@link getHistory}, which returns a
     * defensive deep copy for caller mutation safety.
     */
@@ -202476,7 +202488,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    setSessionStartContext(extraInstruction: string) {
-@@ -2153,6 +1426,16 @@
+@@ -2153,6 +1428,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -202493,7 +202505,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2195,1042 +1478,611 @@
+@@ -2195,1042 +1480,606 @@
      prompt_id: string,
      goalContext?: GoalTurnPermit,
    ): Promise<AsyncGenerator<StreamEvent>> {
@@ -204052,16 +204064,11 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +            await wait.promise;
 +            continue;
 +          }
-+          const classification = classifyRetryError(error, {
-+            authType: cgConfig.authType,
-+            extraRetryErrorCodes,
-+          });
 +          if (
-+            classification.kind === 'transport' &&
-+            classification.transportCode &&
-+            RETRYABLE_STREAM_TRANSPORT_CODES.has(
-+              classification.transportCode,
-+            ) &&
++            retryableStreamTransportCode(error, {
++              authType: cgConfig.authType,
++              extraRetryErrorCodes,
++            }) !== undefined &&
 +            transportRetries < FRESH_RESAMPLE_MAX_RETRIES
 +          ) {
 +            transportRetries++;
@@ -204095,7 +204102,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
                    delayMs,
                    model,
                  ),
-@@ -3239,674 +2091,64 @@
+@@ -3239,674 +2088,64 @@
                await delay(delayMs, params.config?.abortSignal).promise;
                continue;
              }
@@ -204802,7 +204809,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        shouldRetryOnError: (error: unknown) => {
          if (error instanceof Error) {
            if (isSchemaDepthError(error.message)) return false;
-@@ -3936,17 +2178,8 @@
+@@ -3936,17 +2175,8 @@
        },
        authType,
        extraRetryErrorCodes,
@@ -204821,7 +204828,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        onRetry: (info) => {
          logApiRetry(
            this.config,
-@@ -3961,40 +2194,47 @@
+@@ -3961,40 +2191,47 @@
            }),
          );
        },
@@ -204895,7 +204902,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Returns the chat history.
     *
-@@ -4018,10 +2258,17 @@
+@@ -4018,10 +2255,17 @@
     * @return History contents alternating between user and model for the entire
     * chat session.
     */
@@ -204915,7 +204922,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Deep copy the history to avoid mutating the history outside of the
      // chat session.
      return structuredClone(history);
-@@ -4034,8 +2281,8 @@
+@@ -4034,8 +2278,8 @@
    getHistoryTail(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -204926,7 +204933,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return structuredClone(history.slice(-count));
    }
  
-@@ -4046,13 +2293,15 @@
+@@ -4046,13 +2290,15 @@
     */
    getHistoryShallow(curated: boolean = false): Content[] {
      const history = curated
@@ -204945,7 +204952,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return extractCuratedHistory(history).map(copyContentContainer);
    }
  
-@@ -4062,8 +2311,8 @@
+@@ -4062,8 +2308,8 @@
    getHistoryTailShallow(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -204956,7 +204963,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return history.slice(-count).map(copyContentContainer);
    }
  
-@@ -4081,7 +2330,7 @@
+@@ -4081,7 +2327,7 @@
     * mutate the returned object.
     */
    peekLastHistoryEntry(): Content | undefined {
@@ -204965,7 +204972,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4090,8 +2339,8 @@
+@@ -4090,8 +2336,8 @@
     * needed.
     */
    getLastModelMessageText(): string | undefined {
@@ -204976,7 +204983,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (message?.role !== 'model') continue;
        const text =
          message.parts
-@@ -4112,7 +2361,7 @@
+@@ -4112,7 +2358,7 @@
     * otherwise pay the {@link getHistory} `structuredClone` cost.
     */
    getHistoryLength(): number {
@@ -204985,7 +204992,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4133,7 +2382,7 @@
+@@ -4133,7 +2379,7 @@
     */
    getHistoryFunctionResponseIds(): Set<string> {
      const ids = new Set<string>();
@@ -204994,7 +205001,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (entry.role !== 'user') continue;
        for (const part of entry.parts ?? []) {
          const id = part.functionResponse?.id;
-@@ -4147,192 +2396,75 @@
+@@ -4147,192 +2393,75 @@
     * Clears the chat history.
     */
    clearHistory(): void {
@@ -205240,7 +205247,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4342,6 +2474,8 @@
+@@ -4342,6 +2471,8 @@
     */
    stripOrphanedUserEntriesFromHistory(): Content[] {
      const strippedEntries: Content[] = [];
@@ -205249,7 +205256,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      while (
        this.history.length > 0 &&
        this.history[this.history.length - 1]!.role === 'user'
-@@ -4365,18 +2499,9 @@
+@@ -4365,18 +2496,9 @@
        }
        strippedEntries.unshift(this.history.pop()!);
      }
@@ -205271,7 +205278,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return strippedEntries;
    }
  
-@@ -4388,7 +2513,10 @@
+@@ -4388,7 +2510,10 @@
      injected: Array<{ callId: string; name: string }>;
      droppedDuplicates: Array<{ callId: string; name: string }>;
    } {
@@ -205283,7 +205290,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    setTools(tools: Tool[]): void {
-@@ -4396,7 +2524,7 @@
+@@ -4396,7 +2521,7 @@
    }
  
    /** Returns a shallow copy of the current generation config (for cache param snapshots). */
@@ -205292,7 +205299,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return { ...this.generationConfig };
    }
  
-@@ -4430,687 +2558,221 @@
+@@ -4430,687 +2555,221 @@
      }
    }
  
@@ -207608,7 +207615,7 @@ diff --git a/packages/core/src/core/generation-refusal.test.ts b/packages/core/s
 diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/core/generation-refusal.ts
 --- /dev/null
 +++ b/packages/core/src/core/generation-refusal.ts
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,122 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -207647,6 +207654,12 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 +/**
 + * The most times one request is drawn, the first draw included.
 + *
++ * A draw is an answer the rules judge. A request that fails in transport
++ * produces no answer and is not one: it is issued again, fresh, under the
++ * bound a turn's broken stream is issued again under
++ * (`FRESH_RESAMPLE_MAX_RETRIES`), so a fault spends a request and never a
++ * draw, and this bound is what it was measured for -- refused answers.
++ *
 + * Every draw of a request is an independent sample, and every one after the
 + * first is told why the one before it was refused. Compaction measures the
 + * rate. The snapshot draws of one long probe, judged against the snapshot's
@@ -207661,8 +207674,9 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 + * therefore not unlucky but held by a cause no further draw changes --
 + * reasoning that has degenerated, or work it will not do in parts -- and that
 + * is what the limit exists to catch: the fourth refusal ends the session,
-+ * loudly, with the reason named. The bound is also the cost: a request that
-+ * fails spends at most four generations of its ceiling.
++ * loudly, with the reason named. The bound is also the cost: a request whose
++ * answers are all refused spends at most four generations of its ceiling, and
++ * each draw whose request broke in transport at most one more.
 + */
 +export const MAX_GENERATION_DRAWS = 4;
 +
@@ -231220,7 +231234,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  export function createDuplicateProviderToolCallResponse(
    request: ToolCallRequestInfo,
  ): ToolCallResponseInfo {
-@@ -328,58 +638,149 @@
+@@ -328,58 +638,158 @@
  
  export type ServerGeminiErrorEvent = {
    type: GeminiEventType.Error;
@@ -231262,16 +231276,24 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 + * failed side query never reaches the billed event stream.
 + */
 +/**
-+ * A candidate the model produced that the acceptance rule refused, retained
-+ * with the cost it already incurred. A resampled transition must never hide
-+ * what earlier attempts spent, and the reason each was refused is the evidence
-+ * that resampling was warranted rather than a fault being retried blindly.
++ * A draw that did not settle the transition and was followed by another,
++ * retained with the cost it already incurred: a candidate the model produced
++ * that the acceptance rule refused, or a request that failed in transport
++ * before it produced an answer. A resampled transition must never hide what
++ * earlier attempts spent, and each says which it was: the rule a refused
++ * answer failed is the evidence that resampling was warranted, and a
++ * transport fault is the evidence that the request, not the model, was
++ * issued again.
 + *
 + * The output ceiling is declared once on the transition's last draw. Its
 + * physical requests retain the ceiling actually dispatched to the provider.
 + */
 +export interface CompactionRejectedAttempt {
-+  /** The acceptance rule this candidate failed. */
++  /**
++   * The acceptance rule this candidate failed, or
++   * `COMPRESSION_FAILED_TRANSPORT_ERROR` when its request failed in transport
++   * and there was no answer to judge.
++   */
 +  status: CompressionStatus;
 +  /** Physical retry operation that produced this draw. */
 +  operationId: string;
@@ -231366,8 +231388,9 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  /** Absent when the attempt was refused before any generation ran. */
 +  output?: CompactionOutputAccounting;
 +  /**
-+   * Candidates that were refused and then followed by another draw, oldest
-+   * first. A transition's candidates are exactly these followed by the one
++   * Draws that were refused, or whose request failed in transport, and then
++   * followed by another draw, oldest first. A transition's draws are exactly
++   * these followed by the one
 +   * `output` describes, so no draw is recorded twice and none is lost when the
 +   * last of them generated nothing and left `output` absent. Empty when the
 +   * first draw settled the transition, and never absent, so a reader cannot
@@ -231407,7 +231430,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
  }
  
  export type ServerGeminiChatCompressedEvent = {
-@@ -387,18 +788,107 @@
+@@ -387,18 +797,107 @@
    value: ChatCompressionInfo | null;
  };
  
@@ -231457,9 +231480,9 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +   */
 +  output: CompactionOutputAccounting | null;
 +  /**
-+   * Candidates refused before that one, oldest first. Present even when
-+   * `output` is null, so a draw that was refused is never lost behind a later
-+   * one that never generated.
++   * Draws refused, or whose request failed in transport, before that one,
++   * oldest first. Present even when `output` is null, so a draw that was
++   * refused or broke is never lost behind a later one that never generated.
 +   */
 +  rejectedAttempts: CompactionRejectedAttemptRecord[];
 +}
@@ -231520,7 +231543,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +};
 +
  export type ServerGeminiLoopDetectedEvent = {
-@@ -451,25 +941,26 @@
+@@ -451,25 +950,26 @@
  
  // The original union type, now composed of the individual types
  export type ServerGeminiStreamEvent =
@@ -231549,7 +231572,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    | ServerGeminiRetryEvent;
  
  function getDisplayContentParts(
-@@ -527,25 +1018,63 @@
+@@ -527,25 +1027,63 @@
      req: PartListUnion,
      signal: AbortSignal,
    ): AsyncGenerator<ServerGeminiStreamEvent> {
@@ -231627,7 +231650,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
          }
  
          // Handle the new RETRY event: clear accumulated state from the
-@@ -557,26 +1086,21 @@
+@@ -557,26 +1095,21 @@
            yield {
              type: GeminiEventType.Retry,
              retryInfo: streamEvent.retryInfo,
@@ -231664,7 +231687,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            };
            continue;
          }
-@@ -656,6 +1180,12 @@
+@@ -656,6 +1189,12 @@
              this.pendingCitations.clear();
            }
  
@@ -231677,7 +231700,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            this.finishReason = finishReason;
            yield {
              type: GeminiEventType.Finished,
-@@ -664,6 +1194,13 @@
+@@ -664,6 +1203,13 @@
                usageMetadata: resp.usageMetadata,
              },
            };
@@ -246131,7 +246154,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
        role: 'user',
        parts: [
          {
-@@ -2475,1931 +600,1433 @@
+@@ -2475,1931 +600,1562 @@
          },
        ],
      };
@@ -248015,7 +248038,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -        firePostCompactEvent: vi.fn().mockResolvedValue(undefined),
 +  it.each([
 +    [
-+      'a transport fault',
++      'a stream fault that names no transport code',
 +      (harness: Harness) => {
 +        harness.generateText.mockReset().mockRejectedValue(
 +          new GenerationTextFailure(
@@ -248069,8 +248092,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +
 +      const result = await compress(harness);
 +
-+      // A draw is redrawn only for a fault in the model's own answer. These
-+      // are not, so the transition ends on the first draw, and the cause is
++      // A draw is redrawn only for a fault in the model's own answer, and
++      // its request issued again only for a transport fault. These are
++      // neither, so the transition ends on the first draw, and the cause is
 +      // carried beside the accounting for the ending to name.
 +      expect(result.newHistory).toBeNull();
 +      expect(result.info.compressionStatus).toBe(status);
@@ -248081,6 +248105,134 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      );
 +    },
 +  );
++
++  /**
++   * A draw whose request broke in transport, as generateText reports one: the
++   * prefix it had received, and the socket error the SDK nests in its cause.
++   */
++  function transportFault(
++    code: string,
++    operationId: string,
++    thoughtText = '',
++  ): GenerationTextFailure {
++    const socket = Object.assign(new Error(`read ${code}`), { code });
++    return new GenerationTextFailure(
++      'Text stream failed after establishment',
++      {
++        sdkValuesJson: thoughtText
++          ? [
++              JSON.stringify({
++                choices: [{ delta: { reasoning_content: thoughtText } }],
++              }),
++            ]
++          : [],
++        text: '',
++        thoughtText,
++        usage: undefined,
++        functionCalls: [],
++        incompleteToolCalls: [],
++        requestAttempts: 1,
++        operationId,
++        physicalRequests: 1,
++      },
++      new TypeError('terminated', { cause: socket }),
++    );
++  }
++
++  it('issues a draw whose request failed in transport again, fresh, and keeps the broken one', async () => {
++    const harness = makeHarness();
++    harness.generateText
++      .mockRejectedValueOnce(
++        transportFault('ECONNRESET', 'broken-operation', 'Reasoning cut off.'),
++      )
++      .mockResolvedValue(summaryResult());
++
++    const result = await compress(harness);
++
++    // The connection broke before the draw had an answer, so there was none
++    // to refuse and nothing to tell: the same request is issued again, and
++    // the broken one is kept with what it had received, named by the fault.
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    expect(harness.generateText).toHaveBeenCalledTimes(2);
++    const [first, second] = harness.generateText.mock.calls.map(
++      ([options]) => (options as GenerateTextOptions).contents,
++    );
++    expect(second).toEqual(first);
++    expect(result.info.rejectedAttempts).toEqual([
++      {
++        status: CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,
++        operationId: 'broken-operation',
++        usage: null,
++        text: '',
++        reasoning: 'Reasoning cut off.',
++        sdkValuesJson: [
++          JSON.stringify({
++            choices: [{ delta: { reasoning_content: 'Reasoning cut off.' } }],
++          }),
++        ],
++        functionCalls: [],
++        newTokenCount: null,
++        snapshotBytes: null,
++        incompleteToolCalls: [],
++        finishReason: null,
++        physicalRequests: 1,
++      },
++    ]);
++  });
++
++  it(`spends a broken request's retry, never one of the ${MAX_GENERATION_DRAWS} draws`, async () => {
++    const harness = makeHarness();
++    const refused = summaryResult({ functionCalls: [], text: 'no snapshot' });
++    // Every draw breaks once and is issued again; the answers are refused
++    // until the last draw, which is accepted. The faults spend no draw, and
++    // the request issued again after one is the request it replaces, with
++    // the notice it carried.
++    for (let draw = 1; draw < MAX_GENERATION_DRAWS; draw++) {
++      harness.generateText
++        .mockRejectedValueOnce(transportFault('UND_ERR_SOCKET', `broken-${draw}`))
++        .mockResolvedValueOnce({ ...refused, operationId: `refused-${draw}` });
++    }
++    harness.generateText.mockResolvedValue(summaryResult());
++
++    const result = await compress(harness);
++
++    expect(result.info.compressionStatus).toBe(CompressionStatus.COMPRESSED);
++    expect(harness.generateText).toHaveBeenCalledTimes(
++      2 * (MAX_GENERATION_DRAWS - 1) + 1,
++    );
++    expect(result.info.rejectedAttempts.map((attempt) => attempt.status)).toEqual(
++      Array.from({ length: MAX_GENERATION_DRAWS - 1 }, () => [
++        CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,
++        CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++      ]).flat(),
++    );
++    const contents = harness.generateText.mock.calls.map(
++      ([options]) => (options as GenerateTextOptions).contents,
++    );
++    for (let draw = 0; draw < MAX_GENERATION_DRAWS - 1; draw++)
++      expect(contents[2 * draw + 1]).toEqual(contents[2 * draw]);
++  });
++
++  it('ends the compaction when the request issued again fails in transport too, naming both faults', async () => {
++    const harness = makeHarness();
++    harness.generateText
++      .mockReset()
++      .mockRejectedValueOnce(transportFault('ECONNRESET', 'broken-first'))
++      .mockRejectedValueOnce(transportFault('UND_ERR_SOCKET', 'broken-again'));
++
++    const result = await compress(harness);
++
++    expect(result.newHistory).toBeNull();
++    expect(result.info.compressionStatus).toBe(
++      CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,
++    );
++    expect(harness.generateText).toHaveBeenCalledTimes(2);
++    expect(result.info.rejectedAttempts.map((attempt) => attempt.operationId)).toEqual(['broken-first']);
++    expect(result.info.output?.operationId).toBe('broken-again');
++    expect(result.newHistory === null && result.failure).toBe(
++      'the request of its draw 1 failed in transport (ECONNRESET: terminated (cause: read ECONNRESET)), and so did the fresh request issued in its place (UND_ERR_SOCKET: terminated (cause: read UND_ERR_SOCKET)), so no further draw was taken.',
++    );
++  });
 +
 +  it('reports no refusals and no accounting when no draw was ever made', async () => {
 +    const harness = makeHarness();
@@ -249349,7 +249501,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -1,3 +1,16 @@
+@@ -1,3 +1,20 @@
 +import {
 +  acceptStateSnapshot,
 +  compactionRequestDirective,
@@ -249363,10 +249515,14 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +import { requireServedUsage, type ServedUsage } from '../core/served-usage.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
 +import { compactionDrawContext } from '../core/utility-delivery.js';
++import {
++  FRESH_RESAMPLE_MAX_RETRIES,
++  retryableStreamTransportCode,
++} from '../core/stream-transport-retry.js';
  /**
   * @license
   * Copyright 2025 Google LLC
-@@ -5,205 +18,264 @@
+@@ -5,205 +22,264 @@
   */
  
 -import type { Content, GenerateContentConfig } from '@google/genai';
@@ -249797,7 +249953,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
  export type CompactTrigger = 'manual' | 'auto';
  
-@@ -212,18 +284,7 @@
+@@ -212,18 +288,7 @@
    force: boolean;
    config: Config;
    /**
@@ -249817,7 +249973,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
     */
    originalTokenCount: number;
    /**
-@@ -234,20 +295,10 @@
+@@ -234,20 +299,10 @@
    trigger?: CompactTrigger;
    signal?: AbortSignal;
    /**
@@ -249840,7 +249996,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    /** Per-request overrides used by the main turn, including transient tools. */
    requestGenerationConfig?: GenerateContentConfig;
    /**
-@@ -301,12 +352,12 @@
+@@ -301,12 +356,12 @@
   * Compose the compression side-query system prompt: the base template,
   * optionally followed by an `Additional Instructions:` block containing
   * the user's `/compress <text>` directives and any `additionalContext`
@@ -249854,7 +250010,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  ): string {
    const base = getCompressionPrompt();
    const parts: string[] = [];
-@@ -319,143 +370,115 @@
+@@ -319,143 +374,115 @@
    if (parts.length === 0) return base;
    return `${base}\n\nAdditional Instructions:\n${parts.join('\n\n')}`;
 +}
@@ -250091,7 +250247,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
      const curatedHistory = chat.getHistoryShallow(true);
      if (curatedHistory.length === 0) {
        return {
-@@ -464,15 +487,39 @@
+@@ -464,15 +491,39 @@
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
@@ -250136,7 +250292,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Guard: need at least a user+model pair for a meaningful summary.
      // This runs BEFORE the PreCompact hook fires — a hook with side effects
-@@ -485,6 +532,8 @@
+@@ -485,6 +536,8 @@
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
@@ -250145,7 +250301,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        failure: null,
        };
      }
-@@ -512,616 +561,783 @@
+@@ -512,616 +565,862 @@
          // client.ts) — keep it consistent.
          const merged = result?.getAdditionalContext();
          if (merged && merged.trim().length > 0) {
@@ -250850,11 +251006,24 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        }
 +      | {
 +          /**
-+           * Failed for a cause outside what the model produced -- a transport
-+           * or protocol fault, a history the frozen request cannot be
-+           * assembled from, a counter. A draw is redrawn only for a fault in
-+           * the model's own answer, so this one ends the compaction, and its
-+           * cause is carried to the ending in words.
++           * Its request failed in transport before it produced an answer, so
++           * there was no answer to judge and nothing to tell the next draw.
++           * The same request is issued again, fresh, as a turn whose stream
++           * broke is, and this one is kept with what it had received.
++           */
++          kind: 'faulted';
++          status: CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR;
++          accounting: AttemptAccounting;
++          cause: string;
++          newTokenCount?: undefined;
++        }
++      | {
++          /**
++           * Failed for a cause outside what the model produced that issuing
++           * the request again does not change -- a protocol fault, a request
++           * that never reached the provider, a history the frozen request
++           * cannot be assembled from, a counter. It ends the compaction, and
++           * its cause is carried to the ending in words.
 +           */
 +          kind: 'terminal';
 +          status: CompressionStatus;
@@ -250912,7 +251081,8 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        // A stream that failed after establishment, a cancelled request, or
 +        // served counts that do not obey the contract are transport and
 +        // protocol faults rather than something the model chose, so this is
-+        // not a refused draw and no draw follows it: its cause is named.
++        // not a refused draw: a transport fault is issued again, fresh, and
++        // anything else ends the compaction with its cause named.
 +        //
 +        // `GenerationTextFailure` alone does not prove a request was issued:
 +        // generateText wraps everything it caught in one, including failures
@@ -250943,6 +251113,31 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +            incompleteToolCalls: partial.incompleteToolCalls,
 +            finishReason: partial.finishReason ?? null,
 +            physicalRequests: partial.physicalRequests,
++          };
++        }
++        // A request that broke in transport produced no answer, which is
++        // a different thing from an answer that was refused. It is recorded
++        // as what it is, with whatever it had received, and issued again --
++        // but only when it was issued at all: a request with no physical
++        // record has nothing to account for.
++        const transportCode = retryableStreamTransportCode(
++          error instanceof GenerationTextFailure ? error.cause : error,
++          {
++            authType: contentGeneratorConfig.authType,
++            extraRetryErrorCodes: contentGeneratorConfig.retryErrorCodes,
++          },
++        );
++        if (accounting && transportCode !== undefined) {
++          config
++            .getDebugLogger()
++            .warn(
++              `[chat-compression] draw request failed in transport: ${String(error)}`,
++            );
++          return {
++            kind: 'faulted',
++            status: CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,
++            accounting,
++            cause: `${transportCode}: ${getErrorMessage(error instanceof GenerationTextFailure ? error.cause : error)}`,
 +          };
 +        }
 +        config
@@ -251330,48 +251525,86 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 -    } else if (newTokenCount > originalTokenCount) {
 +    };
 +
-+    // The bound is on draws, not on wall time, and it is the bound every
-+    // refused answer is drawn under (`MAX_GENERATION_DRAWS`): each pass issues
-+    // exactly one request under the same options and ceiling, and only a
-+    // refusal the model itself caused reaches this condition. It bounds
-+    // resampling and does not weaken the rule: every draw is judged against
-+    // the same requirements, causes that are fixed given the request are
-+    // never resampled at all, and the next draw is told why the one before it
-+    // was refused, and nothing else changes.
-+    // Why each refused draw was refused, in draw order, for the ending a
-+    // compaction that runs out of draws forces.
++    // Two bounds, one for each thing that can stop a draw short of an
++    // accepted snapshot. An answer the rules refuse is drawn again under the
++    // bound every refused answer is drawn under (`MAX_GENERATION_DRAWS`),
++    // told why: it bounds resampling and does not weaken the rule -- every
++    // draw is judged against the same requirements, and the next draw is told
++    // why the one before it was refused, and nothing else changes. A request
++    // that failed in transport produced no answer: it is not one of those
++    // draws, and nothing about it is told; it is issued again, fresh, under
++    // the bound a turn's fresh request is issued under
++    // (`FRESH_RESAMPLE_MAX_RETRIES`), so a broken connection costs a request
++    // rather than the session. Causes that are fixed given the request are
++    // not drawn again at all. Every request is issued under the same options
++    // and ceiling.
++    // Why each refused draw was refused, in draw order, and which draws were
++    // issued again after a transport fault, for the ending a compaction that
++    // runs out of draws forces.
 +    const refusals: DrawRefusal[] = [];
-+    let outcome = await drawCandidate(sideQueryOptions.contents);
-+    while (
-+      outcome.kind === 'resampleable' &&
-+      rejectedAttempts.length + 1 < MAX_GENERATION_DRAWS
-+    ) {
-+      refusals.push(outcome.refusal);
-+      const notice = drawRefusalNotice(outcome.refusal);
-+      config
-+        .getDebugLogger()
-+        .warn(
-+          `[chat-compression] candidate ${rejectedAttempts.length + 1} refused ` +
-+            `(${CompressionStatus[outcome.status]}); drawing another under the same rule, told: ${notice}`,
-+        );
-+      rejectedAttempts.push({
-+        status: outcome.status,
-+        ...outcome.accounting,
-+      });
-+      outcome = await drawCandidate([
-+        ...sideQueryOptions.contents,
-+        { role: 'user', parts: [{ text: notice }] },
-+      ]);
++    const faulted = new Map<number, string>();
++    let contents = sideQueryOptions.contents;
++    let freshRetries = 0;
++    let outcome = await drawCandidate(contents);
++    for (;;) {
++      if (
++        outcome.kind === 'faulted' &&
++        freshRetries < FRESH_RESAMPLE_MAX_RETRIES
++      ) {
++        freshRetries++;
++        faulted.set(refusals.length + 1, outcome.cause);
++        config
++          .getDebugLogger()
++          .warn(
++            `[chat-compression] draw ${refusals.length + 1}'s request failed in transport (${outcome.cause}); issuing it again`,
++          );
++        rejectedAttempts.push({
++          status: outcome.status,
++          ...outcome.accounting,
++        });
++        outcome = await drawCandidate(contents);
++        continue;
++      }
++      if (
++        outcome.kind === 'resampleable' &&
++        refusals.length + 1 < MAX_GENERATION_DRAWS
++      ) {
++        refusals.push(outcome.refusal);
++        const notice = drawRefusalNotice(outcome.refusal);
++        config
++          .getDebugLogger()
++          .warn(
++            `[chat-compression] draw ${refusals.length} refused ` +
++              `(${CompressionStatus[outcome.status]}); drawing another under the same rule, told: ${notice}`,
++          );
++        rejectedAttempts.push({
++          status: outcome.status,
++          ...outcome.accounting,
++        });
++        contents = [
++          ...sideQueryOptions.contents,
++          { role: 'user', parts: [{ text: notice }] },
++        ];
++        freshRetries = 0;
++        outcome = await drawCandidate(contents);
++        continue;
++      }
++      break;
 +    }
 +
 +    if (outcome.kind !== 'accepted') {
-+      // Exhausting the draws and refusing for a cause that cannot be resampled
-+      // are both terminal, and both preserve the original history. The status
-+      // names which rule was failed last; `rejectedAttempts` carries what the
-+      // draws before it already spent, and `output` is absent exactly when the
-+      // last of them never issued a request. The failure names every draw's
-+      // refusal, or the fault the last one ended on.
-+      const drawn = rejectedAttempts.length + 1;
++      // Exhausting the draws, a request that failed in transport again on
++      // its fresh issue, and a cause that cannot be resampled all end the
++      // compaction, and all preserve the original history. The status names
++      // which rule was failed last, or the fault; `rejectedAttempts` carries
++      // what the draws before it already spent, and `output` is absent exactly
++      // when the last of them never issued a request. The failure names every
++      // draw's refusal, or the fault the last one ended on.
++      const drawn = refusals.length + 1;
++      const drawName = (draw: number): string =>
++        faulted.has(draw)
++          ? `draw ${draw}, issued again after its request failed in transport (${faulted.get(draw)}),`
++          : `draw ${draw}`;
        return {
          newHistory: null,
          info: {
@@ -251396,10 +251629,12 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +              ]
 +                .map(
 +                  (refusal, index) =>
-+                    `draw ${index + 1} because ${drawRefusalReason(refusal)}`,
++                    `${drawName(index + 1)} because ${drawRefusalReason(refusal)}`,
 +                )
 +                .join('; ')}.`
-+            : `its draw ${drawn} ended on a fault outside the model's answer, so no further draw was taken: ${outcome.cause}`,
++            : outcome.kind === 'faulted'
++              ? `the request of its draw ${drawn} failed in transport (${faulted.get(drawn)}), and so did the fresh request issued in its place (${outcome.cause}), so no further draw was taken.`
++              : `its ${drawName(drawn)} ended on a fault outside the model's answer, so no further draw was taken: ${outcome.cause}`,
        };
 -    } else {
 -      // Fire PostCompact event after successful compression
@@ -339049,7 +339284,7 @@ diff --git a/packages/core/src/utils/retryErrorClassification.ts b/packages/core
 diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packages/core/src/utils/runtime-contract-admission.test.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-contract-admission.test.ts
-@@ -0,0 +1,606 @@
+@@ -0,0 +1,635 @@
 +import { describe, expect, it } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { readFileSync } from 'node:fs';
@@ -339220,6 +339455,35 @@ diff --git a/packages/core/src/utils/runtime-contract-admission.test.ts b/packag
 +        newTokenCount: 12,
 +      }),
 +    ).toBeNull();
++  });
++
++  it('admits a draw followed by another as a refused answer or a transport fault, and as nothing else', () => {
++    const failed = {
++      status: 'COMPRESSION_FAILED_TRANSPORT_ERROR',
++      succeeded: false,
++      originalTokenCount: 24,
++      newTokenCount: 24,
++      triggerReason: null,
++      rejectedAttempts: [] as Array<{ status: string }>,
++    };
++    for (const status of [
++      'COMPRESSION_FAILED_EMPTY_SUMMARY',
++      'COMPRESSION_FAILED_SUMMARY_OVER_BOUND',
++      'COMPRESSION_FAILED_TRANSPORT_ERROR',
++    ])
++      expect(
++        validateCompactionOutcome({ ...failed, rejectedAttempts: [{ status }] }),
++      ).toBeNull();
++    for (const status of [
++      'COMPRESSION_FAILED_PROTOCOL_ERROR',
++      'COMPRESSION_FAILED_TOKEN_COUNT_ERROR',
++      'COMPRESSED',
++    ])
++      expect(
++        validateCompactionOutcome({ ...failed, rejectedAttempts: [{ status }] }),
++      ).toBe(
++        'Compaction rejected attempt names neither a rule its answer failed nor a transport fault; retain the original stream and recapture with a corrected compaction producer',
++      );
 +  });
 +
 +  it.each([
@@ -340986,9 +341250,12 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.test.ts b/packages/
 diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/src/utils/runtime-stream-contract.ts
 --- /dev/null
 +++ b/packages/core/src/utils/runtime-stream-contract.ts
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,194 @@
 +import type { GoalSnapshotV2 } from '../goals/goal-protocol.js';
-+import { CompressionStatus } from '../core/compression-status.js';
++import {
++  ANSWER_REFUSAL_STATUSES,
++  CompressionStatus,
++} from '../core/compression-status.js';
 +import { requireGenerationUsage } from '../telemetry/generation-usage.js';
 +import {
 +  GOAL_CHECKPOINT_EVIDENCE_MAX_BYTES,
@@ -341028,13 +341295,17 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +    .join('; ');
 +}
 +
-+const rejectedCompactionStatuses = new Set<string>([
-+  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT],
-+  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY],
-+  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED],
-+  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_INSUFFICIENT_ROOM],
-+  CompressionStatus[CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND],
-+]);
++/**
++ * What a draw followed by another can have been: an answer refused by a rule
++ * another draw can satisfy, or a request that failed in transport before it
++ * produced an answer, which is issued again.
++ */
++const rejectedCompactionStatuses = new Set<string>(
++  [
++    ...ANSWER_REFUSAL_STATUSES,
++    CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR,
++  ].map((status) => CompressionStatus[status]),
++);
 +
 +export function validateCompactionOutcome(
 +  data: Record<string, unknown>,
@@ -341079,7 +341350,7 @@ diff --git a/packages/core/src/utils/runtime-stream-contract.ts b/packages/core/
 +        ),
 +    )
 +  )
-+    return 'Compaction rejected attempt does not name a resampleable rule; retain the original stream and recapture with a corrected compaction producer';
++    return 'Compaction rejected attempt names neither a rule its answer failed nor a transport fault; retain the original stream and recapture with a corrected compaction producer';
 +  return null;
 +}
 +
@@ -348145,7 +348416,7 @@ diff --git a/packages/core/src/utils/transcript-records.ts b/packages/core/src/u
 +} from '../core/generation-attempt-meta.js';
 +
 +/** Canonical JSONL format, independent of the CLI package version. */
-+export const CHAT_RECORDING_VERSION = 21;
++export const CHAT_RECORDING_VERSION = 22;
 +
  export type TranscriptRecordType =
    | 'user'
@@ -381388,7 +381659,7 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 +The shared proxy error redactor constructs native `DOMException` clones so abort
 +classification and diagnostic accessors remain valid after redaction.
 +
-+The stream contract is v18 and the canonical recording is version 21. Response
++The stream contract is v19 and the canonical recording is version 22. Response
 +evidence is structurally separate from conversation messages and cannot
 +advance the parent chain. Readers validate physical ordering, hashes and
 +ownership before projecting a branch. Live checkpoints list unfinished
@@ -383231,7 +383502,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1452 @@
+@@ -0,0 +1,1497 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -383282,6 +383553,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +} from '../services/state-snapshot.js';
 +import { tokenizerText } from './tokenLimits.js';
 +import { REFUSED_ANSWER } from './generation-refusal.js';
++import { CompressionStatus, compactionDrawKind } from './compression-status.js';
 +import type { CompletedTokenizerCount } from './model-utility-replay.js';
 +import type { UnnormalizedGenerationObservation } from './model-generation.js';
 +import {
@@ -383927,6 +384199,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  outputs: readonly UnnormalizedGenerationObservation[];
 +  failedResponse: GenerateContentResponse | null;
 +  delivered: number | null;
++  /** Whether its processing completed, once its outcome is recorded. */
++  completed: boolean | null;
 +};
 +
 +type CompactionPhysicalOperation = {
@@ -384043,9 +384317,32 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    scope: string,
 +    claimTokenCount: (operationId: string, scope: string) => CompletedTokenizerCount,
 +  ): void {
-+    const draws = [
-+      ...record.rejectedAttempts,
-+      ...(record.output ? [record.output] : []),
++    // What each draw was is read from the status that names it -- a rejected
++    // attempt's own, and the record's for the draw `output` describes -- and
++    // its physical request is held to that below.
++    const statusOf = (name: string): CompressionStatus => {
++      const status =
++        CompressionStatus[name as keyof typeof CompressionStatus];
++      if (typeof status !== 'number')
++        failure('compaction draw names no compaction status');
++      return status;
++    };
++    const draws: Array<{
++      draw: CompactionOutputAccounting | CompactionRejectedAttemptRecord;
++      kind: ReturnType<typeof compactionDrawKind>;
++    }> = [
++      ...record.rejectedAttempts.map((draw) => ({
++        draw,
++        kind: compactionDrawKind(statusOf(draw.status)),
++      })),
++      ...(record.output
++        ? [
++            {
++              draw: record.output,
++              kind: compactionDrawKind(statusOf(record.status)),
++            },
++          ]
++        : []),
 +    ];
 +    const measurements = record.tokenMeasurements;
 +    if (!Array.isArray(measurements)) {
@@ -384083,7 +384380,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          'compaction preflight has no measured original and request counts',
 +        );
 +      let next = 3;
-+      for (const draw of draws) {
++      for (const { draw } of draws) {
 +        if (draw.newTokenCount !== null) {
 +          if (
 +            measurements[next]?.role !== 'candidate' ||
@@ -384114,7 +384411,8 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      failure('compaction replacement count differs from its accepted draw');
 +    }
 +    const budgets = draws.map(
-+      (draw) => this.compactionOperations.get(draw.operationId)?.declaredBudget,
++      ({ draw }) =>
++        this.compactionOperations.get(draw.operationId)?.declaredBudget,
 +    );
 +    if (
 +      budgets.some((budget) => budget === undefined) ||
@@ -384123,7 +384421,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      failure('compaction draws have no single recorded request ceiling');
 +    if (
 +      draws.some(
-+        (draw) =>
++        ({ draw }) =>
 +          this.compactionOperations.get(draw.operationId)?.model !==
 +          measuredModels[0],
 +      )
@@ -384132,7 +384430,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    if (draws.length > 0) {
 +      let previous = counts[2]!.lastSequence;
 +      let nextCandidate = 3;
-+      for (const draw of draws) {
++      for (const { draw } of draws) {
 +        const operation = this.compactionOperations.get(draw.operationId);
 +        const first = operation?.responses[0]?.sequence;
 +        const last = operation?.responses.at(-1)?.sequence;
@@ -384147,14 +384445,22 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        }
 +      }
 +    }
-+    for (const draw of draws) this.claimCompactionDraw(draw, scope);
++    for (const { draw, kind } of draws)
++      this.claimCompactionDraw(draw, scope, kind);
 +  }
++  /**
++   * Claim one draw against its physical operation. A draw that had an answer
++   * claims a request that completed and delivered it; a request that failed
++   * in transport claims one that did not complete; a draw the compaction
++   * ended on for another cause claims whichever its request was.
++   */
 +  claimCompactionDraw(
 +    draw:
 +      | CompactionOutputAccounting
 +      | CompactionRejectedAttempt
 +      | CompactionRejectedAttemptRecord,
 +    scope: string,
++    kind: ReturnType<typeof compactionDrawKind>,
 +  ): void {
 +    const operation = this.compactionOperations.get(draw.operationId);
 +    if (
@@ -384192,6 +384498,14 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    const last = operation.responses.at(-1)!;
 +    const delivered =
 +      last.delivered ?? failure('compaction response has no delivery receipt');
++    if (kind === 'answer' && (last.completed !== true || delivered === 0))
++      failure(
++        'compaction draw claims an answer its physical request did not complete and deliver',
++      );
++    if (kind === 'fault' && last.completed !== false)
++      failure(
++        'compaction draw claims a transport fault its physical request did not have',
++      );
 +    const outputs = last.outputs.slice(0, delivered);
 +    let text = '';
 +    let reasoning = '';
@@ -384325,6 +384639,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +        outputs: [],
 +        failedResponse: null,
 +        delivered: null,
++        completed: null,
 +      });
 +    }
 +    if (owner.kind === 'chat') {
@@ -384490,6 +384805,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +          physical.sdkValuesJson = sdkValues.map((value) =>
 +            JSON.stringify(value),
 +          );
++          physical.completed = event.status === 'completed';
 +          // A draw is what its consumer received, the decoded outputs just
 +          // proved against the bytes. A terminal a refused stream could not
 +          // publish reached it only as a text diagnostic, and is claimed as
@@ -390443,7 +390759,7 @@ diff --git a/docs/design/background-resume-history.md b/docs/design/background-r
 +source transcript. Model request and response evidence stays outside the
 +conversation chain.
 +
-+The reader admits canonical recording version 21 only, through the same
++The reader admits canonical recording version 22 only, through the same
 +record admission and version refusal as every canonical reader. Retained
 +child discovery, background continuation and revival of completed children
 +share this path, for fork and named children, across interactive, headless and
@@ -390464,7 +390780,7 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +recorded. Resume therefore replays explicit history changes, not those display
 +records.
 +
-+Canonical runtime JSONL version 21 carries:
++Canonical runtime JSONL version 22 carries:
 +
 +- A `runtime_history` system checkpoint when a Chat is initialized. Its state
 +  contains the exact ordered Content array and its image payload store.
@@ -390529,7 +390845,7 @@ diff --git a/docs/design/runtime-history-recording.md b/docs/design/runtime-hist
 +including on inactive branches.
 +
 +The service's `output/events.jsonl` is stdout evidence, under stream
-+contract v18. Its exact provider request and attempt records are evidence of what
++contract v19. Its exact provider request and attempt records are evidence of what
 +was sent and produced; they are not canonical history operations.
 +
 +The assertion establishes both the canonical state and the rendered Chat
@@ -407805,7 +408121,7 @@ diff --git a/packages/core/src/utils/__fixtures__/ordinary-tool-wire.json b/pack
 +    "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
 +    "parent_tool_use_id": null,
 +    "subtype": "stream_start",
-+    "stream_contract_sha256": "906fefad2c4d3f7a41b6cb0949b0bd0bbf18756b6694f56a474e5e34df8c03dc",
++    "stream_contract_sha256": "63734821d63b7fc0d0fc6bd4bdf00da2ce993a1b8ce922dd6a881701a94ad63d",
 +    "request_evidence_origin": {
 +      "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
 +      "first_sequence": 1
@@ -416484,7 +416800,7 @@ diff --git a/packages/core/src/utils/retry.test.ts b/packages/core/src/utils/ret
 diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages/core/src/core/model-compaction-physical.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-compaction-physical.test.ts
-@@ -0,0 +1,731 @@
+@@ -0,0 +1,765 @@
 +import { createHash } from 'node:crypto';
 +import { describe, expect, it } from 'vitest';
 +import { ModelResponseReplay } from './model-response-evidence.js';
@@ -416854,14 +417170,25 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +
 +  it('matches the model-facing budget, decoded snapshot arguments and rendered bytes', () => {
 +    const reader = replay();
-+    reader.claimCompactionDraw(draw, 'scope');
++    reader.claimCompactionDraw(draw, 'scope', 'answer');
 +    expect(() => reader.finish()).not.toThrow();
 +  });
 +
-+  it('claims a draw refused at EOF for missing usage by the output its consumer received', () => {
-+    // The stream served its terminal but no usage, so the decoder refused the
-+    // EOF and delivered the held terminal only as a text diagnostic. The draw
-+    // reports what it received; the claim reads the same delivered output.
++  it('refuses a transport fault claimed of a request that completed', () => {
++    expect(() => replay().claimCompactionDraw(draw, 'scope', 'fault')).toThrow(
++      'compaction draw claims a transport fault its physical request did not have',
++    );
++  });
++
++  /**
++   * A stream that served its terminal but no usage: the decoder refused the
++   * EOF and delivered the held terminal only as a text diagnostic, and the
++   * request's processing failed. The draw reports what it received.
++   */
++  function refusedAtEof(): {
++    reader: ModelResponseReplay;
++    claimed: Parameters<ModelResponseReplay['claimCompactionDraw']>[0];
++  } {
 +    const streamPolicy = { ...policy, mode: 'stream' } as const;
 +    const chunk = {
 +      id: 'physical',
@@ -416949,8 +417276,9 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +    });
 +    observe(refused);
 +    observe({ kind: 'delivery', outputs_delivered: 1 });
-+    reader.claimCompactionDraw(
-+      {
++    return {
++      reader,
++      claimed: {
 +        ...draw,
 +        usage: null,
 +        text: 'summary',
@@ -416959,9 +417287,25 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +        snapshotBytes: null,
 +        finishReason: null,
 +      },
-+      'scope',
++    };
++  }
++
++  it.each(['ended', 'fault'] as const)(
++    'claims a draw whose request did not complete, as a draw named %s, by the output its consumer received',
++    (kind) => {
++      const { reader, claimed } = refusedAtEof();
++      reader.claimCompactionDraw(claimed, 'scope', kind);
++      expect(() => reader.finish()).not.toThrow();
++    },
++  );
++
++  it('refuses an answer claimed of a request that did not complete', () => {
++    const { reader, claimed } = refusedAtEof();
++    expect(() =>
++      reader.claimCompactionDraw(claimed, 'scope', 'answer'),
++    ).toThrow(
++      'compaction draw claims an answer its physical request did not complete and deliver',
 +    );
-+    expect(() => reader.finish()).not.toThrow();
 +  });
 +
 +  it('refuses a candidate token count that differs from the served tokenizer bytes', () => {
@@ -417074,13 +417418,15 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +    ],
 +  ])('refuses changed %s with the same provider bytes', (_name, change) => {
 +    expect(() =>
-+      replay().claimCompactionDraw({ ...draw, ...change }, 'scope'),
++      replay().claimCompactionDraw({ ...draw, ...change }, 'scope', 'answer'),
 +    ).toThrow();
 +  });
 +
 +  it('reads a redraw\'s ceiling from the directive its refusal notice follows', () => {
 +    const reader = replay(100, requestBody(100, [noticeMessage]));
-+    expect(() => reader.claimCompactionDraw(draw, 'scope')).not.toThrow();
++    expect(() =>
++      reader.claimCompactionDraw(draw, 'scope', 'answer'),
++    ).not.toThrow();
 +  });
 +
 +  it.each([
@@ -417212,7 +417558,11 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +      pipeline_outputs_delivered: 1,
 +    });
 +    observe({ kind: 'delivery', outputs_delivered: 1 });
-+    reader.claimCompactionDraw({ ...draw, physicalRequests: 2 }, 'scope');
++    reader.claimCompactionDraw(
++      { ...draw, physicalRequests: 2 },
++      'scope',
++      'answer',
++    );
 +    expect(() => reader.finish()).not.toThrow();
 +  });
 +});
@@ -422509,7 +422859,7 @@ diff --git a/packages/cli/src/ui/components/StatsDialog.test.tsx b/packages/cli/
 diff --git a/packages/core/src/core/compression-status.ts b/packages/core/src/core/compression-status.ts
 --- /dev/null
 +++ b/packages/core/src/core/compression-status.ts
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,102 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -422570,6 +422920,47 @@ diff --git a/packages/core/src/core/compression-status.ts b/packages/core/src/co
 +
 +  /** Admitted history changed while this compaction was being prepared. */
 +  COMPRESSION_FAILED_HISTORY_CHANGED,
++
++  /**
++   * A draw's request failed in transport before it produced an answer: the
++   * connection gave out, so there was no answer to judge. It names no rule an
++   * answer failed, and is kept apart from every status that does. A draw
++   * recorded with it is drawn again, fresh, once; a compaction that ends with
++   * it is one whose fresh request failed the same way.
++   */
++  COMPRESSION_FAILED_TRANSPORT_ERROR,
++}
++
++/**
++ * The rules a draw's answer can fail that another draw can satisfy: a draw
++ * named by one of them had an answer, judged and refused.
++ */
++export const ANSWER_REFUSAL_STATUSES: ReadonlySet<CompressionStatus> = new Set([
++  CompressionStatus.COMPRESSION_FAILED_INFLATED_TOKEN_COUNT,
++  CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
++  CompressionStatus.COMPRESSION_FAILED_OUTPUT_TRUNCATED,
++  CompressionStatus.COMPRESSION_FAILED_INSUFFICIENT_ROOM,
++  CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
++]);
++
++/**
++ * What a compaction's draw was, read from the status that names it: an
++ * answer the rules judged -- accepted, or refused by a rule -- a request that
++ * failed in transport before it produced one, or a draw the compaction ended
++ * on for a cause outside both, whose request may have finished or not.
++ * Readers that account for a draw's physical request hold it to this.
++ */
++export function compactionDrawKind(
++  status: CompressionStatus,
++): 'answer' | 'fault' | 'ended' {
++  if (
++    status === CompressionStatus.COMPRESSED ||
++    ANSWER_REFUSAL_STATUSES.has(status)
++  )
++    return 'answer';
++  if (status === CompressionStatus.COMPRESSION_FAILED_TRANSPORT_ERROR)
++    return 'fault';
++  return 'ended';
 +}
 diff --git a/packages/core/src/core/generation-attempt-meta.ts b/packages/core/src/core/generation-attempt-meta.ts
 --- /dev/null
@@ -433459,4 +433850,54 @@ diff --git a/packages/core/src/core/recording-refusal.ts b/packages/core/src/cor
 +    if (current instanceof AggregateError) pending.push(...current.errors);
 +  }
 +  return undefined;
++}
+diff --git a/packages/core/src/core/stream-transport-retry.ts b/packages/core/src/core/stream-transport-retry.ts
+--- a/packages/core/src/core/stream-transport-retry.ts
++++ b/packages/core/src/core/stream-transport-retry.ts
+@@ -1,7 +1,12 @@
+ /**
+  * @license
+  * Copyright 2026 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
++
++import {
++  classifyRetryError,
++  type RetryErrorClassificationContext,
++} from '../utils/retryErrorClassification.js';
+ 
+ // Internal stream retry allow-list. Keep this outside geminiChat.ts because
+@@ -12,6 +17,33 @@
+   'ETIMEDOUT',
+   'UND_ERR_BODY_TIMEOUT',
+   'UND_ERR_CONNECT_TIMEOUT',
+   'UND_ERR_HEADERS_TIMEOUT',
+   'UND_ERR_SOCKET',
+ ]);
++
++/**
++ * How many times a request whose transport failed before it produced an
++ * answer is issued again, fresh: once. A turn's stream that breaks before it
++ * delivered anything is issued once more, and so is a compaction draw whose
++ * request breaks; a request that fails that way twice in a row is not meeting
++ * a transient fault, and the second failure is its outcome.
++ */
++export const FRESH_RESAMPLE_MAX_RETRIES = 1;
++
++/**
++ * The code of a transport fault a request is issued again after, or undefined
++ * when the failure is not one: the connection gave out with one of the codes
++ * above, wherever in the error's cause chain the SDK put it. One test for a
++ * turn and a compaction draw alike.
++ */
++export function retryableStreamTransportCode(
++  error: unknown,
++  context: RetryErrorClassificationContext,
++): string | undefined {
++  const classification = classifyRetryError(error, context);
++  return classification.kind === 'transport' &&
++    classification.transportCode !== undefined &&
++    RETRYABLE_STREAM_TRANSPORT_CODES.has(classification.transportCode)
++    ? classification.transportCode
++    : undefined;
 +}

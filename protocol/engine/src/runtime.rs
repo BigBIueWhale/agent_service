@@ -2,7 +2,7 @@
 //! observations. Physical capture, storage and process receipts remain external.
 use crate::{
     generation::{DisplayMessage, Generation, Origin, OutputScope},
-    model_requests::Disposition,
+    model_requests::{Disposition, DrawKind},
     partial_stream::OutputOrigin,
     json::{Document, Limits, Value},
     schema::ValidationLimits,
@@ -94,11 +94,14 @@ pub struct RequestScope {
 /// Served counts, when present, obey the same five-field contract as the CLI.
 ///
 /// A transition may draw more than one candidate when the model's own output
-/// fails the acceptance rule. `rejectedAttempts` holds the ones refused before
-/// the candidate `output` describes, oldest first, and is present whatever
-/// `output` is: a draw that was refused and billed must not disappear behind a
-/// later draw that never generated. Each carries the accounting `output`
-/// carries, minus the transition-wide budget, plus the rule it failed.
+/// fails the acceptance rule, and issues a draw's request again when it failed
+/// in transport before it produced an answer. `rejectedAttempts` holds the
+/// draws that did not settle it before the one `output` describes, oldest
+/// first, and is present whatever `output` is: a draw that was refused and
+/// billed, or broke, must not disappear behind a later draw that never
+/// generated. Each carries the accounting `output` carries, minus the
+/// transition-wide budget, plus the rule it failed or the transport fault it
+/// ended on, and its physical request is held to which of the two it names.
 fn validate_compaction_event(
     object: Value<'_>,
     line: usize,
@@ -148,6 +151,7 @@ fn validate_compaction_event(
             | "COMPRESSION_FAILED_INSUFFICIENT_ROOM"
             | "COMPRESSION_FAILED_SUMMARY_OVER_BOUND"
             | "COMPRESSION_FAILED_HISTORY_CHANGED"
+            | "COMPRESSION_FAILED_TRANSPORT_ERROR"
     );
     if !(status == "COMPRESSED" && succeeded || failed_status && !succeeded) {
         return Err(refuse(
@@ -375,18 +379,13 @@ fn validate_compaction_event(
         let attempt = attempt
             .as_object()
             .ok_or_else(|| refuse(&format!("whose {whose} is not an object")))?;
-        if !matches!(
-            attempt.get("status").and_then(Value::as_str),
-            Some(
-                "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT"
-                    | "COMPRESSION_FAILED_EMPTY_SUMMARY"
-                    | "COMPRESSION_FAILED_OUTPUT_TRUNCATED"
-                    | "COMPRESSION_FAILED_INSUFFICIENT_ROOM"
-                    | "COMPRESSION_FAILED_SUMMARY_OVER_BOUND"
-            )
-        ) {
+        if !attempt
+            .get("status")
+            .and_then(Value::as_str)
+            .is_some_and(|status| status != "COMPRESSED" && draw_kind(status) != DrawKind::Ended)
+        {
             return Err(refuse(&format!(
-                "whose {whose} does not name a resampleable rule it failed; retain the original stream and recapture with a corrected compaction producer"
+                "whose {whose} names neither a rule its answer failed nor a transport fault; retain the original stream and recapture with a corrected compaction producer"
             )));
         }
         candidate(attempt, &whose, budget)?;
@@ -465,13 +464,16 @@ fn validate_compaction_event(
             ));
         }
         let physical_requests = count(draw, "physicalRequests")?;
+        // A rejected attempt is named by its own status, the draw `output`
+        // describes by the record's.
+        let kind = draw_kind(draw.get("status").and_then(Value::as_str).unwrap_or(status));
         let (issued, first_sequence, last_sequence) = requests.check_compaction_draw(
             id,
             kv_scope,
             &measurements[0].3,
             physical_requests,
             draw,
-            succeeded || draw.get("status").is_some(),
+            kind,
         )?;
         let served = field(draw, "usage", line)?;
         if !served.is_null() && count(served, "candidatesTokenCount")? > issued {
@@ -511,6 +513,23 @@ fn validate_compaction_event(
         }
     }
     Ok((claims, token_claims))
+}
+
+/// What a compaction's draw was, read from the status that names it: an
+/// answer the rules judged -- accepted, or refused by a rule another draw can
+/// satisfy -- a request that failed in transport before it produced one, or a
+/// draw the compaction ended on for a cause outside both.
+fn draw_kind(status: &str) -> DrawKind {
+    match status {
+        "COMPRESSED"
+        | "COMPRESSION_FAILED_INFLATED_TOKEN_COUNT"
+        | "COMPRESSION_FAILED_EMPTY_SUMMARY"
+        | "COMPRESSION_FAILED_OUTPUT_TRUNCATED"
+        | "COMPRESSION_FAILED_INSUFFICIENT_ROOM"
+        | "COMPRESSION_FAILED_SUMMARY_OVER_BOUND" => DrawKind::Answer,
+        "COMPRESSION_FAILED_TRANSPORT_ERROR" => DrawKind::Fault,
+        _ => DrawKind::Ended,
+    }
 }
 
 /// Every emitted event names its scope: `null` and an absent field both mean
@@ -2313,7 +2332,7 @@ mod tests {
         .unwrap_err();
         assert!(error
             .to_string()
-            .contains("completed candidate without delivered output"));
+            .contains("claims an answer its physical request did not complete and deliver"));
         let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
         let error = admit(
             &mut with_compaction_transport_delivery_models(

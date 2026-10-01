@@ -30,7 +30,10 @@ Delivery is a separate boundary. The utility wrapper counts an output only
 when its caller receives it and records that count as a delivery receipt.
 `generateText` needs a terminal reason and served usage before it returns a
 candidate, so a successful replacement, or a candidate refused by a
-redrawable rule, has at least one output delivered from its final request; a
+redrawable rule, is an answer: its final request completed and delivered at
+least one output. A draw whose request failed in transport, issued again in
+its place, is named by that fault and claims a final request that did not
+complete; a draw the transition ended on for another cause may be either. A
 failed draw may retain a processed value that never reached the caller.
 
 The native engine checks the operation, scope, request count, output ceiling,

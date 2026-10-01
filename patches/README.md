@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `dd236692e7bab459dc05da90a300d0642a422d17c58a686e66f473fb95c886d2`
+- Review-diff SHA-256: `5b5c8b65d7b76c2d9e99d31b2fac8cf35a771c69da105ae70013260bc40df3c4`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `34e62fad2f2abdde970f5d3199aaa11652a65f5f66907905fc4127e4f53f4ea5`
+- Transformer-manifest SHA-256: `ebfad572e912e44d406dec23196485355b0247959f07b96493eda53a4b840add`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -310,8 +310,18 @@ snapshot, reduce the request, and leave an issuable turn. Failure retains the
 previous history and reports that retained count, and says why in words carried
 beside the accounting rather than in it: every draw's refusal, in the clause the
 next draw was told, the fault outside the model's answer its last draw ended
-on, or what its preflight refused. A draw is drawn again only for a fault in
-the model's own answer. A conversation still at or above the trigger after a
+on, or what its preflight refused. A draw is drawn again, told why, only for a
+fault in the model's own answer, under `MAX_GENERATION_DRAWS`. A draw whose
+request failed in transport before it produced an answer had no answer to
+judge: it is kept among the rejected attempts as
+`COMPRESSION_FAILED_TRANSPORT_ERROR`, with what it had received, and the same
+request is issued again, untold, under `FRESH_RESAMPLE_MAX_RETRIES`, the bound
+a turn's broken stream is issued again under, by the one transport test
+(`retryableStreamTransportCode`) a turn uses; it spends no draw, and a fresh
+request that fails the same way ends the compaction with that status, naming
+both faults. Every reader holds each draw to what its status names: a refused
+or accepted answer claims a final request that completed and delivered it, and
+a transport fault one that did not complete. A conversation still at or above the trigger after a
 failed compaction ends there, and the ending names that failure. There is no separate
 reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
 what the model can quote, not what it has seen: it disarms every file-read
@@ -440,7 +450,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused with the action above. They are not promoted into
-complete version 21 histories.
+complete version 22 histories.
 The complete-record evidence replay and the resume reader use the same
 projection for runtime checkpoints, compaction, and rewind.
 Adopted and realtime conversation records must carry content with the role
@@ -523,7 +533,7 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream contract v18 exposes these same request records, declares the journal
+Stream contract v19 exposes these same request records, declares the journal
 origin in `system/stream_start`, and accounts for the output window at every root result.
 Complete `system/init` runtime metadata has its own owner and does not reset that
 journal. Each checkpoint lists open response and logical attempt identities.
@@ -582,7 +592,7 @@ after one minute without progress
 Synchronous child-transcript file I/O cannot be preempted by that budget and is
 unbounded.
 
-Canonical recording version 21 structurally excludes response evidence from
+Canonical recording version 22 structurally excludes response evidence from
 messages, conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix

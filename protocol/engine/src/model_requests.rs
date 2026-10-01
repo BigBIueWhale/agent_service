@@ -679,6 +679,19 @@ pub(crate) struct ModelRequests {
     all_usage: GenerationUsageSummary,
 }
 
+/// What a compaction's draw claims of its physical request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DrawKind {
+    /// An answer the rules judged: its last request completed and delivered it.
+    Answer,
+    /// A request that failed in transport before it produced an answer: its
+    /// last request did not complete.
+    Fault,
+    /// The draw a compaction ended on for a cause outside both, whose request
+    /// may have completed or not.
+    Ended,
+}
+
 #[derive(Default)]
 struct CompactionOperation {
     scope: String,
@@ -2447,7 +2460,7 @@ impl ModelRequests {
         tokenizer_model: &str,
         physical_requests: u64,
         draw: Value<'_>,
-        requires_delivery: bool,
+        kind: DrawKind,
     ) -> ContractResult<(u64, u64, u64)> {
         let operation = self
             .compactions
@@ -2494,10 +2507,20 @@ impl ModelRequests {
                     "compaction draw mixes output from physical retries",
                 ));
             }
-            if requires_delivery && index + 1 == operation.requests.len() && *delivered == 0 {
-                return Err(refusal(
-                    "compaction draw claims a completed candidate without delivered output",
-                ));
+            if index + 1 == operation.requests.len() {
+                match kind {
+                    DrawKind::Answer if !outcome.completed || *delivered == 0 => {
+                        return Err(refusal(
+                            "compaction draw claims an answer its physical request did not complete and deliver",
+                        ));
+                    }
+                    DrawKind::Fault if outcome.completed => {
+                        return Err(refusal(
+                            "compaction draw claims a transport fault its physical request did not have",
+                        ));
+                    }
+                    _ => {}
+                }
             }
             observed_values = observed_values
                 .checked_add(outcome.sdk_values_seen)
