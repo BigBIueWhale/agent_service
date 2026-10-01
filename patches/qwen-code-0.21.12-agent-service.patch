@@ -380951,9 +380951,9 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +      body_bytes: bytes.length,
 +      body_sha256: createHash('sha256').update(bytes).digest('hex'),
 +    });
-+    expect(
-+      (f.records.at(-1)?.event as { error: string }).error,
-+    ).toContain('read-ahead bound');
++    const refusal = (f.records.at(-1)?.event as { error: string }).error;
++    expect(refusal).toContain(`${RESPONSE_READ_AHEAD_BYTES}-byte read-ahead bound`);
++    expect(refusal).toContain('Next: inspect the recorded prefix');
 +  });
 +
 +  it('records the prefix a real HTTP connection delivered before closing short of its content length', async () => {
@@ -382141,7 +382141,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1404 @@
+@@ -0,0 +1,1416 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -382217,8 +382217,20 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +// that wait, not the response. A provider that runs further ahead is refused:
 +// its transport is cancelled and the response ends `failed`, naming this bound,
 +// after every byte read has been recorded -- memory stays finite and the
-+// record says it is incomplete instead of silently dropping bytes. The value
-+// is a memory policy, stated once.
++// record says it is incomplete instead of silently dropping bytes.
++//
++// The value is a memory policy, declared here once, not derived: 1,024
++// persistence quanta, 64 MiB. Its reason is the trade it makes. The wait it
++// bounds exists only while the journal or the parser lags the provider; a
++// journal that keeps up holds a chunk or two, each at most one quantum, and a
++// write that stops progressing is refused on its own after
++// RECORDING_STALL_TIMEOUT_MS. So the bound sits three orders of magnitude above
++// the ordinary wait: a slow but progressing journal or a briefly paused parser
++// is not mistaken for a runaway provider, and a runaway holds at most 64 MiB
++// for its response before it is refused. It is not derived from the largest
++// response the locked backend serves, because no raw stream from that backend
++// has been recorded to measure; the first sessions under this recorder record
++// exactly that.
 +export const RESPONSE_READ_AHEAD_BYTES = 1024 * RESPONSE_RECORD_BYTES;
 +// Response operations share the recording deadline but not the model's
 +// separate network generation budget.
@@ -382550,7 +382562,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +            signal();
 +            if (unreadBytes > RESPONSE_READ_AHEAD_BYTES)
 +              throw new Error(
-+                `The provider sent ${unreadBytes} response bytes that persistence and the response parser had not yet taken, more than the ${RESPONSE_READ_AHEAD_BYTES}-byte read-ahead bound. The response was refused and its transport cancelled; every byte read is recorded.`,
++                `The provider sent ${unreadBytes} response bytes that persistence and the response parser had not yet taken, more than the ${RESPONSE_READ_AHEAD_BYTES}-byte read-ahead bound. The response was refused and its transport cancelled; every byte read is recorded. Next: inspect the recorded prefix to see what the provider sent, confirm that this session's recording storage keeps up and that the endpoint is the locked backend, then run the session again.`,
 +              );
 +            if (this.refusal) throw this.refusal.cause;
 +          }
