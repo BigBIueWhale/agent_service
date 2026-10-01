@@ -34,6 +34,13 @@ temporary encoded record, without a total response limit.
 The per-request clock pauses during recorder and output backpressure, preserving
 the meaning of upstream timeout bounds. User cancellation still owns transport
 abort. Failure to record poisons the durable journal and prevents later dispatch.
+A refusal is a failure to record, and it cannot remove the record it is about:
+a stdout window writes each record before its replay judges it, and a record
+the journal itself refuses is published to every window but never persisted,
+so the canonical history stays a prefix its readers accept while the stream
+keeps the evidence. The stream then says why recording stopped, naming the
+rule that refused, and the run ends on that stop in the error state; nothing
+is recorded after it.
 An explicitly detached optional renderer releases its own output ownership.
 Automatic title generation is owned background work: finalization aborts and
 joins it before a terminal is published, a fork snapshot is taken, or the writer

@@ -58670,7 +58670,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    /**
     * Handle control request asynchronously (fire-and-forget from main loop).
     * Errors are handled internally and responses sent by dispatcher.
-@@ -465,38 +470,85 @@
+@@ -465,38 +470,94 @@
      }
  
      dispatcher.handleCancel(cancelRequest.request_id);
@@ -58738,6 +58738,15 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
 +              },
 +            },
 +          );
++          // A run returns without its result only when its recording stopped:
++          // it reported the stop on the output and on stderr, and nothing more
++          // can be recorded, so the session ends on that stop.
++          if (!resultDelivered) {
++            await settleChatRecording(this.config, { finalize: false });
++            throw new Error(
++              'A turn ended without its terminal result while the session recording holds. Report this client defect with the session output.',
++            );
++          }
 +        } catch (error) {
 +          if (resultDelivered) {
 +            await runCleanupSteps([
@@ -58777,7 +58786,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
     * Handle a continue_last_turn control request: classify the last turn
     * from chat history and, when it was interrupted, schedule a
     * continuation turn on the work queue. Returns the control reply
-@@ -564,51 +616,18 @@
+@@ -564,51 +625,18 @@
     * re-detection happens inside runNonInteractive (history may have moved
     * since the request was accepted); a turn that became clean by then is
     * a no-op result message.
@@ -58835,7 +58844,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      batch: MonitorQueueItem[],
    ): Promise<void> {
      await this.waitForInitialization();
-@@ -634,34 +653,16 @@
+@@ -634,34 +662,16 @@
        );
      }
  
@@ -58874,7 +58883,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      if (this.isShuttingDown || this.sessionAbortController.signal.aborted) {
        return;
      }
-@@ -673,29 +674,19 @@
+@@ -673,29 +683,19 @@
          this.monitorQueue.length > 0) &&
        !this.isShuttingDown &&
        !this.sessionAbortController.signal.aborted
@@ -58906,7 +58915,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
        const started = this.monitorStartedQueue.shift();
        if (started) {
          this.outputAdapter.emitSystemMessage('task_started', started);
-@@ -703,21 +694,13 @@
+@@ -703,21 +703,13 @@
        }
  
        if (this.monitorQueue.length === 0) {
@@ -58929,7 +58938,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    private enqueueUserMessage(userMessage: CLIUserMessage): void {
      this.userMessageQueue.push(userMessage);
      this.ensureProcessingStarted();
-@@ -735,43 +718,48 @@
+@@ -735,43 +727,48 @@
  
    private ensureProcessingStarted(): void {
      if (this.processingPromise) {
@@ -58993,7 +59002,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      debugLogger.info('[Session] Interrupt requested');
      this.activeTurnAbortController?.abort(new TurnInterruptedError());
    }
-@@ -808,93 +796,62 @@
+@@ -808,93 +805,62 @@
    }
  
    /**
@@ -59137,7 +59146,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
      if (
        !this.monitorNotificationsRegistered &&
        !this.monitorRegistrationsRegistered
-@@ -918,14 +875,19 @@
+@@ -918,14 +884,19 @@
        process.removeListener('SIGINT', this.shutdownHandler);
        process.removeListener('SIGTERM', this.shutdownHandler);
        this.shutdownHandler = null;
@@ -59159,7 +59168,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
     * Main message processing loop
     *
     * CRITICAL: This loop must NEVER await handlers that might need to
-@@ -938,118 +900,104 @@
+@@ -938,118 +909,104 @@
     * 2. First message - determines mode, starts async initialization
     * 3. control_request - fire-and-forget, tracked by dispatcher
     * 4. control_cancel - synchronous
@@ -59360,7 +59369,7 @@ diff --git a/packages/cli/src/nonInteractive/session.ts b/packages/cli/src/nonIn
    settings: LoadedSettings = createMinimalSettings(),
  ): Promise<void> {
    let initialPrompt: CLIUserMessage | undefined = undefined;
-@@ -1064,13 +1012,15 @@
+@@ -1064,13 +1021,15 @@
        },
        parent_tool_use_id: null,
      };
@@ -59866,13 +59875,14 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    Kind,
    OutputFormat,
    uiTelemetryService,
-@@ -45,29 +63,193 @@
+@@ -45,29 +63,194 @@
    PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,
    createGoalRuntime,
    GoalPersistenceUnavailableError,
 +  ORPHAN_TOOL_USE_REPAIR_REASON,
 +  MAX_GENERATION_DRAWS,
 +  turnRefusalNotice,
++  RecordingRefusal,
  } from '@qwen-code/qwen-code-core';
 -import type { Part } from '@google/genai';
 +import {
@@ -60065,7 +60075,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
  // Mock core modules
  const runVisionBridgeSpy = vi.hoisted(() => vi.fn());
-@@ -76,16 +258,12 @@
+@@ -76,16 +259,12 @@
  const addAgentOutputMessageAttributesSpy = vi.hoisted(() => vi.fn());
  const interactionSpan = vi.hoisted(() => ({}));
  vi.mock('./ui/hooks/atCommandProcessor.js');
@@ -60085,7 +60095,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    return {
      ...original,
-@@ -96,10 +274,9 @@
+@@ -96,10 +275,9 @@
      getActiveInteractionSpan: getActiveInteractionSpanSpy,
      shutdownTelemetry: vi.fn(),
      isTelemetrySdkInitialized: vi.fn().mockReturnValue(true),
@@ -60097,7 +60107,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      },
    };
  });
-@@ -118,12 +295,13 @@
+@@ -118,12 +296,13 @@
      getTranscriptCursor: () => ({ recordId: null }),
      async recordGoalState(
        recordUuid: string,
@@ -60111,7 +60121,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          timestamp: new Date(0).toISOString(),
          type: 'system',
          subtype: 'goal_state',
-@@ -248,23 +426,21 @@
+@@ -248,23 +427,21 @@
    let processStderrSpy: MockInstance;
    let mockGeminiClient: {
      sendMessageStream: Mock;
@@ -60138,7 +60148,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      mockCoreExecuteToolCall = vi.mocked(executeToolCall);
      runVisionBridgeSpy.mockReset();
-@@ -272,10 +448,19 @@
+@@ -272,10 +449,19 @@
      addAgentOutputMessageAttributesSpy.mockReset();
      getActiveInteractionSpanSpy.mockReset();
      getActiveInteractionSpanSpy.mockReturnValue(interactionSpan);
@@ -60159,7 +60169,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockGetCommandsForMode.mockImplementation((mode: ExecutionMode) =>
        filterCommandsForMode(mockGetCommands(), mode),
      );
-@@ -284,12 +469,13 @@
+@@ -284,12 +470,13 @@
        getCommandsForMode: mockGetCommandsForMode,
      });
  
@@ -60175,7 +60185,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      vi.spyOn(process, 'exit').mockImplementation((code) => {
        throw new Error(`process.exit(${code}) called`);
      });
-@@ -322,32 +508,35 @@
+@@ -322,32 +509,35 @@
        recordCompletedToolCall: vi.fn(),
        addHistory: vi.fn(),
        stripOrphanedUserEntriesFromHistory: vi.fn(),
@@ -60219,7 +60229,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getMcpServers: vi.fn().mockReturnValue(undefined),
        getCliVersion: vi.fn().mockReturnValue('test-version'),
        storage: {
-@@ -355,7 +544,9 @@
+@@ -355,7 +545,9 @@
        },
        getIdeMode: vi.fn().mockReturnValue(false),
        getFullContext: vi.fn().mockReturnValue(false),
@@ -60230,7 +60240,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getDebugMode: vi.fn().mockReturnValue(false),
        getOutputFormat: vi.fn().mockReturnValue('text'),
        getJsonSchema: vi.fn().mockReturnValue(undefined),
-@@ -369,9 +560,16 @@
+@@ -369,9 +561,16 @@
          currentModel = model;
        }),
        getExperimentalZedIntegration: vi.fn().mockReturnValue(false),
@@ -60247,7 +60257,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getCronScheduler: vi.fn().mockReturnValue(null),
        getTeamManager: vi.fn().mockReturnValue(null),
        onTeamManagerChange: vi.fn(),
-@@ -441,6 +639,13 @@
+@@ -441,6 +640,13 @@
      overrides?: Partial<SessionMetrics>,
    ): SessionMetrics {
      return {
@@ -60261,7 +60271,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        models: {},
        tools: {
          totalCalls: 0,
-@@ -470,27 +675,648 @@
+@@ -470,27 +676,648 @@
    }
  
    /**
@@ -60915,7 +60925,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      input: string;
      prepare: 'none' | 'active' | 'paused';
      expectedStatus: 'active' | 'paused' | null;
-@@ -581,15 +1407,19 @@
+@@ -581,15 +1408,19 @@
      }
    }
  
@@ -60937,7 +60947,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -615,9 +1445,9 @@
+@@ -615,9 +1446,9 @@
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(
          testCase.expectedWorkers,
        );
@@ -60950,7 +60960,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(goalRuntime.getSnapshot()).toMatchObject({
          goal:
            testCase.expectedStatus === null
-@@ -630,33 +1460,30 @@
+@@ -630,33 +1461,30 @@
      },
    );
  
@@ -60998,7 +61008,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      },
    );
  
-@@ -664,7 +1491,7 @@
+@@ -664,7 +1492,7 @@
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
      mockConfig.getGoalRuntimeReady = vi.fn(async () => {
@@ -61007,7 +61017,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      });
  
      const exitCode = await runNonInteractive(
-@@ -713,42 +1540,38 @@
+@@ -713,42 +1541,38 @@
  
    it('keeps the exact Goal permit through a ToolResult continuation', async () => {
      setupMetricsMock();
@@ -61064,7 +61074,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]);
-@@ -791,45 +1614,43 @@
+@@ -791,45 +1615,43 @@
        getEventEmitter: () => teamEvents,
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
@@ -61129,7 +61139,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]);
-@@ -866,20 +1687,19 @@
+@@ -866,20 +1688,19 @@
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
      await prepareGoalState('paused');
@@ -61157,7 +61167,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          _signal: AbortSignal,
          _promptId: string,
          sendOptions: { goalPermit?: GoalTurnPermit },
-@@ -896,6 +1716,13 @@
+@@ -896,6 +1717,13 @@
                goalContext: sendOptions.goalPermit,
              },
            },
@@ -61171,7 +61181,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          ]),
      );
  
-@@ -907,17 +1734,176 @@
+@@ -907,17 +1735,176 @@
      );
  
      expect(exitCode).toBe(0);
@@ -61349,7 +61359,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('streams Goal state changes that happen while a headless turn settles', async () => {
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
-@@ -929,16 +1915,15 @@
+@@ -929,16 +1916,15 @@
        await goalRuntime.dispatch({
          action: 'pause',
          expectedGoalId: permit.goalId,
@@ -61369,7 +61379,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          _signal: AbortSignal,
          _promptId: string,
          sendOptions: { goalPermit?: GoalTurnPermit },
-@@ -955,6 +1940,13 @@
+@@ -955,6 +1941,13 @@
                goalContext: sendOptions.goalPermit,
              },
            },
@@ -61383,7 +61393,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          ]),
      );
  
-@@ -989,12 +1981,13 @@
+@@ -989,12 +1982,13 @@
      const finishTurn = vi
        .spyOn(goalRuntime, 'finishTurn')
        .mockResolvedValue(undefined);
@@ -61397,7 +61407,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
-@@ -1002,8 +1995,8 @@
+@@ -1002,8 +1996,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -61408,7 +61418,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -1023,225 +2016,60 @@
+@@ -1023,225 +2017,60 @@
      );
    });
  
@@ -61668,7 +61678,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    expect(exitCode).toBe(53);
 +    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
 +    expect(goalRuntime.getSnapshot().goal?.status).toBe('paused');
-@@ -1344,12 +2172,15 @@
+@@ -1344,12 +2173,15 @@
      { text: 'inspect this image' },
      { inlineData: { mimeType: 'image/png', data: 'AAAA' } },
    ];
@@ -61686,7 +61696,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      },
    ];
-@@ -1393,7 +2224,10 @@
+@@ -1393,7 +2225,10 @@
        { type: GeminiEventType.Content, value: ' World' },
        {
          type: GeminiEventType.Finished,
@@ -61698,7 +61708,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -1417,7 +2251,9 @@
+@@ -1417,7 +2252,9 @@
          submittedPrompt: 'Test input',
        },
      );
@@ -61709,7 +61719,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockShutdownTelemetry).toHaveBeenCalled();
    });
  
-@@ -1429,35 +2265,38 @@
+@@ -1429,35 +2266,38 @@
      });
      const handleWorkflowApproval = vi.fn().mockResolvedValue(undefined);
      const controlService = {
@@ -61771,7 +61781,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        controlService,
      });
  
-@@ -1478,11 +2317,12 @@
+@@ -1478,11 +2318,12 @@
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -61786,7 +61796,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -1504,7 +2344,10 @@
+@@ -1504,7 +2345,10 @@
        createStreamFromEvents([
          {
            type: GeminiEventType.Finished,
@@ -61798,7 +61808,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -1554,7 +2397,10 @@
+@@ -1554,7 +2398,10 @@
        createStreamFromEvents([
          {
            type: GeminiEventType.Finished,
@@ -61810,7 +61820,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -1574,7 +2420,7 @@
+@@ -1574,7 +2421,7 @@
          functionResponse: {
            id: 'call-1',
            name: 'shell',
@@ -61819,7 +61829,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        },
      ]);
-@@ -1590,38 +2436,41 @@
+@@ -1590,38 +2437,41 @@
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
      };
@@ -61886,7 +61896,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -1631,14 +2480,14 @@
+@@ -1631,14 +2481,14 @@
      await vi.waitFor(() =>
        expect(respond).toHaveBeenCalledWith(ToolConfirmationOutcome.Cancel),
      );
@@ -61905,7 +61915,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('describes the active mode when explicit teammate approval cannot be shown', async () => {
-@@ -1651,38 +2500,41 @@
+@@ -1651,38 +2501,41 @@
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
      };
@@ -61972,7 +61982,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -1692,17 +2544,19 @@
+@@ -1692,17 +2545,19 @@
      await vi.waitFor(() =>
        expect(respond).toHaveBeenCalledWith(ToolConfirmationOutcome.Cancel),
      );
@@ -61995,7 +62005,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('cannot be bypassed by YOLO mode'),
      );
    });
-@@ -1725,7 +2579,10 @@
+@@ -1725,7 +2580,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62007,7 +62017,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1758,7 +2615,10 @@
+@@ -1758,7 +2616,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62019,7 +62029,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1793,7 +2653,10 @@
+@@ -1793,7 +2654,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62031,7 +62041,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1812,7 +2675,7 @@
+@@ -1812,7 +2676,7 @@
            functionResponse: {
              id: 'call-1',
              name: 'shell',
@@ -62040,7 +62050,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]);
-@@ -1834,7 +2697,10 @@
+@@ -1834,7 +2698,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62052,7 +62062,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1859,7 +2725,7 @@
+@@ -1859,7 +2726,7 @@
            functionResponse: {
              id: 'call-1',
              name: 'shell',
@@ -62061,7 +62071,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
          { text: expect.stringContaining(SYSTEM_REMINDER_OPEN) },
-@@ -1883,41 +2749,85 @@
+@@ -1883,41 +2750,85 @@
      });
    });
  
@@ -62164,7 +62174,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        type: GeminiEventType.ToolCallRequest,
        value: {
          callId: 'tool-1',
-@@ -1931,7 +2841,7 @@
+@@ -1931,7 +2842,7 @@
        toolCallEvent,
        {
          type: GeminiEventType.LoopDetected,
@@ -62173,7 +62183,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -1948,7 +2858,7 @@
+@@ -1948,7 +2859,7 @@
      expect(exitCode).toBe(1);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      expect(processStdoutSpy).not.toHaveBeenCalled();
@@ -62182,7 +62192,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Loop detection halted the run'),
      );
    });
-@@ -1987,12 +2897,14 @@
+@@ -1987,12 +2898,14 @@
      // The consecutive guard is always-on, so the headless message must flag it
      // as always-on and must NOT suggest the skipLoopDetection escape hatch,
      // which cannot disable it.
@@ -62199,7 +62209,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining(
          'Set the `model.skipLoopDetection` setting to true',
        ),
-@@ -2033,49 +2945,13 @@
+@@ -2033,49 +2946,13 @@
      // A heuristic loop IS gated by skipLoopDetection, so the message must offer
      // that escape hatch and must NOT claim it is an always-on guard. (Mutation
      // guard: routing all types into the always-on hint would fail here.)
@@ -62253,7 +62263,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 -    );
 -  });
 -
-@@ -2086,7 +2962,7 @@
+@@ -2086,7 +2963,7 @@
        { type: GeminiEventType.Content, value: 'Partial work' },
        {
          type: GeminiEventType.LoopDetected,
@@ -62262,7 +62272,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -2108,17 +2984,1220 @@
+@@ -2108,17 +2985,1220 @@
      expect(typeof lastOutput).toBe('string');
      const parsed = JSON.parse(lastOutput as string) as Array<{
        type?: string;
@@ -63480,11 +63490,11 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    });
 +  });
 +
-+  it('refuses the JSON terminal result and preserves failed canonical recording', async () => {
++  it('ends on a stopped canonical recording without a JSON terminal result', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock();
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -2126,11 +4205,20 @@
+@@ -2126,11 +4206,20 @@
          { type: GeminiEventType.Content, value: 'Answer' },
          {
            type: GeminiEventType.Finished,
@@ -63506,7 +63516,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      let recordingFailureListener:
        | ((event: { sessionId: string; error: Error }) => void)
        | undefined;
-@@ -2153,48 +4241,564 @@
+@@ -2153,48 +4242,668 @@
          getChatRecordingService: () => {
            finalize: () => void;
            flush: () => Promise<void>;
@@ -63526,6 +63536,8 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      });
  
++    // The stopped recording is how the run ended: the error state's exit
++    // code and its cause on stderr, and no result written after the stop.
 -    await runNonInteractive(
 +    await expect(
 +      runNonInteractive(
@@ -63535,10 +63547,16 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        'prompt-recording-failure',
 +        { onResultEmitted },
 +      ),
-+    ).rejects.toBe(failure);
++    ).resolves.toBe(TERMINAL_RESULT_BY_STATE[AgentTerminateMode.ERROR].exitCode);
 +    expect(order).toEqual(['finalize', 'flush']);
 +    expect(onResultEmitted).not.toHaveBeenCalled();
 +    expect(processStdoutSpy).not.toHaveBeenCalled();
++    expect(processStderrSpy.mock.calls.map(([chunk]) => chunk)).toContainEqual(
++      expect.stringContaining('Session recording stopped after a write failure.'),
++    );
++    expect(processStderrSpy.mock.calls.map(([chunk]) => chunk)).toContainEqual(
++      expect.stringContaining('Cause: Error: write failed'),
++    );
 +    // The warning is a record of the output stream's own session that
 +    // names the affected session in its data.
 +    expect(emittedMessages).toHaveBeenCalledWith(
@@ -63628,7 +63646,94 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 -    }>;
 -    const warningIndex = messages.findIndex(
 -      (message) => message.subtype === 'session_recording_degraded',
-+  it('preserves recording and telemetry-cleanup failures together', async () => {
++  it('ends on a recording refusal, named on the stream and on stderr, with no result after it', async () => {
++    (mockConfig.getOutputFormat as Mock).mockReturnValue(
++      OutputFormat.STREAM_JSON,
++    );
++    setupMetricsMock();
++    mockGeminiClient.sendMessageStream.mockReturnValue(
++      createStreamFromEvents([
++        { type: GeminiEventType.Content, value: 'Answer' },
++        {
++          type: GeminiEventType.Finished,
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: servedOutputTokens(1),
++          },
++        },
++      ]),
++    );
++    const refusal = new RecordingRefusal(
++      new Error(
++        'Invalid model response evidence: compaction request has no matching output ceiling directive. Inspect the complete original recording with its matching client; do not certify a partial response.',
++      ),
++    );
++    let recordingFailureListener:
++      | ((event: { sessionId: string; error: Error }) => void)
++      | undefined;
++    (
++      mockConfig as unknown as {
++        onChatRecordingFailure: (
++          listener: (event: { sessionId: string; error: Error }) => void,
++        ) => () => void;
++      }
++    ).onChatRecordingFailure = (listener) => {
++      recordingFailureListener = listener;
++      return vi.fn();
++    };
++    (
++      mockConfig as unknown as {
++        getChatRecordingService: () => {
++          finalize: () => void;
++          flush: () => Promise<void>;
++        };
++      }
++    ).getChatRecordingService = () => ({
++      modelRequests,
++      finalize: () => undefined,
++      flush: async () => {
++        recordingFailureListener?.({ sessionId: 'test-session-id', error: refusal });
++        throw refusal;
++      },
++    });
++
++    const exitCode = await runNonInteractive(
++      mockConfig,
++      mockSettings,
++      'Test input',
++      'prompt-recording-refusal',
++    );
++
++    expect(exitCode).toBe(
++      TERMINAL_RESULT_BY_STATE[AgentTerminateMode.ERROR].exitCode,
++    );
++    const rows = processStdoutSpy.mock.calls
++      .map(([chunk]) => String(chunk))
++      .join('')
++      .split('\n')
++      .filter(Boolean)
++      .map((line) => JSON.parse(line) as CLIMessage);
++    // The stream's last record is the stop, naming the rule that refused.
++    expect(rows.at(-1)).toMatchObject({
++      type: 'system',
++      subtype: 'session_recording_degraded',
++      data: {
++        reason: 'write_failed',
++        message: expect.stringContaining(
++          'the recorder refused a record it produced: Invalid model response evidence: compaction request has no matching output ceiling directive.',
++        ),
++      },
++    });
++    expect(rows.some((row) => row.type === 'result')).toBe(false);
++    expect(processStderrSpy.mock.calls.map(([chunk]) => chunk)).toContainEqual(
++      expect.stringContaining('compaction request has no matching output ceiling directive'),
++    );
++    expect(
++      processStderrSpy.mock.calls.map(([chunk]) => String(chunk)).join(''),
++    ).not.toContain('Check disk space');
++  });
++
++  it('ends on a stopped recording and still reports a telemetry-cleanup failure', async () => {
 +    setupMetricsMock();
 +    const recording = new Error('terminal recording refused');
 +    const cleanup = new Error('telemetry cleanup failed');
@@ -63655,8 +63760,12 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      'test',
 +      'two-settlement-errors',
 +    ).catch((error) => error);
-+    expect(failure).toBeInstanceOf(AggregateError);
-+    expect((failure as AggregateError).errors).toEqual([recording, cleanup]);
++    // The recording's stop is the run's ending, told on stderr; the cleanup
++    // failure that follows it is a failure of its own and still reported.
++    expect(failure).toBe(cleanup);
++    expect(processStderrSpy.mock.calls.map(([chunk]) => chunk)).toContainEqual(
++      expect.stringContaining('Cause: Error: terminal recording refused'),
++    );
 +    expect(processStdoutSpy).not.toHaveBeenCalled();
 +  });
 +
@@ -63912,8 +64021,10 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      );
 +      expect(result).toHaveProperty('error');
 +      if (!('error' in result)) throw new Error('cleanup failures resolved');
++      // The failed finalization stopped the recording, which is how the run
++      // ended and is told on stderr; every cleanup failure after it is still
++      // reported.
 +      expect(leaves(result.error)).toEqual([
-+        operation,
 +        unsubscribeFailure,
 +        hostFailure,
 +        reviewFailure,
@@ -63921,6 +64032,9 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        telemetryFailure,
 +        drain,
 +      ]);
++      expect(
++        processStderrSpy.mock.calls.map(([chunk]) => chunk),
++      ).toContainEqual(expect.stringContaining('canonical finalization failed'));
 +      await expectCleanup(observed);
 +    });
 +
@@ -64094,7 +64208,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('flushes but does not finalize when the caller owns the stream adapter', async () => {
-@@ -2207,7 +4811,10 @@
+@@ -2207,7 +4916,10 @@
          { type: GeminiEventType.Content, value: 'Answer' },
          {
            type: GeminiEventType.Finished,
@@ -64106,7 +64220,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -2217,13 +4824,13 @@
+@@ -2217,13 +4929,13 @@
        mockConfig as unknown as {
          getChatRecordingService: () => {
            finalize: () => void;
@@ -64121,7 +64235,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -2244,21 +4851,24 @@
+@@ -2244,21 +4956,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -64153,7 +64267,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -2291,18 +4901,21 @@
+@@ -2291,18 +5006,21 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -64178,7 +64292,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      // Verify recordCompletedToolCall is called with the tool name and args.
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledWith(
        'testTool',
-@@ -2363,21 +4976,25 @@
+@@ -2363,21 +5081,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64206,7 +64320,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        2,
        [{ text: 'Tool response with image' }, { text: 'Skill response' }],
        expect.any(AbortSignal),
-@@ -2441,21 +5058,25 @@
+@@ -2441,21 +5163,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64234,7 +64348,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
-@@ -2533,8 +5154,8 @@
+@@ -2533,8 +5259,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64245,7 +64359,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -2569,21 +5190,25 @@
+@@ -2569,21 +5295,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64273,7 +64387,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        4,
-@@ -2591,15 +5216,42 @@
+@@ -2591,15 +5321,42 @@
        expect.any(AbortSignal),
        'prompt-drain/automatic/3',
        { type: SendMessageType.ToolResult, modelOverride: first },
@@ -64318,7 +64432,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -2620,23 +5272,23 @@
+@@ -2620,23 +5377,23 @@
        }));
      }
  
@@ -64345,7 +64459,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        vi.mocked(mockToolRegistry.getTool).mockImplementation(
          (name: string) =>
            ({
-@@ -2665,13 +5317,13 @@
+@@ -2665,13 +5422,13 @@
            resultDisplay: 'entered plan mode',
          }),
        );
@@ -64360,7 +64474,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
                'p-plan-boundary',
              ),
              ...toolCallEvents(
-@@ -2683,19 +5335,20 @@
+@@ -2683,19 +5440,20 @@
                ['read-after-entry-1', 'read-after-entry-2'],
                ToolNames.READ_FILE,
                'p-plan-boundary',
@@ -64382,7 +64496,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall.mock.calls[0][1]).toMatchObject({
          callId: 'enter-plan',
          name: ToolNames.ENTER_PLAN_MODE,
-@@ -2758,23 +5411,25 @@
+@@ -2758,23 +5516,25 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -64411,7 +64525,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(total);
      });
  
-@@ -2802,19 +5457,19 @@
+@@ -2802,19 +5562,19 @@
                });
            }),
        );
@@ -64436,7 +64550,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
        resolvers['c']();
        resolvers['a']();
-@@ -2826,72 +5481,15 @@
+@@ -2826,72 +5586,15 @@
        const nextTurnParts = mockGeminiClient.sendMessageStream.mock
          .calls[1][0] as Part[];
        const ids = nextTurnParts
@@ -64512,7 +64626,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        setupMetricsMock();
        // Kind.Edit is a mutator: each unsafe call forms its own sequential
        // batch, so call #2 must not start until call #1 has settled.
-@@ -2910,17 +5508,19 @@
+@@ -2910,17 +5613,19 @@
              );
            }),
        );
@@ -64535,7 +64649,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['e1']);
        resolvers[0]();
-@@ -2931,47 +5531,6 @@
+@@ -2931,47 +5636,6 @@
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(2);
      });
  
@@ -64583,7 +64697,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      it('partitions a mixed batch: parallel reads, sequential edit, parallel reads', async () => {
        setupMetricsMock();
        // read → Kind.Read (safe), edit → Kind.Edit (unsafe). The batch
-@@ -2994,21 +5553,23 @@
+@@ -2994,21 +5658,23 @@
                resolve({ responseParts: [{ text: `resp-${req.callId}` }] });
            }),
        );
@@ -64610,7 +64724,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['r1', 'r2']);
        resolvers['r1']();
-@@ -3056,19 +5617,21 @@
+@@ -3056,19 +5722,21 @@
                };
              }),
          );
@@ -64635,7 +64749,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          await new Promise((resolve) => setImmediate(resolve));
          expect(startOrder).toEqual(['c1', 'c2']);
          // Freeing one slot admits the next call, one at a time.
-@@ -3125,19 +5688,21 @@
+@@ -3125,19 +5793,21 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -64660,7 +64774,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // would deadlock.
        expect(started).toBe(total);
        expect(startOrder).toEqual(['s1', 's2']);
-@@ -3146,7 +5711,6 @@
+@@ -3146,7 +5816,6 @@
  
    it('should ignore duplicate provider tool-call ids across rounds', async () => {
      setupMetricsMock();
@@ -64668,7 +64782,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3155,23 +5719,32 @@
+@@ -3155,23 +5824,32 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -64707,7 +64821,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -3192,7 +5765,9 @@
+@@ -3192,7 +5870,9 @@
      expect(duplicateParts[0].functionResponse?.response?.['error']).toContain(
        'Duplicate provider tool call id "tool-1"',
      );
@@ -64718,13 +64832,13 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should stop repeated duplicate provider tool-call responses', async () => {
-@@ -3199,5 +5774,4 @@
+@@ -3199,5 +5879,4 @@
      setupMetricsMock();
 -    vi.mocked(mockConfig.getMaxToolCalls).mockReturnValue(1);
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3228,40 +5802,41 @@
+@@ -3228,40 +5907,41 @@
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(
@@ -64777,7 +64891,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should stop repeated duplicate provider tool-call responses from drain items', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3316,25 +5891,30 @@
+@@ -3316,25 +5996,30 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64810,7 +64924,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(3);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      const drainPromptIds = mockGeminiClient.sendMessageStream.mock.calls
-@@ -3346,14 +5926,15 @@
+@@ -3346,14 +6031,15 @@
  
      const duplicateParts = mockGeminiClient.sendMessageStream.mock
        .calls[2][0] as Part[];
@@ -64828,7 +64942,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should ignore duplicate provider tool-call ids already present in chat history', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3367,20 +5948,24 @@
+@@ -3367,20 +6053,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -64856,7 +64970,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -3404,26 +5989,28 @@
+@@ -3404,26 +6094,28 @@
      expect(duplicateParts[0].functionResponse?.response?.['error']).toContain(
        'Duplicate provider tool call id "tool-history"',
      );
@@ -64888,7 +65002,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const firstToolCall: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3486,21 +6073,26 @@
+@@ -3486,21 +6178,26 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64917,7 +65031,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledTimes(1);
  
-@@ -3515,13 +6107,16 @@
+@@ -3515,13 +6212,16 @@
        'success',
        'error',
      ]);
@@ -64935,7 +65049,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -3530,39 +6125,38 @@
+@@ -3530,39 +6230,38 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -64991,7 +65105,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool error',
-@@ -3573,38 +6167,43 @@
+@@ -3573,38 +6272,43 @@
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
@@ -65048,7 +65162,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should not exit if a tool is not found, and should send error back to model', async () => {
-@@ -3616,30 +6215,39 @@
+@@ -3616,30 +6320,39 @@
          name: 'nonexistentTool',
          args: {},
          isClientInitiated: false,
@@ -65095,7 +65209,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool not found',
-@@ -3648,22 +6256,71 @@
+@@ -3648,22 +6361,71 @@
  
      expect(mockCoreExecuteToolCall).toHaveBeenCalled();
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -65177,7 +65291,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should preprocess @include commands before sending to the model', async () => {
-@@ -3694,7 +6351,10 @@
+@@ -3694,7 +6456,10 @@
        { type: GeminiEventType.Content, value: 'Summary complete.' },
        {
          type: GeminiEventType.Finished,
@@ -65189,7 +65303,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -3717,7 +6377,9 @@
+@@ -3717,7 +6482,9 @@
      );
  
      // 6. Assert the final output is correct
@@ -65200,7 +65314,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('keeps an agent-capable image route for the full headless tool chain', async () => {
-@@ -3738,28 +6400,31 @@
+@@ -3738,28 +6505,31 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -65237,7 +65351,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            ...finishedEvents,
          ]),
        );
-@@ -3771,9 +6436,7 @@
+@@ -3771,9 +6541,7 @@
        'prompt-vision-route',
      );
  
@@ -65248,7 +65362,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(acceptedSameSelector).toBe(true);
      expect(rejectedDifferentSelector).toBe(true);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
-@@ -3786,13 +6449,13 @@
+@@ -3786,13 +6554,13 @@
          modelOverride: selector,
          submittedPrompt: 'inspect @image.png',
        },
@@ -65263,7 +65377,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3800,7 +6463,7 @@
+@@ -3800,7 +6568,7 @@
        expect.any(AbortSignal),
        expect.objectContaining({ runtimeView }),
      );
@@ -65272,7 +65386,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Routing this image turn to vision-agent'),
      );
    });
-@@ -3828,18 +6491,22 @@
+@@ -3828,18 +6596,22 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -65299,7 +65413,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'inspect @image.png',
-@@ -3855,13 +6522,17 @@
+@@ -3855,13 +6627,17 @@
          type: SendMessageType.Notification,
          modelOverride: undefined,
        }),
@@ -65318,7 +65432,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3911,7 +6582,7 @@
+@@ -3911,7 +6687,7 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -65327,7 +65441,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Converted 1 image(s)'),
      );
    });
-@@ -3937,12 +6608,16 @@
+@@ -3937,12 +6713,16 @@
        createStreamFromEvents(finishedEvents),
      );
      const writes: string[] = [];
@@ -65350,7 +65464,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      await runNonInteractive(
        mockConfig,
-@@ -3992,7 +6667,7 @@
+@@ -3992,7 +6772,7 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -65359,7 +65473,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Vision bridge failed; proceeding without the image(s).\n',
      );
    });
-@@ -4030,10 +6705,10 @@
+@@ -4030,10 +6810,10 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -65372,7 +65486,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('were sent to vision-bridge'),
      );
    });
-@@ -4088,18 +6763,18 @@
+@@ -4088,18 +6868,18 @@
      });
      resolveForModel.mockRejectedValue(new Error('route unavailable'));
  
@@ -65403,7 +65517,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).not.toHaveBeenCalled();
    });
  
-@@ -4108,24 +6783,28 @@
+@@ -4108,24 +6888,28 @@
        { type: GeminiEventType.Content, value: 'Hello World' },
        {
          type: GeminiEventType.Finished,
@@ -65434,7 +65548,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.any(AbortSignal),
        'prompt-id-1',
        {
-@@ -4153,13 +6832,16 @@
+@@ -4153,13 +6937,16 @@
      expect(resultMessage).toBeTruthy();
      expect(resultMessage?.result).toBe('Hello World');
      // Get the actual metrics that were used
@@ -65455,7 +65569,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -4167,32 +6849,51 @@
+@@ -4167,32 +6954,51 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -65513,7 +65627,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock({
-@@ -4224,14 +6925,15 @@
+@@ -4224,14 +7030,15 @@
        },
      });
  
@@ -65531,7 +65645,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({ name: 'testTool' }),
-@@ -4240,6 +6942,10 @@
+@@ -4240,6 +7047,10 @@
          outputUpdateHandler: expect.any(Function),
        }),
      );
@@ -65542,7 +65656,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      // JSON adapter emits array of messages, last one is result with stats
      const outputCalls = processStdoutSpy.mock.calls.filter(
-@@ -4257,33 +6963,43 @@
+@@ -4257,33 +7068,43 @@
          msg.type === 'result',
      );
      expect(resultMessage).toBeTruthy();
@@ -65593,7 +65707,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        [{ text: 'Empty response test' }],
        expect.any(AbortSignal),
        'prompt-id-empty',
-@@ -4309,13 +7025,29 @@
+@@ -4309,13 +7130,29 @@
          'type' in msg &&
          msg.type === 'result',
      );
@@ -65628,7 +65742,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should handle errors in JSON format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock();
-@@ -4325,35 +7057,43 @@
+@@ -4325,35 +7162,43 @@
        throw testError;
      });
  
@@ -65701,7 +65815,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle API errors in text mode and exit with error code', async () => {
-@@ -4375,24 +7115,14 @@
+@@ -4375,24 +7220,14 @@
        createStreamFromEvents([apiErrorEvent]),
      );
  
@@ -65734,7 +65848,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      // Verify error was written to stderr
      expect(processStderrSpy).toHaveBeenCalled();
-@@ -4403,16 +7133,14 @@
+@@ -4403,16 +7238,14 @@
    });
  
    it('does not double-wrap or double-format an API error in non-interactive mode', async () => {
@@ -65757,7 +65871,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.TEXT);
      setupMetricsMock();
      const finalize = vi.fn();
-@@ -4421,13 +7149,13 @@
+@@ -4421,13 +7254,13 @@
        mockConfig as unknown as {
          getChatRecordingService: () => {
            finalize: () => void;
@@ -65772,7 +65886,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        value: {
          error: {
            message: '402 Model gpt-oss-120b is not available for billing.',
-@@ -4440,15 +7168,14 @@
+@@ -4440,15 +7273,14 @@
        createStreamFromEvents([apiErrorEvent]),
      );
  
@@ -65796,7 +65910,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(finalize).toHaveBeenCalledOnce();
      expect(flush).toHaveBeenCalledOnce();
  
-@@ -4487,35 +7214,45 @@
+@@ -4487,35 +7319,45 @@
        throw fatalError;
      });
  
@@ -65871,7 +65985,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should execute a slash command that returns a prompt', async () => {
-@@ -4535,7 +7272,10 @@
+@@ -4535,7 +7377,10 @@
        { type: GeminiEventType.Content, value: 'Response from command' },
        {
          type: GeminiEventType.Finished,
@@ -65883,7 +65997,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4561,7 +7301,9 @@
+@@ -4561,7 +7406,9 @@
        },
      );
  
@@ -65894,7 +66008,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle command that requires confirmation by returning early', async () => {
-@@ -4585,7 +7327,7 @@
+@@ -4585,7 +7432,7 @@
      );
  
      // Should write error message through adapter to stdout (TEXT mode goes through JsonOutputAdapter)
@@ -65903,7 +66017,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Shell command confirmation is not supported in non-interactive mode. Use YOLO mode or pre-approve commands.\n',
      );
    });
-@@ -4599,7 +7341,10 @@
+@@ -4599,7 +7446,10 @@
        { type: GeminiEventType.Content, value: 'Response to unknown' },
        {
          type: GeminiEventType.Finished,
@@ -65915,7 +66029,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4625,7 +7370,9 @@
+@@ -4625,7 +7475,9 @@
        },
      );
  
@@ -65926,7 +66040,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle known but unsupported slash commands like /help by returning early', async () => {
-@@ -4647,7 +7394,7 @@
+@@ -4647,7 +7499,7 @@
      );
  
      // Should write error message through adapter to stdout (TEXT mode goes through JsonOutputAdapter)
@@ -65935,7 +66049,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'The command "/help" is not supported in this mode.\n',
      );
    });
-@@ -4672,7 +7419,7 @@
+@@ -4672,7 +7524,7 @@
      );
  
      // Should write error message to stderr
@@ -65944,7 +66058,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Unknown command result type: unhandled\n',
      );
    });
-@@ -4695,7 +7442,10 @@
+@@ -4695,7 +7547,10 @@
        { type: GeminiEventType.Content, value: 'Acknowledged' },
        {
          type: GeminiEventType.Finished,
@@ -65956,7 +66070,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4711,7 +7461,9 @@
+@@ -4711,7 +7566,9 @@
  
      expect(mockAction).toHaveBeenCalledWith(expect.any(Object), 'arg1 arg2');
  
@@ -65967,7 +66081,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should emit stream-json envelopes when output format is stream-json', async () => {
-@@ -4720,20 +7472,25 @@
+@@ -4720,20 +7577,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66002,7 +66116,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4750,61 +7507,72 @@
+@@ -4750,61 +7612,72 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -66100,7 +66214,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
  
      const envelopes = writes
-@@ -4816,6 +7584,7 @@
+@@ -4816,6 +7689,7 @@
      expect(process.exit).not.toHaveBeenCalled();
      expect(envelopes.at(-1)).toMatchObject({
        type: 'result',
@@ -66108,7 +66222,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        is_error: true,
        error: { message: 'Operation cancelled.' },
      });
-@@ -4832,12 +7601,16 @@
+@@ -4832,12 +7706,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66131,7 +66245,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockBackgroundTaskRegistry.setRegisterCallback.mockImplementation(
        (callback) => {
          callback?.({
-@@ -4854,8 +7627,8 @@
+@@ -4854,8 +7732,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -66142,7 +66256,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -4894,14 +7667,16 @@
+@@ -4894,14 +7772,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66167,7 +66281,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const notificationXml =
        '<task-notification>\n' +
-@@ -4963,8 +7738,8 @@
+@@ -4963,8 +7843,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66178,7 +66292,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -4975,8 +7750,8 @@
+@@ -4975,8 +7855,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66189,7 +66303,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5078,8 +7853,8 @@
+@@ -5078,8 +7958,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66200,7 +66314,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5090,8 +7865,8 @@
+@@ -5090,8 +7970,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66211,7 +66325,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5102,8 +7877,8 @@
+@@ -5102,8 +7982,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66222,7 +66336,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5137,26 +7912,32 @@
+@@ -5137,26 +8017,32 @@
      );
    });
  
@@ -66265,7 +66379,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -5202,14 +7983,16 @@
+@@ -5202,14 +8088,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66290,7 +66404,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const notificationXml =
        '<task-notification>\n' +
-@@ -5239,8 +8022,8 @@
+@@ -5239,8 +8127,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -66301,7 +66415,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -5291,14 +8074,16 @@
+@@ -5291,14 +8179,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66326,7 +66440,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const firstNotificationXml =
        '<task-notification>\n' +
-@@ -5377,8 +8162,8 @@
+@@ -5377,8 +8267,8 @@
        yield {
          type: GeminiEventType.Finished,
          value: {
@@ -66337,7 +66451,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        };
      }
-@@ -5390,16 +8175,16 @@
+@@ -5390,16 +8280,16 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66357,7 +66471,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Watch the logs',
        'prompt-monitor-cutover',
-@@ -5438,14 +8223,16 @@
+@@ -5438,14 +8328,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66382,7 +66496,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      let keepBackgroundTaskOpen = true;
      let lateMonitorEventEmitted = false;
-@@ -5535,8 +8322,8 @@
+@@ -5535,8 +8427,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66393,7 +66507,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5547,8 +8334,8 @@
+@@ -5547,8 +8439,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66404,7 +66518,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5594,52 +8381,376 @@
+@@ -5594,52 +8486,376 @@
      });
    });
  
@@ -66801,7 +66915,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      await runNonInteractive(
        mockConfig,
        mockSettings,
-@@ -5655,12 +8766,7 @@
+@@ -5655,12 +8871,7 @@
      const resultEnvelope = envelopes.at(-1);
      expect(resultEnvelope?.type).toBe('result');
      expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);
@@ -66815,7 +66929,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      nowSpy.mockRestore();
    });
-@@ -5671,20 +8777,25 @@
+@@ -5671,20 +8882,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66850,7 +66964,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -5750,14 +8861,16 @@
+@@ -5750,14 +8966,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66875,7 +66989,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -5766,25 +8879,24 @@
+@@ -5766,25 +8984,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -66911,7 +67025,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -5802,24 +8914,36 @@
+@@ -5802,24 +9019,36 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -66959,7 +67073,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -5852,14 +8976,16 @@
+@@ -5852,14 +9081,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66984,7 +67098,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -5868,41 +8994,40 @@
+@@ -5868,41 +9099,40 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -67040,7 +67154,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger error',
-@@ -5936,12 +9061,14 @@
+@@ -5936,12 +9166,14 @@
          block !== null &&
          'type' in block &&
          block.type === 'tool_result',
@@ -67055,7 +67169,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should emit partial messages when includePartialMessages is true', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
-@@ -5949,21 +9076,26 @@
+@@ -5949,21 +9181,26 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67091,7 +67205,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6006,24 +9138,33 @@
+@@ -6006,24 +9243,33 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67135,7 +67249,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6040,38 +9181,40 @@
+@@ -6040,38 +9286,40 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -67198,7 +67312,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCall1: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -6091,32 +9234,37 @@
+@@ -6091,32 +9339,37 @@
          args: { param: 'value2' },
          isClientInitiated: false,
          prompt_id: 'prompt-id-multi',
@@ -67247,7 +67361,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Multiple tools',
        'prompt-id-multi',
-@@ -6125,36 +9273,32 @@
+@@ -6125,36 +9378,32 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -67303,7 +67417,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -6174,12 +9318,16 @@
+@@ -6174,12 +9423,16 @@
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
      const writes: string[] = [];
@@ -67326,7 +67440,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const duplicateToolCall: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -6223,21 +9371,26 @@
+@@ -6223,21 +9476,26 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -67355,7 +67469,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({
-@@ -6255,30 +9408,15 @@
+@@ -6255,30 +9513,15 @@
      );
      expect(toolResultParts[1].functionResponse?.id).toBe('dup_id_0001');
      expect(toolResultParts[1].functionResponse?.response?.['error']).toContain(
@@ -67389,7 +67503,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
-@@ -6325,21 +9463,25 @@
+@@ -6325,21 +9568,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -67417,7 +67531,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenNthCalledWith(
        1,
        mockConfig,
-@@ -6368,20 +9510,25 @@
+@@ -6368,20 +9615,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67452,7 +67566,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6481,7 +9628,10 @@
+@@ -6481,7 +9733,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -67464,7 +67578,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -6499,31 +9649,27 @@
+@@ -6499,31 +9754,27 @@
        true,
      );
      expect(predicate({ prompt: 'regular cron job' } as CronJob)).toBe(false);
@@ -67511,7 +67625,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          properties: { summary: { type: 'string' } },
        });
        (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
-@@ -6542,14 +9688,16 @@
+@@ -6542,14 +9793,16 @@
        });
  
        const writes: string[] = [];
@@ -67536,7 +67650,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Same turn: the model emits structured_output FIRST, then a second
        // (hypothetical side-effecting) tool. The break must prevent the
-@@ -6573,25 +9721,28 @@
+@@ -6573,25 +9826,28 @@
            args: {},
            isClientInitiated: false,
            prompt_id: 'prompt-id-structured',
@@ -67568,7 +67682,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // should have been skipped because structured output ended the session.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const firstCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6615,44 +9766,25 @@
+@@ -6615,44 +9871,25 @@
          'tool_call',
        );
        expect(
@@ -67622,7 +67736,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6670,14 +9802,16 @@
+@@ -6670,14 +9907,16 @@
        });
  
        const writes: string[] = [];
@@ -67647,7 +67761,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Same turn, reverse order: a side-effecting tool comes BEFORE
        // structured_output. The pre-scan must drop the leading call so the
-@@ -6703,25 +9837,28 @@
+@@ -6703,25 +9942,28 @@
            args: structuredArgs,
            isClientInitiated: false,
            prompt_id: 'prompt-id-leading',
@@ -67679,7 +67793,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // leading side-effect tool must have been suppressed by the pre-scan.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const onlyCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6729,54 +9866,35 @@
+@@ -6729,54 +9971,35 @@
        };
        expect(onlyCallArg.name).toBe('structured_output');
        // No follow-up turn should have been issued.
@@ -67746,7 +67860,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      it('tries multiple structured_output calls in the same turn until one succeeds', async () => {
        // Same-turn batch: [structured_output(bad), structured_output(good)].
-@@ -6802,14 +9920,16 @@
+@@ -6802,14 +10025,16 @@
        });
  
        const writes: string[] = [];
@@ -67771,7 +67885,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const goodArgs = { summary: 'ok' };
        const badStructured: ServerGeminiStreamEvent = {
-@@ -6850,21 +9970,24 @@
+@@ -6850,21 +10075,24 @@
                  name: 'structured_output',
                  response: { error: 'args invalid' },
                },
@@ -67799,7 +67913,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // order; the loop stops at the first success so no third execution.
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string; callId: string }).name,
-@@ -6881,27 +10004,17 @@
+@@ -6881,27 +10109,17 @@
        // No retry turn was needed.
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
        expect(abortAllSpy).toHaveBeenCalledTimes(1);
@@ -67832,7 +67946,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6933,28 +10046,35 @@
+@@ -6933,28 +10151,35 @@
            args: { summary: 'second try' },
            isClientInitiated: false,
            prompt_id: 'prompt-id-retry',
@@ -67878,7 +67992,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Emit structured output',
          'prompt-id-retry',
-@@ -6986,20 +10106,25 @@
+@@ -6986,20 +10211,25 @@
        setupMetricsMock();
  
        const writes: string[] = [];
@@ -67913,7 +68027,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValueOnce(
-@@ -7030,8 +10155,8 @@
+@@ -7030,8 +10260,8 @@
        expect(result?.error?.message).toMatch(/structured_output/);
        expect(endInteractionSpanSpy).toHaveBeenCalledWith('error', {
          promptId: 'prompt-id-plaintext',
@@ -67924,7 +68038,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        });
      });
  
-@@ -7104,17 +10229,22 @@
+@@ -7104,17 +10334,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -67947,7 +68061,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string }).name,
        );
-@@ -7260,17 +10390,22 @@
+@@ -7260,17 +10495,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -67970,7 +68084,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          (call) => (call[1] as { name: string }).name,
        );
        expect(executedNames).toEqual([
-@@ -7334,14 +10469,16 @@
+@@ -7334,14 +10574,16 @@
        setupMetricsMock();
  
        const writes: string[] = [];
@@ -67995,7 +68109,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Inject a monitor notification synchronously when the registry
        // wires up — same trick the existing notification tests use to
-@@ -7386,20 +10523,29 @@
+@@ -7386,20 +10628,29 @@
              {
                type: GeminiEventType.Finished,
                value: {
@@ -68031,7 +68145,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Watch the logs',
          'prompt-drain-struct',
-@@ -7507,14 +10653,16 @@
+@@ -7507,14 +10758,16 @@
        });
  
        const writes: string[] = [];
@@ -68056,7 +68170,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const structuredArgs = { summary: 'done' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -7524,17 +10672,24 @@
+@@ -7524,17 +10777,24 @@
            name: 'structured_output',
            args: structuredArgs,
            isClientInitiated: false,
@@ -68085,7 +68199,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const exitCode = await runNonInteractive(
          mockConfig,
          mockSettings,
-@@ -7603,14 +10758,16 @@
+@@ -7603,14 +10863,16 @@
        });
  
        const writes: string[] = [];
@@ -68110,7 +68224,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const structuredArgs = { summary: 'text-mode-ok' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -7620,17 +10777,24 @@
+@@ -7620,17 +10882,24 @@
            name: 'structured_output',
            args: structuredArgs,
            isClientInitiated: false,
@@ -68139,7 +68253,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockConfig,
          mockSettings,
          'Emit structured output (text mode)',
-@@ -7701,7 +10865,10 @@
+@@ -7701,7 +10970,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68151,7 +68265,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7742,7 +10909,10 @@
+@@ -7742,7 +11014,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68163,7 +68277,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7797,7 +10967,10 @@
+@@ -7797,7 +11072,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68244,7 +68358,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    clampInlineMediaPart,
    formatFullTurnVisionNotice,
    formatVisionBridgeNotice,
-@@ -64,30 +60,67 @@
+@@ -64,30 +60,68 @@
    runVisionBridge,
    shouldRunVisionBridge,
    splitImageParts,
@@ -68322,9 +68436,10 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -import { RunBudgetEnforcer } from './utils/runBudget.js';
 +import { handleToolError } from './utils/errors.js';
  import {
++  chatRecordingStoppedLine,
    settleChatRecording,
    subscribeToHeadlessChatRecordingFailures,
-@@ -103,6 +136,78 @@
+@@ -103,6 +137,78 @@
      this.name = 'TurnInterruptedError';
    }
  }
@@ -68403,7 +68518,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +
  const restoredBackgroundAgentSessions = new WeakMap<Config, Set<string>>();
  
-@@ -150,47 +255,19 @@
+@@ -150,47 +256,19 @@
  
  import {
    normalizePartList,
@@ -68457,7 +68572,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -  // per-turn cap is also always-on but has its own knob, so it gets a
 -  // dedicated hint instead of membership in this list.
 +  // setting can't disable them — don't suggest it for those loop types.
-@@ -200,12 +277,9 @@
+@@ -200,12 +278,9 @@
      loopType === LoopType.GLOBAL_TOOL_CALL_DUPLICATE ||
      loopType === LoopType.INVALID_TOOL_PARAMS_STAGNATION ||
      loopType === LoopType.REPEATED_TOOL_EXECUTION_FAILURE;
@@ -68473,7 +68588,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    return `Loop detection halted the run${detail}.${hint}`;
  }
  
-@@ -363,65 +437,49 @@
+@@ -363,65 +438,49 @@
    return true;
  }
  
@@ -68572,7 +68687,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
   * Provides optional overrides for `runNonInteractive` execution.
   *
   * @param abortController - Optional abort controller for cancellation.
-@@ -439,13 +497,6 @@
+@@ -439,13 +498,6 @@
    captureMonitorNotifications?: boolean;
    captureMonitorRegistrations?: boolean;
    onResultEmitted?: () => void;
@@ -68586,7 +68701,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
    /**
     * Continue the most recent unfinished turn from chat history instead of
     * submitting `input` (which is ignored). No new user message enters the
-@@ -523,20 +574,20 @@
+@@ -523,20 +575,20 @@
          finalize: ownsAdapter,
        }).then(() => undefined);
        return chatRecordingSettlement;
@@ -68613,7 +68728,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      const sessionId = config.getSessionId();
      const permissionMode = config.getApprovalMode() as PermissionMode;
      const cleanupReviewWorktrees = (gitTimeout?: number) =>
-@@ -551,7 +602,13 @@
+@@ -551,7 +603,13 @@
      );
  
      let turnCount = 0;
@@ -68628,7 +68743,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let totalApiDurationMs = 0;
      const startTime = Date.now();
      let activeInteractionPromptId = prompt_id;
-@@ -609,19 +666,25 @@
+@@ -609,19 +667,25 @@
      const observeGoalRuntime = (runtime: GoalRuntime) => {
        goalRuntimeUnsubscribe ??= runtime.subscribe(emitGoalSnapshot);
      };
@@ -68666,7 +68781,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
        }
      };
      let goalHostUnbind: (() => void) | undefined;
-@@ -678,31 +741,25 @@
+@@ -678,31 +742,25 @@
              return;
            }
  
@@ -68717,7 +68832,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
          } finally {
            if (activeGoalTurn === turn) {
              activeGoalTurn = undefined;
-@@ -716,95 +773,63 @@
+@@ -716,95 +774,63 @@
        return goalTurnSettlement;
      };
      const finishGoalTurn = async (turn: HeadlessGoalTurn): Promise<void> => {
@@ -68863,7 +68978,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      };
  
      interface LocalQueueItem {
-@@ -818,7 +843,7 @@
+@@ -818,7 +844,7 @@
          tool_use_id?: string;
          status: BackgroundTaskStatus;
          usage?: {
@@ -68872,7 +68987,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
            tool_uses: number;
            duration_ms: number;
          };
-@@ -860,13 +885,123 @@
+@@ -860,13 +886,152 @@
        captureMonitorTurnsInLocalQueue = false;
        config.getMonitorRegistry().abortAll();
        flushQueuedNotificationsToSdk(sdkOnlyMonitorQueue);
@@ -68926,6 +69041,29 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +            : {},
 +        );
 +      };
++      /**
++       * The recording is settled before anything terminal is written, and
++       * what it settled to is part of how the run ended, never a condition
++       * for saying so. A recording that stopped has already told the output
++       * why, in the `session_recording_degraded` record it wrote when it
++       * stopped, and nothing is recorded after that: a result would be a
++       * record written past the point the recording ends. So the run ends
++       * there, in the error state, its cause on stderr, with that state's
++       * exit code. Returns that code, or undefined while the recording holds.
++       */
++      const endIfRecordingStopped = async (): Promise<number | undefined> => {
++        const stopped = await settleBeforeTerminalOutput().then(
++          () => undefined,
++          (cause: unknown) => ({ cause }),
++        );
++        if (!stopped) return undefined;
++        const line = chatRecordingStoppedLine(stopped.cause);
++        process.stderr.write(`${line}\n`);
++        terminalExitCode =
++          TERMINAL_RESULT_BY_STATE[AgentTerminateMode.ERROR].exitCode;
++        reportInteraction(AgentTerminateMode.ERROR, line);
++        return terminalExitCode;
++      };
 +      try {
 +        await failClosedActiveGoalTurn(
 +          `Headless Goal stopped: ${ending.terminateMode}`,
@@ -68941,13 +69079,15 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +        flushQueuedNotificationsToSdk(localQueue);
 +        finalizeOneShotMonitors();
 +
++        const stoppedExitCode = await endIfRecordingStopped();
++        if (stoppedExitCode !== undefined) return stoppedExitCode;
++
 +        // Text mode's terminal record is a line on stderr, so an ending whose
 +        // message is already there would print it a second time.
 +        if (
 +          outputFormat === OutputFormat.TEXT &&
 +          ending.reportedOnStderr === true
 +        ) {
-+          await settleBeforeTerminalOutput();
 +          terminalExitCode = exitCode;
 +          reportInteraction(ending.terminateMode, ending.message);
 +          return exitCode;
@@ -68984,6 +69124,10 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +        );
 +        return terminalExitCode;
 +      } catch (error) {
++        // A step of the ending that failed because the recording stopped
++        // ends the run as that stop, the same as one the settlement found.
++        const stoppedExitCode = await endIfRecordingStopped();
++        if (stoppedExitCode !== undefined) return stoppedExitCode;
 +        terminalExitCode =
 +          TERMINAL_RESULT_BY_STATE[AgentTerminateMode.ERROR].exitCode;
 +        reportInteraction(
@@ -69001,7 +69145,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let pipeBroken = false;
      let workflowApprovalChannelRegistered = false;
      const stdoutErrorHandler = (err: NodeJS.ErrnoException) => {
-@@ -996,2175 +1131,2309 @@
+@@ -996,2175 +1161,2309 @@
      // the regular options.sendMessageType / UserQuery selection applies.
      let continueSendType: SendMessageType | null = null;
  
@@ -113714,7 +113858,28 @@ diff --git a/packages/cli/src/ui/utils/statsDataService.ts b/packages/cli/src/ui
 diff --git a/packages/cli/src/utils/chat-recording-failure.test.ts b/packages/cli/src/utils/chat-recording-failure.test.ts
 --- a/packages/cli/src/utils/chat-recording-failure.test.ts
 +++ b/packages/cli/src/utils/chat-recording-failure.test.ts
-@@ -28,22 +28,25 @@
+@@ -4,17 +4,20 @@
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import { afterEach, describe, expect, it, vi } from 'vitest';
+ import {
+   OutputFormat,
++  RecordingRefusal,
+   type ChatRecordingFailureEvent,
+   type ChatRecordingFailureListener,
+   type Config,
+ } from '@qwen-code/qwen-code-core';
+ import type { JsonOutputAdapterInterface } from '../nonInteractive/io/BaseJsonOutputAdapter.js';
+ import {
++  CHAT_RECORDING_FAILURE_MESSAGE,
++  chatRecordingStoppedLine,
+   createChatRecordingFailureSystemMessage,
+   settleChatRecording,
+   subscribeToHeadlessChatRecordingFailures,
+ } from './chat-recording-failure.js';
+ 
+@@ -28,26 +31,68 @@
  
  describe('chat recording failure reporting', () => {
    afterEach(() => {
@@ -113746,7 +113911,50 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.test.ts b/packages/cl
          reason: 'write_failed',
        },
      });
-@@ -58,25 +61,27 @@
+     expect(JSON.stringify(message)).not.toContain('private path details');
++  });
++
++  it('names a recording refusal, the recorder\'s own text, instead of a write failure', () => {
++    const refusal = new RecordingRefusal(
++      new Error(
++        'Invalid model response evidence: compaction request has no matching output ceiling directive. Inspect the complete original recording with its matching client; do not certify a partial response.',
++      ),
++    );
++    // However the stop reached the recorder, wrapped or not.
++    for (const error of [refusal, new Error('settle failed', { cause: refusal })]) {
++      const message = createChatRecordingFailureSystemMessage(
++        { sessionId: 'failed-session', error },
++        'output-session',
++      );
++      expect(message.data).toMatchObject({
++        reason: 'write_failed',
++        message: expect.stringContaining(
++          'the recorder refused a record it produced: Invalid model response evidence: compaction request has no matching output ceiling directive.',
++        ),
++      });
++      expect(JSON.stringify(message)).not.toContain('Check disk space');
++      expect(chatRecordingStoppedLine(error)).toBe(
++        (message.data as { message: string }).message,
++      );
++    }
++  });
++
++  it('keeps a write failure\'s text off the output and on the stderr line', () => {
++    const error = new Error('/private/transcript.jsonl: ENOSPC');
++    const message = createChatRecordingFailureSystemMessage(
++      { sessionId: 'failed-session', error },
++      'output-session',
++    );
++    expect((message.data as { message: string }).message).toBe(
++      CHAT_RECORDING_FAILURE_MESSAGE,
++    );
++    expect(chatRecordingStoppedLine(error)).toBe(
++      `${CHAT_RECORDING_FAILURE_MESSAGE} Cause: Error: /private/transcript.jsonl: ENOSPC`,
++    );
+   });
+ 
+   it('reports structured failures through the supplied adapter', () => {
+@@ -58,25 +103,27 @@
        onChatRecordingFailure: (next: ChatRecordingFailureListener) => {
          listener = next;
          return unsubscribe;
@@ -113775,7 +113983,7 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.test.ts b/packages/cl
      expect(unsubscribe).toHaveBeenCalledOnce();
    });
  
-@@ -102,38 +107,160 @@
+@@ -102,38 +149,160 @@
      expect(mockWriteStderrLine).toHaveBeenCalledWith(
        expect.stringMatching(/^Warning: Session recording stopped/),
      );
@@ -113955,13 +114163,14 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.test.ts b/packages/cl
 diff --git a/packages/cli/src/utils/chat-recording-failure.ts b/packages/cli/src/utils/chat-recording-failure.ts
 --- a/packages/cli/src/utils/chat-recording-failure.ts
 +++ b/packages/cli/src/utils/chat-recording-failure.ts
-@@ -3,13 +3,13 @@
+@@ -3,13 +3,14 @@
   * Copyright 2025 Qwen Team
   * SPDX-License-Identifier: Apache-2.0
   */
  
  import { randomUUID } from 'node:crypto';
  import {
++  findRecordingRefusal,
 -  createDebugLogger,
 +  runCleanupSteps,
    OutputFormat,
@@ -113970,7 +114179,7 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.ts b/packages/cli/src
  } from '@qwen-code/qwen-code-core';
  import type { JsonOutputAdapterInterface } from '../nonInteractive/io/BaseJsonOutputAdapter.js';
  import type { CLISystemMessage } from '../nonInteractive/types.js';
-@@ -18,24 +18,22 @@
+@@ -18,24 +19,50 @@
  
  export const CHAT_RECORDING_FAILURE_MESSAGE =
    'Session recording stopped after a write failure. New messages for the affected session will not be saved. Check disk space and permissions, then start a new session to resume recording. See the debug log for details.';
@@ -113981,6 +114190,34 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.ts b/packages/cli/src
 -const CHAT_RECORDING_SETTLE_TIMEOUT_MS = 2000;
 -const debugLogger = createDebugLogger('CHAT_RECORDING');
  
++/**
++ * What the output is told when the session's recording stops. A recording
++ * refusal -- the recorder refused a record it had produced -- is told with the
++ * rule that refused it: that text is the recorder's own, and the storage advice
++ * would send the reader after a disk that is fine. Any other failure is a
++ * storage or output failure, whose text can carry private paths, so the output
++ * is told upstream's words for it and the run's stderr carries its cause.
++ */
++export function chatRecordingFailureMessage(error: unknown): string {
++  const refusal = findRecordingRefusal(error);
++  return refusal
++    ? `Session recording stopped because the recorder refused a record it produced: ${refusal.message} Nothing after this is recorded and no further request is sent. This is a client defect, not a storage fault: keep this output and the client's stderr, and report them with the client version.`
++    : CHAT_RECORDING_FAILURE_MESSAGE;
++}
++
++/**
++ * The run's stderr line for a recording that stopped: the output's message,
++ * and for a storage or output failure the failure itself, which stderr may
++ * carry.
++ */
++export function chatRecordingStoppedLine(error: unknown): string {
++  const message = chatRecordingFailureMessage(error);
++  if (findRecordingRefusal(error)) return message;
++  const cause =
++    error instanceof Error ? `${error.name}: ${error.message}` : String(error);
++  return `${message} Cause: ${cause}`;
++}
++
  export function createChatRecordingFailureSystemMessage(
    event: ChatRecordingFailureEvent,
 +  outputSessionId: string,
@@ -113995,9 +114232,10 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.ts b/packages/cli/src
      data: {
        session_id: event.sessionId,
        reason: 'write_failed',
-       message: CHAT_RECORDING_FAILURE_MESSAGE,
+-      message: CHAT_RECORDING_FAILURE_MESSAGE,
++      message: chatRecordingFailureMessage(event.error),
      },
-@@ -43,13 +41,15 @@
+@@ -43,51 +70,37 @@
  }
  
  export function reportChatRecordingFailureToAdapter(
@@ -114014,7 +114252,14 @@ diff --git a/packages/cli/src/utils/chat-recording-failure.ts b/packages/cli/src
    config: Config,
    adapter: JsonOutputAdapterInterface,
  ): () => void {
-@@ -63,31 +63,15 @@
+   if (typeof config.onChatRecordingFailure !== 'function') return () => {};
+   return config.onChatRecordingFailure((event) => {
+     if (config.getOutputFormat() === OutputFormat.TEXT) {
+-      writeStderrLine(`Warning: ${t(CHAT_RECORDING_FAILURE_MESSAGE)}`);
++      writeStderrLine(`Warning: ${t(chatRecordingFailureMessage(event.error))}`);
+       return;
+     }
+     reportChatRecordingFailureToAdapter(adapter, event);
    });
  }
  
@@ -151250,10 +151495,16 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * A Goal restore held back because the session writer is not accepting
     * writes yet. Settled by {@link startPendingGoalRestore} once the
     * recorder has its lease, or by {@link settlePendingGoalRestore} when the
-@@ -1988,15 +1882,12 @@
+@@ -1988,15 +1882,18 @@
    private goalTurnHost: GoalTurnHost | undefined;
    private goalTurnHostUnbind: (() => void) | undefined;
    private goalTurnHostGeneration = 0;
++  /**
++   * The recording failure a failure listener was told of. Telling a listener
++   * is how a stopped recording is reported, so shutdown does not raise it a
++   * second time.
++   */
++  private reportedChatRecordingFailure: Error | undefined;
    private readonly chatRecordingFailureListeners =
      new Set<ChatRecordingFailureListener>();
    private fileCheckpointingEnabled: boolean;
@@ -151266,7 +151517,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly explicitIncludeDirectories: string[];
    private readonly bugCommand: BugCommandSettings | undefined;
    private outputLanguageFilePath?: string;
-@@ -2007,7 +1898,3 @@
+@@ -2007,7 +1904,3 @@
  
    private readonly maxSessionTurns: number;
    private readonly maxSubagentDepth: number;
@@ -151274,7 +151525,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -  private readonly maxToolCalls: number;
 -  private readonly clearContextOnIdle: ClearContextOnIdleSettings;
 -  private readonly sessionTokenLimit: number;
-@@ -2014,13 +1901,12 @@
+@@ -2014,13 +1907,12 @@
    private readonly listExtensions: boolean;
    private readonly overrideExtensions?: string[];
  
@@ -151288,7 +151539,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly cronRecurringMaxAgeDays: number;
    private readonly agentTeamEnabled: boolean = false;
    private readonly artifactEnabled: boolean = true;
-@@ -2031,17 +1917,15 @@
+@@ -2031,17 +1923,15 @@
    private workflowsEnabled = false;
    private readonly skipWorkflowUsageWarning: boolean = false;
    private readonly computerUseEnabled: boolean = true;
@@ -151306,12 +151557,12 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly useBuiltinRipgrep: boolean;
    private readonly shouldUseNodePtyShell: boolean;
    private readonly preventSystemSleep: boolean;
-@@ -2048,4 +1932,3 @@
+@@ -2048,4 +1938,3 @@
 -  private readonly skipNextSpeakerCheck: boolean;
    private shellExecutionConfig: ShellExecutionConfig;
    private arenaManager: ArenaManager | null = null;
    private arenaManagerChangeCallback:
-@@ -2060,8 +1943,6 @@
+@@ -2060,8 +1949,6 @@
    private readonly agentsSettings: AgentsCollabSettings;
    private readonly worktreeSettings: WorktreeSettings;
    private readonly skipLoopDetection: boolean;
@@ -151320,7 +151571,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly skipStartupContext: boolean;
    private readonly bareMode: boolean;
    private readonly safeMode: boolean;
-@@ -2078,19 +1959,15 @@
+@@ -2078,19 +1965,15 @@
    private initializationSucceeded = false;
    private initializationSettled = false;
    private shutdownRequested = false;
@@ -151341,7 +151592,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly channel: string | undefined;
    private readonly jsonFd: number | undefined;
    private readonly jsonFile: string | undefined;
-@@ -2116,13 +1993,11 @@
+@@ -2116,13 +1999,11 @@
    private readonly webSearchSettings?: WebSearchSettings;
    private webSearchNoticeEmitted = false;
    private visionModel?: string;
@@ -151355,7 +151606,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    private readonly userHooks?: Record<string, unknown>;
    /** Project-level hooks (only loaded in trusted folders) */
    private readonly projectHooks?: Record<string, unknown>;
-@@ -2138,25 +2013,28 @@
+@@ -2138,25 +2019,28 @@
    private readonly ownsModelEnvSlot: boolean = false;
    private readonly settingsWatcher?: { stopWatching(): void };
  
@@ -151385,7 +151636,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.fileSystemService = new StandardFileSystemService();
      this.sandbox = params.sandbox;
      this.targetDir = path.resolve(params.targetDir);
-@@ -2177,12 +2055,15 @@
+@@ -2177,12 +2061,15 @@
      this.outputFormat = normalizedOutputFormat ?? OutputFormat.TEXT;
      this.includePartialMessages = params.includePartialMessages ?? false;
      this.question = params.question;
@@ -151401,7 +151652,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        ...(params.disabledSlashCommands ?? []),
      ]);
      this.disabledSkillNamesProvider = params.disabledSkillNamesProvider ?? null;
-@@ -2223,14 +2104,12 @@
+@@ -2223,14 +2110,12 @@
      this.sdkMode = params.sdkMode ?? false;
      this.userMemory = params.userMemory ?? '';
      this.geminiMdFileCount = params.geminiMdFileCount ?? 0;
@@ -151416,7 +151667,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        otlpEndpoint: params.telemetry?.otlpEndpoint,
        otlpProtocol: params.telemetry?.otlpProtocol,
        otlpTracesEndpoint: params.telemetry?.otlpTracesEndpoint,
-@@ -2282,29 +2161,11 @@
+@@ -2282,29 +2167,11 @@
      this.bugCommand = params.bugCommand;
      this.maxSessionTurns = validateMaxSessionTurns(params.maxSessionTurns);
      this.maxSubagentDepth = normalizeMaxSubagentDepth(params.maxSubagentDepth);
@@ -151446,7 +151697,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      );
      this.agentTeamEnabled = params.agentTeamEnabled ?? false;
      this.artifactEnabled = params.artifactEnabled ?? true;
-@@ -2325,22 +2186,13 @@
+@@ -2325,22 +2192,13 @@
      this.folderTrust = params.folderTrust ?? false;
      this.ideMode = params.ideMode ?? false;
      this.modelProvidersConfig = params.modelProvidersConfig;
@@ -151469,14 +151720,14 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    // Whether the user explicitly set the cap (vs. the resolved default). An
 -    // explicit value is honored as a hard cap; the default is adaptive.
 -    this.maxToolCallsPerTurnExplicit = params.maxToolCallsPerTurn !== undefined;
-@@ -2364,6 +2216,5 @@
+@@ -2364,6 +2222,5 @@
      this.shouldUseNodePtyShell =
        params.shouldUseNodePtyShell ?? shouldDefaultToNodePty();
      this.preventSystemSleep = params.preventSystemSleep ?? true;
 -    this.skipNextSpeakerCheck = params.skipNextSpeakerCheck ?? true;
      this.shellExecutionConfig = {
        terminalWidth: params.shellExecutionConfig?.terminalWidth ?? 80,
-@@ -2370,23 +2221,12 @@
+@@ -2370,23 +2227,12 @@
        terminalHeight: params.shellExecutionConfig?.terminalHeight ?? 24,
        showColor: params.shellExecutionConfig?.showColor ?? false,
        pager: params.shellExecutionConfig?.pager,
@@ -151500,7 +151751,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // a negative or fractional value would throw RangeError or silently degrade
      // to a 1ms timeout. Unlike the vision bridge, 0 is valid here and disables
      // the timeout. Reject anything the timer can't take and fall back to the
-@@ -2430,13 +2270,13 @@
+@@ -2430,13 +2276,13 @@
        process.env['QWEN_CODE_PROJECT_DIR'] = this.storage.getProjectDir();
        projectDirEnvClaimed = true;
      }
@@ -151515,7 +151766,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          ? {
              maxConcurrentBackgroundAgents:
                this.agentsSettings.maxParallelAgents,
-@@ -2541,25 +2381,15 @@
+@@ -2541,25 +2387,15 @@
          });
        // Swallow an early rejection so it cannot become an unhandledRejection
        // before initialize() awaits (and surfaces) the stored promise.
@@ -151544,7 +151795,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        enabledExtensionOverrides: this.overrideExtensions,
        isWorkspaceTrusted: this.isTrustedFolder(),
        locale: params.locale,
-@@ -2587,7 +2417,6 @@
+@@ -2587,7 +2423,6 @@
      this.fastModel = params.fastModel || undefined;
      this.webSearchSettings = params.webSearch;
      this.visionModel = params.visionModel || undefined;
@@ -151552,7 +151803,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.imageModel = params.imageModel || undefined;
      // Guard: nothing validates settings.json on the load path, so this is the
      // only real gate. `AbortSignal.timeout()` requires an integer in
-@@ -2599,13 +2428,12 @@
+@@ -2599,13 +2434,12 @@
        params.visionBridgeTimeoutMs !== undefined &&
        Number.isInteger(params.visionBridgeTimeoutMs) &&
        params.visionBridgeTimeoutMs > 0 &&
@@ -151566,7 +151817,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      );
      // Store user and project hooks separately for proper source attribution
      this.userHooks = params.userHooks;
-@@ -2618,45 +2446,50 @@
+@@ -2618,45 +2452,50 @@
  
    /**
     * Must only be called once, throws if called again.
@@ -151633,7 +151884,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          unregisterSessionProjectDir(this.sessionId);
          this.sessionProjectDirRegistered = false;
        }
-@@ -2695,25 +2528,33 @@
+@@ -2695,25 +2534,33 @@
      const explicitExtensionNames = this.isSafeMode()
        ? []
        : (this.overrideExtensions ?? []).filter(
@@ -151669,7 +151920,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
        // Initialize MessageBus for hook execution
        this.messageBus = new MessageBus();
-@@ -2772,13 +2613,13 @@
+@@ -2772,13 +2619,13 @@
                  );
                  break;
                case 'Stop': {
@@ -151684,7 +151935,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
                    (input['stop_hook_active'] as boolean) || false,
                    (input['last_assistant_message'] as string) || '',
                    contextUsageData,
-@@ -2962,13 +2803,13 @@
+@@ -2962,13 +2809,13 @@
        this.debugLogger.debug('Hook system disabled, skipping initialization');
      }
      recordStartupEvent('config_initialize_hooks_end');
@@ -151699,7 +151950,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
              this.getProjectRoot(),
            );
            if (curatorResult.status === 'ran') {
-@@ -3008,13 +2849,17 @@
+@@ -3008,13 +2855,17 @@
      // Load session subagents if they were provided before initialization
      if (this.sessionSubagents.length > 0) {
        this.subagentManager.loadSessionSubagents(this.sessionSubagents);
@@ -151718,7 +151969,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
      recordStartupEvent('config_initialize_hierarchical_memory_start');
      await this.refreshHierarchicalMemory('session_start');
-@@ -3175,28 +3020,36 @@
+@@ -3175,28 +3026,36 @@
            );
          }
        })();
@@ -151760,7 +152011,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          onOwnershipAcquired: (acquiredLease) => {
            lease = acquiredLease;
            this.pendingSessionWriterLease = acquiredLease;
-@@ -3217,16 +3070,12 @@
+@@ -3217,16 +3076,12 @@
        if (location === 'conflict' || location === 'archived') {
          throw new SessionTranscriptChangedError();
        }
@@ -151777,7 +152028,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          authoritative = await this.getSessionService().loadSession(
            this.sessionId,
          );
-@@ -3234,13 +3083,20 @@
+@@ -3234,13 +3089,20 @@
        } else if (location !== undefined) {
          throw new SessionTranscriptChangedError();
        }
@@ -151799,7 +152050,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.sessionData = authoritative;
        recorder.activate(
          lease,
-@@ -3625,39 +3481,12 @@
+@@ -3625,39 +3487,12 @@
      this.getFileReadCache().recordRead(indexPath, indexRead.stats, {
        full: true,
        cacheable: true,
@@ -151839,7 +152090,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      }
  
      if (this.getBareMode()) {
-@@ -3683,15 +3512,19 @@
+@@ -3683,15 +3518,19 @@
    }
  
    getContextRuleExcludes(): string[] {
@@ -151862,7 +152113,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    /**
     * Get the ModelsConfig instance for model-related operations.
     * External code (e.g., CLI) can use this to access model configuration.
-@@ -3736,98 +3569,96 @@
+@@ -3736,98 +3575,96 @@
      this.baseLlmClient?.clearPerModelGeneratorCache();
    }
  
@@ -152039,7 +152290,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getSessionId(): string {
      return this.sessionId;
    }
-@@ -3919,64 +3750,114 @@
+@@ -3919,64 +3756,114 @@
    /**
     * Returns warnings generated during configuration resolution.
     * These warnings are collected from model configuration resolution
@@ -152182,7 +152433,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (process.env) {
        process.env['QWEN_CODE_SESSION_ID'] = this.sessionId;
      }
-@@ -3986,43 +3867,56 @@
+@@ -3986,43 +3873,56 @@
      // model by the new id, miss, and fall back to another session's value.
      // Drop the orphaned entry too — shutdown only unregisters the current id.
      unregisterSessionModel(previousSessionId);
@@ -152245,7 +152496,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          sessionData && isSessionTransition ? previousSessionId : undefined,
        );
      }
-@@ -4118,17 +4012,53 @@
+@@ -4118,17 +4018,53 @@
    }
  
    getImportFormat(): 'tree' | 'flat' {
@@ -152304,7 +152555,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // If contentGeneratorConfigSources is empty (before initializeAuth),
      // get sources from ModelsConfig
      if (
-@@ -4139,13 +4069,13 @@
+@@ -4139,13 +4075,13 @@
      }
      return this.contentGeneratorConfigSources;
    }
@@ -152319,7 +152570,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getCurrentModelRegistryBaseUrl(): string | null | undefined {
      return this.modelsConfig.getCurrentRegistryBaseUrl();
    }
-@@ -4288,65 +4218,1 @@
+@@ -4288,65 +4224 @@
      this.visionModel = model || undefined;
 -  }
 -
@@ -152385,7 +152636,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -   */
 -  setCompactionModel(model: string | undefined): void {
 -    this.compactionModel = model || undefined;
-@@ -4360,21 +4226,12 @@
+@@ -4360,21 +4232,12 @@
      this.imageModel = model || undefined;
      if (!this.initialized || !this.isImageGenerationEnabled()) {
        return;
@@ -152407,7 +152658,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Read the active reasoning-effort tier from the live content-generator
     * config. Returns undefined when thinking is disabled (`reasoning: false`) or
     * no tier is set (the model/provider default applies).
-@@ -4476,15 +4333,18 @@
+@@ -4476,15 +4339,18 @@
        // `if (cfg.reasoning)` checks would treat reasoning as active and the
        // pipeline would emit `reasoning: {}` as wire noise.
        cfg.reasoning = Object.keys(next).length > 0 ? next : undefined;
@@ -152428,7 +152679,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      applyEffort(this.modelsConfig?.getGenerationConfig());
    }
  
-@@ -4618,36 +4478,29 @@
+@@ -4618,36 +4484,29 @@
     */
    getVisionBridgeTimeoutMs(): number | undefined {
      return this.visionBridgeTimeoutMs;
@@ -152468,7 +152719,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // Reasoning effort is a global, model-independent preference (set via
      // /effort). Capture it before the rebuild and re-apply after, so switching
      // models never silently drops the user's chosen effort — neither the
-@@ -4655,101 +4508,12 @@
+@@ -4655,101 +4514,12 @@
      // full refresh path (which rebuilds the config from scratch).
      const priorReasoningEffort = this.getReasoningEffort();
  
@@ -152570,7 +152821,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      // preceding switchModel() ran applyResolvedModelDefaults(), which overwrote
      // modelsConfig's `reasoning` with the new model's preset (undefined for most
      // models), BEFORE this callback fires. So refreshAuth reads `undefined` and
-@@ -4837,20 +4601,4 @@
+@@ -4837,20 +4607,4 @@
      return this.maxSubagentDepth;
 -  }
 -
@@ -152591,7 +152842,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getEmbeddingModel(): string {
-@@ -4873,135 +4621,20 @@
+@@ -4873,135 +4627,20 @@
    }
  
    getTargetDir(): string {
@@ -152728,7 +152979,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      const targetPath = path.resolve(newDir);
      const expected = expectedCanonicalDir ?? fs.realpathSync(targetPath);
      if (!fs.statSync(targetPath).isDirectory()) {
-@@ -5030,29 +4663,16 @@
+@@ -5030,29 +4669,16 @@
          throw new Error(
            `Realpath mismatch: resolved ${actualCanonical}, expected ${expected}.`,
          );
@@ -152759,13 +153010,21 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionService = undefined;
      this.fileHistoryService = undefined;
      this.getFileReadCache().clear();
-@@ -5125,51 +4745,44 @@
+@@ -5125,51 +4751,50 @@
    async shutdown(options?: {
      shutdownTelemetry?: boolean;
      skipSessionWriter?: boolean;
      strictResourceCleanup?: boolean;
    }): Promise<void> {
      this.shutdownRequested = true;
++    // Shutdown reports the recording failures its own settlement finds. A
++    // stop a failure listener was already told of was reported when the
++    // recording stopped, and the session ended on it there; the recorder
++    // raises it again from every later flush and close, which here would
++    // report it twice.
++    const unreported = (error: unknown): void => {
++      if (error !== this.reportedChatRecordingFailure) throw error;
++    };
 -    this.settingsWatcher?.stopWatching();
 -    const closeWriter = () =>
 -      this.closeSessionWriter().catch((error) => {
@@ -152815,14 +153074,12 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 +      ...(!options?.skipSessionWriter && !earlyWriterClose
 +        ? [
 +            () => this.chatRecordingService.finalize(),
-+            async () => {
-+              await this.chatRecordingService.flush();
-+            },
++            () => this.chatRecordingService.flush().catch(unreported),
 +          ]
 +        : []),
 +      () => this.shutdownResources(options?.strictResourceCleanup === true),
 +      ...(!options?.skipSessionWriter
-+        ? [() => earlyWriterClose ?? this.closeSessionWriter()]
++        ? [() => (earlyWriterClose ?? this.closeSessionWriter()).catch(unreported)]
 +        : []),
 +      () => {
 +        this.chatRecordingFailureListeners.clear();
@@ -152838,7 +153095,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      waitForInitialization: boolean,
    ): Promise<void> {
      if (waitForInitialization) {
-@@ -5219,67 +4832,67 @@
+@@ -5219,67 +4844,67 @@
      };
      void shutdown.then(clear, clear);
      return shutdown;
@@ -152961,7 +153218,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.promptRegistry;
    }
  
-@@ -5315,10 +4928,31 @@
+@@ -5315,10 +4940,31 @@
      if (this.getBareMode()) {
        return DEFAULT_BARE_CORE_TOOLS;
      }
@@ -152993,7 +153250,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Returns the merged allow-rules for PermissionManager.
     *
     * This merges all sources so that PermissionManager receives a single,
-@@ -6515,16 +6149,12 @@
+@@ -6515,16 +6161,12 @@
    }
  
    getAccessibility(): AccessibilitySettings {
@@ -153010,7 +153267,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    isTelemetryInitializationDeferred(): boolean {
      return this.telemetryInitializationDeferred;
-@@ -6974,13 +6604,13 @@
+@@ -6974,13 +6616,13 @@
        const service = new FileHistoryService(
          this.sessionId,
          this.fileCheckpointingEnabled,
@@ -153025,7 +153282,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        const snapshots = this.sessionData?.fileHistorySnapshots;
        if (snapshots?.length && service.isEnabled()) {
          service.restoreFromSnapshots(snapshots);
-@@ -7031,16 +6661,12 @@
+@@ -7031,16 +6673,12 @@
    }
  
    getExperimentalZedIntegration(): boolean {
@@ -153042,7 +153299,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    getExtensionManager(): ExtensionManager {
      return this.extensionManager;
-@@ -7069,32 +6695,40 @@
+@@ -7069,32 +6707,40 @@
    }
  
    /**
@@ -153086,7 +153343,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7108,13 +6742,13 @@
+@@ -7108,13 +6754,13 @@
     * Whether the daemon/session should auto-sync team memory with the git
     * remote (pull + commit + push). Resolves the `memory.enableTeamMemorySync`
     * setting, with env `QWEN_CODE_MEMORY_TEAM_SYNC` ('0'/'1') as an override.
@@ -153101,7 +153358,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7122,23 +6756,35 @@
+@@ -7122,23 +6768,35 @@
        return true;
      }
      return this.enableTeamMemorySync;
@@ -153140,7 +153397,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Toggle auto-skill for the running session. The startup value is copied from
     * settings, so persisting a settings change alone would not take effect until
     * the next launch; the skill-review scheduler reads `getAutoSkillEnabled()`
-@@ -7149,13 +6795,17 @@
+@@ -7149,13 +6807,17 @@
     */
    setAutoSkillEnabled(enabled: boolean): void {
      this.enableAutoSkill = enabled;
@@ -153159,7 +153416,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Max runtime in minutes for background memory agents (extraction, dream,
     * remember, skill review). Resolves the `memory.agentTimeoutMinutes`
     * setting. Unset → each agent's built-in default; 0 → no time limit.
-@@ -7418,20 +7068,12 @@
+@@ -7418,20 +7080,12 @@
    setFileSystemService(fileSystemService: FileSystemService): void {
      this.fileSystemService = fileSystemService;
    }
@@ -153180,7 +153437,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.interactive;
    }
  
-@@ -7456,10 +7098,6 @@
+@@ -7456,10 +7110,6 @@
      return this.shouldUseNodePtyShell;
    }
  
@@ -153191,7 +153448,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getShellExecutionConfig(): ShellExecutionConfig {
      return this.shellExecutionConfig;
    }
-@@ -7487,26 +7125,4 @@
+@@ -7487,26 +7137,4 @@
    getSkipLoopDetection(): boolean {
      return this.skipLoopDetection;
    }
@@ -153218,7 +153475,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.maxToolCallsPerTurnExplicit;
 -  }
 -
-@@ -7523,26 +7139,6 @@
+@@ -7523,26 +7151,6 @@
     * extensions, skills, MCP servers, rules) for troubleshooting.
     */
    isSafeMode(): boolean {
@@ -153245,7 +153502,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.truncateToolOutputLines;
 -  }
 -
-@@ -7562,52 +7158,25 @@
+@@ -7562,52 +7170,25 @@
     * default). 0 disables heartbeats.
     */
    getShellHeartbeatIntervalMs(): number | undefined {
@@ -153300,7 +153557,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getGoalRuntimeReady(): Promise<GoalRuntime> {
-@@ -7624,15 +7193,12 @@
+@@ -7624,15 +7205,12 @@
      return runtime.getPreparedRestore().then(() => runtime);
    }
  
@@ -153316,7 +153573,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      runtime.dispose();
      this.initializeGoalRuntime(records);
      await this.goalRuntimeReady;
-@@ -7666,20 +7232,15 @@
+@@ -7666,20 +7244,15 @@
      return () => {
        this.chatRecordingFailureListeners.delete(listener);
      };
@@ -153340,7 +153597,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      records?: readonly GoalRecoveryRecord[],
      restoreRuntime?: SessionRuntimeResumeState,
    ): void {
-@@ -7694,35 +7255,25 @@
+@@ -7694,35 +7267,25 @@
      // writer: its records belong to the outgoing session.
      this.settlePendingGoalRestore(
        new GoalPersistenceUnavailableError(
@@ -153378,7 +153635,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          restoreRuntime.goalCheckpointWindow,
        );
        let resolveActivation!: () => void;
-@@ -7737,16 +7288,13 @@
+@@ -7737,16 +7300,13 @@
          void started.then(resolveActivation, rejectActivation);
          return started;
        };
@@ -153396,7 +153653,21 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.goalRuntimeReady = ready;
      } else {
        this.goalRuntimeReady = runtime
-@@ -7835,34 +7383,32 @@
+@@ -7815,11 +7375,13 @@
+     );
+     this.goalRestoreActivation = undefined;
+     this.rejectGoalRestoreActivation = undefined;
+   }
+ 
+   private notifyChatRecordingFailure(event: ChatRecordingFailureEvent): void {
++    if (this.chatRecordingFailureListeners.size > 0)
++      this.reportedChatRecordingFailure = event.error;
+     for (const listener of [...this.chatRecordingFailureListeners]) {
+       try {
+         const notification = listener(event);
+         if (notification) {
+           void notification.catch((error) => {
+@@ -7835,34 +7397,32 @@
      }
    }
  
@@ -153437,7 +153708,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    setSessionWriterReclaimPolicy(policy: 'local' | 'never'): void {
      if (this.initialized) {
        throw new SessionWriterUnavailableError();
-@@ -7879,13 +7425,13 @@
+@@ -7879,13 +7439,13 @@
  
    closeSessionWriter(options?: { handoff?: boolean }): Promise<void> {
      if (options?.handoff && this.sessionWriterTakeoverPolicy === 'certified') {
@@ -153452,7 +153723,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionWriterClosePromise ??= this.closeSessionWriterOnce();
      return this.sessionWriterClosePromise;
    }
-@@ -7898,13 +7444,13 @@
+@@ -7898,13 +7458,13 @@
      } catch (error) {
        if (!(error instanceof SessionWriterShutdownError)) {
          failures.push(error);
@@ -153467,7 +153738,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        failures.push(error);
      }
      const pendingLease = activation
-@@ -8332,7 +7878,10 @@
+@@ -8332,7 +7892,10 @@
        });
        await registerLazy(ToolNames.SHELL, async () => {
          const { ShellTool } = await import('../tools/shell.js');
@@ -153479,7 +153750,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        });
        await registerGoalWorkerTools();
        await registerStructuredOutputIfRequested();
-@@ -8444,7 +7993,10 @@
+@@ -8444,7 +8007,10 @@
      });
      await registerLazy(ToolNames.SHELL, async () => {
        const { ShellTool } = await import('../tools/shell.js');
@@ -153751,7 +154022,7 @@ diff --git a/packages/core/src/config/qwen38-agent-service-contract.test.ts b/pa
 diff --git a/packages/core/src/config/session-recording-ownership.test.ts b/packages/core/src/config/session-recording-ownership.test.ts
 --- /dev/null
 +++ b/packages/core/src/config/session-recording-ownership.test.ts
-@@ -0,0 +1,676 @@
+@@ -0,0 +1,714 @@
 +/**
 + * @license
 + * Copyright 2025 Google LLC
@@ -153897,6 +154168,44 @@ diff --git a/packages/core/src/config/session-recording-ownership.test.ts b/pack
 +    expect(await readFile(config.getTranscriptPath(), 'utf8')).not.toContain(
 +      'after shutdown',
 +    );
++  });
++
++  it('does not raise again at shutdown a recording stop a listener was told of', async () => {
++    const { config } = createConfig(consumer);
++    await config.initialize();
++    const told: Error[] = [];
++    config.onChatRecordingFailure((event) => {
++      told.push(event.error);
++    });
++    const recorder = config.getChatRecordingService();
++    const stop = new Error('recording stopped earlier');
++    recorder['enterWriteFailure'](stop, config.getSessionId());
++    expect(told).toEqual([stop]);
++    await expect(recorder.flush()).rejects.toBe(stop);
++
++    await expect(
++      config.shutdown({
++        shutdownTelemetry: false,
++        strictResourceCleanup: true,
++      }),
++    ).resolves.toBeUndefined();
++    expect(config.hasSessionWriteOwnership()).toBe(false);
++  });
++
++  it('raises at shutdown a recording stop no listener was told of', async () => {
++    const { config } = createConfig(consumer);
++    await config.initialize();
++    const recorder = config.getChatRecordingService();
++    const stop = new Error('recording stopped unheard');
++    recorder['enterWriteFailure'](stop, config.getSessionId());
++    expectedShutdownErrors.set(config, stop);
++
++    await expect(
++      config.shutdown({
++        shutdownTelemetry: false,
++        strictResourceCleanup: true,
++      }),
++    ).rejects.toBe(stop);
 +  });
 +
 +  it('reports recorder flush failure while releasing the captured writer lease', async () => {
@@ -236319,13 +236628,17 @@ diff --git a/packages/core/src/hooks/types.ts b/packages/core/src/hooks/types.ts
 diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
 --- a/packages/core/src/index.ts
 +++ b/packages/core/src/index.ts
-@@ -1,18 +1,41 @@
+@@ -1,18 +1,45 @@
 +export type { ModelResponseEvidence } from './core/model-response-evidence.js';
 +export type {
 +  ModelUtilityRequestEvidence,
 +  ModelUtilityCompletionEvidence,
 +} from './core/model-utility-evidence.js';
 +export { RECORDING_STALL_TIMEOUT_MS } from './core/recording-stall.js';
++export {
++  RecordingRefusal,
++  findRecordingRefusal,
++} from './core/recording-refusal.js';
 +export {
 +  ModelRequestJournal,
 +  ModelRequestReplay,
@@ -236361,7 +236674,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './permissions/index.js';
  
  // Model configuration
-@@ -48,12 +71,16 @@
+@@ -48,12 +75,16 @@
    validateModelConfig,
  } from './models/index.js';
  
@@ -236378,7 +236691,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  // ============================================================================
  
  export * from './core/client.js';
-@@ -63,12 +90,14 @@
+@@ -63,12 +94,14 @@
    runWithRuntimeContentGenerator,
    type RuntimeContentGeneratorView,
    runOutsideAgentContext,
@@ -236393,7 +236706,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export {
    type PlanModeShellDecision,
    evaluatePlanModeShellPolicy,
-@@ -89,12 +118,13 @@
+@@ -89,12 +122,13 @@
  export * from './core/message-display-dispatcher.js';
  export * from './core/nonInteractiveToolExecutor.js';
  export * from './core/prompts.js';
@@ -236407,7 +236720,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './core/turn-interruption.js';
  
  // ============================================================================
-@@ -234,16 +264,12 @@
+@@ -234,16 +268,12 @@
  export * from './providers/index.js';
  
  // ============================================================================
@@ -236424,7 +236737,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  } from './services/compactionInputSlimming.js';
  export * from './services/chatRecordingService.js';
  export * from './services/cronScheduler.js';
-@@ -266,29 +292,27 @@
+@@ -266,29 +296,27 @@
  } from './services/cronTasksFile.js';
  export * from './services/fileDiscoveryService.js';
  export * from './services/fileHistoryService.js';
@@ -236459,7 +236772,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './services/visionBridge/image-part-utils.js';
  export * from './services/visionBridge/image-capability.js';
  export * from './services/sessionRecap.js';
-@@ -313,12 +337,13 @@
+@@ -313,12 +341,13 @@
    SESSION_TRANSCRIPT_MAX_LIMIT,
    SESSION_TRANSCRIPT_MAX_PAGE_BYTES,
    SessionTranscriptCursorCodec,
@@ -236473,7 +236786,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    SelectiveSessionRestoreOptions,
    SessionLiveRestoreProjection,
    SessionRestoreProjection,
-@@ -328,25 +353,25 @@
+@@ -328,25 +357,25 @@
    SessionTranscriptCursorState,
    SessionTranscriptReadPageOptions,
    SessionTranscriptRecordPage,
@@ -236502,7 +236815,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
    TokenUsageExportOptions,
    TokenUsageGroupSummary,
    TokenUsagePeriod,
-@@ -600,24 +625,26 @@
+@@ -600,24 +629,26 @@
    isTlsVerificationDisabled,
    preloadRuntimeFetchModule,
    redactProxyCredentials,
@@ -236530,7 +236843,7 @@ diff --git a/packages/core/src/index.ts b/packages/core/src/index.ts
  export * from './utils/forkedAgent.js';
  export * from './utils/sideQuery.js';
  
-@@ -704,6 +731,71 @@
+@@ -704,6 +735,71 @@
  export {
    setStartupEventSink,
    recordStartupEvent,
@@ -376869,7 +377182,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,1283 @@
+@@ -0,0 +1,1332 @@
 +import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -376882,6 +377195,7 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  type ModelRequestEvidence,
 +} from './model-request-evidence.js';
 +import { RECORDING_STALL_TIMEOUT_MS } from './recording-stall.js';
++import { RecordingRefusal } from './recording-refusal.js';
 +import type { Content } from '@google/genai';
 +import {
 +  UtilityDelivery,
@@ -378142,21 +378456,69 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +      'a directive stating another ceiling than max_tokens',
 +      () => body([...prompt, directive, notice], budget - 1),
 +    ],
-+  ])('refuses %s', async (_name, request) => {
++  ])('refuses %s, after writing the request it refuses', async (_name, request) => {
 +    const live = recorder();
-+    await expect(live.draw(request())).rejects.toThrow(
++    const refused = live.draw(request());
++    await expect(refused).rejects.toBeInstanceOf(RecordingRefusal);
++    await expect(refused).rejects.toThrow(
 +      'Invalid model response evidence: compaction',
 +    );
-+    await expect(live.journal.flush()).rejects.toThrow(
-+      'Invalid model response evidence: compaction',
-+    );
++    await expect(live.journal.flush()).rejects.toBeInstanceOf(RecordingRefusal);
++    // The window judged the request after the journal persisted it, and
++    // wrote it before refusing: the stream keeps what the refusal is about,
++    // and states no summary it cannot stand behind.
++    expect(live.records).toHaveLength(1);
++    expect(live.written).toEqual(['model_request']);
++    expect(live.output.takePending()).toEqual([]);
++    expect(() => live.output.summary()).toThrow(RecordingRefusal);
 +    live.output.close();
++  });
++});
++
++describe('a record the journal refuses', () => {
++  it('is written to every output window and never persisted', async () => {
++    const persisted: string[] = [];
++    const journal = new ModelRequestJournal(
++      async () => {
++        persisted.push('model_request');
++      },
++      () => true,
++      async () => {
++        persisted.push('model_response');
++      },
++    );
++    const output = journal.openOutputWindow();
++    const written: string[] = [];
++    output.setDrain(async () => {
++      for (const record of output.takePending()) written.push(record.type);
++    });
++    const response = await journal.capture(
++      serialize([]),
++      'root',
++      'p',
++      's',
++      null,
++      TEST_POLICY,
++    );
++    // A history disposition belongs to a chat attempt; the journal's own
++    // replay refuses one for a utility request before it is persisted.
++    const refused = journal['recordResponse']({
++      journal_id: journal.id,
++      request_id: response.requestId,
++      sequence: 1,
++      event: { kind: 'history', disposition: 'abandoned' },
++    });
++    await expect(refused).rejects.toBeInstanceOf(RecordingRefusal);
++    expect(persisted).toEqual(['model_request']);
++    expect(written).toEqual(['model_request', 'model_response']);
++    await expect(journal.flush()).rejects.toBeInstanceOf(RecordingRefusal);
++    output.close();
 +  });
 +});
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.ts
-@@ -0,0 +1,1657 @@
+@@ -0,0 +1,1735 @@
 +import { canonicalGenerationOrigin } from './model-output-origin.js';
 +/** Exact provider request bodies; evidence is never a conversation turn. */
 +import { createHash, randomUUID } from 'node:crypto';
@@ -378189,6 +378551,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  requireModelResponseEvidence,
 +  type ModelResponseEvidence,
 +} from './model-response-evidence.js';
++import { judgeRecord, RecordingRefusal } from './recording-refusal.js';
 +import {
 +  RECORDING_STALL_TIMEOUT_MS,
 +  withRecordingDeadline,
@@ -378569,7 +378932,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    );
 +    const write = this.tail.then(async () => {
 +      if (this.failure) throw this.failure.cause;
-+      const evidence = requireModelUtilityRequestEvidence({
++      const candidate = {
 +        journal_id: this.id,
 +        sequence: this.sequence + 1,
 +        request_id: requestId,
@@ -378583,8 +378946,15 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        body_json: json,
 +        body_bytes: Buffer.byteLength(json, 'utf8'),
 +        body_sha256: hash(json),
-+      });
-+      this.utilities.observeRequest(evidence);
++      };
++      let evidence!: ModelUtilityRequestEvidence;
++      await this.admit(
++        { type: 'model_utility_request', utility_request: candidate },
++        () => {
++          evidence = requireModelUtilityRequestEvidence(candidate);
++          this.utilities.observeRequest(evidence);
++        },
++      );
 +      await this.persistUtilityRequest!(evidence);
 +      this.sequence = evidence.sequence;
 +      this.utilityRequestIds.add(requestId);
@@ -378616,7 +378986,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      );
 +    const write = this.tail.then(async () => {
 +      if (this.failure) throw this.failure.cause;
-+      const evidence = requireModelUtilityCompletionEvidence({
++      const candidate = {
 +        journal_id: this.id,
 +        operation_id: input.operationId,
 +        kv_scope: input.scope,
@@ -378627,8 +378997,15 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +        request_ids: [...input.requestIds],
 +        result: input.result,
 +        error: input.error,
-+      });
-+      this.utilities.observeCompletion(evidence);
++      };
++      let evidence!: ModelUtilityCompletionEvidence;
++      await this.admit(
++        { type: 'model_utility_completion', utility_completion: candidate },
++        () => {
++          evidence = requireModelUtilityCompletionEvidence(candidate);
++          this.utilities.observeCompletion(evidence);
++        },
++      );
 +      await this.persistUtilityCompletion!(evidence);
 +      await this.publish({
 +        type: 'model_utility_completion',
@@ -378728,8 +379105,10 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +            }
 +          : { kind: 'full', json },
 +      };
-+      requireModelRequestEvidence(evidence);
-+      this.generations.observeRequest(evidence);
++      await this.admit({ type: 'model_request', request: evidence }, () => {
++        requireModelRequestEvidence(evidence);
++        this.generations.observeRequest(evidence);
++      });
 +      await this.persist(evidence);
 +      admitted = true;
 +      if (attempt) attempt.attach(response);
@@ -378765,6 +379144,27 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    }
 +  }
 +
++  /**
++   * Judge a record before it joins the canonical recording. History stays a
++   * prefix its readers accept, so a record the recorder refuses is never
++   * persisted; it is still evidence of what this client produced, so it is
++   * published to every output window before the refusal stops the journal,
++   * and the stream keeps the record the refusal is about.
++   */
++  private async admit(
++    evidence: ModelEvidence,
++    judgement: () => void,
++  ): Promise<void> {
++    try {
++      judgeRecord(judgement);
++    } catch (refusal) {
++      // A window's own refusal of the same record is a consequence of this
++      // one; the journal names the first.
++      await this.publish(evidence).catch(() => undefined);
++      throw refusal;
++    }
++  }
++
 +  private async publish(evidence: ModelEvidence): Promise<void> {
 +    if (!this.outputStarted && this.retainForOutput())
 +      this.pending.push(evidence);
@@ -378778,9 +379178,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  private recordResponse(evidence: ModelResponseEvidence): Promise<void> {
 +    const write = this.tail.then(async () => {
 +      if (this.failure) throw this.failure.cause;
-+      if (this.utilityRequestIds.has(evidence.request_id))
-+        this.utilities.observeResponse(evidence);
-+      else this.generations.observeResponse(evidence);
++      await this.admit({ type: 'model_response', response: evidence }, () => {
++        if (this.utilityRequestIds.has(evidence.request_id))
++          this.utilities.observeResponse(evidence);
++        else this.generations.observeResponse(evidence);
++      });
 +      await this.persistResponse(evidence);
 +      await this.publish({ type: 'model_response', response: evidence });
 +    });
@@ -378794,9 +379196,14 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    seed = structuredClone(requireModelNormalizationSeed(seed));
 +    const write = this.tail.then(async () => {
 +      if (this.failure) throw this.failure.cause;
-+      if (seed.journal_id !== this.id)
-+        return refusal('normalization seed belongs to another journal');
-+      this.generations.observeSeed(seed);
++      await this.admit(
++        { type: 'model_normalization_seed', normalization_seed: seed },
++        () => {
++          if (seed.journal_id !== this.id)
++            return refusal('normalization seed belongs to another journal');
++          this.generations.observeSeed(seed);
++        },
++      );
 +      await this.publish({
 +        type: 'model_normalization_seed',
 +        normalization_seed: seed,
@@ -378812,9 +379219,11 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    generation = Object.freeze({ ...generation });
 +    const write = this.tail.then(async () => {
 +      if (this.failure) throw this.failure.cause;
-+      if (generation.journal_id !== this.id)
-+        return refusal('generation belongs to another journal');
-+      this.generations.observeGeneration(generation);
++      await this.admit({ type: 'model_generation', generation }, () => {
++        if (generation.journal_id !== this.id)
++          return refusal('generation belongs to another journal');
++        this.generations.observeGeneration(generation);
++      });
 +      await this.publish({ type: 'model_generation', generation });
 +    });
 +    this.tail = write.catch((cause) => {
@@ -378830,7 +379239,9 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +    completion = structuredClone(completion);
 +    const write = this.tail.then(async () => {
 +      if (this.failure) throw this.failure.cause;
-+      this.generations.observeCompletion(completion);
++      await this.admit({ type: 'model_attempt_completion', completion }, () =>
++        this.generations.observeCompletion(completion),
++      );
 +      await persist(completion);
 +      await this.publish({ type: 'model_attempt_completion', completion });
 +    });
@@ -378884,7 +379295,9 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  private readonly generations = new ModelGenerationReplay();
 +  private readonly utilities = new ModelUtilityReplay();
 +  private readonly utilityRequestIds = new Set<string>();
-+  private failure: { cause: unknown } | undefined;
++  /** Each rendered generation's stream parent, for the completion that settles it. */
++  private readonly generationParents = new Map<string, string | null>();
++  private refusal: RecordingRefusal | undefined;
 +  private drain: ((progress: () => void) => Promise<void>) | undefined;
 +  constructor(
 +    readonly journalId: string,
@@ -378895,6 +379308,7 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +  }
 +  enqueue(record: ModelEvidence): void {
 +    if (this.closed) return refusal('the output window is closed');
++    if (this.refusal) throw this.refusal;
 +    let outputScope: GenerationEnvelope['output_scope'] | undefined;
 +    if (record.type === 'model_request') {
 +      if (record.request.sequence !== this.firstSequence + this.count)
@@ -378960,32 +379374,59 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      outputScope =
 +        this.generations.observeCompletion(completion).envelope.output_scope;
 +    }
-+    this.pending.push({
-+      ...record,
-+      parent_tool_use_id:
-+        outputScope?.kind === 'conversation'
-+          ? outputScope.parent_tool_use_id
-+          : null,
-+    });
++    const parent =
++      outputScope?.kind === 'conversation'
++        ? outputScope.parent_tool_use_id
++        : null;
++    if (record.type === 'model_generation')
++      this.generationParents.set(record.generation.generation_id, parent);
++    this.pending.push({ ...record, parent_tool_use_id: parent });
 +  }
++  /**
++   * Write a record, then judge it. The window renders what the client
++   * produced whether or not its replay accepts it: a record the replay
++   * refuses is drained to the output like any other, so the stream keeps the
++   * record a refusal is about, and the refusal is then raised to the journal,
++   * which stops recording on it. Judging never removes a record from the
++   * output, and a window that refused states no terminal summary.
++   */
 +  async append(record: ModelEvidence, progress: () => void): Promise<void> {
++    let refused: RecordingRefusal | undefined;
 +    try {
-+      this.enqueue(record);
++      judgeRecord(() => this.enqueue(record));
 +    } catch (cause) {
-+      if (
-+        record.type !== 'model_generation' &&
-+        record.type !== 'model_attempt_completion'
-+      )
-+        throw cause;
-+      this.failure = { cause };
-+      this.close();
-+      return;
++      refused = cause as RecordingRefusal;
++      if (this.closed) throw refused;
++      this.refusal ??= refused;
++      this.pending.push({
++        ...record,
++        parent_tool_use_id: this.refusedRecordParent(record),
++      });
 +    }
 +    try {
 +      await this.drain?.(progress);
 +    } catch (cause) {
 +      if (!this.closed) throw cause;
 +    }
++    if (refused) throw refused;
++  }
++  /**
++   * The stream parent of a record its replay refused, from what was rendered
++   * before it: a completion's generation, or a generation's own envelope. A
++   * generation whose envelope cannot be decoded names no parent and is
++   * written at the root, followed by its refusal.
++   */
++  private refusedRecordParent(record: ModelEvidence): string | null {
++    if (record.type === 'model_attempt_completion')
++      return this.generationParents.get(record.completion.generation_id) ?? null;
++    if (record.type !== 'model_generation') return null;
++    let scope: GenerationEnvelope['output_scope'];
++    try {
++      scope = readModelGeneration(record.generation).output_scope;
++    } catch {
++      return null;
++    }
++    return scope.kind === 'conversation' ? scope.parent_tool_use_id : null;
 +  }
 +  setDrain(drain: (progress: () => void) => Promise<void>): void {
 +    this.drain = drain;
@@ -378995,11 +379436,10 @@ diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/sr
 +      readonly parent_tool_use_id: string | null;
 +    }
 +  > {
-+    if (this.failure) throw this.failure.cause;
 +    return this.pending.splice(0);
 +  }
 +  summary(): ModelRequestSummary {
-+    if (this.failure) throw this.failure.cause;
++    if (this.refusal) throw this.refusal;
 +    this.utilities.finish();
 +    return {
 +      journal_id: this.journalId,
@@ -402998,7 +403438,7 @@ diff --git a/packages/cli/src/nonInteractive/io/output-window-lifecycle.test.ts 
 diff --git a/packages/cli/src/nonInteractive/io/terminal-usage.test.ts b/packages/cli/src/nonInteractive/io/terminal-usage.test.ts
 --- /dev/null
 +++ b/packages/cli/src/nonInteractive/io/terminal-usage.test.ts
-@@ -0,0 +1,474 @@
+@@ -0,0 +1,489 @@
 +// @vitest-environment node
 +import { expect, it, vi } from 'vitest';
 +import {
@@ -403422,8 +403862,11 @@ diff --git a/packages/cli/src/nonInteractive/io/terminal-usage.test.ts b/package
 +    await expect(utility(f.config, counts(1, 0))).rejects.toThrow(
 +      /invalid served usage/,
 +    );
++    // The recorder writes the outcome it refuses, so the stream ends with it,
++    // and a reader refuses that same record and nothing before it.
 +    const replayed = new ModelResponseReplay();
-+    for (const row of a.records) {
++    const refusals: string[] = [];
++    for (const [index, row] of a.records.entries()) {
 +      if (row.type === 'model_request')
 +        replayed.begin(
 +          row.request.journal_id,
@@ -403432,8 +403875,20 @@ diff --git a/packages/cli/src/nonInteractive/io/terminal-usage.test.ts b/package
 +          row.request.kv_scope,
 +          row.request.decode_policy,
 +        );
-+      else if (row.type === 'model_response') replayed.observe(row.response);
++      else if (row.type === 'model_response') {
++        try {
++          replayed.observe(row.response);
++        } catch (error) {
++          refusals.push(`${index}: ${String(error)}`);
++          break;
++        }
++      }
 +    }
++    expect(refusals).toEqual([
++      expect.stringMatching(
++        new RegExp(`^${a.records.length - 1}: .*invalid served usage`),
++      ),
++    ]);
 +    expect(replayed.usageSummary()).toEqual({
 +      requests: 2,
 +      usageReports: 1,
@@ -432423,3 +432878,55 @@ diff --git a/packages/core/src/utils/safeJsonParse.ts b/packages/core/src/utils/
 -    }
 -  }
 -}
+diff --git a/packages/core/src/core/recording-refusal.ts b/packages/core/src/core/recording-refusal.ts
+--- /dev/null
++++ b/packages/core/src/core/recording-refusal.ts
+@@ -0,0 +1,48 @@
++/**
++ * The recorder refused a record it had produced, by its own rules: the record
++ * is not one its readers accept. Nothing failed to write. This is a defect in
++ * what the client produced or in the rule that judged it, never a storage
++ * fault, and the recording stops at it.
++ *
++ * The refusal's text names the rule that refused. It is composed by the
++ * recorder from fixed wording and the identities and quantities of the
++ * records it judges -- never from a path or an operating-system error -- so
++ * it can be told on the output stream, where a write failure's text is not.
++ */
++export class RecordingRefusal extends Error {
++  constructor(readonly refusal: unknown) {
++    super(refusal instanceof Error ? refusal.message : String(refusal), {
++      cause: refusal,
++    });
++    this.name = 'RecordingRefusal';
++  }
++}
++
++/** Run one of the recorder's judgements; whatever it refuses is a refusal. */
++export function judgeRecord<T>(judgement: () => T): T {
++  try {
++    return judgement();
++  } catch (cause) {
++    throw cause instanceof RecordingRefusal ? cause : new RecordingRefusal(cause);
++  }
++}
++
++/**
++ * The recording refusal an error is or carries -- as its cause, or among an
++ * aggregate's errors -- if it carries one.
++ */
++export function findRecordingRefusal(
++  error: unknown,
++): RecordingRefusal | undefined {
++  const seen = new Set<unknown>();
++  const pending: unknown[] = [error];
++  while (pending.length > 0) {
++    const current = pending.shift();
++    if (!(current instanceof Error) || seen.has(current)) continue;
++    seen.add(current);
++    if (current instanceof RecordingRefusal) return current;
++    pending.push(current.cause);
++    if (current instanceof AggregateError) pending.push(...current.errors);
++  }
++  return undefined;
++}

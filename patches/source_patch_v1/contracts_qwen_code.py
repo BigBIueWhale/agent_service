@@ -1749,6 +1749,36 @@ def _validate_stream_evidence_after(state: State) -> None:
     label = "headless stream-evidence result"
     adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
     adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
+    # Recording represents what happened; a judgement inside it cannot remove
+    # the record it is about. The window renders first and judges second; the
+    # journal keeps history a valid prefix by never persisting what it refuses,
+    # and still publishes it as evidence before stopping.
+    evidence = "packages/core/src/core/model-request-evidence.ts"
+    _require_all(
+        state,
+        evidence,
+        (
+            "      judgeRecord(() => this.enqueue(record));",
+            "      this.pending.push({\n        ...record,\n        parent_tool_use_id: this.refusedRecordParent(record),\n      });",
+            "    if (refused) throw refused;",
+            "      await this.publish(evidence).catch(() => undefined);\n      throw refusal;",
+        ),
+        label=label,
+    )
+    _require(
+        "if (this.failure) throw this.failure.cause;\n    return this.pending.splice(0);"
+        not in _source(state, evidence, label=label),
+        f"{label}: a window that refused may not withhold the records it wrote",
+    )
+    _require_all(
+        state,
+        "packages/cli/src/utils/chat-recording-failure.ts",
+        (
+            "const refusal = findRecordingRefusal(error);",
+            "message: chatRecordingFailureMessage(event.error),",
+        ),
+        label=label,
+    )
     # The provider request owns exact model input, and the tool_result block
     # carries exactly the text of the tool message that request gives the
     # model for the call: the one function response answering it, spelled by
@@ -7151,6 +7181,28 @@ _BUDGET_STATE_TABLE = re.compile(
 
 
 def _validate_terminal_state_after(state: State) -> None:
+    # A recording failure is an ending, never an escape past the one emitter.
+    runner = "packages/cli/src/nonInteractiveCli.ts"
+    _require_ordered(
+        _source(state, runner, label="stopped-recording ending"),
+        (
+            "const endIfRecordingStopped = async (): Promise<number | undefined> => {",
+            "        const stoppedExitCode = await endIfRecordingStopped();\n        if (stoppedExitCode !== undefined) return stoppedExitCode;",
+            "        const emitted = await emitResult({",
+            "        const stoppedExitCode = await endIfRecordingStopped();\n        if (stoppedExitCode !== undefined) return stoppedExitCode;\n        terminalExitCode =",
+        ),
+        label="stopped-recording ending",
+        location=runner,
+    )
+    _require_all(
+        state,
+        "packages/core/src/config/config.ts",
+        (
+            "      if (error !== this.reportedChatRecordingFailure) throw error;",
+            "            () => this.chatRecordingService.flush().catch(unreported),",
+        ),
+        label="stopped-recording ending",
+    )
     writer_path = "packages/cli/src/utils/output-writer.ts"
     _require_all(
         state,
@@ -11795,7 +11847,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "model for that call, with no display fallback and no stream-only cut. Its is_error "
             "flag cannot be bound to model input, which renders an output and an error as the "
             "same text; it stays the client's claim, which a reader judging a run by failed "
-            "calls must trust and which a forged stream can flip without refusal."
+            "calls must trust and which a forged stream can flip without refusal. Judging never "
+            "removes a record from the output: a stdout window writes each record before its replay "
+            "judges it, and a record the journal refuses is published to every window and never "
+            "persisted before the journal stops on it. A refusal is a typed recording refusal, told "
+            "on the stream with the rule that refused, never as a write failure."
         ),
         removal_condition=(
             "Upstream emits equivalent scoped generation evidence through callback-settled output "
@@ -12079,7 +12135,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "with the state and wire name the tool-call budget ended a run in. What halts a run short "
             "of its budget is repetition, named as repetition. Budget admission precedes "
             "charging. One queued-turn lifetime tracks result delivery, so failed cleanup cannot mint a "
-            "second terminal; cleanup and output callbacks are awaited."
+            "second terminal; cleanup and output callbacks are awaited. The recording is settled "
+            "before anything terminal is written and is part of how the run ended: a recording that "
+            "stopped ends the run in the error state with its cause on stderr and no result after the "
+            "stop, and shutdown does not raise again a stop a failure listener was told of."
         ),
         removal_condition=(
             "Upstream provides total state mapping, exact budget ownership, one result delivery, and "

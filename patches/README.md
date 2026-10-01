@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `f5dd8b7e1bfdb527ca3b1bf09b9e3059dfa0ca51dcdaf88217c50be4aa07a170`
+- Review-diff SHA-256: `6ebc9d0c8c25081feaeefc9676d5251a36a67661818957417deb41c49e5cb0ed`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `41bf1808ad291801c23386bf34b2a9cf11708777ba6b829eaf3ae1795f9097af`
+- Transformer-manifest SHA-256: `f6860ca852e6d9aef8818b27408367aea8ea84b2384519b2076d5aa4980de307`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -549,7 +549,14 @@ before parser delivery. Read-ahead past its stated bound refuses the response
 after recording every byte read, so a record is complete or says it is not. The
 record quantum never truncates a response. Active stdout renderers
 drain each admitted record before generation proceeds. Detached renderers release
-their window without poisoning the canonical writer. Recorder waits are excluded
+their window without poisoning the canonical writer. Recording represents what
+happened, so no judgement inside it removes a record from the output: a stdout
+window writes each record before its replay judges it, and the journal, which
+keeps the canonical history a prefix its readers accept by never persisting a
+record it refuses, still publishes that record to every window before it stops.
+A refusal is a `RecordingRefusal`; the stream's `session_recording_degraded`
+record tells it with the rule that refused, where a storage failure keeps
+upstream's words, and no further request is sent. Recorder waits are excluded
 from the request's start, idle and generation clocks, so the recorder bounds
 itself: the asynchronous canonical writer and response cancellation refuse
 after one minute without progress
@@ -719,7 +726,12 @@ Result acknowledgement follows output settlement. The shared `withCleanup` and
 `runCleanupSteps` preserve independent operation and cleanup failures while
 awaiting their owners. Shutdown joins admitted
 cleanup work, recording, bridge closure, and stdout/stderr settlement while
-preserving independent failures reported by those operations. Queued turn work owns whether its result was
+preserving independent failures reported by those operations; a recording stop
+a failure listener was already told of was reported when it happened and is not
+raised again. The recording is settled before a run writes anything terminal,
+and what it settled to is part of how the run ended: a recording that stopped
+ends the run in the error state, with its cause on stderr and the error state's
+exit code, and no result is written after the stop. Queued turn work owns whether its result was
 already delivered; subsequent cleanup failure cannot create another result.
 Fatal worker failure cancels input admission even while its input pipe is open.
 
