@@ -4,7 +4,9 @@
   "implementation_commit": "b14b7619006491e21e3daf432860142d388804cf",
   "build_inputs_manifest_sha256": "1953c524823082172d5907868f386857c51f6f86671e3cc03f64dbc8587e167f",
   "stack_lock_sha256": "427d7252117b340c49a35338ab440ac61ac98e1948e712bda1cc2c1e8c3b80c0",
-  "archive": null,
+  "archive": {
+    "sha256": "273add9f44d7decdb192d1428e231f781d439c47c46b1fe8a53229400b5aa19f"
+  },
   "images": {
     "agent": "sha256:1178557bdbd60f202a1dac84cadbc214f50816715daf058b83e3e26fc8765a57",
     "capture": "sha256:2f446423fd30fd62cf733fd11e47dd4840bcdd7b6320da7c0e9326d23d33c6d7",
