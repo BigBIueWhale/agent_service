@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `3d24b6750d1963fa124fd6d6a6fa8c2d1faaa1c45588690d231c187dd5bb8b8b`
+- Review-diff SHA-256: `dd236692e7bab459dc05da90a300d0642a422d17c58a686e66f473fb95c886d2`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `7ebd9f35b535f1ffd16083b146e110d83527c0260a814684e81aa3b2f70ca14f`
+- Transformer-manifest SHA-256: `34e62fad2f2abdde970f5d3199aaa11652a65f5f66907905fc4127e4f53f4ea5`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -137,7 +137,7 @@ that a declared path is the one the prompt names.
 
 ## Context and instructions
 
-The context partition spends the window exactly, from five declared quantities.
+The context partition spends the window exactly, from six declared quantities.
 `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a declared
 capacity rather than a derivation: the system prompt and the tool declarations
 are texts this repo ships, so the turn preamble is counted exactly against it by
@@ -147,11 +147,17 @@ their byte caps rather than counted, and so is the startup context that opens
 every history, its environment lines and folder listing bounded the same way,
 and the turn budget the `## Context` section states, its number bounded by the
 sixteen digits a safe integer renders to; a preamble that does not fit is a
-startup refusal naming shorten-or-deploy-larger;
-each compaction's preflight holds what its request adds -- the snapshot's
-declaration and the directive -- to the same share, beside the refusal notices
-the prompt it summarises can carry, which the startup proof also holds within
-it so a redraw keeps a turn's room. The
+startup refusal naming shorten-or-deploy-larger. The preamble is in every
+request the trigger is compared with, so `D` is charged in the fit, not held
+back from the trigger. `A`, what a request adds to the prompt it was admitted
+at, is 3W/256 — 3,072 tokens — a declared capacity proved the same way: a
+refused turn's redraw adds its refusal notices to that prompt, and the request
+that compacts it adds the snapshot's declaration and the directive, counted by
+the startup proof in the shape every compaction request carries them with the
+directive stating the widest ceiling, and a redraw's notice; their sum, 3,026,
+is held within `A` before the first turn, and each compaction's preflight holds
+what its own request adds to the same share, since a request can carry a user's
+`/compress` text or a PreCompact hook's that no startup proof sees. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof bounds the frame around a compacted
@@ -174,16 +180,17 @@ a turn legitimately does, write one inline block after reasoning about it: the
 block is at most `M` tokens whatever it holds, because a text's tokens are at
 most the UTF-8 bytes of its NFC form, the form the served tokenizer splits, so
 `C = M + R`. `T`, the compaction trigger, is what the window has left,
-`T = W - C - D`. At the served window they are 40,960 and 208,896. What stands
+`T = W - C - A`. At the served window they are 40,960 and 218,112. What stands
 in the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; every term but the
 turn is bounded in bytes before it exists, so `D + (S + F) + 2(M + F) + (C + F)`
-must stand below the trigger, and does, by 24,331 at the served window. All of it is
+must stand below the trigger, and does, by 33,547 at the served window. All of it is
 asserted, not assumed: the fit, the no-overrun property and the compaction room
 are checked at every window the partition can be given, and a window where the
-fit fails is refused rather than partitioned. Every token of `C` or `D`, and
-every byte of `M`, is a token `T` does not have; `S` is not in `T`, since a
-snapshot is never generated as a turn. `C` is the output limit of every turn
+fit fails is refused rather than partitioned. Every token of `C` or `A`, and
+every byte of `M`, is a token `T` does not have; `D` and `S` are not in `T`,
+since the preamble is counted in every request and a snapshot is never
+generated as a turn. `C` is the output limit of every turn
 whatever its prompt, and the least a compaction's draw is issued with. The route refuses a configured ceiling, including
 `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate histories are
 counted using the actual rendered request, and a request is counted once: the
@@ -293,7 +300,7 @@ acceptance — not decoding — refuses a longer draw, which is redrawn whole
 rather than cut. A redraw carries one message more than the request it
 repeats: why the draw before it was refused and what to do instead, built from
 measured values and closed names rather than the draw's text, never the draw
-itself, and bounded at its widest inside the directive's share of `D`. Every
+itself, and bounded at its widest inside the additions' share, `A`. Every
 reader reads a draw's ceiling where its request states it -- the last message,
 or the one before a final notice, which opens as every refusal does -- and holds
 it to the request's `max_tokens`, the client's replay and the native certifier
@@ -355,7 +362,7 @@ declaration ends the turn's tool block differently, so the request does not
 reuse the turn's prompt-cache prefix past it; the conversation it carries is
 otherwise unchanged. What the request adds to the prompt it summarizes -- the
 declaration and the directive -- is measured against that prompt as it was
-issued and held to the static preamble's share.
+issued and held to the additions' share, `A`.
 
 How the snapshot is obtained is ours; how the history it becomes is rendered is
 upstream's. The accepted sections are rendered as upstream's `<state_snapshot>`

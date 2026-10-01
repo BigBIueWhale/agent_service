@@ -4238,14 +4238,15 @@ def _validate_compaction_budget_before(state: State) -> None:
     )
 
 
-# The quantities the partition declares. `D`, `M`, `S` and `R` are shares of
-# the window; `F` is a byte count that belongs to the served chat template and
-# does not scale with the window. They are read out of the post-patch source
-# rather than restated here, so the arithmetic below is a check on the tree
-# and not a copy of it.
+# The quantities the partition declares. `D`, `A`, `M`, `S` and `R` are shares
+# of the window; `F` is a byte count that belongs to the served chat template
+# and does not scale with the window. They are read out of the post-patch
+# source rather than restated here, so the arithmetic below is a check on the
+# tree and not a copy of it.
 _PARTITION_DECLARED_NAMES = (
     "WINDOW_SHARES",
     "STATIC_PREAMBLE_SHARES",
+    "PROMPT_ADDITIONS_SHARES",
     "INLINE_BLOCK_SHARES",
     "SNAPSHOT_SHARES",
     "TURN_REASONING_SHARES",
@@ -4256,11 +4257,12 @@ _PARTITION_DECLARED_NAMES = (
 _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
     "staticPreamble": 12_288,
+    "promptAdditions": 3_072,
     "inlineBlockBytes": 32_768,
     "snapshotBytes": 65_536,
     "messageFraming": 61,
     "turnGeneration": 40_960,
-    "compactionTrigger": 208_896,
+    "compactionTrigger": 218_112,
 }
 
 # Partition numbers of no deployment this repository describes. A literal in
@@ -4268,7 +4270,8 @@ _SERVED_PARTITION = {
 # source derives, and nothing would notice it disagree.
 _RETIRED_PARTITION_NUMBERS = re.compile(
     r"(?<!\w)(?<!\d,)(?<!\d\.)"
-    r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215|57[_,]?099|151[_,]?796)"
+    r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215|57[_,]?099|151[_,]?796"
+    r"|208[_,]?896|24[_,]?331|135[_,]?046)"
     r"(?!\w|,\d|\.\d)"
 )
 
@@ -4289,21 +4292,24 @@ def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
     """The partition a window yields, written from the declarations.
 
     `C` is one inline block at the most tokens it can be and the reasoning
-    share beside it; `T` is what the window has left once `C` and `D` are
-    held back.
+    share beside it; `T` is what the window has left once `C` and `A` are
+    held back. The preamble is in every request the trigger is compared with,
+    so `D` is charged in the fit and held back from nothing.
     """
     total = declared["WINDOW_SHARES"]
     share = lambda shares: (window * shares) // total  # noqa: E731
     preamble = share(declared["STATIC_PREAMBLE_SHARES"])
+    additions = share(declared["PROMPT_ADDITIONS_SHARES"])
     block = share(declared["INLINE_BLOCK_SHARES"])
     turn = block + share(declared["TURN_REASONING_SHARES"])
     return {
         "staticPreamble": preamble,
+        "promptAdditions": additions,
         "inlineBlockBytes": block,
         "snapshotBytes": share(declared["SNAPSHOT_SHARES"]),
         "messageFraming": declared["MESSAGE_FRAMING_BYTES"],
         "turnGeneration": turn,
-        "compactionTrigger": window - turn - preamble,
+        "compactionTrigger": window - turn - additions,
     }
 
 
@@ -4322,7 +4328,7 @@ def _surviving(part: dict[str, int]) -> int:
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget follows from five declared quantities, and what a
+    """Every context budget follows from six declared quantities, and what a
     compaction can leave standing stands below the trigger.
 
     The safety argument: what stands in the window after a compaction is the
@@ -4349,21 +4355,22 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         f"{label}: every declared quantity must be a positive integer",
     )
     _require(
-        declared["STATIC_PREAMBLE_SHARES"]
+        declared["PROMPT_ADDITIONS_SHARES"]
         + declared["INLINE_BLOCK_SHARES"]
         + declared["TURN_REASONING_SHARES"]
         < declared["WINDOW_SHARES"],
         f"{label}: the declared shares leave no window for a trigger",
     )
     # `C` is a block and the reasoning beside it, and `T` is what the window
-    # has left once `C` and `D` are held back, so the three terms spend the
-    # window exactly and no fourth budget exists.
+    # has left once `C` and `A` are held back, so the three terms spend the
+    # window exactly and no fourth budget exists; the preamble is inside the
+    # requests the trigger is compared with, and charged in the fit.
     _require_all(
         state,
         limits,
         (
             "  const turnGeneration = inlineBlockBytes + share(TURN_REASONING_SHARES);",
-            "  const compactionTrigger = contextWindowSize - turnGeneration - staticPreamble;",
+            "  const compactionTrigger = contextWindowSize - turnGeneration - promptAdditions;",
             "  if (surviving > compactionTrigger - 1) {",
             "this deployment needs a larger window.",
         ),
@@ -4391,7 +4398,7 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"{label}: a {window}-token window yields a non-positive budget {part!r}",
         )
         _require(
-            part["staticPreamble"] + part["turnGeneration"] + part["compactionTrigger"]
+            part["promptAdditions"] + part["turnGeneration"] + part["compactionTrigger"]
             == window,
             f"{label}: a {window}-token window is not spent exactly by {part!r}",
         )
@@ -4415,14 +4422,14 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         )
         _require(
             window - (part["compactionTrigger"] - 1)
-            == part["turnGeneration"] + part["staticPreamble"] + 1,
+            == part["turnGeneration"] + part["promptAdditions"] + 1,
             f"{label}: at a {window}-token window the request that summarises "
             f"the largest admitted prompt is not issued with a whole turn's "
-            f"room plus the preamble",
+            f"room plus what a request may add to it",
         )
     # A window too small to hold what a compaction leaves standing is refused
     # rather than partitioned into something unusable.
-    for tiny in (256, 257, 459, 1_086, 1_104, 2_549, 2_552, 2_592):
+    for tiny in (256, 257, 459, 1_086, 1_104, 1_846, 1_848, 1_888):
         part = _partition(tiny, declared)
         _require(
             _surviving(part) > part["compactionTrigger"] - 1,
@@ -4740,14 +4747,25 @@ def _validate_compaction_budget_after(state: State) -> None:
     # message the refused draw answered, a redraw is admitted only against
     # that message, carries the notice and nothing else, is never compacted,
     # and is drawn at most MAX_GENERATION_DRAWS times. Its request stands
-    # above the trigger by no more than its notices, which the startup proof
-    # holds within D, so its room is a turn's.
+    # above the trigger by no more than its notices, and the request that
+    # compacts its prompt by those and what that request adds -- the
+    # snapshot's declaration and the directive, counted in the shape every
+    # compaction request carries them at the widest ceiling, and a redraw's
+    # notice -- which the startup proof holds within A, so its room is a
+    # turn's and every draw's is at least that.
     _require_ordered(
         chat_source,
         (
             "private refusal:",
-            "const refusalNotices = refusedTurnNoticeTokens(partition);",
-            "if (refusalNotices > partition.staticPreamble) {",
+            "const compactionAdded =",
+            "buildCompressionSystemPrompt(undefined, ''),",
+            "partition.window,",
+            "compactionRequestTools(rendered.tools ?? [], partition),",
+            ")) - bare;",
+            "partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;",
+            "const turnNotices = refusedTurnNoticeTokens(partition);",
+            "const additions = compactionAdded + redrawNotice + turnNotices;",
+            "if (additions > partition.promptAdditions) {",
             "async redrawRefusedTurn(",
             "'redraw',",
             "draw: 'turn' | 'redraw',",
@@ -4817,7 +4835,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         "refuses a redraw once the conversation has changed since the refusal",
         "refuses a redraw that carries %s",
         "leaves a refused turn behind when a new message is sent",
-        "refuses a window whose preamble share cannot hold a refused turn's notices",
+        "holds what a request may add to its prompt within the room above the trigger",
+        "counts what a compaction request adds in the shape it carries it",
     ):
         require_text(state, chat_test, case, label=label)
     require_text(
@@ -5078,7 +5097,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     for case in (
-        "refuses when what the request adds outgrows the static preamble",
+        "refuses when what the request adds outgrows the room above the trigger for it",
         "gives the snapshot at least a turn's room at the largest prompt a turn can be issued against",
         "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
         "keeps the pending tool result out of the summary and in the turn's commit counts",
@@ -5095,13 +5114,13 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "declares D, M and S as shares of the window and F as a constant",
+        "declares D, A, M and S as shares of the window and F as a constant",
         "gives a turn one inline block at its most tokens and the reasoning share beside it",
         "spends the whole window and nothing more",
         "leaves what a compaction can leave standing below the trigger, at every window",
         "cannot overrun the window from the largest admitted prompt",
         "issues the compaction of any admitted prompt with a whole turn of room",
-        "takes every token of the turn room and the preamble from the trigger",
+        "takes every token of the turn room and the additions from the trigger, and none of the preamble",
         "names the served partition and the least a segment after a compaction has",
         "refuses a window too small to hold what a compaction leaves standing",
         "refuses a window that is not a count of tokens",
@@ -5111,12 +5130,10 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, limits_test, case, label=label)
     # A turn's room is sized, not maximised: nothing asserts it is the largest
-    # the fit allows, and the trigger is not independent of the preamble.
-    for retired in (
-        "gives a turn the largest room the fit allows",
-        "leaves the trigger independent of the static preamble",
-    ):
-        forbid_text(state, limits_test, retired, label=label)
+    # the fit allows.
+    forbid_text(
+        state, limits_test, "gives a turn the largest room the fit allows", label=label
+    )
     forbid_text(state, limits, "The largest C satisfying", label=label)
     # The retired vocabulary cannot come back through a test either: a case
     # that still names a reserve is describing a partition this deployment no
@@ -5135,7 +5152,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     # snapshot's declaration and the directive -- less the widest notice a
     # redraw appends. What it adds is measured against the prompt as it was
     # issued, with the turn's own tools, and it and that notice, framed, are
-    # held to the static preamble's share before the first draw beside the
+    # held to the additions' share, `A`, before the first draw beside the
     # refusal notices the prompt itself can carry past the trigger, so every
     # draw -- the first and each redraw -- is issued under one ceiling that is
     # never below a turn's room.
@@ -5150,7 +5167,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "          config: { ...requestOptions.config, tools: turnTools },\n          contents: issuedPrompt,",
             "const addedTokens =\n        summaryRequestTokenCount - promptOnlyCount.totalTokens;",
             "const turnNoticeTokens = refusedTurnNoticeTokens(partition);",
-            "        addedTokens + redrawNoticeTokens + turnNoticeTokens >\n        partition.staticPreamble",
+            "        addedTokens + redrawNoticeTokens + turnNoticeTokens >\n        partition.promptAdditions",
             "compactionOutputBudget =\n        contextLimit - summaryRequestTokenCount - redrawNoticeTokens;",
             "if (compactionOutputBudget < partition.turnGeneration) {",
             "      if (originalTokenCount < partition.compactionTrigger) {",
@@ -5358,7 +5375,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         "tells the next draw why %s was refused, and what to do instead",
         "does not show the next draw the draw that was refused",
         "tells each redraw only why the draw just before it was refused",
-        "holds the widest redraw notice and the notices of a refused turn inside the share of the static preamble what the request adds is held to",
+        "holds the widest redraw notice and the notices of a refused turn inside the share what the request adds is held to",
         "derives the widest notice from the notices themselves",
     ):
         require_text(state, service_test, case, label=label)
@@ -5474,12 +5491,15 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
-    require_text(
-        state,
-        service,
-        "text: `${systemInstruction}\\n\\n${compactionRequestDirective(maxOutputTokens)}`",
-        label=label,
-    )
+    # The closing message and the snapshot's declaration are built in one
+    # place, which the startup proof counts and every draw is issued from.
+    for construct in (
+        "text: `${instructions}\\n\\n${compactionRequestDirective(maxOutputTokens)}`",
+        "compactionDirectiveMessage(systemInstruction, maxOutputTokens),",
+        "  return [...turnTools, stateSnapshotTool(partition.snapshotBytes)];",
+        "tools: compactionRequestTools(turnTools, partition),",
+    ):
+        require_text(state, service, construct, label=label)
     _require_ordered(
         service_source,
         (
@@ -5803,7 +5823,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         service,
         (
             "const turnTools = generationConfig.tools ?? [];",
-            "tools: [...turnTools, stateSnapshotTool(partition.snapshotBytes)],",
+            "  return [...turnTools, stateSnapshotTool(partition.snapshotBytes)];",
+            "tools: compactionRequestTools(turnTools, partition),",
             "          functionCallingConfig: {\n            mode: FunctionCallingConfigMode.ANY,\n            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],\n          },",
             "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.snapshotBytes,\n      )",
             "                  maxBytes: partition.snapshotBytes,",
@@ -11973,11 +11994,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="context-window-partition",
         rationale=(
-            "The served window is spent from five declared quantities: the static preamble, a "
+            "The served window is spent from six declared quantities: the static preamble, a "
             "capacity proved against the real preamble before the first turn, with the Git "
             "snapshot's values, the startup context's workspace data and the stated turn budget's "
-            "number bounded by their bytes; one inline block; the most an accepted snapshot may "
-            "render to; the per-message framing; and the "
+            "number bounded by their bytes, and charged in the fit because the trigger is compared "
+            "with requests that hold it; what a request may add to the prompt it was admitted "
+            "at, a capacity proved before the first turn against a refused turn's notices and a "
+            "compaction request's declaration, directive and redraw notice; one inline block; the "
+            "most an accepted snapshot may render to; the per-message framing; and the "
             "reasoning a turn is given beside one block. A turn's room is one inline block at its "
             "most tokens and that reasoning, the compaction trigger is what the window has left, "
             "and what a compaction leaves standing fits below it; a turn's output limit is that "

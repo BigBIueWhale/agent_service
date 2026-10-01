@@ -39,13 +39,14 @@ SYSTEM_SETTINGS_FILES = (
     Path("/etc/qwen-code/settings.json"),
     Path("/etc/qwen-code/system-defaults.json"),
 )
-# The two-turn cycle's requests, in order: the startup proof's six counts (the preamble,
+# The two-turn cycle's requests, in order: the startup proof's seven counts (the preamble,
 # the preamble with its startup context, the compaction frame -- the snapshot's trailer,
 # the acknowledgement and a retained input's header -- and the todo reminder, the framing
-# text alone, and the message, turn and tool-result probes), then for each turn the request it
-# is about to issue, counted once because compaction leaves it as it was, and the generation.
-# A tool result is bounded where it is made, so no turn counts a baseline without it.
-EXPECTED_ROUTES = ["/tokenize"] * 7 + ["/v1/chat/completions"] + ["/tokenize"] + ["/v1/chat/completions"]
+# text alone, the message, turn and tool-result probes, and the preamble in the shape a
+# compaction request carries it), then for each turn the request it is about to issue,
+# counted once because compaction leaves it as it was, and the generation. A tool result is
+# bounded where it is made, so no turn counts a baseline without it.
+EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] + ["/v1/chat/completions"]
 EXPECTED_ROLES = [
     ["system"],
     ["system", "user", "user", "assistant", "user"],
@@ -55,9 +56,15 @@ EXPECTED_ROLES = [
     ["system", "user", "assistant", "tool"],
     ["system", "user"],
     ["system", "user"],
+    ["system", "user"],
     ["system", "user", "assistant", "tool"],
     ["system", "user", "assistant", "tool"],
 ]
+# The proof's count of what a compaction request adds: the turn's tools with the snapshot's
+# declaration after them, and the message that closes the request, stating the widest
+# ceiling a draw can be issued with, the served window.
+COMPACTION_PROBE = 6
+SNAPSHOT_FUNCTION = "state_snapshot"
 
 
 class SmokeFailure(RuntimeError):
@@ -197,19 +204,29 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
         require(system.count(rule) == 1 and f"{block}\n\n{rule}" in system,
                 f"request {index}'s system message does not carry the sealed output-language rule "
                 "once, after the sealed QWEN.md")
-        require_quantities_stated_once(system, body["tools"])
+        declared = body["tools"]
+        if index == COMPACTION_PROBE:
+            require(declared[-1]["function"]["name"] == SNAPSHOT_FUNCTION,
+                    "the proof's compaction count does not declare the snapshot after the turn's tools")
+            declared = declared[:-1]
+            closing = body["messages"][-1]["content"]
+            closing = closing if isinstance(closing, str) else "".join(
+                part.get("text", "") for part in closing if part.get("type") == "text")
+            require("your answer may generate at most 262144 tokens" in closing,
+                    "the proof's compaction count does not state the widest ceiling a draw has")
+        require_quantities_stated_once(system, declared)
         require(body["chat_template_kwargs"] == config["extra_body"]["chat_template_kwargs"],
                 f"request {index}'s template arguments are not the sealed ones")
-        tools = tools if tools is not None else body["tools"]
-        require(body["tools"] == tools, f"request {index} declares other tools than the first")
+        tools = tools if tools is not None else declared
+        require(declared == tools, f"request {index} declares other tools than the first")
         # Every turn states the budget a session that names none runs under; the startup
         # proof counts its line with the widest number left out.
-        if index >= 6:
+        if index > COMPACTION_PROBE:
             require(f"- This session may run at most {turn_budget} turns." in system,
                     f"request {index} does not state the sealed {turn_budget}-turn budget")
     require(sorted(t["function"]["name"] for t in tools) == sorted(strict_tools),
             "the declared tools are not the launcher's strict tools")
-    for index in (7, 9):
+    for index in (8, 10):
         body = requests[index]["body"]
         for key, value in config["samplingParams"].items():
             require(body[key] == value, f"generation {index} sends {key}={body[key]!r}, not {value!r}")

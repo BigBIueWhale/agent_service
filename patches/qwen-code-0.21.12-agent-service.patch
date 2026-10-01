@@ -11021,7 +11021,7 @@ diff --git a/packages/acp-bridge/src/bridge.test.ts b/packages/acp-bridge/src/br
 diff --git a/packages/acp-bridge/src/context-usage-types.ts b/packages/acp-bridge/src/context-usage-types.ts
 --- /dev/null
 +++ b/packages/acp-bridge/src/context-usage-types.ts
-@@ -0,0 +1,28 @@
+@@ -0,0 +1,29 @@
 +import type { STATUS_SCHEMA_VERSION } from './status-version.js';
 +
 +export interface ServeSessionContextUsage {
@@ -11033,6 +11033,7 @@ diff --git a/packages/acp-bridge/src/context-usage-types.ts b/packages/acp-bridg
 +    window: number;
 +    compactionTrigger: number;
 +    staticPreamble: number;
++    promptAdditions: number;
 +    inlineBlockBytes: number;
 +    snapshotBytes: number;
 +    messageFraming: number;
@@ -84456,7 +84457,7 @@ diff --git a/packages/cli/src/ui/commands/compressFastCommand.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/src/ui/commands/contextCommand.test.ts
 --- a/packages/cli/src/ui/commands/contextCommand.test.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.test.ts
-@@ -1,369 +1,308 @@
+@@ -1,369 +1,311 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -84658,7 +84659,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +    expect(text).toContain(
 +      'Rendered request: 120,000 / 200,000 tokens (vLLM /tokenize)',
 +    );
-+    expect(text).toContain('Compaction trigger: 159,375 tokens');
++    expect(text).toContain('Compaction trigger: 166,407 tokens');
 +    expect(text).toContain(
 +      'below trigger, so the next turn is issued with 31,250 tokens of room',
 +    );
@@ -84668,12 +84669,15 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +    expect(text).toContain(
 +      'Declared static preamble, system prompt and tool declarations: 9,375 tokens',
 +    );
++    expect(text).toContain(
++      "Declared additions above the trigger, refusal notices and a compaction request's declaration and directive: 2,343 tokens",
++    );
 +    expect(text).toContain('One inline block: 25,000 bytes, framed by 61');
 +    expect(text).toContain('One compaction snapshot: 50,000 bytes');
 +    expect(data.partition).toEqual(partitionContextWindow(200_000));
 +  });
 +
-+  it.each([0, 50_000, 159_374])(
++  it.each([0, 50_000, 166_406])(
 +    'reports measured usage %i below the trigger',
 +    async (tokens) => {
 +      const data = await collectContextData(makeFixture(tokens).config, false);
@@ -84684,7 +84688,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 -  };
 +  );
 +
-+  it.each([159_375, 200_000])(
++  it.each([166_407, 200_000])(
 +    'requires compaction at measured usage %i',
 +    async (tokens) => {
 +      const data = await collectContextData(makeFixture(tokens).config, false);
@@ -84700,7 +84704,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +      'Rendered request: 0 / 200,000 tokens',
 +    );
 +    expect(formatContextUsageText(data)).toContain(
-+      'Compaction trigger: 159,375 tokens',
++      'Compaction trigger: 166,407 tokens',
 +    );
 +  });
 +
@@ -84710,7 +84714,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +      false,
 +    );
 +    expect(data.partition).toEqual(partitionContextWindow(32_000));
-+    expect(data.partition.compactionTrigger).toBe(25_500);
++    expect(data.partition.compactionTrigger).toBe(26_625);
 +    expect(data.partition.turnGeneration).toBe(5_000);
 +    expect(data.partition.inlineBlockBytes).toBe(4_000);
 +    expect(data.partition.snapshotBytes).toBe(8_000);
@@ -85119,7 +85123,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/ui/commands/contextCommand.ts
 --- a/packages/cli/src/ui/commands/contextCommand.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.ts
-@@ -1,626 +1,94 @@
+@@ -1,626 +1,95 @@
  /**
   * @license
 - * Copyright 2025 Qwen
@@ -85546,6 +85550,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 +    `Compaction trigger: ${count(p.compactionTrigger)} tokens; ${data.renderedRequestTokens >= p.compactionTrigger ? 'compaction required before another turn' : `below trigger, so the next turn is issued with ${count(p.turnGeneration)} tokens of room`}.`,
 +    `Turn generation, the room every turn is issued with, reasoning included: ${count(p.turnGeneration)} tokens`,
 +    `Declared static preamble, system prompt and tool declarations: ${count(p.staticPreamble)} tokens`,
++    `Declared additions above the trigger, refusal notices and a compaction request's declaration and directive: ${count(p.promptAdditions)} tokens`,
 +    `One inline block: ${count(p.inlineBlockBytes)} bytes, framed by ${count(p.messageFraming)}`,
 +    `One compaction snapshot: ${count(p.snapshotBytes)} bytes`,
 +    `History: ${data.historyMessages} messages; ${data.tools.length} available tool declarations.`,
@@ -181343,7 +181348,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
  import { classifyRetryError } from '../utils/retryErrorClassification.js';
  import { StreamContentError } from './openaiContentGenerator/pipeline.js';
-@@ -30,30 +96,501 @@
+@@ -30,30 +96,537 @@
  import { EnhancedErrorHandler } from './openaiContentGenerator/errorHandler.js';
  import { APIConnectionTimeoutError } from 'openai';
  import type { OpenAICompatibleProvider } from './openaiContentGenerator/provider/index.js';
@@ -181360,7 +181365,14 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +  type ChatCompressionInfo,
 +  type CompactionRecord,
 +} from './turn.js';
-+import { ChatCompressionService } from '../services/chatCompressionService.js';
++import {
++  ChatCompressionService,
++  DRAW_REFUSAL_NOTICE_MAX_BYTES,
++  buildCompressionSystemPrompt,
++  compactionDirectiveMessage,
++} from '../services/chatCompressionService.js';
++import { STATE_SNAPSHOT_FUNCTION_NAME } from '../services/state-snapshot.js';
++import { getCompressionPrompt } from './prompts.js';
 +import { compactionFrame } from '../services/postCompactAttachments.js';
 +import { activeTodoReminderBound } from '../tools/todo-reminder.js';
 +import { partitionContextWindow } from './tokenLimits.js';
@@ -181402,18 +181414,20 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +const FRAMING_PROBE = 'framing';
 +
 +/**
-+ * Before its first turn a chat proves `D` and `F` against the served
++ * Before its first turn a chat proves `D`, `F` and `A` against the served
 + * tokenizer: it counts the preamble alone, then the preamble with each of
 + * three framing probes -- a user message, then an assistant turn after it,
-+ * then a tool result with the call it answers -- and the probe's text
-+ * alone. They are fixed requests, so a case that stubs a count by value has
-+ * to say what they render to as well, and a case that counts calls has to
-+ * know which of them were this proof. Every probe opens with the same user
-+ * message.
++ * then a tool result with the call it answers -- the probe's text alone, and
++ * the preamble in the shape a compaction request carries it, under the
++ * snapshot's declaration and the directive. They are fixed requests, so a
++ * case that stubs a count by value has to say what they render to as well,
++ * and a case that counts calls has to know which of them were this proof.
++ * Every framing probe opens with the same user message.
 + */
 +function isDeclarationProbe(contents: Content[]): boolean {
 +  if (contents.length === 0) return true;
 +  if (isFrameProbe(contents)) return true;
++  if (isCompactionProbe(contents)) return true;
 +  const [first] = contents;
 +  return (
 +    first.role === 'user' &&
@@ -181442,6 +181456,25 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +/** What the served template spends on that fixed text. */
 +const FRAME_TOKENS = 124;
 +
++/**
++ * The proof counts what a compaction request adds as one message: the
++ * compaction's shipped instructions and the directive at the widest ceiling.
++ */
++function isCompactionProbe(contents: Content[]): boolean {
++  return (
++    contents.length === 1 &&
++    contents[0].role === 'user' &&
++    contents[0].parts?.length === 1 &&
++    contents[0].parts[0].text?.startsWith(getCompressionPrompt()) === true
++  );
++}
++
++/**
++ * What the served template and tokenizer render the snapshot's declaration
++ * and the directive to, beside the turn's own tools and the preamble.
++ */
++const COMPACTION_ADDITIONS_TOKENS = 1_440;
++
 +/** The most bytes the reminder's list and truncation mark add. */
 +const TODO_LIST_BYTES = activeTodoReminderBound().listBytes;
 +
@@ -181468,9 +181501,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +  contents: Content[],
 +  framings: Record<ProbedKind, number>,
 +  preamble: number,
++  additions = COMPACTION_ADDITIONS_TOKENS,
 +): number {
 +  if (contents.length === 0) return preamble;
 +  if (isFrameProbe(contents)) return preamble + FRAME_TOKENS;
++  if (isCompactionProbe(contents)) return preamble + additions;
 +  const message = preamble + framings.message + FRAMING_PROBE_TOKENS;
 +  if (contents.length === 1) return message;
 +  const turn = message + framings.turn + 2 * FRAMING_PROBE_TOKENS;
@@ -181481,20 +181516,26 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +/**
 + * Answer the declaration proof from the request's shape and leave every other
 + * count to `count`. A case can serve a template that frames some kind more
-+ * widely, or a longer preamble.
++ * widely, a longer preamble, or wider compaction additions.
 + */
 +function answeringDeclarations(
 +  count: ContentGenerator['countRequestTokens'],
 +  window: number,
 +  framings: Partial<Record<ProbedKind, number>> = {},
 +  preamble = DECLARED_PREAMBLE_TOKENS,
++  additions = COMPACTION_ADDITIONS_TOKENS,
 +): Mock<ContentGenerator['countRequestTokens']> {
 +  const served = { ...SERVED_FRAMING_TOKENS, ...framings };
 +  return vi.fn(async (request, promptId) => {
 +    const contents = request.contents as Content[];
 +    if (isDeclarationProbe(contents)) {
 +      return {
-+        totalTokens: declarationProbeTokens(contents, served, preamble),
++        totalTokens: declarationProbeTokens(
++          contents,
++          served,
++          preamble,
++          additions,
++        ),
 +        maxModelLen: window,
 +      };
 +    }
@@ -181853,7 +181894,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  vi.mock('node:fs', () => {
    const fsModule = {
      mkdirSync: vi.fn(),
-@@ -88,35 +625,29 @@
+@@ -88,35 +661,29 @@
    return {
      ...actual,
      retryWithBackoff: mockRetryWithBackoff,
@@ -181891,7 +181932,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  const { mockAcquireSleepInhibitor, mockSleepInhibitorRelease } = vi.hoisted(
    () => ({
      mockAcquireSleepInhibitor: vi.fn(),
-@@ -154,72 +685,117 @@
+@@ -154,72 +721,117 @@
  
    beforeEach(() => {
      vi.clearAllMocks();
@@ -182024,7 +182065,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    afterEach(() => {
      vi.restoreAllMocks();
-@@ -271,12 +847,13 @@
+@@ -271,12 +883,13 @@
        yield* responses;
      })();
    }
@@ -182038,7 +182079,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -284,15 +861,19 @@
+@@ -284,15 +897,19 @@
    }
  
    describe('system instruction helpers', () => {
@@ -182059,7 +182100,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
-@@ -302,15 +883,19 @@
+@@ -302,15 +919,19 @@
        );
      });
  
@@ -182080,7 +182121,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nUser memory\n\n---\n\nAppended rule',
        );
  
-@@ -322,20 +907,24 @@
+@@ -322,20 +943,24 @@
        );
      });
  
@@ -182106,7 +182147,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        isolatedChat.setSessionStartContext('Ctx1');
        isolatedChat.setSessionStartContext('Ctx2');
  
-@@ -344,15 +933,19 @@
+@@ -344,15 +969,19 @@
        );
      });
  
@@ -182127,7 +182168,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
        isolatedChat.applySessionStartContext(
          '  Sync ctx  ',
-@@ -364,15 +957,19 @@
+@@ -364,15 +993,19 @@
        );
      });
  
@@ -182148,7 +182189,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'Base instruction\n\n---\n\nSessionStart additional context:\nLegitimate content',
        );
  
-@@ -384,17 +981,780 @@
+@@ -384,17 +1017,780 @@
        expect(isolatedChat['generationConfig'].systemInstruction).toContain(
          '<qwen:session-start-context hidden="true">\nSessionStart additional context:\nCtx1\n</qwen:session-start-context>',
        );
@@ -182929,7 +182970,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -415,12 +1775,93 @@
+@@ -415,12 +1811,93 @@
          mockConfig,
          'Qwen Code is streaming a model response',
        );
@@ -183023,7 +183064,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            mockContentGenerator.generateContentStream,
          ).mockImplementation(async () =>
            streamResponse(stopResponse([{ text: 'ok' }])),
-@@ -525,34 +1966,40 @@
+@@ -525,34 +2002,40 @@
              ),
          ).toHaveLength(1);
        });
@@ -183073,7 +183114,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'second' },
            'prompt-id-plan-exit-rollback-2',
          );
-@@ -630,78 +2077,88 @@
+@@ -630,78 +2113,88 @@
            mockConfig.restorePendingManualPlanExitNotice,
          ).not.toHaveBeenCalled();
        });
@@ -183184,7 +183225,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    'changed outside the approved exit_plan_mode flow',
                  ),
                ),
-@@ -725,15 +2182,16 @@
+@@ -725,15 +2218,16 @@
              ),
            );
            expect(noticeTurn?.parts?.at(-1)?.text).toContain(
@@ -183203,7 +183244,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              mockConfig.takePendingManualPlanExitNotice,
            ).toHaveBeenCalledTimes(1);
            expect(
-@@ -764,13 +2222,22 @@
+@@ -764,13 +2258,22 @@
            'prompt-id-plan-exit-before-rebuild',
          );
          for await (const _ of firstStream) {
@@ -183227,7 +183268,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'replacement chat' },
            'prompt-id-plan-exit-after-rebuild',
          );
-@@ -795,12 +2262,13 @@
+@@ -795,12 +2298,13 @@
      });
  
      it('increments the user-content push counter once per surviving send', async () => {
@@ -183241,7 +183282,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -824,12 +2292,13 @@
+@@ -824,12 +2328,13 @@
      });
  
      it('releases the sleep inhibitor when the stream errors', async () => {
@@ -183255,7 +183296,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                },
              ],
            } as unknown as GenerateContentResponse;
-@@ -852,43 +2321,46 @@
+@@ -852,43 +2357,46 @@
        ).rejects.toThrow('stream aborted');
  
        expect(mockSleepInhibitorRelease).toHaveBeenCalledTimes(1);
@@ -183305,7 +183346,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          'prompt-id-tool-call-empty-end',
        );
        await expect(
-@@ -907,38 +2379,40 @@
+@@ -907,38 +2415,40 @@
        expect(modelTurn?.parts![0]!.functionCall).toBeDefined();
      });
  
@@ -183351,7 +183392,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test message' },
            'prompt-id-no-finish-empty-end',
          );
-@@ -949,23 +2423,25 @@
+@@ -949,23 +2459,25 @@
      });
  
      it('should succeed if the stream ends with an invalid part but has a finishReason and contained a valid part', async () => {
@@ -183377,7 +183418,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '' }], // Invalid part
                },
-@@ -1002,20 +2478,22 @@
+@@ -1002,20 +2514,22 @@
      });
  
      it('should consolidate subsequent text chunks after receiving an empty text chunk', async () => {
@@ -183400,7 +183441,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1045,39 +2523,44 @@
+@@ -1045,39 +2559,44 @@
      });
  
      it('should consolidate adjacent text parts that arrive in separate stream chunks', async () => {
@@ -183445,7 +183486,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        })();
  
        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
-@@ -1110,18 +2593,19 @@
+@@ -1110,18 +2629,19 @@
        expect(modelTurn.parts![2]!.text).toBe('This is the second part.');
      });
      it('should preserve text parts that stream in the same chunk as a thought', async () => {
@@ -183466,7 +183507,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1149,25 +2633,24 @@
+@@ -1149,25 +2669,24 @@
        expect(history.length).toBe(2);
  
        const modelTurn = history[1]!;
@@ -183499,7 +183540,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'first message' }] },
          {
            role: 'model',
-@@ -1182,12 +2665,13 @@
+@@ -1182,12 +2701,13 @@
            ],
          },
        ]);
@@ -183513,7 +183554,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1256,12 +2740,13 @@
+@@ -1256,12 +2776,13 @@
            ],
          },
        ]);
@@ -183527,7 +183568,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -1295,114 +2780,77 @@
+@@ -1295,114 +2816,77 @@
        expect(frParts[0]!.functionResponse?.id).toBe('call_retry_real_fr');
        expect(
          (frParts[0]!.functionResponse?.response as { output?: string })?.output,
@@ -183697,7 +183738,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            role: 'model',
            parts: [
-@@ -1426,21 +2874,23 @@
+@@ -1426,21 +2910,23 @@
                },
              },
            ],
@@ -183721,7 +183762,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    role: 'model',
                    parts: [
                      {
-@@ -1452,12 +2902,13 @@
+@@ -1452,12 +2938,13 @@
                      },
                    ],
                  },
@@ -183735,7 +183776,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const stream = await chat.sendMessageStream(
          'test-model',
          { message: 'second request' },
-@@ -1479,157 +2930,18 @@
+@@ -1479,157 +2966,18 @@
          functionCall?.type === StreamEventType.CHUNK
            ? functionCall.value.functionCalls?.[0]?.id
            : undefined,
@@ -183895,7 +183936,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: 'partial reply that will be lost' }],
                },
-@@ -1663,62 +2975,30 @@
+@@ -1663,62 +3011,30 @@
      });
  
      it('should throw InvalidStreamError when no tool call and no finish reason', async () => {
@@ -183964,7 +184005,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { message: 'test' },
            'prompt-id-1',
          );
-@@ -1730,12 +3010,13 @@
+@@ -1730,12 +3046,13 @@
  
      it('should succeed when there is finish reason and only thought content (reasoning models)', async () => {
        // This test verifies that responses containing only thought/reasoning content
@@ -183978,7 +184019,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -1777,215 +3058,13 @@
+@@ -1777,215 +3094,13 @@
        expect(modelTurn.parts![0]).toEqual({
          thought: true,
          text: 'Let me think through this problem step by step...',
@@ -184195,7 +184236,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -2045,172 +3124,16 @@
+@@ -2045,172 +3160,16 @@
                (part) => part.functionCall?.id === 'call_list_files',
              ),
          ),
@@ -184370,7 +184411,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [{ text: '(empty content)' }],
                },
-@@ -2259,12 +3182,14 @@
+@@ -2259,12 +3218,14 @@
          } as unknown as GenerateContentResponse;
  
          // Some providers emit a trailing usage-only chunk after finishReason.
@@ -184385,7 +184426,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2289,24 +3214,26 @@
+@@ -2289,24 +3250,26 @@
      });
  
      it('should succeed for thought-only content when finish reason arrives in a later chunk', async () => {
@@ -184412,7 +184453,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [],
                },
-@@ -2356,12 +3283,14 @@
+@@ -2356,12 +3319,14 @@
          } as unknown as GenerateContentResponse;
  
          // Provider can emit trailing usage-only chunk after finish.
@@ -184427,7 +184468,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2402,14 +3331,15 @@
+@@ -2402,14 +3367,15 @@
                },
                finishReason: 'STOP',
                index: 0,
@@ -184444,7 +184485,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2425,87 +3355,46 @@
+@@ -2425,87 +3391,46 @@
        for await (const _ of stream) {
          // consume stream
        }
@@ -184551,7 +184592,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        vi.mocked(mockConfig.getChatCompression).mockReturnValue({
          maxRecentImagesToRetain: 1,
          imagePayloadThreshold: 1,
-@@ -2527,24 +3416,24 @@
+@@ -2527,24 +3452,24 @@
            role: 'model',
            parts: [{ text: 'I see the second image' }],
          },
@@ -184577,7 +184618,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          response,
        );
  
-@@ -2594,12 +3483,13 @@
+@@ -2594,12 +3519,13 @@
              },
            ],
          },
@@ -184591,7 +184632,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  parts: [{ text: 'response' }],
                  role: 'model',
                },
-@@ -2664,33 +3554,39 @@
+@@ -2664,33 +3590,39 @@
        chat.setHistory([
          { role: 'user', parts: [{ text: 'prior question' }] },
          { role: 'model', parts: [{ text: 'prior answer' }] },
@@ -184634,7 +184675,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'hello' },
-@@ -2714,13 +3610,22 @@
+@@ -2714,13 +3646,22 @@
          'prompt-id-no-request-clone',
        );
      });
@@ -184658,7 +184699,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            candidates: [
              {
                content: {
-@@ -2729,14 +3634,15 @@
+@@ -2729,14 +3670,15 @@
                },
                finishReason: 'STOP',
                index: 0,
@@ -184675,7 +184716,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2751,25 +3657,71 @@
+@@ -2751,25 +3693,71 @@
        );
        for await (const _ of stream) {
          // consume stream
@@ -184749,7 +184790,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              candidates: [
                {
                  content: {
-@@ -2778,187 +3730,206 @@
+@@ -2778,187 +3766,206 @@
                  },
                  finishReason: 'STOP',
                  index: 0,
@@ -185096,7 +185137,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            },
          } as unknown as GenerateContentResponse;
        })();
-@@ -2966,27 +3937,36 @@
+@@ -2966,27 +3973,36 @@
          response,
        );
  
@@ -185140,7 +185181,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  role: 'model',
                  parts: [
                    {
-@@ -3015,54 +3995,58 @@
+@@ -3015,54 +4031,58 @@
      });
    });
  
@@ -185209,7 +185250,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
  
-@@ -3084,31 +4068,38 @@
+@@ -3084,31 +4104,38 @@
          .mockResolvedValue({
            newHistory: null,
 +          failure: null,
@@ -185259,7 +185300,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('second response'),
        );
        const stream = await chat.sendMessageStream(
-@@ -3127,35 +4118,47 @@
+@@ -3127,35 +4154,47 @@
            .some((content) =>
              content.parts?.some((part) => part.text === 'first'),
            ),
@@ -185319,7 +185360,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse(),
        );
  
-@@ -3166,29 +4169,31 @@
+@@ -3166,29 +4205,31 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -185353,7 +185394,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +4204,1672 @@
+@@ -3199,2262 +4240,1705 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -187776,7 +187817,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        });
 +        await sendOn(chat, 'prompt-proof-declared');
 +        expect(proofInstructions()).toEqual(
-+          Array(5).fill('instruction without repository data'),
++          Array(6).fill('instruction without repository data'),
 +        );
 +        expect(
 +          mockContentGenerator.generateContentStream,
@@ -187871,7 +187912,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        });
 +        await sendOn(chat, 'prompt-proof-turn-budget');
 +        expect(proofInstructions()).toEqual(
-+          Array(5).fill('instruction with the budget left out'),
++          Array(6).fill('instruction with the budget left out'),
 +        );
 +        expect(
 +          mockContentGenerator.generateContentStream,
@@ -187995,15 +188036,18 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        chat.setSystemInstruction('replacement');
 +        serveInstructions({ declared: PARTITION.staticPreamble + 1 });
 +        await sendOn(chat, 'prompt-proof-replaced');
-+        expect(proofInstructions()).toEqual(Array(5).fill('replacement'));
++        expect(proofInstructions()).toEqual(Array(6).fill('replacement'));
 +      });
 +
 +      /** The tool declarations each proof request carried. */
++      /** The tools each preamble probe was counted with; the compaction probe adds the snapshot's. */
 +      function proofTools(): string[] {
 +        return vi
 +          .mocked(mockContentGenerator.countRequestTokens)
-+          .mock.calls.filter(([request]) =>
-+            isDeclarationProbe(request.contents as Content[]),
++          .mock.calls.filter(
++            ([request]) =>
++              isDeclarationProbe(request.contents as Content[]) &&
++              !isCompactionProbe(request.contents as Content[]),
 +          )
 +          .map(([request]) => JSON.stringify(request.config?.tools ?? null));
        }
@@ -188027,7 +188071,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        serveInstructions({});
 +        await sendOn(chat, 'prompt-proof-once-1');
 +        await sendOn(chat, 'prompt-proof-once-2');
-+        expect(proofInstructions()).toHaveLength(5);
++        expect(proofInstructions()).toHaveLength(6);
 +      });
 +
 +      it('re-proves the preamble before the next turn when its tool declarations change', async () => {
@@ -188532,21 +188576,11 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -    it('uses QWEN_CODE_MAX_OUTPUT_TOKENS as the ceiling when set', async () => {
 -      process.env['QWEN_CODE_MAX_OUTPUT_TOKENS'] = '12000';
 -      try {
-+      it("refuses a window whose preamble share cannot hold a refused turn's notices", async () => {
-+        // A turn refused at its limit is drawn again on its admitted prompt
-+        // with a notice for each refusal, so the notices of a turn refused as
-+        // often as a turn can be must fit within D, which is what the window
-+        // keeps beyond the trigger and a turn's room. At 20,480 tokens D is
-+        // 960: it holds a small preamble, and not those notices.
-+        const window = 20_480;
-+        const small = partitionContextWindow(window);
-         vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
+-        vi.mocked(mockConfig.getContentGeneratorConfig).mockReturnValue({
 -          authType: AuthType.USE_GEMINI,
 -          model: 'test-model',
 -          contextWindowSize: 200_000,
-+          ...TEST_CONTENT_CONFIG,
-+          contextWindowSize: window,
-         });
+-        });
 -
 -        vi.spyOn(
 -          ChatCompressionService.prototype,
@@ -188561,12 +188595,29 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        });
 -        vi.mocked(mockContentGenerator.generateContentStream).mockResolvedValue(
 -          makeStreamResponse('env ceiling response'),
-+        mockContentGenerator.countTextTokens = countingProbeText(window);
++      it('holds what a request may add to its prompt within the room above the trigger', async () => {
++        // A refused turn's redraw adds its notices to the prompt it was
++        // admitted at, and the request that compacts that prompt adds the
++        // snapshot's declaration, the directive and a redraw's notice above
++        // them. Together they must fit within A, what the window keeps above
++        // the trigger beside a turn's room. At the served window A is 3,072
++        // and the served additions come to 3,026, which fit; additions one
++        // token past A are refused before any turn is issued, naming each
++        // part and the moves that exist.
++        const notices = refusedTurnNoticeTokens(PARTITION);
++        const redraw = PARTITION.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;
++        expect(COMPACTION_ADDITIONS_TOKENS + redraw + notices).toBe(3_026);
++        expect(COMPACTION_ADDITIONS_TOKENS + redraw + notices).toBeLessThanOrEqual(
++          PARTITION.promptAdditions,
++        );
++        const widest = PARTITION.promptAdditions - redraw - notices + 1;
++        mockContentGenerator.countTextTokens = countingProbeText(WINDOW);
 +        mockContentGenerator.countRequestTokens = answeringDeclarations(
-+          vi.fn().mockResolvedValue({ totalTokens: 100, maxModelLen: window }),
-+          window,
++          vi.fn().mockResolvedValue({ totalTokens: 100, maxModelLen: WINDOW }),
++          WINDOW,
 +          {},
-+          10,
++          DECLARED_PREAMBLE_TOKENS,
++          widest,
          );
 -
 -        const chatInstance = new GeminiChat(
@@ -188575,13 +188626,38 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -          [],
 -          undefined,
 -          uiTelemetryService,
-+        await expect(send('prompt-proof-refusal-notices')).rejects.toThrow(
-+          `carries refusal notices of at most ${refusedTurnNoticeTokens(small)} tokens, past the ${small.staticPreamble} this ${window}-token window holds beyond the trigger and a turn's room.`,
++        await expect(send('prompt-proof-additions')).rejects.toThrow(
++          `What a request may add to the prompt it was admitted at -- a compaction request's declaration and directive, ${widest} tokens, a redraw's refusal notice, at most ${redraw}, and the refusal notices of a turn refused ${MAX_GENERATION_DRAWS - 1} times, at most ${notices} -- comes to ${PARTITION.promptAdditions + 1} tokens, past the ${PARTITION.promptAdditions} this ${WINDOW}-token window holds above the trigger for it. Shorten the directive, the declaration or a refusal notice, or deploy on a larger window.`,
          );
 -        chatInstance.setLastPromptTokenCount(50_000);
 +        expect(
 +          mockContentGenerator.generateContentStream,
 +        ).not.toHaveBeenCalled();
++      });
++
++      it('counts what a compaction request adds in the shape it carries it', async () => {
++        // The declaration after the turn's own tools and the directive, at
++        // the widest ceiling it can state, against the instruction the proof
++        // counts the preamble with.
++        serve();
++        await send('prompt-proof-compaction-shape');
++        const probe = vi
++          .mocked(mockContentGenerator.countRequestTokens)
++          .mock.calls.map(([request]) => request)
++          .find((request) => isCompactionProbe(request.contents as Content[]));
++        expect(probe).toBeDefined();
++        expect((probe!.contents as Content[])[0]).toEqual(
++          compactionDirectiveMessage(
++            buildCompressionSystemPrompt(undefined, ''),
++            WINDOW,
++          ),
++        );
++        const declared = (probe!.config?.tools ?? []).flatMap(
++          (tool) =>
++            (tool as { functionDeclarations?: Array<{ name?: string }> })
++              .functionDeclarations ?? [],
++        );
++        expect(declared.at(-1)?.name).toBe(STATE_SNAPSHOT_FUNCTION_NAME);
 +      });
  
 -        const stream = await chatInstance.sendMessageStream(
@@ -189022,7 +189098,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5699,12 +6114,13 @@
+@@ -5699,12 +6183,13 @@
                response: payload,
              },
            },
@@ -189036,7 +189112,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            throw new Error('unexpected deep clone');
          });
  
-@@ -5714,13 +6130,16 @@
+@@ -5714,13 +6199,16 @@
        expect(history).toEqual([content]);
        expect(history[0]).not.toBe(content);
        expect(history[0]!.parts).not.toBe(content.parts);
@@ -189054,7 +189130,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('getHistoryForForkWindow', () => {
      it('removes startup context before curating adjacent user turns', () => {
        const startup: Content = {
-@@ -5797,19 +6216,21 @@
+@@ -5797,19 +6285,21 @@
    describe('peekLastHistoryEntry', () => {
      it('returns the last entry without structured-cloning the full history', () => {
        const first: Content = { role: 'user', parts: [{ text: 'a' }] };
@@ -189077,7 +189153,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    describe('getLastModelMessageText', () => {
      it('returns text from the latest model message without cloning history', () => {
-@@ -5858,20 +6279,22 @@
+@@ -5858,20 +6348,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -189101,7 +189177,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +6338,301 @@
+@@ -5915,33 +6407,301 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -189407,7 +189483,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +6642,22 @@
+@@ -5951,22 +6711,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -189434,7 +189510,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +6669,13 @@
+@@ -5978,99 +6738,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -189534,7 +189610,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +6684,23 @@
+@@ -6079,23 +6753,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -189560,7 +189636,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6104,25 +6709,40 @@
+@@ -6104,25 +6778,40 @@
                  ],
                } as unknown as OpenAI.Chat.ChatCompletionChunk;
              })(),
@@ -189604,7 +189680,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,134 +6766,85 @@
+@@ -6146,134 +6835,85 @@
          } finally {
            vi.useRealTimers();
          }
@@ -189757,7 +189833,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6291,14 +6862,14 @@
+@@ -6291,14 +6931,14 @@
          const events = await collectStreamWithFakeTimers(stream);
  
          expect(
@@ -189774,7 +189850,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.some(
              (e) =>
                e.type === StreamEventType.CHUNK &&
-@@ -6308,29 +6879,21 @@
+@@ -6308,29 +6948,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -189806,7 +189882,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +6908,13 @@
+@@ -6345,12 +6977,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -189820,7 +189896,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +6924,29 @@
+@@ -6360,21 +6993,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -189852,7 +189928,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +6961,18 @@
+@@ -6389,24 +7030,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -189879,7 +189955,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +6992,13 @@
+@@ -6426,12 +7061,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -189893,7 +189969,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +7008,29 @@
+@@ -6441,21 +7077,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -189925,7 +190001,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +7044,12 @@
+@@ -6469,56 +7113,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -189982,7 +190058,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +7057,13 @@
+@@ -6526,12 +7126,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -189996,7 +190072,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +7075,18 @@
+@@ -6543,14 +7144,18 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -190016,7 +190092,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +7097,16 @@
+@@ -6561,12 +7166,16 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -190033,7 +190109,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +7117,13 @@
+@@ -6577,13 +7186,13 @@
                  },
                },
              ],
@@ -190048,7 +190124,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +7150,13 @@
+@@ -6610,15 +7219,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -190065,7 +190141,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +7167,13 @@
+@@ -6629,12 +7236,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -190079,7 +190155,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +7210,12 @@
+@@ -6671,752 +7279,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -190832,7 +190908,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +7230,13 @@
+@@ -7431,12 +7299,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -190846,7 +190922,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +7297,13 @@
+@@ -7497,13 +7366,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -190861,7 +190937,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +7320,37 @@
+@@ -7520,116 +7389,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -190983,7 +191059,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +7361,13 @@
+@@ -7640,12 +7430,13 @@
                throw transportError;
              })(),
            )
@@ -190997,7 +191073,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +7400,22 @@
+@@ -7678,103 +7469,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -191102,7 +191178,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +7426,13 @@
+@@ -7785,12 +7495,13 @@
                throw transportError;
              })(),
            )
@@ -191116,7 +191192,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +7457,213 @@
+@@ -7815,1231 +7526,213 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -192512,7 +192588,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +7694,13 @@
+@@ -9070,12 +7763,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -192526,7 +192602,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +7750,21 @@
+@@ -9125,13 +7819,21 @@
              timeoutError,
              {
                model: 'test-model',
@@ -192549,7 +192625,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +7775,13 @@
+@@ -9142,12 +7844,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -192563,7 +192639,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +7834,13 @@
+@@ -9200,12 +7903,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -192577,7 +192653,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +7890,13 @@
+@@ -9255,12 +7959,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -192591,7 +192667,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,59 +8027,56 @@
+@@ -9391,59 +8096,56 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -192666,7 +192742,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +8091,13 @@
+@@ -9458,12 +8160,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -192680,7 +192756,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +8107,42 @@
+@@ -9473,130 +8176,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -192823,7 +192899,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +8152,13 @@
+@@ -9606,12 +8221,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -192837,7 +192913,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,39 +8173,43 @@
+@@ -9626,39 +8242,43 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -192886,7 +192962,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,16 +8247,21 @@
+@@ -9696,16 +8316,21 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -192910,7 +192986,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          vi.useRealTimers();
        }
-@@ -9733,12 +8289,13 @@
+@@ -9733,12 +8358,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -192924,7 +193000,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,23 +8309,27 @@
+@@ -9752,23 +8378,27 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -192957,7 +193033,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9792,12 +8353,13 @@
+@@ -9792,12 +8422,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -192971,7 +193047,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,31 +8380,35 @@
+@@ -9818,31 +8449,35 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -193012,7 +193088,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9884,18 +8450,22 @@
+@@ -9884,18 +8519,22 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -193038,7 +193114,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          await expect(nextPromise).rejects.toThrow();
  
          // Only one API call should have been made (no retry after abort)
-@@ -9905,12 +8475,13 @@
+@@ -9905,12 +8544,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -193052,7 +193128,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +8525,13 @@
+@@ -9954,12 +8594,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -193066,7 +193142,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,48 +8546,52 @@
+@@ -9974,48 +8615,52 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -193129,7 +193205,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +8604,14 @@
+@@ -10028,12 +8673,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -193144,7 +193220,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +8636,13 @@
+@@ -10058,12 +8705,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -193158,7 +193234,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,37 +8654,39 @@
+@@ -10075,37 +8723,39 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -193207,7 +193283,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(retryInfos.map((info) => info.delayMs)).toEqual([3_000, 5_000]);
          expect(
-@@ -10123,12 +8704,14 @@
+@@ -10123,12 +8773,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -193222,7 +193298,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +8737,13 @@
+@@ -10154,12 +8806,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -193236,7 +193312,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,32 +8754,33 @@
+@@ -10170,32 +8823,33 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -193279,7 +193355,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            events.some(
-@@ -10261,12 +8846,13 @@
+@@ -10261,12 +8915,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -193293,7 +193369,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +8925,13 @@
+@@ -10339,12 +8994,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -193307,7 +193383,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +8959,13 @@
+@@ -10372,12 +9028,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -193321,7 +193397,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +8973,22 @@
+@@ -10385,20 +9042,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -193345,7 +193421,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +9040,185 @@
+@@ -10450,103 +9109,185 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -193586,7 +193662,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +9233,58 @@
+@@ -10561,41 +9302,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -193658,7 +193734,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +9295,13 @@
+@@ -10606,12 +9364,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -193672,7 +193748,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +9331,325 @@
+@@ -10641,275 +9400,325 @@
          }),
          'prompt-id-res3',
        );
@@ -194229,7 +194305,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +9694,31 @@
+@@ -10954,28 +9763,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -194262,7 +194338,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +9739,54 @@
+@@ -10996,138 +9808,54 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -194415,7 +194491,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +9797,33 @@
+@@ -11138,33 +9866,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -194460,7 +194536,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +9833,30 @@
+@@ -11174,22 +9902,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -194492,7 +194568,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +9910,33 @@
+@@ -11243,31 +9979,33 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -194533,7 +194609,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +9947,64 @@
+@@ -11278,59 +10016,64 @@
                      },
                    ],
                  },
@@ -194604,7 +194680,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +10045,12 @@
+@@ -11371,252 +10114,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -194857,7 +194933,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +10224,704 @@
+@@ -11790,179 +10293,704 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -195699,7 +195775,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +11034,12 @@
+@@ -12075,17 +11103,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -195717,7 +195793,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,2978 +11522,1241 @@
+@@ -12568,2978 +11591,1241 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -199868,7 +199944,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  import { parseAndFormatApiError } from '../utils/errorParsing.js';
  import {
    getRateLimitErrorDetails,
-@@ -41,73 +62,71 @@
+@@ -41,73 +62,75 @@
    isRateLimitError,
    type RetryInfo,
  } from '../utils/rateLimit.js';
@@ -199916,6 +199992,10 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +import { type ChatCommitRecorder } from '../services/chatRecordingService.js';
  import {
    ChatCompressionService,
++  DRAW_REFUSAL_NOTICE_MAX_BYTES,
++  buildCompressionSystemPrompt,
++  compactionDirectiveMessage,
++  compactionRequestTools,
 -  computeThresholds,
 -  MAX_CONSECUTIVE_FAILURES,
    type CompactTrigger,
@@ -199976,7 +200056,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  } from '../utils/environmentContext.js';
  import type { SessionStartSource } from '../hooks/types.js';
  import {
-@@ -116,42 +135,25 @@
+@@ -116,42 +139,25 @@
  } from './prompts.js';
  import { RETRYABLE_STREAM_TRANSPORT_CODES } from './stream-transport-retry.js';
  import {
@@ -200030,7 +200110,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
   */
  function hasNonThoughtCandidateParts(
    response: GenerateContentResponse,
-@@ -163,242 +165,10 @@
+@@ -163,242 +169,10 @@
    );
  }
  
@@ -200276,7 +200356,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /** A regular content chunk from the API. */
    CHUNK = 'chunk',
    /** A signal that a retry is about to happen. The UI should discard any partial
-@@ -409,64 +179,48 @@
+@@ -409,64 +183,48 @@
     * agent UI, subagent loop) can surface it without each call site running
     * its own compaction step. */
    COMPRESSED = 'compressed',
@@ -200363,7 +200443,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -  /**
     * Forwarded to the compression side-query system prompt. Sourced from
     * `/compress <text>` invocation arg; appended after the base prompt as
-@@ -476,561 +230,9 @@
+@@ -476,561 +234,9 @@
    customInstructions?: string;
  }
  
@@ -200928,7 +201008,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
  /**
   * Options for retrying on rate-limit throttling errors returned as stream content.
-@@ -1089,71 +291,6 @@
+@@ -1089,71 +295,6 @@
        resolveRef();
      },
    };
@@ -201000,7 +201080,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  }
  
  /**
-@@ -1175,66 +312,12 @@
+@@ -1175,66 +316,12 @@
   *
   * @remarks
   * The model may sometimes generate invalid or empty contents(e.g., due to safety
@@ -201067,7 +201147,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    const parts = content.parts.filter((part) => !(part as Part).thought);
-@@ -1248,111 +331,41 @@
+@@ -1248,111 +335,41 @@
    };
  }
  
@@ -201212,7 +201292,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  }
  
  /**
-@@ -1363,78 +376,7 @@
+@@ -1363,78 +380,7 @@
   * `onAllToolCallsComplete` was a single-shot that already fired into an
   * `isResponding` early-return).
   */
@@ -201292,7 +201372,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
  /**
   * Walk `history` left-to-right and close every dangling
-@@ -1594,7 +536,11 @@
+@@ -1594,7 +540,11 @@
    });
    for (const loc of removals) {
      const turnParts = history[loc.turnIdx].parts;
@@ -201305,7 +201385,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    // (2) Drop now-empty user turns within [modelIdx + 2, scanEnd).
-@@ -1615,11 +561,14 @@
+@@ -1615,11 +565,14 @@
      const existing = next.parts ?? [];
      const firstNonFr = existing.findIndex((part) => !part.functionResponse);
      const insertAt = firstNonFr === -1 ? existing.length : firstNonFr;
@@ -201325,7 +201405,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return { insertedBefore: 0 };
    }
    history.splice(adjacentIdx, 0, { role: 'user', parts: partsToInject });
-@@ -1680,6 +629,15 @@
+@@ -1680,6 +633,15 @@
   * @remarks
   * The session maintains all the turns between user and model.
   */
@@ -201341,7 +201421,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  const SESSION_START_CONTEXT_SENTINEL_START =
    '<qwen:session-start-context hidden="true">';
  const SESSION_START_CONTEXT_SENTINEL_END = '</qwen:session-start-context>';
-@@ -1715,68 +673,36 @@
+@@ -1715,68 +677,36 @@
    // model.
    private sendPromise: Promise<void> = Promise.resolve();
  
@@ -201440,7 +201520,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    /**
     * Monotonically counts user-content pushes that survived into history.
-@@ -1789,31 +715,16 @@
+@@ -1789,31 +719,16 @@
     */
    private userContentPushCount = 0;
    private manualPlanExitNoticesEnabled = false;
@@ -201482,7 +201562,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
  
    /**
     * Creates a new GeminiChat instance.
-@@ -1821,21 +732,78 @@
+@@ -1821,21 +736,78 @@
     * @param config - The configuration object.
     * @param generationConfig - Optional generation configuration.
     * @param history - Optional initial conversation history.
@@ -201566,7 +201646,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    enableManualPlanExitNotices(): void {
-@@ -1843,19 +811,11 @@
+@@ -1843,19 +815,11 @@
    }
  
    /**
@@ -201591,7 +201671,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -1866,275 +826,558 @@
+@@ -1866,275 +830,584 @@
     * Public history readers still use {@link getHistory}, which returns a
     * defensive deep copy for caller mutation safety.
     */
@@ -201743,10 +201823,8 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -  isLastPromptTokenCountEstimated(): boolean {
 -    return this.lastPromptTokenCountIsEstimated;
 +  /**
-+   * Prove the two quantities the partition declares that depend on what is
-+   * rendered, `D` and `F`, once, before this chat issues anything -- and,
-+   * with them, that a turn refused at its limit keeps its room when it is
-+   * drawn again.
++   * Prove the three quantities the partition declares that depend on what is
++   * rendered, `D`, `F` and `A`, once, before this chat issues anything.
 +   *
 +   * `D` is a declared capacity: the system prompt and the tool declarations
 +   * are texts this repo ships, and the window has to hold them before it
@@ -201797,18 +201875,31 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +   * different template, and proving a declaration against some other one
 +   * would prove nothing about the request that goes out.
 +   *
-+   * A refused turn is drawn again on the prompt it was admitted at with the
-+   * notice of each refusal added, so what its redraws can add -- the widest
-+   * notice, framed, for every refusal but the last a turn can have -- is held
-+   * within `D`, the room the window keeps beyond the trigger and a turn.
++   * `A` is what a request may add to the prompt it was admitted at, and two
++   * requests add to one. A refused turn is drawn again on that prompt with the
++   * notice of each refusal added -- the widest notice, framed, for every
++   * refusal but the last a turn can have. And the request that compacts it
++   * carries that prompt, with those notices, under the snapshot's
++   * declaration and the directive, and on a redraw the widest notice of why
++   * the draw before was refused, framed. The declaration and the directive
++   * are counted here in the shape every compaction request carries them,
++   * against the instruction declared without its data, with the directive
++   * stating the widest ceiling it can, the window itself: what the two add is
++   * the count with them less the count without. Their sum with the notices is
++   * held within `A`, the room the window keeps above the trigger beside a
++   * turn's.
 +   *
 +   * Every refusal names the two moves that exist. None can fire at this
-+   * deployment's own preamble, which renders to well under its share -- and
-+   * that is the point of proving it rather than asserting it.
++   * deployment's own preamble and additions, which render to under their
++   * shares -- and that is the point of proving them rather than asserting it.
 +   */
 +  private async verifyDeclarations(
 +    partition: ContextPartition,
-+    count: (contents: Content[], systemInstruction?: string) => Promise<number>,
++    count: (
++      contents: Content[],
++      systemInstruction?: string,
++      tools?: ChatGenerationConfig['tools'],
++    ) => Promise<number>,
 +    countText: (text: string) => Promise<number>,
 +    rendered: Pick<ChatGenerationConfig, 'tools' | 'systemInstruction'>,
 +  ): Promise<void> {
@@ -201929,15 +202020,30 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +        );
 +      }
 +    }
-+    // A turn refused at its limit is drawn again on the prompt it was
-+    // admitted at, with the notice of each refusal added, framed. What the
-+    // window has beyond the trigger and a turn's room is D, so a turn
-+    // refused as often as a turn can be still has its room when the notices
-+    // it carries fit within D; that is held here, before any turn is issued.
-+    const refusalNotices = refusedTurnNoticeTokens(partition);
-+    if (refusalNotices > partition.staticPreamble) {
++    // What the window has above the trigger beside a turn's room is A. A
++    // turn refused as often as a turn can be still has its room when the
++    // notices it carries fit within A, and the request that compacts its
++    // prompt still has a turn's when those notices, the declaration, the
++    // directive and a redraw's notice fit within A together; that is held
++    // here, before any turn is issued.
++    const compactionAdded =
++      (await count(
++        [
++          compactionDirectiveMessage(
++            buildCompressionSystemPrompt(undefined, ''),
++            partition.window,
++          ),
++        ],
++        declared?.systemInstruction,
++        compactionRequestTools(rendered.tools ?? [], partition),
++      )) - bare;
++    const redrawNotice =
++      partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;
++    const turnNotices = refusedTurnNoticeTokens(partition);
++    const additions = compactionAdded + redrawNotice + turnNotices;
++    if (additions > partition.promptAdditions) {
 +      throw new Error(
-+        `A turn refused at its limit ${MAX_GENERATION_DRAWS - 1} times carries refusal notices of at most ${refusalNotices} tokens, past the ${partition.staticPreamble} this ${partition.window}-token window holds beyond the trigger and a turn's room. Shorten the refusal notice, or deploy on a larger window.`,
++        `What a request may add to the prompt it was admitted at -- a compaction request's declaration and directive, ${compactionAdded} tokens, a redraw's refusal notice, at most ${redrawNotice}, and the refusal notices of a turn refused ${MAX_GENERATION_DRAWS - 1} times, at most ${turnNotices} -- comes to ${additions} tokens, past the ${partition.promptAdditions} this ${partition.window}-token window holds above the trigger for it. Shorten the directive, the declaration or a refusal notice, or deploy on a larger window.`,
 +      );
 +    }
 +    this.provenPreamble = preambleProved;
@@ -202370,7 +202476,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    setSessionStartContext(extraInstruction: string) {
-@@ -2153,6 +1396,16 @@
+@@ -2153,6 +1426,16 @@
      }
      const contextBlock = buildSessionStartContextBlock(trimmed);
      this.generationConfig.systemInstruction = `${baseInstruction}${contextBlock}`;
@@ -202387,7 +202493,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2195,1042 +1448,608 @@
+@@ -2195,1042 +1478,611 @@
      prompt_id: string,
      goalContext?: GoalTurnPermit,
    ): Promise<AsyncGenerator<StreamEvent>> {
@@ -202419,9 +202525,10 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +   * rendered from the history as every request is. Nothing else joins it --
 +   * no compaction, no reminder -- so what the redraw is told was refused is
 +   * exactly the request it is given. The turn was admitted below the
-+   * compaction trigger, and the notices its redraws add are held within the
-+   * static preamble's share, so its room is `C` like any turn's; that is
-+   * asserted on the request as counted.
++   * compaction trigger, and the notices its redraws add are held within
++   * `A`, the room the window keeps above the trigger for what a request adds,
++   * so its room is `C` like any turn's; that is asserted on the request as
++   * counted.
 +   */
 +  async redrawRefusedTurn(
 +    model: string,
@@ -202721,6 +202828,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      const countExactRequestTokens = async (
 +        contents: Content[],
 +        systemInstruction?: string,
++        tools?: ChatGenerationConfig['tools'],
 +      ): Promise<number> => {
 +        const request = {
 +          model,
@@ -202729,6 +202837,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +            ...this.generationConfig,
 +            ...params.config,
 +            ...(systemInstruction === undefined ? {} : { systemInstruction }),
++            ...(tools === undefined ? {} : { tools }),
 +          },
 +        };
 +        // What the tokenizer is shown, as the JSON it is serialized to; the
@@ -203015,7 +203124,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +          );
 +          // The turn was admitted below the trigger, and each refusal adds
 +          // one notice, framed; the compaction that later summarises this
-+          // prompt holds that within D, and so does the room below.
++          // prompt holds that within A, and so does the room below.
 +          promptTokensForClamp = await countExactRequestTokens(requestContents);
 +          const noticesAdded =
 +            refusedBefore *
@@ -203324,7 +203433,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +                : `The conversation renders to ${promptTokensForClamp} tokens and no turn is issued at or above the ${partition.compactionTrigger}-token compaction trigger. Its compaction failed: ${compaction.failure.replace(/[.\s]*$/, '.')} The session cannot continue; the compaction record in its stream holds what each draw produced, and the task can be run again in a new session.`,
 +            );
 +          }
-+          // The turn's limit is C, whatever the prompt: T + C + D === W, so a
++          // The turn's limit is C, whatever the prompt: T + C + A === W, so a
 +          // turn issued below the trigger cannot reach the window.
 +          params = {
 +            ...params,
@@ -203986,7 +204095,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
                    delayMs,
                    model,
                  ),
-@@ -3239,674 +2058,64 @@
+@@ -3239,674 +2091,64 @@
                await delay(delayMs, params.config?.abortSignal).promise;
                continue;
              }
@@ -204693,7 +204802,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        shouldRetryOnError: (error: unknown) => {
          if (error instanceof Error) {
            if (isSchemaDepthError(error.message)) return false;
-@@ -3936,17 +2145,8 @@
+@@ -3936,17 +2178,8 @@
        },
        authType,
        extraRetryErrorCodes,
@@ -204712,7 +204821,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        onRetry: (info) => {
          logApiRetry(
            this.config,
-@@ -3961,40 +2161,47 @@
+@@ -3961,40 +2194,47 @@
            }),
          );
        },
@@ -204786,7 +204895,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Returns the chat history.
     *
-@@ -4018,10 +2225,17 @@
+@@ -4018,10 +2258,17 @@
     * @return History contents alternating between user and model for the entire
     * chat session.
     */
@@ -204806,7 +204915,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Deep copy the history to avoid mutating the history outside of the
      // chat session.
      return structuredClone(history);
-@@ -4034,8 +2248,8 @@
+@@ -4034,8 +2281,8 @@
    getHistoryTail(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -204817,7 +204926,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return structuredClone(history.slice(-count));
    }
  
-@@ -4046,13 +2260,15 @@
+@@ -4046,13 +2293,15 @@
     */
    getHistoryShallow(curated: boolean = false): Content[] {
      const history = curated
@@ -204836,7 +204945,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return extractCuratedHistory(history).map(copyContentContainer);
    }
  
-@@ -4062,8 +2278,8 @@
+@@ -4062,8 +2311,8 @@
    getHistoryTailShallow(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -204847,7 +204956,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return history.slice(-count).map(copyContentContainer);
    }
  
-@@ -4081,7 +2297,7 @@
+@@ -4081,7 +2330,7 @@
     * mutate the returned object.
     */
    peekLastHistoryEntry(): Content | undefined {
@@ -204856,7 +204965,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4090,8 +2306,8 @@
+@@ -4090,8 +2339,8 @@
     * needed.
     */
    getLastModelMessageText(): string | undefined {
@@ -204867,7 +204976,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (message?.role !== 'model') continue;
        const text =
          message.parts
-@@ -4112,7 +2328,7 @@
+@@ -4112,7 +2361,7 @@
     * otherwise pay the {@link getHistory} `structuredClone` cost.
     */
    getHistoryLength(): number {
@@ -204876,7 +204985,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4133,7 +2349,7 @@
+@@ -4133,7 +2382,7 @@
     */
    getHistoryFunctionResponseIds(): Set<string> {
      const ids = new Set<string>();
@@ -204885,7 +204994,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (entry.role !== 'user') continue;
        for (const part of entry.parts ?? []) {
          const id = part.functionResponse?.id;
-@@ -4147,192 +2363,75 @@
+@@ -4147,192 +2396,75 @@
     * Clears the chat history.
     */
    clearHistory(): void {
@@ -205131,7 +205240,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4342,6 +2441,8 @@
+@@ -4342,6 +2474,8 @@
     */
    stripOrphanedUserEntriesFromHistory(): Content[] {
      const strippedEntries: Content[] = [];
@@ -205140,7 +205249,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      while (
        this.history.length > 0 &&
        this.history[this.history.length - 1]!.role === 'user'
-@@ -4365,18 +2466,9 @@
+@@ -4365,18 +2499,9 @@
        }
        strippedEntries.unshift(this.history.pop()!);
      }
@@ -205162,7 +205271,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return strippedEntries;
    }
  
-@@ -4388,7 +2480,10 @@
+@@ -4388,7 +2513,10 @@
      injected: Array<{ callId: string; name: string }>;
      droppedDuplicates: Array<{ callId: string; name: string }>;
    } {
@@ -205174,7 +205283,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    setTools(tools: Tool[]): void {
-@@ -4396,7 +2491,7 @@
+@@ -4396,7 +2524,7 @@
    }
  
    /** Returns a shallow copy of the current generation config (for cache param snapshots). */
@@ -205183,7 +205292,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return { ...this.generationConfig };
    }
  
-@@ -4430,687 +2525,221 @@
+@@ -4430,687 +2558,221 @@
      }
    }
  
@@ -207485,11 +207594,11 @@ diff --git a/packages/core/src/core/generation-refusal.test.ts b/packages/core/s
 +
 +  it('fits within what the served window keeps beyond the trigger and a turn', () => {
 +    // A redraw is its turn's admitted prompt with its notices added, so the
-+    // notices of a turn refused as often as a turn can be must fit within D
++    // notices of a turn refused as often as a turn can be must fit within A
 +    // for the redraw to keep its room.
 +    for (const window of [262_144, 524_288, 1_048_576]) {
 +      const p = partitionContextWindow(window);
-+      expect(refusedTurnNoticeTokens(p)).toBeLessThanOrEqual(p.staticPreamble);
++      expect(refusedTurnNoticeTokens(p)).toBeLessThanOrEqual(p.promptAdditions);
 +      expect(
 +        p.compactionTrigger - 1 + refusedTurnNoticeTokens(p) + p.turnGeneration,
 +      ).toBeLessThan(p.window);
@@ -207499,7 +207608,7 @@ diff --git a/packages/core/src/core/generation-refusal.test.ts b/packages/core/s
 diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/core/generation-refusal.ts
 --- /dev/null
 +++ b/packages/core/src/core/generation-refusal.ts
-@@ -0,0 +1,114 @@
+@@ -0,0 +1,115 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -207512,8 +207621,9 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 + * An answer that is refused is drawn again from the same request, told why,
 + * and a request is drawn a bounded number of times. Two kinds of generation
 + * are drawn this way. They share the bound, the voice a refusal is told in,
-+ * and the rule that the telling is held within the static preamble's share;
-+ * they differ in what refuses an answer and in what a draw is.
++ * and the rule that the telling is held within the room the window keeps
++ * above the trigger for what a request adds to its prompt, `A`; they differ
++ * in what refuses an answer and in what a draw is.
 + *
 + * A compaction's snapshot draw is refused for any rule its answer fails: it
 + * reached its limit, declared a snapshot that is incomplete or past its
@@ -207604,9 +207714,9 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 + * The most tokens the refusal notices of one turn can add to the prompt it
 + * was admitted at: one for each draw refused before the last, each at its
 + * widest and framed as a message of its own. A turn is admitted below the
-+ * compaction trigger, so its redraw's request stands below the trigger by
-+ * at most this much more, and the compaction that later summarises it holds
-+ * this within `D` beside what its own request adds.
++ * compaction trigger, so its redraw's request stands above the trigger by
++ * at most this much, and the compaction that later summarises it holds this
++ * within `A` beside what its own request adds.
 + */
 +export function refusedTurnNoticeTokens(partition: ContextPartition): number {
 +  return (
@@ -227356,7 +227466,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('normalize', () => {
    it('should lowercase and trim the model string', () => {
      expect(normalize('  GEMINI-1.5-PRO  ')).toBe('gemini-1.5-pro');
-@@ -509,68 +513,417 @@
+@@ -509,68 +513,426 @@
        expect(tokenLimit('QWEN3-MAX', 'output')).toBe(32768);
        expect(tokenLimit('qwen3-max-20250601', 'output')).toBe(32768);
      });
@@ -227424,13 +227534,14 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  // The served profile.
 +  const WINDOW = 262_144;
 +
-+  it('declares D, M and S as shares of the window and F as a constant', () => {
-+    // D is 3W/64, M is W/8 and S is W/4; F belongs to the served template,
-+    // not to the window, so it does not scale.
++  it('declares D, A, M and S as shares of the window and F as a constant', () => {
++    // D is 3W/64, A is 3W/256, M is W/8 and S is W/4; F belongs to the
++    // served template, not to the window, so it does not scale.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      expect(p.window).toBe(window);
 +      expect(p.staticPreamble).toBe(Math.floor((window * 3) / 64));
++      expect(p.promptAdditions).toBe(Math.floor((window * 3) / 256));
 +      expect(p.inlineBlockBytes).toBe(Math.floor(window / 8));
 +      expect(p.snapshotBytes).toBe(Math.floor(window / 4));
 +      expect(p.messageFraming).toBe(61);
@@ -227452,9 +227563,12 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  });
 +
 +  it('spends the whole window and nothing more', () => {
++    // Above the trigger the window keeps a turn's room and what a request
++    // may add to its prompt; the preamble is inside every request the
++    // trigger is compared with, so it is held back nowhere.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
-+      expect(p.staticPreamble + p.turnGeneration + p.compactionTrigger).toBe(
++      expect(p.promptAdditions + p.turnGeneration + p.compactionTrigger).toBe(
 +        window,
 +      );
 +    }
@@ -227482,30 +227596,34 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +
 +  it('issues the compaction of any admitted prompt with a whole turn of room', () => {
 +    // The request that summarises a prompt carries the same history under
-+    // additions also held within D, so what the window has left for it is
-+    // C + D + 1 -- never less than a turn's room, whatever the prompt was.
++    // additions also held within A, so what the window has left for it is
++    // C + A + 1 -- never less than a turn's room, whatever the prompt was.
 +    // That is why a draw has the whole of a turn, and why no separate
 +    // reasoning budget exists to cut it short.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      const largestAdmittedPrompt = p.compactionTrigger - 1;
 +      expect(window - largestAdmittedPrompt).toBe(
-+        p.turnGeneration + p.staticPreamble + 1,
++        p.turnGeneration + p.promptAdditions + 1,
 +      );
 +      expect(window - largestAdmittedPrompt).toBeGreaterThan(p.turnGeneration);
 +    }
 +  });
 +
-+  it('takes every token of the turn room and the preamble from the trigger', () => {
-+    // T = W - M - R - D: a token given to a turn or held for the preamble,
-+    // and a byte of the inline block, is a token of work every segment
-+    // before compaction does not have. S is not in it: a snapshot is never
-+    // a turn. Asserted as that closed form, so a change that spent the
++  it('takes every token of the turn room and the additions from the trigger, and none of the preamble', () => {
++    // T = W - M - R - A: a token given to a turn or held for what a request
++    // adds, and a byte of the inline block, is a token of work every segment
++    // before compaction does not have. D is not in it: the preamble is in
++    // every request the trigger is compared with. Nor is S: a snapshot is
++    // never a turn. Asserted as that closed form, so a change that spent the
 +    // window differently fails here.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      expect(p.compactionTrigger).toBe(
-+        window - p.inlineBlockBytes - reasoningShare(window) - p.staticPreamble,
++        window -
++          p.inlineBlockBytes -
++          reasoningShare(window) -
++          p.promptAdditions,
 +      );
 +    }
 +  });
@@ -227517,14 +227635,15 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    expect(served).toEqual({
 +      window: 262_144,
 +      staticPreamble: 12_288,
++      promptAdditions: 3_072,
 +      inlineBlockBytes: 32_768,
 +      snapshotBytes: 65_536,
 +      messageFraming: 61,
 +      turnGeneration: 40_960,
-+      compactionTrigger: 208_896,
++      compactionTrigger: 218_112,
 +    });
 +    expect(served.compactionTrigger - 1 - survivingRequest(served)).toBe(
-+      24_331,
++      33_547,
 +    );
 +  });
 +
@@ -227532,16 +227651,16 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    // A window of 256 is a whole share-unit per share and is still refused:
 +    // the preamble, the snapshot and two blocks a compaction carries and the
 +    // carried turn exceed its trigger. Near the edge the shares' rounding
-+    // decides, so 2,550 is accepted and 2,552 refused; 2,592 is the largest
-+    // window refused, and every window from 2,593 on is accepted. The
++    // decides, so 1,847 is accepted and 1,848 refused; 1,888 is the largest
++    // window refused, and every window from 1,889 on is accepted. The
 +    // refusal names the one move an operator has.
-+    for (const tiny of [256, 257, 459, 1_086, 1_104, 2_549, 2_552, 2_592]) {
++    for (const tiny of [256, 257, 459, 1_086, 1_104, 1_846, 1_848, 1_888]) {
 +      expect(() => partitionContextWindow(tiny)).toThrow(
 +        'needs a larger window',
 +      );
 +    }
-+    expect(() => partitionContextWindow(2_550)).not.toThrow();
-+    for (let window = 2_593; window <= 20_000; window++) {
++    expect(() => partitionContextWindow(1_847)).not.toThrow();
++    for (let window = 1_889; window <= 20_000; window++) {
 +      const p = partitionContextWindow(window);
 +      expect(survivingRequest(p)).toBeLessThan(p.compactionTrigger);
 +    }
@@ -227830,7 +227949,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('defaultOutputCeiling', () => {
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
-@@ -625,6 +978,39 @@
+@@ -625,6 +987,39 @@
    it('returns undefined when either side is absent (caller applies its own fallback)', () => {
      expect(reconcileMaxTokens(8_000, undefined)).toBeUndefined();
      expect(reconcileMaxTokens(undefined, 8_000)).toBeUndefined();
@@ -227873,7 +227992,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,572 @@
+@@ -8,88 +8,616 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -227922,21 +228041,33 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 - * not captured by the API-reported prompt count. Deliberately conservative —
 - * a generous margin only trims output in the final approach to compaction,
 - * while an under-sized one reintroduces the #5950 400s.
-+ * The served context window, spent exactly, from five declared quantities.
++ * The served context window, spent exactly, from six declared quantities.
 + *
 + * `D`, the static preamble. The system prompt and the tool declarations are
-+ * texts this repo authors and ships, and a compaction request swaps the tool
-+ * block for the snapshot declaration and its directive. Either shape renders
-+ * into every request and the server's tokenizer counts it, so the window
-+ * holds it before it holds any conversation. `D` is a declared capacity, not
-+ * a derivation: it is chosen here, and the real turn preamble is then counted
-+ * exactly against it before the first turn, so a deployment whose own
-+ * preamble does not fit is refused at startup rather than part-way through a
-+ * session. The compaction shape is counted where it occurs: each compaction's
-+ * preflight measures what its directive adds, adds the widest notice a
-+ * redraw may carry of why the draw before it was refused, and the refusal
-+ * notices the prompt it summarises may carry, each framed, and holds them to
-+ * `D`.
++ * texts this repo authors and ships, and they render into every request
++ * before any conversation does, so every request the trigger is compared
++ * with holds them, and so does every history a compaction leaves. `D` is a
++ * declared capacity, not a derivation: it is chosen here, and the real turn
++ * preamble is then counted exactly against it before the first turn, so a
++ * deployment whose own preamble does not fit is refused at startup rather
++ * than part-way through a session. It is charged in one place, the fit
++ * below: the trigger is compared with requests counted with their preamble
++ * in them, so it holds back nothing for the preamble itself.
++ *
++ * `A`, the additions: the most a request adds to the prompt it was admitted
++ * at. Two requests stand on an admitted prompt rather than being admitted
++ * themselves. A turn refused at its limit is drawn again on that prompt with
++ * the notice of each refusal added; and the request that compacts a prompt
++ * carries it with the snapshot's declaration after the turn's tools, the
++ * directive after its messages and, on a redraw, the notice of why the draw
++ * before it was refused. Each stands above the trigger by what it adds, and
++ * `A` is the room the window keeps above the trigger for exactly that. It is
++ * a declared capacity like `D`, and proved like `D` before the first turn:
++ * the notices at their widest, and the declaration and directive counted by
++ * the served tokenizer with the directive stating the widest ceiling it can.
++ * Each compaction's preflight holds what its own request adds to the same
++ * share, because that request can carry instructions no startup proof sees:
++ * a user's `/compress` text and a PreCompact hook's.
 + *
 + * `M`, the inline block, in UTF-8 bytes of its NFC form: the most any one
 + * block placed inline may be -- one tool result, one `read_file` page, one
@@ -227981,13 +228112,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * is refused and asked for again, told why (`generation-refusal.ts`): a turn
 + * that needs more room is asked to do less in it rather than given more.
 + *
-+ * `T`, the compaction trigger, is what the window has left once `C` and `D`
-+ * are held back: `T = W - C - D`. A turn issued at any admitted prompt cannot
++ * `T`, the compaction trigger, is what the window has left once `C` and `A`
++ * are held back: `T = W - C - A`. A turn issued at any admitted prompt cannot
 + * overrun the window, because the prompt is below `T` and `T + C <= W`; a
-+ * redraw's request is that prompt with its refusal notices, which `D` holds.
++ * redraw's request is that prompt with its refusal notices, which `A` holds.
 + * And the request that later summarises a prompt is issued with at least
 + * `C + 1`, because it carries the same history under additions also held
-+ * within `D` -- so a draw has at least a turn's room, and there is no
++ * within `A` -- so a draw has at least a turn's room, and there is no
 + * separate reasoning budget anywhere to cut it short. That room is not sized
 + * for a snapshot at the most tokens `S` bytes can be: a snapshot of `S`
 + * bytes and `R` of reasoning beside it fit `C + 1` whenever the snapshot
@@ -228008,29 +228139,31 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * and it must stand below `T`, or a history that has just been compacted
 + * could not be continued. It is asserted below at every window, and a window
 + * where it fails is refused rather than partitioned. What it leaves below `T`
-+ * -- 24,331 tokens at the served window -- is the least any segment after a
++ * -- 33,547 tokens at the served window -- is the least any segment after a
 + * compaction has to work in.
 + *
 + * The request that summarises a prompt carries the prompt and not the turn
 + * issued against it, which is carried behind the snapshot verbatim instead.
 + * Upstream's compaction request carries the whole history, that turn and its
 + * result included; this partition cannot hold them. The turn can be `C + F`
-+ * and its result `M + F`, so on a prompt of `T - 1`, with the additions' `D`,
++ * and its result `M + F`, so on a prompt of `T - 1`, with the additions' `A`,
 + * the request alone could reach `W + M + 2F - 1` -- 32,889 tokens past the
 + * window at 262,144, before the snapshot had one -- and `W + F - 1` with the
 + * turn and no result. Holding room for them would lower the trigger by
-+ * `C + M + 2F`, from 208,896 to 135,046 at the served window, for a request
++ * `C + M + 2F`, from 218,112 to 144,262 at the served window, for a request
 + * that needs neither: the turn is carried whole behind the snapshot, and its
 + * result follows it.
 + *
-+ * What the quantities cost one another is plain from `T = W - M - R - D`:
-+ * every token of `C` or of `D`, and every byte of `M`, is a token `T` does
++ * What the quantities cost one another is plain from `T = W - M - R - A`:
++ * every token of `C` or of `A`, and every byte of `M`, is a token `T` does
 + * not have, and so a token less of work in every segment before compaction
-+ * comes. `S` is not in `T`: a snapshot is never generated as a turn, and
-+ * its draw's room is whatever the window has left. The fit's margin,
-+ * `T - 1 - (D + (S + F) + 2(M + F) + (C + F))`, is
-+ * `W - S - 4M - 2R - 2D - 4F - 1`: a byte of `M` costs it four tokens, a
-+ * token of `R` or `D` two, a byte of `F` four and a byte of `S` one.
++ * comes. `D` and `S` are not in `T`: the preamble is already in every
++ * request the trigger is compared with, and a snapshot is never generated as
++ * a turn, its draw's room being whatever the window has left. Both are in
++ * the fit, whose margin, `T - 1 - (D + (S + F) + 2(M + F) + (C + F))`, is
++ * `W - S - 4M - 2R - D - A - 4F - 1`: a byte of `M` costs it four tokens, a
++ * token of `R` two, a token of `D` or `A` one, a byte of `F` four and a byte
++ * of `S` one.
   */
 -export function outputClampMargin(contextWindowSize: number): TokenCount {
 -  return Math.max(10_000, Math.round(0.05 * contextWindowSize));
@@ -228039,6 +228172,8 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  readonly window: number;
 +  /** `D`: the most the static preamble may render to, in tokens. */
 +  readonly staticPreamble: number;
++  /** `A`: the most a request may add to the prompt it was admitted at, in tokens. */
++  readonly promptAdditions: number;
 +  /** `M`: the most one inline block may be, in UTF-8 bytes. */
 +  readonly inlineBlockBytes: number;
 +  /** `S`: the most one accepted snapshot may render to, in UTF-8 bytes. */
@@ -228058,7 +228193,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 - * invariant on every main-turn request (issue #5950 becomes structurally
 - * impossible), which is what lets compaction thresholds run against the
 - * full window with no output reservation.
-+ * The window divides into this many shares. `D`, `M`, `S` and `R` are shares
++ * The window divides into this many shares. `D`, `A`, `M`, `S` and `R` are shares
 + * of it rather than constants, because 512K and 1M are the next served tiers
 + * and a budget that did not scale would quietly stop describing them.
 + */
@@ -228104,6 +228239,32 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + */
 +const STATIC_PREAMBLE_SHARES = 12;
 +
++/**
++ * `A` = 3W/256, which is 3,072 tokens at the served 262,144.
++ *
++ * The startup proof counts what a compaction request adds to the prompt it
++ * summarises, rendered by the served template and counted by the served
++ * tokenizer, with the directive stating the widest ceiling it can, the
++ * window itself: the snapshot's declaration after the turn's ten, 786 tokens,
++ * and the directive with the compaction's instructions, framed, 654 -- 1,440,
++ * the same on the bare preamble as on every prompt measured. It adds the
++ * widest notice a redraw of that request may carry, 313 bytes framed in `F`,
++ * 374, and the notices a turn refused as often as a turn can be carries
++ * before its last draw, three of 343 bytes, each framed, 1,212. That is
++ * 3,026, the most any request adds to the prompt it was admitted at.
++ *
++ * Three shares is the least that holds it, with 46 tokens left: the
++ * directive, the declaration or a notice can grow by no more than that
++ * before the startup proof refuses, naming the move, one more share. A share
++ * is 1,024 tokens of every segment, so the capacity is the measured worst
++ * case rounded up to the next share and no further.
++ *
++ * `A` scales with the window and what it holds does not: `floor(3W/256)`
++ * first reaches 3,026 at a 258,219-token window, so no smaller window holds
++ * these additions, and one that cannot is refused at startup.
++ */
++const PROMPT_ADDITIONS_SHARES = 3;
++
 +/** `M` = W/8 bytes, 32,768 at the served window. */
 +const INLINE_BLOCK_SHARES = 32;
 +
@@ -228122,7 +228283,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * tokenizer, a snapshot runs close to four bytes a token, so one at the
 + * bound is about 17,000 tokens of the history it opens.
 + *
-+ * Its cost is the fit's margin, a token for every byte past `M`: 24,331
++ * Its cost is the fit's margin, a token for every byte past `M`: 33,547
 + * tokens at the served window, which is the least a segment after a
 + * compaction works in when every term it carries is at its widest. `C`, `T`
 + * and every turn's room are unchanged by it.
@@ -228193,6 +228354,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  const share = (shares: number): number =>
 +    Math.floor((contextWindowSize * shares) / WINDOW_SHARES);
 +  const staticPreamble = share(STATIC_PREAMBLE_SHARES);
++  const promptAdditions = share(PROMPT_ADDITIONS_SHARES);
 +  const inlineBlockBytes = share(INLINE_BLOCK_SHARES);
 +  const snapshotBytes = share(SNAPSHOT_SHARES);
 +  const messageFraming = MESSAGE_FRAMING_BYTES;
@@ -228205,7 +228367,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  // ratio between bytes and tokens is assumed or computed anywhere, and
 +  // nothing converts the other way.
 +  const turnGeneration = inlineBlockBytes + share(TURN_REASONING_SHARES);
-+  const compactionTrigger = contextWindowSize - turnGeneration - staticPreamble;
++  const compactionTrigger = contextWindowSize - turnGeneration - promptAdditions;
 +  const block = inlineBlockBytes + messageFraming;
 +  // The fit: what a compaction can leave standing, the preamble, a snapshot,
 +  // the authored input and one result, and the carried turn, stands below
@@ -228217,7 +228379,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +    (turnGeneration + messageFraming);
 +  if (surviving > compactionTrigger - 1) {
 +    throw new Error(
-+      `A ${contextWindowSize}-token window leaves a ${compactionTrigger}-token trigger once a ${turnGeneration}-token turn and the ${staticPreamble}-token static preamble are held back, but a compaction can leave ${surviving} tokens standing: the preamble, a snapshot, the authored input, the carried turn and one result. A history that cannot hold what a compaction produces cannot continue; this deployment needs a larger window.`,
++      `A ${contextWindowSize}-token window leaves a ${compactionTrigger}-token trigger once a ${turnGeneration}-token turn and the ${promptAdditions} tokens a request may add to its prompt are held back, but a compaction can leave ${surviving} tokens standing: the ${staticPreamble}-token static preamble, a snapshot, the authored input, the carried turn and one result. A history that cannot hold what a compaction produces cannot continue; this deployment needs a larger window.`,
 +    );
 +  }
 +  // A turn issued at the largest admitted prompt still cannot reach the end
@@ -228231,6 +228393,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  return {
 +    window: contextWindowSize,
 +    staticPreamble,
++    promptAdditions,
 +    inlineBlockBytes,
 +    snapshotBytes,
 +    messageFraming,
@@ -228247,7 +228410,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * may produce is knowable before its prompt is counted. The partition proves
 + * that room is always available -- for a turn, because `T + C <= W`, and for
 + * a compaction's snapshot, because that request carries the same history
-+ * under additions also held within `D`.
++ * under additions also held within `A`.
 + *
 + * Reasoning is inside this number. There is no separate thinking budget and
 + * no forced end-of-reasoning marker; a generation that reaches this limit is
@@ -228498,7 +228661,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -150,14 +634,14 @@
+@@ -150,14 +678,14 @@
    // 128K carve-outs for Opus 4.6+. Rewrite the dotted minor to hyphenated
    // up front so every downstream regex sees the canonical form regardless
    // of which alias the proxy exposed.
@@ -228515,7 +228678,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
    // the version parser and the limit tables agree on every alias shape.
    s = s.replace(/^(claude-[a-z]+-\d+(?:-\d+)?)\.(\d+)(?:\.\d+)*/, '$1-$2');
  
-@@ -392,18 +876,19 @@
+@@ -392,18 +920,19 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -246855,9 +247018,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      [
 +        PARTITION.compactionTrigger -
 +          1 +
-+          PARTITION.staticPreamble -
++          PARTITION.promptAdditions -
 +          REDRAW_NOTICE_TOKENS,
-+        PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS - TURN_NOTICES_TOKENS,
++        PARTITION.promptAdditions - REDRAW_NOTICE_TOKENS - TURN_NOTICES_TOKENS,
 +      ],
      ]) {
 -      const t = computeThresholds(w);
@@ -246952,18 +247115,18 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    // admitted one token below the trigger and refused at its limit as often
 +    // as a turn can be, carrying every refusal notice, plus a directive
 +    // that, with those notices and the widest notice a redraw adds, fills the
-+    // whole static preamble. What the turn generated after that prompt is
-+    // not in it, so the room left is a turn's room plus one, whatever the
-+    // turn produced, for every draw.
++    // whole of what the window holds above the trigger for additions. What
++    // the turn generated after that prompt is not in it, so the room left is
++    // a turn's room plus one, whatever the turn produced, for every draw.
 +    const largestPrompt = PARTITION.compactionTrigger - 1 + TURN_NOTICES_TOKENS;
 +    const harness = makeHarness();
 +    stubSideQueryCounts(
 +      harness,
 +      largestPrompt +
-+        PARTITION.staticPreamble -
++        PARTITION.promptAdditions -
 +        REDRAW_NOTICE_TOKENS -
 +        TURN_NOTICES_TOKENS,
-+      PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS - TURN_NOTICES_TOKENS,
++      PARTITION.promptAdditions - REDRAW_NOTICE_TOKENS - TURN_NOTICES_TOKENS,
 +    );
 +    await compress(harness);
 +    const generated = harness.generateText.mock
@@ -246978,9 +247141,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -        computeThresholds(32_000, 1),
 -      );
 -    });
-+  it('refuses when what the request adds outgrows the static preamble', async () => {
++  it('refuses when what the request adds outgrows the room above the trigger for it', async () => {
 +    const overgrown = makeHarness();
-+    stubSideQueryCounts(overgrown, 150_000, PARTITION.staticPreamble + 1);
++    stubSideQueryCounts(overgrown, 150_000, PARTITION.promptAdditions + 1);
 +    expect((await compress(overgrown)).info.compressionStatus).toBe(
 +      CompressionStatus.COMPRESSION_FAILED_PROTOCOL_ERROR,
 +    );
@@ -246992,13 +247155,13 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -        computeThresholds(32_000), // no pct arg = DEFAULT_PCT
 -      );
 -    });
-+  it('holds the widest redraw notice and the notices of a refused turn inside the share of the static preamble what the request adds is held to', async () => {
++  it('holds the widest redraw notice and the notices of a refused turn inside the share what the request adds is held to', async () => {
 +    // A redraw's notice is counted before the first draw, at its widest and
 +    // framed, and so are the refusal notices the prompt itself can carry
 +    // past the trigger, so no draw can be issued with less than a turn's
 +    // room.
 +    const largestAdded =
-+      PARTITION.staticPreamble - REDRAW_NOTICE_TOKENS - TURN_NOTICES_TOKENS;
++      PARTITION.promptAdditions - REDRAW_NOTICE_TOKENS - TURN_NOTICES_TOKENS;
 +    const fits = makeHarness();
 +    stubSideQueryCounts(fits, 150_000, largestAdded);
 +    expect((await compress(fits)).info.compressionStatus).toBe(
@@ -249203,10 +249366,15 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  /**
   * @license
   * Copyright 2025 Google LLC
-@@ -5,205 +18,256 @@
+@@ -5,205 +18,264 @@
   */
  
- import type { Content, GenerateContentConfig } from '@google/genai';
+-import type { Content, GenerateContentConfig } from '@google/genai';
++import type {
++  Content,
++  GenerateContentConfig,
++  ToolListUnion,
++} from '@google/genai';
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
 -import type { GenerateTextResult } from '../core/baseLlmClient.js';
@@ -249228,7 +249396,11 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    CompressionStatus,
  } from '../core/turn.js';
 -import { DEFAULT_TOKEN_LIMIT } from '../core/tokenLimits.js';
-+import { partitionContextWindow, tokenizerText } from '../core/tokenLimits.js';
++import {
++  partitionContextWindow,
++  tokenizerText,
++  type ContextPartition,
++} from '../core/tokenLimits.js';
 +import {
 +  MAX_GENERATION_DRAWS,
 +  REFUSED_ANSWER,
@@ -249625,7 +249797,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
  export type CompactTrigger = 'manual' | 'auto';
  
-@@ -212,18 +276,7 @@
+@@ -212,18 +284,7 @@
    force: boolean;
    config: Config;
    /**
@@ -249645,7 +249817,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
     */
    originalTokenCount: number;
    /**
-@@ -234,20 +287,10 @@
+@@ -234,20 +295,10 @@
    trigger?: CompactTrigger;
    signal?: AbortSignal;
    /**
@@ -249668,9 +249840,56 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
    /** Per-request overrides used by the main turn, including transient tools. */
    requestGenerationConfig?: GenerateContentConfig;
    /**
-@@ -319,143 +362,82 @@
+@@ -301,12 +352,12 @@
+  * Compose the compression side-query system prompt: the base template,
+  * optionally followed by an `Additional Instructions:` block containing
+  * the user's `/compress <text>` directives and any `additionalContext`
+  * returned by PreCompact hooks. Order is user-first / hook-appended so an
+  * explicit user intent outranks a global hook policy when both speak.
+  */
+-function buildCompressionSystemPrompt(
++export function buildCompressionSystemPrompt(
+   userInstructions: string | undefined,
+   hookInstructions: string,
+ ): string {
+   const base = getCompressionPrompt();
+   const parts: string[] = [];
+@@ -319,143 +370,115 @@
    if (parts.length === 0) return base;
    return `${base}\n\nAdditional Instructions:\n${parts.join('\n\n')}`;
++}
++
++/**
++ * The tools a compaction request declares: the turn's own, because the
++ * history it summarises calls them, and the snapshot's declaration after
++ * them, which the request forces a call to.
++ */
++export function compactionRequestTools(
++  turnTools: ToolListUnion,
++  partition: ContextPartition,
++): ToolListUnion {
++  return [...turnTools, stateSnapshotTool(partition.snapshotBytes)];
++}
++
++/**
++ * The message that closes a compaction request: the compaction's
++ * instructions, then the directive stating the ceiling its answer is issued
++ * with. With the snapshot's declaration it is everything the request adds to
++ * the prompt it summarises, so the startup proof counts it in this shape and
++ * every draw is issued in it.
++ */
++export function compactionDirectiveMessage(
++  instructions: string,
++  maxOutputTokens: number,
++): Content {
++  return {
++    role: 'user',
++    parts: [
++      {
++        text: `${instructions}\n\n${compactionRequestDirective(maxOutputTokens)}`,
++      },
++    ],
++  };
  }
  
  function supportsCompressionCacheSharing(config: Config): boolean {
@@ -249872,7 +250091,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
      const curatedHistory = chat.getHistoryShallow(true);
      if (curatedHistory.length === 0) {
        return {
-@@ -464,15 +446,39 @@
+@@ -464,15 +487,39 @@
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
@@ -249917,7 +250136,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  
      // Guard: need at least a user+model pair for a meaningful summary.
      // This runs BEFORE the PreCompact hook fires — a hook with side effects
-@@ -485,6 +491,8 @@
+@@ -485,6 +532,8 @@
            originalTokenCount,
            newTokenCount: originalTokenCount,
            compressionStatus: CompressionStatus.NOOP,
@@ -249926,7 +250145,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        failure: null,
        };
      }
-@@ -512,616 +520,787 @@
+@@ -512,616 +561,783 @@
          // client.ts) — keep it consistent.
          const merged = result?.getAdditionalContext();
          if (merged && merged.trim().length > 0) {
@@ -250371,14 +250590,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    // which states the ceiling its answer is issued with.
 +    const requestContents = (maxOutputTokens: number): Content[] => [
 +      ...issuedPrompt,
-+      {
-+        role: 'user',
-+        parts: [
-+          {
-+            text: `${systemInstruction}\n\n${compactionRequestDirective(maxOutputTokens)}`,
-+          },
-+        ],
-+      },
++      compactionDirectiveMessage(systemInstruction, maxOutputTokens),
 +    ];
 +    // One request shape, used for both the exact count and the generation,
 +    // so the two can never disagree about rendering; they differ only in the
@@ -250433,7 +250645,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      systemInstruction: mainSystemInstruction,
 +      config: {
 +        ...generationConfig,
-+        tools: [...turnTools, stateSnapshotTool(partition.snapshotBytes)],
++        tools: compactionRequestTools(turnTools, partition),
 +        toolConfig: {
 +          ...generationConfig.toolConfig,
 +          functionCallingConfig: {
@@ -250480,11 +250692,14 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      summaryRequestTokenCount = summaryCount.totalTokens;
 +      // The request adds two things to the prompt it summarizes, the
 +      // snapshot's declaration and the directive, and the partition holds a
-+      // share for exactly that. What they cost is measured against the
-+      // prompt as it was issued -- the turn's own tools, no directive -- so
-+      // the share is checked against the rendering rather than against an
-+      // assumption about it. Additions that outgrew their share would put the
-+      // snapshot below its reserve, so they end the attempt here instead.
++      // share above the trigger for exactly what a request adds, `A`. What
++      // they cost is measured against the prompt as it was issued -- the
++      // turn's own tools, no directive -- so the share is checked against the
++      // rendering rather than against an assumption about it. The startup
++      // proof held them in their shipped form; this request can carry more,
++      // a user's `/compress` text or a PreCompact hook's, and additions that
++      // outgrew their share would put the snapshot below its reserve, so they
++      // end the attempt here instead.
 +      const promptOnlyCount = await measured('prompt_only', () => config
 +        .getBaseLlmClient()
 +        .countRequestTokens({
@@ -250513,10 +250728,10 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      const turnNoticeTokens = refusedTurnNoticeTokens(partition);
 +      if (
 +        addedTokens + redrawNoticeTokens + turnNoticeTokens >
-+        partition.staticPreamble
++        partition.promptAdditions
 +      ) {
 +        throw new Error(
-+          `The snapshot's declaration and the compaction directive render to ${addedTokens} tokens, a redraw's refusal notice to at most ${redrawNoticeTokens} more and the refusal notices of the turn it summarises to at most ${turnNoticeTokens} more, past the ${partition.staticPreamble} the partition declares for the whole static preamble. Shorten the directive, the declaration or the notices, or deploy on a larger window.`,
++          `The snapshot's declaration and the compaction directive render to ${addedTokens} tokens, a redraw's refusal notice to at most ${redrawNoticeTokens} more and the refusal notices of the turn it summarises to at most ${turnNoticeTokens} more, past the ${partition.promptAdditions} the partition holds above the trigger for what a request adds to its prompt. Shorten the compaction's instructions, the directive, the declaration or the notices, or deploy on a larger window.`,
 +        );
 +      }
 +      // The snapshot is issued at the room the window actually has, not at a
@@ -250526,8 +250741,8 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      // turn's: the prompt this request extends was issued below the trigger,
 +      // with at most its refusal notices more, and what the request adds to
 +      // it -- the declaration, the directive and a redraw's notice -- is held
-+      // within D with those notices above, so the request is at most
-+      // T - 1 + D, which leaves at least C + 1. Every lighter request leaves
++      // within A with those notices above, so the request is at most
++      // T - 1 + A, which leaves at least C + 1. Every lighter request leaves
 +      // more, and spending it is what keeps the snapshot from being truncated
 +      // by the reasoning it shares an output stream with. A turn's room is
 +      // what the fit charges for the turn a compaction carries; a draw's
@@ -391089,7 +391304,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +it('actual compaction commit preserves its whole snapshot', async () => {
 +  const f = await setup('compaction-control');
 +  await f.chatSend([{ text: 'old prompt' }]);
-+  f.tokenCounts.push(230_000, 230_000, 190_000, 188_000, 12_000);
++  f.tokenCounts.push(230_000, 230_000, 190_000, 188_560, 12_000);
 +  f.outputs.push([snapshotCall()]);
 +  f.properties['getFileReadCache'] = () => ({
 +    markAllReadsEvictedFromHistory: () => 0,
@@ -391123,7 +391338,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +it('accepted turn after actual compaction commit retains later runtime reminder', async () => {
 +  const f = await setup('post-compaction');
 +  await f.chatSend([{ text: 'old prompt' }]);
-+  f.tokenCounts.push(230_000, 230_000, 190_000, 188_000, 12_000);
++  f.tokenCounts.push(230_000, 230_000, 190_000, 188_560, 12_000);
 +  f.outputs.push([snapshotCall()]);
 +  f.properties['getFileReadCache'] = () => ({
 +    markAllReadsEvictedFromHistory: () => 0,
@@ -391244,7 +391459,7 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +      entered = resolve;
 +    });
 +    if (status === CompressionStatus.COMPRESSED) {
-+      f.tokenCounts.push(230_000, 230_000, 190_000, 188_000, 12_000);
++      f.tokenCounts.push(230_000, 230_000, 190_000, 188_560, 12_000);
 +      f.outputs.push([snapshotCall()]);
 +      f.responseGate.wait = async () => {
 +        entered();
@@ -424880,7 +425095,7 @@ diff --git a/packages/core/src/services/session-reference-service.test.ts b/pack
 diff --git a/packages/core/src/test-utils/live-chat-recording-fixture.ts b/packages/core/src/test-utils/live-chat-recording-fixture.ts
 --- /dev/null
 +++ b/packages/core/src/test-utils/live-chat-recording-fixture.ts
-@@ -0,0 +1,340 @@
+@@ -0,0 +1,342 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -424962,10 +425177,12 @@ diff --git a/packages/core/src/test-utils/live-chat-recording-fixture.ts b/packa
 + * they are measured: the Chat's count of the request it would send (at the
 + * compaction trigger), then the service's original request, summary request,
 + * summary request without its directive, and candidate. The summary request
-+ * is admitted, and the candidate leaves a turn issuable.
++ * adds the 1,440 tokens the served template renders the snapshot's
++ * declaration and the directive to, so it is admitted, and the candidate
++ * leaves a turn issuable.
 + */
 +export const LIVE_COMPACTION_TOKEN_COUNTS = [
-+  230_000, 230_000, 190_000, 188_000, 12_000,
++  230_000, 230_000, 190_000, 188_560, 12_000,
 +] as const;
 +
 +export interface LiveChatRecordingOptions {
