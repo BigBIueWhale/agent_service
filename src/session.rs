@@ -786,8 +786,16 @@ pub async fn run_one(
         }
         Err(error) => {
             diagnostics.push(format!("strict event parse failed: {error}"));
+            // A client that ended without a certifiable result said why on
+            // its own stderr, which the container logs do not carry: the
+            // capture owns that stream. Its last words are the record's.
+            let client = client_stderr_account(&paths.output.join("qwen.stderr"))
+                .unwrap_or_else(|error| {
+                    diagnostics.push(format!("read the client's captured stderr: {error}"));
+                    format!("the client's stderr could not be read ({error}); it is output/qwen.stderr in the bundle")
+                });
             (
-                format!("agent output was invalid: {error}; recent container logs:\n{logs}"),
+                format!("agent output was invalid: {error}; {client}; recent container logs:\n{logs}"),
                 None,
             )
         }
@@ -2184,6 +2192,58 @@ fn write_private_file(path: &Path, bytes: &[u8]) -> ServiceResult<()> {
         .map_err(|error| ServiceError::Internal(format!("write/sync {}: {error}", path.display())))
 }
 
+/// The most of the client's captured stderr a terminal record quotes: its
+/// final message and a full default-depth Node stack trace, which together
+/// ran to 1,528 bytes when a recording refusal ended a probe, with an order of
+/// magnitude to spare. A longer stderr is quoted from its end, the place a
+/// dying process writes why, and the record says how much precedes the quote;
+/// the whole stream is `output/qwen.stderr` in the bundle.
+const CLIENT_STDERR_QUOTE_BYTES: u64 = 16 * 1024;
+
+/// The client's own account of how it ended, from its captured stderr.
+fn client_stderr_account(path: &Path) -> ServiceResult<String> {
+    use std::io::{Read, Seek, SeekFrom};
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(path)
+        .map_err(|error| ServiceError::AgentOutputMissing(format!("open {}: {error}", path.display())))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| ServiceError::AgentOutputMissing(format!("fstat {}: {error}", path.display())))?;
+    if !metadata.is_file()
+        || metadata.uid() != 1000
+        || metadata.gid() != 1000
+        || metadata.permissions().mode() & 0o777 != 0o600
+    {
+        return Err(ServiceError::AgentOutputMissing(format!(
+            "captured stderr {} has unsafe opened type/mode/owner",
+            path.display()
+        )));
+    }
+    let length = metadata.len();
+    if length == 0 {
+        return Ok("the client wrote nothing to stderr".into());
+    }
+    let omitted = length.saturating_sub(CLIENT_STDERR_QUOTE_BYTES);
+    file.seek(SeekFrom::Start(omitted))
+        .map_err(|error| ServiceError::AgentOutputMissing(format!("seek {}: {error}", path.display())))?;
+    let mut quoted = Vec::new();
+    file.take(CLIENT_STDERR_QUOTE_BYTES)
+        .read_to_end(&mut quoted)
+        .map_err(|error| ServiceError::AgentOutputMissing(format!("read {}: {error}", path.display())))?;
+    let text = String::from_utf8_lossy(&quoted);
+    Ok(if omitted == 0 {
+        format!("the client's stderr reads:\n{}", text.trim_end())
+    } else {
+        format!(
+            "the client's stderr ends (its first {omitted} of {length} bytes are in output/qwen.stderr in the bundle):\n{}",
+            text.trim_end()
+        )
+    })
+}
+
 fn validate_capture_output(path: &Path, expected_bytes: u64, label: &str) -> ServiceResult<()> {
     let metadata = std::fs::symlink_metadata(path).map_err(|error| {
         ServiceError::AgentOutputMissing(format!(
@@ -2360,9 +2420,10 @@ mod tests {
     }
 
     use super::{
-        ensure_private_forensic_file, ensure_prompt_record, raw_retention_decision,
-        retain_raw_evidence, validate_completed_capture, FinalizationPhase, SessionPaths,
-        TeardownProof,
+        client_stderr_account, ensure_private_forensic_file, ensure_prompt_record,
+        raw_retention_decision, retain_raw_evidence, validate_completed_capture,
+        write_private_file, FinalizationPhase, SessionPaths, TeardownProof,
+        CLIENT_STDERR_QUOTE_BYTES,
     };
     use crate::docker_ops::CaptureComplete;
 
@@ -2620,6 +2681,49 @@ mod tests {
                 .map(|decision| decision.0),
             Some("service-restart-bundle-failure")
         );
+    }
+
+    #[test]
+    fn the_client_stderr_is_quoted_from_its_end_within_its_bound() {
+        let root = std::env::temp_dir().join(format!(
+            "qwen38-client-stderr-{}",
+            uuid::Uuid::new_v4().simple()
+        ));
+        std::fs::create_dir_all(&root).expect("create client-stderr fixture");
+        let path = root.join("qwen.stderr");
+        let write = |bytes: &[u8]| {
+            let _ = std::fs::remove_file(&path);
+            write_private_file(&path, bytes).expect("write captured stderr");
+            if unsafe { libc::geteuid() } == 0 {
+                std::os::unix::fs::chown(&path, Some(1000), Some(1000))
+                    .expect("assign trusted capture ownership in root-run fixture");
+            }
+        };
+        write(b"");
+        assert_eq!(
+            client_stderr_account(&path).unwrap(),
+            "the client wrote nothing to stderr"
+        );
+        let refusal = "An unexpected critical error occurred:\nError: Invalid model response evidence: compaction request has no matching output ceiling directive.\n";
+        write(refusal.as_bytes());
+        assert_eq!(
+            client_stderr_account(&path).unwrap(),
+            format!("the client's stderr reads:\n{}", refusal.trim_end())
+        );
+        let mut long = vec![b'x'; CLIENT_STDERR_QUOTE_BYTES as usize];
+        long.extend_from_slice(refusal.as_bytes());
+        write(&long);
+        let account = client_stderr_account(&path).unwrap();
+        assert!(account.starts_with(&format!(
+            "the client's stderr ends (its first {} of {} bytes are in output/qwen.stderr in the bundle):",
+            refusal.len(),
+            long.len()
+        )));
+        assert!(account.ends_with(refusal.trim_end()));
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640))
+            .expect("drift captured stderr mode");
+        assert!(client_stderr_account(&path).is_err());
+        std::fs::remove_dir_all(&root).expect("remove client-stderr fixture");
     }
 
     #[test]

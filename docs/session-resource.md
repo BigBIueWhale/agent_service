@@ -125,7 +125,7 @@ The `terminal` object has these required fields:
 | `container_exit_code` | integer or null | Actual Docker-wait exit status in 0..255, or no successful wait observation |
 | `agent_exit_code` | integer or null | Trusted exit-sidecar readback in 0..255, or no valid sidecar; the same original observation as Docker wait, not independent corroboration |
 | `is_process_error` | boolean | An ended session's exit disagrees with the exit the stream contract's terminal table gives the subtype its certified record carries, no terminal record was certified, or mandatory evidence handling failed; an ending the run recorded and exited with, whichever ending it is, is not one, a cancelled session's exit is the cancellation's and is not compared, and this does not judge task correctness |
-| `response` | string | Final service response, including any failure explanation; an empty string is a real empty answer |
+| `response` | string | Final service response, including any failure explanation; an empty string is a real empty answer. With no certified result it names the certification refusal, then quotes the client's own captured stderr -- the last 16,384 bytes, saying how many precede them, since a client that dies writes why at the end and the whole stream is `output/qwen.stderr` in the bundle -- then the recent container logs |
 | `agent_result` | object or null | Strictly certified agent result, or no certified result |
 | `bundle` | object or null | Accepted bundle metadata, or no accepted bundle |
 | `raw_session_tree_retained` | boolean | Final raw-tree retention decision; retained raw state can coexist with an accepted bundle |
