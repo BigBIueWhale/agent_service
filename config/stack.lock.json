@@ -53,7 +53,7 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:64b150fd98f083ef708f1c1f0741d0d3799b2d472bedadd2fd3ed9ea5b0a1aaf",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "8492beede4f2c1b3672ec5c7745b008df282d5760682b73e010fd1c125ffcd2b",
+    "policy_sha256": "99b0c628a64eda63c06734f02234a99f2156b19c7407251b727b41ba5d30bb79",
     "source_sha256": "9ea3381227c032f31ab1f6391f61e601d60ca7d094d093f00d6fd9a1514c8de1",
     "memory": "128m",
     "memory_swap": "128m",
@@ -76,7 +76,7 @@
   },
   "capture": {
     "image_tag": "qwen38-session-capture:1.0.0",
-    "image_id": "sha256:1658271fc7a12695376eef81371401816037dd6ce2f2754f85426681c2935c4e",
+    "image_id": "sha256:2f446423fd30fd62cf733fd11e47dd4840bcdd7b6320da7c0e9326d23d33c6d7",
     "source_sha256": "b67c4ccf6d5d52baf86b29deefd31f93c797a9a269b5e41a74b37c3931e294b4",
     "capture_id": "unix-stream-capture-v1",
     "memory": "32m",

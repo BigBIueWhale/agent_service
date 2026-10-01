@@ -7,7 +7,7 @@
   "archive": null,
   "images": {
     "agent": "sha256:e6f5a984a6157ce7c3c01a816ffddba9632a934c95758f3adbde688268501b81",
-    "capture": "sha256:1658271fc7a12695376eef81371401816037dd6ce2f2754f85426681c2935c4e",
+    "capture": "sha256:2f446423fd30fd62cf733fd11e47dd4840bcdd7b6320da7c0e9326d23d33c6d7",
     "relay": "sha256:869cc8dc77736fe3f39dbfb07e1677df4a4b25928980f38efd22d1f0117c0b87",
     "broker": "sha256:64b150fd98f083ef708f1c1f0741d0d3799b2d472bedadd2fd3ed9ea5b0a1aaf",
     "service": "sha256:44da98ca7bb48e5b5a4970bf94e22c6bcb8a46ef1238565c3cecd70299324612"
