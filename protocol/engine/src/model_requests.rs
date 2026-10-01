@@ -287,6 +287,44 @@ fn nonstream_json_value(body: &[u8]) -> Option<serde_json::Value> {
     serde_json::from_str(&String::from_utf8_lossy(second)).ok()
 }
 
+/// The lead every refusal notice opens with, the client's `REFUSED_ANSWER`
+/// (`generation-refusal.ts`, pinned by the transformer's contract). No
+/// compaction directive opens with it.
+const REFUSAL_NOTICE_LEAD: &str = "Your previous answer to this request was refused because";
+
+/// A user message's model-facing text, or `None` when it carries none.
+fn user_message_text(message: Value<'_>, line: usize) -> ContractResult<Option<String>> {
+    if message.get("role").and_then(Value::as_str) != Some("user") {
+        return Ok(None);
+    }
+    let content = field(message, "content", line)?;
+    if let Some(text) = content.as_str() {
+        return Ok(Some(text.to_string()));
+    }
+    let Some(parts) = content.elements() else {
+        return Ok(None);
+    };
+    let mut joined = String::new();
+    let mut count = 0;
+    for part in parts {
+        if part.get("type").and_then(Value::as_str) != Some("text") {
+            return Ok(None);
+        }
+        joined.push_str(text(part, "text", line)?);
+        count += 1;
+    }
+    Ok((count > 0).then_some(joined))
+}
+
+/// The output ceiling a compaction draw was issued with, read from the one
+/// place its request states it to the model and held to its `max_tokens`.
+///
+/// A draw's request is the prompt it summarises followed by the directive
+/// that states the ceiling. A redraw is that request with one message more
+/// after the directive: the notice naming why the draw before it was refused,
+/// which opens with [`REFUSAL_NOTICE_LEAD`]. So the directive is the last
+/// message, or the message immediately before a final refusal notice, and
+/// nowhere else; the number it states must be the request's `max_tokens`.
 fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64> {
     let budget = unsigned(
         field(body, "max_tokens", line)?,
@@ -298,35 +336,25 @@ fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64
             "compaction request has no positive physical output ceiling",
         ));
     }
-    let last = field(body, "messages", line)?
+    let messages: Vec<Value<'_>> = field(body, "messages", line)?
         .elements()
-        .and_then(|items| items.last())
-        .ok_or_else(|| refusal("compaction request has no final directive"))?;
-    if text(last, "role", line)? != "user" {
-        return Err(refusal(
-            "compaction request does not end in a user directive",
-        ));
-    }
-    let content = field(last, "content", line)?;
-    let directive = if let Some(text) = content.as_str() {
-        text.to_string()
+        .map(Iterator::collect)
+        .unwrap_or_default();
+    let last = match messages.last() {
+        Some(last) => user_message_text(*last, line)?,
+        None => return Err(refusal("compaction request has no final directive")),
+    };
+    let redrawn = last
+        .as_deref()
+        .is_some_and(|text| text.starts_with(REFUSAL_NOTICE_LEAD));
+    let directive = if redrawn {
+        match messages.len().checked_sub(2).map(|at| messages[at]) {
+            Some(message) => user_message_text(message, line)?,
+            None => None,
+        }
+        .ok_or_else(|| refusal("compaction refusal notice does not follow a user directive"))?
     } else {
-        let parts = content
-            .elements()
-            .ok_or_else(|| refusal("compaction directive has no model-facing text"))?;
-        let mut text = String::new();
-        let mut count = 0;
-        for part in parts {
-            if crate::stream::text(part, "type", line)? != "text" {
-                return Err(refusal("compaction directive contains non-text content"));
-            }
-            text.push_str(crate::stream::text(part, "text", line)?);
-            count += 1;
-        }
-        if count == 0 {
-            return Err(refusal("compaction directive has no model-facing text"));
-        }
-        text
+        last.ok_or_else(|| refusal("compaction request does not end in a user directive"))?
     };
     let marker = "your answer may generate at most ";
     let claimed = directive
@@ -2641,6 +2669,35 @@ mod tests {
         state.commit(admission);
         Ok(())
     }
+    /// A compaction draw states its ceiling in the directive that closes its
+    /// request; a redraw adds the refusal notice after that directive. Both
+    /// are read, and every other trailing shape is refused.
+    #[test]
+    fn a_redraw_ceiling_is_read_from_the_directive_its_notice_follows() {
+        let directive = json!({"role":"user","content":[{"type":"text","text":
+            "system\n\nyour answer may generate at most 52102 tokens, reasoning included. If all 4 are refused, this conversation is not compacted and cannot continue."}]});
+        let notice = json!({"role":"user","content":[{"type":"text","text":
+            "Your previous answer to this request was refused because its snapshot renders to 38102 bytes, past the 32768-byte limit. Write the same state more briefly."}]});
+        let other = json!({"role":"user","content":"more"});
+        let budget = |messages: serde_json::Value, max_tokens: u64| {
+            let json = json!({"max_tokens":max_tokens,"messages":messages}).to_string();
+            let document = Document::decode(json.as_bytes(), LIMITS).unwrap();
+            compaction_request_budget(document.root(), 1)
+        };
+        assert_eq!(budget(json!([directive]), 52102).unwrap(), 52102);
+        assert_eq!(budget(json!([other, directive, notice]), 52102).unwrap(), 52102);
+        for (messages, max_tokens, refused) in [
+            (json!([directive, other]), 52102, "no declared output ceiling"),
+            (json!([directive, notice, notice]), 52102, "no declared output ceiling"),
+            (json!([notice]), 52102, "notice does not follow a user directive"),
+            (json!([directive, notice]), 52101, "differs from its physical output ceiling"),
+            (json!([]), 52102, "no final directive"),
+        ] {
+            let error = budget(messages, max_tokens).unwrap_err().to_string();
+            assert!(error.contains(refused), "{error}");
+        }
+    }
+
     #[test]
     fn utility_count_requires_its_physical_bytes_and_operation_completion() {
         let mut state = ModelRequests::default();

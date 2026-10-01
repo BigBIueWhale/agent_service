@@ -376869,7 +376869,7 @@ diff --git a/packages/vscode-ide-companion/src/services/qwenSessionReader.ts b/p
 diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/core/src/core/model-request-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-request-evidence.test.ts
-@@ -0,0 +1,1160 @@
+@@ -0,0 +1,1283 @@
 +import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 +import { createHash } from 'node:crypto';
 +import { ChatAttempt } from './chat-attempt.js';
@@ -376882,7 +376882,15 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  type ModelRequestEvidence,
 +} from './model-request-evidence.js';
 +import { RECORDING_STALL_TIMEOUT_MS } from './recording-stall.js';
-+import { UtilityDelivery, utilityDeliveryContext } from './utility-delivery.js';
++import type { Content } from '@google/genai';
++import {
++  UtilityDelivery,
++  compactionDrawContext,
++  utilityDeliveryContext,
++} from './utility-delivery.js';
++import { OpenAIContentConverter } from './openaiContentGenerator/converter.js';
++import { compactionRequestDirective } from '../services/state-snapshot.js';
++import { drawRefusalNotice } from '../services/chatCompressionService.js';
 +import {
 +  fingerprintRuntimeHistory,
 +  type RuntimeHistoryState,
@@ -378029,6 +378037,121 @@ diff --git a/packages/core/src/core/model-request-evidence.test.ts b/packages/co
 +  expect(() =>
 +    replay.begin({ journal_id: 'new-journal', first_sequence: 1 }),
 +  ).toThrow();
++});
++
++describe('a compaction redraw through the live recorder', () => {
++  // The probe's third compaction: its first draw declared a snapshot that
++  // rendered to 38102 bytes against the 32768-byte bound, so it was refused
++  // and drawn again, told why. Both requests are rendered here as the
++  // compaction service builds them -- the summarised prompt, the directive,
++  // and on the redraw the refusal notice after it -- through the shared
++  // converter, and captured by the journal with a stdout window open, which
++  // is where the live run refused the redraw it had just built.
++  const budget = 52102;
++  const prompt: Content[] = [
++    { role: 'user', parts: [{ text: 'Read every chunk, in order.' }] },
++    { role: 'model', parts: [{ text: 'Reading chunk_00.' }] },
++  ];
++  const directive: Content = {
++    role: 'user',
++    parts: [
++      {
++        text: `You are the compaction component.\n\n${compactionRequestDirective(budget)}`,
++      },
++    ],
++  };
++  const notice: Content = {
++    role: 'user',
++    parts: [
++      {
++        text: drawRefusalNotice({
++          kind: 'over_bound',
++          bytes: 38102,
++          maxBytes: 32768,
++        }),
++      },
++    ],
++  };
++  const body = (contents: Content[], maxTokens = budget) =>
++    JSON.stringify({
++      model: 'test-model',
++      messages: OpenAIContentConverter.convertGeminiRequestToOpenAI(
++        { model: 'test-model', contents },
++        {
++          model: 'test-model',
++          modalities: { image: false, pdf: false, audio: false, video: false },
++          startTime: 0,
++        },
++      ),
++      max_tokens: maxTokens,
++      stream: true,
++      kv_scope: 'root',
++    });
++  const policy = {
++    ...TEST_POLICY,
++    mode: 'stream',
++    named_tool_choice: 'state_snapshot',
++  } as const;
++
++  function recorder() {
++    const f = fixture();
++    const output = f.journal.openOutputWindow();
++    const written: string[] = [];
++    output.setDrain(async () => {
++      for (const record of output.takePending()) written.push(record.type);
++    });
++    // Each draw is its own utility operation, as each generateText call is.
++    const draw = (json: string) =>
++      compactionDrawContext.run(true, () => {
++        const delivery = new UtilityDelivery();
++        return utilityDeliveryContext.run(delivery, () =>
++          f.journal.capture(json, 'root', 'compaction', 'segment', null, policy),
++        );
++      });
++    return { ...f, output, written, draw };
++  }
++
++  it('records the redraw, whose refusal notice follows its directive', async () => {
++    const live = recorder();
++    await live.draw(body([...prompt, directive]));
++    const redraw = body([...prompt, directive, notice]);
++    // The notice is a user message of its own after the directive, which is
++    // the shape a check reading the ceiling from the last message refuses.
++    expect(
++      (JSON.parse(redraw) as { messages: Array<{ role: string }> }).messages
++        .slice(-2)
++        .map((message) => message.role),
++    ).toEqual(['user', 'user']);
++    await live.draw(redraw);
++    await live.journal.flush();
++    expect(live.written).toEqual(['model_request', 'model_request']);
++    expect(live.records.map((record) => record.body.kind)).toEqual([
++      'full',
++      'delta',
++    ]);
++    live.output.close();
++  });
++
++  it.each([
++    [
++      'a final message that is no refusal notice',
++      () => body([...prompt, directive, prompt[0]!]),
++    ],
++    ['two refusal notices', () => body([...prompt, directive, notice, notice])],
++    [
++      'a directive stating another ceiling than max_tokens',
++      () => body([...prompt, directive, notice], budget - 1),
++    ],
++  ])('refuses %s', async (_name, request) => {
++    const live = recorder();
++    await expect(live.draw(request())).rejects.toThrow(
++      'Invalid model response evidence: compaction',
++    );
++    await expect(live.journal.flush()).rejects.toThrow(
++      'Invalid model response evidence: compaction',
++    );
++    live.output.close();
++  });
 +});
 diff --git a/packages/core/src/core/model-request-evidence.ts b/packages/core/src/core/model-request-evidence.ts
 --- /dev/null
@@ -382141,7 +382264,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1416 @@
+@@ -0,0 +1,1452 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -382191,6 +382314,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  stateSnapshotText,
 +} from '../services/state-snapshot.js';
 +import { tokenizerText } from './tokenLimits.js';
++import { REFUSED_ANSWER } from './generation-refusal.js';
 +import type { CompletedTokenizerCount } from './model-utility-replay.js';
 +import type { UnnormalizedGenerationObservation } from './model-generation.js';
 +import {
@@ -382846,7 +382970,48 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  responses: CompactionPhysicalResponse[];
 +};
 +
-+/** Read the ceiling from the last request message the model actually saw. */
++/** A user message's model-facing text, or undefined when it carries none. */
++function userMessageText(message: unknown): string | undefined {
++  if (
++    !message ||
++    typeof message !== 'object' ||
++    !('role' in message) ||
++    message.role !== 'user' ||
++    !('content' in message)
++  )
++    return undefined;
++  const content = message.content;
++  if (typeof content === 'string') return content;
++  if (
++    Array.isArray(content) &&
++    content.length > 0 &&
++    content.every(
++      (part) =>
++        part &&
++        typeof part === 'object' &&
++        part.type === 'text' &&
++        typeof part.text === 'string',
++    )
++  )
++    return content.map((part) => part.text).join('');
++  return undefined;
++}
++
++/**
++ * The output ceiling a compaction draw was issued with, read from the one
++ * place its request states it to the model and held to the ceiling the request
++ * was dispatched with.
++ *
++ * A draw's request is the prompt it summarises followed by the directive that
++ * states the ceiling. A redraw is that request with one message more after the
++ * directive: the notice naming why the draw before it was refused, which opens
++ * with {@link REFUSED_ANSWER} as every refusal notice does and as no directive
++ * does. So the directive is the request's last message, or the message
++ * immediately before a final refusal notice, and nowhere else. The number it
++ * states must be the request's `max_tokens`: the ceiling the model was told
++ * and the ceiling it was issued with are one value for every draw, first or
++ * redrawn.
++ */
 +function declaredCompactionBudget(bodyJson: string): number {
 +  let body: unknown;
 +  try {
@@ -382859,25 +383024,15 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  const messages = body.messages;
 +  if (!Array.isArray(messages) || messages.length === 0)
 +    return failure('compaction request has no final directive');
-+  const last = messages.at(-1);
-+  if (!last || typeof last !== 'object' || last.role !== 'user')
-+    return failure('compaction request does not end in a user directive');
-+  const content = last.content;
-+  let text: string;
-+  if (typeof content === 'string') text = content;
-+  else if (
-+    Array.isArray(content) &&
-+    content.length > 0 &&
-+    content.every(
-+      (part) =>
-+        part &&
-+        typeof part === 'object' &&
-+        part.type === 'text' &&
-+        typeof part.text === 'string',
-+    )
-+  )
-+    text = content.map((part) => part.text).join('');
-+  else return failure('compaction directive has no model-facing text');
++  const last = userMessageText(messages.at(-1));
++  const redrawn = last?.startsWith(REFUSED_ANSWER) === true;
++  const text = redrawn ? userMessageText(messages.at(-2)) : last;
++  if (text === undefined)
++    return failure(
++      redrawn
++        ? 'compaction refusal notice does not follow a user directive'
++        : 'compaction request does not end in a user directive',
++    );
 +  const marker = 'your answer may generate at most ';
 +  const at = text.lastIndexOf(marker);
 +  const digits =
@@ -382894,6 +383049,10 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  )
 +    return failure(
 +      'compaction request has no matching output ceiling directive',
++    );
++  if (!('max_tokens' in body) || body.max_tokens !== budget)
++    return failure(
++      'compaction directive states a ceiling other than the request max_tokens',
 +    );
 +  return budget;
 +}
@@ -389525,7 +389684,7 @@ diff --git a/packages/core/src/agents/backends/types.ts b/packages/core/src/agen
 diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages/core/src/core/runtime-history-recording.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/runtime-history-recording.test.ts
-@@ -0,0 +1,864 @@
+@@ -0,0 +1,863 @@
 +import * as fs from 'node:fs/promises';
 +import * as path from 'node:path';
 +import OpenAI from 'openai';
@@ -389615,7 +389774,6 @@ diff --git a/packages/core/src/core/runtime-history-recording.test.ts b/packages
 +    contextWindowSize: window,
 +    exactTokenCounting: 'vllm',
 +    maxRetries: 0,
-+    samplingParams: { max_tokens: 1000 },
 +  };
 +  const outputs: Part[][] = [[{ text: 'accepted answer 雪🧪\n' }]];
 +  const tokenCounts: number[] = [];
@@ -415343,7 +415501,7 @@ diff --git a/packages/core/src/utils/retry.test.ts b/packages/core/src/utils/ret
 diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages/core/src/core/model-compaction-physical.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-compaction-physical.test.ts
-@@ -0,0 +1,687 @@
+@@ -0,0 +1,731 @@
 +import { createHash } from 'node:crypto';
 +import { describe, expect, it } from 'vitest';
 +import { ModelResponseReplay } from './model-response-evidence.js';
@@ -415358,6 +415516,7 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +  stateSnapshotText,
 +} from '../services/state-snapshot.js';
 +import { tokenizerText } from './tokenLimits.js';
++import { drawRefusalNotice } from '../services/chatCompressionService.js';
 +
 +const policy = {
 +  mode: 'nonstream',
@@ -415429,19 +415588,37 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +  finishReason: 'STOP',
 +  physicalRequests: 1,
 +};
-+const requestBody = (budget: number) =>
++const directiveMessage = (budget: number) => ({
++  role: 'user',
++  content: [
++    {
++      type: 'text',
++      text: `system\n\n${compactionRequestDirective(budget)}`,
++    },
++  ],
++});
++// A redraw's request is its draw's request and the refusal notice after it.
++const noticeMessage = {
++  role: 'user',
++  content: [
++    {
++      type: 'text',
++      text: drawRefusalNotice({
++        kind: 'over_bound',
++        bytes: 38102,
++        maxBytes: 32768,
++      }),
++    },
++  ],
++};
++const requestBody = (
++  budget: number,
++  trailing: readonly unknown[] = [],
++  maxTokens = budget,
++) =>
 +  JSON.stringify({
-+    messages: [
-+      {
-+        role: 'user',
-+        content: [
-+          {
-+            type: 'text',
-+            text: `system\n\n${compactionRequestDirective(budget)}`,
-+          },
-+        ],
-+      },
-+    ],
++    messages: [directiveMessage(budget), ...trailing],
++    max_tokens: maxTokens,
 +  });
 +const preflightMeasurements = [
 +  { role: 'original' as const, operationId: 'token-original' },
@@ -415497,7 +415674,7 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +  });
 +}
 +
-+function replay(budget = 100) {
++function replay(budget = 100, request = requestBody(budget)) {
 +  const reader = new ModelResponseReplay();
 +  reader.begin(
 +    'journal',
@@ -415509,7 +415686,7 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +    },
 +    'scope',
 +    policy,
-+    requestBody(budget),
++    request,
 +    4,
 +  );
 +  let sequence = 0;
@@ -415916,6 +416093,31 @@ diff --git a/packages/core/src/core/model-compaction-physical.test.ts b/packages
 +    expect(() =>
 +      replay().claimCompactionDraw({ ...draw, ...change }, 'scope'),
 +    ).toThrow();
++  });
++
++  it('reads a redraw\'s ceiling from the directive its refusal notice follows', () => {
++    const reader = replay(100, requestBody(100, [noticeMessage]));
++    expect(() => reader.claimCompactionDraw(draw, 'scope')).not.toThrow();
++  });
++
++  it.each([
++    ['a final message that is no refusal notice', requestBody(100, [{ role: 'user', content: 'more' }])],
++    ['two refusal notices', requestBody(100, [noticeMessage, noticeMessage])],
++    ['a notice with no directive before it', JSON.stringify({ messages: [noticeMessage], max_tokens: 100 })],
++    ['a ceiling other than max_tokens', requestBody(100, [noticeMessage], 99)],
++    ['no max_tokens', JSON.stringify({ messages: [directiveMessage(100)] })],
++  ])('refuses a compaction request with %s', (_name, request) => {
++    expect(() =>
++      new ModelResponseReplay().begin(
++        'journal',
++        'request',
++        { kind: 'utility', operation_id: draw.operationId, purpose: 'compaction' },
++        'scope',
++        policy,
++        request,
++        1,
++      ),
++    ).toThrow('Invalid model response evidence: compaction');
 +  });
 +
 +  it('refuses an unclaimed output and a request without the final directive', () => {
@@ -423910,7 +424112,7 @@ diff --git a/packages/core/src/services/session-reference-service.test.ts b/pack
 diff --git a/packages/core/src/test-utils/live-chat-recording-fixture.ts b/packages/core/src/test-utils/live-chat-recording-fixture.ts
 --- /dev/null
 +++ b/packages/core/src/test-utils/live-chat-recording-fixture.ts
-@@ -0,0 +1,341 @@
+@@ -0,0 +1,340 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -424032,7 +424234,6 @@ diff --git a/packages/core/src/test-utils/live-chat-recording-fixture.ts b/packa
 +    contextWindowSize: window,
 +    exactTokenCounting: 'vllm',
 +    maxRetries: 0,
-+    samplingParams: { max_tokens: 1000 },
 +  };
 +  /** Provider answers, in the order the requests reach the transport. */
 +  const outputs: LiveWireTurn[] = [];

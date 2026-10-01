@@ -5836,6 +5836,18 @@ def _validate_compaction_accounting_before(state: State) -> None:
 
 def _validate_compaction_accounting_after(state: State) -> None:
     label = "compaction output-accounting result"
+    # A redraw is its draw's request with the refusal notice after the
+    # directive; the ceiling is read where the request states it.
+    _require_all(
+        state,
+        "packages/core/src/core/model-response-evidence.ts",
+        (
+            "  const redrawn = last?.startsWith(REFUSED_ANSWER) === true;",
+            "  const text = redrawn ? userMessageText(messages.at(-2)) : last;",
+            "  if (!('max_tokens' in body) || body.max_tokens !== budget)",
+        ),
+        label=label,
+    )
     # The client's own stream admission refuses a compaction record whose
     # status contradicts whether history was replaced; the SDKs are upstream's
     # and admit nothing of their own.
@@ -11865,7 +11877,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "whether history was replaced, and refused draws name resampleable rules. "
             "Failure after a partial stream cannot erase the "
             "last valid observation. Reasoning remains inline; this contract does not assert reference "
-            "persistence."
+            "persistence. A draw's ceiling is read from its directive, the request's last message or "
+            "the one before a final refusal notice, and must be the request's max_tokens."
         ),
         removal_condition=(
             "Upstream preserves complete success and interrupted compaction evidence with served "

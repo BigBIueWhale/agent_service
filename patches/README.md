@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `4b01caed8a09062a24c0fc2cb092f97d3720d5a6e9fef149b3e674137d74238d`
+- Review-diff SHA-256: `f5dd8b7e1bfdb527ca3b1bf09b9e3059dfa0ca51dcdaf88217c50be4aa07a170`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `5951adccb826da93c7b6173433422a3dc0d645555f70cf2be5cf94ba53b5f1f8`
+- Transformer-manifest SHA-256: `41bf1808ad291801c23386bf34b2a9cf11708777ba6b829eaf3ae1795f9097af`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -287,7 +287,11 @@ acceptance — not decoding — refuses a longer draw, which is redrawn whole
 rather than cut. A redraw carries one message more than the request it
 repeats: why the draw before it was refused and what to do instead, built from
 measured values and closed names rather than the draw's text, never the draw
-itself, and bounded at its widest inside the directive's share of `D`. A
+itself, and bounded at its widest inside the directive's share of `D`. Every
+reader reads a draw's ceiling where its request states it -- the last message,
+or the one before a final notice, which opens as every refusal does -- and holds
+it to the request's `max_tokens`, the client's replay and the native certifier
+alike. A
 candidate must end normally, carry the required
 snapshot, reduce the request, and leave an issuable turn. Failure retains the
 previous history and reports that retained count. There is no separate

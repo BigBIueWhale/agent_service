@@ -571,16 +571,30 @@ impl Trace {
     /// The physical requests of one compaction draw: earlier retries deliver
     /// nothing; the final request streams exactly the draw's SDK values, and
     /// the client delivers the decoded observation its content projects from.
-    fn compaction_draw(&mut self, kv: &str, operation: &str, budget: u64, draw: &Value) {
+    /// A redraw's request is its draw's request with the refusal notice for
+    /// the draw before it after the directive, as the client builds it.
+    fn compaction_draw(
+        &mut self,
+        kv: &str,
+        operation: &str,
+        budget: u64,
+        draw: &Value,
+        redrawn: bool,
+    ) {
         let requests = draw["physicalRequests"].as_u64().unwrap().max(1);
         for attempt in 1..=requests {
             let last = attempt == requests;
             let sequence = self.next_sequence();
             let id = format!("request-{sequence}");
+            let mut messages = vec![json!({"role":"user","content":[{"type":"text","text":format!(
+                "your answer may generate at most {budget} tokens, reasoning included. If all draws are refused, this conversation cannot continue."
+            )}]})];
+            if redrawn {
+                messages.push(json!({"role":"user","content":[{"type":"text","text":
+                    "Your previous answer to this request was refused because its snapshot renders to 38102 bytes, past the 32768-byte limit. Write the same state more briefly."}]}));
+            }
             let body = json!({"kv_scope":kv,"model":COMPACTION_MODEL,"stream":true,
-                "max_tokens":budget,"messages":[{"role":"user","content":format!(
-                    "your answer may generate at most {budget} tokens, reasoning included. If all draws are refused, this conversation cannot continue."
-                )}]})
+                "max_tokens":budget,"messages":messages})
             .to_string();
             self.push(json!({"type":"model_request","request":{
                 "journal_id":"fixture","sequence":sequence,"request_id":id,"kv_scope":kv,
@@ -692,12 +706,12 @@ impl Trace {
                 None,
             ));
         }
-        for (draw, operation, index) in draws {
+        for (ordinal, (draw, operation, index)) in draws.into_iter().enumerate() {
             match index {
                 Some(index) => record["data"]["rejectedAttempts"][index]["operationId"] = json!(operation),
                 None => record["data"]["output"]["operationId"] = json!(operation),
             }
-            self.compaction_draw(&kv, &operation, budget, &draw);
+            self.compaction_draw(&kv, &operation, budget, &draw, ordinal > 0);
             if let Some(count) = draw["newTokenCount"].as_u64() {
                 let measured = self.tokenizer(&kv, "candidate", count);
                 measurements.push(json!({"role":"candidate","operationId":measured}));
