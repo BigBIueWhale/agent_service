@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `5b5c8b65d7b76c2d9e99d31b2fac8cf35a771c69da105ae70013260bc40df3c4`
+- Review-diff SHA-256: `b0423b07749fabbf6a5b75c069ce8babd29649039f813572f4afa1a57ceee71f`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `ebfad572e912e44d406dec23196485355b0247959f07b96493eda53a4b840add`
+- Transformer-manifest SHA-256: `61be281fc9ce76367e58d9437ccb2afc64be3f67a7e7988760ffc65b635cd2d4`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -578,13 +578,24 @@ after recording every byte read, so a record is complete or says it is not. The
 record quantum never truncates a response. Active stdout renderers
 drain each admitted record before generation proceeds. Detached renderers release
 their window without poisoning the canonical writer. Recording represents what
-happened, so no judgement inside it removes a record from the output: a stdout
-window writes each record before its replay judges it, and the journal, which
-keeps the canonical history a prefix its readers accept by never persisting a
-record it refuses, still publishes that record to every window before it stops.
-A refusal is a `RecordingRefusal`; the stream's `session_recording_degraded`
-record tells it with the rule that refused, where a storage failure keeps
-upstream's words, and no further request is sent. Recorder waits are excluded
+happened, so no judgement inside it removes a record from the output. A
+refusal is a `RecordingRefusal`, and it carries the record it refused, whole.
+The journal, which keeps the canonical history a prefix its readers accept by
+never persisting a record it refuses, publishes that refusal to every window
+before it stops -- or keeps it for a window not yet open -- and a stdout window
+whose own replay refuses a record does the same. A window writes the refusal
+in the record's place as a `session_recording_degraded` record of reason
+`refused`, which tells the rule that refused and carries the refused record as
+`refused_record`: the stream admits no record its contract refuses, so this is
+where the record a refusal is about is kept, at its place, and nothing after it
+is judged against it. A storage failure is reason `write_failed` and keeps
+upstream's words. No further request is sent; what follows on the stream
+settles the work that was in flight, and each stop is told once. A compaction
+in flight when the recording stops commits nothing and writes no checkpoint:
+its record, status `COMPRESSION_FAILED_RECORDING_STOPPED`, claiming only the
+counts and draws the recording settled, reaches the stream after the stop, on
+`CompactionRecordingStoppedError`, which ends the session with the stop's cause.
+Recorder waits are excluded
 from the request's start, idle and generation clocks, so the recorder bounds
 itself: the asynchronous canonical writer and response cancellation refuse
 after one minute without progress

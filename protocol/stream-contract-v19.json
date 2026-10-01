@@ -526,10 +526,16 @@
                   "minLength": 1
                 },
                 "reason": {
-                  "const": "write_failed"
+                  "enum": [
+                    "write_failed",
+                    "refused"
+                  ]
                 },
                 "message": {
                   "type": "string"
+                },
+                "refused_record": {
+                  "type": "object"
                 }
               },
               "required": [
@@ -537,7 +543,29 @@
                 "reason",
                 "message"
               ],
-              "additionalProperties": false
+              "additionalProperties": false,
+              "if": {
+                "properties": {
+                  "reason": {
+                    "const": "refused"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "refused_record": {
+                    "type": "object"
+                  }
+                },
+                "required": [
+                  "refused_record"
+                ]
+              },
+              "else": {
+                "properties": {
+                  "refused_record": false
+                }
+              }
             },
             "type": {},
             "uuid": {},

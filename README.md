@@ -396,7 +396,13 @@ with what it had received, and the same request is issued again, untold, once,
 as a turn's broken stream is; a fresh request that fails the same way ends the
 compaction with that status, naming both faults. The record says which each
 draw was, and both certifiers hold it to its physical request: an answer, refused
-or accepted, completed and was delivered; a transport fault did not complete. A turn's room is what the fit charges for the
+or accepted, completed and was delivered; a transport fault did not complete. A
+compaction the session's recording stopped under commits nothing and writes no
+checkpoint; its record, `COMPRESSION_FAILED_RECORDING_STOPPED`, claims only the
+counts and draws the recording settled and follows the record of the stop on
+the stream -- a refusal's `session_recording_degraded` record, which carries the
+record the recorder refused -- and the session ends on the stop, its cause
+named. A turn's room is what the fit charges for the
 turn a compaction carries; a draw's answer is never carried, only the snapshot
 it declares, so it can be given whatever the window has left. The request is
 counted with that number at its widest, the window, and the served tokenizer

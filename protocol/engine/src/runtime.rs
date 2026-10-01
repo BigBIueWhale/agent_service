@@ -152,6 +152,7 @@ fn validate_compaction_event(
             | "COMPRESSION_FAILED_SUMMARY_OVER_BOUND"
             | "COMPRESSION_FAILED_HISTORY_CHANGED"
             | "COMPRESSION_FAILED_TRANSPORT_ERROR"
+            | "COMPRESSION_FAILED_RECORDING_STOPPED"
     );
     if !(status == "COMPRESSED" && succeeded || failed_status && !succeeded) {
         return Err(refuse(
@@ -1616,7 +1617,18 @@ impl RuntimeContract {
                         state.partial.set_origin(OutputOrigin::Runtime, line)?;
                         partial_origin = Some((scope_key.clone(), OutputOrigin::Runtime));
                     },
-                    SystemKind::SessionRecordingDegraded | SystemKind::TurnCleanupFailed | SystemKind::VisionBridgeFailed => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} reports operational failure {}: {}", subtype.wire(), field(object, "data", line)?.raw()))),
+                    // A stopped recording is named by its reason and the client's own words
+                    // for it; a refusal's record travels in the data and is not repeated here.
+                    SystemKind::SessionRecordingDegraded => {
+                        let data = field(object, "data", line)?;
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} reports operational failure {} ({}): {}",
+                            subtype.wire(),
+                            text(data, "reason", line)?,
+                            text(data, "message", line)?,
+                        )));
+                    },
+                    SystemKind::TurnCleanupFailed | SystemKind::VisionBridgeFailed => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} reports operational failure {}: {}", subtype.wire(), field(object, "data", line)?.raw()))),
                     SystemKind::SessionStart | SystemKind::SessionEnd => return Err(ContractError::InvalidRecord(format!("events.jsonl line {line} declares transport ownership inside an already owned invocation"))),
                     SystemKind::TaskNotification => { if let Some(usage) = field(object, "data", line)?.get("usage") { GenerationUsageSummary::read(field(usage, "ownerUsage", line)?, line)?; } },
                     SystemKind::TaskStarted | SystemKind::WorktreeStarted | SystemKind::WorktreeRestored | SystemKind::VisionRouting | SystemKind::VisionBridge => {},
@@ -2486,6 +2498,54 @@ mod tests {
         forged["data"]["status"] = serde_json::json!("COMPRESSED");
         forged["data"]["rejectedAttempts"] = serde_json::json!([rejected]);
         assert!(admit(&mut initialized(), &forged.to_string()).is_err());
+    }
+    #[test]
+    fn a_stopped_recording_names_its_refusal_and_carries_the_record_it_refused() {
+        // The recorder refused a record of its own: the stream carries it,
+        // whole, inside the record that reports the stop, and the stop is
+        // named by the client's words rather than by the record's bytes.
+        let degraded = |data: serde_json::Value| {
+            serde_json::json!({
+                "type":"system", "subtype":"session_recording_degraded", "uuid":"stop",
+                "session_id":"session", "parent_tool_use_id":null, "data":data
+            })
+            .to_string()
+        };
+        let refused_record = serde_json::json!({
+            "type":"model_response",
+            "response":{"journal_id":"fixture","request_id":"refused-request","sequence":1,
+                "event":{"kind":"history","disposition":"abandoned"}}
+        });
+        let message = "Session recording stopped because the recorder refused a record it produced: chat history decision has no completed processing owner.";
+        let error = admit(
+            &mut initialized(),
+            &degraded(serde_json::json!({
+                "session_id":"session", "reason":"refused", "message":message,
+                "refused_record":refused_record
+            })),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            error.contains(&format!(
+                "reports operational failure session_recording_degraded (refused): {message}"
+            )),
+            "{error}"
+        );
+        assert!(!error.contains("refused-request"), "{error}");
+        // A refusal carries its record, and only a refusal does.
+        for data in [
+            serde_json::json!({"session_id":"session","reason":"refused","message":message}),
+            serde_json::json!({"session_id":"session","reason":"write_failed","message":message,
+                "refused_record":refused_record}),
+        ] {
+            let error = admit(&mut initialized(), &degraded(data)).unwrap_err().to_string();
+            assert!(error.contains("schema rule"), "{error}");
+        }
+        // A compaction the stopped recording ended claims only what was settled.
+        let mut stopped = compaction_failed();
+        stopped["data"]["status"] = serde_json::json!("COMPRESSION_FAILED_RECORDING_STOPPED");
+        admit(&mut initialized(), &stopped.to_string()).unwrap();
     }
     /// A partial as the producer writes it: no origin. The runtime owns the
     /// producer positionally (latest chat request or operation receipt).

@@ -1765,18 +1765,48 @@ def _validate_stream_evidence_after(state: State) -> None:
     adapter = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.ts"
     adapter_test = "packages/cli/src/nonInteractive/io/BaseJsonOutputAdapter.test.ts"
     # Recording represents what happened; a judgement inside it cannot remove
-    # the record it is about. The window renders first and judges second; the
+    # the record it is about. A refusal carries the record it refused; the
     # journal keeps history a valid prefix by never persisting what it refuses,
-    # and still publishes it as evidence before stopping.
+    # and publishes the refusal to every window before stopping -- or keeps it
+    # for a window not yet open -- and a window that refuses a record does the
+    # same. A window writes the refusal in the record's place and judges
+    # nothing after it: the stream admits no record its contract refuses, so
+    # the refused record travels inside the record reporting its refusal.
+    _require_all(
+        state,
+        "packages/core/src/core/recording-refusal.ts",
+        (
+            "    readonly refusal: unknown,\n    readonly record: unknown,",
+            "export function judgeRecord<T>(record: unknown, judgement: () => T): T {",
+            "      : new RecordingRefusal(cause, record);",
+        ),
+        label=label,
+    )
     evidence = "packages/core/src/core/model-request-evidence.ts"
     _require_all(
         state,
         evidence,
         (
-            "      judgeRecord(() => this.enqueue(record));",
-            "      this.pending.push({\n        ...record,\n        parent_tool_use_id: this.refusedRecordParent(record),\n      });",
-            "    if (refused) throw refused;",
-            "      await this.publish(evidence).catch(() => undefined);\n      throw refusal;",
+            "      judgeRecord(evidence, judgement);",
+            "      await this.publishRefusal(refusal).catch(() => undefined);\n      throw refusal;",
+            "      this.pending.push({ type: 'recording_refusal', refusal });",
+            "        (progress) => output.refuse(refusal, progress),",
+            "      if (record.type === 'recording_refusal') output.retainRefusal(record.refusal);",
+            "      judgeRecord(record, () => this.enqueue(record));",
+            "      await this.refuse(refused, progress);\n      throw refused;",
+            "    this.pending.push({ type: 'recording_refusal', refusal });",
+        ),
+        label=label,
+    )
+    forbid_text(state, evidence, "refusedRecordParent", label=label)
+    _require_all(
+        state,
+        adapter,
+        (
+            "      if (pending.type === 'recording_refusal') {",
+            "            { sessionId: this.getSessionId(), error: pending.refusal },",
+            "        this.reportedRefusals.add(pending.refusal);",
+            "    if (this.reportedRefusals.has(refusal)) return;",
         ),
         label=label,
     )
@@ -1790,7 +1820,10 @@ def _validate_stream_evidence_after(state: State) -> None:
         "packages/cli/src/utils/chat-recording-failure.ts",
         (
             "const refusal = findRecordingRefusal(error);",
-            "message: chatRecordingFailureMessage(event.error),",
+            "  const refusal = findRecordingRefusal(event.error);",
+            "          reason: 'refused',",
+            "          refused_record: refusal.record,",
+            "    adapter.reportRecordingRefusal(event);",
         ),
         label=label,
     )
@@ -5967,7 +6000,8 @@ def _validate_compaction_accounting_after(state: State) -> None:
         state,
         "packages/core/src/core/compression-status.ts",
         (
-            "  COMPRESSION_FAILED_TRANSPORT_ERROR,\n}",
+            "  COMPRESSION_FAILED_TRANSPORT_ERROR,\n",
+            "  COMPRESSION_FAILED_RECORDING_STOPPED,\n}",
             "export const ANSWER_REFUSAL_STATUSES: ReadonlySet<CompressionStatus> = new Set([",
             "export function compactionDrawKind(",
         ),
@@ -5990,6 +6024,52 @@ def _validate_compaction_accounting_after(state: State) -> None:
         ),
         label=label,
         location="packages/core/src/services/chatCompressionService.ts",
+    )
+    # A compaction the session's recording stopped under commits nothing and
+    # is not recorded: every failure it meets while the recording has stopped
+    # is the recording's, the draw in flight claims nothing it never settled,
+    # and the settled compaction is carried past the recording, on the error
+    # that ends the session, to the stream, after the record of the stop.
+    _require_ordered(
+        _source(state, "packages/core/src/services/chatCompressionService.ts", label=label),
+        (
+            "compressionStatus: stopped\n            ? CompressionStatus.COMPRESSION_FAILED_RECORDING_STOPPED",
+            "if (chat.recordingFailure() !== undefined) {",
+            "accounting: null,\n            cause: RECORDING_STOPPED_FAILURE,",
+            "if (chat.recordingFailure() !== undefined) {",
+        ),
+        label=label,
+        location="packages/core/src/services/chatCompressionService.ts",
+    )
+    _require_ordered(
+        _source(state, "packages/core/src/core/geminiChat.ts", label=label),
+        (
+            "const stop = await this.recordingStop();",
+            "throw new CompactionRecordingStoppedError(\n          recordingStoppedCompaction(info),",
+            "const commit = this.chatRecordingService.recordChatCompression({",
+            "if (this.chatRecordingService.recordingFailure())\n          throw new CompactionRecordingStoppedError(",
+            "error instanceof CompactionFinalizationError ||\n          error instanceof CompactionRecordingStoppedError",
+            "compaction = error.compaction;",
+        ),
+        label=label,
+        location="packages/core/src/core/geminiChat.ts",
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/turn.ts",
+        (
+            "export class CompactionRecordingStoppedError extends Error {",
+            "export function recordingStoppedCompaction(",
+            "compressionStatus: CompressionStatus.COMPRESSION_FAILED_RECORDING_STOPPED,",
+            "committedHistory: null,\n    failure: RECORDING_STOPPED_FAILURE,",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/geminiChat.test.ts",
+        ("carries %s to the stream, and records and installs none of it",),
+        label=label,
     )
     _require_all(
         state,
@@ -11972,10 +12052,13 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "flag cannot be bound to model input, which renders an output and an error as the "
             "same text; it stays the client's claim, which a reader judging a run by failed "
             "calls must trust and which a forged stream can flip without refusal. Judging never "
-            "removes a record from the output: a stdout window writes each record before its replay "
-            "judges it, and a record the journal refuses is published to every window and never "
-            "persisted before the journal stops on it. A refusal is a typed recording refusal, told "
-            "on the stream with the rule that refused, never as a write failure."
+            "removes a record from the output: a refusal carries the record it refused, the journal "
+            "publishes it to every window and never persists the record before it stops on it, and a "
+            "window writes the refusal in the record's place, carrying the record, since the stream "
+            "admits no record its contract refuses. A refusal is a typed recording refusal, told "
+            "on the stream once, with the rule that refused, never as a write failure; what follows "
+            "it settles the work in flight, such as a compaction the stop ended, which commits nothing "
+            "and claims only what the recording settled."
         ),
         removal_condition=(
             "Upstream emits equivalent scoped generation evidence through callback-settled output "
