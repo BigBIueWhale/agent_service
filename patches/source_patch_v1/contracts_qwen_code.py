@@ -2142,7 +2142,11 @@ def _validate_compaction_event_after(state: State) -> None:
             "ServerGeminiChatCompactionEvent",
             "export interface SettledCompaction {",
             "readonly committedHistory: readonly Content[] | null;",
-            "}: SettledCompaction): CompactionRecord {",
+            # Why an attempt committed nothing travels beside the accounting
+            # too, for the ending a failed compaction forces, and the record
+            # is projected without it.
+            "readonly failure: string | null;",
+            "}: Pick<SettledCompaction, 'info' | 'committedHistory'>): CompactionRecord {",
             "postCompactionHistory: committedHistory,",
             "readonly compaction: SettledCompaction,",
             "sdkValuesJson: readonly string[];",
@@ -4723,6 +4727,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "if (promptTokensForClamp >= partition.compactionTrigger) {",
             "throw new Error(",
+            # A compaction that reduced nothing ends the session there, and the
+            # ending names why: the failure carried beside its accounting.
+            "Its compaction failed: ${compaction.failure.replace(",
             "maxOutputTokens: turnOutputLimit(partition),",
         ),
         label=label,
@@ -5082,6 +5089,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         "gives every turn the same room, whatever its prompt",
         "sends no output limit but the turn's room, whatever the request asked for",
         "issues no turn once the rendered prompt reaches the compaction trigger",
+        "ends at the trigger naming why its compaction failed",
         "refuses when the tokenizer reports another window",
         "refuses when the provider declares no context window",
     ):
@@ -5244,8 +5252,10 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "export const MAX_GENERATION_DRAWS = 4;",
             "export const REFUSED_ANSWER =\n  'Your previous answer to this request was refused because';",
+            "export function limitReached(limit: number, unfinished: string): string {",
+            "  return `it reached its ${limit}-token limit before ${unfinished} was complete`;",
             "export function limitReachedRefusal(limit: number, unfinished: string): string {",
-            "  return `${REFUSED_ANSWER} it reached its ${limit}-token limit before ${unfinished} was complete`;",
+            "  return `${REFUSED_ANSWER} ${limitReached(limit, unfinished)}`;",
             "export function turnRefusalNotice(limit: number): string {\n"
             "  return (\n"
             "    '<system-reminder>\\n' +\n"
@@ -5263,8 +5273,19 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "      outcome.kind === 'resampleable' &&",
             "      rejectedAttempts.length + 1 < MAX_GENERATION_DRAWS",
-            "  const refused = REFUSED_ANSWER;",
-            "      return `${limitReachedRefusal(refusal.limit, `its ${STATE_SNAPSHOT_FUNCTION_NAME} call`)}. Reason more briefly, and make the call within the limit.`;",
+            # Why a draw was refused is said once: the notice the next draw is
+            # told opens with it, and the ending a compaction that ran out of
+            # draws forces names every draw's.
+            "export function drawRefusalReason(refusal: DrawRefusal): string {",
+            "      return limitReached(\n        refusal.limit,\n        `its ${STATE_SNAPSHOT_FUNCTION_NAME} call`,\n      );",
+            "      return 'Reason more briefly, and make the call within the limit.';",
+            "  return `${REFUSED_ANSWER} ${drawRefusalReason(refusal)}. ${drawRefusalAdvice(refusal)}`;",
+            "`draw ${index + 1} because ${drawRefusalReason(refusal)}`",
+            # A fault outside the model's answer ends the compaction on its
+            # draw, and its cause is carried, not only logged.
+            "      failure: string | null;",
+            "          cause: string;",
+            "`its draw ${drawn} ended on a fault outside the model's answer, so no further draw was taken: ${outcome.cause}`",
         ),
         label=label,
     )

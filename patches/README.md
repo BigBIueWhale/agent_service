@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `7e23a85de251e182b6afea6acd2ae45ce1215265b1818ad910cf7037a4c25bb5`
+- Review-diff SHA-256: `26ad1fb65d13afbde2a286c7692b702a61478585498f58631d6df843736a52d4`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `ceb5365c840a5c0b534251880934c4d919ebf298af5492a261927343d6a2c7c1`
+- Transformer-manifest SHA-256: `5c478e7e593040d791807f587f043f5e788a45c1b8efa7abf40a5ecfe30dcc2f`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -300,7 +300,12 @@ it to the request's `max_tokens`, the client's replay and the native certifier
 alike. A
 candidate must end normally, carry the required
 snapshot, reduce the request, and leave an issuable turn. Failure retains the
-previous history and reports that retained count. There is no separate
+previous history and reports that retained count, and says why in words carried
+beside the accounting rather than in it: every draw's refusal, in the clause the
+next draw was told, the fault outside the model's answer its last draw ended
+on, or what its preflight refused. A draw is drawn again only for a fault in
+the model's own answer. A conversation still at or above the trigger after a
+failed compaction ends there, and the ending names that failure. There is no separate
 reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
 what the model can quote, not what it has seen: it disarms every file-read
 entry's history residency and leaves the read and write evidence in place, so a
@@ -736,7 +741,7 @@ preserving independent failures reported by those operations; a recording stop
 a failure listener was already told of was reported when it happened and is not
 raised again. The recording is settled before a run writes anything terminal,
 and what it settled to is part of how the run ended: a recording that stopped
-ends the run in the error state, with its cause on stderr and the error state's
+ends the run in the error state, with its cause, and the fault that cause wraps, on stderr and the error state's
 exit code, and no result is written after the stop. Queued turn work owns whether its result was
 already delivered; subsequent cleanup failure cannot create another result.
 Fatal worker failure cancels input admission even while its input pipe is open.

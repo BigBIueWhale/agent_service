@@ -365,7 +365,11 @@ the request leaves, never less than `C + 1`, which is not that number; so the
 directive says the request is not a turn, states the number the request's
 `max_tokens` is set to, and says that an answer reaching it is refused and asked
 for again, told why, up to the draw limit, after which the conversation is not
-compacted and cannot continue. A turn's room is what the fit charges for the
+compacted and cannot continue: the run ends as `error_during_execution`, and its
+message names why the compaction failed -- every draw's refusal, in the clause
+each redraw was told it in, or the fault outside the model's answer that its
+last draw ended on, or what its preflight refused -- beside the compaction
+record that holds what each draw produced. A turn's room is what the fit charges for the
 turn a compaction carries; a draw's answer is never carried, only the snapshot
 it declares, so it can be given whatever the window has left. The request is
 counted with that number at its widest, the window, and the served tokenizer
@@ -967,10 +971,10 @@ in the conversation and nothing it called was run, and to reason more briefly
 and write a long file in parts. Nothing compacts between a refusal and its
 redraw, and nothing else joins it. Each draw is a turn: charged to the turn
 budget, billed, and recorded as it was served, the refused one with its
-`incomplete_tool_use` block and the notice as a `user` record. Four draws in a
-row that reach the limit -- the bound every refused answer is drawn under, a
-compaction's snapshot included -- end the run as `error_incomplete_generation`:
-a limit that keeps being reached is a turn that will not fit, or reasoning that
+`incomplete_tool_use` block and the notice as a `user` record. Four draws of a
+turn in a row that reach the limit -- the bound every refused answer is drawn
+under, a compaction's snapshot draws included -- end the run as
+`error_incomplete_generation`: a limit that keeps being reached is a turn that will not fit, or reasoning that
 has degenerated, and the run says so loudly rather than drawing again. The
 record names the limit and the prompt the last refused generation was issued
 at, and what it generated, reasoning included; a generation stopped for any
