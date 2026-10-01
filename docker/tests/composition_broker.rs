@@ -219,6 +219,7 @@ async fn guarded_connection(
             fixture::Case::CaptureProofHeldCancel
                 | fixture::Case::CaptureProofLost
                 | fixture::Case::CaptureByteMismatch
+                | fixture::Case::CaptureBlankLine
                 | fixture::Case::CaptureModeMismatch
         ) && matches!(
             parse_request(&bytes).map_err(std::io::Error::other)?,

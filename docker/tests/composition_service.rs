@@ -24,6 +24,30 @@ fn certify_available_stream() {
     println!("COMPOSITION_AVAILABLE_CERTIFICATE {}", serde_json::to_string(&result).unwrap());
 }
 
+/// The same production certifier on a stream a case has made uncertifiable:
+/// it must refuse, and the refusal is printed for the harness to match.
+#[test]
+#[ignore = "requires the owned final-image composition harness"]
+fn refuse_available_stream() {
+    let fixture = fixture::Fixture::read();
+    assert_eq!(fixture.session_ids.len(), 1);
+    let path = fixture
+        .root
+        .join("state/sessions")
+        .join(&fixture.session_ids[0])
+        .join("output/events.jsonl");
+    let snapshot = agent_service::result_parse::read_event_snapshot(&path)
+        .expect("read actual captured stream")
+        .expect("captured stream exists");
+    let refusal = snapshot
+        .certified
+        .expect_err("the production protocol certifier refuses the faulted stream");
+    println!(
+        "COMPOSITION_AVAILABLE_REFUSAL {}",
+        serde_json::to_string(&refusal.to_string()).unwrap()
+    );
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires the owned final-image composition harness"]
 async fn final_image_service() {

@@ -705,7 +705,7 @@ print(json.dumps(found))
         if self.case in ("provider_malformed_sse", "provider_disconnected_sse"):
             return self.provider_failure(service, route)
         if self.case in ("capture_proof_held_cancel", "capture_proof_lost", "capture_byte_mismatch",
-                         "capture_mode_mismatch", "wait_observation_lost"):
+                         "capture_blank_line", "capture_mode_mismatch", "wait_observation_lost"):
             return self.observation_fault(service, route)
         if self.case.startswith("terminal_"):
             return self.terminal_recovery(service, route)
@@ -1150,6 +1150,18 @@ print(json.dumps(found))
                 "observation fault would mask an independent stream error")
         return certificate
 
+    def refuse_available(self, service, expected):
+        result = self.command(["docker", "exec", service, "/gate/agent_service", "--exact",
+                               "composition_gate::refuse_available_stream", "--ignored", "--nocapture"])
+        matches = [line.removeprefix(b"COMPOSITION_AVAILABLE_REFUSAL ")
+                   for line in result.stdout.splitlines() if line.startswith(b"COMPOSITION_AVAILABLE_REFUSAL ")]
+        save(self.root / "evidence" / f"available-refusal-{len(self.commands)}.stdout", result.stdout)
+        require(len(matches) == 1, "faulted output has no unique production refusal")
+        refusal = json.loads(matches[0])
+        save_json(self.root / "evidence" / f"available-refusal-{len(self.commands)}.json", {"refusal": refusal})
+        require(expected in refusal, f"the production certifier refused for another reason: {refusal}")
+        return refusal
+
     def observation_fault(self, service, route):
         lost_wait = self.case == "wait_observation_lost"
         marker = "wait-observation-held.json" if lost_wait else "capture-proof-held.json"
@@ -1179,8 +1191,9 @@ print(json.dumps(found))
                     "real capture proof does not describe the unmodified output")
         save(self.root / "evidence/events-before-fault.jsonl", before)
         save(self.root / "evidence/stderr-before-fault", stderr)
-        if self.case in ("capture_byte_mismatch", "capture_mode_mismatch"):
-            path = output / ("events.jsonl" if self.case == "capture_byte_mismatch" else "qwen.stderr")
+        faulted = before
+        if self.case in ("capture_byte_mismatch", "capture_blank_line", "capture_mode_mismatch"):
+            path = output / ("qwen.stderr" if self.case == "capture_mode_mismatch" else "events.jsonl")
             fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
             try:
                 prior = os.fstat(fd)
@@ -1188,8 +1201,21 @@ print(json.dumps(found))
                         (prior.st_dev, prior.st_ino) == (path.lstat().st_dev, path.lstat().st_ino),
                         "owned capture output changed before injection")
                 if self.case == "capture_byte_mismatch":
+                    # One byte the certifier cannot see: a space after the final
+                    # record's opening brace. The record parses to the same value,
+                    # so only the capture's byte-count proof can refuse the stream.
+                    require(before.endswith(b"\n"), "captured events do not end with a record")
+                    start = before.rindex(b"\n", 0, len(before) - 1) + 1 if b"\n" in before[:-1] else 0
+                    require(before[start:start + 1] == b"{", "the final captured record is not a JSON object")
+                    faulted = before[:start + 1] + b" " + before[start + 1:]
+                    require(os.pwrite(fd, faulted[start:], start) == len(faulted) - start,
+                            "byte fault was not written")
+                elif self.case == "capture_blank_line":
+                    # A completed blank line, which the certifier must refuse
+                    # (b2df5d3) independently of the byte-count proof.
+                    faulted = before + b"\n"
                     os.lseek(fd, 0, os.SEEK_END)
-                    require(os.write(fd, b"\n") == 1, "byte fault was not written")
+                    require(os.write(fd, b"\n") == 1, "blank-line fault was not written")
                 else:
                     os.fchmod(fd, 0o640)
                 os.fsync(fd)
@@ -1201,7 +1227,10 @@ print(json.dumps(found))
                 })
             finally:
                 os.close(fd)
-            self.certify_available(service)
+            if self.case == "capture_blank_line":
+                self.refuse_available(service, "is blank; every completed line must be a JSON object")
+            else:
+                self.certify_available(service)
         if self.case == "capture_proof_held_cancel":
             status, raw = self.http(service, "POST", route + "/cancel")
             require(status == 202, "late cancellation was not accepted")
@@ -1224,7 +1253,7 @@ print(json.dumps(found))
                 end["container_exit_code"] == end["agent_exit_code"] == (None if lost_wait else 0),
                 "observation fault invented or lost the actual lifecycle facts")
         require(end["is_process_error"] is (not cancelled), "observation fault has wrong process outcome")
-        require(body["observed_unaccounted_records"] == 0 and body["observed_usage"]["requests"] == 2 and body["observed_usage"]["usageReports"] == 2 and body["observed_usage"]["usage"]["candidatesTokenCount"] == 16 and
+        require(body["observed_unaccounted_records"] == (1 if self.case == "capture_blank_line" else 0) and body["observed_usage"]["requests"] == 2 and body["observed_usage"]["usageReports"] == 2 and body["observed_usage"]["usage"]["candidatesTokenCount"] == 16 and
                 body["observed_usage"]["usage"]["thoughtsTokenCount"] == 0 and body["num_turns"] == 2,
                 "refused certification lost independent served observations")
         if cancelled or lost_wait:
@@ -1239,12 +1268,13 @@ print(json.dumps(found))
             cause = {"wait_observation_lost": "docker wait failed:",
                      "capture_proof_lost": "trusted stream capture did not prove complete durable output:",
                      "capture_byte_mismatch": "trusted captured events output drift",
+                     "capture_blank_line": "trusted captured events output drift",
                      "capture_mode_mismatch": "trusted captured stderr output drift"}[self.case]
             require(any(cause in detail for detail in diagnostics), "intended observation refusal cause was not retained")
             if lost_wait or self.case == "capture_proof_lost":
                 require(any("broker response is not one terminal-LF JSON record without CR bytes" in detail
                             for detail in diagnostics), "lost observation did not name the empty-response protocol refusal")
-            elif self.case == "capture_byte_mismatch":
+            elif self.case in ("capture_byte_mismatch", "capture_blank_line"):
                 require(any(f"mode=600 bytes={len(before) + 1} expected_bytes={len(before)}" in detail
                             for detail in diagnostics), "byte refusal did not identify the exact count contradiction")
             else:
@@ -1261,7 +1291,7 @@ print(json.dumps(found))
         archive = self.root / "evidence/bundle.tar.zst"
         save(archive, bundle)
         retained = self.command(["tar", "--zstd", "-xOf", str(archive), "output/events.jsonl"]).stdout
-        require(retained == before + (b"\n" if self.case == "capture_byte_mismatch" else b""),
+        require(retained == faulted,
                 "forensic bundle did not retain exact actual event bytes")
         retained_stderr = self.command(["tar", "--zstd", "-xOf", str(archive), "output/qwen.stderr"]).stdout
         require(retained_stderr == stderr, "forensic bundle changed captured stderr")
@@ -1371,7 +1401,8 @@ print(json.dumps(found))
         self.containing = True
         releases = {"cancel_start_gate": ["release-create-response"], "cancel_held_sse": ["release-remove"],
                     "capture_proof_held_cancel": ["release-observation"], "capture_proof_lost": ["release-observation"],
-                    "capture_byte_mismatch": ["release-observation"], "capture_mode_mismatch": ["release-observation"],
+                    "capture_byte_mismatch": ["release-observation"], "capture_blank_line": ["release-observation"],
+                    "capture_mode_mismatch": ["release-observation"],
                     "wait_observation_lost": ["release-observation"],
                     "remove_stopped_capture_failed": ["release-remove-fault"],
                     "quiescence_observation_lost": ["release-observation", "release-remove-fault"]}
@@ -1689,7 +1720,8 @@ def main():
     parent_certificate = None
     for case in ("tool_cycle", "cancel_start_gate", "cancel_held_sse",
                  "provider_malformed_sse", "provider_disconnected_sse", "capture_proof_held_cancel",
-                 "capture_proof_lost", "capture_byte_mismatch", "capture_mode_mismatch", "wait_observation_lost",
+                 "capture_proof_lost", "capture_byte_mismatch", "capture_blank_line", "capture_mode_mismatch",
+                 "wait_observation_lost",
                  "terminal_prepare_file_sync", "terminal_prepare_directory_sync", "terminal_publish_link",
                  "terminal_publish_directory_sync", "terminal_raw_parent_sync", "terminal_temporary_unlink",
                  "terminal_temporary_unlink_directory_sync", "remove_stopped_capture_failed", "quiescence_observation_lost"):

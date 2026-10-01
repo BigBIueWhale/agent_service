@@ -28,6 +28,7 @@ pub enum Case {
     CaptureProofHeldCancel,
     CaptureProofLost,
     CaptureByteMismatch,
+    CaptureBlankLine,
     CaptureModeMismatch,
     WaitObservationLost,
     RemoveStoppedCaptureFailed,
