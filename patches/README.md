@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `6ebc9d0c8c25081feaeefc9676d5251a36a67661818957417deb41c49e5cb0ed`
+- Review-diff SHA-256: `56744c5c885ae36ea37d495ca34b5c72f40272ae2e4f18afc0bb588fba58f0e9`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `f6860ca852e6d9aef8818b27408367aea8ea84b2384519b2076d5aa4980de307`
+- Transformer-manifest SHA-256: `08924336373f10eb95c9c8e391531738a1b3a707a2b297a11aa7f6f210fa9622`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -183,7 +183,10 @@ every byte of `M`, is a token `T` does not have. `C` is the output limit of
 every turn whatever its prompt, and the least a compaction's snapshot is issued
 with. The route refuses a configured ceiling, including
 `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate histories are
-counted using the actual rendered request.
+counted using the actual rendered request, and a request is counted once: the
+tokenizer's answer is a function of what it is shown, so the count a turn takes
+before compaction is the count of the request it sends whenever compaction left
+that request as it was.
 
 A tool result says whether it is complete. One notice states what was asked
 for, what came back, the bound and its unit, the real total or why the tool

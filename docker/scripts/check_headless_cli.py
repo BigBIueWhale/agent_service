@@ -42,10 +42,10 @@ SYSTEM_SETTINGS_FILES = (
 # The two-turn cycle's requests, in order: the startup proof's six counts (the preamble,
 # the preamble with its startup context, the compaction frame -- the snapshot's trailer,
 # the acknowledgement and a retained input's header -- and the todo reminder, the framing
-# text alone, and the message, turn and tool-result probes), then for each turn the request with its
-# pending message counted, the request about to be issued counted, and the generation. A
-# tool result is bounded where it is made, so no turn counts a baseline without it.
-EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] * 2 + ["/v1/chat/completions"]
+# text alone, and the message, turn and tool-result probes), then for each turn the request it
+# is about to issue, counted once because compaction leaves it as it was, and the generation.
+# A tool result is bounded where it is made, so no turn counts a baseline without it.
+EXPECTED_ROUTES = ["/tokenize"] * 7 + ["/v1/chat/completions"] + ["/tokenize"] + ["/v1/chat/completions"]
 EXPECTED_ROLES = [
     ["system"],
     ["system", "user", "user", "assistant", "user"],
@@ -55,8 +55,6 @@ EXPECTED_ROLES = [
     ["system", "user", "assistant", "tool"],
     ["system", "user"],
     ["system", "user"],
-    ["system", "user"],
-    ["system", "user", "assistant", "tool"],
     ["system", "user", "assistant", "tool"],
     ["system", "user", "assistant", "tool"],
 ]
@@ -211,7 +209,7 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
                     f"request {index} does not state the sealed {turn_budget}-turn budget")
     require(sorted(t["function"]["name"] for t in tools) == sorted(strict_tools),
             "the declared tools are not the launcher's strict tools")
-    for index in (8, 11):
+    for index in (7, 9):
         body = requests[index]["body"]
         for key, value in config["samplingParams"].items():
             require(body[key] == value, f"generation {index} sends {key}={body[key]!r}, not {value!r}")

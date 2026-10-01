@@ -185307,7 +185307,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          makeStreamResponse('answer'),
        );
  
-@@ -3199,2262 +4201,1623 @@
+@@ -3199,2262 +4201,1626 @@
        );
        const events: Array<{ type: StreamEventType }> = [];
        for await (const event of stream) {
@@ -186514,16 +186514,18 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +        };
 +      }
 +
-+      function assertCountedAndSent(contents: Content[]) {
++      function assertCountedAndSent(contents: Content[], counts: number) {
 +        // The declaration proof's own two requests are not counts of this
-+        // turn, so they are left out of what this asserts about it.
++        // turn, so they are left out of what this asserts about it. The turn
++        // is counted before compaction, and counted again only when
++        // compaction changed the request it sends.
 +        const calls = vi
 +          .mocked(mockContentGenerator.countRequestTokens)
 +          .mock.calls.filter(
 +            ([request]) => !isDeclarationProbe(request.contents as Content[]),
 +          );
-+        expect(calls).toHaveLength(2);
-+        expect(calls[1][0].contents).toEqual(contents);
++        expect(calls).toHaveLength(counts);
++        expect(calls.at(-1)![0].contents).toEqual(contents);
 +        expect(
 +          mockContentGenerator.generateContentStream,
 +        ).toHaveBeenCalledOnce();
@@ -186556,7 +186558,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +            ...compactedHistory,
 +            { role: 'user', parts: [{ text: pending }] },
 +          ];
-+          assertCountedAndSent(finalContents);
++          assertCountedAndSent(finalContents, 2);
 +          expect(
 +            ChatCompressionService.prototype.compress,
 +          ).toHaveBeenCalledOnce();
@@ -186605,10 +186607,10 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 +          originalTokens: 1000,
 +        });
 +        await consume();
-+        assertCountedAndSent([
-+          ...originalHistory,
-+          { role: 'user', parts: [{ text: pending }] },
-+        ]);
++        assertCountedAndSent(
++          [...originalHistory, { role: 'user', parts: [{ text: pending }] }],
++          1,
++        );
 +        expect(acceptedTurns(recorder)).toHaveLength(1);
 +        expect(recorder.recordChatCompression).not.toHaveBeenCalled();
 +        expect(events.map((event) => event.type)).toEqual([
@@ -188884,13 +188886,13 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        { message: 'hi' },
 -        'prompt-small-window-clamp',
 +      // Two of the counts are the declaration proof this chat takes once;
-+      // the turn itself is counted before compaction and after it, and a
-+      // tool result adds no baseline count of its own.
++      // the turn itself is counted once, before compaction, which left its
++      // request as it was, and a tool result adds no count of its own.
 +      expect(
 +        count.mock.calls.filter(
 +          ([request]) => !isDeclarationProbe(request.contents as Content[]),
 +        ),
-+      ).toHaveLength(2);
++      ).toHaveLength(1);
 +    });
 +
 +    it('takes no second count for a turn that appends no tool result', async () => {
@@ -188915,19 +188917,20 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
 -        mockContentGenerator.generateContentStream,
 -      ).mock.calls[0][0].config as { maxOutputTokens?: number };
 -      expect(requestConfig.maxOutputTokens).toBe(32_768);
-+      // Two of the four are the declaration proof this chat takes once.
++      // Two of the three are the declaration proof this chat takes once; the
++      // turn's request is counted once, and compaction left it unchanged.
 +      expect(
 +        count.mock.calls.filter(
 +          ([request]) => !isDeclarationProbe(request.contents as Content[]),
 +        ),
-+      ).toHaveLength(2);
++      ).toHaveLength(1);
      });
    });
  
    describe('addHistory', () => {
      it('should add a new content item to the history', () => {
        const newContent: Content = {
-@@ -5699,12 +6062,13 @@
+@@ -5699,12 +6065,13 @@
                response: payload,
              },
            },
@@ -188941,7 +188944,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            throw new Error('unexpected deep clone');
          });
  
-@@ -5714,13 +6078,16 @@
+@@ -5714,13 +6081,16 @@
        expect(history).toEqual([content]);
        expect(history[0]).not.toBe(content);
        expect(history[0]!.parts).not.toBe(content.parts);
@@ -188959,7 +188962,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
    describe('getHistoryForForkWindow', () => {
      it('removes startup context before curating adjacent user turns', () => {
        const startup: Content = {
-@@ -5797,19 +6164,21 @@
+@@ -5797,19 +6167,21 @@
    describe('peekLastHistoryEntry', () => {
      it('returns the last entry without structured-cloning the full history', () => {
        const first: Content = { role: 'user', parts: [{ text: 'a' }] };
@@ -188982,7 +188985,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
    describe('getLastModelMessageText', () => {
      it('returns text from the latest model message without cloning history', () => {
-@@ -5858,20 +6227,22 @@
+@@ -5858,20 +6230,22 @@
          // Use mockImplementationOnce to provide a fresh, promise-wrapped generator for each attempt.
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockImplementationOnce(async () =>
@@ -189006,7 +189009,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -5915,33 +6286,301 @@
+@@ -5915,33 +6289,301 @@
          });
          expect(history[1]).toEqual({
            role: 'model',
@@ -189312,7 +189315,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                ],
              } as unknown as GenerateContentResponse;
            })(),
-@@ -5951,22 +6590,22 @@
+@@ -5951,22 +6593,22 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-fail',
@@ -189339,7 +189342,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          );
  
          // History should still contain the user message.
-@@ -5978,99 +6617,13 @@
+@@ -5978,99 +6620,13 @@
          });
        } finally {
          vi.useRealTimers();
@@ -189439,7 +189442,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          delta: {
            tool_calls: [
              {
-@@ -6079,23 +6632,23 @@
+@@ -6079,23 +6635,23 @@
                type: 'function',
                function: { arguments: '{}' },
              },
@@ -189465,7 +189468,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    {
                      index: 0,
                      delta: testCase.delta,
-@@ -6104,25 +6657,40 @@
+@@ -6104,25 +6660,40 @@
                  ],
                } as unknown as OpenAI.Chat.ChatCompletionChunk;
              })(),
@@ -189509,7 +189512,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
            const stream = await chat.sendMessageStream(
              'test-model',
-@@ -6146,134 +6714,85 @@
+@@ -6146,134 +6717,85 @@
          } finally {
            vi.useRealTimers();
          }
@@ -189662,7 +189665,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after empty stream' }],
                      },
                      finishReason: 'STOP',
-@@ -6291,14 +6810,14 @@
+@@ -6291,14 +6813,14 @@
          const events = await collectStreamWithFakeTimers(stream);
  
          expect(
@@ -189679,7 +189682,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            events.some(
              (e) =>
                e.type === StreamEventType.CHUNK &&
-@@ -6308,29 +6827,21 @@
+@@ -6308,29 +6830,21 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -189711,7 +189714,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6345,12 +6856,13 @@
+@@ -6345,12 +6859,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -189725,7 +189728,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6360,21 +6872,29 @@
+@@ -6360,21 +6875,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -189757,7 +189760,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // History must NOT contain the failed attempt's partial
          // model[functionCall]. Expected shape: [user, model(success
          // text)] — exactly two entries, alternation intact.
-@@ -6389,24 +6909,18 @@
+@@ -6389,24 +6912,18 @@
          );
        } finally {
          vi.useRealTimers();
@@ -189784,7 +189787,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -6426,12 +6940,13 @@
+@@ -6426,12 +6943,13 @@
              'Model stream ended without a finish reason.',
              'NO_FINISH_REASON',
            );
@@ -189798,7 +189801,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6441,21 +6956,29 @@
+@@ -6441,21 +6959,29 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -189830,7 +189833,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          // Final shape must be clean: [user, model(success text)].
          // The failed attempt's partial functionCall must NOT survive.
          expect(history.length).toBe(2);
-@@ -6469,56 +6992,12 @@
+@@ -6469,56 +6995,12 @@
          );
        } finally {
          vi.useRealTimers();
@@ -189887,7 +189890,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          {
            status: 503,
          },
-@@ -6526,12 +7005,13 @@
+@@ -6526,12 +7008,13 @@
        const routeGenerateContentStream = vi
          .fn()
          .mockRejectedValueOnce(capacityError)
@@ -189901,7 +189904,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    finishReason: 'STOP',
                  },
                ],
-@@ -6543,14 +7023,18 @@
+@@ -6543,14 +7026,18 @@
          generateContentStream: routeGenerateContentStream,
        } as ContentGenerator;
        const routeSelector =
@@ -189921,7 +189924,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            modalities: { image: true },
          },
          retryAuthType: AuthType.USE_OPENAI,
-@@ -6561,12 +7045,16 @@
+@@ -6561,12 +7048,16 @@
        } as unknown as ReturnType<typeof mockConfig.getBaseLlmClient>);
        vi.mocked(mockConfig.getEffectiveInputModalities).mockReturnValue({
          pdf: true,
@@ -189938,7 +189941,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              role: 'user',
              parts: [
                { text: 'prior question' },
-@@ -6577,13 +7065,13 @@
+@@ -6577,13 +7068,13 @@
                  },
                },
              ],
@@ -189953,7 +189956,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        mockRetryWithBackoff.mockImplementation(async (apiCall, options) => {
          try {
            return await apiCall();
-@@ -6610,15 +7098,13 @@
+@@ -6610,15 +7101,13 @@
        );
        for await (const _ of stream) {
          /* consume */
@@ -189970,7 +189973,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const routeRequest = JSON.stringify(
          routeGenerateContentStream.mock.calls.at(-1)?.[0],
        );
-@@ -6629,12 +7115,13 @@
+@@ -6629,12 +7118,13 @@
  
        vi.mocked(
          mockContentGenerator.generateContentStream,
@@ -189984,7 +189987,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -6671,752 +7158,12 @@
+@@ -6671,752 +7161,12 @@
        const history = JSON.stringify(chat.getHistory());
        expect(history).toContain('private-image');
        expect(history).toContain('prior-pdf');
@@ -190737,7 +190740,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          const transportError = Object.assign(new TypeError('terminated'), {
            cause: Object.assign(new Error('other side closed'), {
              code: 'UND_ERR_SOCKET',
-@@ -7431,12 +7178,13 @@
+@@ -7431,12 +7181,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -190751,7 +190754,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after transport retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7497,13 +7245,13 @@
+@@ -7497,13 +7248,13 @@
            'test-model',
            { message: 'test' },
            'prompt-transport-retry-exhausted',
@@ -190766,7 +190769,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          let caughtError: unknown;
          const collecting = (async () => {
            try {
-@@ -7520,116 +7268,37 @@
+@@ -7520,116 +7271,37 @@
          await collecting;
  
          expect(caughtError).toBeInstanceOf(Error);
@@ -190888,7 +190891,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [
                          { text: 'Let me think about this…', thought: true },
                        ],
-@@ -7640,12 +7309,13 @@
+@@ -7640,12 +7312,13 @@
                throw transportError;
              })(),
            )
@@ -190902,7 +190905,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after thinking-phase retry' }],
                      },
                      finishReason: 'STOP',
-@@ -7678,103 +7348,22 @@
+@@ -7678,103 +7351,22 @@
          ).toBe(true);
        } finally {
          vi.useRealTimers();
@@ -191007,7 +191010,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            { callId: 'call-preparing', toolName: 'read_file' },
          ]);
  
-@@ -7785,12 +7374,13 @@
+@@ -7785,12 +7377,13 @@
                throw transportError;
              })(),
            )
@@ -191021,7 +191024,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after preparation' }],
                      },
                      finishReason: 'STOP',
-@@ -7815,1231 +7405,213 @@
+@@ -7815,1231 +7408,213 @@
          ).toHaveLength(1);
        } finally {
          vi.useRealTimers();
@@ -192417,7 +192420,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        // a typo is introduced here, this fails instead of silently never
        // retrying.
        for (const code of RETRYABLE_STREAM_TRANSPORT_CODES) {
-@@ -9070,12 +7642,13 @@
+@@ -9070,12 +7645,13 @@
                  yield {} as GenerateContentResponse;
                })(),
              )
@@ -192431,7 +192434,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                          parts: [{ text: `Recovered from ${transportCode}` }],
                        },
                        finishReason: 'STOP',
-@@ -9125,13 +7698,21 @@
+@@ -9125,13 +7701,21 @@
              timeoutError,
              {
                model: 'test-model',
@@ -192454,7 +192457,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          }
  
          vi.mocked(mockContentGenerator.generateContentStream)
-@@ -9142,12 +7723,13 @@
+@@ -9142,12 +7726,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -192468,7 +192471,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Recovered after enhanced timeout' }],
                      },
                      finishReason: 'STOP',
-@@ -9200,12 +7782,13 @@
+@@ -9200,12 +7785,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -192482,7 +192485,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -9255,12 +7838,13 @@
+@@ -9255,12 +7841,13 @@
  
        vi.mocked(mockContentGenerator.generateContentStream)
          .mockRejectedValueOnce(transportError)
@@ -192496,7 +192499,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      parts: [{ text: 'Recovered from depth-2 RST' }],
                    },
                    finishReason: 'STOP',
-@@ -9391,59 +7975,56 @@
+@@ -9391,59 +7978,56 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-transport-abort-delay',
@@ -192571,7 +192574,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -9458,12 +8039,13 @@
+@@ -9458,12 +8042,13 @@
              ],
            } as unknown as GenerateContentResponse;
            throw tpmError;
@@ -192585,7 +192588,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9473,130 +8055,42 @@
+@@ -9473,130 +8058,42 @@
            .mockResolvedValueOnce(failingStream)
            .mockResolvedValueOnce(successStream);
  
@@ -192728,7 +192731,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
-@@ -9606,12 +8100,13 @@
+@@ -9606,12 +8103,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -192742,7 +192745,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9626,39 +8121,43 @@
+@@ -9626,39 +8124,43 @@
            'test-model',
            { message: 'test' },
            'prompt-id-tpm-retry',
@@ -192791,7 +192794,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after TPM retry',
-@@ -9696,16 +8195,21 @@
+@@ -9696,16 +8198,21 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -192815,7 +192818,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        } finally {
          vi.useRealTimers();
        }
-@@ -9733,12 +8237,13 @@
+@@ -9733,12 +8240,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -192829,7 +192832,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                        parts: [{ text: 'Success after Retry-After' }],
                      },
                      finishReason: 'STOP',
-@@ -9752,23 +8257,27 @@
+@@ -9752,23 +8260,27 @@
            'test-model',
            { message: 'test' },
            'prompt-id-retry-after',
@@ -192862,7 +192865,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9792,12 +8301,13 @@
+@@ -9792,12 +8304,13 @@
        try {
          const tpmError = new StreamContentError(
            '{"error":{"code":"429","message":"Throttling: TPM(1/1)"}}',
@@ -192876,7 +192879,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9818,31 +8328,35 @@
+@@ -9818,31 +8331,35 @@
            'test-model',
            { message: 'test' },
            'prompt-id-skip-delay',
@@ -192917,7 +192920,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            mockContentGenerator.generateContentStream,
-@@ -9884,18 +8398,22 @@
+@@ -9884,18 +8401,22 @@
            'test-model',
            { message: 'test', config: { abortSignal: abortController.signal } },
            'prompt-id-abort-delay',
@@ -192943,7 +192946,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          await expect(nextPromise).rejects.toThrow();
  
          // Only one API call should have been made (no retry after abort)
-@@ -9905,12 +8423,13 @@
+@@ -9905,12 +8426,13 @@
  
          // Verify the next sendMessageStream is not blocked by the old delay.
          // If sendPromise were still pending, this would hang until the 60s
@@ -192957,7 +192960,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9954,12 +8473,13 @@
+@@ -9954,12 +8476,13 @@
  
            yield {} as GenerateContentResponse;
          }
@@ -192971,7 +192974,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -9974,48 +8494,52 @@
+@@ -9974,48 +8497,52 @@
            'test-model',
            { message: 'test' },
            'prompt-id-glm-retry',
@@ -193034,7 +193037,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                e.type === StreamEventType.CHUNK &&
                e.value.candidates?.[0]?.content?.parts?.[0]?.text ===
                  'Success after GLM retry',
-@@ -10028,12 +8552,14 @@
+@@ -10028,12 +8555,14 @@
  
      it('should use configured delay across repeated streamed rate-limit errors', async () => {
        vi.useFakeTimers();
@@ -193049,7 +193052,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryMaxDelayMs: 5_000,
          });
          const firstError = new StreamContentError(
-@@ -10058,12 +8584,13 @@
+@@ -10058,12 +8587,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -193063,7 +193066,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10075,37 +8602,39 @@
+@@ -10075,37 +8605,39 @@
            'test-model',
            { message: 'test' },
            'prompt-id-streamed-rate-limit-backoff',
@@ -193112,7 +193115,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(retryInfos.map((info) => info.delayMs)).toEqual([3_000, 5_000]);
          expect(
-@@ -10123,12 +8652,14 @@
+@@ -10123,12 +8655,14 @@
  
      it('uses configured stream rate-limit retry delays', async () => {
        vi.useFakeTimers();
@@ -193127,7 +193130,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            retryInitialDelayMs: 3_000,
            retryMaxDelayMs: 5_000,
          });
-@@ -10154,12 +8685,13 @@
+@@ -10154,12 +8688,13 @@
                yield {} as GenerateContentResponse;
              })(),
            )
@@ -193141,7 +193144,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10170,32 +8702,33 @@
+@@ -10170,32 +8705,33 @@
          const stream = await chat.sendMessageStream(
            'test-model',
            { message: 'test' },
@@ -193184,7 +193187,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
  
          expect(
            events.some(
-@@ -10261,12 +8794,13 @@
+@@ -10261,12 +8797,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error429)
@@ -193198,7 +193201,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10339,12 +8873,13 @@
+@@ -10339,12 +8876,13 @@
  
          vi.mocked(mockContentGenerator.generateContentStream)
            .mockRejectedValueOnce(error500)
@@ -193212,7 +193215,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                      finishReason: 'STOP',
                    },
                  ],
-@@ -10372,12 +8907,13 @@
+@@ -10372,12 +8910,13 @@
        afterEach(() => {
          // Reset to default behavior
          mockRetryWithBackoff.mockImplementation(async (apiCall) => apiCall());
@@ -193226,7 +193229,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        { role: 'user', parts: [{ text: 'First question' }] },
        { role: 'model', parts: [{ text: 'First answer' }] },
      ];
-@@ -10385,20 +8921,22 @@
+@@ -10385,20 +8924,22 @@
  
      // 2. Mock the API to fail once with an empty stream, then succeed.
      vi.mocked(mockContentGenerator.generateContentStream)
@@ -193250,7 +193253,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                  finishReason: 'STOP',
                },
              ],
-@@ -10450,103 +8988,185 @@
+@@ -10450,103 +8991,185 @@
          'Test setup error: Fourth turn is not a valid text part.',
        );
      }
@@ -193491,7 +193494,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              finishReason: 'STOP',
            },
          ],
-@@ -10561,41 +9181,58 @@
+@@ -10561,41 +9184,58 @@
      const firstStream = await chat.sendMessageStream(
        'test-model',
        { message: 'first' },
@@ -193563,7 +193566,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      expect(history.length).toBe(4);
  
      const turn4 = history[3];
-@@ -10606,12 +9243,13 @@
+@@ -10606,12 +9246,13 @@
      }
      expect(turn4.parts[0].text).toBe('second response');
    });
@@ -193577,7 +193580,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            finishReason: 'STOP',
          },
        ],
-@@ -10641,275 +9279,325 @@
+@@ -10641,275 +9282,325 @@
          }),
          'prompt-id-res3',
        );
@@ -194134,7 +194137,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      { text: 'thinking', thought: true },
                      { text: response.slice(0, splitAt) },
-@@ -10954,28 +9642,31 @@
+@@ -10954,28 +9645,31 @@
        expect(emittedParts.find((part) => part.thought)?.text).toBe('thinking');
        expect(streamedTextChunks.join('')).toBe(response);
        expect(chat.getLastModelMessageText()).toBe(response);
@@ -194167,7 +194170,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
      );
  
      const stream = await chat.sendMessageStream(
-@@ -10996,138 +9687,54 @@
+@@ -10996,138 +9690,54 @@
      const emittedText = emittedParts
        .filter((part) => !part.thought)
        .map((part) => part.text ?? '')
@@ -194320,7 +194323,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
        const responses = toolCallFirst
          ? [functionCallResponse, ...textResponses]
          : [textResponses[0]!, functionCallResponse, textResponses[1]!];
-@@ -11138,33 +9745,33 @@
+@@ -11138,33 +9748,33 @@
        const stream = await chatWithRecording.sendMessageStream(
          'test-model',
          { message: 'test' },
@@ -194365,7 +194368,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              .map((part) => part.text)
              .join(''),
          ).toBe(response);
-@@ -11174,22 +9781,30 @@
+@@ -11174,22 +9784,30 @@
  
    it.each([false, true])(
      'keeps leading JSON before a later structured tool call (preparation: %s)',
@@ -194397,7 +194400,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
              },
            ],
          } as unknown as GenerateContentResponse,
-@@ -11243,31 +9858,33 @@
+@@ -11243,31 +9861,33 @@
          expect(parts.findIndex((part) => part.text === response)).toBe(0);
          expect(parts.findIndex((part) => part.functionCall)).toBe(1);
        }
@@ -194438,7 +194441,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                    parts: [
                      {
                        functionCall: {
-@@ -11278,59 +9895,64 @@
+@@ -11278,59 +9898,64 @@
                      },
                    ],
                  },
@@ -194509,7 +194512,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
                finishReason: 'STOP',
              },
            ],
-@@ -11371,252 +9993,12 @@
+@@ -11371,252 +9996,12 @@
      expect(events.some((event) => event.type === StreamEventType.RETRY)).toBe(
        false,
      );
@@ -194762,7 +194765,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
          { role: 'user', parts: [{ text: 'question' }] },
          {
            role: 'model',
-@@ -11790,179 +10172,704 @@
+@@ -11790,179 +10175,704 @@
        chat.stripOrphanedUserEntriesFromHistory();
  
        expect(chat.getHistory()).toEqual([]);
@@ -195604,7 +195607,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12075,17 +10982,12 @@
+@@ -12075,17 +10985,12 @@
        expect(parts[0]!.functionResponse?.id).toBe('call_A');
        expect(parts[1]!.functionResponse?.id).toBe('call_B');
        expect(parts[2]).toEqual({ text: 'retry prompt' });
@@ -195622,7 +195625,7 @@ diff --git a/packages/core/src/core/geminiChat.test.ts b/packages/core/src/core/
            role: 'model',
            parts: [
              {
-@@ -12568,2978 +11470,1239 @@
+@@ -12568,2978 +11473,1239 @@
          )
          .filter((id): id is string => Boolean(id));
        expect(allFrIds).toEqual(['cid_adj_dup']);
@@ -202282,7 +202285,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    applySessionStartContext(
-@@ -2195,1042 +1440,590 @@
+@@ -2195,1042 +1440,602 @@
      prompt_id: string,
      goalContext?: GoalTurnPermit,
    ): Promise<AsyncGenerator<StreamEvent>> {
@@ -202606,13 +202609,32 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +      };
 +      // One counter for every size this turn asks about. The tokenizer must
 +      // report the same window the budgets were derived from, or the count
-+      // describes a different deployment and the turn does not go out.
++      // describes a different deployment and the turn does not go out. Its
++      // answer is a function of the request it is shown, so a request this
++      // turn has already counted is not shown to it again: the count taken
++      // before compaction is the count of the request the turn sends whenever
++      // compaction left the history as it was, which is almost every turn.
++      let counted: { readonly request: string; readonly tokens: number } | undefined;
 +      const countExactRequestTokens = async (
 +        contents: Content[],
 +        systemInstruction?: string,
 +      ): Promise<number> => {
++        const request = {
++          model,
++          contents,
++          config: {
++            ...this.generationConfig,
++            ...params.config,
++            ...(systemInstruction === undefined ? {} : { systemInstruction }),
++          },
++        };
++        // What the tokenizer is shown, as the JSON it is serialized to; the
++        // abort signal is the call's, not the request's.
++        const { abortSignal: _abortSignal, ...shown } = request.config;
++        const identity = JSON.stringify({ ...request, config: shown });
++        if (counted?.request === identity) return counted.tokens;
 +        const result = await requestRoute.contentGenerator.countRequestTokens(
-           {
+-          {
 -            pendingUserMessage: userContent,
 -            precomputedEffectiveTokens: effectiveTokens,
 -            requestGenerationConfig: params.config,
@@ -202623,14 +202645,8 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 -            // classified correctly while the pending user message preserves
 -            // any active tool-call / response pairing.
 -            trigger: shouldForceFromHard ? 'auto' : undefined,
-+            model,
-+            contents,
-+            config: {
-+              ...this.generationConfig,
-+              ...params.config,
-+              ...(systemInstruction === undefined ? {} : { systemInstruction }),
-+            },
-           },
+-          },
++          request,
 +          prompt_id,
          );
 -      }
@@ -202680,6 +202696,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
 +            `Exact tokenizer max_model_len=${result.maxModelLen} does not match the ${partition.window}-token window the budgets are derived from.`,
            );
          }
++        counted = { request: identity, tokens: result.totalTokens };
 -        const compressionStatus =
 -          CompressionStatus[compressionInfo.compressionStatus] ??
 -          String(compressionInfo.compressionStatus);
@@ -203861,7 +203878,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
                    delayMs,
                    model,
                  ),
-@@ -3239,674 +2032,64 @@
+@@ -3239,674 +2044,64 @@
                await delay(delayMs, params.config?.abortSignal).promise;
                continue;
              }
@@ -204568,7 +204585,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        shouldRetryOnError: (error: unknown) => {
          if (error instanceof Error) {
            if (isSchemaDepthError(error.message)) return false;
-@@ -3936,17 +2119,8 @@
+@@ -3936,17 +2131,8 @@
        },
        authType,
        extraRetryErrorCodes,
@@ -204587,7 +204604,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        onRetry: (info) => {
          logApiRetry(
            this.config,
-@@ -3961,40 +2135,47 @@
+@@ -3961,40 +2147,47 @@
            }),
          );
        },
@@ -204661,7 +204678,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    /**
     * Returns the chat history.
     *
-@@ -4018,10 +2199,17 @@
+@@ -4018,10 +2211,17 @@
     * @return History contents alternating between user and model for the entire
     * chat session.
     */
@@ -204681,7 +204698,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      // Deep copy the history to avoid mutating the history outside of the
      // chat session.
      return structuredClone(history);
-@@ -4034,8 +2222,8 @@
+@@ -4034,8 +2234,8 @@
    getHistoryTail(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -204692,7 +204709,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return structuredClone(history.slice(-count));
    }
  
-@@ -4046,13 +2234,15 @@
+@@ -4046,13 +2246,15 @@
     */
    getHistoryShallow(curated: boolean = false): Content[] {
      const history = curated
@@ -204711,7 +204728,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return extractCuratedHistory(history).map(copyContentContainer);
    }
  
-@@ -4062,8 +2252,8 @@
+@@ -4062,8 +2264,8 @@
    getHistoryTailShallow(count: number, curated: boolean = false): Content[] {
      if (count <= 0) return [];
      const history = curated
@@ -204722,7 +204739,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return history.slice(-count).map(copyContentContainer);
    }
  
-@@ -4081,7 +2271,7 @@
+@@ -4081,7 +2283,7 @@
     * mutate the returned object.
     */
    peekLastHistoryEntry(): Content | undefined {
@@ -204731,7 +204748,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4090,8 +2280,8 @@
+@@ -4090,8 +2292,8 @@
     * needed.
     */
    getLastModelMessageText(): string | undefined {
@@ -204742,7 +204759,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (message?.role !== 'model') continue;
        const text =
          message.parts
-@@ -4112,7 +2302,7 @@
+@@ -4112,7 +2314,7 @@
     * otherwise pay the {@link getHistory} `structuredClone` cost.
     */
    getHistoryLength(): number {
@@ -204751,7 +204768,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4133,7 +2323,7 @@
+@@ -4133,7 +2335,7 @@
     */
    getHistoryFunctionResponseIds(): Set<string> {
      const ids = new Set<string>();
@@ -204760,7 +204777,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
        if (entry.role !== 'user') continue;
        for (const part of entry.parts ?? []) {
          const id = part.functionResponse?.id;
-@@ -4147,192 +2337,75 @@
+@@ -4147,192 +2349,75 @@
     * Clears the chat history.
     */
    clearHistory(): void {
@@ -205006,7 +205023,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    /**
-@@ -4342,6 +2415,8 @@
+@@ -4342,6 +2427,8 @@
     */
    stripOrphanedUserEntriesFromHistory(): Content[] {
      const strippedEntries: Content[] = [];
@@ -205015,7 +205032,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      while (
        this.history.length > 0 &&
        this.history[this.history.length - 1]!.role === 'user'
-@@ -4365,18 +2440,9 @@
+@@ -4365,18 +2452,9 @@
        }
        strippedEntries.unshift(this.history.pop()!);
      }
@@ -205037,7 +205054,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return strippedEntries;
    }
  
-@@ -4388,7 +2454,10 @@
+@@ -4388,7 +2466,10 @@
      injected: Array<{ callId: string; name: string }>;
      droppedDuplicates: Array<{ callId: string; name: string }>;
    } {
@@ -205049,7 +205066,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
    }
  
    setTools(tools: Tool[]): void {
-@@ -4396,7 +2465,7 @@
+@@ -4396,7 +2477,7 @@
    }
  
    /** Returns a shallow copy of the current generation config (for cache param snapshots). */
@@ -205058,7 +205075,7 @@ diff --git a/packages/core/src/core/geminiChat.ts b/packages/core/src/core/gemin
      return { ...this.generationConfig };
    }
  
-@@ -4430,687 +2499,221 @@
+@@ -4430,687 +2511,221 @@
      }
    }
  
