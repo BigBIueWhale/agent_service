@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `748e64f348ec62905c72d94f9dbad296d20e0ed2d95aceb4f233b0835adede8f`
+- Review-diff SHA-256: `b46d43df03aa99493d08c9b88219a7eeec217cf30206bf19f5ff505facd5185c`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `399be4638f44b49b445f5d04d5e906ef2321f52801f1c7f1ce4bcb7ce51ffb5d`
+- Transformer-manifest SHA-256: `fb89f530e45e1289037b345407e71ced703077953886d15d18b2dbf429fd0b05`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -538,9 +538,12 @@ observed byte count and SHA-256, or a processing outcome. EOF, failed read,
 cancellation and an undispatched intent are distinct. SDK and conversion
 completion, failure or cancellation are recorded after the transport end, so an
 EOF cannot hide a later parser failure. Arbitrary malformed UTF-8 and JSON survive
-as bytes. Capture uses
-one pull-through stream; it durably writes each bounded record before parser
-delivery. The record quantum never truncates a response. Active stdout renderers
+as bytes. Capture reads the transport from the moment the response exists,
+with one read outstanding until it ends, because an HTTP client discards bytes it
+holds unread when its connection fails; it durably writes each bounded record
+before parser delivery. Read-ahead past its stated bound refuses the response
+after recording every byte read, so a record is complete or says it is not. The
+record quantum never truncates a response. Active stdout renderers
 drain each admitted record before generation proceeds. Detached renderers release
 their window without poisoning the canonical writer. Recorder waits are excluded
 from the request's start, idle and generation clocks, so the recorder bounds

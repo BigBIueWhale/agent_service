@@ -8737,7 +8737,10 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "core/model-response-evidence.ts", (
         "export class ModelResponseRecorder", "export class ModelResponseReplay",
         "requireModelResponseEvidence", "body_sha256", "Buffer.from(bytes).toString('base64')",
-        "await this.body(bytes)", "controller.enqueue(bytes)",
+        "const durable = this.body(bytes);", "await next.durable;",
+        "controller.enqueue(next.bytes);",
+        "export const RESPONSE_READ_AHEAD_BYTES = 1024 * RESPONSE_RECORD_BYTES;",
+        "-byte read-ahead bound. The response was refused and its transport cancelled; every byte read is recorded.",
         "this.clock.persist", "openRequestIds()", "terminal omits a response completion",
         "finish(outcome: ModelResponseOutcome)", "response outcome precedes transport completion",
         "transport event follows transport completion", "state.digest = null",
@@ -8760,6 +8763,24 @@ def _validate_served_accounting_after(state: State) -> None:
         "completed response contains a failed decode observation",
         "recorded decoded output differs from its physical response",
     ), label=label)
+    # A transport read is outstanding from the moment the response exists: the
+    # header record is queued and the first read issued before anything awaits,
+    # each body record is queued as its bytes arrive, the read-ahead refuses past
+    # its bound, and the consumer receives bytes only once their record is
+    # durable.
+    capture = _source(state, core + "core/model-response-evidence.ts", label=label).split(
+        "async capture(response: Response): Promise<Response> {", 1)[-1].split(
+        "private async closeBody(", 1)[0]
+    _require_ordered(capture, (
+        "const reader = response.body?.getReader();",
+        "const header = this.enqueue(async () => {",
+        "const next = await reader.read();",
+        "const durable = this.body(bytes);",
+        "if (unreadBytes > RESPONSE_READ_AHEAD_BYTES)",
+        "await header;",
+        "await next.durable;",
+        "controller.enqueue(next.bytes);",
+    ), label=label, location=core + "core/model-response-evidence.ts capture")
     _require_all(state, core + "core/utility-delivery.ts", (
         "readonly operationId = retryContext.getStore()?.operationId ?? randomUUID()",
         "this.responses.set(response.requestId, response)",
@@ -8796,6 +8817,10 @@ def _validate_served_accounting_after(state: State) -> None:
         "refuses a stalled header write and resumes the paused network clock",
         "refuses a stalled body write while cancellation waits for its read",
         "waits for a responsive durable write before delivering bytes",
+        "records the prefix a provider sent before its transport failed, while the header write was pending",
+        "keeps reading the transport while earlier body records are still being written",
+        "refuses a provider that runs past the read-ahead bound and records every byte it read",
+        "records the prefix a real HTTP connection delivered before closing short of its content length",
         "records utility observations at their conversion boundary",
         "records a nonstream response exposed only by failure",
     ), label=label)
@@ -11440,6 +11465,8 @@ def _validate_stream_bounds_after(state: State) -> None:
     _require_all(state, pipeline, ("clock.subscribe(rearm)", "if (clock.paused) return;", "unsubscribe?.()"), label=label)
     _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts", (
         "excludes progressing durable writes from first-chunk and idle guards",
+        "records an ordinary cancellation before the terminal as before",
+        "records the transport EOF of a provider that finished before the consumer stopped early",
         "const writeDelayMs = RECORDING_STALL_TIMEOUT_MS / 2;",
         "const heldWrites = Math.floor(STREAM_IDLE_TIMEOUT_MS / writeDelayMs) + 1;",
         "await vi.advanceTimersByTimeAsync(writeDelayMs);",

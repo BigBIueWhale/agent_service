@@ -380247,7 +380247,7 @@ diff --git a/packages/core/src/services/model-request-recording.test.ts b/packag
 diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response-evidence.md
 --- /dev/null
 +++ b/docs/design/model-response-evidence.md
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,64 @@
 +# Exact observed provider responses
 +
 +The shared client records a physical generation request before dispatch, then
@@ -380270,8 +380270,17 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 +cancelled transport end. The chat's history decision, or a utility caller's
 +delivery receipt, is a further record of its own.
 +
-+One pull-through stream writes before delivering bytes to the SDK. A persistence
-+quantum bounds each temporary encoded record, without a total response limit.
++The recorder reads the transport from the moment the response exists and keeps
++one read outstanding until it ends, because an HTTP client discards bytes it
++still holds unread when its connection fails: a provider that sent a prefix and
++then disconnected must leave that prefix in the record. Each body record is
++durable before the SDK receives its bytes. Bytes read ahead of the SDK are
++bounded; a provider that runs past the bound is refused, its transport cancelled
++and its response ended `failed` naming the bound, after every byte read is
++recorded, so a record is complete or says it is not. Because the transport is
++read ahead, a response whose provider finished before the consumer stopped ends
++at EOF even when processing was cancelled. A persistence quantum bounds each
++temporary encoded record, without a total response limit.
 +The per-request clock pauses during recorder and output backpressure, preserving
 +the meaning of upstream timeout bounds. User cancellation still owns transport
 +abort. Failure to record poisons the durable journal and prevents later dispatch.
@@ -380306,8 +380315,9 @@ diff --git a/docs/design/model-response-evidence.md b/docs/design/model-response
 diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/core/src/core/model-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.test.ts
-@@ -0,0 +1,1622 @@
+@@ -0,0 +1,1822 @@
 +import { createHash } from 'node:crypto';
++import { createServer, type AddressInfo } from 'node:net';
 +import OpenAI from 'openai';
 +import { GenerateContentResponse } from '@google/genai';
 +import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -380321,6 +380331,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +  ModelResponseRecorder,
 +  ModelResponseReplay,
 +  RESPONSE_CANCELLATION_STALL_TIMEOUT_MS,
++  RESPONSE_READ_AHEAD_BYTES,
 +  RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS,
 +  describeResponseFailure,
 +  requireModelResponseEvidence,
@@ -380807,6 +380818,201 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    expect(recorder.clock.now()).toBe(at);
 +    await vi.advanceTimersByTimeAsync(20);
 +    expect(recorder.clock.now()).toBe(at + 20);
++  });
++
++  it('records the prefix a provider sent before its transport failed, while the header write was pending', async () => {
++    const records: ModelResponseEvidence[] = [];
++    const recorder = new ModelResponseRecorder(
++      'j',
++      'r',
++      async (record) => {
++        // A durable append takes real time; nothing reads for the SDK yet.
++        if (record.event.kind === 'http')
++          await new Promise((resolve) => setTimeout(resolve, 20));
++        records.push(structuredClone(record));
++      },
++      { kind: 'utility', operation_id: 'utility-operation', purpose: 'other' },
++    );
++    recorder.dispatched();
++    const prefix = Buffer.from('data: {"partial":true}\n\n');
++    const terminated = new TypeError('terminated');
++    const captured = recorder.capture(
++      new Response(
++        new ReadableStream<Uint8Array>(
++          {
++            start(controller) {
++              // The prefix arrives, then the connection fails: an unread
++              // queued chunk is discarded when a stream errors.
++              setTimeout(() => {
++                controller.enqueue(prefix);
++                setTimeout(() => controller.error(terminated), 0);
++              }, 0);
++            },
++          },
++          { highWaterMark: 0 },
++        ),
++        { headers: sseHeaders },
++      ),
++    );
++    const reader = (await captured).body!.getReader();
++    expect(Buffer.from((await reader.read()).value!)).toEqual(prefix);
++    await expect(reader.read()).rejects.toBe(terminated);
++    expect(records.map((record) => record.event.kind)).toEqual([
++      'http',
++      'body',
++      'end',
++    ]);
++    expect(raw(records)).toEqual(prefix);
++    expect(records.at(-1)?.event).toMatchObject({
++      kind: 'end',
++      termination: 'failed',
++      body_bytes: prefix.length,
++      body_sha256: createHash('sha256').update(prefix).digest('hex'),
++      error: 'TypeError: terminated',
++    });
++  });
++
++  it('keeps reading the transport while earlier body records are still being written', async () => {
++    const held = deferred();
++    const records: ModelResponseEvidence[] = [];
++    const recorder = new ModelResponseRecorder(
++      'j',
++      'r',
++      async (record) => {
++        if (record.event.kind === 'body') await held.promise;
++        records.push(structuredClone(record));
++      },
++      { kind: 'utility', operation_id: 'utility-operation', purpose: 'other' },
++    );
++    recorder.dispatched();
++    const frames = ['data: 1\n\n', 'data: 2\n\n', 'data: 3\n\n'].map((frame) =>
++      Buffer.from(frame),
++    );
++    const sent = deferred();
++    const response = await recorder.capture(
++      new Response(
++        new ReadableStream<Uint8Array>(
++          {
++            start(controller) {
++              let index = 0;
++              const next = () => {
++                if (index < frames.length) {
++                  controller.enqueue(frames[index++]!);
++                  setTimeout(next, 0);
++                } else {
++                  controller.error(new TypeError('terminated'));
++                  sent.resolve();
++                }
++              };
++              setTimeout(next, 0);
++            },
++          },
++          { highWaterMark: 0 },
++        ),
++        { headers: sseHeaders },
++      ),
++    );
++    // Every frame and the failure arrive while the first body write is held.
++    await sent.promise;
++    held.resolve();
++    await expect(response.text()).rejects.toThrow('terminated');
++    expect(raw(records)).toEqual(Buffer.concat(frames));
++    expect(records.at(-1)?.event).toMatchObject({
++      kind: 'end',
++      termination: 'failed',
++      body_bytes: Buffer.concat(frames).length,
++    });
++  });
++
++  it('refuses a provider that runs past the read-ahead bound and records every byte it read', async () => {
++    const f = fixture();
++    f.recorder.dispatched();
++    const bytes = Buffer.alloc(RESPONSE_READ_AHEAD_BYTES + 1, 0x61);
++    let cancelledWith: unknown;
++    const response = await f.recorder.capture(
++      new Response(
++        new ReadableStream<Uint8Array>({
++          start(controller) {
++            controller.enqueue(bytes);
++          },
++          cancel(reason) {
++            cancelledWith = reason;
++          },
++        }),
++      ),
++    );
++    await expect(response.arrayBuffer()).rejects.toThrow(
++      `more than the ${RESPONSE_READ_AHEAD_BYTES}-byte read-ahead bound`,
++    );
++    expect(cancelledWith).toBeInstanceOf(Error);
++    expect(f.records.at(-1)?.event).toMatchObject({
++      kind: 'end',
++      termination: 'failed',
++      body_bytes: bytes.length,
++      body_sha256: createHash('sha256').update(bytes).digest('hex'),
++    });
++    expect(
++      (f.records.at(-1)?.event as { error: string }).error,
++    ).toContain('read-ahead bound');
++  });
++
++  it('records the prefix a real HTTP connection delivered before closing short of its content length', async () => {
++    const { Agent, fetch } = await import('undici');
++    const prefix =
++      'data: {"choices":[{"index":0,"delta":{"content":"PROVIDER_FAILURE_PREFIX"}}]}\n\n';
++    // The provider declares more body than it sends, flushes one frame and
++    // closes, as the composition gate's disconnected provider does.
++    const server = createServer((socket) => {
++      socket.once('data', () => {
++        socket.end(
++          'HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n' +
++            `content-length: ${Buffer.byteLength(prefix) + 1024}\r\n` +
++            `connection: close\r\n\r\n${prefix}`,
++        );
++      });
++    });
++    await new Promise<void>((resolve) =>
++      server.listen(0, '127.0.0.1', () => resolve()),
++    );
++    // The dispatcher the runtime builds for a direct connection.
++    const dispatcher = new Agent({
++      headersTimeout: 0,
++      bodyTimeout: 0,
++      keepAliveTimeout: 60_000,
++    });
++    try {
++      const records: ModelResponseEvidence[] = [];
++      const recorder = new ModelResponseRecorder(
++        'j',
++        'r',
++        async (record) => {
++          if (record.event.kind === 'http')
++            await new Promise((resolve) => setTimeout(resolve, 50));
++          records.push(structuredClone(record));
++        },
++        { kind: 'utility', operation_id: 'utility-operation', purpose: 'other' },
++      );
++      recorder.dispatched();
++      const { port } = server.address() as AddressInfo;
++      const served = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
++        method: 'POST',
++        body: '{}',
++        dispatcher,
++      });
++      const response = await recorder.capture(served as unknown as Response);
++      const reader = response.body!.getReader();
++      expect(Buffer.from((await reader.read()).value!).toString()).toBe(prefix);
++      await expect(reader.read()).rejects.toThrow('terminated');
++      expect(raw(records).toString()).toBe(prefix);
++      expect(records.at(-1)?.event).toMatchObject({
++        kind: 'end',
++        termination: 'failed',
++        body_bytes: Buffer.byteLength(prefix),
++      });
++    } finally {
++      await dispatcher.close();
++      await new Promise<void>((resolve) => server.close(() => resolve()));
++    }
 +  });
 +
 +  it('records a cancelled prefix without mistaking cancellation for EOF', async () => {
@@ -381405,7 +381611,10 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 +    const replay = utilityReplay();
 +    f.records.forEach((record) => replay.observe(record));
 +    expect(() => replay.finish()).not.toThrow();
-+    expect(raw(f.records).toString()).toBe(servedEvent);
++    // The transport is read ahead of the consumer, so the record holds every
++    // byte the provider delivered before cancellation, not only the prefix
++    // the parser took; replay of a cancelled stream reads complete events only.
++    expect(raw(f.records).toString()).toBe(`${servedEvent}unread tail`);
 +    expect(
 +      f.records.find((record) => record.event.kind === 'end')?.event,
 +    ).toMatchObject({ termination: 'cancelled' });
@@ -381932,7 +382141,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1319 @@
+@@ -0,0 +1,1404 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -382003,6 +382212,14 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +// A persistence quantum bounds each encoded response record and temporary copy.
 +// It never bounds or truncates the total response or a model argument.
 +const RESPONSE_RECORD_BYTES = 64 * 1024;
++// The transport is read continuously (see capture), so bytes it delivers wait
++// in memory until persistence and the response parser take them. This bounds
++// that wait, not the response. A provider that runs further ahead is refused:
++// its transport is cancelled and the response ends `failed`, naming this bound,
++// after every byte read has been recorded -- memory stays finite and the
++// record says it is incomplete instead of silently dropping bytes. The value
++// is a memory policy, stated once.
++export const RESPONSE_READ_AHEAD_BYTES = 1024 * RESPONSE_RECORD_BYTES;
 +// Response operations share the recording deadline but not the model's
 +// separate network generation budget.
 +export const RESPONSE_SETTLEMENT_STALL_TIMEOUT_MS = RECORDING_STALL_TIMEOUT_MS;
@@ -382215,22 +382432,140 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +  }
 +
 +  async capture(response: Response): Promise<Response> {
-+    try {
-+      await this.enqueue(async () => {
-+        if (this.state !== 'dispatched')
-+          failure('HTTP headers have no unique dispatch');
-+        await this.write({
-+          kind: 'http',
-+          status: response.status,
-+          content_type: response.headers.get('content-type'),
-+        });
-+        this.state = 'http';
-+        this.httpStatus = response.status;
++    // The transport is read from the moment the response exists, with a read
++    // outstanding for as long as it delivers. An HTTP client discards bytes it
++    // still holds unread when its connection fails, so bytes left waiting for
++    // this recorder's header write, or for the SDK's next pull, are lost with
++    // the connection: a provider that sent a prefix and then disconnected used
++    // to leave a record of none of it. The `http` record is queued before the
++    // first read is issued, so the journal still orders it before every body
++    // record, and the SDK still receives each byte only after its body record
++    // is durable.
++    const reader = response.body?.getReader();
++    const header = this.enqueue(async () => {
++      if (this.state !== 'dispatched')
++        failure('HTTP headers have no unique dispatch');
++      await this.write({
++        kind: 'http',
++        status: response.status,
++        content_type: response.headers.get('content-type'),
 +      });
++      this.state = 'http';
++      this.httpStatus = response.status;
++    });
++    // Bytes read from the transport and not yet taken by the consumer, in
++    // transport order, each with the durability of its own body record.
++    const unread: Array<{ bytes: Uint8Array; durable: Promise<void> }> = [];
++    let unreadBytes = 0;
++    let transportEnd:
++      | { kind: 'eof'; recorded: Promise<void> }
++      | { kind: 'cancelled' }
++      | { kind: 'failed'; cause: unknown }
++      | undefined;
++    let wake: (() => void) | undefined;
++    const signal = () => {
++      const waiting = wake;
++      wake = undefined;
++      waiting?.();
++    };
++    let reading: Promise<void> = Promise.resolve();
++    let released = false;
++    let cancelled = false;
++    let wrapperCancelled = false;
++    let rawCancellation: Promise<void> | undefined;
++    let boundedRawCancellation: Promise<void> | undefined;
++    let joinedCancellation: Promise<void> | undefined;
++    let cancellation: Promise<void> | undefined;
++    let readFailure: { cause: unknown } | undefined;
++    const release = () => {
++      if (reader && !released) {
++        reader.releaseLock();
++        released = true;
++      }
++    };
++    const cancelReader = (cause?: unknown): Promise<void> => {
++      if (!rawCancellation) {
++        rawCancellation = Promise.resolve().then(() => reader!.cancel(cause));
++        boundedRawCancellation = this.boundCancellation(rawCancellation);
++        joinedCancellation = Promise.allSettled([
++          rawCancellation,
++          reading,
++        ]).then((results) => {
++          release();
++          const errors = results
++            .filter(
++              (result): result is PromiseRejectedResult =>
++                result.status === 'rejected',
++            )
++            .map((result) => result.reason);
++          if (errors.length === 1) throw errors[0];
++          if (errors.length > 1)
++            throw new AggregateError(errors, 'Response cancellation failed');
++        });
++        void joinedCancellation.catch(() => {});
++      }
++      return boundedRawCancellation!;
++    };
++    // A failed read, a refused read-ahead or a failed record ends the response
++    // `failed`, after every byte already read, and then stops the transport.
++    const fail = async (error: unknown): Promise<unknown> => {
++      readFailure ??= { cause: error };
++      const errors: unknown[] = [error];
++      try {
++        await this.end('failed', describeResponseFailure(error));
++      } catch (recordingError) {
++        if (recordingError !== error) errors.push(recordingError);
++      }
++      try {
++        if (!released) await cancelReader(error);
++      } catch (cleanupError) {
++        if (cleanupError !== error) errors.push(cleanupError);
++      }
++      return errors.length === 1
++        ? error
++        : new AggregateError(errors, 'Response read and recording failed');
++    };
++    if (reader) {
++      // The first read is issued here, synchronously, before anything awaits.
++      reading = (async () => {
++        try {
++          for (;;) {
++            const next = await reader.read();
++            if (next.done) {
++              if (rawCancellation) {
++                transportEnd = { kind: 'cancelled' };
++              } else {
++                const recorded = this.end('eof', null);
++                recorded.catch(() => {});
++                release();
++                transportEnd = { kind: 'eof', recorded };
++              }
++              return;
++            }
++            const bytes = Uint8Array.from(next.value);
++            const durable = this.body(bytes);
++            durable.catch(() => {});
++            unread.push({ bytes, durable });
++            unreadBytes += bytes.byteLength;
++            signal();
++            if (unreadBytes > RESPONSE_READ_AHEAD_BYTES)
++              throw new Error(
++                `The provider sent ${unreadBytes} response bytes that persistence and the response parser had not yet taken, more than the ${RESPONSE_READ_AHEAD_BYTES}-byte read-ahead bound. The response was refused and its transport cancelled; every byte read is recorded.`,
++              );
++            if (this.refusal) throw this.refusal.cause;
++          }
++        } catch (error) {
++          transportEnd = { kind: 'failed', cause: await fail(error) };
++        } finally {
++          signal();
++        }
++      })();
++    }
++    try {
++      await header;
 +    } catch (cause) {
 +      try {
-+        if (response.body)
-+          await this.boundCancellation(response.body.cancel(cause));
++        if (reader && !released) await cancelReader(cause);
 +      } catch (cleanupError) {
 +        throw new AggregateError(
 +          [cause, cleanupError],
@@ -382239,58 +382574,21 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      }
 +      throw cause;
 +    }
-+    if (!response.body) {
++    if (!reader) {
 +      await this.end('eof', null);
 +      return response;
 +    }
-+    const reader = response.body.getReader();
-+    let pull: Promise<void> = Promise.resolve();
-+    let released = false;
-+    let cancelled = false;
-+    let wrapperCancelled = false;
-+    let rawCancellation: Promise<void> | undefined;
-+    let boundedRawCancellation: Promise<void> | undefined;
-+    let joinedCancellation: Promise<void> | undefined;
-+    let cancellation: Promise<void> | undefined;
-+    let pullFailure: { cause: unknown } | undefined;
-+    const release = () => {
-+      if (!released) {
-+        reader.releaseLock();
-+        released = true;
-+      }
-+    };
-+    const cancelReader = (cause?: unknown): Promise<void> => {
-+      if (!rawCancellation) {
-+        rawCancellation = Promise.resolve().then(() => reader.cancel(cause));
-+        boundedRawCancellation = this.boundCancellation(rawCancellation);
-+        joinedCancellation = Promise.allSettled([rawCancellation, pull]).then(
-+          (results) => {
-+            release();
-+            const errors = results
-+              .filter(
-+                (result): result is PromiseRejectedResult =>
-+                  result.status === 'rejected',
-+              )
-+              .map((result) => result.reason);
-+            if (errors.length === 1) throw errors[0];
-+            if (errors.length > 1)
-+              throw new AggregateError(errors, 'Response cancellation failed');
-+          },
-+        );
-+        void joinedCancellation.catch(() => {});
-+      }
-+      return boundedRawCancellation!;
-+    };
 +    const cancel = (): Promise<void> => {
 +      cancellation ??= (async () => {
 +        if (released && !rawCancellation) return;
 +        cancelled = true;
++        signal();
 +        try {
 +          await this.boundCancellation(
 +            Promise.all([cancelReader(), joinedCancellation!]).then(() => {}),
 +          );
 +        } catch (cause) {
-+          if (!pullFailure || cause !== pullFailure.cause) throw cause;
++          if (!readFailure || cause !== readFailure.cause) throw cause;
 +        }
 +      })();
 +      return cancellation;
@@ -382298,52 +382596,48 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +    this.cancelBody = cancel;
 +    const body = new ReadableStream<Uint8Array>(
 +      {
-+        pull: (controller) => {
-+          pull = (async () => {
-+            try {
-+              const next = await reader.read();
-+              if (next.done) {
-+                if (cancelled) {
-+                  if (!wrapperCancelled) controller.close();
-+                  return;
-+                }
-+                await this.end('eof', null);
-+                release();
-+                controller.close();
++        pull: async (controller) => {
++          for (;;) {
++            const next = unread.shift();
++            if (next) {
++              try {
++                await next.durable;
++              } catch (error) {
++                const cause = await fail(error);
++                if (!wrapperCancelled) controller.error(cause);
 +                return;
 +              }
-+              const bytes = Uint8Array.from(next.value);
-+              await this.body(bytes);
++              unreadBytes -= next.bytes.byteLength;
 +              if (cancelled) {
 +                if (!wrapperCancelled) controller.close();
 +              } else {
-+                controller.enqueue(bytes);
++                controller.enqueue(next.bytes);
 +              }
-+            } catch (error) {
-+              pullFailure = { cause: error };
-+              const errors: unknown[] = [error];
-+              try {
-+                await this.end('failed', describeResponseFailure(error));
-+              } catch (recordingError) {
-+                if (recordingError !== error) errors.push(recordingError);
-+              }
-+              try {
-+                await cancelReader(error);
-+              } catch (cleanupError) {
-+                if (cleanupError !== error) errors.push(cleanupError);
-+              }
-+              if (!wrapperCancelled)
-+                controller.error(
-+                  errors.length === 1
-+                    ? error
-+                    : new AggregateError(
-+                        errors,
-+                        'Response read and recording failed',
-+                      ),
-+                );
++              return;
 +            }
-+          })();
-+          return pull;
++            if (transportEnd?.kind === 'eof') {
++              try {
++                await transportEnd.recorded;
++              } catch (error) {
++                const cause = await fail(error);
++                if (!wrapperCancelled) controller.error(cause);
++                return;
++              }
++              if (!wrapperCancelled) controller.close();
++              return;
++            }
++            if (transportEnd?.kind === 'failed') {
++              if (!wrapperCancelled) controller.error(transportEnd.cause);
++              return;
++            }
++            if (cancelled || transportEnd?.kind === 'cancelled') {
++              if (!wrapperCancelled) controller.close();
++              return;
++            }
++            await new Promise<void>((resolve) => {
++              wake = resolve;
++            });
++          }
 +        },
 +        cancel: async (reason) => {
 +          wrapperCancelled = true;
@@ -383255,7 +383549,7 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,1060 @@
+@@ -0,0 +1,1085 @@
 +import OpenAI from 'openai';
 +import type {
 +  GenerateContentConfig,
@@ -384297,7 +384591,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +  });
 +
 +  it('records an ordinary cancellation before the terminal as before', async () => {
-+    const f = fixture(async () => sse(complete));
++    // The provider is still streaming when the consumer stops: its body has
++    // served the head and the rest has not arrived.
++    const source = afterHead(() => new Promise<void>(() => {}));
++    const f = fixture(source.fetch);
 +    const stream = await f.pipeline.executeStream(
 +      f.request,
 +      'return-before-terminal',
@@ -384305,6 +384602,28 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 +    expect(texts([(await stream.next()).value])).toEqual(['A']);
 +    await stream.return(undefined);
 +    expect(transportEnd(f.responses)).toBe('cancelled');
++    expect(outcomeOf(f)).toEqual({
++      kind: 'outcome',
++      status: 'cancelled',
++      error: null,
++      served_usage: null,
++      sdk_values_seen: 1,
++      pipeline_outputs_delivered: 1,
++    });
++    validate(f);
++  });
++
++  it('records the transport EOF of a provider that finished before the consumer stopped early', async () => {
++    // The whole body has arrived; the transport is read ahead of the parser,
++    // so its end is the EOF it reached, while processing stays cancelled.
++    const f = fixture(async () => sse(complete));
++    const stream = await f.pipeline.executeStream(
++      f.request,
++      'return-before-terminal-after-eof',
++    );
++    expect(texts([(await stream.next()).value])).toEqual(['A']);
++    await stream.return(undefined);
++    expect(transportEnd(f.responses)).toBe('eof');
 +    expect(outcomeOf(f)).toEqual({
 +      kind: 'outcome',
 +      status: 'cancelled',

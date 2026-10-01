@@ -20,8 +20,17 @@ usage it observed. Completed processing requires a 2xx status and an EOF or
 cancelled transport end. The chat's history decision, or a utility caller's
 delivery receipt, is a further record of its own.
 
-One pull-through stream writes before delivering bytes to the SDK. A persistence
-quantum bounds each temporary encoded record, without a total response limit.
+The recorder reads the transport from the moment the response exists and keeps
+one read outstanding until it ends, because an HTTP client discards bytes it
+still holds unread when its connection fails: a provider that sent a prefix and
+then disconnected must leave that prefix in the record. Each body record is
+durable before the SDK receives its bytes. Bytes read ahead of the SDK are
+bounded; a provider that runs past the bound is refused, its transport cancelled
+and its response ended `failed` naming the bound, after every byte read is
+recorded, so a record is complete or says it is not. Because the transport is
+read ahead, a response whose provider finished before the consumer stopped ends
+at EOF even when processing was cancelled. A persistence quantum bounds each
+temporary encoded record, without a total response limit.
 The per-request clock pauses during recorder and output backpressure, preserving
 the meaning of upstream timeout bounds. User cancellation still owns transport
 abort. Failure to record poisons the durable journal and prevents later dispatch.
