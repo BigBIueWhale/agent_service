@@ -1381,7 +1381,8 @@ Cutting a new release — changing anything the images are built from — is
 It is one command because the components form a chain: the agent image ID is
 compiled into the typed broker policy, that policy is compiled into the broker
 and the service, and the stack lock is compiled into the service, so moving one
-moves the next. It builds, adopts whichever image ID moved, commits, and repeats
+moves the next. It builds, adopts the image ID the build reports for an image it
+just produced with an ID other than its pin, commits, and repeats
 until `./build.sh` agrees, then proves the release lock names a commit that
 already contains the tree it records. It terminates because the service image ID
 is recorded only in `config/release.lock.json`, which is excluded from the

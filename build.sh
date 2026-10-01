@@ -86,6 +86,26 @@ cleanup_build_export() {
   rm -rf -- "${BUILD_EXPORT_DIR}"
 }
 trap cleanup_build_export EXIT
+# A component's image is provably this build's product at exactly one point:
+# straight after `docker load` of the archive this run just exported, because
+# the load is what makes the component's tag name it. So the ID is compared
+# with the pin there, and only there is a disagreement reported to
+# ./release.sh, through the file AGENT_SERVICE_BUILD_DRIFT_REPORT names when the
+# release loop runs this build. Anywhere else a tag can name an image another
+# checkout built -- an earlier release's, still resident -- and adopting that
+# would pin a release to bytes its sources never produced.
+require_built_image() {
+  local component="$1" tag="$2" pinned="$3" built
+  built="$(image_id "${tag}")"
+  [[ "${built}" =~ ^sha256:[0-9a-f]{64}$ ]] ||
+    die "the ${component} image this build loaded as ${tag} has no image ID: ${built:-none}"
+  [[ "${built}" == "${pinned}" ]] && return 0
+  if [[ -n "${AGENT_SERVICE_BUILD_DRIFT_REPORT:-}" ]]; then
+    printf '%s\t%s\n' "${component}" "${built}" >"${AGENT_SERVICE_BUILD_DRIFT_REPORT}" ||
+      die "the ${component} image ID drift could not be reported to ${AGENT_SERVICE_BUILD_DRIFT_REPORT}"
+  fi
+  die "${component} image ID drift: expected '${pinned}', observed '${built}', the image this build just produced"
+}
 AGENT_ARCHIVE="${BUILD_EXPORT_DIR}/agent.tar"
 RELAY_ARCHIVE="${BUILD_EXPORT_DIR}/relay.tar"
 CAPTURE_ARCHIVE="${BUILD_EXPORT_DIR}/capture.tar"
@@ -131,7 +151,7 @@ docker buildx build \
   "${PROJECT_DIR}"
 docker load --input "${AGENT_ARCHIVE}"
 rm -f -- "${AGENT_ARCHIVE}"
-require_equal "agent image ID" "$(image_id "${AGENT_IMAGE}")" "$(lock_value '.agent.image_id')"
+require_built_image agent "${AGENT_IMAGE}" "$(lock_value '.agent.image_id')"
 require_agent_image_contract
 
 printf 'Building the minimal fixed-purpose relay image...\n'
@@ -156,6 +176,7 @@ docker buildx build \
   "${PROJECT_DIR}"
 docker load --input "${RELAY_ARCHIVE}"
 rm -f -- "${RELAY_ARCHIVE}"
+require_built_image relay "${RELAY_IMAGE}" "$(lock_value '.relay.image_id')"
 require_relay_image_contract
 
 printf 'Building the minimal trusted session-capture image...\n'
@@ -180,6 +201,7 @@ docker buildx build \
   "${PROJECT_DIR}"
 docker load --input "${CAPTURE_ARCHIVE}"
 rm -f -- "${CAPTURE_ARCHIVE}"
+require_built_image capture "${CAPTURE_IMAGE}" "$(lock_value '.capture.image_id')"
 require_capture_image_contract
 
 printf 'Building the no-network typed Docker broker image...\n'
@@ -205,6 +227,7 @@ docker buildx build \
   "${PROJECT_DIR}"
 docker load --input "${BROKER_ARCHIVE}"
 rm -f -- "${BROKER_ARCHIVE}"
+require_built_image broker "${BROKER_IMAGE}" "$(lock_value '.broker.image_id')"
 require_broker_image_contract
 
 printf 'Building the pinned Docker-only service image from committed source %s...\n' "${SOURCE_COMMIT}"
@@ -239,7 +262,7 @@ docker buildx build \
   "${PROJECT_DIR}"
 docker load --input "${SERVICE_ARCHIVE}"
 rm -f -- "${SERVICE_ARCHIVE}"
-
+require_built_image service "${SERVICE_IMAGE}" "$(release_value '.images.service')"
 require_service_image_contract
 printf 'Qualifying final-image execution, capture, and durable service publication...\n'
 docker buildx build \

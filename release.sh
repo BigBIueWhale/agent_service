@@ -9,8 +9,10 @@
 # that policy is compiled into the broker and the service, and the stack lock is
 # compiled into the service. Moving one moves the next.
 #
-# The loop is: seal whatever changed, build, and if the build refuses because a
-# component's real ID is not its pinned ID, adopt that ID and go round again.
+# The loop is: seal whatever changed, build, and if the build reports that an
+# image it just produced has an ID other than its pin, adopt that ID and go
+# round again. Only the build's own report is adopted, never an ID read off a
+# tag (see reported_drift).
 # It terminates because the service image ID is recorded only in
 # config/release.lock.json, which scripts/list-build-inputs.sh excludes from the
 # build-input manifest -- so adopting it changes no build input and the next
@@ -211,24 +213,34 @@ repin_component() {
   resync_broker_policy_hash
 }
 
-# Find the single component whose real image disagrees with its pins. build.sh
-# stops at the first disagreement, so at most one can be outstanding; a
-# component whose image is not present locally has simply not been built yet.
-drifted_component() {
-  local component tag observed pinned found=""
-  for component in "${COMPONENTS[@]}"; do
-    tag="$(lock_value "$(component_tag_path "${component}")")"
-    observed="$(docker image inspect "${tag}" --format '{{.Id}}' 2>/dev/null || true)"
-    [[ -n "${observed}" ]] || continue
-    pinned="$(json_value "${RELEASE_LOCK_PATH}" ".images.${component}")"
-    if [[ "${observed}" != "${pinned}" ]]; then
-      [[ -z "${found}" ]] ||
-        die "more than one component disagrees with its pins (${found} and ${component}); refusing to guess which release this is"
-      found="${component}"
-      printf '%s\t%s\n' "${component}" "${observed}"
-    fi
-  done
-  [[ -n "${found}" ]]
+# The build reports an image-ID disagreement only for an image it has just
+# produced and loaded itself (build.sh: require_built_image), and that report is
+# the only drift this loop adopts. It used to infer the drift instead, by
+# comparing every component's tag with its pin after any failed build -- but a
+# tag can name an image no build of this tree produced. The first release
+# attempt of v27 failed inside the agent stage before any component was built;
+# the service tag still named the previously deployed release's resident image,
+# and the loop pinned that image as this release's service (9ae03cf). A build
+# that stops before loading a component now reports nothing about it, and a
+# failed build that reports nothing is refused as the failure it is.
+#
+# build.sh dies at the first disagreement it finds, so a report is exactly one
+# line; anything else did not come from the build and is refused rather than
+# read. Takes the report path explicitly so the release test harness proves the
+# refusals on copies.
+reported_drift() {
+  local report="$1" lines component observed extra
+  lines="$(wc -l <"${report}")"
+  [[ "${lines}" == 1 ]] ||
+    die "the build's image-ID report holds ${lines} lines; the build writes exactly one, so this report is refused"
+  IFS=$'\t' read -r component observed extra <"${report}" || true
+  [[ -z "${extra}" && "${observed}" =~ ^sha256:[0-9a-f]{64}$ ]] ||
+    die "the build's image-ID report is malformed: $(tr '\t' ' ' <"${report}")"
+  case " ${COMPONENTS[*]} " in
+    *" ${component} "*) ;;
+    *) die "the build reported an image ID for a component this release does not pin: ${component}" ;;
+  esac
+  printf '%s\t%s\n' "${component}" "${observed}"
 }
 
 # Does the release lock still describe the working tree? The lock describes it
@@ -402,7 +414,7 @@ require_release_lock_describes_its_own_tree() {
 }
 
 main() {
-  local round drift drifted_name drifted_id component_name archive_name
+  local round drift drift_report drifted_name drifted_id component_name archive_name
   check_host_tools_and_versions
   # Repinning while the stack is up would leave the running containers
   # describing a release the lock no longer names, and ./stop.sh would then
@@ -417,13 +429,17 @@ main() {
     fi
   done
   require_clean_committed_repository
+  drift_report="$(mktemp /tmp/qwen38-release-drift.XXXXXX)"
+  # shellcheck disable=SC2064 # the path is fixed now, on purpose
+  trap "rm -f -- '${drift_report}'" EXIT
 
   printf 'Releasing: build, adopt whatever moved, repeat until the build agrees.\n'
   for ((round = 1; round <= MAX_ROUNDS; round++)); do
     printf '\n== round %d/%d ==\n' "${round}" "${MAX_ROUNDS}"
     seal "Advance the pinned stack"
 
-    if "${PROJECT_DIR}/build.sh"; then
+    : >"${drift_report}"
+    if AGENT_SERVICE_BUILD_DRIFT_REPORT="${drift_report}" "${PROJECT_DIR}/build.sh"; then
       seal "Advance the pinned stack"
       bundle_release_archive
       seal "Pin the release image archive"
@@ -446,9 +462,14 @@ main() {
       return 0
     fi
 
-    drift="$(drifted_component)" ||
-      die "the build failed for a reason other than an image-ID disagreement; its output above is the evidence"
+    [[ -s "${drift_report}" ]] ||
+      die "the build failed for a reason other than an image-ID disagreement of an image it produced; its output above is the evidence"
+    drift="$(reported_drift "${drift_report}")" || exit 1
     IFS=$'\t' read -r drifted_name drifted_id <<<"${drift}"
+    # The report is the build's own statement about the image it loaded; the
+    # component's tag must still name that image when it is adopted.
+    require_equal "${drifted_name} image the build reported" \
+      "$(image_id "$(lock_value "$(component_tag_path "${drifted_name}")")")" "${drifted_id}"
     repin_component "${drifted_name}" "${drifted_id}"
     seal "Pin the rebuilt ${drifted_name} image"
   done

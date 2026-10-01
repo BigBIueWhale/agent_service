@@ -131,7 +131,44 @@ computed_policy="$(sha256sum "${PROJECT_DIR}/config/broker-policy-v1.json" | cut
 [[ "${recorded_policy}" == "${computed_policy}" ]] ||
   fail "the stack lock records broker policy ${recorded_policy} but the policy hashes to ${computed_policy}"
 
-printf 'RELEASE_CONTRACT_OK pin-locations=proved unique-substitution=enforced ambiguity=refused termination=release-lock-excluded tree=self-consistent\n'
+# ---------------------------------------------------------------------------
+# The loop adopts only the drift the build reports for an image it has just
+# produced, never one read off a tag: a tag can name an image another checkout
+# built, and the loop once pinned exactly such a resident image as a release's
+# service. The report is one well-formed line naming a component this release
+# pins, or it is refused; and build.sh writes it only straight after loading the
+# archive it exported for that component, the one point its tag provably names
+# this build's product.
+# ---------------------------------------------------------------------------
+drift_probe="${TEST_DIR}/drift-report"
+built_id="sha256:$(printf '%064d' 0 | tr 0 a)"
+printf 'service\t%s\n' "${built_id}" >"${drift_probe}"
+[[ "$(reported_drift "${drift_probe}")" == "service"$'\t'"${built_id}" ]] ||
+  fail 'a well-formed build drift report was not read back exactly'
+for malformed in \
+  '' \
+  $'service\n' \
+  $'service\tsha256:abc\n' \
+  $'builder\t'"${built_id}"$'\n' \
+  $'service\t'"${built_id}"$'\textra\n' \
+  $'service\t'"${built_id}"$'\nrelay\t'"${built_id}"$'\n'; do
+  printf '%s' "${malformed}" >"${drift_probe}"
+  if (reported_drift "${drift_probe}") >/dev/null 2>&1; then
+    fail "a drift report the build cannot have written was accepted: $(printf '%q' "${malformed}")"
+  fi
+done
+build_script="${PROJECT_DIR}/build.sh"
+for component in agent relay capture broker service; do
+  upper="$(tr '[:lower:]' '[:upper:]' <<<"${component}")"
+  loaded="$(grep -n -A2 -F "docker load --input \"\${${upper}_ARCHIVE}\"" "${build_script}" || true)"
+  grep -qE "^[0-9]+-require_built_image ${component} \"\\$\\{${upper}_IMAGE\\}\" " <<<"${loaded}" ||
+    fail "build.sh does not check and report the ${component} image straight after loading the archive it built"
+done
+if grep -qE 'drifted_component|docker image inspect .*component_tag_path' "${release_under_test}"; then
+  fail 'release.sh still infers drift from image tags instead of reading the build report'
+fi
+
+printf 'RELEASE_CONTRACT_OK pin-locations=proved unique-substitution=enforced ambiguity=refused termination=release-lock-excluded tree=self-consistent drift=build-reported\n'
 
 # ---------------------------------------------------------------------------
 # The release lock's exact schema includes the archive identity, and every
