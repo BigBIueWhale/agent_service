@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `56744c5c885ae36ea37d495ca34b5c72f40272ae2e4f18afc0bb588fba58f0e9`
+- Review-diff SHA-256: `7e23a85de251e182b6afea6acd2ae45ce1215265b1818ad910cf7037a4c25bb5`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `08924336373f10eb95c9c8e391531738a1b3a707a2b297a11aa7f6f210fa9622`
+- Transformer-manifest SHA-256: `ceb5365c840a5c0b534251880934c4d919ebf298af5492a261927343d6a2c7c1`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -137,7 +137,7 @@ that a declared path is the one the prompt names.
 
 ## Context and instructions
 
-The context partition spends the window exactly, from four declared quantities.
+The context partition spends the window exactly, from five declared quantities.
 `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a declared
 capacity rather than a derivation: the system prompt and the tool declarations
 are texts this repo ships, so the turn preamble is counted exactly against it by
@@ -160,7 +160,10 @@ needed -- with it, the blocks left out, and one todo reminder
 with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — a
 declared magnitude and openly a policy: it is the most any single block placed
 inline may be, and anything larger is kept whole in a file and paged back rather
-than shortened. `F`, the per-message framing, is the 61 bytes the served
+than shortened. `S`, a compaction snapshot, is W/4 bytes — 65,536 — in the same
+measure: the most an accepted snapshot may render to, declared from the
+snapshots the model was recorded writing rather than borrowed from `M`
+(`SNAPSHOT_SHARES` says from what). `F`, the per-message framing, is the 61 bytes the served
 template wraps around one message at its widest, declared here and verified
 against the template rather than copied from it. `R`, the reasoning a turn is
 given beside its block, is W/32 tokens — 8,192 — declared from what the model
@@ -174,14 +177,14 @@ most the UTF-8 bytes of its NFC form, the form the served tokenizer splits, so
 `T = W - C - D`. At the served window they are 40,960 and 208,896. What stands
 in the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; every term but the
-turn is bounded in bytes before it exists, so `D + 3(M + F) + (C + F)` must
-stand below the trigger, and does, by 57,099 at the served window. All of it is
+turn is bounded in bytes before it exists, so `D + (S + F) + 2(M + F) + (C + F)`
+must stand below the trigger, and does, by 24,331 at the served window. All of it is
 asserted, not assumed: the fit, the no-overrun property and the compaction room
 are checked at every window the partition can be given, and a window where the
 fit fails is refused rather than partitioned. Every token of `C` or `D`, and
-every byte of `M`, is a token `T` does not have. `C` is the output limit of
-every turn whatever its prompt, and the least a compaction's snapshot is issued
-with. The route refuses a configured ceiling, including
+every byte of `M`, is a token `T` does not have; `S` is not in `T`, since a
+snapshot is never generated as a turn. `C` is the output limit of every turn
+whatever its prompt, and the least a compaction's draw is issued with. The route refuses a configured ceiling, including
 `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate histories are
 counted using the actual rendered request, and a request is counted once: the
 tokenizer's answer is a function of what it is shown, so the count a turn takes
@@ -284,8 +287,8 @@ cannot continue. A turn's room is what the fit charges for the turn a
 compaction carries; a draw's answer is never carried, only the snapshot it
 declares, so it can be given whatever the window has left. The request is counted with that number at its widest, the
 window, and the served tokenizer spends one token per digit, so the room it
-states is the room it is issued with. The accepted snapshot is itself one inline
-block: the bound is stated in the declaration the model is given, and
+states is the room it is issued with. The accepted snapshot is bounded by `S`:
+the bound is stated in the declaration the model is given, and
 acceptance — not decoding — refuses a longer draw, which is redrawn whole
 rather than cut. A redraw carries one message more than the request it
 repeats: why the draw before it was refused and what to do instead, built from

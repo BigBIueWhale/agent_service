@@ -1168,11 +1168,12 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         (
             "const STATED_QUANTITY = /\\b(\\d[\\d,]*) (bytes|tokens|turns)\\b/g;",
             "export function refuseRestatedQuantities(",
-            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n    ],",
+            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n      snapshot,\n    ],",
             "refuseRestatedQuantities(prompt, context.quantities);",
             "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
             "'- A `read_file` page and the statement that leads it are one inline block together.',",
-            "a declared snapshot of at most one inline block plus the original inputs verbatim,",
+            "  const snapshot = `${partition.snapshotBytes} bytes`;",
+            "a declared snapshot of at most ${snapshot} plus the original inputs verbatim,",
             # The model is told what happens at the turn's limit: the turn is
             # refused rather than truncated, kept nowhere and run in no part,
             # asked for again as the next turn, and how many refusals in a
@@ -4233,8 +4234,8 @@ def _validate_compaction_budget_before(state: State) -> None:
     )
 
 
-# The quantities the partition declares. `D`, `M` and `R` are shares of the
-# window; `F` is a byte count that belongs to the served chat template and
+# The quantities the partition declares. `D`, `M`, `S` and `R` are shares of
+# the window; `F` is a byte count that belongs to the served chat template and
 # does not scale with the window. They are read out of the post-patch source
 # rather than restated here, so the arithmetic below is a check on the tree
 # and not a copy of it.
@@ -4242,6 +4243,7 @@ _PARTITION_DECLARED_NAMES = (
     "WINDOW_SHARES",
     "STATIC_PREAMBLE_SHARES",
     "INLINE_BLOCK_SHARES",
+    "SNAPSHOT_SHARES",
     "TURN_REASONING_SHARES",
     "MESSAGE_FRAMING_BYTES",
 )
@@ -4251,6 +4253,7 @@ _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
     "staticPreamble": 12_288,
     "inlineBlockBytes": 32_768,
+    "snapshotBytes": 65_536,
     "messageFraming": 61,
     "turnGeneration": 40_960,
     "compactionTrigger": 208_896,
@@ -4261,7 +4264,7 @@ _SERVED_PARTITION = {
 # source derives, and nothing would notice it disagree.
 _RETIRED_PARTITION_NUMBERS = re.compile(
     r"(?<!\w)(?<!\d,)(?<!\d\.)"
-    r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215)"
+    r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215|57[_,]?099|151[_,]?796)"
     r"(?!\w|,\d|\.\d)"
 )
 
@@ -4293,6 +4296,7 @@ def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
     return {
         "staticPreamble": preamble,
         "inlineBlockBytes": block,
+        "snapshotBytes": share(declared["SNAPSHOT_SHARES"]),
         "messageFraming": declared["MESSAGE_FRAMING_BYTES"],
         "turnGeneration": turn,
         "compactionTrigger": window - turn - preamble,
@@ -4301,27 +4305,29 @@ def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
 
 def _surviving(part: dict[str, int]) -> int:
     """What a compaction leaves standing: the static preamble, then the
-    snapshot, the authored input and one result -- each at most one framed
-    inline block -- and the carried turn, framed like any other message."""
+    snapshot, framed and at most `S`, the authored input and one result --
+    each at most one framed inline block -- and the carried turn, framed like
+    any other message."""
     framing = part["messageFraming"]
     return (
         part["staticPreamble"]
-        + 3 * (part["inlineBlockBytes"] + framing)
+        + (part["snapshotBytes"] + framing)
+        + 2 * (part["inlineBlockBytes"] + framing)
         + (part["turnGeneration"] + framing)
     )
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget follows from four declared quantities, and what a
+    """Every context budget follows from five declared quantities, and what a
     compaction can leave standing stands below the trigger.
 
     The safety argument: what stands in the window after a compaction is the
     static preamble plus a snapshot, the authored input, one tool result and
     the turn carried behind them. Three of those four are bounded in bytes
-    before they exist, and a text's tokens are at most the UTF-8 bytes of its
-    NFC form -- the served tokenizer normalizes to NFC and then spends at
-    least a byte per token -- so the whole of it is known before any of it is
-    generated. `C` is sized for the largest thing a turn legitimately does,
+    before they exist, the snapshot by `S` and the others by `M`, and a
+    text's tokens are at most the UTF-8 bytes of its NFC form -- the served
+    tokenizer normalizes to NFC and then spends at least a byte per token --
+    so the whole of it is known before any of it is generated. `C` is sized for the largest thing a turn legitimately does,
     one inline block at the most tokens it can be and the reasoning share
     beside it, and `T` is what the window has left. At every window the
     deployment can be given, the fit holds, a turn issued at the largest
@@ -4412,7 +4418,7 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         )
     # A window too small to hold what a compaction leaves standing is refused
     # rather than partitioned into something unusable.
-    for tiny in (256, 257, 459, 1_085, 1_104):
+    for tiny in (256, 257, 459, 1_086, 1_104, 2_549, 2_552, 2_592):
         part = _partition(tiny, declared)
         _require(
             _surviving(part) > part["compactionTrigger"] - 1,
@@ -4521,7 +4527,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "required: [...STATE_SNAPSHOT_SECTIONS],",
             "additionalProperties: false,",
             # The bound travels with the declaration, so the model is told what
-            # one inline block may carry before it composes a snapshot, and
+            # a snapshot may render to before it composes one, and
             # acceptance -- not decoding -- is where a longer draw is refused
             # and redrawn whole.
             "export function stateSnapshotTool(maxBytes: number): Tool {",
@@ -4573,11 +4579,10 @@ def _validate_compaction_budget_after(state: State) -> None:
     # The arithmetic itself, evaluated against the shares the tree declares.
     _validate_context_partition(state, label=label)
 
-    # One derivation, in one place, from four declared quantities. A turn's
+    # One derivation, in one place, from five declared quantities. A turn's
     # limit is one inline block and the reasoning share beside it, and nothing
     # else: not the prompt, not a model ceiling, not a clamp margin, not a
-    # floor. A compaction's snapshot, one block and the reasoning that writes
-    # it, is issued with at least that room.
+    # floor. A compaction's draw is issued with at least that room.
     limits_source = _require_all(
         state,
         limits,
@@ -5082,7 +5087,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "declares D and M as shares of the window and F as a constant",
+        "declares D, M and S as shares of the window and F as a constant",
         "gives a turn one inline block at its most tokens and the reasoning share beside it",
         "spends the whole window and nothing more",
         "leaves what a compaction can leave standing below the trigger, at every window",
@@ -5777,9 +5782,10 @@ def _validate_compaction_budget_after(state: State) -> None:
         service,
         (
             "const turnTools = generationConfig.tools ?? [];",
-            "tools: [...turnTools, stateSnapshotTool(partition.inlineBlockBytes)],",
+            "tools: [...turnTools, stateSnapshotTool(partition.snapshotBytes)],",
             "          functionCallingConfig: {\n            mode: FunctionCallingConfigMode.ANY,\n            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],\n          },",
-            "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.inlineBlockBytes,\n      )",
+            "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.snapshotBytes,\n      )",
+            "                  maxBytes: partition.snapshotBytes,",
             "if (!acceptance.snapshot) {",
             # A snapshot refused for its length keeps its raw provider output
             # and the byte count that exceeded the bound, under its own status.
@@ -5792,7 +5798,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         label=label,
     )
     for retired in (
-        "tools: [stateSnapshotTool(partition.inlineBlockBytes)],",
+        "stateSnapshotTool(partition.inlineBlockBytes)",
         "directiveTokens",
     ):
         forbid_text(state, service, retired, label=label)
@@ -5840,7 +5846,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     )
     for path, case in (
         (service_test, "records a snapshot refused for its length as over the bound, with what the model wrote"),
-        (service_test, "'a snapshot past one inline block'"),
+        (service_test, "'a snapshot past its bound'"),
         ("packages/core/src/services/state-snapshot.test.ts", "refuses %s as declaring no complete snapshot"),
         ("packages/cli/src/utils/compression-result.test.ts", "COMPRESSION_FAILED_SUMMARY_OVER_BOUND,\n      'error',\n      'longer than its bound'"),
     ):
@@ -11946,10 +11952,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="context-window-partition",
         rationale=(
-            "The served window is spent from four declared quantities: the static preamble, a "
+            "The served window is spent from five declared quantities: the static preamble, a "
             "capacity proved against the real preamble before the first turn, with the Git "
             "snapshot's values, the startup context's workspace data and the stated turn budget's "
-            "number bounded by their bytes; one inline block; the per-message framing; and the "
+            "number bounded by their bytes; one inline block; the most an accepted snapshot may "
+            "render to; the per-message framing; and the "
             "reasoning a turn is given beside one block. A turn's room is one inline block at its "
             "most tokens and that reasoning, the compaction trigger is what the window has left, "
             "and what a compaction leaves standing fits below it; a turn's output limit is that "
@@ -11957,7 +11964,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "limit is refused rather than truncated and drawn again on its request with the "
             "refusal notice added, never compacted in between, under the one bound every refused "
             "answer is drawn under. Compaction summarises the prompt the last turn was issued "
-            "against and carries that turn verbatim behind the snapshot, so the snapshot always "
+            "against and carries that turn verbatim behind the snapshot, so a draw always "
             "has at least a turn's room, and each draw is told its own room as its limit and that "
             "reaching it refuses the answer and asks again. Exact before/after sizing "
             "governs compaction. Original authored inputs are retained independently of model "

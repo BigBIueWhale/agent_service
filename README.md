@@ -200,13 +200,14 @@ the model was never trained on. Qwen3.8-27B was trained with preserved thinking,
 as nearly all current models are, and there is no correct off switch for it,
 which is why the served template offers none.
 
-The served context window is spent exactly, from four declared quantities and
+The served context window is spent exactly, from five declared quantities and
 two derived from them:
 
 | quantity | what it is | at 262,144 |
 | --- | --- | --- |
 | `D`, the static preamble | 3W/64, a declared capacity | 12,288 tokens |
 | `M`, one inline block | W/8, a declared page size | 32,768 bytes |
+| `S`, one compaction snapshot | W/4, declared from the snapshots the model was recorded writing | 65,536 bytes |
 | `F`, the per-message framing | the served template's widest | 61 bytes |
 | `R`, a turn's reasoning beside its block | W/32, declared from what turns were recorded doing | 8,192 tokens |
 | `C`, a turn's generation room | `M + R` | 40,960 tokens |
@@ -220,12 +221,14 @@ or `M` by 1,024 bytes, lowers `T` by 1,024, and lowering them raises it by as
 much. At the served window the first turn's prompt is about 8,400 tokens, so the
 first segment runs to about 200,500 tokens before its compaction, and every later
 segment runs from what the compaction left to `T`. The fit that keeps a compacted
-history continuable has a margin of its own, `T − 1 − (D + 3(M + F) + (C + F))`,
-which is `W − 5M − 2R − 2D − 4F − 1`, 57,099 tokens at the served window: a
-byte of `M` costs it five tokens, since `M` is both the three blocks a
-compaction carries and the block a turn writes, a token of `R` or `D` two and a
-byte of `F` four, and a partition whose margin would fall below zero is refused
-rather than derived. A larger `C` buys a turn more room before it is refused and
+history continuable has a margin of its own,
+`T − 1 − (D + (S + F) + 2(M + F) + (C + F))`,
+which is `W − S − 4M − 2R − 2D − 4F − 1`, 24,331 tokens at the served window: a
+byte of `M` costs it four tokens, since `M` is both the two blocks a
+compaction carries beside the snapshot and the block a turn writes, a token of
+`R` or `D` two, a byte of `F` four and a byte of `S` one, and a partition whose
+margin would fall below zero is refused rather than derived. `S` is not in `T`:
+a snapshot is never generated as a turn. A larger `C` buys a turn more room before it is refused and
 asked for again; a smaller one buys every segment more room before it compacts,
 and makes a turn that runs away cost less before it is refused.
 
@@ -239,7 +242,7 @@ rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
 its request adds — the snapshot's declaration and the directive — to the same
 share. The proof counts this deployment's turn preamble with the Git
-snapshot's repository values and the turn budget's number left out — 7,245 tokens, rendered by the served template and counted by the
+snapshot's repository values and the turn budget's number left out — 7,249 tokens, rendered by the served template and counted by the
 served tokenizer — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
 around its blocks — the snapshot's resume trailer and the acknowledgement
@@ -250,9 +253,9 @@ may hold, capped in the NFC form the tokenizer reads, as the most tokens they
 can cost: 1,936 for the snapshot's branch line, status and commits, 1,280 for the
 startup context's environment lines and folder listing, 16 for the turn
 budget, the widest a safe integer renders to, and 812 for the todo reminder's
-list and truncation mark. That is a bound of 11,445, the same for every
+list and truncation mark. That is a bound of 11,449, the same for every
 repository, every workspace, every budget and every todo list, so none of them
-can make a deployment refuse to start, with 843 left for the prompt and the
+can make a deployment refuse to start, with 839 left for the prompt and the
 declarations to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
@@ -270,7 +273,7 @@ call it answers.
 
 `M` is a declared magnitude and openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one
-accepted snapshot, one submitted prompt. A tool result past it keeps its start
+submitted prompt. A tool result past it keeps its start
 and its end inline, split as upstream's truncation split them, with a notice in
 the cut naming the `read_file` call that returns the cut lines from a file
 holding the whole, or saying why no such file could be kept. It is
@@ -290,6 +293,21 @@ holds them to that. That inequality is the whole of the conversion, it is spent
 in one function, and nothing converts between the two units in either
 direction.
 
+`S` is the snapshot's own bound, in the same measure: the most an accepted
+compaction snapshot may render to as the block the resuming agent reads, its
+retained inputs left out because they are bounded where they were submitted.
+A snapshot is the agent's whole memory of the history it replaces, and how
+much of that to keep is the model's choice, so `S` is declared from what the
+model was recorded choosing rather than borrowed from `M`. The snapshots one
+long probe accepted ran from 9,894 to 27,142 bytes; the complete snapshots
+three runs refused at one inline block ran from 34,520 to 59,739 bytes, the
+state of long reads taken in chunk by chunk, and a quarter of the window holds
+every one of them. Three draws have run past it, at 75,472, 84,636 and 118,882
+bytes, and are refused and drawn again, told why. Counted by the served
+tokenizer a snapshot runs close to four bytes a token, so one at `S` is about
+17,000 tokens. `S` costs the fit's margin a token for every byte past `M` and
+costs `C` and `T` nothing.
+
 `C` is sized for the largest thing a turn legitimately does: write one inline
 block — a file, a note, a report; anything longer is written in parts, a block
 to a turn, as it is read a page at a time — after reasoning about what to write.
@@ -303,10 +321,11 @@ summary written whole, was 28,521 tokens, and the two turns past 40,960 each
 wrote far more than a block in one call. `T` is what the window has left. What
 stands in the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; three of those four
-are blocks bounded in bytes before they exist, and the fourth is the turn,
-bounded by `C`. So the largest request a compaction can leave behind is
-`D + 3(M + F) + (C + F)`, 151,796 at the served window, and it stands below
-the trigger by the margin above; a window where it would not is refused rather
+are bounded in bytes before they exist, the snapshot by `S` and the input and
+the result by `M`, and the fourth is the turn, bounded by `C`. So the largest
+request a compaction can leave behind is `D + (S + F) + 2(M + F) + (C + F)`,
+184,564 at the served window, and it stands below the trigger by the margin
+above; a window where it would not is refused rather
 than partitioned. All of it is asserted rather than assumed.
 
 A turn is issued with `C` whatever its prompt, reasoning included, and nothing
@@ -314,7 +333,7 @@ else bounds it: the route refuses a configured `max_tokens`,
 `max_completion_tokens`, `max_new_tokens` or `QWEN_CODE_MAX_OUTPUT_TOKENS` at
 configuration. A turn that reaches `C` is refused rather than truncated and
 asked for again, told why, as the next turn (see below). Raising
-`max_model_len` re-derives `D`, `M`, `R`, `C` and `T`; `F` belongs to the served
+`max_model_len` re-derives `D`, `M`, `S`, `R`, `C` and `T`; `F` belongs to the served
 template and does not move. New authored input, retained instructions, tools,
 and the compaction directive still require exact recounting at admission; the
 partition does not guarantee that arbitrary new content will fit.
@@ -322,8 +341,11 @@ partition does not guarantee that arbitrary new content will fit.
 Compaction summarises the prompt the last turn was issued against, not the
 history that turn produced. That prompt was admitted below the trigger when it
 was issued, so the request that summarises it — the prompt plus one directive,
-under a preamble also bounded by `D` — always leaves the snapshot at least
-`C + 1`, whatever the turn generated. The turn itself, reasoning included, is
+under a preamble also bounded by `D` — always leaves a draw at least
+`C + 1`, whatever the turn generated. That holds a snapshot of `S` bytes and
+`R` of reasoning beside it whenever the snapshot averages two bytes a token or
+more; the snapshots recorded measure close to four, and a denser draw that
+reaches its room is refused as truncated and drawn again, told why. The turn itself, reasoning included, is
 carried behind the snapshot verbatim, followed by the tool result it was
 waiting for; nothing synthetic stands between them. Upstream's compaction
 request carries the whole history, that turn and its result included. This
@@ -348,12 +370,12 @@ turn a compaction carries; a draw's answer is never carried, only the snapshot
 it declares, so it can be given whatever the window has left. The request is
 counted with that number at its widest, the window, and the served tokenizer
 spends one token per digit, so the room it states is the room it is issued
-with. The accepted snapshot is itself one inline block: the bound is stated
+with. The accepted snapshot is bounded by `S`: the bound is stated
 in the declaration the model is given, and a draw that renders past it is
 refused and redrawn whole rather than cut. A redraw is told why the draw before
 it was refused, so it does not start over blind: the request gains one user
 message, one line naming what that draw did against which rule and what to do
-instead, such as a snapshot of so many bytes against the 32,768-byte limit and
+instead, such as a snapshot of so many bytes against the 65,536-byte limit and
 to write the same state more briefly. It is never shown the refused draw,
 which would not fit beside another in the room the request is proved to have.
 The notice is built only from values the service measured and closed names,
@@ -542,7 +564,7 @@ A terminal conversation and a headless conversation share the same obligations:
   on its request with the refusal notice added. Compaction summarises the prompt the last turn was
   issued against, receives the room left by that exact request, requires at
   least `C`, accepts only a normally terminated snapshot, in upstream's
-  sections, that fits one inline block and leaves an issuable turn, and carries
+  sections, that fits `S` and leaves an issuable turn, and carries
   the turn behind the snapshot verbatim.
 - A tool result declares whether it is complete. The one notice in
   `packages/core/src/tools/tools.ts` states what was asked for, what came back,

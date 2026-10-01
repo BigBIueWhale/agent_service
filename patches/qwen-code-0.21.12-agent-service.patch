@@ -11021,7 +11021,7 @@ diff --git a/packages/acp-bridge/src/bridge.test.ts b/packages/acp-bridge/src/br
 diff --git a/packages/acp-bridge/src/context-usage-types.ts b/packages/acp-bridge/src/context-usage-types.ts
 --- /dev/null
 +++ b/packages/acp-bridge/src/context-usage-types.ts
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,28 @@
 +import type { STATUS_SCHEMA_VERSION } from './status-version.js';
 +
 +export interface ServeSessionContextUsage {
@@ -11034,6 +11034,7 @@ diff --git a/packages/acp-bridge/src/context-usage-types.ts b/packages/acp-bridg
 +    compactionTrigger: number;
 +    staticPreamble: number;
 +    inlineBlockBytes: number;
++    snapshotBytes: number;
 +    messageFraming: number;
 +    turnGeneration: number;
 +  };
@@ -84447,7 +84448,7 @@ diff --git a/packages/cli/src/ui/commands/compressFastCommand.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/src/ui/commands/contextCommand.test.ts
 --- a/packages/cli/src/ui/commands/contextCommand.test.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.test.ts
-@@ -1,369 +1,306 @@
+@@ -1,369 +1,308 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -84660,6 +84661,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +      'Declared static preamble, system prompt and tool declarations: 9,375 tokens',
 +    );
 +    expect(text).toContain('One inline block: 25,000 bytes, framed by 61');
++    expect(text).toContain('One compaction snapshot: 50,000 bytes');
 +    expect(data.partition).toEqual(partitionContextWindow(200_000));
 +  });
 +
@@ -84703,6 +84705,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 +    expect(data.partition.compactionTrigger).toBe(25_500);
 +    expect(data.partition.turnGeneration).toBe(5_000);
 +    expect(data.partition.inlineBlockBytes).toBe(4_000);
++    expect(data.partition.snapshotBytes).toBe(8_000);
 +  });
 +
 +  it('includes schema inventory only when details are requested', async () => {
@@ -85108,7 +85111,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.test.ts b/packages/cli/
 diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/ui/commands/contextCommand.ts
 --- a/packages/cli/src/ui/commands/contextCommand.ts
 +++ b/packages/cli/src/ui/commands/contextCommand.ts
-@@ -1,626 +1,93 @@
+@@ -1,626 +1,94 @@
  /**
   * @license
 - * Copyright 2025 Qwen
@@ -85536,6 +85539,7 @@ diff --git a/packages/cli/src/ui/commands/contextCommand.ts b/packages/cli/src/u
 +    `Turn generation, the room every turn is issued with, reasoning included: ${count(p.turnGeneration)} tokens`,
 +    `Declared static preamble, system prompt and tool declarations: ${count(p.staticPreamble)} tokens`,
 +    `One inline block: ${count(p.inlineBlockBytes)} bytes, framed by ${count(p.messageFraming)}`,
++    `One compaction snapshot: ${count(p.snapshotBytes)} bytes`,
 +    `History: ${data.historyMessages} messages; ${data.tools.length} available tool declarations.`,
 +  ];
 +  if (data.showDetails) {
@@ -207391,7 +207395,7 @@ diff --git a/packages/core/src/core/generation-refusal.test.ts b/packages/core/s
 diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/core/generation-refusal.ts
 --- /dev/null
 +++ b/packages/core/src/core/generation-refusal.ts
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,109 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -207408,8 +207412,8 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 + * they differ in what refuses an answer and in what a draw is.
 + *
 + * A compaction's snapshot draw is refused for any rule its answer fails: it
-+ * reached its limit, declared a snapshot that is incomplete or past one
-+ * inline block, or left the conversation no smaller or with no room to go
++ * reached its limit, declared a snapshot that is incomplete or past its
++ * bound, or left the conversation no smaller or with no room to go
 + * on. A draw is a side request and not a turn, so it is judged and redrawn
 + * inside the compaction, its refused draws are kept in the compaction's
 + * record, and since its request is a request rather than a conversation the
@@ -207431,12 +207435,15 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 + *
 + * Every draw of a request is an independent sample, and every one after the
 + * first is told why the one before it was refused. Compaction measures the
-+ * rate: a snapshot draw is accepted about five times in six, which carries a
-+ * long session's transitions at roughly 0.6% with one draw, 45% with two, 88%
-+ * with three and 98% with four, and the draws recorded being told their
-+ * snapshot was too large came back inside the bound every time. A turn's
-+ * draw is refused far more rarely: no legitimate turn recorded has reached
-+ * its limit. A turn refused four times in a row, told why three times, is
++ * rate. The snapshot draws of one long probe, judged against the snapshot's
++ * bound, were accepted 28 times in 29 -- drawn while the model was told a
++ * bound half as large, and a model told this one may write longer -- and
++ * the draws recorded being told their snapshot was too large came back
++ * inside the bound every time. At that rate a long session's 28 compactions
++ * all complete 37% of the time with one draw each, 97% with two, 99.9% with
++ * three and 99.996% with four. A turn's draw is refused far more rarely: no
++ * legitimate turn recorded has reached its limit. A turn refused four times
++ * in a row, told why three times, is
 + * therefore not unlucky but held by a cause no further draw changes --
 + * reasoning that has degenerated, or work it will not do in parts -- and that
 + * is what the limit exists to catch: the fourth refusal ends the session,
@@ -226296,7 +226303,7 @@ diff --git a/packages/core/src/core/prompts.ts b/packages/core/src/core/prompts.
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/core/src/core/qwen38-deployment-prompt.test.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.test.ts
-@@ -0,0 +1,456 @@
+@@ -0,0 +1,458 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -226408,6 +226415,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +      PARTITION.window,
 +      PARTITION.turnGeneration,
 +      PARTITION.inlineBlockBytes,
++      PARTITION.snapshotBytes,
 +      PARTITION.compactionTrigger,
 +    ]) {
 +      expect(rendered).toContain(String(value));
@@ -226445,6 +226453,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 +      `${TURN_BUDGET} turns`,
 +      `${PARTITION.inlineBlockBytes} bytes`,
 +      `${PARTITION.compactionTrigger} tokens`,
++      `${PARTITION.snapshotBytes} bytes`,
 +    ]);
 +  });
 +
@@ -226756,7 +226765,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.test.ts b/packages/
 diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/src/core/qwen38-deployment-prompt.ts
 --- /dev/null
 +++ b/packages/core/src/core/qwen38-deployment-prompt.ts
-@@ -0,0 +1,256 @@
+@@ -0,0 +1,258 @@
 +/**
 + * @license
 + * Copyright 2025 Qwen
@@ -226902,6 +226911,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +  const turn = `${partition.turnGeneration} tokens`;
 +  const turns = `${budget} turns`;
 +  const block = `${partition.inlineBlockBytes} bytes`;
++  const snapshot = `${partition.snapshotBytes} bytes`;
 +  const trigger = `${partition.compactionTrigger} tokens`;
 +  const text = [
 +    '## Context',
@@ -226912,7 +226922,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +    '- One tool call per turn. There is no parallel dispatch; issue independent work as successive turns.',
 +    `- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \`read_file\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,
 +    '- A `read_file` page and the statement that leads it are one inline block together.',
-+    `- At ${trigger} the next send compacts the conversation: the prompt the last turn was issued against becomes a declared snapshot of at most one inline block plus the original inputs verbatim, that turn is carried verbatim behind it, and the work continues.`,
++    `- At ${trigger} the next send compacts the conversation: the prompt the last turn was issued against becomes a declared snapshot of at most ${snapshot} plus the original inputs verbatim, that turn is carried verbatim behind it, and the work continues.`,
 +    '- Do not reconstruct or persist hidden reasoning outside model history.',
 +  ].join('\n');
 +  // The turn budget left out in the form the startup proof counts states no
@@ -226925,6 +226935,7 @@ diff --git a/packages/core/src/core/qwen38-deployment-prompt.ts b/packages/core/
 +      ...(budget ? [turns] : []),
 +      block,
 +      trigger,
++      snapshot,
 +    ],
 +  };
 +}
@@ -227236,7 +227247,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('normalize', () => {
    it('should lowercase and trim the model string', () => {
      expect(normalize('  GEMINI-1.5-PRO  ')).toBe('gemini-1.5-pro');
-@@ -509,68 +513,409 @@
+@@ -509,68 +513,417 @@
        expect(tokenLimit('QWEN3-MAX', 'output')).toBe(32768);
        expect(tokenLimit('qwen3-max-20250601', 'output')).toBe(32768);
      });
@@ -227257,16 +227268,17 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +
 +/**
 + * What stands in the window after a compaction: the static preamble, then the
-+ * snapshot, the authored input and one result -- each at most one framed
-+ * inline block -- and the carried turn, framed like any other message.
++ * snapshot, framed and at most `S`, the authored input and one result -- each
++ * at most one framed inline block -- and the carried turn, framed like any
++ * other message.
 + *
-+ * Written from the four terms rather than from the source under test, so
-+ * this says what the partition is for instead of restating how it is
-+ * computed.
++ * Written from the terms rather than from the source under test, so this
++ * says what the partition is for instead of restating how it is computed.
 + */
 +const survivingRequest = (p: ContextPartition): number =>
 +  p.staticPreamble +
-+  3 * (p.inlineBlockBytes + p.messageFraming) +
++  (p.snapshotBytes + p.messageFraming) +
++  2 * (p.inlineBlockBytes + p.messageFraming) +
 +  (p.turnGeneration + p.messageFraming);
 +
 +/** `R`, the reasoning share: W/32. */
@@ -227303,14 +227315,15 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  // The served profile.
 +  const WINDOW = 262_144;
 +
-+  it('declares D and M as shares of the window and F as a constant', () => {
-+    // D is 3W/64 and M is W/8; F belongs to the served template, not to the
-+    // window, so it does not scale.
++  it('declares D, M and S as shares of the window and F as a constant', () => {
++    // D is 3W/64, M is W/8 and S is W/4; F belongs to the served template,
++    // not to the window, so it does not scale.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      expect(p.window).toBe(window);
 +      expect(p.staticPreamble).toBe(Math.floor((window * 3) / 64));
 +      expect(p.inlineBlockBytes).toBe(Math.floor(window / 8));
++      expect(p.snapshotBytes).toBe(Math.floor(window / 4));
 +      expect(p.messageFraming).toBe(61);
 +    }
 +  });
@@ -227339,9 +227352,9 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  });
 +
 +  it('leaves what a compaction can leave standing below the trigger, at every window', () => {
-+    // A compacted history is the preamble, three framed blocks and the
-+    // carried turn. It must stand below the trigger or the history a
-+    // compaction produces could not be continued.
++    // A compacted history is the preamble, the framed snapshot, two framed
++    // blocks and the carried turn. It must stand below the trigger or the
++    // history a compaction produces could not be continued.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      expect(survivingRequest(p)).toBeLessThan(p.compactionTrigger);
@@ -227362,8 +227375,8 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    // The request that summarises a prompt carries the same history under
 +    // additions also held within D, so what the window has left for it is
 +    // C + D + 1 -- never less than a turn's room, whatever the prompt was.
-+    // That is why the snapshot, a block and its reasoning, has the whole of
-+    // a turn, and why no separate reasoning budget exists to cut it short.
++    // That is why a draw has the whole of a turn, and why no separate
++    // reasoning budget exists to cut it short.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      const largestAdmittedPrompt = p.compactionTrigger - 1;
@@ -227377,8 +227390,9 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +  it('takes every token of the turn room and the preamble from the trigger', () => {
 +    // T = W - M - R - D: a token given to a turn or held for the preamble,
 +    // and a byte of the inline block, is a token of work every segment
-+    // before compaction does not have. Asserted as that closed form, so a
-+    // change that spent the window differently fails here.
++    // before compaction does not have. S is not in it: a snapshot is never
++    // a turn. Asserted as that closed form, so a change that spent the
++    // window differently fails here.
 +    for (const window of PARTITION_WINDOWS) {
 +      const p = partitionContextWindow(window);
 +      expect(p.compactionTrigger).toBe(
@@ -227395,29 +227409,30 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      window: 262_144,
 +      staticPreamble: 12_288,
 +      inlineBlockBytes: 32_768,
++      snapshotBytes: 65_536,
 +      messageFraming: 61,
 +      turnGeneration: 40_960,
 +      compactionTrigger: 208_896,
 +    });
 +    expect(served.compactionTrigger - 1 - survivingRequest(served)).toBe(
-+      57_099,
++      24_331,
 +    );
 +  });
 +
 +  it('refuses a window too small to hold what a compaction leaves standing', () => {
 +    // A window of 256 is a whole share-unit per share and is still refused:
-+    // the preamble, the three blocks a compaction carries and the carried
-+    // turn exceed its trigger. Near the edge the shares' rounding decides, so
-+    // 1,086 is accepted and 1,088 refused; 1,104 is the largest window
-+    // refused, and every window from 1,105 on is accepted. The refusal names
-+    // the one move an operator has.
-+    for (const tiny of [256, 257, 459, 1_085, 1_088, 1_104]) {
++    // the preamble, the snapshot and two blocks a compaction carries and the
++    // carried turn exceed its trigger. Near the edge the shares' rounding
++    // decides, so 2,550 is accepted and 2,552 refused; 2,592 is the largest
++    // window refused, and every window from 2,593 on is accepted. The
++    // refusal names the one move an operator has.
++    for (const tiny of [256, 257, 459, 1_086, 1_104, 2_549, 2_552, 2_592]) {
 +      expect(() => partitionContextWindow(tiny)).toThrow(
 +        'needs a larger window',
 +      );
 +    }
-+    expect(() => partitionContextWindow(1_086)).not.toThrow();
-+    for (let window = 1_105; window <= 20_000; window++) {
++    expect(() => partitionContextWindow(2_550)).not.toThrow();
++    for (let window = 2_593; window <= 20_000; window++) {
 +      const p = partitionContextWindow(window);
 +      expect(survivingRequest(p)).toBeLessThan(p.compactionTrigger);
 +    }
@@ -227453,8 +227468,9 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +    // of NFC cannot become more than M tokens, because the tokenizer
 +    // normalizes to NFC and then spends at least one byte per token. It is
 +    // spent for the block a turn writes, which C holds whole beside the
-+    // reasoning share, and for the blocks a compaction carries, which the
-+    // template frames in F more. No ratio is assumed and none is computed.
++    // reasoning share, for the blocks a compaction carries, which the
++    // template frames in F more, and for the snapshot beside them, which S
++    // bounds in the same measure. No ratio is assumed and none is computed.
 +    for (const window of PARTITION_WINDOWS) {
 +      const part = partitionContextWindow(window);
 +      const block = part.inlineBlockBytes + part.messageFraming;
@@ -227463,19 +227479,22 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 +      );
 +      expect(
 +        part.staticPreamble +
-+          3 * block +
++          (part.snapshotBytes + part.messageFraming) +
++          2 * block +
 +          (part.turnGeneration + part.messageFraming),
 +      ).toBeLessThanOrEqual(part.compactionTrigger - 1);
 +    }
 +  });
 +
 -    );
-+  it('leaves three framed blocks and a turn inside the served trigger', () => {
++  it('leaves the framed snapshot, two framed blocks and a turn inside the served trigger', () => {
 +    const part = partitionContextWindow(262_144);
 +    expect(part.inlineBlockBytes + part.messageFraming).toBe(32_829);
++    expect(part.snapshotBytes + part.messageFraming).toBe(65_597);
 +    expect(
 +      part.staticPreamble +
-+        3 * (part.inlineBlockBytes + part.messageFraming) +
++        (part.snapshotBytes + part.messageFraming) +
++        2 * (part.inlineBlockBytes + part.messageFraming) +
 +        (part.turnGeneration + part.messageFraming),
 +    ).toBeLessThan(part.compactionTrigger);
 +  });
@@ -227702,7 +227721,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
  describe('defaultOutputCeiling', () => {
    it('clips a model advertising more than the ceiling down to it', () => {
      // deepseek-v4 advertises 384K output → clipped to OUTPUT_TOKEN_CEILING.
-@@ -625,6 +970,39 @@
+@@ -625,6 +978,39 @@
    it('returns undefined when either side is absent (caller applies its own fallback)', () => {
      expect(reconcileMaxTokens(8_000, undefined)).toBeUndefined();
      expect(reconcileMaxTokens(undefined, 8_000)).toBeUndefined();
@@ -227745,7 +227764,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,525 @@
+@@ -8,88 +8,572 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -227794,7 +227813,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 - * not captured by the API-reported prompt count. Deliberately conservative —
 - * a generous margin only trims output in the final approach to compaction,
 - * while an under-sized one reintroduces the #5950 400s.
-+ * The served context window, spent exactly, from four declared quantities.
++ * The served context window, spent exactly, from five declared quantities.
 + *
 + * `D`, the static preamble. The system prompt and the tool declarations are
 + * texts this repo authors and ships, and a compaction request swaps the tool
@@ -227812,7 +227831,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + *
 + * `M`, the inline block, in UTF-8 bytes of its NFC form: the most any one
 + * block placed inline may be -- one tool result, one `read_file` page, one
-+ * accepted snapshot, one authored prompt. `M` is openly a policy, a page size,
++ * authored prompt. `M` is openly a policy, a page size,
 + * and its consequence is that anything larger is kept whole in a file and
 + * read back a page at a time rather than shortened. A byte bound is a token
 + * bound here because the served tokenizer normalizes a text to NFC before it
@@ -227821,6 +227840,17 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * most the bytes it was written in, because NFC can lengthen a text, up to
 + * threefold. `tokenizerText` is where that is measured, and nothing converts
 + * between the two units in either direction.
++ *
++ * `S`, the snapshot, in UTF-8 bytes of its NFC form, measured as `M` is: the
++ * most one accepted compaction snapshot may render to as the block the resuming
++ * agent reads, with the original inputs it carries left out, since those are
++ * bounded where they were submitted. A snapshot is the agent's whole memory of
++ * the history it replaces, and the model, not the runtime, decides how much of
++ * that memory to keep, so `S` is declared for that job rather than borrowed
++ * from `M`: a draw past it is refused and drawn again, and the draws a
++ * compaction may take are bounded, so a snapshot bound the model's own
++ * snapshots pass is a bound a session can end on (`SNAPSHOT_SHARES` says what
++ * it is declared from).
 + *
 + * `F`, the framing, in UTF-8 bytes: the fixed prologue and epilogue the
 + * served chat template wraps around one message, at its widest. It is charged
@@ -227848,24 +227878,28 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * redraw's request is that prompt with its refusal notices, which `D` holds.
 + * And the request that later summarises a prompt is issued with at least
 + * `C + 1`, because it carries the same history under additions also held
-+ * within `D` -- so the snapshot, itself one block and the reasoning that
-+ * writes it, has at least a turn's room, and there is no separate reasoning
-+ * budget anywhere to cut it short.
++ * within `D` -- so a draw has at least a turn's room, and there is no
++ * separate reasoning budget anywhere to cut it short. That room is not sized
++ * for a snapshot at the most tokens `S` bytes can be: a snapshot of `S`
++ * bytes and `R` of reasoning beside it fit `C + 1` whenever the snapshot
++ * averages two bytes a token or more, and the snapshots recorded measure
++ * close to four. A denser draw that reaches its room is refused as truncated
++ * and drawn again, told why, as any draw that reaches its room is.
 + *
 + * What stands in the window after a compaction is the preamble plus
 + * `snapshot + authored input + carried turn + one result`. Three of those
-+ * four are blocks bounded in bytes before they exist; the fourth is the turn,
-+ * bounded by `C`. The fixed text a compaction puts around them -- the resume
-+ * trailer and the acknowledgement turn -- is counted in the preamble, as the
-+ * startup context is. So the largest request a compaction can leave behind
-+ * is
++ * four are bounded in bytes before they exist -- the snapshot by `S`, the
++ * input and the result by `M`; the fourth is the turn, bounded by `C`. The
++ * fixed text a compaction puts around them -- the resume trailer and the
++ * acknowledgement turn -- is counted in the preamble, as the startup context
++ * is. So the largest request a compaction can leave behind is
 + *
-+ *     D + 3 * (M + F) + (C + F)
++ *     D + (S + F) + 2 * (M + F) + (C + F)
 + *
 + * and it must stand below `T`, or a history that has just been compacted
 + * could not be continued. It is asserted below at every window, and a window
 + * where it fails is refused rather than partitioned. What it leaves below `T`
-+ * -- 57,099 tokens at the served window -- is the least any segment after a
++ * -- 24,331 tokens at the served window -- is the least any segment after a
 + * compaction has to work in.
 + *
 + * The request that summarises a prompt carries the prompt and not the turn
@@ -227883,9 +227917,11 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * What the quantities cost one another is plain from `T = W - M - R - D`:
 + * every token of `C` or of `D`, and every byte of `M`, is a token `T` does
 + * not have, and so a token less of work in every segment before compaction
-+ * comes. The fit's margin, `T - 1 - (D + 3(M + F) + (C + F))`, is
-+ * `W - 5M - 2R - 2D - 4F - 1`: a byte of `M` costs it five tokens, a token of
-+ * `R` or `D` two, a byte of `F` four.
++ * comes. `S` is not in `T`: a snapshot is never generated as a turn, and
++ * its draw's room is whatever the window has left. The fit's margin,
++ * `T - 1 - (D + (S + F) + 2(M + F) + (C + F))`, is
++ * `W - S - 4M - 2R - 2D - 4F - 1`: a byte of `M` costs it four tokens, a
++ * token of `R` or `D` two, a byte of `F` four and a byte of `S` one.
   */
 -export function outputClampMargin(contextWindowSize: number): TokenCount {
 -  return Math.max(10_000, Math.round(0.05 * contextWindowSize));
@@ -227896,6 +227932,8 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  readonly staticPreamble: number;
 +  /** `M`: the most one inline block may be, in UTF-8 bytes. */
 +  readonly inlineBlockBytes: number;
++  /** `S`: the most one accepted snapshot may render to, in UTF-8 bytes. */
++  readonly snapshotBytes: number;
 +  /** `F`: the template's widest per-message framing, in UTF-8 bytes. */
 +  readonly messageFraming: number;
 +  /** `C`: the room every generation is issued with, reasoning included. */
@@ -227911,9 +227949,9 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 - * invariant on every main-turn request (issue #5950 becomes structurally
 - * impossible), which is what lets compaction thresholds run against the
 - * full window with no output reservation.
-+ * The window divides into this many shares. `D`, `M` and `R` are shares of it
-+ * rather than constants, because 512K and 1M are the next served tiers and a
-+ * budget that did not scale would quietly stop describing them.
++ * The window divides into this many shares. `D`, `M`, `S` and `R` are shares
++ * of it rather than constants, because 512K and 1M are the next served tiers
++ * and a budget that did not scale would quietly stop describing them.
 + */
 +const WINDOW_SHARES = 256;
 +
@@ -227923,8 +227961,8 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,245 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,163 of system message,
++ * turn budget's number left out, at 7,249 tokens, counted whole by the served
++ * tokenizer. By where each token starts, that is 2,167 of system message,
 + * 4,836 of tool declarations (each from the first character of its line to
 + * the last) and 246 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
@@ -227935,7 +227973,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * holds around its blocks -- the snapshot's resume trailer and the
 + * acknowledgement turn, with the blocks left out: 59 more; and so is the
 + * todo reminder, of which at most one stands in the request a compaction
-+ * leaves, with one character for its list: 51 more, for 7,401.
++ * leaves, with one character for its list: 51 more, for 7,405.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's branch line, status and commits,
@@ -227945,13 +227983,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * digits of one token each (`QWEN38_TURN_BUDGET_BYTES`), and the todo
 + * reminder's list and truncation mark, 800 + 12 = 812
 + * (`activeTodoReminderBound`). That is a bound of
-+ * 11,445 that no repository, workspace, budget or todo list changes. The 843
++ * 11,449 that no repository, workspace, budget or todo list changes. The 839
 + * tokens left are headroom for the prompt and the declarations to grow into
 + * -- less than one more declaration the size of `run_shell_command`, the
 + * largest at 1,456. Exceeding it is a startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,445 at a 244,160-token window, so no smaller window holds this
++ * reaches 11,449 at a 244,246-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
@@ -227959,6 +227997,28 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +
 +/** `M` = W/8 bytes, 32,768 at the served window. */
 +const INLINE_BLOCK_SHARES = 32;
++
++/**
++ * `S` = W/4 bytes, 65,536 at the served window.
++ *
++ * How much of its memory a snapshot keeps is the model's choice, so `S` is
++ * declared from what the model was recorded choosing rather than derived.
++ * Rendered as the block the resuming agent reads, the snapshots one long
++ * probe accepted ran from 9,894 to 27,142 bytes, and the complete snapshots
++ * three runs refused at one inline block were 34,520, 38,102, 38,805,
++ * 40,944, 42,949, 47,316, 54,336 and 59,739 bytes, each the state of a long
++ * read taken in chunk by chunk. A quarter of the window holds every one of
++ * them. Three draws have run past it, at 75,472, 84,636 and 118,882 bytes;
++ * those are refused and drawn again, told why. Counted by the served
++ * tokenizer, a snapshot runs close to four bytes a token, so one at the
++ * bound is about 17,000 tokens of the history it opens.
++ *
++ * Its cost is the fit's margin, a token for every byte past `M`: 24,331
++ * tokens at the served window, which is the least a segment after a
++ * compaction works in when every term it carries is at its widest. `C`, `T`
++ * and every turn's room are unchanged by it.
++ */
++const SNAPSHOT_SHARES = 64;
 +
 +/**
 + * `R` = W/32 tokens, 8,192 at the served window, so `C = M + R` is 40,960.
@@ -228025,12 +228085,14 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +    Math.floor((contextWindowSize * shares) / WINDOW_SHARES);
 +  const staticPreamble = share(STATIC_PREAMBLE_SHARES);
 +  const inlineBlockBytes = share(INLINE_BLOCK_SHARES);
++  const snapshotBytes = share(SNAPSHOT_SHARES);
 +  const messageFraming = MESSAGE_FRAMING_BYTES;
 +  // The partition is the one place bytes stand in for tokens, and only this
 +  // way round: a block is bounded in the UTF-8 bytes of its NFC form and
 +  // handed on in that form, so no block of `M` such bytes becomes more than
-+  // `M` tokens. It is spent here twice -- in the block a turn writes, and in
-+  // the framed blocks a compaction carries, where the template adds `F`. No
++  // `M` tokens. It is spent here for the block a turn writes, for the framed
++  // blocks a compaction carries, where the template adds `F`, and for the
++  // framed snapshot beside them, bounded by `S` in the same measure. No
 +  // ratio between bytes and tokens is assumed or computed anywhere, and
 +  // nothing converts the other way.
 +  const turnGeneration = inlineBlockBytes + share(TURN_REASONING_SHARES);
@@ -228040,7 +228102,10 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +  // the authored input and one result, and the carried turn, stands below
 +  // the trigger, so every compacted history can be continued.
 +  const surviving =
-+    staticPreamble + 3 * block + (turnGeneration + messageFraming);
++    staticPreamble +
++    (snapshotBytes + messageFraming) +
++    2 * block +
++    (turnGeneration + messageFraming);
 +  if (surviving > compactionTrigger - 1) {
 +    throw new Error(
 +      `A ${contextWindowSize}-token window leaves a ${compactionTrigger}-token trigger once a ${turnGeneration}-token turn and the ${staticPreamble}-token static preamble are held back, but a compaction can leave ${surviving} tokens standing: the preamble, a snapshot, the authored input, the carried turn and one result. A history that cannot hold what a compaction produces cannot continue; this deployment needs a larger window.`,
@@ -228058,6 +228123,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +    window: contextWindowSize,
 +    staticPreamble,
 +    inlineBlockBytes,
++    snapshotBytes,
 +    messageFraming,
 +    turnGeneration,
 +    compactionTrigger,
@@ -228323,7 +228389,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -150,14 +587,14 @@
+@@ -150,14 +634,14 @@
    // 128K carve-outs for Opus 4.6+. Rewrite the dotted minor to hyphenated
    // up front so every downstream regex sees the canonical form regardless
    // of which alias the proxy exposed.
@@ -228340,7 +228406,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
    // the version parser and the limit tables agree on every alias shape.
    s = s.replace(/^(claude-[a-z]+-\d+(?:-\d+)?)\.(\d+)(?:\.\d+)*/, '$1-$2');
  
-@@ -392,18 +829,19 @@
+@@ -392,18 +876,19 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -245433,7 +245499,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        // call is forced to that one function by name. Declaring it is what
 +        // lets the engine hold the sections to their declared shape
 +        // while it decodes.
-+        tools: [...requestTools, stateSnapshotTool(PARTITION.inlineBlockBytes)],
++        tools: [...requestTools, stateSnapshotTool(PARTITION.snapshotBytes)],
 +        toolConfig: {
 +          functionCallingConfig: {
 +            mode: FunctionCallingConfigMode.ANY,
@@ -247028,9 +247094,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,
 +    ],
 +    [
-+      'a snapshot past one inline block',
++      'a snapshot past its bound',
 +      summaryResult({
-+        functionCalls: [snapshotCall('x'.repeat(PARTITION.inlineBlockBytes))],
++        functionCalls: [snapshotCall('x'.repeat(PARTITION.snapshotBytes))],
 +      }),
 +      CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,
 +    ],
@@ -247102,11 +247168,11 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -        ?.parts?.some((part) => part.functionCall?.id === 'tool-call-1'),
 -    ).toBe(true);
 +  it('bounds a compaction at the drawn-candidate count the reliability target needs', () => {
-+    // Not a free parameter. At a per-candidate acceptance rate near five in
-+    // six, a session of 28 transitions completes about 0.6% of the time on one
-+    // draw, 45% on two, 88% on three and 98% on four. Lowering this abandons
-+    // sessions the rule would have admitted; raising it buys almost nothing
-+    // and spends a request to find that out.
++    // Not a free parameter. At the acceptance rate measured against the
++    // snapshot's bound, 28 draws in 29, a session of 28 transitions completes
++    // 37% of the time on one draw, 97% on two, 99.9% on three and 99.996% on
++    // four. Lowering this abandons sessions the rule would have admitted;
++    // raising it buys almost nothing and spends a request to find that out.
 +    expect(MAX_GENERATION_DRAWS).toBe(4);
    });
  
@@ -247212,9 +247278,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -    } as never);
 +  it('records a snapshot refused for its length as over the bound, with what the model wrote', async () => {
 +    const harness = makeHarness();
-+    // A complete snapshot one inline block long in one section alone, so its
++    // A complete snapshot as long as its bound in one section alone, so its
 +    // rendered form, its framing included, is past the bound.
-+    const long = 'x'.repeat(PARTITION.inlineBlockBytes);
++    const long = 'x'.repeat(PARTITION.snapshotBytes);
 +    const refused = summaryResult({ functionCalls: [snapshotCall(long)] });
 +    harness.generateText
 +      .mockResolvedValueOnce(refused)
@@ -247343,22 +247409,22 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +      },
 +    ],
 +    [
-+      'a draw past one inline block',
++      'a draw past its bound',
 +      (harness) =>
 +        harness.generateText.mockResolvedValueOnce(
 +          summaryResult({
 +            functionCalls: [
-+              snapshotCall('x'.repeat(PARTITION.inlineBlockBytes)),
++              snapshotCall('x'.repeat(PARTITION.snapshotBytes)),
 +            ],
 +          }),
 +        ),
 +      {
 +        kind: 'over_bound',
 +        bytes: Buffer.byteLength(
-+          snapshot('x'.repeat(PARTITION.inlineBlockBytes)),
++          snapshot('x'.repeat(PARTITION.snapshotBytes)),
 +          'utf8',
 +        ),
-+        maxBytes: PARTITION.inlineBlockBytes,
++        maxBytes: PARTITION.snapshotBytes,
 +      },
 +    ],
 +    [
@@ -247462,7 +247528,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    // The request's room is proved for one generation; the refused draw would
 +    // not fit beside another, so the redraw is told why, not shown what.
 +    const harness = makeHarness();
-+    const long = 'y'.repeat(PARTITION.inlineBlockBytes);
++    const long = 'y'.repeat(PARTITION.snapshotBytes);
 +    harness.generateText
 +      .mockResolvedValueOnce(
 +        summaryResult({
@@ -247489,7 +247555,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(sent).not.toContain(long);
 +    expect(sent).not.toContain('the refused reasoning');
 +    expect(sent).toContain(
-+      `renders to ${Buffer.byteLength(snapshot(long), 'utf8')} bytes, past the ${PARTITION.inlineBlockBytes}-byte limit`,
++      `renders to ${Buffer.byteLength(snapshot(long), 'utf8')} bytes, past the ${PARTITION.snapshotBytes}-byte limit`,
 +    );
    });
  
@@ -247507,7 +247573,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    harness.generateText
 +      .mockResolvedValueOnce(
 +        summaryResult({
-+          functionCalls: [snapshotCall('z'.repeat(PARTITION.inlineBlockBytes))],
++          functionCalls: [snapshotCall('z'.repeat(PARTITION.snapshotBytes))],
 +        }),
 +      )
 +      .mockResolvedValueOnce(summaryResult({ functionCalls: [] }))
@@ -250163,7 +250229,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +      systemInstruction: mainSystemInstruction,
 +      config: {
 +        ...generationConfig,
-+        tools: [...turnTools, stateSnapshotTool(partition.inlineBlockBytes)],
++        tools: [...turnTools, stateSnapshotTool(partition.snapshotBytes)],
 +        toolConfig: {
 +          ...generationConfig.toolConfig,
 +          functionCallingConfig: {
@@ -250471,7 +250537,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +
 +      const acceptance = acceptStateSnapshot(
 +        summaryResult.functionCalls,
-+        partition.inlineBlockBytes,
++        partition.snapshotBytes,
 +      );
 +      const accounting: AttemptAccounting = {
 +        operationId: drawOperationId(summaryResult),
@@ -250540,7 +250606,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +              ? {
 +                  kind: 'over_bound',
 +                  bytes: acceptance.bytes,
-+                  maxBytes: partition.inlineBlockBytes,
++                  maxBytes: partition.snapshotBytes,
 +                }
 +              : { kind: 'incomplete', lack: acceptance.lack },
 +          accounting,
@@ -280402,7 +280468,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/src/services/state-snapshot.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.test.ts
-@@ -0,0 +1,368 @@
+@@ -0,0 +1,369 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -280427,11 +280493,11 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +} from './state-snapshot.js';
 +
 +/**
-+ * `M` at the served window: the most one inline block may be, and so the most
-+ * an accepted snapshot may render to. Passed in rather than imported, because
-+ * the tool is told its bound by the partition that derived it.
++ * `S` at the served window: the most an accepted snapshot may render to.
++ * Passed in rather than imported, because the tool is told its bound by the
++ * partition that derived it.
 + */
-+const INLINE_BLOCK_BYTES = 32_768;
++const SNAPSHOT_BYTES = 65_536;
 +
 +function sections(body = 'derived state'): StateSnapshot {
 +  return Object.fromEntries(
@@ -280451,7 +280517,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +describe('the declared snapshot', () => {
 +  it('declares one closed function with every section required', () => {
 +    const declarations =
-+      stateSnapshotTool(INLINE_BLOCK_BYTES).functionDeclarations ?? [];
++      stateSnapshotTool(SNAPSHOT_BYTES).functionDeclarations ?? [];
 +    expect(declarations).toHaveLength(1);
 +    expect(declarations[0].name).toBe(STATE_SNAPSHOT_FUNCTION_NAME);
 +    expect(STATE_SNAPSHOT_PARAMETERS['required']).toEqual([
@@ -280475,30 +280541,30 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    // character, which would close a section mid-sentence -- so the
 +    // declaration says it and acceptance enforces it.
 +    const [declaration] =
-+      stateSnapshotTool(INLINE_BLOCK_BYTES).functionDeclarations ?? [];
++      stateSnapshotTool(SNAPSHOT_BYTES).functionDeclarations ?? [];
 +    expect(declaration.description).toContain(
-+      `${INLINE_BLOCK_BYTES} bytes`,
++      `${SNAPSHOT_BYTES} bytes`,
 +    );
 +  });
 +
 +  it('accepts a complete call', () => {
 +    expect(
-+      acceptStateSnapshot([call(sections())], INLINE_BLOCK_BYTES).snapshot,
++      acceptStateSnapshot([call(sections())], SNAPSHOT_BYTES).snapshot,
 +    ).toEqual(sections());
 +  });
 +
-+  it('refuses a draw that renders past one inline block', () => {
++  it('refuses a draw that renders past its bound', () => {
 +    // Measured on the rendered form, its framing included, because that is what
 +    // the history carries. A refused draw is redrawn whole: nothing is cut.
-+    const oversized = sections('x'.repeat(INLINE_BLOCK_BYTES));
++    const oversized = sections('x'.repeat(SNAPSHOT_BYTES));
 +    const accepted = acceptStateSnapshot(
 +      [call(oversized)],
-+      INLINE_BLOCK_BYTES,
++      SNAPSHOT_BYTES,
 +    );
 +    expect(accepted.snapshot).toBeUndefined();
 +    expect(accepted.refused).toBe('over_bound');
 +    expect(accepted.refusal).toContain(
-+      `past the ${INLINE_BLOCK_BYTES} one inline block may carry`,
++      `past the ${SNAPSHOT_BYTES} a snapshot may render to`,
 +    );
 +    // The draw declared a complete snapshot and wrote too much of it. It is
 +    // kept with the refusal, in the form measured, because it is what the
@@ -280515,18 +280581,19 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +
 +  it('measures the rendered snapshot in the NFC bytes the tokenizer reads', () => {
 +    // U+1D1C0 is four bytes as written and twelve in NFC. Sections of them
-+    // inside one block as written are three blocks as counted, so the draw is
-+    // refused -- and an accepted one is rendered in the form measured.
++    // inside the bound as written are three times as long as counted, past
++    // it, so the draw is refused -- and an accepted one is rendered in the
++    // form measured.
 +    const fusa = '\u{1D1C0}'.repeat(900);
 +    const drawn = sections(fusa);
 +    expect(
 +      Buffer.byteLength(Object.values(drawn).join(''), 'utf8'),
-+    ).toBeLessThan(INLINE_BLOCK_BYTES);
-+    const refused = acceptStateSnapshot([call(drawn)], INLINE_BLOCK_BYTES);
++    ).toBeLessThan(SNAPSHOT_BYTES);
++    const refused = acceptStateSnapshot([call(drawn)], SNAPSHOT_BYTES);
 +    expect(refused.snapshot).toBeUndefined();
 +    expect(refused.refused).toBe('over_bound');
 +    expect(refused.refusal).toContain(
-+      `past the ${INLINE_BLOCK_BYTES} one inline block may carry`,
++      `past the ${SNAPSHOT_BYTES} a snapshot may render to`,
 +    );
 +
 +    const rendered = stateSnapshotText(sections('\u{1D1C0}'));
@@ -280534,22 +280601,22 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    expect(rendered.normalize('NFC')).toBe(rendered);
 +  });
 +
-+  it('accepts a draw that renders to exactly one inline block', () => {
++  it('accepts a draw that renders to exactly its bound', () => {
 +    // The bound is inclusive, so the largest accepted snapshot is built here
-+    // rather than approached: one section grown until the rendered form is M
++    // rather than approached: one section grown until the rendered form is S
 +    // bytes to the byte.
 +    const base = sections('y');
 +    const baseBytes = Buffer.byteLength(stateSnapshotText(base), 'utf8');
 +    const [first] = STATE_SNAPSHOT_SECTIONS;
 +    const exact = {
 +      ...base,
-+      [first]: 'y'.repeat(INLINE_BLOCK_BYTES - baseBytes + 1),
++      [first]: 'y'.repeat(SNAPSHOT_BYTES - baseBytes + 1),
 +    } as StateSnapshot;
 +    expect(Buffer.byteLength(stateSnapshotText(exact), 'utf8')).toBe(
-+      INLINE_BLOCK_BYTES,
++      SNAPSHOT_BYTES,
 +    );
 +    expect(
-+      acceptStateSnapshot([call(exact)], INLINE_BLOCK_BYTES).refusal,
++      acceptStateSnapshot([call(exact)], SNAPSHOT_BYTES).refusal,
 +    ).toBeUndefined();
 +  });
 +
@@ -280573,7 +280640,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +  ])('carries %s verbatim', (_name, body) => {
 +    const accepted = acceptStateSnapshot(
 +      [call(sections(body))],
-+      INLINE_BLOCK_BYTES,
++      SNAPSHOT_BYTES,
 +    );
 +    expect(accepted.refusal).toBeUndefined();
 +    for (const section of STATE_SNAPSHOT_SECTIONS) {
@@ -280651,7 +280718,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +      },
 +    ],
 +  ])('refuses %s as declaring no complete snapshot', (_name, calls, lack) => {
-+    const accepted = acceptStateSnapshot(calls, INLINE_BLOCK_BYTES);
++    const accepted = acceptStateSnapshot(calls, SNAPSHOT_BYTES);
 +    expect(accepted.snapshot).toBeUndefined();
 +    expect(accepted.refused).toBe('incomplete');
 +    expect(accepted.refusal).toBeTruthy();
@@ -280665,7 +280732,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    const written = 'a_function_the_model_invented';
 +    const accepted = acceptStateSnapshot(
 +      [call(sections(), written)],
-+      INLINE_BLOCK_BYTES,
++      SNAPSHOT_BYTES,
 +    );
 +    expect(accepted.refusal).toContain(written);
 +    expect(
@@ -280679,7 +280746,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +  // properties; every section being required is what keeps the object closed.
 +  it('reaches the provider as a closed, fully required schema', async () => {
 +    const [wire] = await convertGeminiToolsToOpenAI([
-+      stateSnapshotTool(INLINE_BLOCK_BYTES),
++      stateSnapshotTool(SNAPSHOT_BYTES),
 +    ]);
 +    expect(wire.function.name).toBe(STATE_SNAPSHOT_FUNCTION_NAME);
 +    const parameters = wire.function.parameters as Record<string, unknown>;
@@ -280712,7 +280779,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +      ),
 +    );
 +    const [declaration] =
-+      stateSnapshotTool(INLINE_BLOCK_BYTES).functionDeclarations ?? [];
++      stateSnapshotTool(SNAPSHOT_BYTES).functionDeclarations ?? [];
 +    expect(declaration.description).toContain(
 +      'its all_user_messages element is filled by the runtime with the original inputs, verbatim',
 +    );
@@ -280905,8 +280972,8 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +/**
 + * The tool declaration a compaction request carries, and the only one.
 + *
-+ * `maxBytes` is `M`, the one magnitude the partition declares, and it is in
-+ * the description because the model has to know the bound before it composes
++ * `maxBytes` is `S`, the partition's bound on a snapshot, and it is in the
++ * description because the model has to know the bound before it composes
 + * the sections rather than after they are refused. It is not declared as a
 + * `maxLength` on each section: the served engine compiles the declaration
 + * into the grammar it constrains decoding with, and a decode-time bound
@@ -281040,7 +281107,7 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +  if (rendered.bytes > maxBytes) {
 +    return {
 +      refused: 'over_bound',
-+      refusal: `snapshot renders to ${rendered.bytes} bytes, past the ${maxBytes} one inline block may carry; write the same state more briefly`,
++      refusal: `snapshot renders to ${rendered.bytes} bytes, past the ${maxBytes} a snapshot may render to; write the same state more briefly`,
 +      rendered: rendered.text,
 +      bytes: rendered.bytes,
 +    };
