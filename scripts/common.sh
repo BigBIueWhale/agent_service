@@ -408,10 +408,6 @@ check_pinned_inputs() {
     "$(lock_value '.agent.memory_swap')"
   require_equal "broker policy agent PID limit" "$(policy_value '.agent.pids_limit | tostring')" \
     "$(lock_value '.agent.pids_limit | tostring')"
-  require_equal "broker policy agent /tmp" "$(policy_value '.agent.tmpfs_tmp')" \
-    "$(lock_value '.agent.tmpfs_tmp')"
-  require_equal "broker policy agent runtime" "$(policy_value '.agent.tmpfs_qwen_runtime')" \
-    "$(lock_value '.agent.tmpfs_qwen_runtime')"
   require_equal "broker policy agent sandbox" "$(policy_value '.agent.sandbox')" \
     "$(lock_value '.agent.agent_exec_sandbox')"
   require_equal "broker policy agent ready event" "$(policy_value '.agent.ready_event_prefix')" \

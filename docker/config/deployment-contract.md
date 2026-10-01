@@ -6,7 +6,7 @@
   state is kept at session teardown.
 - `/artifacts` starts empty, is kept at session teardown, and is for deliberate
   durable reports, exports, diagrams, or other requested deliverables.
-- `/tmp` is bounded writable scratch. Use it for derived document pages, archive
+- `/tmp` is writable scratch. Use it for derived document pages, archive
   extraction, databases, compiler probes, indexes, media conversion, and other
   transient computation. `/tmp` is discarded at session teardown, as is anything
   written outside `/workspace` and `/artifacts`; anything that must survive

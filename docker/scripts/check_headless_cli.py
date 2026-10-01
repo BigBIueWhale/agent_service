@@ -583,8 +583,8 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
         worker.start()
         try:
             # run_agent.sh's exports and agent_exec's one addition. The runtime root is the one
-            # substitution: the image has no /qwen-runtime tmpfs, and nothing the model is sent
-            # names it.
+            # substitution: the image carries no session's runtime directory, and nothing the
+            # model is sent names it.
             env = {"PATH": os.environ["PATH"], "HOME": str(home), "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8",
                 "QWEN_RUNTIME_DIR": str(runtime), "QWEN_HOME": str(sealed_home),
                 "QWEN38_AGENT_SERVICE_LOCKED": "1", "QWEN_SYSTEM_MD": str(sealed_home / "system.md"),

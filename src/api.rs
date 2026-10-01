@@ -3653,6 +3653,8 @@ mod tests {
             &paths.control,
             &paths.streams,
             &paths.output,
+            &paths.scratch,
+            &paths.runtime,
             &paths.control.join("prompt.txt"),
             &paths.control.join("turn-budget.json"),
             &paths.control.join("deliverables.json"),

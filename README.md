@@ -242,7 +242,7 @@ rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it; each compaction's preflight holds what
 its request adds — the snapshot's declaration and the directive — to the same
 share. The proof counts this deployment's turn preamble with the Git
-snapshot's repository values and the turn budget's number left out — 7,249 tokens, rendered by the served template and counted by the
+snapshot's repository values and the turn budget's number left out — 7,248 tokens, rendered by the served template and counted by the
 served tokenizer — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
 around its blocks — the snapshot's resume trailer and the acknowledgement
@@ -253,9 +253,9 @@ may hold, capped in the NFC form the tokenizer reads, as the most tokens they
 can cost: 1,936 for the snapshot's branch line, status and commits, 1,280 for the
 startup context's environment lines and folder listing, 16 for the turn
 budget, the widest a safe integer renders to, and 812 for the todo reminder's
-list and truncation mark. That is a bound of 11,449, the same for every
+list and truncation mark. That is a bound of 11,448, the same for every
 repository, every workspace, every budget and every todo list, so none of them
-can make a deployment refuse to start, with 839 left for the prompt and the
+can make a deployment refuse to start, with 840 left for the prompt and the
 declarations to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
@@ -1208,10 +1208,21 @@ quiescent, required streams and sidecars are captured, the deterministic bundle 
 complete, and terminal state is durable. If capture or bundling fails, the raw tree
 and diagnostics are retained as failure evidence instead of being silently erased.
 
-This does not impose a blanket RAM-only filesystem. The bounded `/tmp` and
-`/qwen-runtime` tmpfs mounts remain because they are useful private scratch/runtime
-boundaries, while staged workspaces, service state, terminal records, and bundles
-may use ordinary Docker or host-backed project storage. Docker images are durable,
+None of the agent's writable filesystem is memory. Its `/tmp` and
+`/qwen-runtime` -- its scratch, and the client's canonical transcript, writer
+lease, kept tool results, effect journal and toolchain caches -- are the
+`scratch` and `runtime` directories of the session's own tree, bind-mounted
+private to it like `staged` and `artifacts`, on the same disk, and removed with
+that tree at teardown; neither is bundled. The agent's bytes reach disk in
+`/workspace` and `/artifacts` in any case, so memory would buy those two
+directories no guarantee the rest of the tree lacks, and it would charge them
+to the agent's memory limit, which has no swap: up to the size of each mount
+taken from builds and tests, and a canonical transcript that grows with the
+session's evidence bounded by memory rather than by the disk its evidence is
+written to. They are bounded, as `/workspace` is, by the state disk's free
+space; a per-session disk bound would need project quotas on that filesystem.
+Service state, terminal records, and bundles use ordinary host-backed project
+storage. Docker images are durable,
 immutable, pinned deployment artifacts—not temporary session state. Completed
 result bundles persist until the operator explicitly deletes that one terminal
 record through the API. The security properties come from fresh ownership,

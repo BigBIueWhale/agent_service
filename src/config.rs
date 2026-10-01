@@ -359,8 +359,6 @@ pub struct AgentLock {
     pub memory: String,
     pub memory_swap: String,
     pub pids_limit: u32,
-    pub tmpfs_tmp: String,
-    pub tmpfs_qwen_runtime: String,
     pub settings_sha256: String,
     pub instructions_sha256: String,
     pub system_prompt_sha256: String,
@@ -512,8 +510,6 @@ struct BrokerPolicyAgent {
     memory: String,
     memory_swap: String,
     pids_limit: u32,
-    tmpfs_tmp: String,
-    tmpfs_qwen_runtime: String,
     ready_event_prefix: String,
     sandbox: String,
 }
@@ -965,9 +961,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         || lock.agent.memory != "32g"
         || lock.agent.memory_swap != "32g"
         || lock.agent.pids_limit != 4096
-        || lock.agent.tmpfs_tmp != "rw,nosuid,nodev,size=8g,mode=1777"
-        || lock.agent.tmpfs_qwen_runtime
-            != "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700"
     {
         return fail("agent model proxy must be exactly http://127.0.0.1:18000/v1".into());
     }
@@ -1322,16 +1315,6 @@ fn validate_embedded_broker_policy(lock: &StackLock) -> ServiceResult<()> {
         "agent.pids_limit",
         policy.agent.pids_limit,
         lock.agent.pids_limit
-    );
-    same!(
-        "agent.tmpfs_tmp",
-        policy.agent.tmpfs_tmp.as_str(),
-        lock.agent.tmpfs_tmp.as_str()
-    );
-    same!(
-        "agent.tmpfs_qwen_runtime",
-        policy.agent.tmpfs_qwen_runtime.as_str(),
-        lock.agent.tmpfs_qwen_runtime.as_str()
     );
     same!(
         "agent.ready_event_prefix",

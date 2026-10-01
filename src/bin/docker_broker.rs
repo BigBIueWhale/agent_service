@@ -91,8 +91,6 @@ struct AgentPolicy {
     memory: String,
     memory_swap: String,
     pids_limit: u32,
-    tmpfs_tmp: String,
-    tmpfs_qwen_runtime: String,
     ready_event_prefix: String,
     sandbox: String,
 }
@@ -329,9 +327,6 @@ fn validate_policy(policy: &Policy) -> Result<(), String> {
         || policy.agent.memory != "32g"
         || policy.agent.memory_swap != "32g"
         || policy.agent.pids_limit != 4096
-        || policy.agent.tmpfs_tmp != "rw,nosuid,nodev,size=8g,mode=1777"
-        || policy.agent.tmpfs_qwen_runtime
-            != "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700"
         || policy.agent.ready_event_prefix
             != "AGENT_READY model=qwen3.8-27b-nvfp4-k8v4 context=262144 network=loopback-only token_count="
         || policy.agent.sandbox
@@ -1038,6 +1033,84 @@ async fn verify_self(policy: &Policy) -> Result<(), String> {
     Ok(())
 }
 
+/// A bind mount of one directory of a session's own tree.
+fn session_bind(
+    policy: &Policy,
+    session_id: &str,
+    leaf: &str,
+    destination: &str,
+    readonly: bool,
+) -> String {
+    format!(
+        "type=bind,src={},dst={destination}{}",
+        Path::new(&policy.state_dir)
+            .join("sessions")
+            .join(session_id)
+            .join(leaf)
+            .display(),
+        if readonly { ",readonly" } else { "" }
+    )
+}
+
+/// How the broker runs a session's agent. Its root is read-only, and every
+/// path it writes is a directory of the session's own tree, bound in
+/// private to it: the workspace, the artifacts, and its `/tmp` and runtime
+/// state, all on the disk that tree is on and removed with it at teardown.
+fn agent_run_args(policy: &Policy, session_id: &str) -> Vec<String> {
+    let agent = agent_name(session_id);
+    let mount = |leaf: &str, destination: &str, readonly: bool| {
+        session_bind(policy, session_id, leaf, destination, readonly)
+    };
+    vec![
+        "run".into(),
+        "-d".into(),
+        "--name".into(),
+        agent,
+        "--label".into(),
+        format!("agent_service.session={session_id}"),
+        "--label".into(),
+        format!("agent_service.profile={}", policy.profile),
+        "--label".into(),
+        format!("agent_service.component={}", Component::Agent.label()),
+        "--network".into(),
+        "none".into(),
+        "--restart".into(),
+        "no".into(),
+        "--user".into(),
+        "1000:1000".into(),
+        "--workdir".into(),
+        "/workspace".into(),
+        "--read-only".into(),
+        "--cap-drop".into(),
+        "ALL".into(),
+        "--security-opt".into(),
+        "no-new-privileges:true".into(),
+        "--memory".into(),
+        policy.agent.memory.clone(),
+        "--memory-swap".into(),
+        policy.agent.memory_swap.clone(),
+        "--pids-limit".into(),
+        policy.agent.pids_limit.to_string(),
+        "--mount".into(),
+        mount("staged", "/workspace", false),
+        "--mount".into(),
+        mount("artifacts", "/artifacts", false),
+        "--mount".into(),
+        mount("control", "/run/agent", true),
+        "--mount".into(),
+        mount("streams", "/streams", true),
+        // The agent's `/tmp` and its runtime state are directories of the
+        // session's own tree, on disk and gone with it at teardown, not
+        // memory: memory would keep them off a disk the workspace is already
+        // on, and spend the agent's memory limit to do it.
+        "--mount".into(),
+        mount("scratch", "/tmp", false),
+        "--mount".into(),
+        mount("runtime", "/qwen-runtime", false),
+        policy.agent.image_id.clone(),
+    ]
+}
+
 async fn create_session(policy: &Policy, session_id: &str) -> Result<(), String> {
     validate_session_paths(policy, session_id)?;
     let agent = agent_name(session_id);
@@ -1057,60 +1130,7 @@ async fn create_session(policy: &Policy, session_id: &str) -> Result<(), String>
             "session container collision: {agent}, {relay}, or {capture} already exists; explicit removal is required before recreation"
         ));
     }
-    let session_root = Path::new(&policy.state_dir)
-        .join("sessions")
-        .join(session_id);
-    let mount = |leaf: &str, destination: &str, readonly: bool| {
-        format!(
-            "type=bind,src={},dst={destination}{}",
-            session_root.join(leaf).display(),
-            if readonly { ",readonly" } else { "" }
-        )
-    };
-    let agent_args = vec![
-        "run".into(),
-        "-d".into(),
-        "--name".into(),
-        agent.clone(),
-        "--label".into(),
-        format!("agent_service.session={session_id}"),
-        "--label".into(),
-        format!("agent_service.profile={}", policy.profile),
-        "--label".into(),
-        format!("agent_service.component={}", Component::Agent.label()),
-        "--network".into(),
-        "none".into(),
-        "--restart".into(),
-        "no".into(),
-        "--user".into(),
-        "1000:1000".into(),
-        "--workdir".into(),
-        "/workspace".into(),
-        "--read-only".into(),
-        "--tmpfs".into(),
-        format!("/tmp:{}", policy.agent.tmpfs_tmp),
-        "--tmpfs".into(),
-        format!("/qwen-runtime:{}", policy.agent.tmpfs_qwen_runtime),
-        "--cap-drop".into(),
-        "ALL".into(),
-        "--security-opt".into(),
-        "no-new-privileges:true".into(),
-        "--memory".into(),
-        policy.agent.memory.clone(),
-        "--memory-swap".into(),
-        policy.agent.memory_swap.clone(),
-        "--pids-limit".into(),
-        policy.agent.pids_limit.to_string(),
-        "--mount".into(),
-        mount("staged", "/workspace", false),
-        "--mount".into(),
-        mount("artifacts", "/artifacts", false),
-        "--mount".into(),
-        mount("control", "/run/agent", true),
-        "--mount".into(),
-        mount("streams", "/streams", true),
-        policy.agent.image_id.clone(),
-    ];
+    let agent_args = agent_run_args(policy, session_id);
     docker_os(agent_args, "create_agent", Some(DOCKER_TIMEOUT)).await?;
     if let Err(error) = verify_agent(policy, session_id).await {
         let cleanup = remove_session(policy, session_id).await;
@@ -1156,9 +1176,9 @@ async fn create_session(policy: &Policy, session_id: &str) -> Result<(), String>
         "--pids-limit".into(),
         policy.capture.pids_limit.to_string(),
         "--mount".into(),
-        mount("streams", "/streams", false),
+        session_bind(policy, session_id, "streams", "/streams", false),
         "--mount".into(),
-        mount("output", "/output", false),
+        session_bind(policy, session_id, "output", "/output", false),
         policy.capture.image_id.clone(),
     ];
     docker_os(capture_args, "create_session_capture", Some(DOCKER_TIMEOUT)).await?;
@@ -1399,6 +1419,8 @@ fn validate_session_paths(policy: &Policy, session_id: &str) -> Result<(), Strin
         ("control", 0o755),
         ("streams", 0o700),
         ("output", 0o700),
+        ("scratch", 0o700),
+        ("runtime", 0o700),
     ] {
         let path = root.join(leaf);
         let metadata = std::fs::symlink_metadata(&path)
@@ -1504,26 +1526,16 @@ async fn verify_agent(policy: &Policy, session_id: &str) -> Result<(), String> {
     )?;
     require_hardening(&value, "agent")?;
     require_empty_object(&value, "/HostConfig/PortBindings", "agent port bindings")?;
-    let expected_tmpfs = std::collections::BTreeMap::from([
-        ("/qwen-runtime", policy.agent.tmpfs_qwen_runtime.as_str()),
-        ("/tmp", policy.agent.tmpfs_tmp.as_str()),
-    ]);
-    let observed_tmpfs = value
-        .pointer("/HostConfig/Tmpfs")
-        .and_then(Value::as_object)
-        .ok_or_else(|| "agent inspect lacks tmpfs map".to_string())?
-        .iter()
-        .map(|(key, value)| {
-            value
-                .as_str()
-                .map(|value| (key.as_str(), value))
-                .ok_or_else(|| format!("agent tmpfs option for {key} is not a string"))
-        })
-        .collect::<Result<std::collections::BTreeMap<_, _>, _>>()?;
-    if observed_tmpfs != expected_tmpfs {
-        return Err(format!(
-            "agent tmpfs drift: expected {expected_tmpfs:?}, observed {observed_tmpfs:?}"
-        ));
+    // Nothing of the agent's is held in memory as a filesystem: Docker omits
+    // the map when no tmpfs was asked for.
+    match value.pointer("/HostConfig/Tmpfs") {
+        None | Some(Value::Null) => {}
+        Some(Value::Object(items)) if items.is_empty() => {}
+        Some(observed) => {
+            return Err(format!(
+                "agent tmpfs drift: expected none, observed {observed:?}"
+            ))
+        }
     }
     let session_root = Path::new(&policy.state_dir)
         .join("sessions")
@@ -1536,9 +1548,21 @@ async fn verify_agent(policy: &Policy, session_id: &str) -> Result<(), String> {
         .into_owned();
     let control = session_root.join("control").to_string_lossy().into_owned();
     let streams = session_root.join("streams").to_string_lossy().into_owned();
+    let scratch = session_root.join("scratch").to_string_lossy().into_owned();
+    let runtime = session_root.join("runtime").to_string_lossy().into_owned();
     require_exact_mounts(
         &value,
         &[
+            MountContract {
+                source: &scratch,
+                destination: "/tmp",
+                writable: true,
+            },
+            MountContract {
+                source: &runtime,
+                destination: "/qwen-runtime",
+                writable: true,
+            },
             MountContract {
                 source: &staged,
                 destination: "/workspace",
@@ -2538,7 +2562,8 @@ mod tests {
     use tokio::io::AsyncWriteExt;
 
     use super::{
-        docker_log_follow_args, drain_bounded, load_policy, optional_running, parse_agent_ready,
+        agent_run_args, docker_log_follow_args, drain_bounded, load_policy, optional_running,
+        parse_agent_ready,
         parse_capture_complete, parse_request, stop_args, validate_empty_ipv4_route_table,
         validate_empty_ipv6_route_table, validate_session_id, Request, DOCKER_TIMEOUT, STOP_GRACE,
     };
@@ -2578,6 +2603,36 @@ mod tests {
     #[test]
     fn compiled_policy_is_exact() {
         load_policy().expect("compiled broker policy must pass exact validation");
+    }
+
+    #[test]
+    fn the_agent_writes_only_to_its_session_tree_and_holds_no_filesystem_in_memory() {
+        // Its root is read-only, and every path it can write is a directory of
+        // the session's own tree, on disk and removed with that tree: nothing
+        // it writes is charged to its memory limit, and nothing bounds its
+        // transcript but the disk the rest of its evidence is on.
+        let policy = load_policy().expect("load exact policy");
+        let session_id = "s-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let args = agent_run_args(&policy, session_id);
+        assert!(args.iter().any(|arg| arg == "--read-only"));
+        assert!(!args.iter().any(|arg| arg.starts_with("--tmpfs")));
+        let root = format!("{}/sessions/{session_id}", policy.state_dir);
+        let mounts: Vec<&str> = args
+            .windows(2)
+            .filter(|pair| pair[0] == "--mount")
+            .map(|pair| pair[1].as_str())
+            .collect();
+        assert_eq!(
+            mounts,
+            [
+                format!("type=bind,src={root}/staged,dst=/workspace"),
+                format!("type=bind,src={root}/artifacts,dst=/artifacts"),
+                format!("type=bind,src={root}/control,dst=/run/agent,readonly"),
+                format!("type=bind,src={root}/streams,dst=/streams,readonly"),
+                format!("type=bind,src={root}/scratch,dst=/tmp"),
+                format!("type=bind,src={root}/runtime,dst=/qwen-runtime"),
+            ]
+        );
     }
 
     #[test]

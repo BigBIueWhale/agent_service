@@ -29,8 +29,6 @@
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
-    "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
-    "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "ready_event_prefix": "AGENT_READY model=qwen3.8-27b-nvfp4-k8v4 context=262144 network=loopback-only token_count=",
     "sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1"
   },

@@ -353,8 +353,8 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
         "runtime",
         "effect_manifest_root",
         "subagent_scratch_root",
-        "tmpfs_tmp",
-        "tmpfs_runtime",
+        "tmp_session_directory",
+        "runtime_session_directory",
         "private_devpts",
         "private_devpts_write_access",
         "operator_source_writable",
@@ -363,6 +363,13 @@ def verify_wrapper(contract: dict[str, Any], wrapper: str) -> None:
     if set(filesystem) != expected_filesystem_fields:
         raise ContractError("filesystem fields differ from the canonical contract")
     require_equal("agent stream mount", filesystem["streams"], "/streams")
+    # `/tmp` and the runtime root are directories of the session's own tree,
+    # on the disk the rest of it is on and removed with it at teardown; no
+    # part of the agent's filesystem is held in its memory.
+    require_equal("agent /tmp session directory", filesystem["tmp_session_directory"], "scratch")
+    require_equal(
+        "agent runtime session directory", filesystem["runtime_session_directory"], "runtime"
+    )
     require_equal("agent output mount absence", filesystem["output_mounted_in_agent"], False)
     require_equal("output owner", filesystem["output_owner_component"], "session-capture")
     require_equal("private devpts path", filesystem["private_devpts"], "/dev/pts")

@@ -53,8 +53,8 @@
     "image_tag": "qwen38-docker-broker:1.1.0",
     "image_id": "sha256:1aa3ded6c3d11b71e4f6ef9981895840eb46d6769ebd100b5f13298c508623a9",
     "socket_path": "/home/user/Desktop/agent_service/.runtime/control/broker.sock",
-    "policy_sha256": "a1f7d63c9db27d7543d445e6268087933c344171063890e6e7a9da06b42526f4",
-    "source_sha256": "9ea3381227c032f31ab1f6391f61e601d60ca7d094d093f00d6fd9a1514c8de1",
+    "policy_sha256": "6cc23ad5b2bcd4494f0ca9118ea30b573e45ff1003ba422d0e0e99daf6c4d0fb",
+    "source_sha256": "51b70180b423a588f1294013fe647c11dd0b7342556893490638dd4dde148c8f",
     "memory": "128m",
     "memory_swap": "128m",
     "pids_limit": 64
@@ -89,15 +89,13 @@
     "memory": "32g",
     "memory_swap": "32g",
     "pids_limit": 4096,
-    "tmpfs_tmp": "rw,nosuid,nodev,size=8g,mode=1777",
-    "tmpfs_qwen_runtime": "rw,nosuid,nodev,noexec,size=2g,uid=1000,gid=1000,mode=0700",
     "settings_sha256": "54386b0b910f498f4c5a905d1d34c6364d857586381d002205fe85ab1dd90fbf",
     "instructions_sha256": "7151a19aa179d83577189e99d9f7420a45a3fe7074508022065487a80b4d2879",
     "system_prompt_sha256": "49785ca44bfd6bdb1e1d9d4159601dfce99e88011e5deb16c8ff019fdf817e19",
-    "deployment_contract_sha256": "2feb3b825c2377823dac78fd352abe3d941b2146aa30aa87851ebb31229c1149",
+    "deployment_contract_sha256": "75b056d5511980d8d2b09c8a385782799d24c4bc70e6081c8ed23ed3e4757f94",
     "output_language_sha256": "0c61823b23e53d1d056f31d28904e7170e7bb26d76e349598bc2927c8fabd005",
     "toolchain_manifest_sha256": "f9a4a70c2cadb10c9a2c501aa05232b6e553664670354572546fa4bee991f56b",
-    "runtime_contract_sha256": "d00d610f580bf6f91dfddab84f6ae46c6fb48e8ea2e5c68834c47f5c3aa71826",
+    "runtime_contract_sha256": "008cbc3dc6ddd3d31f33ed5bf227574c0f214c63793681a25d577bd76b92097c",
     "wrapper_sha256": "aa965fa913a378f2ce3ba79a2f37712b6a797ddf95e7383d5344723c716f2825",
     "agent_exec_source_sha256": "7bbe8bfbf8b33964d1b0b51e0ac0e7debdba4d6b87b36f37c45701f737fedc61",
     "agent_exec_sandbox": "landlock-fs-v4-write-roots-v1+private-devpts-rw-v1+output-unmounted-v1",
@@ -121,8 +119,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "26ad1fb65d13afbde2a286c7692b702a61478585498f58631d6df843736a52d4",
-      "source_patch_manifest_sha256": "5c478e7e593040d791807f587f043f5e788a45c1b8efa7abf40a5ecfe30dcc2f"
+      "patch_sha256": "3d24b6750d1963fa124fd6d6a6fa8c2d1faaa1c45588690d231c187dd5bb8b8b",
+      "source_patch_manifest_sha256": "7ebd9f35b535f1ffd16083b146e110d83527c0260a814684e81aa3b2f70ca14f"
     }
   },
   "backend": {

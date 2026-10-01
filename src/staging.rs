@@ -60,6 +60,16 @@ pub struct SessionPaths {
     pub control: PathBuf,
     pub streams: PathBuf,
     pub output: PathBuf,
+    /// The agent's `/tmp`, and its `/qwen-runtime`: the client's canonical
+    /// transcript, its writer lease, the session's kept tool results, the
+    /// effect journal and the toolchains' caches. Both are the session's own,
+    /// on the disk the rest of its tree is on, and go with that tree at
+    /// teardown; neither is bundled. Agent bytes reach disk in `/workspace`
+    /// and `/artifacts` in any case, so memory would buy these no guarantee
+    /// the rest of the tree lacks, and would spend the agent's memory limit on
+    /// them and bound the transcript by it.
+    pub scratch: PathBuf,
+    pub runtime: PathBuf,
 }
 
 impl SessionPaths {
@@ -71,6 +81,8 @@ impl SessionPaths {
             control: root.join("control"),
             streams: root.join("streams"),
             output: root.join("output"),
+            scratch: root.join("scratch"),
+            runtime: root.join("runtime"),
             root,
         }
     }
@@ -103,7 +115,13 @@ impl SessionPaths {
             }
             // The service and all three per-session containers are pinned to
             // uid/gid 1000. Private directories permit only intended writers.
-            for directory in [&self.artifacts, &self.streams, &self.output] {
+            for directory in [
+                &self.artifacts,
+                &self.streams,
+                &self.output,
+                &self.scratch,
+                &self.runtime,
+            ] {
                 create_exact_directory(directory, 0o700)?;
             }
             sync_directory(&self.root, "sync complete session layout")?;
@@ -150,6 +168,8 @@ impl SessionPaths {
                     (&self.artifacts, 0o700),
                     (&self.streams, 0o700),
                     (&self.output, 0o700),
+                    (&self.scratch, 0o700),
+                    (&self.runtime, 0o700),
                 ] {
                     validate_existing_session_directory(path, mode)?;
                 }
@@ -1314,6 +1334,8 @@ mod tests {
                 &paths.artifacts,
                 &paths.streams,
                 &paths.output,
+                &paths.scratch,
+                &paths.runtime,
             ] {
                 std::os::unix::fs::chown(path, Some(1000), Some(1000))
                     .expect("assign runtime ownership in root-run fixture");

@@ -1137,6 +1137,8 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
         "artifacts".to_string(),
         "control".to_string(),
         "output".to_string(),
+        "runtime".to_string(),
+        "scratch".to_string(),
         "staged".to_string(),
         "streams".to_string(),
     ]);
@@ -1154,6 +1156,8 @@ pub(crate) fn validate_exact_uncommitted_state_tree(
         &paths.artifacts,
         &paths.streams,
         &paths.output,
+        &paths.scratch,
+        &paths.runtime,
     ] {
         if !names(directory)?.is_empty() {
             return Err(ServiceError::Internal(format!(
@@ -4715,6 +4719,8 @@ mod tests {
                 &paths.control,
                 &paths.streams,
                 &paths.output,
+                &paths.scratch,
+                &paths.runtime,
                 &result_dir,
                 &input,
                 &paths.control.join("prompt.txt"),
@@ -6432,6 +6438,8 @@ mod tests {
                 &paths.control,
                 &paths.streams,
                 &paths.output,
+                &paths.scratch,
+                &paths.runtime,
                 &paths.control.join("prompt.txt"),
                 &paths.control.join("turn-budget.json"),
                 &paths.control.join("deliverables.json"),

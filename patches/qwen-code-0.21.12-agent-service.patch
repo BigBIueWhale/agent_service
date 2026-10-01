@@ -228070,8 +228070,8 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,249 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,167 of system message,
++ * turn budget's number left out, at 7,248 tokens, counted whole by the served
++ * tokenizer. By where each token starts, that is 2,166 of system message,
 + * 4,836 of tool declarations (each from the first character of its line to
 + * the last) and 246 of the template's own text. Counting
 + * each token once, in the piece it starts in, is what makes the parts sum to
@@ -228082,7 +228082,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * holds around its blocks -- the snapshot's resume trailer and the
 + * acknowledgement turn, with the blocks left out: 59 more; and so is the
 + * todo reminder, of which at most one stands in the request a compaction
-+ * leaves, with one character for its list: 51 more, for 7,405.
++ * leaves, with one character for its list: 51 more, for 7,404.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's branch line, status and commits,
@@ -228092,13 +228092,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * digits of one token each (`QWEN38_TURN_BUDGET_BYTES`), and the todo
 + * reminder's list and truncation mark, 800 + 12 = 812
 + * (`activeTodoReminderBound`). That is a bound of
-+ * 11,449 that no repository, workspace, budget or todo list changes. The 839
++ * 11,448 that no repository, workspace, budget or todo list changes. The 840
 + * tokens left are headroom for the prompt and the declarations to grow into
 + * -- less than one more declaration the size of `run_shell_command`, the
 + * largest at 1,456. Exceeding it is a startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,449 at a 244,246-token window, so no smaller window holds this
++ * reaches 11,448 at a 244,224-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
