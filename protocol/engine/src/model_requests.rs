@@ -406,9 +406,15 @@ impl ResponseValues {
         }
     }
 
-    fn stream_values(&self, transport_eof: bool) -> Option<Vec<serde_json::Value>> {
+    /// The SDK values a streamed body decoded, its final unfinished chunk
+    /// flushed at EOF as the SDK flushes it. The reader is consumed: the
+    /// values move to their owner rather than being copied.
+    fn into_stream_values(self, transport_eof: bool) -> Option<Vec<serde_json::Value>> {
         match self {
-            Self::Stream(values) => Some(values.at_eof(transport_eof).values),
+            Self::Stream(mut values) => {
+                values.settle(transport_eof);
+                Some(values.values)
+            }
             Self::Nonstream(_) => None,
         }
     }
@@ -425,10 +431,11 @@ impl ResponseValues {
         }
         match self {
             Self::Stream(values) => values
-                .at_eof(transport_eof)
+                .eof_tail(transport_eof)
                 .usage_reports
                 .iter()
                 .rev()
+                .chain(values.usage_reports.iter().rev())
                 .find(|(position, _)| *position <= seen)
                 .map(|(_, usage)| *usage),
             Self::Nonstream(_) if status == Some(204) => None,
@@ -462,18 +469,8 @@ impl ResponseValues {
         } else {
             match self {
                 Self::Stream(values) => {
-                    if transport_eof
-                        && (!values.pending.is_empty()
-                            || values.after_cr
-                            || !values.line.is_empty())
-                        && !values.failed
-                        && !values.done
-                    {
-                        let settled = values.at_eof(true);
-                        (settled.count, settled.failed)
-                    } else {
-                        (values.count, values.failed)
-                    }
+                    let settled = values.eof_tail(transport_eof);
+                    (settled.count, settled.failed)
                 }
                 Self::Nonstream(_) if status == Some(204) => (1, false),
                 Self::Nonstream(body) => {
@@ -502,7 +499,7 @@ impl ResponseValues {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Default)]
 struct SseValues {
     pending: Vec<u8>,
     line: Vec<u8>,
@@ -518,22 +515,42 @@ struct SseValues {
 }
 
 impl SseValues {
-    fn at_eof(&self, transport_eof: bool) -> Self {
-        let mut settled = self.clone();
+    /// The pinned SDK yields its final incomplete SSE chunk at EOF.
+    fn settle(&mut self, transport_eof: bool) {
         if transport_eof
-            && (!settled.pending.is_empty() || settled.after_cr || !settled.line.is_empty())
-            && !settled.failed
-            && !settled.done
+            && (!self.pending.is_empty() || self.after_cr || !self.line.is_empty())
+            && !self.failed
+            && !self.done
         {
-            // The pinned SDK yields its final incomplete SSE chunk at EOF.
-            let pending = std::mem::take(&mut settled.pending);
-            settled.feed(&pending);
-            if settled.after_cr || !settled.line.is_empty() {
-                settled.after_cr = false;
-                settled.finish_line();
+            let pending = std::mem::take(&mut self.pending);
+            self.feed(&pending);
+            if self.after_cr || !self.line.is_empty() {
+                self.after_cr = false;
+                self.finish_line();
             }
         }
-        settled
+    }
+
+    /// The reader as EOF would leave it, holding only what settling adds:
+    /// its counts are the settled counts, and its values and usage reports
+    /// are those the unfinished chunk yields, without the ones already
+    /// decoded, which settling never changes.
+    fn eof_tail(&self, transport_eof: bool) -> Self {
+        let mut tail = Self {
+            pending: self.pending.clone(),
+            line: self.line.clone(),
+            event: self.event.clone(),
+            data: self.data.clone(),
+            count: self.count,
+            values: Vec::new(),
+            usage_reports: Vec::new(),
+            retain_values: false,
+            failed: self.failed,
+            done: self.done,
+            after_cr: self.after_cr,
+        };
+        tail.settle(transport_eof);
+        tail
     }
 
     fn push(&mut self, bytes: &[u8]) {
@@ -761,19 +778,11 @@ pub(crate) struct UtilityCompletionAdmission {
     token_count: Option<CompletedTokenCount>,
 }
 
-#[derive(Clone)]
-struct DecodedChunk {
-    bytes: Vec<u8>,
-    previous: Option<Arc<DecodedChunk>>,
-}
-
-#[derive(Clone)]
+/// A decoded observation still being received: its bytes so far.
 struct DecodedPending {
     role: String,
     index: u64,
-    bytes: u64,
-    digest: Sha256,
-    tail: Option<Arc<DecodedChunk>>,
+    bytes: Vec<u8>,
 }
 
 #[derive(Default)]
@@ -861,7 +870,9 @@ impl RequestAdmission {
     }
 }
 
-#[derive(Clone, Default)]
+/// What one physical response has established so far. It is changed in place
+/// by each admitted event and never copied.
+#[derive(Default)]
 struct ResponseState {
     scope: String,
     attempt: Option<String>,
@@ -879,20 +890,54 @@ struct ResponseState {
     decoded_failure: Option<serde_json::Value>,
     decoded_pending: Option<DecodedPending>,
 }
+
+// A plan reads what a response has accumulated and never copies it. Neither
+// the response's state nor its value reader is `Clone`, so no plan can: this
+// item compiles only while neither type implements it.
+const _: fn() = || {
+    trait AmbiguousIfClone<A> {
+        fn some_item() {}
+    }
+    impl<T: ?Sized> AmbiguousIfClone<()> for T {}
+    struct IsClone;
+    impl<T: ?Sized + Clone> AmbiguousIfClone<IsClone> for T {}
+    let _ = <ResponseState as AmbiguousIfClone<_>>::some_item;
+    let _ = <ResponseValues as AmbiguousIfClone<_>>::some_item;
+};
+
 pub(crate) struct ResponseAdmission {
     request_id: String,
-    state: Option<ResponseState>,
-    attempt: Option<String>,
-    settlement: Option<bool>,
-    compaction: Option<String>,
-    utility: Option<String>,
-    delivery: Option<u64>,
-    decoded_values: Option<Vec<serde_json::Value>>,
-    decoded_observations: Option<Vec<serde_json::Value>>,
-    decoded_failure: Option<Option<serde_json::Value>>,
-    pub outcome: Option<ResponseOutcome>,
+    sequence: u64,
+    step: ResponseStep,
+    outcome: Option<ResponseOutcome>,
     usage: Option<(GenerationUsageSummary, GenerationUsageSummary)>,
-    body: Option<Vec<u8>>,
+}
+
+/// The one change an admitted response event makes to its request's state.
+enum ResponseStep {
+    Http {
+        status: u64,
+        content_type: Option<String>,
+    },
+    Body(Vec<u8>),
+    End {
+        termination: String,
+    },
+    DecodedBody {
+        role: String,
+        index: u64,
+        bytes: Vec<u8>,
+    },
+    DecodedEnd {
+        failure: bool,
+        value: serde_json::Value,
+    },
+    Outcome {
+        completed: bool,
+        pipeline_outputs_delivered: u64,
+    },
+    Delivery(u64),
+    History(bool),
 }
 
 impl ModelRequests {
@@ -1673,10 +1718,14 @@ impl ModelRequests {
     ) -> ContractResult<ResponseAdmission> {
         let response = field(record, "response", line)?;
         let id = text(response, "request_id", line)?;
-        let mut state = self
+        // The plan reads the request's state and names the one change this
+        // event makes to it; only the commit makes the change. The state holds
+        // everything the response has accumulated, so it is borrowed, never
+        // copied: admitting an event costs that event, however long the
+        // response it belongs to has grown.
+        let state = self
             .responses
             .get(id)
-            .cloned()
             .ok_or_else(|| refusal("response has no open request"))?;
         let sequence = unsigned(
             field(response, "sequence", line)?,
@@ -1691,11 +1740,7 @@ impl ModelRequests {
             ));
         }
         let event = field(response, "event", line)?;
-        let mut ended = false;
-        let mut settlement = None;
-        let mut delivery = None;
         let mut outcome = None;
-        let mut body = None;
         let kind = text(event, "kind", line)?;
         if state.utility.is_some() && matches!(kind, "decoded_body" | "decoded_end" | "history") {
             return Err(refusal(
@@ -1712,22 +1757,26 @@ impl ModelRequests {
                 "response processing outcome must follow transport completion",
             ));
         }
-        match kind {
+        let step = match kind {
             "http" => {
                 if state.http_status.is_some() || state.sequence != 0 {
                     return Err(refusal("response repeats HTTP headers"));
                 }
-                state.http_status = Some(unsigned(
+                let status = unsigned(
                     field(event, "status", line)?,
                     "HTTP response status",
                     SAFE_INTEGER,
-                )?);
+                )?;
                 let media_type = field(event, "content_type", line)?;
-                state.content_type = if media_type.is_null() {
+                let content_type = if media_type.is_null() {
                     None
                 } else {
                     Some(text(event, "content_type", line)?.to_string())
                 };
+                ResponseStep::Http {
+                    status,
+                    content_type,
+                }
             }
             "body" => {
                 if state.http_status.is_none()
@@ -1747,13 +1796,12 @@ impl ModelRequests {
                 if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
                     return Err(refusal("response has noncanonical base64 bytes"));
                 }
-                state.bytes = state
+                state
                     .bytes
                     .checked_add(bytes.len() as u64)
                     .filter(|bytes| *bytes <= SAFE_INTEGER)
                     .ok_or_else(|| refusal("response exceeds exact byte accounting"))?;
-                state.digest.as_mut().unwrap().update(&bytes);
-                body = Some(bytes);
+                ResponseStep::Body(bytes)
             }
             "end" => {
                 let termination = text(event, "termination", line)?;
@@ -1768,7 +1816,7 @@ impl ModelRequests {
                     || state
                         .digest
                         .as_ref()
-                        .unwrap()
+                        .expect("an open body has its digest")
                         .clone()
                         .finalize()
                         .iter()
@@ -1780,8 +1828,9 @@ impl ModelRequests {
                         "response completion does not account for the exact observed bytes",
                     ));
                 }
-                state.digest = None;
-                state.termination = Some(termination.to_string());
+                ResponseStep::End {
+                    termination: termination.to_string(),
+                }
             }
             "decoded_body" | "decoded_end" => {
                 let role = text(event, "role", line)?;
@@ -1805,26 +1854,20 @@ impl ModelRequests {
                         "decoded output offset",
                         SAFE_INTEGER,
                     )?;
-                    if state.decoded_pending.is_none() {
-                        if offset != 0 {
+                    match &state.decoded_pending {
+                        None if offset != 0 => {
                             return Err(refusal("decoded observation starts after a byte gap"));
                         }
-                        state.decoded_pending = Some(DecodedPending {
-                            role: role.to_string(),
-                            index,
-                            bytes: 0,
-                            digest: Sha256::default(),
-                            tail: None,
-                        });
-                    }
-                    let pending = state
-                        .decoded_pending
-                        .as_mut()
-                        .ok_or_else(|| refusal("decoded observation has no open byte sequence"))?;
-                    if pending.role != role || pending.index != index || pending.bytes != offset {
-                        return Err(refusal(
-                            "decoded observation has an interleaved or missing byte chunk",
-                        ));
+                        Some(pending)
+                            if pending.role != role
+                                || pending.index != index
+                                || pending.bytes.len() as u64 != offset =>
+                        {
+                            return Err(refusal(
+                                "decoded observation has an interleaved or missing byte chunk",
+                            ));
+                        }
+                        _ => {}
                     }
                     let encoded = text(event, "base64", line)?;
                     let bytes = STANDARD
@@ -1833,34 +1876,31 @@ impl ModelRequests {
                     if bytes.is_empty() || STANDARD.encode(&bytes) != encoded {
                         return Err(refusal("decoded observation has noncanonical base64 bytes"));
                     }
-                    pending.bytes = pending
-                        .bytes
+                    offset
                         .checked_add(bytes.len() as u64)
                         .filter(|size| *size <= SAFE_INTEGER)
                         .ok_or_else(|| {
                             refusal("decoded observation exceeds exact byte accounting")
                         })?;
-                    pending.digest.update(&bytes);
-                    pending.tail = Some(Arc::new(DecodedChunk {
+                    ResponseStep::DecodedBody {
+                        role: role.to_string(),
+                        index,
                         bytes,
-                        previous: pending.tail.take(),
-                    }));
+                    }
                 } else {
                     let pending = state
                         .decoded_pending
-                        .take()
+                        .as_ref()
                         .ok_or_else(|| refusal("decoded observation end has no byte sequence"))?;
                     if pending.role != role
                         || pending.index != index
-                        || pending.bytes
+                        || pending.bytes.len() as u64
                             != unsigned(
                                 field(event, "body_bytes", line)?,
                                 "decoded output bytes",
                                 SAFE_INTEGER,
                             )?
-                        || pending
-                            .digest
-                            .finalize()
+                        || Sha256::digest(&pending.bytes)
                             .iter()
                             .map(|byte| format!("{byte:02x}"))
                             .collect::<String>()
@@ -1870,17 +1910,7 @@ impl ModelRequests {
                             "decoded observation end differs from its exact bytes",
                         ));
                     }
-                    let mut chunks = Vec::new();
-                    let mut tail = pending.tail;
-                    while let Some(chunk) = tail {
-                        chunks.push(chunk.bytes.clone());
-                        tail = chunk.previous.clone();
-                    }
-                    let mut bytes = Vec::with_capacity(pending.bytes as usize);
-                    for chunk in chunks.into_iter().rev() {
-                        bytes.extend_from_slice(&chunk);
-                    }
-                    let decoded: serde_json::Value = serde_json::from_slice(&bytes)
+                    let decoded: serde_json::Value = serde_json::from_slice(&pending.bytes)
                         .map_err(|_| refusal("decoded observation is not valid JSON"))?;
                     if !decoded.as_object().is_some_and(|object| {
                         object.len() == 3
@@ -1896,10 +1926,9 @@ impl ModelRequests {
                     }) {
                         return Err(refusal("decoded observation has an unknown response shape"));
                     }
-                    if role == "utility" {
-                        state.decoded_utility.push(decoded);
-                    } else {
-                        state.decoded_failure = Some(decoded);
+                    ResponseStep::DecodedEnd {
+                        failure: role == "failure",
+                        value: decoded,
                     }
                 }
             }
@@ -1957,31 +1986,28 @@ impl ModelRequests {
                 {
                     return Err(refusal("decoded progress has no observed SDK response"));
                 }
-                self.response_values
+                let values = self
+                    .response_values
                     .get(id)
-                    .ok_or_else(|| refusal("response has no physical value reader"))?
-                    .require_prefix(
-                        sdk_values_seen,
-                        completed,
-                        state.http_status,
-                        state.content_type.as_deref(),
-                        state.termination.as_deref() == Some("eof"),
-                    )?;
+                    .ok_or_else(|| refusal("response has no physical value reader"))?;
+                values.require_prefix(
+                    sdk_values_seen,
+                    completed,
+                    state.http_status,
+                    state.content_type.as_deref(),
+                    state.termination.as_deref() == Some("eof"),
+                )?;
                 let recorded_usage = if usage.is_null() {
                     None
                 } else {
                     Some(ServedUsage::read(usage, line)?)
                 };
-                let observed_usage = self
-                    .response_values
-                    .get(id)
-                    .ok_or_else(|| refusal("response has no physical value reader"))?
-                    .observed_usage(
-                        sdk_values_seen,
-                        state.http_status,
-                        state.content_type.as_deref(),
-                        state.termination.as_deref() == Some("eof"),
-                    );
+                let observed_usage = values.observed_usage(
+                    sdk_values_seen,
+                    state.http_status,
+                    state.content_type.as_deref(),
+                    state.termination.as_deref() == Some("eof"),
+                );
                 if recorded_usage != observed_usage {
                     return Err(refusal(
                         "served usage differs from processed physical response bytes",
@@ -1992,7 +2018,21 @@ impl ModelRequests {
                 // marks a tokenizer or embedding call, which serves none)
                 // completes only with the usage its bytes served.
                 if completed && state.utility.is_none() && recorded_usage.is_none() {
-                    return Err(refusal("completes a generation response that served no usage"));
+                    return Err(refusal(
+                        "completes a generation response that served no usage",
+                    ));
+                }
+                if state.compaction.is_some() {
+                    // The commit hands the draw the SDK values its stream
+                    // decoded, up to the count the SDK reached.
+                    if !matches!(values, ResponseValues::Stream(_)) {
+                        return Err(refusal(
+                            "compaction response has no streamed physical values",
+                        ));
+                    }
+                    usize::try_from(sdk_values_seen).map_err(|_| {
+                        refusal("compaction SDK value count exceeds addressable memory")
+                    })?;
                 }
                 outcome = Some(ResponseOutcome {
                     scope: state.scope.clone(),
@@ -2001,8 +2041,10 @@ impl ModelRequests {
                     pipeline_outputs_delivered,
                     sdk_values_seen,
                 });
-                state.processing = Some(completed);
-                state.pipeline_outputs = Some(pipeline_outputs_delivered);
+                ResponseStep::Outcome {
+                    completed,
+                    pipeline_outputs_delivered,
+                }
             }
             "delivery" => {
                 let delivered = unsigned(
@@ -2020,8 +2062,7 @@ impl ModelRequests {
                         "utility delivery has no matching physical output prefix",
                     ));
                 }
-                delivery = Some(delivered);
-                ended = true;
+                ResponseStep::Delivery(delivered)
             }
             "history" => {
                 let attempt = state
@@ -2041,46 +2082,13 @@ impl ModelRequests {
                         ));
                     }
                 }
-                settlement = Some(accepted);
-                ended = true;
+                ResponseStep::History(accepted)
             }
             _ => return Err(refusal("response uses an unknown event")),
-        }
-        state.sequence = sequence;
-        let decoded_values = if let (Some(outcome), Some(_)) = (&outcome, &state.compaction) {
-            let mut values = self
-                .response_values
-                .get(id)
-                .and_then(|values| {
-                    values.stream_values(state.termination.as_deref() == Some("eof"))
-                })
-                .ok_or_else(|| refusal("compaction response has no streamed physical values"))?;
-            let seen = usize::try_from(outcome.sdk_values_seen)
-                .map_err(|_| refusal("compaction SDK value count exceeds addressable memory"))?;
-            // Retain only what the SDK reached; later body values remain wire evidence.
-            values.truncate(seen);
-            Some(values)
-        } else {
-            None
         };
         Ok(ResponseAdmission {
             request_id: id.to_string(),
-            attempt: state.attempt.clone(),
-            compaction: state.compaction.clone(),
-            utility: state.utility.clone(),
-            settlement,
-            delivery,
-            decoded_values,
-            decoded_observations: if outcome.is_some() && state.compaction.is_some() {
-                Some(state.decoded_utility.clone())
-            } else {
-                None
-            },
-            decoded_failure: if outcome.is_some() && state.compaction.is_some() {
-                Some(state.decoded_failure.clone())
-            } else {
-                None
-            },
+            sequence,
             usage: outcome
                 .as_ref()
                 .filter(|_| state.utility.is_none())
@@ -2092,117 +2100,169 @@ impl ModelRequests {
                 })
                 .transpose()?,
             outcome,
-            body,
-            state: if ended { None } else { Some(state) },
+            step,
         })
     }
 
+    /// Apply a planned response event to its request's state in place.
     pub(crate) fn commit_response(&mut self, admission: ResponseAdmission) {
-        if let Some(operation_id) = &admission.utility {
-            let operation = self
-                .utilities
-                .get_mut(operation_id)
-                .expect("planned utility operation");
-            if let Some(outcome) = &admission.outcome {
-                let state = admission
-                    .state
-                    .as_ref()
-                    .expect("outcome retains response state");
-                operation.physical.insert(
-                    admission.request_id.clone(),
-                    UtilityPhysical {
-                        status: state.http_status,
-                        content_type: state.content_type.clone(),
-                        termination: state.termination.clone(),
-                        completed: outcome.completed,
-                        delivered: false,
-                    },
-                );
+        let ResponseAdmission {
+            request_id,
+            sequence,
+            step,
+            outcome,
+            usage,
+        } = admission;
+        let state = self
+            .responses
+            .get_mut(&request_id)
+            .expect("planned response state");
+        state.sequence = sequence;
+        let ended = match step {
+            ResponseStep::Http {
+                status,
+                content_type,
+            } => {
+                state.http_status = Some(status);
+                state.content_type = content_type;
+                false
             }
-            if admission.delivery.is_some() {
-                operation
-                    .physical
-                    .get_mut(&admission.request_id)
-                    .expect("planned utility physical outcome")
-                    .delivered = true;
+            ResponseStep::Body(bytes) => {
+                state.bytes += bytes.len() as u64;
+                state
+                    .digest
+                    .as_mut()
+                    .expect("planned open body digest")
+                    .update(&bytes);
+                self.response_values
+                    .get_mut(&request_id)
+                    .expect("planned physical value reader")
+                    .push(&bytes);
+                false
             }
-        }
-        if let Some(id) = &admission.compaction {
-            let operation = self
-                .compactions
-                .get_mut(id)
-                .expect("planned compaction operation");
-            if let Some(outcome) = &admission.outcome {
-                operation
-                    .outcomes
-                    .insert(admission.request_id.clone(), outcome.clone());
+            ResponseStep::End { termination } => {
+                state.digest = None;
+                state.termination = Some(termination);
+                false
             }
-            if let Some(values) = &admission.decoded_values {
-                operation
-                    .values
-                    .insert(admission.request_id.clone(), values.clone());
+            ResponseStep::DecodedBody { role, index, bytes } => {
+                match &mut state.decoded_pending {
+                    Some(pending) => pending.bytes.extend_from_slice(&bytes),
+                    None => state.decoded_pending = Some(DecodedPending { role, index, bytes }),
+                }
+                false
             }
-            if let Some(values) = &admission.decoded_observations {
-                operation
-                    .observations
-                    .insert(admission.request_id.clone(), values.clone());
+            ResponseStep::DecodedEnd { failure, value } => {
+                state.decoded_pending = None;
+                if failure {
+                    state.decoded_failure = Some(value);
+                } else {
+                    state.decoded_utility.push(value);
+                }
+                false
             }
-            if let Some(failure) = &admission.decoded_failure {
-                operation
-                    .failures
-                    .insert(admission.request_id.clone(), failure.clone());
+            ResponseStep::Outcome {
+                completed,
+                pipeline_outputs_delivered,
+            } => {
+                let outcome = outcome.expect("an outcome step carries its outcome");
+                state.processing = Some(completed);
+                state.pipeline_outputs = Some(pipeline_outputs_delivered);
+                if let Some(operation_id) = &state.utility {
+                    self.utilities
+                        .get_mut(operation_id)
+                        .expect("planned utility operation")
+                        .physical
+                        .insert(
+                            request_id.clone(),
+                            UtilityPhysical {
+                                status: state.http_status,
+                                content_type: state.content_type.clone(),
+                                termination: state.termination.clone(),
+                                completed,
+                                delivered: false,
+                            },
+                        );
+                }
+                if let Some(operation_id) = &state.compaction {
+                    // The draw's evidence is handed to its operation once,
+                    // here, and is not kept twice: the SDK values its stream
+                    // decoded, as far as the SDK reached (later body values
+                    // remain wire evidence), and its decoded observations.
+                    let mut values = self
+                        .response_values
+                        .remove(&request_id)
+                        .and_then(|values| {
+                            values.into_stream_values(state.termination.as_deref() == Some("eof"))
+                        })
+                        .expect("planned streamed compaction values");
+                    values.truncate(
+                        usize::try_from(outcome.sdk_values_seen)
+                            .expect("planned addressable SDK value count"),
+                    );
+                    let operation = self
+                        .compactions
+                        .get_mut(operation_id)
+                        .expect("planned compaction operation");
+                    operation
+                        .outcomes
+                        .insert(request_id.clone(), outcome.clone());
+                    operation.values.insert(request_id.clone(), values);
+                    operation.observations.insert(
+                        request_id.clone(),
+                        std::mem::take(&mut state.decoded_utility),
+                    );
+                    operation
+                        .failures
+                        .insert(request_id.clone(), state.decoded_failure.take());
+                }
+                if state.utility.is_none() || !completed {
+                    self.response_values.remove(&request_id);
+                }
+                if let Some((scope_usage, all_usage)) = usage {
+                    self.usage.insert(outcome.scope.clone(), scope_usage);
+                    self.all_usage = all_usage;
+                }
+                if let Some(attempt) = &state.attempt {
+                    self.attempts
+                        .get_mut(attempt)
+                        .expect("planned chat attempt")
+                        .outcomes
+                        .insert(request_id.clone(), outcome);
+                }
+                false
             }
-            if let Some(delivered) = admission.delivery {
-                operation.open.remove(&admission.request_id);
-                operation
-                    .deliveries
-                    .insert(admission.request_id.clone(), delivered);
+            ResponseStep::Delivery(delivered) => {
+                if let Some(operation_id) = &state.utility {
+                    self.utilities
+                        .get_mut(operation_id)
+                        .expect("planned utility operation")
+                        .physical
+                        .get_mut(&request_id)
+                        .expect("planned utility physical outcome")
+                        .delivered = true;
+                }
+                if let Some(operation_id) = &state.compaction {
+                    let operation = self
+                        .compactions
+                        .get_mut(operation_id)
+                        .expect("planned compaction operation");
+                    operation.open.remove(&request_id);
+                    operation.deliveries.insert(request_id.clone(), delivered);
+                }
+                true
             }
-        }
-        if let Some(body) = &admission.body {
-            self.response_values
-                .get_mut(&admission.request_id)
-                .expect("planned physical value reader")
-                .push(body);
-        }
-        if admission.outcome.is_some()
-            && (admission.utility.is_none()
-                || admission
-                    .outcome
-                    .as_ref()
-                    .is_some_and(|outcome| !outcome.completed))
-        {
-            self.response_values.remove(&admission.request_id);
-        }
-        if let Some((usage, all_usage)) = admission.usage {
-            self.usage.insert(
-                admission
-                    .outcome
-                    .as_ref()
-                    .expect("planned usage outcome")
-                    .scope
-                    .clone(),
-                usage,
-            );
-            self.all_usage = all_usage;
-        }
-        if let Some(id) = &admission.attempt {
-            let attempt = self.attempts.get_mut(id).expect("planned chat attempt");
-            if let Some(outcome) = admission.outcome {
-                attempt
-                    .outcomes
-                    .insert(admission.request_id.clone(), outcome);
-            }
-            if let Some(accepted) = admission.settlement {
-                attempt
+            ResponseStep::History(accepted) => {
+                self.attempts
+                    .get_mut(state.attempt.as_ref().expect("planned chat history owner"))
+                    .expect("planned chat attempt")
                     .settled
-                    .insert(admission.request_id.clone(), accepted);
+                    .insert(request_id.clone(), accepted);
+                true
             }
-        }
-        if let Some(state) = admission.state {
-            self.responses.insert(admission.request_id, state);
-        } else {
-            self.responses.remove(&admission.request_id);
+        };
+        if ended {
+            self.responses.remove(&request_id);
         }
     }
 
@@ -2721,6 +2781,151 @@ mod tests {
         }
     }
 
+    /// A draw that reasoned long is many response events against one
+    /// request. Each is admitted against the state in place: every SDK value
+    /// and decoded observation reaches the draw's operation once, in order,
+    /// and the response keeps no second copy of them; a refused event
+    /// changes nothing.
+    #[test]
+    fn a_long_compaction_draw_hands_its_operation_each_value_once() {
+        const VALUES: usize = 4_000;
+        let mut state = ModelRequests::default();
+        state.commit_origin(RequestOrigin {
+            journal_id: "j".into(),
+            first_sequence: 1,
+        });
+        let body = json!({"kv_scope":"owner","model":"fixture-model","stream":true,"max_tokens":8,
+            "messages":[{"role":"user","content":
+                "your answer may generate at most 8 tokens, reasoning included. If all draws are refused, this conversation cannot continue."}]})
+        .to_string();
+        let request = json!({"request":{"journal_id":"j","sequence":1,"request_id":"draw",
+            "owner":{"kind":"utility","operation_id":"compaction","purpose":"compaction"},
+            "kv_scope":"owner","segment_id":"segment","prompt_id":"p",
+            "decode_policy":{"mode":"stream","model":"fixture-model","strict_tool_calling":true,
+                "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
+            "body_bytes":body.len(),"body_sha256":sha256(&body),"body":{"kind":"full","json":body}}})
+        .to_string();
+        admit(&mut state, &request).unwrap();
+
+        let usage = json!({"prompt_tokens":24,"completion_tokens":4,"total_tokens":28,
+            "prompt_tokens_details":{"cached_tokens":0},
+            "completion_tokens_details":{"reasoning_tokens":0}});
+        let values: Vec<serde_json::Value> = (0..VALUES)
+            .map(|index| {
+                let mut value = json!({"choices":[{"index":0,"delta":{"reasoning_content":format!("step {index}")}}]});
+                if index + 1 == VALUES {
+                    value["usage"] = usage.clone();
+                }
+                value
+            })
+            .collect();
+        let decoded = json!({"response":{"candidates":[]},"incomplete_tool_calls":[],
+            "tool_call_preparations":[]})
+        .to_string();
+        let mut sequence = 0u64;
+        // Each admitted event takes the next sequence; a refused one takes none.
+        let mut event = |state: &mut ModelRequests, event: serde_json::Value| {
+            let response = json!({"response":{"journal_id":"j","request_id":"draw",
+                "sequence":sequence + 1,"event":event}})
+            .to_string();
+            let document = Document::decode(response.as_bytes(), LIMITS).unwrap();
+            let admission = state.plan_response(document.root(), 1)?;
+            state.commit_response(admission);
+            sequence += 1;
+            ContractResult::Ok(())
+        };
+        event(
+            &mut state,
+            json!({"kind":"http","status":200,"content_type":"text/event-stream"}),
+        )
+        .unwrap();
+        let mut body_bytes = Vec::new();
+        for value in &values {
+            let chunk = format!("data: {value}\n\n");
+            event(
+                &mut state,
+                json!({"kind":"body","offset":body_bytes.len(),
+                "base64":STANDARD.encode(chunk.as_bytes())}),
+            )
+            .unwrap();
+            body_bytes.extend_from_slice(chunk.as_bytes());
+        }
+        event(
+            &mut state,
+            json!({"kind":"end","termination":"eof","body_bytes":body_bytes.len(),
+            "body_sha256":sha256(std::str::from_utf8(&body_bytes).unwrap()),"error":null}),
+        )
+        .unwrap();
+        let (head, tail) = decoded.as_bytes().split_at(decoded.len() / 2);
+        for index in 0..VALUES {
+            event(
+                &mut state,
+                json!({"kind":"decoded_body","role":"utility","index":index,
+                "offset":0,"base64":STANDARD.encode(head)}),
+            )
+            .unwrap();
+            if index == VALUES / 2 {
+                // A chunk past a byte gap is refused and leaves the
+                // observation as it was.
+                let error = event(
+                    &mut state,
+                    json!({"kind":"decoded_body","role":"utility",
+                    "index":index,"offset":head.len() + 1,"base64":STANDARD.encode(tail)}),
+                )
+                .unwrap_err();
+                assert!(
+                    error
+                        .to_string()
+                        .contains("interleaved or missing byte chunk"),
+                    "{error}"
+                );
+                let pending = state.responses["draw"].decoded_pending.as_ref().unwrap();
+                assert_eq!(pending.bytes, head);
+            }
+            event(
+                &mut state,
+                json!({"kind":"decoded_body","role":"utility","index":index,
+                "offset":head.len(),"base64":STANDARD.encode(tail)}),
+            )
+            .unwrap();
+            event(
+                &mut state,
+                json!({"kind":"decoded_end","role":"utility","index":index,
+                "body_bytes":decoded.len(),"body_sha256":sha256(&decoded)}),
+            )
+            .unwrap();
+        }
+        assert_eq!(state.responses["draw"].decoded_utility.len(), VALUES);
+        event(
+            &mut state,
+            json!({"kind":"outcome","status":"completed","error":null,
+            "sdk_values_seen":VALUES,"pipeline_outputs_delivered":VALUES,
+            "served_usage":{"promptTokenCount":24,"candidatesTokenCount":4,
+                "thoughtsTokenCount":0,"cachedContentTokenCount":0,"totalTokenCount":28}}),
+        )
+        .unwrap();
+        let operation = &state.compactions["compaction"];
+        assert_eq!(operation.values["draw"], values);
+        assert_eq!(operation.observations["draw"].len(), VALUES);
+        assert!(operation.observations["draw"]
+            .iter()
+            .all(|observation| observation.to_string() == decoded));
+        assert_eq!(operation.failures["draw"], None);
+        // Handed over, not copied: the response holds neither any longer.
+        assert!(state.responses["draw"].decoded_utility.is_empty());
+        assert!(!state.response_values.contains_key("draw"));
+        event(
+            &mut state,
+            json!({"kind":"delivery","outputs_delivered":VALUES}),
+        )
+        .unwrap();
+        assert!(state.responses.is_empty());
+        assert_eq!(
+            state.compactions["compaction"].deliveries["draw"],
+            VALUES as u64
+        );
+    }
+
     #[test]
     fn utility_count_requires_its_physical_bytes_and_operation_completion() {
         let mut state = ModelRequests::default();
@@ -2788,13 +2993,6 @@ mod tests {
         stream
             .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
-        assert_eq!(
-            stream.stream_values(true).unwrap(),
-            vec![
-                json!({"id": 1}),
-                json!({"event": "thread.message", "data": {"error": {"message": "ordinary only"}}}),
-            ]
-        );
         assert!(stream
             .require_prefix(3, false, Some(200), Some("text/event-stream"), true)
             .is_err());
@@ -2802,6 +3000,14 @@ mod tests {
         stream
             .require_prefix(2, true, Some(200), Some("text/event-stream"), true)
             .unwrap();
+        // Nothing after `[DONE]` is a value the SDK yields.
+        assert_eq!(
+            stream.into_stream_values(true).unwrap(),
+            vec![
+                json!({"id": 1}),
+                json!({"event": "thread.message", "data": {"error": {"message": "ordinary only"}}}),
+            ]
+        );
 
         let mut stopped = ResponseValues::new(true, false);
         stopped.push(b"data: {\"id\":1}\n\ndata: {\"error\":{\"message\":\"stop\"}}\n\n");
