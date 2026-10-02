@@ -152760,12 +152760,12 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 +  /**
 +   * `M`, in UTF-8 bytes: the most one block placed inline may be.
 +   *
-+   * One tool result, one `read_file` page, one accepted compaction snapshot
-+   * and one authored prompt are all held to it, and anything larger is kept
-+   * whole in a file and read back a page at a time rather than shortened. It
-+   * is a share of the served window, so a larger window pages in larger
-+   * units; a provider that declares no window has no share to take and is
-+   * refused here rather than silently given a default.
++   * One tool result, one `read_file` page and one authored prompt are held
++   * to it, and anything larger is kept whole in a file and read back a page
++   * at a time rather than shortened; an accepted compaction snapshot is held
++   * to its own share, `S`. `M` is a share of the served window, so a larger
++   * window pages in larger units; a provider that declares no window has no
++   * share to take and is refused here rather than silently given a default.
 +   */
 +  getInlineBlockBytes(): number {
 +    const contextWindowSize =
@@ -251226,7 +251226,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +    // cannot be forced without being declared: the backend refuses that in
 +    // its request validator, in XGrammar's tool-choice normalisation and in
 +    // its Qwen structural-tag builder. Declaring the snapshot on every turn
-+    // instead would cost about 558 tokens of the static preamble on every
++    // instead would cost about 786 tokens of the static preamble on every
 +    // request and put a tool upstream does not have in front of the model on
 +    // every turn. What it would buy is small: in the measured long run the
 +    // draws spent their wall time decoding, not prefilling, and a shared
