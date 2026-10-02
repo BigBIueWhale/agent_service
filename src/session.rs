@@ -654,10 +654,12 @@ pub async fn run_one(
         );
         None
     };
-    let mut capture_proved = false;
+    // The capture component's durable byte count for events.jsonl, once the
+    // file is proved to hold exactly that many bytes.
+    let mut proved_event_bytes = None;
     match capture_result {
         Some(Ok(capture)) => match validate_completed_capture(&paths, &capture) {
-            Ok(()) => capture_proved = true,
+            Ok(()) => proved_event_bytes = Some(capture.events_bytes),
             Err(error) => diagnostics.push(error.to_string()),
         },
         Some(Err(error)) => diagnostics.push(format!(
@@ -683,16 +685,11 @@ pub async fn run_one(
             diagnostics.push(format!("read final agent logs: {error}"));
             "<agent logs unavailable>".into()
         });
-    let pre_teardown_observed = crate::runtime::read_output_progress(&paths.events_jsonl())
-        .unwrap_or_else(|error| {
-            diagnostics.push(format!(
-                "read pre-teardown event progress metadata: {error}"
-            ));
-            crate::runtime::OutputProgress::default()
-        });
+    // Teardown is published with the byte count the capture proved. The stream
+    // itself is read once, after quiescence, and its physical request count
+    // reaches the progress record with the bundle.
     let observed_counters = ProgressCounters {
-        output_event_bytes: pre_teardown_observed.output_event_bytes,
-        physical_requests: pre_teardown_observed.observed_usage.requests,
+        output_event_bytes: proved_event_bytes.unwrap_or(staged_counters.output_event_bytes),
         ..staged_counters
     };
     if let Err(error) = progress.publish(
@@ -722,31 +719,38 @@ pub async fn run_one(
         ));
     }
 
-    let snapshot = result_parse::read_event_snapshot(&paths.events_jsonl());
-    let final_output_observations = match &snapshot {
-        Ok(snapshot) => Some(
-            snapshot
-                .as_ref()
-                .map(|snapshot| snapshot.observed)
-                .unwrap_or_default(),
-        ),
-        Err(error) => {
-            diagnostics.push(format!("read final event snapshot: {error}"));
-            None
+    // The one read of the quiescent stream. Its observations and its verdict
+    // come from the same scan; a capture not proved complete is never
+    // certified, so its stream is read for observations alone.
+    let events = paths.events_jsonl();
+    let (final_output_observations, parsed) = if proved_event_bytes.is_some() {
+        match result_parse::read_event_snapshot(&events) {
+            Ok(Some(snapshot)) => (Some(snapshot.observed), snapshot.certified),
+            Ok(None) => (
+                Some(crate::runtime::OutputProgress::default()),
+                Err(ServiceError::AgentOutputMissing(
+                    "events.jsonl does not exist".into(),
+                )),
+            ),
+            Err(error) => {
+                diagnostics.push(format!("read final event snapshot: {error}"));
+                (None, Err(error))
+            }
         }
-    };
-    let parsed = if capture_proved {
-        snapshot.and_then(|snapshot| {
-            snapshot
-                .ok_or_else(|| {
-                    ServiceError::AgentOutputMissing("events.jsonl does not exist".into())
-                })?
-                .certified
-        })
     } else {
-        Err(ServiceError::AgentOutputMissing(
-            "trusted stream capture was not proved complete; refusing complete-result certification".into(),
-        ))
+        let observations = match result_parse::read_event_observations(&events) {
+            Ok(observed) => Some(observed.unwrap_or_default()),
+            Err(error) => {
+                diagnostics.push(format!("read final event snapshot: {error}"));
+                None
+            }
+        };
+        (
+            observations,
+            Err(ServiceError::AgentOutputMissing(
+                "trusted stream capture was not proved complete; refusing complete-result certification".into(),
+            )),
+        )
     };
     // The run can only report as missing what it was asked to leave: a
     // certified list naming anything else did not come from the check the
@@ -802,7 +806,7 @@ pub async fn run_one(
     };
     // Lifecycle counters retain their prior observations if storage is unreadable.
     // The explicit optional output observations below remain absent in that case.
-    let final_observed = final_output_observations.unwrap_or(pre_teardown_observed);
+    let final_observed = final_output_observations.unwrap_or_default();
     let last_event_at_unix = final_observed.last_event_at_unix;
     let final_num_turns = final_output_observations.and_then(|observed| observed.num_turns);
     let (mut is_process_error, disagreement) = process_outcome(

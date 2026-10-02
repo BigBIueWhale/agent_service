@@ -120,6 +120,21 @@ fn torn_tail_preserves_both_scope_observations_without_a_complete_result() {
     }
 }
 
+/// A reader that wants observations and no certificate makes the certifying
+/// scan without its physical replay, and observes exactly what it observes.
+#[test]
+fn observations_are_the_certifying_scan_without_its_replay() {
+    let trace = Trace::delegated();
+    trace.certify();
+    let path = owned_event_file(trace.text().as_bytes());
+    let observed = read_event_observations(&path).unwrap().unwrap();
+    let snapshot = read_event_snapshot(&path).unwrap().unwrap();
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(observed, snapshot.observed);
+    assert_eq!(observed.num_turns, Some(1));
+    assert!(read_event_observations(&path).unwrap().is_none());
+}
+
 #[test]
 fn complete_result_and_observations_come_from_the_same_snapshot() {
     let snapshot = Trace::delegated().snapshot();

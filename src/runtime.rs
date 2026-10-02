@@ -2258,12 +2258,11 @@ pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
 
 pub use crate::result_parse::OutputProgress;
 
-/// Read the same immutable event snapshot used by terminal certification.
-/// No file means no output has been observed; unreadable storage is an error.
+/// Read the observations of an immutable event prefix, by the same scan
+/// terminal certification makes, without certifying it. No file means no
+/// output has been observed; unreadable storage is an error.
 pub fn read_output_progress(events_path: &Path) -> ServiceResult<OutputProgress> {
-    Ok(crate::result_parse::read_event_snapshot(events_path)?
-        .map(|snapshot| snapshot.observed)
-        .unwrap_or_default())
+    Ok(crate::result_parse::read_event_observations(events_path)?.unwrap_or_default())
 }
 
 pub fn preview(s: &str) -> String {

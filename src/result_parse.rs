@@ -96,7 +96,11 @@ struct EventPrefix<R> {
 /// as JSON. Abrupt exit cannot certify it. Invalid complete records also remain
 /// unaccounted, while independently readable observations survive. Certification
 /// still requires the entire pinned stream and its unique final main result.
-/// Both running reads and terminal finalization consume this one descriptor scan.
+///
+/// This is the certifying read: one descriptor scan yields the observations and
+/// the native verdict together, and only a stream the native contract certified
+/// is replayed physically. A reader that wants observations and no certificate
+/// uses `read_event_observations`, which is the same scan without the replay.
 pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> {
     open_event_prefix(path)?
         .map(|prefix| {
@@ -112,6 +116,15 @@ pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> 
             }
             Ok(snapshot)
         })
+        .transpose()
+}
+
+/// The observations of the captured prefix, for a run still in progress or a
+/// record that is not being certified: the same descriptor scan as
+/// `read_event_snapshot`, without the physical replay a certificate needs.
+pub fn read_event_observations(path: &Path) -> ServiceResult<Option<OutputProgress>> {
+    open_event_prefix(path)?
+        .map(|prefix| read_opened_event_snapshot(path, prefix).map(|snapshot| snapshot.observed))
         .transpose()
 }
 
