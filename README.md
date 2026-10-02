@@ -544,7 +544,7 @@ The source pins describe this checkout. The independently pinned
 pins does not build, release, or update those images.
 
 The [source transformer](patches/source_patch_v1) applies the reviewed changes to
-that exact upstream tree. It checks source identities, structural landmarks, 35
+that exact upstream tree. It checks source identities, structural landmarks, 36
 semantic concerns, and final identities, including explicit absent identities for
 removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
 mutation refuse application. Failed publication restores original bytes, modes,
@@ -611,6 +611,13 @@ A terminal conversation and a headless conversation share the same obligations:
   cap without it refuses the build, so a bound cannot become invisible by a tool
   forgetting to mention it. A cap applied inside a service is returned with the
   items, because the layer asked to declare a limit has to be told one was hit.
+- A shell command's result is everything the command wrote before it exited,
+  or it says what it lacks. The client reads the pseudo-terminal to the end the
+  kernel reports rather than the end libuv infers from a short read on a
+  hang-up, which closed over all but the first 4,095 bytes of a command that
+  exited before it was read; it renders every row of a long output rather than
+  the last 10,000; and it states binary output and output past its capture
+  limit, with the true total and the command to run instead.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
   request advertises one function whose closed parameter schema is the sections
   of upstream's `<state_snapshot>` block but `all_user_messages`, which the

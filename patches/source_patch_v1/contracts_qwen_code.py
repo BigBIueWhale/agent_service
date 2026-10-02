@@ -11362,16 +11362,16 @@ def _validate_bounded_output_after(state: State) -> None:
                 f"applies here by name instead.",
             )
         require_text(state, path, "formatOutputBound(", count=1, label=label)
-    # The capture notice follows the output it describes, as upstream placed
-    # it.
+    # The capture-limit notice follows the output it describes, as upstream
+    # placed it; binary output, which is not shown, is the notice alone.
     _require_all(
         state,
         "packages/core/src/services/shellExecutionService.ts",
         (
             "outputCaptureLimitExceeded?: boolean;",
             "unit: 'bytes of output',",
-            "total: totalBytesReceived,",
-            "return output ? `${output}\\n\\n${notice}` : notice;",
+            "total: capture.totalBytesReceived,",
+            "return capture.binary || !output ? notice : `${output}\\n\\n${notice}`;",
         ),
         label=label,
     )
@@ -11776,6 +11776,155 @@ def _validate_stream_bounds_after(state: State) -> None:
         (bound_test, "refuses a streaming request whose max_tokens is $label"),
     ):
         require_text(state, path, case, label=label)
+
+
+_NODE_PTY_PATCH = "patches/@lydell+node-pty-linux-x64+1.2.0-beta.10.patch"
+_SHELL_SERVICE = "packages/core/src/services/shellExecutionService.ts"
+_TERMINAL_SERIALIZER = "packages/core/src/utils/terminalSerializer.ts"
+_SHELL_CAPTURE_TEST = "packages/core/src/services/shellExecutionService.capture.test.ts"
+
+
+def _validate_shell_output_completeness_before(state: State) -> None:
+    label = "shell output completeness precondition"
+    # Upstream reads the pty master through node-pty as libuv delivers it, so
+    # libuv's end of the stream is the end of the output; the dependency
+    # patches upstream ships do not touch node-pty.
+    _require(
+        _NODE_PTY_PATCH not in state,
+        f"{label}: {_NODE_PTY_PATCH} already exists upstream",
+    )
+    require_text(
+        state,
+        "package.json",
+        '"postinstall": "patch-package",',
+        label=label,
+    )
+    require_text(
+        state,
+        "package-lock.json",
+        '    "node_modules/@lydell/node-pty-linux-x64": {\n'
+        '      "version": "1.2.0-beta.10",',
+        label=label,
+    )
+    # Upstream's replay keeps the last 10,000 rows, shows binary output as the
+    # live terminal's text, and states only the capture limit, with no remedy.
+    _require_all(
+        state,
+        _SHELL_SERVICE,
+        (
+            "    scrollback: 10000,\n    convertEol: true,",
+            "                    fullOutput = serializeTerminalToText(headlessTerminal);",
+            "              snapshot = serializeTerminalToText(headlessTerminal) ?? '';",
+            "function appendOutputCaptureLimitNotice(",
+        ),
+        label=label,
+    )
+    forbid_text(state, _TERMINAL_SERIALIZER, "appendTerminalRows", label=label)
+
+
+def _validate_shell_output_completeness_after(state: State) -> None:
+    label = "shell output completeness result"
+    # The pty master ends where the kernel says the output ends. libuv takes a
+    # hang-up with a read short of its buffer as the end, but a pty master
+    # returns at most one line-discipline buffer per read, so the read side
+    # drains the master synchronously before an end is taken, and before the
+    # socket is closed after an exit. patch-package applies it to the exact
+    # version the lock pins.
+    _require_all(
+        state,
+        _NODE_PTY_PATCH,
+        (
+            "diff --git a/node_modules/@lydell/node-pty-linux-x64/lib/unixTerminal.js b/node_modules/@lydell/node-pty-linux-x64/lib/unixTerminal.js",
+            "+var PtyMasterReadStream = /** @class */ (function (_super) {",
+            "+    PtyMasterReadStream.prototype.push = function (chunk, encoding) {\n"
+            "+        if (chunk === null) {\n"
+            "+            this.drainMaster();\n"
+            "+        }\n",
+            "+                read = fs.readSync(this._masterFd, buffer, 0, buffer.length, null);",
+            "+                if (err.code === 'EIO' || err.code === 'EAGAIN') {",
+            "+                    _this._socket.drainMaster();\n"
+            "                     // Destroying the socket now will cause the close event to fire\n"
+            "                     _this._socket.destroy();",
+            "-        _this._socket = new tty.ReadStream(term.fd);\n"
+            "+        _this._socket = new PtyMasterReadStream(term.fd);",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        "package-lock.json",
+        '    "node_modules/@lydell/node-pty-linux-x64": {\n'
+        '      "version": "1.2.0-beta.10",',
+        label=label,
+    )
+    # One rule joins a terminal's rows into lines, and the replay takes rows
+    # with it as they scroll above the screen, in pieces no write can scroll
+    # past, so no row is lost to the window. A program's own erasures stay
+    # erased, the alternate screen at the end is the rendering as upstream's
+    # is, and a sequence that scrolls past the whole window is refused.
+    _require_all(
+        state,
+        _TERMINAL_SERIALIZER,
+        (
+            "export function appendTerminalRows(",
+            "  appendTerminalRows(lines, buffer, 0, buffer.length);",
+        ),
+        label=label,
+    )
+    service = _require_all(
+        state,
+        _SHELL_SERVICE,
+        (
+            "const REPLAY_WINDOW_ROWS = 10000;",
+            "    scrollback: REPLAY_WINDOW_ROWS,",
+            "replayTerminal.parser.registerCsiHandler({ final: 'J' }, eraseScrollback);",
+            "    { prefix: '?', final: 'J' },",
+            "replayTerminal.parser.registerEscHandler({ final: 'c' }, () => {",
+            "    appendTerminalRows(lines, buffer, start, end);",
+            "    const piece = REPLAY_WINDOW_ROWS - 1;",
+            "        take(replayTerminal.buffer.normal.baseY);",
+            "    take(replayTerminal.buffer.normal.length);",
+            "so its rendering would be missing rows.",
+        ),
+        label=label,
+    )
+    for retired in (
+        "scrollback: 10000,",
+        "fullOutput = serializeTerminalToText(headlessTerminal);",
+        "snapshot = serializeTerminalToText(headlessTerminal) ?? '';",
+        "appendOutputCaptureLimitNotice",
+    ):
+        forbid_text(state, _SHELL_SERVICE, retired, label=label)
+    # Output the result does not carry is stated through the one notice, with
+    # the total and the command that gets the rest, on every path a result is
+    # finished on.
+    _require_all(
+        state,
+        _SHELL_SERVICE,
+        (
+            "function capturedOutputText(output: string, capture: CapturedOutput): string {",
+            "          continuation: { unretained: BINARY_OUTPUT_NOT_SHOWN },",
+            "          continuation: { unretained: CAPTURE_LIMIT_DISCARDED },",
+            "'that file with a command that prints bytes as text, such as `od -c`.';",
+            "`with its output redirected to a file, then read that file with ${ToolNames.READ_FILE}.`;",
+            "  return capture.binary || !output ? notice : `${output}\\n\\n${notice}`;",
+        ),
+        label=label,
+    )
+    _require(
+        service.count("binary: !isStreamingRawContent,") == 4,
+        f"{label}: {_SHELL_SERVICE} finishes a result without stating binary output; "
+        "each of the four paths that resolve a result passes it to capturedOutputText",
+    )
+    for case in (
+        "delivers output a command finished writing past one pty read before the client read any of it",
+        "renders an output with more rows than the replay window whole",
+        "renders one line wrapped over more rows than the replay window whole",
+        "says binary output is not shown, how much there was, and how to inspect it",
+        "renders %s as an unbounded terminal does",
+        "refuses one sequence that scrolls past the whole window rather than render it short",
+    ):
+        require_text(state, _SHELL_CAPTURE_TEST, case, label=label)
 
 
 CONCERNS: tuple[SemanticConcern, ...] = (
@@ -12446,6 +12595,35 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_stream_bounds_before,
         validate_after=_validate_stream_bounds_after,
+    ),
+    SemanticConcern(
+        name="shell-output-completeness",
+        rationale=(
+            "A shell command's result carries everything the command wrote before it exited, or "
+            "says what it does not carry, how much there was and the command that gets it; a "
+            "result that reports the exit status never stands over output that was lost. The "
+            "pseudo-terminal is read to the end the kernel reports before the exit is reported. "
+            "libuv ends a stream on a hang-up that arrives with a read short of its buffer, but a "
+            "pty master returns at most one line-discipline buffer, 4,095 bytes, per read, so a "
+            "command that wrote more and exited before it was read had the rest closed over and "
+            "framed as a complete result. The pinned node-pty, patched through upstream's own "
+            "patch-package, reads the master synchronously to EIO before it takes that end, and to "
+            "EIO or EAGAIN before it closes the socket after an exit. The final rendering keeps "
+            "every row: the replay takes each row as it scrolls above the screen, where nothing can "
+            "address it again, writes the output in pieces no write can scroll past, and refuses "
+            "rather than shortens a rendering when one sequence scrolls past its whole window. Rows "
+            "a program erased stay erased and the alternate screen at the end is the rendering, as "
+            "upstream renders them. Binary output, which is not shown, and output past the capture "
+            "limit, which is discarded as it arrives, are stated through the one notice with the "
+            "true total and the command to run instead."
+        ),
+        removal_condition=(
+            "The pinned Node.js libuv reads a pty master to its end before reporting a hang-up as "
+            "the end of the stream, node-pty reads the master to its end before closing it after "
+            "an exit, and upstream's replay keeps every row and states binary and capped output."
+        ),
+        validate_before=_validate_shell_output_completeness_before,
+        validate_after=_validate_shell_output_completeness_after,
     ),
 )
 

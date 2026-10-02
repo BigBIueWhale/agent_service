@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `2bc8c98463188ce0579e944d385b65d180299964aa10fd9b189e56d32e237ef3`
+- Review-diff SHA-256: `19499e662e6f47406f59c40757cde6596cf7c0f7f257d4778fa89fb20d54117d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `7a15389ed8d1abe0bf6c039b98f10737fd731e94a086d7e5254f04379156b16b`
+- Transformer-manifest SHA-256: `0ff01d8a71c436e01f25320878a9ad62941390b4e002302211fa4c1b6348e30f`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 35 semantic concerns before changing the private source tree.
+identities, and 36 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -276,6 +276,27 @@ operational summary follows the tool's own words to the model, so the end a
 bound keeps says what failed. `error.message` is left whole on purpose, because
 the scrollback, the `PostToolUseFailure` hook and the sanitized telemetry span
 read it and want the operational summary in full.
+
+A shell command's result carries everything the command wrote before it
+exited, or says what it does not carry, how much there was and the command that
+gets it; a result that reports the exit status never stands over output that
+was lost. The pseudo-terminal is read to the end the kernel reports. libuv
+takes a hang-up that arrives with a read short of its buffer as the end of the
+stream, but a pty master returns at most one line-discipline buffer, 4,095
+bytes, per read, so a command that wrote more and exited before the client read
+it had the rest closed over, and its result said `Exit Code: 0`. The pinned
+node-pty, patched through upstream's own patch-package, reads the master
+synchronously to EIO before it takes that end, and to EIO or EAGAIN before it
+closes the socket after an exit. The final text is upstream's replay terminal
+with every row kept: `replayTerminalOutput` takes each row as it scrolls above
+the screen, where nothing a program writes can address it again, and writes
+the output in pieces no write can scroll past, so a long output keeps its
+start. A program's own erasures, and an alternate screen still shown at the
+end, render as upstream renders them; one sequence that scrolls past the whole
+window is refused rather than rendered short. Binary output, which is not
+shown, and output past the capture limit, which is discarded as it arrives, are
+stated through the one notice with the true total and the command to run
+instead.
 
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
