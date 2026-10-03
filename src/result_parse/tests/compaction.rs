@@ -57,7 +57,7 @@ fn committed(history: Value) -> Value {
         "operationId":"named-when-recorded",
         "functionCalls":[{"id":"snapshot-call","name":"state_snapshot","args":sections}],
         "text":"","reasoning":"","sdkValuesJson":[provider, usage_chunk(&usage)],
-        "newTokenCount":12,"snapshotBytes":588,"incompleteToolCalls":[],
+        "newTokenCount":12,"snapshotBytes":524,"incompleteToolCalls":[],
         "finishReason":"STOP","usage":usage});
     let mut record = record(draw, json!([]));
     record["data"]["status"] = json!("COMPRESSED");

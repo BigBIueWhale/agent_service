@@ -2187,7 +2187,7 @@ mod tests {
             "operationId":"compaction-operation", "functionCalls":[{
                 "id":"snapshot-call","name":"state_snapshot","args":compaction_sections()}],
             "text":"", "reasoning":"", "sdkValuesJson":[compaction_provider_value()],
-            "newTokenCount":12, "snapshotBytes":588,
+            "newTokenCount":12, "snapshotBytes":524,
             "incompleteToolCalls":[], "finishReason":"STOP",
             "usage":{"promptTokenCount":24,"candidatesTokenCount":4,
                 "thoughtsTokenCount":0,"cachedContentTokenCount":0,

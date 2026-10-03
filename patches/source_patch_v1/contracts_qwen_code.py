@@ -1187,7 +1187,9 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
             "'- A `read_file` page and the statement that leads it are one inline block together.',",
             "  const snapshot = `${partition.snapshotBytes} bytes`;",
-            "a declared snapshot of at most ${snapshot} plus the original inputs verbatim,",
+            # What a compaction is, the model is told before its first turn,
+            # from the one statement of the frame it will read.
+            "    `- ${compactionDeclaration(trigger, snapshot)}`,",
             # The model is told what happens at the turn's limit: the turn is
             # refused rather than truncated, kept nowhere and run in no part,
             # asked for again as the next turn, and how many refusals in a
@@ -4561,18 +4563,18 @@ def _validate_compaction_budget_after(state: State) -> None:
             # and redrawn whole.
             "export function stateSnapshotTool(maxBytes: number): Tool {",
             "its all_user_messages element is filled by the runtime with the original inputs, verbatim.",
-            "`${maxBytes} bytes, including the tags and indentation that frame it; a longer snapshot is refused and redrawn.`,",
+            "`${maxBytes} bytes, including the tags that frame it; a longer snapshot is refused and redrawn.`,",
             "export function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxBytes: number,\n): StateSnapshotAcceptance {",
             # Measured with all_user_messages empty: the inputs it will hold
             # are bounded on their own, and are not the draw's.
             "const rendered = tokenizerText(stateSnapshotText(snapshot));",
             "if (rendered.bytes > maxBytes) {",
             # Rendered as upstream's block: one `<state_snapshot>` element, a
-            # child per section, laid out as upstream's compression prompt
-            # lays out the block it asks for. Nothing is escaped.
-            "      `    <${section}>`,",
-            "        .map((line) => (line === '' ? '' : `        ${line}`)),",
-            "      `    </${section}>`,",
+            # child per section, its tags laid out as upstream's compression
+            # prompt lays them out, and each section's text between them
+            # exactly as the model wrote it: nothing is escaped, indented or
+            # trimmed.
+            "    [`    <${section}>`, snapshot[section], `    </${section}>`].join('\\n');",
             "  const at = STATE_SNAPSHOT_ELEMENTS.indexOf(RETAINED_INPUTS_ELEMENT);",
             "      `<state_snapshot>\\n${before.join('\\n\\n')}\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n`,",
             "      `\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n${after.join('\\n\\n')}\\n</state_snapshot>`,",
@@ -5636,13 +5638,13 @@ def _validate_compaction_budget_after(state: State) -> None:
         ),
         label=label,
     )
-    # The post-compact history is composed as upstream's composer composes
-    # it: the snapshot with its resume trailer as a user message, the
-    # retained inputs as their own parts in its all_user_messages, the
-    # standalone acknowledgement in upstream's words before attachments --
-    # the state reminders, each block set off from the next -- as one user
-    # message, then the turn. Without attachments the carried model turn
-    # answers the snapshot directly, with no runtime words added to its parts.
+    # The post-compact history is the snapshot with its resume trailer as a
+    # user message, the retained inputs as their own parts in its
+    # all_user_messages, the attachments -- the state reminders, each block
+    # set off from the next -- as one user message when there are any, then
+    # the carried turn. Nothing in it speaks in the model's role that the
+    # model did not write: upstream's acknowledgement is not composed, and no
+    # runtime words are added to the carried turn's parts.
     _require_all(
         state,
         attachments,
@@ -5653,32 +5655,30 @@ def _validate_compaction_budget_after(state: State) -> None:
             "function snapshotMessage(snapshot: StateSnapshot, inputs: Part[]): Content {",
             "      { text: opening },\n      ...inputs,\n      { text: `${closing}\\n\\n${RESUME_TRAILER}` },",
             "const snapshot = snapshotMessage(declared, retainedInstructionParts(history));",
-            "export const COMPACTION_ACKNOWLEDGEMENT =\n  'Got it. Thanks for the additional context!';",
+            "export function compactionDeclaration(",
             "const BLOCK_SEPARATOR = '\\n\\n';",
             "    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],",
             "  turn?: Content[];",
-            "    return [\n      snapshot,\n      { role: 'model', parts: [acknowledgement] },\n      { role: 'user', parts: attachments },\n      ...carried,\n    ];",
-            "  if (carried[0]?.role === 'model') {\n    return [snapshot, ...carried];",
-            "  return [snapshot, { role: 'model', parts: [acknowledgement] }, ...carried];",
+            "  return [\n    snapshot,\n    ...(attachments.length > 0\n      ? [{ role: 'user', parts: attachments } satisfies Content]\n      : []),\n    ...carried,\n  ];",
             # The frame the startup proof counts is built from the same text.
             "export function compactionFrame(): Content[] {",
-            "    { role: 'user', parts: [{ text: `\\n\\n${RESUME_TRAILER}` }] },",
-            "{ role: 'model', parts: [{ text: COMPACTION_ACKNOWLEDGEMENT }] },",
+            "  return [{ role: 'user', parts: [{ text: `\\n\\n${RESUME_TRAILER}` }] }];",
         ),
         label=label,
     )
-    forbid_text(state, attachments, "parts: [acknowledgement,", label=label)
+    for retired in ("parts: [acknowledgement", "COMPACTION_ACKNOWLEDGEMENT", "'Got it. Thanks"):
+        forbid_text(state, attachments, retired, label=label)
     # The carried turn follows the snapshot in time as well as in the
     # history: the snapshot is the state as of the prompt the turn was issued
-    # against, and the turn is the step taken next, after the
-    # acknowledgement. The trailer is upstream's own, word for word, and
+    # against, and the turn is the step taken next. The trailer is upstream's
+    # own, word for word, and
     # nothing calls the turn "the most recent", which would place it before
     # the snapshot and make a snapshot that ends before the step its history
     # shows taken read as one that contradicts it.
     require_text(
         state,
         attachments,
-        "  'Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.';",
+        "export const RESUME_TRAILER =\n  'Resume the prior task using the summary above. Continue from the last in-flight step; do not acknowledge the summary, do not re-introduce, do not greet the user again.';",
         label=label,
     )
     forbid_text(state, attachments, "the most recent turn and its result", label=label)
@@ -5703,18 +5703,28 @@ def _validate_compaction_budget_after(state: State) -> None:
     )
     # A compacted prefix is structural, the retained input included, so a
     # rewind or fork does not count it as a prompt the user typed later: the
-    # snapshot is recognised by its trailer, which follows the inputs in its
-    # message rather than leading it.
-    require_text(
+    # snapshot is recognised by its trailer, the one constant that composes
+    # it, which follows the inputs in its message rather than leading it.
+    _require_all(
         state,
         "packages/core/src/utils/environmentContext.ts",
-        "  const resumes = (firstEntry.parts ?? []).some(",
+        (
+            "  const resumes = (firstEntry.parts ?? []).some(",
+            "part.text.includes(RESUME_TRAILER),",
+        ),
         label=label,
+    )
+    forbid_text(
+        state, "packages/core/src/utils/environmentContext.ts", "'Resume the prior task'", label=label
     )
     forbid_text(state, attachments, "postProcessSummary", label=label)
     for name, path in (
         (
-            "composes upstream's order: snapshot, acknowledgement, attachments, then the turn whole",
+            "composes the snapshot, the attachments, then the turn whole, with no acknowledgement",
+            "packages/core/src/services/postCompactAttachments.test.ts",
+        ),
+        (
+            "re-enters every section between its tags exactly as the model wrote it",
             "packages/core/src/services/postCompactAttachments.test.ts",
         ),
         (
@@ -5730,7 +5740,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "packages/core/src/services/postCompactAttachments.test.ts",
         ),
         (
-            "is the fixed text around the blocks: the trailer after the snapshot, and the acknowledgement",
+            "is the fixed text around the blocks: the trailer after the snapshot",
             "packages/core/src/services/postCompactAttachments.test.ts",
         ),
         (
@@ -5746,7 +5756,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "packages/core/src/core/prompts.test.ts",
         ),
         (
-            "renders the sections as upstream's state_snapshot block, laid out as its prompt lays it out",
+            "renders the sections as upstream's state_snapshot block, each exactly as the model wrote it",
             "packages/core/src/services/state-snapshot.test.ts",
         ),
         (
@@ -5816,7 +5826,8 @@ def _validate_compaction_budget_after(state: State) -> None:
             forbid_text(state, path, absent, label=label)
     forbid_text(state, prompts, "may also be restored", label=label)
     for case in (
-        "never lets one message of a role follow another of the same role",
+        "puts in the model's role only the turn the model generated",
+        "puts nothing in the model's role when nothing is attached and no turn is carried",
         "restores nothing from the workspace or the earlier history",
     ):
         require_text(state, attachments_test, case, label=label)

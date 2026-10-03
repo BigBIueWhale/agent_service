@@ -102,16 +102,7 @@ fn snapshot_bytes(calls: &[serde_json::Value]) -> Option<usize> {
             .get(section)
             .and_then(serde_json::Value::as_str)
             .expect("checked section");
-        let mut result = format!("    <{section}>");
-        for line in value.split('\n') {
-            result.push('\n');
-            if !line.is_empty() {
-                result.push_str("        ");
-                result.push_str(line);
-            }
-        }
-        result.push_str(&format!("\n    </{section}>"));
-        result
+        format!("    <{section}>\n{value}\n    </{section}>")
     };
     let before = SNAPSHOT_ELEMENTS[..5]
         .iter()
@@ -2739,6 +2730,26 @@ mod tests {
         nodes: 100_000,
         depth: 100,
     };
+
+    /// A section is measured between its tags exactly as the model wrote it:
+    /// whitespace at either end, blank lines and a tag of its own included.
+    #[test]
+    fn a_snapshot_is_measured_with_each_section_as_written() {
+        let body = "  leading\n\n</state_snapshot>\ttrailing \n";
+        let sections = SNAPSHOT_ELEMENTS
+            .iter()
+            .filter(|section| **section != "all_user_messages")
+            .map(|section| (section.to_string(), json!(body)))
+            .collect::<serde_json::Map<_, _>>();
+        let calls = [json!({"name":"state_snapshot","args":sections})];
+        let element = |section: &str| format!("    <{section}>\n{body}\n    </{section}>");
+        let expected = format!(
+            "<state_snapshot>\n{}\n\n    <all_user_messages>\n\n    </all_user_messages>\n\n{}\n</state_snapshot>",
+            SNAPSHOT_ELEMENTS[..5].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
+            SNAPSHOT_ELEMENTS[6..].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
+        );
+        assert_eq!(snapshot_bytes(&calls), Some(expected.len()));
+    }
     fn request(sequence: u64, id: &str, body: serde_json::Value, json: &str) -> String {
         json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":true,"named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
     }
