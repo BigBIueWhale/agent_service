@@ -177,6 +177,12 @@ else
   mv -- "${PROVENANCE_ROOT}/release.json.partial" "${PROVENANCE_ROOT}/release.json"
   sync -f -- "${PROVENANCE_ROOT}"
 fi
+# Every pass under this root is release evidence: its provenance, results and
+# pair summaries name the release they ran on. The root is registered as an
+# evidence store before any task runs, so ./collect.sh keeps every release a
+# pass here names.
+"${SERVICE_ROOT}/scripts/register-evidence-store.sh" "${BENCH_ROOT}" >&2 ||
+  die 'registering this benchmark root as an evidence store failed'
 
 printf 'Validating the live production release before touching any task...\n' >&2
 STATUS_SNAPSHOT="$(mktemp "${PROVENANCE_ROOT}/status.XXXXXX")"

@@ -26,17 +26,27 @@ touched and never listed. What is deployed is read from the containers, not
 from a file, and every state the evaluation cannot explain is a refusal naming
 what was expected, what was found and what to do next.
 
-Evidence is found rather than assumed to live where it should: the home
-directory is walked (one filesystem, `.git` skipped) for the files the evidence
-producers write -- session records (`s-<64 hex>/accepted.json`, `finished.json`,
-`judgement.md`) and benchmark pass provenance (`release-provenance/release.json`,
-per-run `result.json`, `pair-summary*.json`, `benchmark-lock.json`, status
-files). Every full commit, image or archive hash such a file names references
-that release, and a lock hash stands for everything that lock pinned. A session
-record that names no release (schema 2) still ran on a release that existed
-when it was accepted, so every release available before the newest such record
-counts as referenced: an over-approximation that can only keep more, and the
-report names the record that forces it.
+Evidence is read from the stores it is kept in, and from nowhere else. The
+service keeps its session records in the stack lock's results_dir, which the
+lock declares before any record is written there. Every other writer of
+evidence registers the directory it keeps evidence in when it writes there,
+through scripts/register-evidence-store.sh: the benchmark harness registers its
+root when it starts a pass, and a person keeping copies of
+records with their judgements registers the directory they keep them in. A
+store is read whole, and in it the files the evidence producers write are
+evidence -- session records and their copies (`s-<64 hex>/` or `service-record/`
+`accepted.json`, `finished.json`, `judgement.md`) and benchmark pass provenance
+(`release-provenance/release.json`, per-run `result.json`, `pair-summary*.json`,
+`benchmark-lock.json`, status files). Every full commit, image or archive hash
+such a file names references that release, and a lock hash stands for
+everything that lock pinned. A session record that names no release (schema 2)
+still ran on a release that existed when it was accepted, so every release
+available before the newest such record counts as referenced: an
+over-approximation that can only keep more, and the report names the record
+that forces it. A registered store that is gone, or that holds a directory this
+user cannot read, could hold evidence, so it stops the evaluation and names its
+registration. Evidence kept where no store covers it is not read, which is why
+its keeper registers it.
 
 `report` prints every one of our objects with its size, its release identity
 and the rule that decides it, then one summary line. `delete` evaluates the
@@ -414,46 +424,108 @@ def deployed_releases(stack, users, service, backend):
 # Evidence
 # ---------------------------------------------------------------------------
 
-def evidence_files(root, extra_root):
-    device = os.lstat(root).st_dev
-    found, crossed, pending, walked = [], [], [str(root)], 0
-    extra = os.path.realpath(extra_root)
-    if os.path.isdir(extra) and not (extra + os.sep).startswith(os.path.realpath(root) + os.sep):
-        pending.append(extra)   # the results root lives elsewhere; it is searched too
-    while pending:
-        directory = pending.pop()
-        walked += 1
+def evidence_stores(results_dir, registry):
+    """Every store evidence is kept in: the service's own, then each registered one.
+
+    The service's store is declared by the stack lock before any record is
+    written, so its absence means the service has written no record here. A
+    registered store was declared by a writer that put evidence in it, so its
+    absence is evidence gone missing, and that is a refusal.
+    """
+    stores = [{"path": str(results_dir), "declared": "the stack lock's service.results_dir",
+               "registration": None}]
+    try:
+        if not stat.S_ISDIR(os.lstat(results_dir).st_mode):
+            refuse(f"The service's evidence store {results_dir}, the stack lock's service.results_dir, "
+                   "is not a directory, so the session records it keeps cannot be read.",
+                   f"Next: restore {results_dir} as the directory the service writes its records in.")
+    except FileNotFoundError:
+        stores[0]["absent"] = True
+    except OSError as error:
+        refuse(f"The service's evidence store {results_dir} cannot be reached: {error.strerror}.",
+               "Next: make it readable to this user.")
+    try:
+        if not stat.S_ISDIR(os.lstat(registry).st_mode):
+            refuse(f"The evidence-store registry {registry} is not a directory.",
+                   "Next: move it aside and register each store again with "
+                   "scripts/register-evidence-store.sh <directory>.")
+        entries = sorted(os.scandir(registry), key=lambda entry: entry.name)
+    except FileNotFoundError:
+        return stores   # no writer has registered a store on this host
+    except OSError as error:
+        refuse(f"The evidence-store registry {registry} cannot be read: {error.strerror}.",
+               "Next: make it readable to this user.")
+    for entry in entries:
+        if not (HEX64.match(entry.name) and entry.is_file(follow_symlinks=False)):
+            refuse(f"{entry.path} is not a registration: scripts/register-evidence-store.sh names each "
+                   "one for the SHA-256 of its store's path, and leaves a name with a leading dot only "
+                   "when a registration was interrupted.",
+                   f"Next: remove {entry.path}, and register its store again if one was being registered.")
         try:
-            entries = list(os.scandir(directory))
+            with open(entry.path, "rb") as handle:
+                content = handle.read()
         except OSError as error:
-            refuse(f"The evidence search cannot read {directory}: {error.strerror}.",
-                   "Evidence could be there, so nothing can be proved unreferenced.",
+            refuse(f"The registration {entry.path} cannot be read: {error.strerror}.",
                    "Next: make it readable to this user.")
-        for entry in entries:
-            if entry.is_symlink():
-                continue
-            if entry.is_dir(follow_symlinks=False):
-                if entry.name == ".git":
+        path = content.decode(errors="replace")[:-1]
+        if not (content.endswith(b"\n") and path.startswith("/") and "\n" not in path
+                and hashlib.sha256(path.encode()).hexdigest() == entry.name):
+            refuse(f"The registration {entry.path} does not hold the one path its name commits to.",
+                   f"Next: remove {entry.path} and register the store again.")
+        try:
+            missing = None if stat.S_ISDIR(os.lstat(path).st_mode) else "is not a directory"
+        except FileNotFoundError:
+            missing = "is gone"
+        except OSError as error:
+            missing = f"cannot be reached: {error.strerror}"
+        if missing:
+            refuse(f"The evidence store {path}, registered by {entry.path}, {missing}. Evidence kept "
+                   "there cannot be read, so nothing it named can be proved unreferenced.",
+                   f"Next: restore {path}, or remove {entry.path} if it no longer keeps evidence.")
+        stores.append({"path": path, "declared": f"registered by {entry.path}",
+                       "registration": entry.path})
+    return stores
+
+
+def evidence_files(stores):
+    found, walked = set(), 0
+    for store in stores:
+        if store.get("absent"):
+            continue
+        pending = [store["path"]]
+        while pending:
+            directory = pending.pop()
+            walked += 1
+            try:
+                entries = list(os.scandir(directory))
+            except OSError as error:
+                refuse(f"The evidence store {store['path']} ({store['declared']}) holds {directory}, "
+                       f"which cannot be read: {error.strerror}.",
+                       "Evidence could be there, so nothing can be proved unreferenced.",
+                       "Next: make it readable to this user"
+                       + (f", or remove {store['registration']} if the store no longer keeps evidence."
+                          if store["registration"] else "."))
+            for entry in entries:
+                if entry.is_symlink():
                     continue
-                if entry.stat(follow_symlinks=False).st_dev != device:
-                    crossed.append(entry.path)
-                else:
-                    pending.append(entry.path)
-                continue
-            if not entry.is_file(follow_symlinks=False):
-                continue
-            parent = os.path.basename(directory)
-            if entry.name in RECORD_FILES and (SESSION_DIR.match(parent) or parent == "service-record"):
-                found.append(entry.path)
-            elif entry.name == "release.json" and parent == "release-provenance":
-                found.append(entry.path)
-            elif entry.name in PASS_FILES - {"release.json"} or entry.name.startswith(PASS_PREFIX):
-                found.append(entry.path)
-    return found, crossed, walked
+                if entry.is_dir(follow_symlinks=False):
+                    if entry.name != ".git":
+                        pending.append(entry.path)
+                    continue
+                if not entry.is_file(follow_symlinks=False):
+                    continue
+                parent = os.path.basename(directory)
+                if entry.name in RECORD_FILES and (SESSION_DIR.match(parent) or parent == "service-record"):
+                    found.add(entry.path)
+                elif entry.name == "release.json" and parent == "release-provenance":
+                    found.add(entry.path)
+                elif entry.name in PASS_FILES - {"release.json"} or entry.name.startswith(PASS_PREFIX):
+                    found.add(entry.path)
+    return sorted(found), walked
 
 
-def gather_evidence(home, results_dir, service):
-    files, crossed, walked = evidence_files(home, results_dir)
+def gather_evidence(stores, service):
+    files, walked = evidence_files(stores)
     tokens, sources = set(), {}
     passes = sorted(os.path.dirname(os.path.dirname(f)) for f in files
                     if f.endswith(os.sep + os.path.join("release-provenance", "release.json")))
@@ -488,7 +560,7 @@ def gather_evidence(home, results_dir, service):
                     tokens.add(token)
                     sources.setdefault(token, sources[sha])
     return {"tokens": tokens, "sources": sources, "files": len(files), "walked": walked,
-            "crossed": crossed, "records": records, "copies": copies, "passes": len(passes),
+            "stores": stores, "records": records, "copies": copies, "passes": len(passes),
             "unresolved": sorted(unresolved)}
 
 
@@ -684,7 +756,7 @@ def check_identity_tags(image_id, tags, service, backend):
                        "Next: find how the tag moved; nothing was evaluated.")
 
 
-def evaluate(project):
+def evaluate(project, registry):
     stack = parse_json(committed(project, "config/stack.lock.json"), "config/stack.lock.json")
     lock = parse_json(committed(project, "config/release.lock.json"), "config/release.lock.json")
     if not isinstance(lock.get("archive"), dict):
@@ -722,7 +794,7 @@ def evaluate(project):
         kept |= {anchor, before(backend["releases"], anchor)}
     kept.discard(None)
 
-    evidence = gather_evidence(Path.home(), results_dir, service)
+    evidence = gather_evidence(evidence_stores(results_dir, registry), service)
     referenced = {}
     for release in service["releases"] + backend["releases"]:
         why = referencing(release, evidence)
@@ -781,15 +853,16 @@ def report(result):
           f"{deployed_backend.short() if deployed_backend else 'no backend is running'}")
     print(f"  checked out: {head.short()}; {backend_head.short()}")
     print("  kept whole:  " + ", ".join(r.short() for r in sorted(result["kept"], key=lambda r: (r.kind, r.cut_at))))
-    print(f"  evidence:    {evidence['walked']} directories under {Path.home()} walked (one filesystem, "
-          f".git skipped): {evidence['records']} session records, {evidence['copies']} record copies, "
-          f"{evidence['passes']} benchmark passes, {evidence['files']} evidence files read")
+    print(f"  evidence:    {plural(len(evidence['stores']), 'store')} read, {evidence['walked']} directories: "
+          f"{evidence['records']} session records, {evidence['copies']} record copies, "
+          f"{evidence['passes']} benchmark passes, {evidence['files']} evidence files")
+    for store in evidence["stores"]:
+        print(f"               store {store['path']}: {store['declared']}"
+              + ("; absent, so it holds no records" if store.get("absent") else ""))
     if evidence["unresolved"]:
         when, record = evidence["unresolved"][-1]
         print(f"               {len(evidence['unresolved'])} session records name no release; the newest, "
               f"{record}, was accepted {utc(when)}, so every release available before then counts as referenced")
-    for path in evidence["crossed"]:
-        print(f"               not searched, another filesystem: {path}")
     for path, info, why in result["untouched"]:
         print(f"  untouched:   {path} ({gb(info.st_size)}): {why}")
     print()
@@ -859,13 +932,14 @@ def delete(result):
 
 
 def main():
-    if len(sys.argv) != 3 or sys.argv[2] not in ("report", "delete"):
-        print("usage: collect.py <agent_service checkout> report|delete", file=sys.stderr)
+    if len(sys.argv) != 4 or sys.argv[3] not in ("report", "delete"):
+        print("usage: collect.py <agent_service checkout> <evidence-store registry> report|delete",
+              file=sys.stderr)
         return 2
     try:
-        result = evaluate(Path(sys.argv[1]).resolve())
+        result = evaluate(Path(sys.argv[1]).resolve(), Path(sys.argv[2]))
         report(result)
-        if sys.argv[2] == "delete":
+        if sys.argv[3] == "delete":
             print()
             delete(result)
     except Refusal as refusal:

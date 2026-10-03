@@ -165,6 +165,60 @@ tag_release_identity() {
   done
 }
 
+# Release evidence is kept in stores, and ./collect.sh reads every store and
+# nothing else, so it keeps exactly the releases kept evidence names. The
+# service's store is the stack lock's results_dir, declared before any record is
+# written there. Every other writer of evidence -- a benchmark harness, a person
+# keeping copies of records with their judgements -- registers the directory it
+# keeps evidence in, here, when it writes there. The registry belongs to the
+# host, as the records beside it do: it lives under the stack lock's runtime
+# root, which git does not track.
+evidence_store_registry() {
+  printf '%s/evidence-stores\n' "$(lock_value '.service.runtime_root')"
+}
+
+# Register a directory as a store of release evidence. A registration is one
+# file, named for the SHA-256 of the store's canonical path and holding that
+# path on one line, published by rename, so it is never half written and
+# registering a store again changes nothing. Removing the file is how a store
+# stops counting. Takes the registry explicitly, on the same terms as
+# validate_release_lock, so the collect test proves it against a scratch
+# registry; every production caller registers in this host's.
+register_evidence_store() {
+  local store="$1" registry="${2:-}" canonical name registration partial
+  [[ -n "${registry}" ]] || registry="$(evidence_store_registry)"
+  [[ -d "${store}" && ! -L "${store}" ]] ||
+    die "An evidence store must be an existing directory, not a symlink: ${store}"
+  canonical="$(realpath -e -- "${store}")" || die "Cannot resolve the evidence store ${store}"
+  [[ "${canonical}" == /* && "${canonical}" != *$'\n'* ]] ||
+    die "The evidence store's path cannot be registered on one line: ${canonical@Q}"
+  name="$(printf '%s' "${canonical}" | sha256sum | cut -d' ' -f1)"
+  registration="${registry}/${name}"
+  if [[ ! -e "${registry}" && ! -L "${registry}" ]]; then
+    [[ -d "$(dirname -- "${registry}")" ]] || mkdir -m 0700 -- "$(dirname -- "${registry}")" ||
+      die "Cannot create the runtime root that holds the evidence-store registry: $(dirname -- "${registry}")"
+    mkdir -m 0700 -- "${registry}" || die "Cannot create the evidence-store registry: ${registry}"
+  fi
+  [[ -d "${registry}" && ! -L "${registry}" ]] ||
+    die "The evidence-store registry is not a real directory: ${registry}"
+  if [[ -e "${registration}" || -L "${registration}" ]]; then
+    [[ -f "${registration}" && ! -L "${registration}" &&
+      "$(cat -- "${registration}")" == "${canonical}" ]] ||
+      die "${registration} exists but does not register ${canonical}." \
+        "Next: remove it and register the store again."
+    printf 'Evidence store already registered: %s (%s)\n' "${canonical}" "${registration}"
+    return 0
+  fi
+  partial="$(mktemp "${registry}/.${name}.XXXXXX")" ||
+    die "Cannot write a registration in ${registry}"
+  printf '%s\n' "${canonical}" >"${partial}" &&
+    sync -f -- "${partial}" &&
+    mv -- "${partial}" "${registration}" &&
+    sync -f -- "${registry}" ||
+    die "Registering ${canonical} did not complete; ${partial} may remain and is not a registration."
+  printf 'Evidence store registered: %s (%s)\n' "${canonical}" "${registration}"
+}
+
 # Fail closed on an unpinned, missing or byte-drifted archive before anything
 # consumes it. The name only finds the file the lock describes; the pinned
 # SHA256 is the archive's only trust anchor: a bundle copied in under the

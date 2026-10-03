@@ -6,6 +6,9 @@
 #     scripts/common.sh derives -- the archive name and the identity tags --
 #     and nothing looser;
 #   * each keep-or-collect rule decides the way the policy states;
+#   * evidence is read from the service's store and the registered stores and
+#     from nowhere else, registering a store is idempotent, and a registered
+#     store that is gone or unreadable refuses, naming its registration;
 #   * the storage hook answers in exactly one line of valid hook JSON and exits
 #     0 even when its check cannot run at all.
 set -Eeuo pipefail
@@ -19,7 +22,7 @@ source "${SCRIPT_DIR}/common.sh"
 
 TEST_DIR="$(mktemp -d /tmp/qwen38-collect-test.XXXXXX)"
 readonly TEST_DIR
-trap 'rm -rf -- "${TEST_DIR}"' EXIT
+trap 'chmod -R u+rwX -- "${TEST_DIR}" 2>/dev/null; rm -rf -- "${TEST_DIR}"' EXIT
 
 probe="${TEST_DIR}/release.lock.json"
 jq --arg commit "$(printf '1%.0s' {1..40})" --arg service "sha256:$(printf '2%.0s' {1..64})" \
@@ -109,6 +112,105 @@ if before is not old or collect.before([anchor, old], old) is not None:
     fail("the release before another is not the next older one by cut time")
 print(f"COLLECT_CONTRACT_OK names=agree-with-common.sh rules={len(cases)} references=bounded")
 PY
+
+# Evidence stores. A scratch tree holds the service's store with a record
+# naming release X, a registered store whose pass names Y, an unregistered
+# directory whose pass names Z, and an unreadable directory outside every
+# store. Only X and Y may be referenced, and nothing outside the stores is read.
+stores_root="${TEST_DIR}/stores"
+commit_x="$(printf 'a%.0s' {1..40})" commit_y="$(printf 'b%.0s' {1..40})" commit_z="$(printf 'c%.0s' {1..40})"
+session="s-$(printf 'd%.0s' {1..64})"
+mkdir -p -- "${stores_root}/results/schema-7/${session}" \
+  "${stores_root}/registered/full-suite-v1/release-provenance" \
+  "${stores_root}/unregistered/full-suite-v1/release-provenance" \
+  "${stores_root}/unreadable-outside"
+printf '{"release":{"implementation_commit":"%s"}}\n' "${commit_x}" \
+  >"${stores_root}/results/schema-7/${session}/accepted.json"
+printf '{"implementation_commit":"%s"}\n' "${commit_y}" \
+  >"${stores_root}/registered/full-suite-v1/release-provenance/release.json"
+printf '{"implementation_commit":"%s"}\n' "${commit_z}" \
+  >"${stores_root}/unregistered/full-suite-v1/release-provenance/release.json"
+registry="${stores_root}/runtime/evidence-stores"
+register_evidence_store "${stores_root}/registered" "${registry}" >/dev/null
+register_evidence_store "${stores_root}/registered/" "${registry}" >/dev/null
+registrations=("${registry}"/*)
+[[ "${#registrations[@]}" == 1 && "$(cat -- "${registrations[0]}")" == "${stores_root}/registered" &&
+  "$(basename -- "${registrations[0]}")" == "$(printf '%s' "${stores_root}/registered" | sha256sum | cut -d' ' -f1)" &&
+  "$(stat -c '%a' "${registry}")" == 700 ]] || {
+  printf 'COLLECT CONTRACT FAILURE: registering a store twice did not leave exactly its one registration\n' >&2
+  exit 1
+}
+if (register_evidence_store "${stores_root}/absent" "${registry}") >/dev/null 2>&1; then
+  printf 'COLLECT CONTRACT FAILURE: a directory that does not exist was registered\n' >&2
+  exit 1
+fi
+chmod 000 -- "${stores_root}/unreadable-outside"
+[[ ! -r "${stores_root}/unreadable-outside" ]] || {
+  printf 'COLLECT CONTRACT FAILURE: this test needs a user that file modes bind; run it as the project user\n' >&2
+  exit 1
+}
+
+PYTHONDONTWRITEBYTECODE=1 python3 - "${PROJECT_DIR}/scripts/collect.py" "${stores_root}" "${registry}" \
+  "${registrations[0]}" "${commit_x}" "${commit_y}" "${commit_z}" <<'PY'
+import importlib.util
+import os
+import shutil
+import sys
+
+spec = importlib.util.spec_from_file_location("collect", sys.argv[1])
+collect = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(collect)
+root, registry, registration, x, y, z = sys.argv[2:]
+results, registered = os.path.join(root, "results"), os.path.join(root, "registered")
+no_locks = {"lock_blobs": {}, "stack_blobs": {}}
+
+
+def fail(message):
+    sys.exit(f"COLLECT CONTRACT FAILURE: {message}")
+
+
+def release(commit):
+    made = collect.Release("service", commit + "-" + "e" * 64, {"service": "sha256:" + "e" * 64},
+                           {"service": "repo"}, "f" * 64, 100, "c" * 40)
+    made.available_at = 100
+    return made
+
+
+def refusal(what):
+    try:
+        collect.gather_evidence(collect.evidence_stores(results, registry), no_locks)
+    except collect.Refusal as refused:
+        return str(refused)
+    fail(f"{what} did not refuse")
+
+
+stores = collect.evidence_stores(results, registry)
+if [(s["path"], s["registration"]) for s in stores] != [(results, None), (registered, registration)]:
+    fail(f"the stores read are not the service's and the registered one: {stores}")
+evidence = collect.gather_evidence(stores, no_locks)
+for commit, expected, where in ((x, True, "the service's store"), (y, True, "a registered store"),
+                                (z, False, "an unregistered directory")):
+    if (collect.referencing(release(commit), evidence) is not None) != expected:
+        fail(f"a release named only in {where} was {'not ' if expected else ''}treated as referenced")
+never = collect.evidence_stores(os.path.join(root, "never-written"), os.path.join(root, "no-registry"))
+if len(never) != 1 or never[0].get("absent") is not True:
+    fail("a service store that does not exist was not reported absent")
+
+inside = os.path.join(registered, "full-suite-v1")
+os.chmod(inside, 0)
+message = refusal("an unreadable directory inside a registered store")
+os.chmod(inside, 0o755)
+if registered not in message or registration not in message or inside not in message:
+    fail(f"the refusal for an unreadable directory does not name the store, its registration and the directory: {message}")
+
+shutil.move(registered, registered + ".moved")
+message = refusal("a registered store that is gone")
+shutil.move(registered + ".moved", registered)
+if registered not in message or registration not in message or "is gone" not in message:
+    fail(f"the refusal for a store that is gone does not name it and its registration: {message}")
+print("COLLECT_EVIDENCE_OK stores=declared+registered unregistered=unread unreadable-outside=untouched refusals=named")
+PY
+chmod 755 -- "${stores_root}/unreadable-outside"
 
 hook_output="$(env -u CLAUDE_PROJECT_DIR "${PROJECT_DIR}/scripts/collect-hook.sh" <<<'{"hook_event_name":"PostToolUse"}')" || {
   printf 'COLLECT CONTRACT FAILURE: the storage hook exited non-zero\n' >&2

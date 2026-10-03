@@ -1594,22 +1594,36 @@ anything of ours is removed.
 A release is a lock state that pinned an archive, in either repository's lock.
 What is deployed is read from the running containers, never from a file; the
 release the checked-out lock names, and the one before it, are kept too, and a
-kept service release keeps the backend release it pins. Evidence is found, not
-assumed: the home directory is walked for session records, judgements and
-benchmark pass provenance, and every full commit, image or archive hash they
-name references that release. A session record that names no release (schema 2)
-still ran on one, so every release available before the newest such record
-counts as referenced. Only objects a lock pins, a lock derives the name of, or
-this project labels are ever considered; anything else is never touched. The
-report names each object, its size, its release identity and the rule that
-decides it, and anything it cannot explain -- no Docker, a lock that does not
-parse, a deployed release it cannot verify, an archive whose bytes are not the
-ones pinned for its name, a symlink where an archive should be -- stops it with
-a next step:
+kept service release keeps the backend release it pins.
+
+**Evidence** is read from the stores it is kept in, and from nowhere else. The
+service keeps its session records in the stack lock's `results_dir`. Every other
+writer of evidence registers the directory it keeps evidence in when it writes
+there: the benchmark harness registers its root when it starts a pass, and a
+person keeping copies of session records with their judgements registers the
+directory they keep them in, once. A registration is one file in the host's
+registry under the stack lock's runtime root, named for the SHA-256 of the
+store's path; removing it is how a store stops counting. In every store, the
+session records and benchmark pass provenance the evidence producers write are
+read, and every full commit, image or archive hash they name references that
+release. A session record that names no release (schema 2) still ran on one, so
+every release available before the newest such record counts as referenced.
+Evidence kept where no store covers it is not read, which is why its keeper
+registers it; the report lists every store it read, so what counts is visible
+before anything is removed.
+
+Only objects a lock pins, a lock derives the name of, or this project labels are
+ever considered; anything else is never touched. The report names each object,
+its size, its release identity and the rule that decides it, and anything it
+cannot explain -- no Docker, a lock that does not parse, a deployed release it
+cannot verify, an archive whose bytes are not the ones pinned for its name, a
+symlink where an archive should be, a registered evidence store that is gone or
+holds a directory it cannot read -- stops it with a next step:
 
 ```bash
 ./collect.sh            # report only; nothing is removed
 ./collect.sh --delete   # remove exactly what the report marks COLLECT
+./scripts/register-evidence-store.sh <directory>   # read the evidence kept there
 ```
 
 **The storage hook.** [`scripts/collect-hook.sh`](scripts/collect-hook.sh) runs
