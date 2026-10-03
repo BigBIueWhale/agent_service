@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `248501f2036ed814ceaf1305306ccc961deecea319498b203a1229e94f3c975a`
+- Review-diff SHA-256: `91b1a80c29abbf9311ce84f10791fcbbde11f63b2e941e5b899b9dab433dfca9`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `47f3ad8e922583f6422faf5def76b186603d4fb9bf4e75de4379393e49cf086b`
+- Transformer-manifest SHA-256: `f0e4258acc5d8d973b2f9dd83e9b3adf1940ebb38f70d51dca7d5c090b05f2ed`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -172,8 +172,9 @@ snapshots the model was recorded writing rather than borrowed from `M`
 (`SNAPSHOT_SHARES` says from what). `F`, the per-message framing, is the 61 bytes the served
 template wraps around one message at its widest, declared here and verified
 against the template rather than copied from it. `R`, the reasoning a turn is
-given beside its block, is W/32 tokens — 8,192 — declared from what the model
-was recorded doing rather than derived (`TURN_REASONING_SHARES` says from what).
+given beside its block, is W/32 tokens — 8,192 — a declared share, a quarter of
+`M`, which is a policy rather than a measurement (`TURN_REASONING_SHARES` says
+what it rests on and what recorded turns show).
 
 `C`, the room every generation is issued with, is sized for the largest thing
 a turn legitimately does, write one inline block after reasoning about it: the

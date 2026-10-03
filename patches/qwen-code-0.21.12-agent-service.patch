@@ -69590,7 +69590,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let pipeBroken = false;
      let workflowApprovalChannelRegistered = false;
      const stdoutErrorHandler = (err: NodeJS.ErrnoException) => {
-@@ -996,2175 +1160,2307 @@
+@@ -996,2175 +1160,2308 @@
      // the regular options.sendMessageType / UserQuery selection applies.
      let continueSendType: SendMessageType | null = null;
  
@@ -72098,7 +72098,8 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +            // initial query — early teammate messages will be picked
 +            // up on the next iteration.
 +            let isTeammateTurn = false;
-+            // A redraw carries the refusal notice and nothing else, so
++            // A redraw's message is the refusal notice and nothing else --
++            // the notice joins the message the refused turn answered -- so
 +            // teammate messages wait for the turn after it.
 +            if (
 +              !isFirstTurn &&
@@ -208320,7 +208321,7 @@ diff --git a/packages/core/src/core/generation-refusal.test.ts b/packages/core/s
 diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/core/generation-refusal.ts
 --- /dev/null
 +++ b/packages/core/src/core/generation-refusal.ts
-@@ -0,0 +1,122 @@
+@@ -0,0 +1,124 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -208373,9 +208374,11 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 + * the draws recorded being told their snapshot was too large came back
 + * inside the bound every time. At that rate a long session's 28 compactions
 + * all complete 37% of the time with one draw each, 97% with two, 99.9% with
-+ * three and 99.996% with four. A turn's draw is refused far more rarely: no
-+ * legitimate turn recorded has reached its limit. A turn refused four times
-+ * in a row, told why three times, is
++ * three and 99.996% with four. A turn's draw is refused far more rarely: of
++ * the 244 turns of two six-hour runs of one long-reading probe, one reached
++ * its limit -- a note written whole in one call after 26,129 tokens of
++ * reasoning -- and its first redraw, told why, was accepted. A turn refused
++ * four times in a row, told why three times, is
 + * therefore not unlucky but held by a cause no further draw changes --
 + * reasoning that has degenerated, or work it will not do in parts -- and that
 + * is what the limit exists to catch: the fourth refusal ends the session,
@@ -228712,7 +228715,7 @@ diff --git a/packages/core/src/core/tokenLimits.test.ts b/packages/core/src/core
 diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts
 --- a/packages/core/src/core/tokenLimits.ts
 +++ b/packages/core/src/core/tokenLimits.ts
-@@ -8,88 +8,615 @@
+@@ -8,88 +8,620 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -228840,11 +228843,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * `C + 1`, because it carries the same history under additions also held
 + * within `A` -- so a draw has at least a turn's room, and there is no
 + * separate reasoning budget anywhere to cut it short. That room is not sized
-+ * for a snapshot at the most tokens `S` bytes can be: a snapshot of `S`
-+ * bytes and `R` of reasoning beside it fit `C + 1` whenever the snapshot
-+ * averages two bytes a token or more, and the snapshots recorded measure
-+ * close to four. A denser draw that reaches its room is refused as truncated
-+ * and drawn again, told why, as any draw that reaches its room is.
++ * for a snapshot at the most tokens `S` bytes can be, nor for the reasoning
++ * beside it: a draw reasons as long as the model does. Of the eight draws of
++ * two six-hour runs of one long-reading probe, the snapshots measured close
++ * to four bytes a token, and the longest draw reasoned 32,286 tokens beside a
++ * snapshot of about 10,000 tokens and finished 257 inside its room of
++ * 42,550; none reached its room. A draw that reaches its room is refused as
++ * truncated and drawn again, told why, as any draw that reaches its room is.
 + *
 + * What stands in the window after a compaction is the preamble plus
 + * `snapshot + authored input + carried turn + one result`. Three of those
@@ -229012,23 +229017,26 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 +/**
 + * `R` = W/32 tokens, 8,192 at the served window, so `C = M + R` is 40,960.
 + *
-+ * Reasoning has no measure but the model's own behaviour, so `R` is declared
-+ * from what the model was recorded doing rather than derived. In two complete
-+ * long-context runs, 375 turns, a turn reasoned at most 3,855 tokens in 95
-+ * turns of 100 and at most 14,793 in 99. Every turn but two fitted 40,960
-+ * whole, reasoning included: the largest, 26,247 tokens, wrote nearly two
-+ * blocks in one call, and the largest that wrote one block or less, 24,289,
-+ * reasoned 20,258 tokens beside it. The largest legitimate act any run has
-+ * recorded, a final summary written whole, was 28,521 tokens; the largest
-+ * compaction draw, which is the same act -- one block and the reasoning that
-+ * writes it -- was 34,995, inside the larger room a draw is issued with. The
-+ * two turns past 40,960 each wrote far more than a block in a single call:
-+ * nearly four blocks in one command, and a note cut at 69,390 tokens of its
-+ * arguments. A quarter of a block beside the densest block there is holds
-+ * what 95 turns in 100 reasoned even in that worst case, and an ordinary
-+ * block is so many fewer tokens than `M` that most of `C` is reasoning room
-+ * as well. A turn that needs more is refused and asked for again, and does
-+ * less in it.
++ * `R` is the room a turn has beyond one block at the most tokens a block can
++ * be, and it is a policy, not a measurement. How long the model reasons is
++ * its own behaviour, set by the model and the work, and nothing makes it a
++ * share of the window; `R` is declared as one, a quarter of `M`, so that a
++ * turn's room scales with the window as every other budget does. What it
++ * costs is plain: every token of `R` is a token `T` does not have and two
++ * tokens of the fit's margin.
++ *
++ * `R` does not by itself hold what a turn reasons. In two six-hour runs of
++ * one long-reading probe, 244 turns, the turn at the 95th percentile reasoned
++ * 8,495 tokens in one run and 14,846 in the other, past `R` in both. What
++ * holds a turn is `C` whole: `M` charges a block at one byte a token, its
++ * densest, and the blocks those runs wrote measured close to four, so a
++ * written block left most of `C` to reasoning. Every turn but one fitted
++ * 40,960, the largest at 37,531 with 24,840 of it reasoning, and twelve
++ * wrote more than a block's bytes in one call. The one that reached 40,960
++ * had reasoned 26,129 tokens and was writing a note whole; it was refused,
++ * asked for again told why, and the redraw was accepted at 26,679. A turn
++ * that needs more than `C` is refused and asked for again, and does less in
++ * it.
 + */
 +const TURN_REASONING_SHARES = 8;
 +
@@ -229380,7 +229388,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -150,14 +677,14 @@
+@@ -150,14 +682,14 @@
    // 128K carve-outs for Opus 4.6+. Rewrite the dotted minor to hyphenated
    // up front so every downstream regex sees the canonical form regardless
    // of which alias the proxy exposed.
@@ -229397,7 +229405,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
    // the version parser and the limit tables agree on every alias shape.
    s = s.replace(/^(claude-[a-z]+-\d+(?:-\d+)?)\.(\d+)(?:\.\d+)*/, '$1-$2');
  
-@@ -392,18 +919,19 @@
+@@ -392,18 +924,19 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }

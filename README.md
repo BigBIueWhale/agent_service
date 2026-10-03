@@ -210,7 +210,7 @@ two derived from them:
 | `M`, one inline block | W/8, a declared page size | 32,768 bytes |
 | `S`, one compaction snapshot | W/4, declared from the snapshots the model was recorded writing | 65,536 bytes |
 | `F`, the per-message framing | the served template's widest | 61 bytes |
-| `R`, a turn's reasoning beside its block | W/32, declared from what turns were recorded doing | 8,192 tokens |
+| `R`, a turn's room beyond its block | W/32, a declared share: a quarter of `M` | 8,192 tokens |
 | `C`, a turn's generation room | `M + R` | 40,960 tokens |
 | `T`, the compaction trigger | `W − C − A` | 218,112 tokens |
 
@@ -332,13 +332,16 @@ costs `C` and `T` nothing.
 block — a file, a note, a report; anything longer is written in parts, a block
 to a turn, as it is read a page at a time — after reasoning about what to write.
 The block is at most `M` tokens whatever it holds, dense data included, because
-every token is at least one byte of NFC, and the reasoning beside it is given
-`R`, declared from what the model was recorded doing: across two complete
-long-context runs, 375 turns, a turn reasoned at most 3,855 tokens in 95 turns
-of 100 and at most 14,793 in 99; every turn but two fitted 40,960 whole,
-reasoning included, the largest legitimate act any run has recorded, a final
-summary written whole, was 28,521 tokens, and the two turns past 40,960 each
-wrote far more than a block in one call. `T` is what the window has left. What
+every token is at least one byte of NFC, and `R` is the room beyond it, a
+declared share -- a quarter of `M` -- rather than a measurement, since how long
+the model reasons is its own behaviour and no share of the window. `R` alone
+does not hold a turn's reasoning: in two six-hour runs of one long-reading
+probe, 244 turns, the turn at the 95th percentile reasoned 8,495 tokens in one
+run and 14,846 in the other. `C` whole holds it, because the blocks those runs
+wrote ran close to four bytes a token: every turn but one fitted 40,960, the
+largest at 37,531 with 24,840 of it reasoning, and the one that reached it was
+refused, asked for again told why, and redrawn at 26,679. `T` is what the
+window has left. What
 stands in the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; three of those four
 are bounded in bytes before they exist, the snapshot by `S` and the input and
