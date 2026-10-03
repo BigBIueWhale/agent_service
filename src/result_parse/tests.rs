@@ -74,9 +74,10 @@ struct Trace {
     last_model_text: BTreeMap<Option<String>, String>,
     chats: BTreeMap<String, Invocation>,
     last_request: BTreeMap<String, String>,
-    /// Request messages carrying each user row a display scope showed since
-    /// its previous chat request, in display order.
-    displayed: BTreeMap<Option<String>, Vec<String>>,
+    /// The messages each scope's next chat request carries after its
+    /// history: the tool message for each call its tools returned, and any
+    /// input the client composed for the model.
+    inputs: BTreeMap<Option<String>, Vec<String>>,
 }
 
 impl Trace {
@@ -106,7 +107,7 @@ impl Trace {
             last_model_text: BTreeMap::new(),
             chats: BTreeMap::new(),
             last_request: BTreeMap::new(),
-            displayed: BTreeMap::new(),
+            inputs: BTreeMap::new(),
         }
     }
 
@@ -233,27 +234,30 @@ impl Trace {
         self.requests.last_mut().unwrap().1 = Some(Value::Null);
     }
 
-    /// A tool result the client displayed in `scope`; the scope's next chat
-    /// request carries it as the tool message for its call.
+    /// The tool for call `id` in `scope` returned: the row reports which call
+    /// and that it did not fail, and the scope's next chat request carries
+    /// `text` as the tool message for the call.
     fn tool_result(&mut self, scope: Option<&str>, id: &str, text: &str) {
         self.push(json!({"type":"user","parent_tool_use_id":scope,
             "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,
-                "content":text,"is_error":false}]}}));
-        self.displayed
-            .entry(scope.map(str::to_string))
-            .or_default()
-            .push(json!({"role":"tool","tool_call_id":id,"content":text}).to_string());
+                "is_error":false}]}}));
+        self.input(scope, json!({"role":"tool","tool_call_id":id,"content":text}));
     }
 
-    /// A notice the client displayed as user input in `scope`; the scope's
-    /// next chat request carries it as a user message.
-    fn notice(&mut self, scope: Option<&str>, text: &str) {
-        self.push(json!({"type":"user","parent_tool_use_id":scope,
-            "message":{"role":"user","content":[{"type":"text","text":text}]}}));
-        self.displayed
+    /// Input the client composed for the model in `scope`. Only the scope's
+    /// next chat request carries it; the stream holds no other copy.
+    fn input(&mut self, scope: Option<&str>, message: Value) {
+        self.inputs
             .entry(scope.map(str::to_string))
             .or_default()
-            .push(json!({"role":"user","content":text}).to_string());
+            .push(message.to_string());
+    }
+
+    /// An event of `scope` that bills nothing: a background task it started.
+    fn task_started(&mut self, scope: Option<&str>) {
+        let id = format!("task-{}", self.rows.len());
+        self.push(json!({"type":"system","subtype":"task_started","parent_tool_use_id":scope,
+            "data":{"task_id":id,"tool_use_id":format!("{id}-call"),"description":"background work"}}));
     }
 
     fn chat(&mut self, parent: Option<&str>, call_id: &str) {
@@ -275,7 +279,7 @@ impl Trace {
     /// display and partials together, then seal their changed byte bodies. The
     /// raw tool argument lexemes remain captured. Runtime metadata comes from
     /// the service manifest in Trace::new. The request carries the scope's
-    /// history and every user row it displayed since its previous request.
+    /// history and every input composed for it since its previous request.
     fn chat_with(&mut self, parent: Option<&str>, call: Option<&str>, delta: bool) {
         let call_id = call.unwrap_or("answer-without-call");
         let captured: Vec<Value> = serde_json::from_str(include_str!(
@@ -310,7 +314,7 @@ impl Trace {
             template[start + first.len()..].to_string(),
         );
         let carried = self
-            .displayed
+            .inputs
             .remove(&parent.map(str::to_string))
             .unwrap_or_default();
         let previous = self.chats.get(scope).cloned();

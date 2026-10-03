@@ -293,14 +293,14 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     replies = [b for b in blocks if b["type"] == "tool_result"]
     require(len(uses) == len(replies) == 1, "expected one actual tool invocation and result")
     require(uses[0]["id"] == "smoke_read" and uses[0]["name"] == "read_file", "wrong tool invocation")
-    require(replies[0]["tool_use_id"] == "smoke_read" and replies[0]["is_error"] is False
-            and replies[0]["content"] == nonce + "\n", "tool result did not carry the file content")
+    require(replies[0] == {"type": "tool_result", "tool_use_id": "smoke_read", "is_error": False},
+            "the stream did not report the call's return, or carried a copy of its result")
     generations = [r["body"] for r in requests if r["path"] == "/v1/chat/completions"]
     require(len(generations) == 2, "stub did not serve both generations")
     received = [message for message in generations[1]["messages"] if message.get("role") == "tool"]
     require(len(received) == 1 and received[0]["content"] ==
-            [{"type": "text", "text": replies[0]["content"]}],
-            "tool-result evidence differs from the model's input; inspect result serialization")
+            [{"type": "text", "text": nonce + "\n"}],
+            "the next request did not give the model the file content; inspect result serialization")
     carried_calls = [call for message in generations[1]["messages"]
                      if message.get("role") == "assistant" for call in message.get("tool_calls", [])]
     require(len(carried_calls) == 1 and carried_calls[0]["id"] == uses[0]["id"] and

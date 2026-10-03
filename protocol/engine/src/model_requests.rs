@@ -864,10 +864,6 @@ impl RequestAdmission {
     pub(crate) fn scope(&self) -> &str {
         &self.scope
     }
-    /// The exact JSON text of each message the model receives, in order.
-    pub(crate) fn messages(&self) -> &[String] {
-        &self.body.messages
-    }
 }
 
 /// What one physical response has established so far. It is changed in place

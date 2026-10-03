@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `19499e662e6f47406f59c40757cde6596cf7c0f7f257d4778fa89fb20d54117d`
+- Review-diff SHA-256: `4925e8f145a2606b3c2e1a446e0fd7246a5c1d8d056557e9095646a602d7d980`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `0ff01d8a71c436e01f25320878a9ad62941390b4e002302211fa4c1b6348e30f`
+- Transformer-manifest SHA-256: `264e84f7bf5071d8485df5fd609ead67d301b5b7957f21c7d018ebe5220d726c`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -843,7 +843,7 @@ these needs model serving, a provider session, a release or a GPU, and none is
 live provider or session verification.
 
 Three points are not verified by any gate. Desktop's suites run under Bun and
-are excluded from the test selection. `is_error` on a displayed tool result
+are excluded from the test selection. `is_error` on a returned call's row
 cannot be bound to the model's input, because nothing in that input carries it:
 the tool message renders a function response's `output` and its `error` as the
 same bare text, and the served template frames every tool response alike, so no

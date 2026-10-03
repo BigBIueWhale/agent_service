@@ -788,13 +788,13 @@ print(json.dumps(found))
         uses = [block for block in blocks if block["type"] == "tool_use"]
         replies = [block for block in blocks if block["type"] == "tool_result"]
         require(len(uses) == len(replies) == 1 and uses[0]["id"] == "composition_read" and
-                uses[0]["name"] == "read_file" and replies[0]["tool_use_id"] == "composition_read" and
-                replies[0]["is_error"] is False and replies[0]["content"] == self.nonce + "\n",
-                "captured tool execution did not return the complete successful proof")
+                uses[0]["name"] == "read_file" and
+                replies[0] == {"type": "tool_result", "tool_use_id": "composition_read", "is_error": False},
+                "captured tool execution did not report the call's return without a copy of its result")
         received = [message for message in generations[1]["messages"] if message.get("role") == "tool"]
         require(len(received) == 1 and received[0]["content"] ==
-                [{"type": "text", "text": replies[0]["content"]}],
-                "tool-result evidence differs from the model's input; inspect result serialization")
+                [{"type": "text", "text": self.nonce + "\n"}],
+                "the next request did not give the model the complete successful proof; inspect result serialization")
         carried_calls = [call for message in generations[1]["messages"]
                          if message.get("role") == "assistant" for call in message.get("tool_calls", [])]
         require(len(carried_calls) == 1 and carried_calls[0]["id"] == uses[0]["id"] and

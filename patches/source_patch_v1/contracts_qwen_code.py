@@ -1827,19 +1827,33 @@ def _validate_stream_evidence_after(state: State) -> None:
         ),
         label=label,
     )
-    # The provider request owns exact model input, and the tool_result block
-    # carries exactly the text of the tool message that request gives the
-    # model for the call: the one function response answering it, spelled by
-    # the renderer's own text rule. Nothing meant for a person (resultDisplay,
-    # an error message, a notice) stands in for it or is added to it.
-    adapter_source = _source(state, adapter, label=label)
-    require_text(
-        state, adapter, "content: toolResultContent(request, response),", label=label
-    )
-    require_text(
+    # The provider request is the one record of what the model received. A
+    # user row reports that a tool returned a call -- which call, and whether
+    # it failed -- and carries no copy of the result or of any other input:
+    # the tool message the next request gives the model is the record of
+    # that, so no second copy can disagree with it and nothing binds two.
+    _require_all(
         state,
         adapter,
-        "textContent = functionResponseContent(part.functionResponse.response);",
+        (
+            "    const block: ToolResultBlock = {\n"
+            "      type: 'tool_result',\n"
+            "      tool_use_id: request.callId,\n"
+            "      is_error: hasError,\n"
+            "    };",
+            "   * of the model's input, so the row carries no copy of it.",
+        ),
+        label=label,
+    )
+    for retired in ("toolResultContent", "emitUserMessage(", "partsToContentBlock"):
+        forbid_text(state, adapter, retired, label=label)
+    forbid_text(
+        state, "packages/cli/src/dualOutput/DualOutputBridge.ts", "emitUserMessage(", label=label
+    )
+    forbid_text(
+        state,
+        "packages/core/src/utils/function-response-content.ts",
+        "toolMessageText",
         label=label,
     )
     require_text(
@@ -1854,24 +1868,16 @@ def _validate_stream_evidence_after(state: State) -> None:
         "const textContent = functionResponseContent(response.response);",
         label=label,
     )
-    _require_all(
+    require_text(
         state,
         "packages/core/src/utils/function-response-content.ts",
-        (
-            "return JSON.stringify(response) ?? String(response);",
-            "export function toolMessageText(response: {",
-            "    functionResponseContent(response.response),\n"
-            "    ...(response.parts ?? []).map((part) =>\n"
-            "      'text' in part && typeof part.text === 'string' ? part.text : '',\n"
-            "    ),\n"
-            "  ].join('');",
-        ),
+        "return JSON.stringify(response) ?? String(response);",
         label=label,
     )
     require_text(
         state,
         adapter_test,
-        "records structured tool output with its model-facing JSON spelling",
+        "reports which call returned and carries no copy of what the model is given",
         label=label,
     )
     forbid_text(state, adapter, "projectHeadlessToolResultContent", label=label)
@@ -1915,45 +1921,10 @@ def _validate_stream_evidence_after(state: State) -> None:
     require_text(
         state,
         "packages/cli/src/nonInteractive/io/StreamJsonOutputAdapter.test.ts",
-        "preserves every escaped byte of an inline model-facing result for main and child tools",
+        "reports the returns of main and child tools in their own scopes, without their results",
         label=label,
     )
-    _require_ordered(
-        adapter_source,
-        (
-            "export function toolResultContent(\n"
-            "  request: ToolCallRequestInfo,\n"
-            "  response: ToolCallResponseInfo,\n"
-            "): string {",
-            "(part) => part.functionResponse?.id === request.callId,",
-            "if (answers.length !== 1)",
-            "return toolMessageText(answers[0]!.functionResponse!);",
-        ),
-        label=label,
-        location=adapter,
-    )
-    tool_result = adapter_source.split("export function toolResultContent(", 1)[-1]
-    tool_result = tool_result.split("\n}\n", 1)[0]
-    for display in (
-        "resultDisplay",
-        "response.error",
-        "visionBridgeNotice",
-        "checkResponsePartsForError",
-        "functionResponsePartsToString",
-        ".slice(",
-    ):
-        _require(
-            display not in tool_result,
-            f"{label}: {adapter} toolResultContent uses {display!r}; a tool "
-            "result is the model-facing tool message text and nothing else",
-        )
     forbid_text(state, adapter, "functionResponsePartsToString", label=label)
-    require_text(
-        state,
-        adapter_test,
-        "displays response-part text rather than the shorter display banner",
-        label=label,
-    )
 
     # A call its output limit stopped is part of what the turn generated, so
     # the stream records it with the turn, in the main session and in every
@@ -6506,7 +6477,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "message: describeRefusedTurns(terminal, turnCount),",
             "const parts: Part[] = [{ text: refusedTurnNotice(terminal) }];",
             ".recordMidTurnUserMessage(parts);",
-            "adapter.emitUserMessage(parts);",
+            "return parts;",
             "if (redrawRefusedTurn) {",
             "sendType = SendMessageType.Redraw;",
             "redrawRefusedTurn = false;",
@@ -6527,7 +6498,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
     require_text(
         state,
         "packages/cli/src/nonInteractiveCli.test.ts",
-        "does not display a redraw notice whose canonical input was refused",
+        "never sends a redraw notice whose canonical input was refused",
         label=label,
     )
     # Both loops read where the generation stood from the turn's own events,
@@ -7014,8 +6985,9 @@ def _validate_final_message_slip_after(state: State) -> None:
     # Only a turn the model ended itself is read for a slip; a severed
     # generation keeps its own terminal. Both reasoning loops share one
     # counter and one answer, the notice goes to the model as the next turn
-    # and to the stream and the recording as the user-role content it is,
-    # and the third consecutive slip is raised as the one terminal shape.
+    # and to the recording as the user-role content it is -- the request that
+    # carries it is the stream's record of it -- and the third consecutive
+    # slip is raised as the one terminal shape.
     cli_source = _require_all(
         state,
         cli,
@@ -7026,7 +6998,6 @@ def _validate_final_message_slip_after(state: State) -> None:
             "terminateMode: AgentTerminateMode.SLIPPED_FINAL_MESSAGE,",
             "message: describeSlippedFinalMessage(kind),",
             "recordMidTurnUserMessage(notice)",
-            "adapter.emitUserMessage(notice);",
             "? describeFinalMessageSlip(turnText)",
             "? describeFinalMessageSlip(itemText)",
         ),
@@ -7037,7 +7008,6 @@ def _validate_final_message_slip_after(state: State) -> None:
         (
             "const noticeForFinalMessageSlip = async (",
             "recordMidTurnUserMessage(notice)",
-            "adapter.emitUserMessage(notice);",
             "return notice;",
         ),
         label=label,
@@ -7046,7 +7016,7 @@ def _validate_final_message_slip_after(state: State) -> None:
     require_text(
         state,
         cli_test,
-        "does not display a slip notice whose canonical input was refused",
+        "never sends a slip notice whose canonical input was refused",
         label=label,
     )
     _require(

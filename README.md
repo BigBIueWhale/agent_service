@@ -854,27 +854,27 @@ evidence; the canonical recording stores it once, as the checkpoint's
 `compressedHistory`. The HTTP byte journal owns the exact response bytes. These
 records are evidence; canonical history decides what resume restores.
 
-A `user` row's `tool_result` content is exactly the tool message text the model
-receives in its next request. The native certifier binds every displayed tool
-result and notice to the next chat request in its display scope (the same
-`tool_call_id` and text; the same user text), refuses a call an accepted
-generation issued without its displayed result before that request, and
-refuses a displayed row that request does not carry, carries out of order or
-carries with other text. The binding runs one way: the runtime also adds input
-it does not display (reminders, the date, the todo list), so a request message
-with no displayed row is not refused, and the recorded request body is the
-authority for everything the model received. Upstream 0.21.12's own
-65,536-byte stream-only cut of textual tool results
-(`headless-tool-result-text-projection.ts` in the pinned upstream archive) is
-not shipped: the stream shows what the model saw. `is_error` is not bound, and
-cannot be: the tool message renders a function response's output and its error
-as the same bare text, so no byte of any request tells a failed call from a
-successful one, and carrying the difference to the model would put text its
-template never renders into its input. That leaves the flag, and the result's
-`permission_denials` built from the same error, as the client's own claims: a
-reader that judges a run by its failed calls trusts the client for them, and a
-forged stream that flips one still certifies. It is a stated limit of the
-certificate.
+What the model received is read from the request bodies, which are the one
+record of it: exact bytes, hash-verified, with every tool message, reminder and
+notice the client composed into them, however it composed them. A `user` row
+reports only that a tool returned a call -- `tool_use_id` and `is_error` -- and
+carries no copy of the result or of any other input, so nothing on the stream
+can disagree with the request and the certifier holds no rule about how the
+client composes its messages. The certifier refuses a chat request sent while
+a call an accepted generation issued in that scope has no row reporting its
+return. Upstream 0.21.12's own 65,536-byte stream-only cut of textual tool
+results (`headless-tool-result-text-projection.ts` in the pinned upstream
+archive) is not shipped. A result the model never received -- one returned
+just before the run ended -- has no request to carry it, so the record holds
+that the call returned and whether it failed, not its text. `is_error` is the
+client's own claim: the tool message renders a function response's output and
+its error as the same bare text, so no byte of any request tells a failed call
+from a successful one, and carrying the difference to the model would put
+text its template never renders into its input. That leaves the flag, and the
+result's `permission_denials` built from the same error, as the client's own
+claims: a reader that judges a run by its failed calls trusts the client for
+them, and a forged stream that flips one still certifies. It is a stated limit
+of the certificate.
 
 The service certifies a captured stream in two passes over the same bytes. The
 native engine admits every record; the pinned client's `dist/record-verifier.js`
@@ -1088,7 +1088,7 @@ The design notes state each record rule, its reason and its limits:
 - [Canonical recording](docs/design/canonical-recording.md): version refusal,
   scans, what resume restores, closed and live readers, and stated limits.
 - [Shared stream gate](docs/design/shared-stream-gate.md): the one contract,
-  the certifier, and displayed-input binding.
+  the certifier, and why a request body is the one record of model input.
 - [Stream contract identity](docs/design/stream-contract-identity.md): how the
   contract's `$id` and SHA-256 bind producer and reader.
 - [Exact observed responses](docs/design/model-response-evidence.md),

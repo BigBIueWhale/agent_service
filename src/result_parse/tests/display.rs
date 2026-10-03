@@ -1,10 +1,11 @@
-//! The displayed conversation binds to model input at the native layer: every
-//! user row a scope shows is what the scope's next chat request carries, and a
-//! settled turn is shown exactly as its generation projects it.
+//! What the model received is read from the request bodies: a user row
+//! reports only that a tool returned its call, and the stream carries no
+//! second copy of any input to compare against the first. A settled turn is
+//! shown exactly as its generation projects it.
 use super::*;
 
-/// A tool call, its displayed result, then a final text answer whose request
-/// carries that result.
+/// A tool call, its result, then a final text answer whose request carries
+/// that result.
 fn two_turns(delta: bool) -> Trace {
     let mut trace = Trace::new();
     trace.chat(None, "first");
@@ -31,11 +32,15 @@ fn last_request(trace: &Trace) -> usize {
 }
 
 #[test]
-fn a_displayed_tool_result_reaches_the_next_request_in_full_and_delta_bodies() {
+fn a_returned_call_is_reported_by_its_row_and_its_result_is_read_from_the_request() {
     for delta in [false, true] {
         let trace = two_turns(delta);
         let request = &trace.rows[last_request(&trace)]["request"]["body"];
         assert_eq!(request["kind"], if delta { "delta" } else { "full" });
+        assert_eq!(
+            trace.rows[user_row(&trace)]["message"]["content"],
+            json!([{"type":"tool_result","tool_use_id":"first","is_error":false}])
+        );
         let result = trace.certify();
         assert_eq!(result.response, "before  after");
         assert_eq!(result.num_turns, 2);
@@ -44,7 +49,7 @@ fn a_displayed_tool_result_reaches_the_next_request_in_full_and_delta_bodies() {
 }
 
 #[test]
-fn consecutive_delta_turns_carry_each_displayed_result() {
+fn consecutive_delta_turns_each_report_their_returned_call() {
     let mut trace = Trace::new();
     trace.chat(None, "first");
     trace.tool_result(None, "first", "done");
@@ -61,65 +66,65 @@ fn consecutive_delta_turns_carry_each_displayed_result() {
     assert_eq!(trace.certify().usage.requests, 3);
 }
 
+/// The request is the one record of what the model was given, however the
+/// client composed it. A redraw's request re-sends the message its refused
+/// turn answered with the refusal notice added beside a reminder already on
+/// it; a reminder may sit beside a tool's result; text may come as one string
+/// or as several parts. None of it is a rule the certificate holds the client
+/// to, and none of it has a second copy for the certificate to compare.
 #[test]
-fn a_displayed_notice_reaches_the_next_request() {
+fn the_certificate_holds_no_rule_about_how_input_is_composed() {
+    let reminder = "<system-reminder>\nThe current task still has unfinished todo items.\n</system-reminder>";
+    let notice = "<system-reminder>\nYour previous answer to this request was refused.\n</system-reminder>";
     let mut trace = Trace::new();
-    trace.notice(None, "A notice before the first turn.");
+    trace.input(None, json!({"role":"user","content":"A note before the first turn."}));
     trace.chat(None, "first");
     trace.tool_result(None, "first", "done");
-    trace.notice(None, "A notice after the tool result.");
+    trace.input(
+        None,
+        json!({"role":"user","content":[{"type":"text","text":reminder},{"type":"text","text":notice}]}),
+    );
     trace.answer(None, true);
     trace.terminal(None, 2, None);
-    trace.certify();
+    assert!(trace.rows.iter().all(|row| row["type"] != "user"
+        || row["message"]["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|block| block.as_object().unwrap().keys().all(|key| key != "content" && key != "text"))));
+    let carried = &trace.rows[last_request(&trace)]["request"]["body"]["added_messages"];
+    assert!(carried.as_array().unwrap().iter().any(|message| message
+        .as_str()
+        .unwrap()
+        .contains("Your previous answer to this request was refused.")));
+    assert_eq!(trace.certify().num_turns, 2);
 }
 
+/// What a request carries is what the model received: rewriting a tool's
+/// result in the body, consistently rehashed, leaves a well-formed record of
+/// a different conversation, not a contradiction for the certificate to find.
 #[test]
-fn a_dropped_tool_result_leaves_the_next_request_without_its_displayed_result() {
-    for delta in [false, true] {
-        let mut trace = two_turns(delta);
-        trace.rows.remove(user_row(&trace));
-        assert_refused_at(
-            &trace,
-            "sends the next request in the main session without the displayed result of call \"first\"",
-        );
-    }
-}
-
-#[test]
-fn a_forged_tool_result_differs_from_what_the_next_request_carries() {
-    for delta in [false, true] {
-        let mut trace = two_turns(delta);
-        let row = user_row(&trace);
-        trace.rows[row]["message"]["content"][0]["content"] = json!("FORGED done");
-        assert_refused_at(
-            &trace,
-            "does not carry displayed input tool result \"first\"",
-        );
-    }
-}
-
-#[test]
-fn a_rehashed_delta_whose_tool_message_contradicts_the_display_is_refused() {
+fn a_request_body_is_the_one_record_of_what_the_model_received() {
     let mut trace = two_turns(true);
     let request = last_request(&trace);
-    let forged = json!({"role":"tool","tool_call_id":"first","content":"FORGED"}).to_string();
+    let rewritten = json!({"role":"tool","tool_call_id":"first","content":"another result"}).to_string();
     let carried = json!({"role":"tool","tool_call_id":"first","content":"done"}).to_string();
     let messages: Vec<String> = trace.chats["a"]
         .messages
         .iter()
         .map(|message| {
             if *message == carried {
-                forged.clone()
+                rewritten.clone()
             } else {
                 message.clone()
             }
         })
         .collect();
-    assert!(messages.contains(&forged));
+    assert!(messages.contains(&rewritten));
     let body = &mut trace.rows[request]["request"]["body"];
     for added in body["added_messages"].as_array_mut().unwrap() {
         if *added == json!(carried) {
-            *added = json!(forged);
+            *added = json!(rewritten);
         }
     }
     let full = format!(
@@ -128,23 +133,21 @@ fn a_rehashed_delta_whose_tool_message_contradicts_the_display_is_refused() {
         messages.join(","),
         body["suffix"].as_str().unwrap()
     );
-    // Consistently rehashed: the physical request itself is well formed.
     trace.rows[request]["request"]["body_bytes"] = json!(full.len());
     trace.rows[request]["request"]["body_sha256"] = json!(hash(full.as_bytes()));
-    assert_refused_at(
-        &trace,
-        "does not carry displayed input tool result \"first\"",
-    );
+    assert_eq!(trace.certify().num_turns, 2);
 }
 
 #[test]
-fn an_injected_notice_the_model_never_received_is_refused() {
-    let mut trace = two_turns(true);
-    let notice = json!({"type":"user","uuid":"injected-notice","session_id":"a",
-        "parent_tool_use_id":null,"message":{"role":"user",
-            "content":[{"type":"text","text":"a notice the model never saw"}]}});
-    trace.rows.insert(user_row(&trace) + 1, notice);
-    assert_refused_at(&trace, "does not carry displayed input notice");
+fn a_request_before_its_scope_reports_a_returned_call_is_refused() {
+    for delta in [false, true] {
+        let mut trace = two_turns(delta);
+        trace.rows.remove(user_row(&trace));
+        assert_refused_at(
+            &trace,
+            "sends the next request in the main session before any row reports that the tool for call \"first\" returned",
+        );
+    }
 }
 
 #[test]
@@ -163,8 +166,10 @@ fn a_user_row_between_a_settled_turn_and_its_display_is_refused() {
     );
 }
 
+/// A user row is a closed array of returned calls. It carries no text and
+/// no result, so it cannot be a second copy of anything the model received.
 #[test]
-fn user_content_is_a_closed_array_of_text_or_tool_results() {
+fn a_user_row_reports_returned_calls_and_carries_no_input() {
     let complete = two_turns(false);
     complete.certify();
     let row = user_row(&complete);
@@ -181,16 +186,27 @@ fn user_content_is_a_closed_array_of_text_or_tool_results() {
     let mut not_array = complete.clone();
     not_array.rows[row]["message"]["content"] = json!("text");
     cases.push(("non-array content", not_array));
+    let mut empty = complete.clone();
+    empty.rows[row]["message"]["content"] = json!([]);
+    cases.push(("no returned call", empty));
     let mut unflagged = complete.clone();
     unflagged.rows[row]["message"]["content"][0]
         .as_object_mut()
         .unwrap()
         .remove("is_error");
     cases.push(("tool result without is_error", unflagged));
-    let mut structured = complete.clone();
-    structured.rows[row]["message"]["content"][0]["content"] =
-        json!([{"type":"text","text":"done"}]);
-    cases.push(("tool result with block content", structured));
+    let mut result_text = complete.clone();
+    result_text.rows[row]["message"]["content"][0]["content"] = json!("done");
+    cases.push(("tool result carrying its text", result_text));
+    let mut text_block = complete.clone();
+    text_block.rows[row]["message"]["content"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!({"type":"text","text":"done"}));
+    cases.push(("text beside a returned call", text_block));
+    let mut text_row = complete.clone();
+    text_row.rows[row]["message"]["content"] = json!([{"type":"text","text":"A notice."}]);
+    cases.push(("text alone", text_row));
     for (label, trace) in cases {
         let error = trace.snapshot().certified.unwrap_err().to_string();
         assert!(
@@ -198,12 +214,6 @@ fn user_content_is_a_closed_array_of_text_or_tool_results() {
             "{label}: {error}"
         );
     }
-    let mut mixed = complete;
-    mixed.rows[row]["message"]["content"]
-        .as_array_mut()
-        .unwrap()
-        .push(json!({"type":"text","text":"done"}));
-    assert_refused_at(&mixed, "mixes tool results with other user content");
 }
 
 #[test]

@@ -93,7 +93,7 @@ The service certifies a captured stream in two passes over the same bytes. The
 native engine admits every record: it replays request bodies, verifies each
 response's byte count and SHA-256, counts the SDK values each body can yield,
 derives served usage from those values, checks the generation envelope,
-completion, shown rows and displayed inputs, and hashes the exact LF-terminated
+completion, shown rows and returned calls, and hashes the exact LF-terminated
 bytes it read. It does not decode chat observations from response bytes.
 `dist/record-verifier.js`, built from the pinned client's converter and
 normalizer, then rereads the file, requires the native-read byte count and

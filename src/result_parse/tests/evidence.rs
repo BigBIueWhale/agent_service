@@ -384,7 +384,7 @@ fn independent_children_keep_distinct_nullable_terminal_claims() {
     trace.chat(None, "call-b");
     trace.utility("call-b", ordinary_usage());
     trace.utility("call-b", ordinary_usage());
-    trace.notice(Some("call-b"), "The subagent is still working.");
+    trace.task_started(Some("call-b"));
     trace.terminal(None, 2, None);
     let result = trace.certify();
     assert_eq!(result.scopes.len(), 2);
@@ -417,11 +417,11 @@ fn orphan_and_future_child_owners_are_refused_at_their_first_reference() {
     Trace::delegated().certify();
     for future in [false, true] {
         let mut trace = Trace::new();
-        trace.notice(Some("child"), "A notice for an unissued child.");
+        trace.task_started(Some("child"));
         let orphan_line = trace
             .rows
             .iter()
-            .position(|row| row["type"] == "user")
+            .position(|row| row["subtype"] == "task_started")
             .unwrap()
             + 1;
         if future {
@@ -446,7 +446,7 @@ fn terminal_scope_and_root_boundaries_refuse_later_events() {
         if second_result {
             trace.terminal(Some("child"), 3, None);
         } else {
-            trace.notice(Some("child"), "A notice after the child ended.");
+            trace.task_started(Some("child"));
         }
         trace.terminal(None, 1, None);
         assert_refused_at(
@@ -510,8 +510,8 @@ fn request_usage_is_partitioned_by_kv_owner_without_billing_presentation() {
     trace.chat(None, "child"); // Captured report: 7 output, 2 thoughts.
     trace.utility("a", served(100, 99, 73, 0));
     trace.utility("child", served(900, 40, 33, 896));
-    // A displayed row in the child scope bills nothing.
-    trace.notice(Some("child"), "Displayed, never billed.");
+    // An event of the child scope that is not a request bills nothing.
+    trace.task_started(Some("child"));
     trace.utility("child", served(1200, 25, 0, 1200));
     trace.unserved("internal");
     trace.terminal(None, 2, None);

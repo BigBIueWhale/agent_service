@@ -71,16 +71,13 @@ field: it belongs to the latest chat request in its scope. A runtime-authored
 answer is a `system/runtime_operation` receipt followed by a text-only
 `assistant` row whose `stop_reason` and `usage` are null.
 
-A displayed `tool_result` is exactly the tool message text the model receives
-in its next request. The certifier binds every displayed tool result and
-notice to the next chat request in its display scope: it refuses a call
-issued by an accepted generation whose displayed result does not precede that
-request, and a displayed row that request does not carry, carries out of order
-or carries with other text. The binding runs one way: the runtime also adds
-input it does not display (reminders, the date, the todo list), so a request
-message with no displayed row is not refused; the recorded request body is the
-authority for everything the model received. `is_error`
-is display-only and is not bound, because nothing the model sees depends on
-it; that is a stated limit of the certificate. Upstream's stream-only
-65,536-byte cut of textual tool results is not shipped: the stream shows what
-the model saw.
+The request bodies are the one record of what the model received. A `user`
+row reports that a tool returned a call -- `tool_use_id` and `is_error` -- and
+carries no text: not the result, not a notice, not a prompt. Nothing on the
+stream is a second copy of model input, so nothing can disagree with a request
+and nothing binds one to another; the certifier holds no rule about how the
+client composes its messages. It refuses a chat request sent while a call an
+accepted generation issued in that scope has no row reporting its return.
+`is_error` is the client's claim alone, because nothing the model sees depends
+on it; that is a stated limit of the certificate. Upstream's stream-only
+65,536-byte cut of textual tool results is not shipped.

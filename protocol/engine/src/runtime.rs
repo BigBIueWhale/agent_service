@@ -537,75 +537,6 @@ fn draw_kind(status: &str) -> DrawKind {
 /// the main session, any other value is the owning `agent` tool-call id. Only
 /// null-or-absent is read as the main session, so a value of any other shape
 /// can only ever exclude an event from the main thread, never admit one to it.
-/// The text a request message gives the model: string content, or its text
-/// parts in order. Media parts reach the model beside the text.
-fn message_text(message: Value<'_>) -> Option<String> {
-    let content = message.get("content")?;
-    if let Some(text) = content.as_str() {
-        return Some(text.to_string());
-    }
-    let mut joined = String::new();
-    for part in content.elements()? {
-        if part.get("type").and_then(Value::as_str) == Some("text") {
-            joined.push_str(part.get("text")?.as_str()?);
-        }
-    }
-    Some(joined)
-}
-
-/// Every user row a scope displayed since its previous chat request is input
-/// the model received in the next one: after the last assistant message, in
-/// the displayed order, a tool result as the tool message for its call and a
-/// notice as a user message, each with exactly the displayed text. Input the
-/// model received but nobody displayed (reminders, context) may sit between.
-fn bind_displayed_inputs(
-    inputs: &[DisplayedInput],
-    messages: &[String],
-    limits: Limits,
-    line: usize,
-) -> ContractResult<()> {
-    if inputs.is_empty() {
-        return Ok(());
-    }
-    let mut tail = Vec::new();
-    for raw in messages.iter().rev() {
-        let document = Document::decode(raw.as_bytes(), limits)
-            .map_err(|cause| decode_failure(cause, line))?;
-        if document.root().get("role").and_then(Value::as_str) == Some("assistant") {
-            break;
-        }
-        tail.push(document);
-    }
-    tail.reverse();
-    let mut candidates = tail.iter().map(Document::root);
-    for input in inputs {
-        let found = candidates.by_ref().any(|message| {
-            let role = message.get("role").and_then(Value::as_str);
-            let content = message_text(message);
-            match input {
-                DisplayedInput::ToolResult { id, text } => {
-                    role == Some("tool")
-                        && message.get("tool_call_id").and_then(Value::as_str) == Some(id)
-                        && content.as_deref() == Some(text)
-                }
-                DisplayedInput::Notice(text) => {
-                    role == Some("user") && content.as_deref() == Some(text)
-                }
-            }
-        });
-        if !found {
-            return Err(ContractError::InvalidRecord(format!(
-                "events.jsonl line {line} sends a request that does not carry displayed input {}; the displayed user rows must be what the model received",
-                match input {
-                    DisplayedInput::ToolResult { id, .. } => format!("tool result {id:?}"),
-                    DisplayedInput::Notice(_) => "notice".to_string(),
-                }
-            )));
-        }
-    }
-    Ok(())
-}
-
 fn required_scope<'a>(object: Value<'a>, line: usize) -> ContractResult<Option<&'a str>> {
     match object.get("parent_tool_use_id") {
         None => Ok(None),
@@ -773,13 +704,6 @@ struct RuntimeOperation {
     output_sha256: String,
     output_bytes: u64,
 }
-/// A user row the model is shown as input: a tool result or a runtime notice.
-/// Each must reach the model in the scope's next chat request.
-#[derive(Clone, Debug)]
-enum DisplayedInput {
-    ToolResult { id: String, text: String },
-    Notice(String),
-}
 /// The assistant messages a settled turn owes before any other record.
 #[derive(Clone)]
 struct OwedDisplay {
@@ -812,8 +736,6 @@ struct AdmissionPlan {
     returns: BTreeSet<String>,
     runtime_operation_id: Option<String>,
     owed: Option<OwedDisplay>,
-    displayed: Vec<DisplayedInput>,
-    bound_display_scope: Option<Option<String>>,
     partial_origin: Option<(Option<String>, OutputOrigin)>,
     prefix: u64,
 }
@@ -850,7 +772,6 @@ pub struct RuntimeContract {
     tool_uses: BTreeMap<String, ToolUse>,
     runtime_operation_ids: BTreeSet<String>,
     owed: Option<OwedDisplay>,
-    displayed_inputs: BTreeMap<Option<String>, Vec<DisplayedInput>>,
     partial_origins: BTreeMap<Option<String>, OutputOrigin>,
     pending: Option<PendingAdmission>,
 }
@@ -877,7 +798,6 @@ impl RuntimeContract {
             tool_uses: BTreeMap::new(),
             runtime_operation_ids: BTreeSet::new(),
             owed: None,
-            displayed_inputs: BTreeMap::new(),
             partial_origins: BTreeMap::new(),
             pending: None,
         }
@@ -1197,16 +1117,6 @@ impl RuntimeContract {
             self.runtime_operation_ids.insert(id);
         }
         self.owed = plan.owed;
-        if !plan.displayed.is_empty() {
-            let scope = self.scope_states[plan.row].id.clone();
-            self.displayed_inputs
-                .entry(scope)
-                .or_default()
-                .extend(plan.displayed);
-        }
-        if let Some(scope) = plan.bound_display_scope {
-            self.displayed_inputs.remove(&scope);
-        }
         if let Some((scope, origin)) = plan.partial_origin {
             self.partial_origins.insert(scope, origin);
         }
@@ -1302,8 +1212,6 @@ impl RuntimeContract {
             shown_turn = true;
         }
         let scope_key = scope.map(str::to_string);
-        let mut displayed = Vec::new();
-        let mut bound_display_scope = None;
         let mut partial_origin = None;
         let mut request = None;
         let mut utility_request = None;
@@ -1350,27 +1258,17 @@ impl RuntimeContract {
                             .find(|(_, tool)| tool.scope == display && !tool.returned)
                         {
                             return Err(ContractError::InvalidRecord(format!(
-                                "events.jsonl line {line} sends the next request in {} without the displayed result of call {id:?}; retain the complete original stream",
+                                "events.jsonl line {line} sends the next request in {} before any row reports that the tool for call {id:?} returned; retain the complete original stream",
                                 scope_display(display.as_deref())
                             )));
                         }
-                        bind_displayed_inputs(
-                            self.displayed_inputs
-                                .get(&display)
-                                .map(Vec::as_slice)
-                                .unwrap_or_default(),
-                            admission.messages(),
-                            self.limits.json,
-                            line,
-                        )?;
                         partial_origin = Some((
-                            display.clone(),
+                            display,
                             OutputOrigin::Model(Origin {
                                 attempt: attempt.to_string(),
                                 scope: kv_scope.to_string(),
                             }),
                         ));
-                        bound_display_scope = Some(display);
                     }
                 }
                 request = Some(admission);
@@ -1514,6 +1412,10 @@ impl RuntimeContract {
                     state.model_text = None;
                 }
             }
+            // A user row reports the tool calls its scope's tools returned:
+            // which call, and whether it failed. What the model was given for
+            // each is in the next request's body, which is the one record of
+            // the model's input.
             EventKind::User => {
                 let blocks = field(field(object, "message", line)?, "content", line)?
                     .elements()
@@ -1521,34 +1423,9 @@ impl RuntimeContract {
                         ContractError::InvalidRecord(format!(
                             "events.jsonl line {line} has user content that is not an array"
                         ))
-                    })?
-                    .collect::<Vec<_>>();
-                let results = blocks
-                    .iter()
-                    .filter(|block| {
-                        block.get("type").and_then(Value::as_str) == Some("tool_result")
-                    })
-                    .count();
-                if results == 0 {
-                    let mut notice = String::new();
-                    for block in &blocks {
-                        notice.push_str(text(*block, "text", line)?);
-                    }
-                    displayed.push(DisplayedInput::Notice(notice));
-                } else if results != blocks.len() {
-                    return Err(ContractError::InvalidRecord(format!(
-                        "events.jsonl line {line} mixes tool results with other user content"
-                    )));
-                }
-                for block in blocks.iter().copied() {
-                    if block.get("type").and_then(Value::as_str) != Some("tool_result") {
-                        continue;
-                    }
+                    })?;
+                for block in blocks {
                     let id = text(block, "tool_use_id", line)?;
-                    displayed.push(DisplayedInput::ToolResult {
-                        id: id.to_string(),
-                        text: text(block, "content", line)?.to_string(),
-                    });
                     self.require_tool_owner(id, scope, line)?;
                     if block.get("is_error").and_then(Value::as_bool) == Some(false) {
                         let tool = self.tool_uses.get(id).expect("checked tool owner");
@@ -1745,8 +1622,6 @@ impl RuntimeContract {
             returns,
             runtime_operation_id,
             owed,
-            displayed,
-            bound_display_scope,
             partial_origin,
             prefix: add(self.prefix, 1, "certified prefix")?,
         })
@@ -2665,8 +2540,7 @@ mod tests {
             "type":"user", "uuid":"structured-return", "session_id":fixture()[0]["session_id"],
             "parent_tool_use_id":null,
             "message":{"role":"user","content":[{"type":"tool_result",
-                "tool_use_id":"provider__qwen_dup_2","is_error":false,
-                "content":"Structured output accepted."}]}
+                "tool_use_id":"provider__qwen_dup_2","is_error":false}]}
         });
         admit(&mut owner, &returned.to_string()).unwrap();
         let mut terminal = fixture().last().unwrap().clone();
@@ -3357,7 +3231,7 @@ mod tests {
             serde_json::json!({
             "type":"user", "uuid":id, "session_id":owner.session_id,
             "parent_tool_use_id":scope,
-            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"provider__qwen_dup_2","content":"done","is_error":false}]}
+            "message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"provider__qwen_dup_2","is_error":false}]}
         }).to_string()
         };
         let mut owner = issued_owner();
@@ -3514,7 +3388,7 @@ mod tests {
         let session = rows[0]["session_id"].clone();
         let late_result = serde_json::json!({"type":"user","uuid":"early-result","session_id":session,
             "parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result",
-            "tool_use_id":"provider__qwen_dup_2","content":"done","is_error":false}]}});
+            "tool_use_id":"provider__qwen_dup_2","is_error":false}]}});
         type Mutation = Box<dyn Fn(&mut Vec<serde_json::Value>)>;
         let (thinking, text, call) = (display[0], display[1], display[2]);
         let cases: Vec<(&str, Mutation, usize, &str)> = vec![
@@ -3894,7 +3768,7 @@ mod tests {
         let mut issued = issued_owner();
         let result = serde_json::json!({"type":"user","uuid":"returned","session_id":issued.session_id,
             "parent_tool_use_id":null,"message":{"role":"user","content":[{"type":"tool_result",
-            "tool_use_id":"provider__qwen_dup_2","content":"done","is_error":false}]}});
+            "tool_use_id":"provider__qwen_dup_2","is_error":false}]}});
         for pointer in ["", "/message", "/message/content/0"] {
             let refusal = admit(&mut issued_owner(), &unknown(&result, pointer).to_string())
                 .unwrap_err()

@@ -831,7 +831,7 @@
               "type": "array",
               "minItems": 1,
               "items": {
-                "$ref": "#/definitions/userContentBlock"
+                "$ref": "#/definitions/userToolResult"
               }
             }
           },
@@ -4234,9 +4234,6 @@
           "type": "string",
           "minLength": 1
         },
-        "content": {
-          "type": "string"
-        },
         "is_error": {
           "type": "boolean"
         }
@@ -4244,31 +4241,9 @@
       "required": [
         "type",
         "tool_use_id",
-        "content",
         "is_error"
       ],
       "additionalProperties": false
-    },
-    "userContentBlock": {
-      "oneOf": [
-        {
-          "allOf": [
-            {
-              "$ref": "#/definitions/contentBlock"
-            },
-            {
-              "properties": {
-                "type": {
-                  "const": "text"
-                }
-              }
-            }
-          ]
-        },
-        {
-          "$ref": "#/definitions/userToolResult"
-        }
-      ]
     }
   }
 }
