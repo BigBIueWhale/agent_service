@@ -759,7 +759,7 @@ pub async fn run_one(
         Some(missing)
             if !crate::runtime::is_ordered_subset(missing, req.deliverables.paths()) =>
         {
-            Err(ServiceError::AgentOutputMissing(format!(
+            Err(ServiceError::AgentRecordRefused(format!(
                 "the terminal record names {} missing deliverables that are not, in order, among the {} the session declared; inspect the captured root result and control/deliverables.json",
                 missing.len(),
                 req.deliverables.paths().len()
@@ -799,7 +799,7 @@ pub async fn run_one(
                     format!("the client's stderr could not be read ({error}); it is output/qwen.stderr in the bundle")
                 });
             (
-                format!("agent output was invalid: {error}; {client}; recent container logs:\n{logs}"),
+                format!("the run's result was not certified: {error}; {client}; recent container logs:\n{logs}"),
                 None,
             )
         }

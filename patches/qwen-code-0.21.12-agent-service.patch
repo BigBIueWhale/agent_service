@@ -18943,7 +18943,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      let changes: number;
  
      function createReportingSession(): void {
-@@ -2559,36 +2899,1 @@
+@@ -2559,36 +2899 @@
  
 -    it('preserves the orphaned turn when a continuation send fails (no data loss)', async () => {
 -      // An interrupted prompt: an orphaned user turn the model never answered.
@@ -21259,7 +21259,26 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -        const reminderIndex = nextMessage.findIndex(
 -          (part) => part.text === todoReminder,
 -        );
-@@ -10418,15 +10193,19 @@
+@@ -10325,13 +10100,17 @@
+         );
+         expect(functionResponseIndex).toBeGreaterThanOrEqual(0);
+         expect(reminderIndex).toBeGreaterThan(functionResponseIndex);
+         expect(midTurnIndex).toBeGreaterThan(reminderIndex);
+         expect(
+           mockChatRecordingService.recordMidTurnUserMessage,
+-        ).toHaveBeenCalledWith([midTurnPart], '  please also check tests  ');
++        ).toHaveBeenCalledWith(
++          [midTurnPart],
++          'real_user',
++          '  please also check tests  ',
++        );
+       });
+ 
+       it('injects drained structured mid-turn user messages with images', async () => {
+         const executeSpy = vi.fn().mockResolvedValue({
+           llmContent: 'file contents',
+           returnDisplay: 'file contents',
+@@ -10418,15 +10197,19 @@
          });
  
          const audioFallbackPart = {
@@ -21282,7 +21301,26 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                data: 'iVBORw0KGgo=',
              },
            },
-@@ -10534,21 +10313,23 @@
+@@ -10459,13 +10242,17 @@
+               },
+             },
+           ]),
+         );
+         expect(
+           mockChatRecordingService.recordMidTurnUserMessage,
+-        ).toHaveBeenCalledWith(midTurnParts, 'please inspect this image');
++        ).toHaveBeenCalledWith(
++          midTurnParts,
++          'real_user',
++          'please inspect this image',
++        );
+         expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
+           'Unknown ContentBlock type: video',
+         );
+       });
+ 
+       it('keeps later structured mid-turn messages when one resolution fails', async () => {
+@@ -10534,21 +10321,23 @@
            debugLoggerWarnSpy.mockClear();
            await session.prompt({
              sessionId: 'test-session-id',
@@ -21312,7 +21350,27 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              expect.arrayContaining([
                fallbackPart,
                attachmentFailurePart,
-@@ -10634,15 +10415,16 @@
+@@ -10556,17 +10345,18 @@
+             ]),
+           );
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+           ).toHaveBeenCalledWith(
+             [fallbackPart, attachmentFailurePart],
++            'real_user',
+             'please inspect this image',
+           );
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+-          ).toHaveBeenCalledWith([followUpPart], 'safe follow-up');
++          ).toHaveBeenCalledWith([followUpPart], 'real_user', 'safe follow-up');
+           expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
+             'Failed to resolve mid-turn message: image decode failed',
+           );
+         } finally {
+           clampSpy.mockRestore();
+         }
+@@ -10634,15 +10424,16 @@
            debugLoggerWarnSpy.mockClear();
            await session.prompt({
              sessionId: 'test-session-id',
@@ -21332,7 +21390,21 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            const secondCall = vi.mocked(mockChat.sendMessageStream).mock
              .calls[1];
  
-@@ -10714,25 +10496,27 @@
+@@ -10650,12 +10441,13 @@
+             expect.arrayContaining([fallbackPart, attachmentFailurePart]),
+           );
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+           ).toHaveBeenCalledWith(
+             [fallbackPart, attachmentFailurePart],
++            'real_user',
+             'please listen to this audio',
+           );
+           expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
+             'Failed to resolve mid-turn message: audio decode failed',
+           );
+         } finally {
+@@ -10714,25 +10506,27 @@
            prompt: [{ type: 'text', text: 'read file' }],
          });
  
@@ -21368,7 +21440,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockChatRecordingService.recordMidTurnUserMessage,
          ).toHaveBeenCalledTimes(10);
          expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
-@@ -10814,21 +10598,22 @@
+@@ -10814,21 +10608,22 @@
          try {
            await session.prompt({
              sessionId: 'test-session-id',
@@ -21398,7 +21470,31 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            expect(promptSignalAborted).toBe(true);
            expect(clampSpy).toHaveBeenCalledTimes(1);
            expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
-@@ -10985,18 +10770,20 @@
+@@ -10840,17 +10635,22 @@
+           );
+           expect(preservedMessage?.parts).not.toEqual(
+             expect.arrayContaining([skippedMidTurnPart]),
+           );
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+-          ).toHaveBeenCalledWith([retainedMidTurnPart], 'already queued');
++          ).toHaveBeenCalledWith(
++            [retainedMidTurnPart],
++            'real_user',
++            'already queued',
++          );
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+           ).not.toHaveBeenCalledWith(
+             [skippedMidTurnPart],
++            'real_user',
+             'should not be processed',
+           );
+         } finally {
+           clampSpy.mockRestore();
+         }
+       });
+@@ -10985,30 +10785,36 @@
          try {
            await session.prompt({
              sessionId: 'test-session-id',
@@ -21425,7 +21521,25 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              expect.arrayContaining([mixedMidTurnPart, midTurnPart]),
            );
            expect(readManyFilesSpy).not.toHaveBeenCalled();
-@@ -11108,39 +10895,41 @@
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+-          ).toHaveBeenCalledWith([mixedMidTurnPart], 'mixed safe follow-up');
++          ).toHaveBeenCalledWith(
++            [mixedMidTurnPart],
++            'real_user',
++            'mixed safe follow-up',
++          );
+           expect(
+             mockChatRecordingService.recordMidTurnUserMessage,
+-          ).toHaveBeenCalledWith([midTurnPart], 'safe follow-up');
++          ).toHaveBeenCalledWith([midTurnPart], 'real_user', 'safe follow-up');
+         } finally {
+           readManyFilesSpy.mockRestore();
+         }
+       });
+ 
+       it('accepts valid mid-turn embedded resources and drops invalid ones', async () => {
+@@ -11108,39 +10914,41 @@
            prompt: [{ type: 'text', text: 'read file' }],
          });
  
@@ -21483,7 +21597,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(debugLoggerWarnSpy).toHaveBeenCalledWith(
            'Dropped 1 invalid mid-turn content block(s): "huge resource"',
          );
-@@ -11407,15 +11196,16 @@
+@@ -11407,15 +11215,16 @@
          resolveLate({ messages: ['please also check tests'] });
          await new Promise((r) => setTimeout(r, 0));
  
@@ -21503,7 +21617,26 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(calls[1]?.[1].message).not.toEqual(
            expect.arrayContaining([midTurnPart]),
          );
-@@ -11554,105 +11344,13 @@
+@@ -11425,13 +11234,17 @@
+         // Recorded exactly once, at injection time.
+         expect(
+           mockChatRecordingService.recordMidTurnUserMessage,
+         ).toHaveBeenCalledTimes(1);
+         expect(
+           mockChatRecordingService.recordMidTurnUserMessage,
+-        ).toHaveBeenCalledWith([midTurnPart], 'please also check tests');
++        ).toHaveBeenCalledWith(
++          [midTurnPart],
++          'real_user',
++          'please also check tests',
++        );
+       }, 20_000);
+ 
+       it('keeps mid-turn drain enabled after a transient error', async () => {
+         const tool = {
+           name: 'read_file',
+           kind: core.Kind.Read,
+@@ -11554,105 +11367,13 @@
            );
          } finally {
            acquireSpy.mockRestore();
@@ -21610,7 +21743,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              .mockResolvedValueOnce({
                success: true,
                output: {
-@@ -11660,13 +11358,16 @@
+@@ -11660,13 +11381,16 @@
                  reason: 'Continue after Stop hook',
                },
              })
@@ -21628,7 +21761,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockConfig.hasHooksForEvent = vi
            .fn()
            .mockImplementation((eventName: string) => eventName === 'Stop');
-@@ -11677,39 +11378,49 @@
+@@ -11677,39 +11401,49 @@
            ]);
          mockChat.getLastModelMessageText = vi
            .fn()
@@ -21691,7 +21824,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              .mockResolvedValueOnce({
                success: true,
                output: {
-@@ -11724,13 +11435,16 @@
+@@ -11724,13 +11458,16 @@
                  reason: 'Continue after second Stop hook',
                },
              })
@@ -21709,7 +21842,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockConfig.hasHooksForEvent = vi
            .fn()
            .mockImplementation((eventName: string) => eventName === 'Stop');
-@@ -11741,136 +11455,47 @@
+@@ -11741,136 +11478,47 @@
            ]);
          mockChat.getLastModelMessageText = vi
            .fn()
@@ -21865,7 +21998,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            start: vi.fn((callback: (job: { prompt: string }) => void) => {
              callback({ prompt: 'scheduled prompt' });
            }),
-@@ -11879,44 +11504,40 @@
+@@ -11879,44 +11527,40 @@
          };
          mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
          mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
@@ -21923,7 +22056,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        it('captures a successful prompt without channel delivery metadata', async () => {
          agentTelemetry.getActiveInteractionSpan.mockReturnValue(
            agentTelemetry.span,
-@@ -12020,13 +11641,13 @@
+@@ -12020,13 +11664,13 @@
                text: 'final answer',
                promptId: 'prompt-1',
              },
@@ -21938,7 +22071,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        it('delivers only the final tool-free response block for a prompt', async () => {
          agentTelemetry.getActiveInteractionSpan.mockReturnValue(
            agentTelemetry.span,
-@@ -12152,27 +11773,17 @@
+@@ -12152,27 +11796,17 @@
          // instead of resolving end_turn, and the failed turn schedules no
          // delivery.
          mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
@@ -21972,7 +22105,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                },
              },
            ]),
-@@ -12196,14 +11807,14 @@
+@@ -12196,14 +11830,14 @@
          ).rejects.toMatchObject({
            data: expect.objectContaining({
              code: 'LOOP_DETECTED',
@@ -21989,7 +22122,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            }),
            {},
          );
-@@ -12220,27 +11831,17 @@
+@@ -12220,27 +11854,17 @@
          // collected response text instead of the rejection failing the
          // non-interactive task.
          mockConfig.getApprovalMode = vi.fn().mockReturnValue(ApprovalMode.YOLO);
@@ -22023,7 +22156,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                },
              },
            ]),
-@@ -12257,7 +11858,7 @@
+@@ -12257,7 +11881,7 @@
          expect(logLoopDetectedSpy).toHaveBeenCalledWith(
            mockConfig,
            expect.objectContaining({
@@ -22032,7 +22165,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            }),
            {},
          );
-@@ -12296,25 +11897,25 @@
+@@ -12296,25 +11920,25 @@
          mockChat.getLastModelMessageText = vi
            .fn()
            .mockReturnValue('initial answer');
@@ -22060,7 +22193,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                    candidates: [
                      {
                        content: { parts: [{ text: 'continued final' }] },
-@@ -12356,26 +11957,25 @@
+@@ -12356,26 +11980,25 @@
            ['initial answer'],
            ['continued final'],
          ]);
@@ -22089,7 +22222,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  candidates: [
                    { content: { parts: [{ text: ' second half' }] } },
                  ],
-@@ -12386,13 +11986,13 @@
+@@ -12386,13 +12009,13 @@
  
          await session.prompt({
            sessionId: 'test-session-id',
@@ -22104,7 +22237,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  id: 'user-1',
                },
              },
-@@ -12400,17 +12000,20 @@
+@@ -12400,17 +12023,20 @@
          });
  
          await vi.waitFor(() => {
@@ -22127,7 +22260,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockChat.sendMessageStream = vi
            .fn()
            .mockResolvedValue(createEmptyStream());
-@@ -12529,34 +12132,2 @@
+@@ -12529,34 +12155,2 @@
            );
          });
 -      });
@@ -22162,7 +22295,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -          'qwen/control/channel-delivery',
 -          expect.anything(),
 -        );
-@@ -14686,269 +14257,377 @@
+@@ -14686,269 +14280,377 @@
              .map((p: { text?: string }) => p.text ?? '')
              .join('');
          await vi.waitFor(() => {
@@ -22700,7 +22833,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        });
  
        it('emits canonical Goal state for an ACP /goal status query', async () => {
-@@ -15096,25 +14775,20 @@
+@@ -15096,25 +14798,20 @@
        it('publishes nothing when no Goal was recovered', async () => {
          mockGoalRuntime.getRecoveryCause.mockReturnValue(undefined);
          await session.publishRecoveredGoalState([]);
@@ -22727,7 +22860,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              timestamp: new Date(0).toISOString(),
              type: 'system',
              subtype: 'slash_command',
-@@ -15286,12 +14960,13 @@
+@@ -15286,12 +14983,13 @@
            vi.mocked(mockConfig.getGoalRuntimeReady).mockRejectedValueOnce(
              new core.GoalPersistenceUnavailableError('unsupported record'),
            );
@@ -22741,7 +22874,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                timestamp: new Date(0).toISOString(),
                type: 'system',
                subtype: 'slash_command',
-@@ -15442,13 +15117,90 @@
+@@ -15442,13 +15140,90 @@
          await vi.waitFor(() => {
            expect(mockClient.sessionUpdate).toHaveBeenCalledTimes(2);
          });
@@ -22833,7 +22966,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'turn-1',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -15468,13 +15220,16 @@
+@@ -15468,13 +15243,16 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((turnKey: string) =>
            turnKey === 'goal-runtime:turn-1' ? permit : undefined,
@@ -22851,7 +22984,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            permit,
            continuationContext: 'check weather',
          });
-@@ -15502,12 +15257,13 @@
+@@ -15502,12 +15280,13 @@
          expect(
            mockChatRecordingService.recordUserMessage,
          ).not.toHaveBeenCalled();
@@ -22865,7 +22998,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // shifted off `goalQueue` by then, so unless the drain's own catch
          // settles it the runtime keeps `currentPermit` and stays 'running'
          // forever: no continuation is ever scheduled again, and every later
-@@ -15535,13 +15291,13 @@
+@@ -15535,13 +15314,13 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((key: string) =>
            key === turnKey ? permit : undefined,
@@ -22880,7 +23013,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
          expect(boundGoalHost).toBeDefined();
          await boundGoalHost!.startGoalTurn({
-@@ -15556,15 +15312,13 @@
+@@ -15556,15 +15335,13 @@
          });
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
@@ -22898,7 +23031,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -          .fn()
 -          .mockReturnValue(true);
 +        mockConfig.getSkipLoopDetection = vi.fn().mockReturnValue(false);
-@@ -15589,33 +15343,33 @@
+@@ -15589,33 +15366,33 @@
              updatedAt: 1234,
            },
          });
@@ -22952,7 +23085,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            permit,
            continuationContext: 'check weather',
          });
-@@ -15624,7 +15378,7 @@
+@@ -15624,7 +15401,7 @@
            expect(logLoopDetectedSpy).toHaveBeenCalledWith(
              mockConfig,
              expect.objectContaining({
@@ -22961,7 +23094,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              }),
              {},
            );
-@@ -15634,12 +15388,13 @@
+@@ -15634,12 +15411,13 @@
            expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(permit);
          });
          expect(mockGoalRuntime.dispatch).not.toHaveBeenCalled();
@@ -22975,7 +23108,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // settlement plus the transcript stop message, never a rejection
          // that would pause the goal without a published turn_error.
          const guardModeEnv = 'QWEN_CODE_ACP_REPEATED_TOOL_FAILURE_GUARD';
-@@ -15691,16 +15446,19 @@
+@@ -15691,16 +15469,19 @@
                    })),
                  },
                },
@@ -22999,7 +23132,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              revision: 1,
              turnId: 'turn-guard-stop',
            };
-@@ -15763,13 +15521,14 @@
+@@ -15763,13 +15544,14 @@
              process.env[guardModeEnv] = previousGuardMode;
            }
          }
@@ -23015,7 +23148,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // and the send — prompt assembly, transcript writes, the abort check
          // itself — count as model work, so a cancel landing in that window
          // paused the Goal and charged it a turn it never took.
-@@ -15796,13 +15555,13 @@
+@@ -15796,13 +15578,13 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((key: string) =>
            key === turnKey ? permit : undefined,
@@ -23030,7 +23163,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          mockChatRecordingService.recordGoalRuntimeMessage.mockImplementation(
            () => {
              void session.cancelPendingPrompt();
-@@ -15824,12 +15583,13 @@
+@@ -15824,12 +15606,13 @@
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
          expect(mockGoalRuntime.releaseTurn).not.toHaveBeenCalledWith(turnKey);
@@ -23044,7 +23177,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // gated on `!goalTurn`, so on exactly that path the permit stayed
          // with a turn that returns `cancelled` without running — the runtime
          // never leaves `running` and every later Goal turn blocks on it.
-@@ -15861,13 +15621,13 @@
+@@ -15861,13 +15644,13 @@
          mockGoalRuntime.getVerifierFeedback.mockImplementation(() => {
            void session.cancelPendingPrompt();
            return undefined;
@@ -23059,7 +23192,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            prompt: [{ type: 'text', text: 'user input' }],
          });
  
-@@ -15876,12 +15636,16 @@
+@@ -15876,12 +15659,16 @@
            expect.stringMatching(/^goal-user:/),
          );
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
@@ -23076,7 +23209,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            goal: {
              goalId: 'goal-1',
              revision: 1,
-@@ -15927,12 +15691,13 @@
+@@ -15927,12 +15714,13 @@
          await expect(session.cancelPendingPrompt()).rejects.toThrow(
            'Not currently generating',
          );
@@ -23090,7 +23223,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // current permit: `activity` stays 'running', `queueContinuation`
          // never flushes, and every later prompt hangs in `claimGoalTurn`.
          const permit: core.GoalTurnPermit = {
-@@ -15957,13 +15722,16 @@
+@@ -15957,13 +15745,16 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((turnKey: string) =>
            turnKey === 'goal-runtime:turn-flush-fails' ? permit : undefined,
@@ -23108,7 +23241,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
          expect(boundGoalHost).toBeDefined();
          await boundGoalHost!.startGoalTurn({
-@@ -15975,12 +15743,13 @@
+@@ -15975,12 +15766,13 @@
            expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(permit);
          });
          expect(mockChatRecordingService.flush).toHaveBeenCalled();
@@ -23122,7 +23255,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // 'running' forever and every later goal prompt hangs behind it.
          const permit: core.GoalTurnPermit = {
            goalId: 'goal-1',
-@@ -16004,13 +15773,13 @@
+@@ -16004,13 +15796,13 @@
          });
          mockGoalRuntime.permitForTurn.mockImplementation((turnKey: string) =>
            turnKey === 'goal-runtime:turn-rejected' ? permit : undefined,
@@ -23137,7 +23270,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
          expect(boundGoalHost).toBeDefined();
          await boundGoalHost!.startGoalTurn({
-@@ -16026,12 +15795,13 @@
+@@ -16026,12 +15818,13 @@
          // The model never ran, so this is a release, not a completed turn.
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
          expect(mockChat.sendMessageStream).not.toHaveBeenCalled();
@@ -23151,7 +23284,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'turn-after-notification',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -16053,19 +15823,24 @@
+@@ -16053,19 +15846,24 @@
          let releaseNotification!: () => void;
          const notificationGate = new Promise<void>((resolve) => {
            releaseNotification = resolve;
@@ -23182,7 +23315,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
-@@ -16097,12 +15872,13 @@
+@@ -16097,12 +15895,13 @@
            expect.any(String),
            permit,
          );
@@ -23196,7 +23329,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'turn-cancelled-behind-notification',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -16124,19 +15900,24 @@
+@@ -16124,19 +15923,24 @@
          let releaseNotification!: () => void;
          const notificationGate = new Promise<void>((resolve) => {
            releaseNotification = resolve;
@@ -23227,7 +23360,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
-@@ -16167,12 +15948,13 @@
+@@ -16167,12 +15971,13 @@
          });
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
          expect(mockGoalRuntime.finishTurn).not.toHaveBeenCalled();
@@ -23241,7 +23374,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            turnId: 'user-turn-1',
          };
          mockGoalRuntime.getSnapshot.mockReturnValue({
-@@ -16191,13 +15973,16 @@
+@@ -16191,13 +15996,16 @@
            },
          });
          mockGoalRuntime.beginTurn.mockReturnValue(permit);
@@ -23259,7 +23392,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            prompt: [{ type: 'text', text: 'hello' }],
          });
  
-@@ -16208,19 +15993,32 @@
+@@ -16208,19 +16016,32 @@
            currentModel,
            expect.any(Object),
            expect.any(String),
@@ -23293,7 +23426,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            revision: 1,
            turnId: 'automatic-turn',
          };
-@@ -16271,28 +16069,37 @@
+@@ -16271,28 +16092,37 @@
              queuedTurnKey = undefined;
              for (const listener of [...listeners]) listener();
            }
@@ -23345,7 +23478,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockClient,
            mockSettings,
          );
-@@ -16300,12 +16107,21 @@
+@@ -16300,12 +16130,21 @@
          await boundGoalHost!.startGoalTurn({
            permit: automaticPermit,
            continuationContext: 'check weather',
@@ -23367,7 +23500,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'user input' }],
          });
-@@ -16324,12 +16140,13 @@
+@@ -16324,12 +16163,13 @@
            automaticPermit,
          );
          expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(userPermit);
@@ -23381,7 +23514,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // pure timing, so both spellings have to settle the same way: a
          // handoff via finishTurn, never a pause. Pausing here would persist
          // the goal as paused and silently stop the autonomous loop.
-@@ -16386,35 +16203,41 @@
+@@ -16386,35 +16226,41 @@
              queuedTurnKey = undefined;
              for (const listener of [...listeners]) listener();
            }
@@ -23442,7 +23575,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockClient,
            mockSettings,
          );
-@@ -16422,12 +16245,21 @@
+@@ -16422,12 +16268,21 @@
          await boundGoalHost!.startGoalTurn({
            permit: automaticPermit,
            continuationContext: 'check weather',
@@ -23464,7 +23597,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'user input' }],
          });
-@@ -16438,12 +16270,13 @@
+@@ -16438,12 +16293,13 @@
          expect(mockGoalRuntime.dispatch).not.toHaveBeenCalledWith(
            expect.objectContaining({ action: 'pause' }),
          );
@@ -23478,7 +23611,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // unwinds reserves a turn key behind the continuation's permit --
          // and the drain cannot start the continuation until this prompt
          // finishes, while this prompt cannot start until the continuation
-@@ -16505,28 +16338,37 @@
+@@ -16505,28 +16361,37 @@
              queuedTurnKey = undefined;
              return true;
            },
@@ -23530,7 +23663,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockClient,
            mockSettings,
          );
-@@ -16534,12 +16376,21 @@
+@@ -16534,12 +16399,21 @@
          const activating = session.prompt({
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'set a goal to check weather' }],
@@ -23552,7 +23685,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // runtime hands the session a continuation it cannot drain yet.
          goalActive = true;
          currentTurnKey = 'goal-runtime:continuation-turn';
-@@ -16570,12 +16421,13 @@
+@@ -16570,12 +16444,13 @@
            userPermit,
          );
          expect(mockGoalRuntime.finishTurn).toHaveBeenCalledWith(userPermit);
@@ -23566,7 +23699,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          // no continuation is ever scheduled again and every later prompt
          // hangs in `claimGoalTurn`.
          const permit: core.GoalTurnPermit = {
-@@ -16603,13 +16455,16 @@
+@@ -16603,13 +16478,16 @@
          );
          mockGoalRuntime.finishTurn.mockRejectedValue(
            new Error('transcript write failed'),
@@ -23584,7 +23717,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            continuationContext: 'check weather',
          });
  
-@@ -16791,16 +16646,13 @@
+@@ -16791,16 +16669,13 @@
                preparationDiscarded: true,
              }),
            }),
@@ -23602,7 +23735,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            const currentExecute = vi.fn().mockResolvedValue({
              llmContent: 'current result',
              returnDisplay: 'current result',
-@@ -16880,16 +16732,13 @@
+@@ -16880,16 +16755,13 @@
                }),
              }),
            });
@@ -23620,7 +23753,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            const execute = vi.fn().mockResolvedValue({
              llmContent: 'current result',
              returnDisplay: 'current result',
-@@ -17266,13 +17115,17 @@
+@@ -17266,13 +17138,17 @@
                uri: `file://${outsidePath}`,
              },
            ],
@@ -23639,7 +23772,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          await fs.rm(outsideDir, { recursive: true, force: true });
        }
      });
-@@ -17295,13 +17148,17 @@
+@@ -17295,13 +17171,17 @@
          await session.prompt({
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'Use @ext:browser now' }],
@@ -23658,7 +23791,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          );
          expect(sentText).toContain('Browser automation');
          expect(sentText).toContain(
-@@ -17330,13 +17187,17 @@
+@@ -17330,13 +17210,17 @@
        await session.prompt({
          sessionId: 'test-session-id',
          prompt: [{ type: 'text', text: 'Use @mcp:demo now' }],
@@ -23677,7 +23810,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(sentText).toContain('- Prompts: 1');
      });
  
-@@ -18050,24 +17911,26 @@
+@@ -18050,25 +17934,28 @@
            expect.objectContaining({
              functionResponse: expect.objectContaining({
                id: 'call-plan-approval-cancelled',
@@ -23705,12 +23838,14 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +            [{ text: 'recovered before cancellation' }],
 +          ),
          ],
++        'real_user',
          'recovered before cancellation',
        );
      });
  
      it('rejects permission-hook rewrites of unknown Plan shell commands', async () => {
-@@ -19308,12 +19171,13 @@
+       const rawCommand = "python -c 'print(1)'";
+@@ -19308,12 +19195,13 @@
  
        await session.prompt({
          sessionId: 'test-session-id',
@@ -23724,7 +23859,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              expect.objectContaining({
                optionId: core.ToolConfirmationOutcome.ProceedOnce,
              }),
-@@ -19883,12 +19747,112 @@
+@@ -19883,12 +19771,112 @@
                }),
              }),
              expect.anything(),
@@ -23837,7 +23972,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                .fn()
                .mockResolvedValueOnce({
                  success: true,
-@@ -20034,12 +19998,13 @@
+@@ -20034,12 +20022,13 @@
                },
              },
            });
@@ -23851,7 +23986,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            // the runtime mints the next continuation, and a Stop hook that
            // always blocks loops the session forever.
            const permit: core.GoalTurnPermit = {
-@@ -20062,19 +20027,31 @@
+@@ -20062,19 +20051,31 @@
                updatedAt: 1234,
              },
            });
@@ -23890,7 +24025,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            mockConfig.hasHooksForEvent = vi
              .fn()
              .mockImplementation((eventName: string) => eventName === 'Stop');
-@@ -20086,13 +20063,17 @@
+@@ -20086,13 +20087,17 @@
              ]);
            mockChat.getLastModelMessageText = vi
              .fn()
@@ -23909,7 +24044,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              prompt: [{ type: 'text', text: 'hello' }],
            });
  
-@@ -21346,12 +21327,15 @@
+@@ -21346,12 +21351,15 @@
            {
              type: core.StreamEventType.CHUNK,
              value: {
@@ -23925,7 +24060,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                    id: 'ask-user-question-call',
                    name: core.ToolNames.ASK_USER_QUESTION,
                    args: {
-@@ -21423,24 +21407,26 @@
+@@ -21423,25 +21431,28 @@
              expect.objectContaining({
                functionResponse: expect.objectContaining({
                  id: 'ask-user-question-call',
@@ -23953,12 +24088,14 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +              [{ text: 'follow-up while waiting' }],
 +            ),
            ],
++          'real_user',
            'follow-up while waiting',
          );
        });
  
        it('waits for pending rewrites before cron stops after cancelled ask_user_question', async () => {
-@@ -21803,12 +21789,118 @@
+         const scheduler = {
+@@ -21803,12 +21814,118 @@
          });
        });
      });
@@ -24077,7 +24214,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          promptId: string,
          functionCalls: FunctionCall[],
          toolLoopState?: DaemonToolLoopState,
-@@ -23327,26 +23419,26 @@
+@@ -23327,26 +23444,26 @@
          prompt: [{ type: 'text', text: 'capture screens until done' }],
        });
  
@@ -24108,7 +24245,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                id: 'provider-call',
                name: core.ToolNames.READ_FILE,
                args: { file_path: 'test.ts' },
-@@ -23502,13 +23594,15 @@
+@@ -23502,13 +23619,15 @@
          return mockAllowedTool(name, execute);
        });
        const historyIds = new Set(['duplicate_read']);
@@ -24125,7 +24262,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                id: 'duplicate_read',
                name: core.ToolNames.READ_FILE,
                args: { file_path: 'duplicate.ts' },
-@@ -24190,7 +24284,6 @@
+@@ -24190,7 +24309,6 @@
          outcome: { outcome: 'cancelled' },
        });
        const toolLoopState: DaemonToolLoopState = {
@@ -24133,7 +24270,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          invalidToolParamErrors: new Map<string, number>(),
          toolCallKeyCounts: new Map<string, number>(),
          maxToolCallKeyRepeat: 0,
-@@ -24931,7 +25024,6 @@
+@@ -24931,7 +25049,6 @@
            isOutputMarkdown: true,
          });
          const toolLoopState: DaemonToolLoopState = {
@@ -24141,7 +24278,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            invalidToolParamErrors: new Map([[core.ToolNames.AGENT, 2]]),
            toolCallKeyCounts: new Map<string, number>(),
            maxToolCallKeyRepeat: 0,
-@@ -25027,7 +25119,6 @@
+@@ -25027,7 +25144,6 @@
            isOutputMarkdown: true,
          });
          const toolLoopState: DaemonToolLoopState = {
@@ -24149,7 +24286,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            // Two prior invalid-param errors: the first failure in this batch
            // trips the threshold of three while the sibling shares the
            // concurrency window, forcing the capped race branch.
-@@ -25867,16 +25958,15 @@
+@@ -25867,16 +25983,15 @@
          'dup_id_0001',
        ]);
        expect(result.stopAfterPermissionCancel).toBe(false);
@@ -24168,7 +24305,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        mockToolRegistry.getTool.mockReturnValue({
          name: 'read_file',
          kind: core.Kind.Read,
-@@ -25889,13 +25979,12 @@
+@@ -25889,13 +26004,12 @@
            getDescription: vi.fn().mockReturnValue('Read file'),
            toolLocations: vi.fn().mockReturnValue([]),
          }),
@@ -24182,7 +24319,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          session as unknown as ToolCallInternals
        ).runToolCalls(new AbortController().signal, 'prompt-budget', [
          { name: 'read_file', args: { file_path: 'a.ts' } },
-@@ -25904,13 +25993,13 @@
+@@ -25904,13 +26018,13 @@
  
        const textLength = (parts: Part[]) =>
          parts.reduce((sum, part) => {
@@ -24197,7 +24334,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          );
        expect(textLength(recordedParts)).toBe(textLength(result.parts));
        expect(recordedParts).toEqual(result.parts);
-@@ -25941,13 +26030,15 @@
+@@ -25941,13 +26055,15 @@
          canUpdateOutput: false,
          isOutputMarkdown: true,
        });
@@ -24214,7 +24351,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                id: 'shell_1',
                name: 'read_file',
                args: { file_path: 'b.ts' },
-@@ -26038,13 +26129,15 @@
+@@ -26038,13 +26154,15 @@
          canUpdateOutput: false,
          isOutputMarkdown: true,
        });
@@ -24231,7 +24368,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                id: 'shell_1',
                name: 'read_file',
                args: { file_path: 'b.ts' },
-@@ -26089,13 +26182,15 @@
+@@ -26089,13 +26207,15 @@
      });
  
      it('suppresses duplicate TodoWrite calls without emitting plan updates', async () => {
@@ -24248,7 +24385,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                id: 'todo_1',
                name: core.ToolNames.TODO_WRITE,
                args: {
-@@ -26175,13 +26270,15 @@
+@@ -26175,13 +26295,15 @@
          isOutputMarkdown: true,
        });
        const historyIds = new Set(['dup_mid']);
@@ -24265,7 +24402,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                id: 'dup_mid',
                name: 'read_file',
                args: { file_path: 'b.ts' },
-@@ -26432,17 +26529,25 @@
+@@ -26432,17 +26554,25 @@
          canUpdateOutput: false,
          isOutputMarkdown: true,
        });
@@ -24292,7 +24429,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-1',
-@@ -26451,13 +26556,13 @@
+@@ -26451,13 +26581,13 @@
                    },
                  ],
                },
@@ -24307,7 +24444,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        lastGuardPromptId = `test-session-id########guard-${++guardPromptCounter}`;
        return session.prompt(
          {
-@@ -26518,12 +26623,198 @@
+@@ -26518,12 +26648,198 @@
        mockGuardBridge(async () => {
          const next = responses[Math.min(index++, responses.length - 1)];
          return typeof next === 'function' ? next() : next;
@@ -24506,7 +24643,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const previousTurn = new Promise<void>((resolve) => {
          releasePreviousTurn = resolve;
        });
-@@ -26576,12 +26867,13 @@
+@@ -26576,12 +26892,13 @@
        });
        let rejectStream!: (reason?: unknown) => void;
        const gate = new Promise<never>((_resolve, reject) => {
@@ -24520,7 +24657,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        return {
          responseStream: stream(),
          started,
-@@ -26590,58 +26882,73 @@
+@@ -26590,58 +26907,73 @@
            error.name = errorName;
            rejectStream(error);
          },
@@ -24631,7 +24768,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        await expect(runGuardPrompt()).rejects.toThrow(
          'provider aborted unexpectedly',
-@@ -26686,65 +26993,3 @@
+@@ -26686,65 +27018,3 @@
        ).toBe(false);
      });
  
@@ -24697,7 +24834,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 -      );
 -    });
 -
-@@ -26763,13 +27008,13 @@
+@@ -26763,13 +27033,13 @@
            enterWait();
            await waitGate;
          }),
@@ -24712,7 +24849,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        await session.cancelPendingPrompt();
        releaseWait();
  
-@@ -26778,16 +27023,16 @@
+@@ -26778,16 +27048,16 @@
  
      it('lets cancellation win while a loop-detected Stop continuation is preserved', async () => {
 -      mockConfig.getMaxToolCallsPerTurn = vi.fn().mockReturnValue(1);
@@ -24737,7 +24874,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +                  name: 'read_file',
 +                  args: { path: 'a' },
 +                })),
-@@ -26831,16 +27076,16 @@
+@@ -26831,16 +27101,16 @@
        // Pins rejectOnLoopDetected=true at the foreground #handleStopHookLoop
        // call site: without it this turn would resolve end_turn.
 -      mockConfig.getMaxToolCallsPerTurn = vi.fn().mockReturnValue(1);
@@ -24762,7 +24899,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +                  name: 'read_file',
 +                  args: { path: 'a' },
 +                })),
-@@ -26864,13 +27109,13 @@
+@@ -26864,13 +27134,13 @@
          message: LOOP_DETECTED_TURN_ERROR_MESSAGE,
          data: expect.objectContaining({
            code: 'LOOP_DETECTED',
@@ -24778,7 +24915,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          }),
          {},
        );
-@@ -26954,17 +27199,19 @@
+@@ -26954,17 +27224,19 @@
        ).toBe(false);
      });
  
@@ -24800,7 +24937,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-stream-error',
-@@ -26973,15 +27220,15 @@
+@@ -26973,15 +27245,15 @@
                    },
                  ],
                },
@@ -24818,7 +24955,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          .mocked(mockClient.sessionUpdate)
          .mock.calls.map(([params]) => params.update)
          .filter(
-@@ -27020,13 +27267,13 @@
+@@ -27020,13 +27292,13 @@
            -1,
          )?.[0] as (
            displayText: string,
@@ -24833,7 +24970,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              {
                id: 'related-after-api-error',
                description: 'related-after-api-error',
-@@ -27041,13 +27288,13 @@
+@@ -27041,13 +27313,13 @@
            });
          },
        );
@@ -24848,7 +24985,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-related-result',
-@@ -27056,15 +27303,15 @@
+@@ -27056,15 +27328,15 @@
                    },
                  ],
                },
@@ -24866,7 +25003,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        );
  
        await vi.waitFor(() => {
-@@ -27089,18 +27336,21 @@
+@@ -27089,18 +27361,21 @@
            -1,
          )?.[0] as (
            displayText: string,
@@ -24894,7 +25031,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        const internals = session as unknown as {
          notificationProcessing: boolean;
-@@ -27113,17 +27363,19 @@
+@@ -27113,17 +27388,19 @@
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
      });
  
@@ -24916,7 +25053,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-new-prompt',
-@@ -27132,15 +27384,15 @@
+@@ -27132,15 +27409,15 @@
                    },
                  ],
                },
@@ -24934,7 +25071,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          sessionId: 'test-session-id',
          prompt: [{ type: 'text', text: 'unrelated ordinary prompt' }],
        });
-@@ -27226,13 +27478,13 @@
+@@ -27226,13 +27503,13 @@
          todoStopGuardQueuedPromptOwnerPromptId?: string;
        };
        internals.todoStopGuardQueuedPromptPriority = true;
@@ -24949,7 +25086,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(internals.todoStopGuardQueuedPromptPriority).toBe(false);
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
      });
-@@ -27304,18 +27556,18 @@
+@@ -27304,18 +27581,18 @@
        installPendingTodoTool();
        let guardSendStarted!: () => void;
        const guardSendStart = new Promise<void>((resolve) => {
@@ -24970,7 +25107,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'arm-before-trust-clear',
-@@ -27324,27 +27576,27 @@
+@@ -27324,27 +27601,27 @@
                    },
                  ],
                },
@@ -25001,7 +25138,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                functionCalls: [
                  {
                    id: 'tool-after-trust-clear',
-@@ -27386,18 +27638,18 @@
+@@ -27386,18 +27663,18 @@
        installPendingTodoTool();
        let guardSendStarted!: () => void;
        const guardSendStart = new Promise<void>((resolve) => {
@@ -25022,7 +25159,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-invalidation-error',
-@@ -27406,21 +27658,21 @@
+@@ -27406,21 +27683,21 @@
                    },
                  ],
                },
@@ -25046,7 +25183,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        mockBackgroundTaskRegistry.getAll.mockReturnValue([
          {
            id: 'old-before-invalidation-error',
-@@ -27441,13 +27693,13 @@
+@@ -27441,13 +27718,13 @@
        callback('old background done', '<old-after-invalidation-error />', {
          agentId: 'old-before-invalidation-error',
          status: 'completed',
@@ -25061,7 +25198,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        await vi.waitFor(() => {
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(4);
        });
-@@ -27468,77 +27720,7 @@
+@@ -27468,77 +27745,7 @@
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(4);
 -    });
 -
@@ -25139,7 +25276,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        rebuildSessionWithGuard();
        installPendingTodoTool();
        queuePendingTodoThenNaturalStops();
-@@ -27554,15 +27736,16 @@
+@@ -27554,15 +27761,16 @@
        await runGuardPrompt();
  
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -25159,7 +25296,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          vi
            .mocked(mockClient.sessionUpdate)
            .mock.calls.some(
-@@ -27917,99 +28100,79 @@
+@@ -27917,99 +28125,79 @@
        );
      });
  
@@ -25303,7 +25440,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  {
                    content: [
                      { type: 'text', text: 'inspect this image too' },
-@@ -28029,280 +28192,192 @@
+@@ -28029,280 +28217,192 @@
          },
          async () => {
            events.push('claim');
@@ -25707,7 +25844,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      it('counts every Guard-attributable tool follow-up as a model call', async () => {
        rebuildSessionWithGuard();
        installPendingTodoTool();
-@@ -28325,13 +28400,13 @@
+@@ -28325,13 +28425,13 @@
        mockToolRegistry.getTool.mockImplementation((name: string) =>
          name === core.ToolNames.TODO_WRITE ? todoTool : readTool,
        );
@@ -25722,7 +25859,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-guard-tools',
-@@ -28340,15 +28415,15 @@
+@@ -28340,15 +28440,15 @@
                    },
                  ],
                },
@@ -25740,7 +25877,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'guard-read-1',
-@@ -28358,13 +28433,13 @@
+@@ -28358,13 +28458,13 @@
                  ],
                },
              },
@@ -25755,7 +25892,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'guard-read-2',
-@@ -28407,19 +28482,19 @@
+@@ -28407,19 +28507,19 @@
        [
          'does not duplicate a successful Guard tool response after history advances',
          true,
@@ -25778,7 +25915,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          const readExecute = vi.fn().mockResolvedValue({
            llmContent: 'file contents',
            returnDisplay: 'file contents',
-@@ -28443,113 +28518,77 @@
+@@ -28443,113 +28543,77 @@
            messages:
              ++drainCount === 4
                ? ['user direction before the failed follow-up']
@@ -25946,7 +26083,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
      it('closes Guard tools with the remaining attempt after Todo completion', async () => {
        rebuildSessionWithGuard();
        const execute = installPendingTodoTool();
-@@ -28574,13 +28613,13 @@
+@@ -28574,13 +28638,13 @@
              changes: {},
            },
          });
@@ -25961,7 +26098,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-guard-completion',
-@@ -28589,15 +28628,15 @@
+@@ -28589,15 +28653,15 @@
                    },
                  ],
                },
@@ -25979,7 +26116,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-by-guard',
-@@ -28606,13 +28645,13 @@
+@@ -28606,13 +28670,13 @@
                    },
                  ],
                },
@@ -25994,7 +26131,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        expect(execute).toHaveBeenCalledTimes(2);
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(4);
        const toolClosure = vi.mocked(mockChat.sendMessageStream).mock
-@@ -28675,13 +28714,13 @@
+@@ -28675,13 +28739,13 @@
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
@@ -26009,7 +26146,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-failed-closure',
-@@ -28690,15 +28729,15 @@
+@@ -28690,15 +28754,15 @@
                    },
                  ],
                },
@@ -26027,7 +26164,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-failed-closure',
-@@ -28708,20 +28747,20 @@
+@@ -28708,20 +28772,20 @@
                  ],
                },
              },
@@ -26050,7 +26187,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        );
        await vi.waitFor(() => {
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(5);
-@@ -28756,13 +28795,13 @@
+@@ -28756,13 +28820,13 @@
            changes: {},
          },
        });
@@ -26065,7 +26202,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-completed-midturn',
-@@ -28771,15 +28810,15 @@
+@@ -28771,15 +28835,15 @@
                    },
                  ],
                },
@@ -26083,7 +26220,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-midturn',
-@@ -28788,13 +28827,13 @@
+@@ -28788,13 +28852,13 @@
                    },
                  ],
                },
@@ -26098,7 +26235,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              ? ['user direction after completion']
              : [],
          hasQueuedPrompt: false,
-@@ -28847,13 +28886,13 @@
+@@ -28847,13 +28911,13 @@
              changes: {},
            },
          });
@@ -26113,7 +26250,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-post-hook-stop',
-@@ -28862,15 +28901,15 @@
+@@ -28862,15 +28926,15 @@
                    },
                  ],
                },
@@ -26131,7 +26268,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-post-hook-stop',
-@@ -28879,13 +28918,13 @@
+@@ -28879,13 +28943,13 @@
                    },
                  ],
                },
@@ -26146,7 +26283,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'PostToolUse') {
              return { success: true, output: {} };
            }
-@@ -28947,13 +28986,13 @@
+@@ -28947,13 +29011,13 @@
              changes: {},
            },
          });
@@ -26161,7 +26298,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-queued-tool-closure',
-@@ -28962,15 +29001,15 @@
+@@ -28962,15 +29026,15 @@
                    },
                  ],
                },
@@ -26179,7 +26316,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-completed-before-queued-tool-closure',
-@@ -28979,13 +29018,13 @@
+@@ -28979,13 +29043,13 @@
                    },
                  ],
                },
@@ -26194,7 +26331,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            vi.mocked(mockChat.sendMessageStream).mock.calls.length === 3,
        }));
  
-@@ -29030,13 +29069,13 @@
+@@ -29030,13 +29094,13 @@
          },
          { messages: [], hasQueuedPrompt: false },
        );
@@ -26209,7 +26346,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-nested-midturn',
-@@ -29045,15 +29084,15 @@
+@@ -29045,15 +29109,15 @@
                    },
                  ],
                },
@@ -26227,7 +26364,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'read-before-nested-midturn',
-@@ -29062,13 +29101,13 @@
+@@ -29062,13 +29126,13 @@
                    },
                  ],
                },
@@ -26242,7 +26379,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const nestedUserCall = vi.mocked(mockChat.sendMessageStream).mock
          .calls[3]?.[1] as { message: Part[] };
        expect(
-@@ -29114,13 +29153,13 @@
+@@ -29114,13 +29178,13 @@
          },
          { messages: [], hasQueuedPrompt: false },
        );
@@ -26257,7 +26394,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-nested-combined-midturn',
-@@ -29129,15 +29168,15 @@
+@@ -29129,15 +29193,15 @@
                    },
                  ],
                },
@@ -26275,7 +26412,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'read-before-nested-combined-midturn',
-@@ -29146,13 +29185,13 @@
+@@ -29146,13 +29210,13 @@
                    },
                  ],
                },
@@ -26290,7 +26427,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -29268,13 +29307,13 @@
+@@ -29268,13 +29332,13 @@
            status: 'completed',
            notified: true,
          },
@@ -26305,7 +26442,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -29328,15 +29367,16 @@
+@@ -29328,15 +29392,16 @@
            ),
        ).toBe(false);
        expect(core.generatePromptSuggestion).not.toHaveBeenCalled();
@@ -26325,7 +26462,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
      it('releases FIFO priority when the queued prompt is a trusted retry', async () => {
        rebuildSessionWithGuard();
-@@ -29461,13 +29501,13 @@
+@@ -29461,13 +29526,13 @@
              changes: {},
            },
          });
@@ -26340,7 +26477,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'pending-before-combined-priority',
-@@ -29476,15 +29516,15 @@
+@@ -29476,15 +29541,15 @@
                    },
                  ],
                },
@@ -26358,7 +26495,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'complete-after-mid-turn',
-@@ -29501,13 +29541,13 @@
+@@ -29501,13 +29566,13 @@
                    },
                  ],
                },
@@ -26373,7 +26510,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            messages: ['mid-turn direction before queued prompt'],
            hasQueuedPrompt: true,
          },
-@@ -29535,15 +29575,16 @@
+@@ -29535,15 +29600,16 @@
            ([request]) => request.eventName === 'Stop',
          ),
        ).toBe(false);
@@ -26393,7 +26530,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        await session.prompt({
          sessionId: 'test-session-id',
-@@ -29589,13 +29630,13 @@
+@@ -29589,13 +29655,13 @@
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
@@ -26408,7 +26545,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-after-queued-prompt-cancel',
-@@ -29604,13 +29645,13 @@
+@@ -29604,13 +29670,13 @@
                    },
                  ],
                },
@@ -26423,7 +26560,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        });
  
        await vi.waitFor(() => {
-@@ -29674,14 +29715,14 @@
+@@ -29674,14 +29740,14 @@
        callback('background done', '<deferred-before-fifo-error />', {
          agentId: 'deferred-before-fifo-error',
          status: 'completed',
@@ -26440,7 +26577,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            sessionId: 'test-session-id',
            prompt: [{ type: 'text', text: 'queued FIFO work' }],
          }),
-@@ -29707,13 +29748,13 @@
+@@ -29707,13 +29773,13 @@
            modelText: string,
            meta: { agentId: string; status: string },
          ) => void;
@@ -26455,7 +26592,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-midturn-fifo-cancel',
-@@ -29722,14 +29763,14 @@
+@@ -29722,14 +29788,14 @@
                    },
                  ],
                },
@@ -26472,7 +26609,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            messages: ['mid-turn before queued prompt cancellation'],
            hasQueuedPrompt: true,
          },
-@@ -29738,15 +29779,16 @@
+@@ -29738,15 +29804,16 @@
  
        await runGuardPrompt();
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -26492,7 +26629,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          agentId: 'after-midturn-fifo-cancel',
          status: 'completed',
        });
-@@ -30131,13 +30173,13 @@
+@@ -30131,13 +30198,13 @@
              secondToolStarted();
              await secondToolGate;
            }
@@ -26507,7 +26644,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id,
-@@ -30148,17 +30190,17 @@
+@@ -30148,17 +30215,17 @@
                },
              },
            ]);
@@ -26527,7 +26664,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
              if (request.eventName !== 'Stop') {
                return { success: true, output: {} };
              }
-@@ -30245,17 +30287,17 @@
+@@ -30245,17 +30312,17 @@
        let releaseSecondSend!: () => void;
        const secondSendGate = new Promise<void>((resolve) => {
          releaseSecondSend = resolve;
@@ -26547,7 +26684,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'second-prompt-todo',
-@@ -30264,13 +30306,13 @@
+@@ -30264,13 +30331,13 @@
                    },
                  ],
                },
@@ -26562,7 +26699,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const secondPrompt = session.prompt({
          sessionId: 'test-session-id',
          prompt: [{ type: 'text', text: 'new work chain' }],
-@@ -30561,13 +30603,13 @@
+@@ -30561,13 +30628,13 @@
            status: 'completed',
            notified: true,
          },
@@ -26577,7 +26714,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -30925,13 +30967,13 @@
+@@ -30925,13 +30992,13 @@
        });
        await new Promise((resolve) => setTimeout(resolve, 0));
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -26592,7 +26729,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(1);
        });
      });
-@@ -30963,14 +31005,22 @@
+@@ -30963,14 +31030,22 @@
        expect(mockChat.sendMessageStream).toHaveBeenCalledTimes(2);
  
        const history: Content[] = [
@@ -26617,7 +26754,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            id: 'pre-rewind-agent',
            description: 'pre-rewind-agent',
            isBackgrounded: true,
-@@ -30978,13 +31028,13 @@
+@@ -30978,13 +31053,13 @@
            notified: true,
          },
        ]);
@@ -26632,7 +26769,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-after-rewind',
-@@ -30993,13 +31043,13 @@
+@@ -30993,13 +31068,13 @@
                    },
                  ],
                },
@@ -26647,7 +26784,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31061,13 +31111,13 @@
+@@ -31061,13 +31136,13 @@
            notified: true,
          },
        ]);
@@ -26662,7 +26799,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'related-notification-todo-after-hard-stop',
-@@ -31076,13 +31126,13 @@
+@@ -31076,13 +31151,13 @@
                    },
                  ],
                },
@@ -26677,7 +26814,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31129,13 +31179,13 @@
+@@ -31129,13 +31204,13 @@
          },
        ]);
        installPendingTodoTool();
@@ -26692,7 +26829,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'unrelated-notification-todo-after-hard-stop',
-@@ -31144,13 +31194,13 @@
+@@ -31144,13 +31219,13 @@
                    },
                  ],
                },
@@ -26707,7 +26844,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31182,13 +31232,13 @@
+@@ -31182,13 +31257,13 @@
      it('retains an already-used attempt when a related background task completes', async () => {
        rebuildSessionWithGuard();
        installPendingTodoTool();
@@ -26722,7 +26859,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-background',
-@@ -31197,26 +31247,26 @@
+@@ -31197,26 +31272,26 @@
                    },
                  ],
                },
@@ -26752,7 +26889,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
  
        mockBackgroundTaskRegistry.getAll.mockReturnValue([
          {
-@@ -31280,13 +31330,13 @@
+@@ -31280,13 +31355,13 @@
            notified: true,
          },
        ]);
@@ -26767,7 +26904,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'notification-todo',
-@@ -31295,13 +31345,13 @@
+@@ -31295,13 +31370,13 @@
                    },
                  ],
                },
@@ -26782,7 +26919,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          )?.[0] as (
            displayText: string,
            modelText: string,
-@@ -31375,13 +31425,13 @@
+@@ -31375,13 +31450,13 @@
          }),
        };
        mockToolRegistry.getTool.mockImplementation((name: string) =>
@@ -26797,7 +26934,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                functionCalls: [
                  {
                    id,
-@@ -31392,13 +31442,13 @@
+@@ -31392,13 +31467,13 @@
              },
            },
          ]);
@@ -26812,7 +26949,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-coalesced-tool-loop',
-@@ -31407,16 +31457,16 @@
+@@ -31407,16 +31482,16 @@
                    },
                  ],
                },
@@ -26831,7 +26968,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -31484,13 +31534,13 @@
+@@ -31484,13 +31559,13 @@
        mockToolRegistry.getTool.mockImplementation((name: string) =>
          name === core.ToolNames.TODO_WRITE ? todoTool : readTool,
        );
@@ -26846,7 +26983,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-coalesced-background-race',
-@@ -31499,15 +31549,15 @@
+@@ -31499,15 +31574,15 @@
                    },
                  ],
                },
@@ -26864,7 +27001,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'coalesced-read-before-background-race',
-@@ -31516,13 +31566,13 @@
+@@ -31516,13 +31591,13 @@
                    },
                  ],
                },
@@ -26879,7 +27016,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -31598,13 +31648,13 @@
+@@ -31598,13 +31673,13 @@
        mockToolRegistry.getTool.mockImplementation((name: string) =>
          name === core.ToolNames.TODO_WRITE ? todoTool : readTool,
        );
@@ -26894,7 +27031,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'todo-before-unavailable-nested-claim',
-@@ -31613,15 +31663,15 @@
+@@ -31613,15 +31688,15 @@
                    },
                  ],
                },
@@ -26912,7 +27049,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'coalesced-read-before-unavailable-nested-claim',
-@@ -31630,13 +31680,13 @@
+@@ -31630,13 +31705,13 @@
                    },
                  ],
                },
@@ -26927,7 +27064,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
            if (request.eventName !== 'Stop') {
              return { success: true, output: {} };
            }
-@@ -31762,94 +31812,5 @@
+@@ -31762,94 +31837,5 @@
  
 -    it('preserves a coalesced Stop-loop event when token rejection skips the final send', async () => {
 -      rebuildSessionWithGuard();
@@ -27022,7 +27159,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        rebuildSessionWithGuard();
        installPendingTodoTool();
        queuePendingTodoThenNaturalStops();
-@@ -32253,13 +32214,13 @@
+@@ -32253,13 +32239,13 @@
  
      it('suspends an armed guard when a background notification stream aborts', async () => {
        rebuildSessionWithGuard();
@@ -27037,7 +27174,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        const callback =
          mockBackgroundTaskRegistry.setNotificationCallback.mock.calls.at(
            -1,
-@@ -32323,15 +32284,15 @@
+@@ -32323,15 +32309,15 @@
        mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
        mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
        rebuildSessionWithGuard();
@@ -27055,7 +27192,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'cron-todo',
-@@ -32340,13 +32301,13 @@
+@@ -32340,13 +32326,13 @@
                    },
                  ],
                },
@@ -27070,7 +27207,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          request: vi.fn().mockImplementation(async (request) => ({
            success: true,
            output:
-@@ -32409,15 +32370,15 @@
+@@ -32409,15 +32395,15 @@
        mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
        mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
        rebuildSessionWithGuard();
@@ -27088,7 +27225,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'cron-todo',
-@@ -32426,37 +32387,29 @@
+@@ -32426,37 +32412,29 @@
                    },
                  ],
                },
@@ -27139,7 +27276,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +      // #runStopContinuation, the shared path cron and background-notification
 +      // turns reach through #handleStopHookLoop.
 +      mockConfig.getSkipLoopDetection = vi.fn().mockReturnValue(false);
-@@ -32468,7 +32421,7 @@
+@@ -32468,7 +32446,7 @@
        expect(logLoopDetectedSpy).toHaveBeenCalledWith(
          mockConfig,
          expect.objectContaining({
@@ -27148,7 +27285,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          }),
          {},
        );
-@@ -32486,15 +32439,15 @@
+@@ -32486,15 +32464,15 @@
  
      it('keeps a background-notification turn graceful when its Stop continuation trips loop protection', async () => {
        rebuildSessionWithGuard();
@@ -27166,7 +27303,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
                  functionCalls: [
                    {
                      id: 'notification-todo',
-@@ -32503,35 +32456,28 @@
+@@ -32503,35 +32481,28 @@
                    },
                  ],
                },
@@ -27212,14 +27349,14 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
 +      // the duplicate threshold and trips loop protection inside
        // #runStopContinuation, pinning the graceful default at the
        // background-notification #handleStopHookLoop call site.
-@@ -32538,5 +32484,4 @@
+@@ -32538,5 +32509,4 @@
 -      mockConfig.getMaxToolCallsPerTurn = vi.fn().mockReturnValue(1);
 -      mockConfig.isMaxToolCallsPerTurnExplicit = vi.fn().mockReturnValue(true);
 +      mockConfig.getSkipLoopDetection = vi.fn().mockReturnValue(false);
        const callback =
          mockBackgroundTaskRegistry.setNotificationCallback.mock.calls.at(
            -1,
-@@ -32557,7 +32502,7 @@
+@@ -32557,7 +32527,7 @@
        expect(logLoopDetectedSpy).toHaveBeenCalledWith(
          mockConfig,
          expect.objectContaining({
@@ -27228,7 +27365,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
          }),
          {},
        );
-@@ -32603,13 +32548,13 @@
+@@ -32603,13 +32573,13 @@
        mockConfig.isCronEnabled = vi.fn().mockReturnValue(true);
        mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
        rebuildSessionWithGuard();
@@ -27243,7 +27380,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.test.ts b/packages
        await aborting.started;
        const internals = session as unknown as {
          cronAbortController: AbortController | null;
-@@ -33179,6 +33124,11 @@
+@@ -33179,6 +33149,11 @@
  
        await session.cancelPendingPrompt();
        expect(capturedSignal!.aborted).toBe(true);
@@ -27584,7 +27721,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.ts b/packages/cli/
    for (const call of calls) {
      const key = getToolCallRepeatKey(call.name ?? '', call.args ?? {});
      const count = (loopState.toolCallKeyCounts.get(key) ?? 0) + 1;
-@@ -772,33 +769,1 @@
+@@ -772,33 +769 @@
    }
 -  // Same per-turn cap semantics as the core LoopDetectionService — the
 -  // shouldHaltOnTurnToolCallCap predicate is shared with core's
@@ -29195,7 +29332,7 @@ diff --git a/packages/cli/src/acp-integration/session/Session.ts b/packages/cli/
 +      await this.config
          .getChatRecordingService()
 -        ?.recordMidTurnUserMessage(built, displayText);
-+        .recordMidTurnUserMessage(built, displayText);
++        .recordMidTurnUserMessage(built, 'real_user', displayText);
        parts.push(...built);
      }
      return parts;
@@ -63081,7 +63218,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        'The file reads 42.',
 +      ]);
 +      expect(textsOf(messages, 'user')).toEqual([]);
-+      expect(recordedNotices()).toEqual([[[{ text: markupNotice(1) }]]]);
++      expect(recordedNotices()).toEqual([[[{ text: markupNotice(1) }], 'system']]);
 +    });
 +
 +    it('never sends a slip notice whose canonical input was refused', async () => {
@@ -63211,8 +63348,8 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        markupTurn,
 +      ]);
 +      expect(recordedNotices()).toEqual([
-+        [[{ text: markupNotice(1) }]],
-+        [[{ text: markupNotice(2) }]],
++        [[{ text: markupNotice(1) }], 'system'],
++        [[{ text: markupNotice(2) }], 'system'],
 +      ]);
 +      expect(
 +        messages.find((message) => message.type === 'result'),
@@ -63565,7 +63702,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      ]);
 +      expect(assistants[0]?.message?.usage?.output_tokens).toBe(40_960);
 +      expect(userTexts(messages)).toEqual([]);
-+      expect(recordedNotices()).toEqual([[[{ text: notice }]]]);
++      expect(recordedNotices()).toEqual([[[{ text: notice }], 'system']]);
 +    });
 +
 +    it('never sends a redraw notice whose canonical input was refused', async () => {
@@ -63723,7 +63860,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        SendMessageType.Notification,
 +        SendMessageType.Redraw,
 +      ]);
-+      expect(recordedNotices()).toEqual([[[{ text: notice }]]]);
++      expect(recordedNotices()).toEqual([[[{ text: notice }], 'system']]);
 +      expect(
 +        readOutput().find((message) => message.type === 'result'),
 +      ).toMatchObject({ subtype: 'success', num_turns: 3 });
@@ -69453,7 +69590,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      let pipeBroken = false;
      let workflowApprovalChannelRegistered = false;
      const stdoutErrorHandler = (err: NodeJS.ErrnoException) => {
-@@ -996,2175 +1160,2308 @@
+@@ -996,2175 +1160,2307 @@
      // the regular options.sendMessageType / UserQuery selection applies.
      let continueSendType: SendMessageType | null = null;
  
@@ -70674,12 +70811,11 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +          /**
 +           * Answers a turn refused at its limit. A refused turn is not kept
 +           * and nothing it called was run, so it is asked for again: the
-+           * notice is recorded like every other user-role content the run
-+           * authors and returned as the message the redraw carries, whose
-+           * request is the stream's record of what the model was told. The
-+           * MAX_GENERATION_DRAWS-th refusal in a row ends the run instead, as
-+           * a generation that did not end on its own, with the last refused
-+           * turn's numbers.
++           * notice is recorded as the runtime's, which wrote it, and returned
++           * as the message the redraw carries, whose request is the stream's
++           * record of what the model was told. The MAX_GENERATION_DRAWS-th
++           * refusal in a row ends the run instead, as a generation that did
++           * not end on its own, with the last refused turn's numbers.
 +           */
 +          const noticeForRefusedTurn = async (
 +            terminal: GenerationTerminal,
@@ -70694,17 +70830,17 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +            const parts: Part[] = [{ text: refusedTurnNotice(terminal) }];
 +            await config
 +              .getChatRecordingService()
-+              .recordMidTurnUserMessage(parts);
++              .recordMidTurnUserMessage(parts, 'system');
 +            return parts;
 +          };
 +          /**
 +           * Answers a slipped turn. The third consecutive slip ends the run:
 +           * the model was told twice and the run holds no final answer. An
 +           * earlier one is put to the model as a user-role notice -- recorded
-+           * like every other user-role content the run authors and returned
-+           * as the next turn's message, whose request is the stream's record
-+           * of it -- so the model sees its own message verbatim in history
-+           * with the notice below it, and nothing is executed on its behalf.
++           * as the runtime's, which wrote it, and returned as the next turn's
++           * message, whose request is the stream's record of it -- so the
++           * model sees its own message verbatim in history with the notice
++           * below it, and nothing is executed on its behalf.
 +           */
 +          const noticeForFinalMessageSlip = async (
 +            kind: FinalMessageSlipKind,
@@ -70726,7 +70862,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +            ];
 +            await config
 +              .getChatRecordingService()
-+              .recordMidTurnUserMessage(notice);
++              .recordMidTurnUserMessage(notice, 'system');
 +            return notice;
 +          };
  
@@ -103129,7 +103265,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        {
          functionResponse: {
            id: 'call1',
-@@ -2729,16 +2753,19 @@
+@@ -2729,16 +2753,20 @@
      });
  
      await waitFor(() => {
@@ -103140,17 +103276,18 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 +    const expectedMidTurnMessage = expectedAuthoredText(queuedPrompt);
      expect(recordMidTurnUserMessage).toHaveBeenCalledWith(
        [expectedMidTurnMessage],
++      'real_user',
        queuedPrompt,
-+    );
+     );
 +    expect(mockSendMessageStream.mock.calls[0]?.[0].at(-1)).toBe(
 +      recordMidTurnUserMessage.mock.calls[0]?.[0][0],
-     );
++    );
      const queuedPromptAddItemIndex = mockAddItem.mock.calls.findIndex(
        ([item]) => item.type === MessageType.USER && item.text === queuedPrompt,
      );
      expect(queuedPromptAddItemIndex).toBeGreaterThanOrEqual(0);
      expect(recordMidTurnUserMessage.mock.invocationCallOrder[0]).toBeLessThan(
-@@ -2767,12 +2794,13 @@
+@@ -2767,12 +2795,13 @@
    });
  
    it('provides queued steer input to core at the next sampling boundary', async () => {
@@ -103164,7 +103301,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      const drainSteer = vi
        .fn<() => string[]>()
        .mockReturnValueOnce([steeredPrompt])
-@@ -2819,25 +2847,132 @@
+@@ -2819,25 +2848,135 @@
      let steerInput: SteerInput | undefined;
      await act(async () => {
        steerInput = await sendOptions.getSteerInput!(
@@ -103185,14 +103322,15 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      expect(recordMidTurnUserMessage).toHaveBeenCalledWith(
 -      [{ text: steeredPrompt }],
 +      steerInput?.parts,
++      'real_user',
        steeredPrompt,
      );
      expect(mockAddItem).toHaveBeenCalledWith(
        { type: MessageType.USER, text: steeredPrompt, sentToModel: false },
-+      expect.any(Number),
-+    );
-+  });
-+
+       expect.any(Number),
+     );
+   });
+ 
 +  it('awaits durable steer acknowledgment before showing accepted input', async () => {
 +    const prompt = '  Preserve λ <correction> exactly.\n';
 +    let completeWrite!: () => void;
@@ -103237,6 +103375,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 +    expect(acknowledged).toBe(false);
 +    expect(recordMidTurnUserMessage).toHaveBeenCalledExactlyOnceWith(
 +      input!.parts,
++      'real_user',
 +      prompt,
 +    );
 +    expect(recordMidTurnUserMessage.mock.calls[0]?.[0][0]).toBe(
@@ -103290,17 +103429,18 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
 +    await expect(input!.accept()).rejects.toBe(failure);
 +    expect(recordMidTurnUserMessage).toHaveBeenCalledExactlyOnceWith(
 +      input!.parts,
++      'real_user',
 +      prompt,
 +    );
 +    expect(mockAddItem).not.toHaveBeenCalledWith(
 +      expect.objectContaining({ type: MessageType.USER, text: prompt }),
-       expect.any(Number),
-     );
-   });
- 
++      expect.any(Number),
++    );
++  });
++
    it('processes queued /goal clear at the next sampling boundary', async () => {
      const goalCommand = '/goal clear';
-@@ -3014,15 +3149,15 @@
+@@ -3014,15 +3153,15 @@
  
      const steerInput = await sendOptions.getSteerInput!(
        new AbortController().signal,
@@ -103318,7 +103458,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
    it('drops a queued replacement prompt when a later goal command clears it', async () => {
      const activeGoal = {
        condition: 'first',
-@@ -3237,12 +3372,13 @@
+@@ -3237,12 +3376,13 @@
      const recordMidTurnUserMessage = vi.fn();
      const recordAtCommand = vi.fn();
      Object.assign(mockConfig, {
@@ -103332,7 +103472,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      mockRunVisionBridge.mockResolvedValue({
        applied: true,
        status: 'ok',
-@@ -3250,12 +3386,13 @@
+@@ -3250,12 +3390,13 @@
        transcript: '[mid-turn image transcript]',
        convertedCount: 1,
        omittedCount: 0,
@@ -103346,7 +103486,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      const resolveAtCommandQuerySpy = vi
        .spyOn(atCommandProcessor, 'resolveAtCommandQuery')
        .mockResolvedValue({
-@@ -3347,13 +3484,15 @@
+@@ -3347,13 +3488,15 @@
      });
  
      await waitFor(() => {
@@ -103363,11 +103503,14 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        signal: expect.any(AbortSignal),
      });
      expect(mockAddItem).toHaveBeenCalledWith(
-@@ -3384,12 +3523,15 @@
+@@ -3382,14 +3525,18 @@
+         onDebugMessage: mockOnDebugMessage,
+         signal: expect.any(AbortSignal),
        }),
      );
      expect(recordMidTurnUserMessage).toHaveBeenCalledWith(
        expectedMidTurnParts,
++      'real_user',
        queuedPrompt,
      );
 +    expect(mockSendMessageStream.mock.calls[0]?.[0].at(-1)).toBe(
@@ -103379,7 +103522,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        userText: queuedPrompt,
      });
      expect(handleAtCommandSpy).not.toHaveBeenCalled();
-@@ -3414,12 +3556,13 @@
+@@ -3414,12 +3561,13 @@
      };
      const recordMidTurnUserMessage = vi.fn();
      Object.assign(mockConfig, {
@@ -103393,7 +103536,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      mockRunVisionBridge.mockResolvedValue({
        applied: false,
        status: 'failed',
-@@ -3427,12 +3570,13 @@
+@@ -3427,12 +3575,13 @@
        omittedCount: 0,
        modelId: 'vm',
        egressOccurred: true,
@@ -103407,7 +103550,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        processedQuery: [resolvedTextPart, resolvedImagePart],
        shouldProceed: true,
      } as unknown as Awaited<
-@@ -3520,22 +3664,23 @@
+@@ -3520,22 +3669,24 @@
        expect(mockSendMessageStream).toHaveBeenCalledTimes(1);
      });
      const sent = JSON.stringify(mockSendMessageStream.mock.calls[0][0]);
@@ -103416,6 +103559,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      expect(recordMidTurnUserMessage).toHaveBeenCalledWith(
 -      [resolvedTextPart],
 +      [expectedAuthoredText(resolvedTextPart.text!, queuedPrompt)],
++      'real_user',
        queuedPrompt,
      );
    });
@@ -103432,7 +103576,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      const toolDisplays = [
        {
          callId: 'client-read-midturn-at-error',
-@@ -3673,12 +3818,13 @@
+@@ -3673,12 +3824,13 @@
    });
  
    it('warns and skips mid-turn @ injection when resolution fails', async () => {
@@ -103446,7 +103590,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        new Error('permission denied'),
      );
      const toolCallResponseParts: Part[] = [
-@@ -3784,12 +3930,13 @@
+@@ -3784,12 +3936,13 @@
    it('times out stalled mid-turn @ resolution before submitting tool results', async () => {
      vi.useFakeTimers();
  
@@ -103460,7 +103604,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      let rejectResolve: ((error: Error) => void) | undefined;
      vi.spyOn(atCommandProcessor, 'resolveAtCommandQuery').mockImplementation(
        ({ signal }) => {
-@@ -3910,12 +4057,13 @@
+@@ -3910,12 +4063,13 @@
    });
  
    it('skips mid-turn @ fallback side effects when cancelled during resolution', async () => {
@@ -103474,7 +103618,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      vi.spyOn(atCommandProcessor, 'resolveAtCommandQuery').mockImplementation(
        ({ signal }) => {
          resolveSignal = signal;
-@@ -4131,111 +4279,12 @@
+@@ -4131,111 +4285,12 @@
          type: MessageType.WARNING,
          text: expect.stringContaining('Could not attach file:'),
        }),
@@ -103586,7 +103730,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      const cancelledToolCalls: TrackedToolCall[] = [
        {
          request: {
-@@ -4538,27 +4587,15 @@
+@@ -4538,27 +4593,15 @@
      // The calls streamed before the halt must not be scheduled for execution.
      expect(mockScheduleToolCalls).not.toHaveBeenCalled();
    });
@@ -103617,7 +103761,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      mockUseReactToolScheduler.mockImplementation((onComplete) => {
        capturedOnComplete ??= onComplete;
        return [[], mockScheduleToolCalls, mockMarkToolsAsSubmitted];
-@@ -4662,13 +4699,13 @@
+@@ -4662,13 +4705,13 @@
          responseParts: [
            {
              functionResponse: {
@@ -103632,7 +103776,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          ],
          resultDisplay: 'first',
          error: undefined,
-@@ -4696,28 +4733,17 @@
+@@ -4696,28 +4739,17 @@
      await waitFor(() => {
        expect(mockSendMessageStream).toHaveBeenCalledTimes(2);
      });
@@ -103662,7 +103806,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
      expect(
        recordToolResult.mock.calls.map((call) => call[1].executionStatus),
      ).toEqual(expect.arrayContaining(['success', 'not_started']));
-@@ -6575,13 +6601,12 @@
+@@ -6575,13 +6607,12 @@
              type: ServerGeminiEventType.Content,
              value: '',
              parts: failedImages.map((inlineData) => ({ inlineData })),
@@ -103676,7 +103820,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: '',
              parts: [{ inlineData: replacementImage }],
            };
-@@ -6592,65 +6617,12 @@
+@@ -6592,65 +6623,12 @@
          })(),
        );
  
@@ -103742,7 +103886,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          .map(([item]) => item as HistoryItem)
          .filter(
            (item) => item.type === 'gemini' || item.type === 'gemini_content',
-@@ -6854,13 +6826,12 @@
+@@ -6854,13 +6832,12 @@
                { text: 'after' },
              ],
            };
@@ -103756,7 +103900,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: 'replacement',
            };
            await holdStream;
-@@ -6904,18 +6875,18 @@
+@@ -6904,18 +6881,18 @@
        act(() => result.current.cancelOngoingRequest());
        await act(async () => {
          releaseStream();
@@ -103779,7 +103923,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          releaseStream = resolve;
        });
        const image = {
-@@ -6930,17 +6901,13 @@
+@@ -6930,17 +6907,13 @@
              parts: [
                { text: 'before' },
                { inlineData: image },
@@ -103798,7 +103942,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
            };
            await holdStream;
          })(),
-@@ -6961,106 +6928,23 @@
+@@ -6961,106 +6934,23 @@
          expect.objectContaining({ type: 'gemini', text: 'before' }),
          { type: 'gemini_content', text: '', images: [image] },
          { type: 'gemini_content', text: 'after' },
@@ -103906,7 +104050,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          releaseStream();
        });
      });
-@@ -7336,17 +7220,17 @@
+@@ -7336,17 +7226,17 @@
          releaseStream = resolve;
        });
  
@@ -103926,7 +104070,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        mockSendMessageStream.mockReturnValue(mockStream);
  
        const { result } = renderTestHook();
-@@ -7372,13 +7256,16 @@
+@@ -7372,13 +7262,16 @@
        expect(result.current.pendingHistoryItems).toEqual([
          expect.objectContaining({
            type: 'gemini_thought',
@@ -103944,7 +104088,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        });
  
        await act(async () => {
-@@ -7402,13 +7289,13 @@
+@@ -7402,13 +7295,13 @@
          releaseStream = resolve;
        });
  
@@ -103959,7 +104103,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        mockSendMessageStream.mockReturnValue(mockStream);
  
        const { result } = renderTestHook();
-@@ -7484,13 +7371,13 @@
+@@ -7484,13 +7377,13 @@
        const holdStream = new Promise<void>((resolve) => {
          releaseStream = resolve;
        });
@@ -103974,7 +104118,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        mockSendMessageStream.mockReturnValue(mockStream);
  
        const { result } = renderTestHook();
-@@ -7931,18 +7818,18 @@
+@@ -7931,18 +7824,18 @@
          releaseStream = resolve;
        });
  
@@ -103995,7 +104139,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        mockSendMessageStream.mockReturnValue(mockStream);
  
        const { result } = renderTestHook();
-@@ -7976,13 +7863,16 @@
+@@ -7976,13 +7869,16 @@
        expect(result.current.pendingHistoryItems).toEqual([
          expect.objectContaining({
            type: 'gemini_thought',
@@ -104013,7 +104157,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        });
  
        await act(async () => {
-@@ -8974,13 +8864,13 @@
+@@ -8974,13 +8870,13 @@
  
        it('does not let a skill tool with modelOverride: undefined clobber an active inline override', async () => {
          allowInlineModel();
@@ -104028,7 +104172,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
            content: [
              { text: 'do the thing' },
              { inlineData: { mimeType: 'image/png', data: 'abc123' } },
-@@ -9052,12 +8942,14 @@
+@@ -9052,12 +8948,14 @@
              },
              status: 'success',
              responseSubmittedToGemini: false,
@@ -104043,7 +104187,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              tool: {
                name: 'pdf-skill',
                displayName: 'pdf-skill',
-@@ -9509,13 +9401,12 @@
+@@ -9509,13 +9407,12 @@
          }
        });
  
@@ -104057,7 +104201,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        ]);
      });
  
-@@ -10622,12 +10513,116 @@
+@@ -10622,12 +10519,116 @@
          expect.objectContaining({ type: MessageType.INFO }),
          expect.any(Number),
        );
@@ -104174,7 +104318,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          (async function* () {
            yield {
              type: ServerGeminiEventType.Content,
-@@ -10680,12 +10675,38 @@
+@@ -10680,12 +10681,38 @@
          }),
        ]);
      });
@@ -104213,7 +104357,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          mimeType: 'image/png',
        };
        // Setup mock to return a stream with MAX_TOKENS finish reason
-@@ -10763,25 +10784,27 @@
+@@ -10763,25 +10790,27 @@
          expected: {
            type: 'info',
            text: expect.stringContaining('maximum number of turns'),
@@ -104249,7 +104393,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          data: 'aW1hZ2U=',
          mimeType: 'image/png',
        };
-@@ -10803,21 +10826,22 @@
+@@ -10803,21 +10832,22 @@
        const { result } = renderTestHook();
        await act(async () => {
          await result.current.submitQuery('test terminal boundary');
@@ -104281,7 +104425,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          { type: 'gemini_content', text: 'after' },
          testCase.expected,
        ]);
-@@ -10874,68 +10898,72 @@
+@@ -10874,68 +10904,72 @@
        const infoMessages = mockAddItem.mock.calls.filter(
          (call) => call[0].type === 'info',
        );
@@ -104410,7 +104554,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
          {
            reason: 'SAFETY',
            message: '⚠  Response stopped due to safety reasons.',
-@@ -11121,19 +11149,86 @@
+@@ -11121,19 +11155,86 @@
          submittedPrompt: rawQuery,
        }), // Argument 4: The options
      );
@@ -104497,7 +104641,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
            };
            yield {
              type: ServerGeminiEventType.Content,
-@@ -11227,17 +11322,17 @@
+@@ -11227,17 +11328,17 @@
        });
  
        mockSendMessageStream.mockReturnValue(
@@ -104517,7 +104661,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              type: ServerGeminiEventType.Finished,
              value: { reason: 'STOP', usageMetadata: undefined },
            };
-@@ -11289,43 +11384,50 @@
+@@ -11289,43 +11390,50 @@
          await Promise.resolve();
        });
  
@@ -104580,7 +104724,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: { reason: 'STOP', usageMetadata: undefined },
            };
          })(),
-@@ -11334,42 +11436,61 @@
+@@ -11334,42 +11442,61 @@
        const { result } = renderTestHook();
  
        await act(async () => {
@@ -104654,7 +104798,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        let releaseStream!: () => void;
        const holdStream = new Promise<void>((resolve) => {
          releaseStream = resolve;
-@@ -11377,19 +11498,21 @@
+@@ -11377,19 +11504,21 @@
  
        mockSendMessageStream.mockReturnValue(
          (async function* () {
@@ -104676,7 +104820,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
            };
            await holdStream;
            yield {
-@@ -11437,13 +11560,17 @@
+@@ -11437,13 +11566,17 @@
  
      it('should commit thought to history with durationMs on Finished', async () => {
        mockSendMessageStream.mockReturnValue(
@@ -104695,7 +104839,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: { reason: 'STOP', usageMetadata: undefined },
            };
          })(),
-@@ -11466,18 +11593,74 @@
+@@ -11466,18 +11599,74 @@
            durationMs: expect.any(Number),
          }),
          expect.any(Number),
@@ -104771,7 +104915,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: 'The answer is 42',
            };
            yield {
-@@ -11521,13 +11704,17 @@
+@@ -11521,13 +11710,17 @@
      it('should commit thought and finalize dual output on UserCancelled', async () => {
        mockUseDualOutput.mockReturnValue(mockDualOutput);
        mockSendMessageStream.mockReturnValue(
@@ -104790,7 +104934,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        );
  
        const { result } = renderTestHook();
-@@ -11585,13 +11772,17 @@
+@@ -11585,13 +11778,17 @@
  
      it('should commit thought to history on Error', async () => {
        mockSendMessageStream.mockReturnValue(
@@ -104809,7 +104953,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: { message: 'Something went wrong', retryable: false },
            };
          })(),
-@@ -11619,13 +11810,17 @@
+@@ -11619,13 +11816,17 @@
  
      it('should commit thought to history when ToolCallRequest arrives', async () => {
        mockSendMessageStream.mockReturnValue(
@@ -104828,7 +104972,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: {
                callId: 'tc1',
                name: 'read_file',
-@@ -11658,30 +11853,33 @@
+@@ -11658,30 +11859,33 @@
            durationMs: expect.any(Number),
          }),
          expect.any(Number),
@@ -104865,7 +105009,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
                value: 'retried response',
              };
              yield {
-@@ -12251,13 +12449,17 @@
+@@ -12251,13 +12455,17 @@
      it('should reset thought to null when user cancels', async () => {
        // Mock a stream that yields a thought then gets cancelled
        mockSendMessageStream.mockReturnValue(
@@ -104884,7 +105028,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
        );
  
        const { result } = renderHook(() =>
-@@ -12378,13 +12580,17 @@
+@@ -12378,13 +12586,17 @@
      it('should reset thought to null when there is an error', async () => {
        // Mock a stream that yields a thought then encounters an error
        mockSendMessageStream.mockReturnValue(
@@ -104903,7 +105047,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.test.tsx b/packages/cli/s
              value: { error: { message: 'Test error' } },
            };
          })(),
-@@ -13426,15 +13632,15 @@
+@@ -13426,15 +13638,15 @@
        // Verify streaming state transitions correctly
        expect(result.current.streamingState).toBe(StreamingState.Idle);
      });
@@ -105467,7 +105611,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              addItem(
                {
                  type: MessageType.INFO,
-@@ -3016,21 +2954,25 @@
+@@ -3016,21 +2954,30 @@
          resolvedMessages.push(...segment);
        }
  
@@ -105485,19 +105629,24 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
 -              recorder?.recordMidTurnUserMessage(parts, message, goalPermit);
 +              await recorder.recordMidTurnUserMessage(
 +                parts,
++                'real_user',
 +                message,
 +                goalPermit,
 +              );
              } else {
 -              recorder?.recordMidTurnUserMessage(parts, message);
-+              await recorder.recordMidTurnUserMessage(parts, message);
++              await recorder.recordMidTurnUserMessage(
++                parts,
++                'real_user',
++                message,
++              );
              }
              addItem(
                {
                  type: MessageType.USER,
                  text: message,
                  // Intentionally false: preserves isRealUserTurn/rewind semantics (steer is not a standalone user turn).
-@@ -3065,16 +3007,16 @@
+@@ -3065,16 +3012,16 @@
            return undefined;
          }
          if (resolved.parts.length === 0) return undefined;
@@ -105516,7 +105665,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              settled = true;
              if (resolved.restoreMessages.length > 0) {
                midTurnRestoreRef?.current?.(resolved.restoreMessages);
-@@ -3512,43 +3454,15 @@
+@@ -3512,43 +3459,15 @@
            logUserRetry(config, new UserRetryEvent(prompt_id));
          }
  
@@ -105560,7 +105709,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              todoWorkChainId: metadata?.todoWorkChainId,
              modelOverride: modelOverrideRef.current,
              steerInput: metadata?.steerInput,
-@@ -3622,31 +3536,21 @@
+@@ -3622,31 +3541,21 @@
            }
  
            const immediateDuplicateToolResponses =
@@ -105599,7 +105748,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
                      resultDisplay: response.resultDisplay,
                      error: response.error,
                      errorType: response.errorType,
-@@ -4382,28 +4286,19 @@
+@@ -4382,28 +4291,19 @@
          orderedResponses.push(...queue);
        }
        for (const queue of duplicateQueues.values()) {
@@ -105633,7 +105782,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              resultDisplay: response.resultDisplay,
              error: response.error,
              errorType: response.errorType,
-@@ -4519,13 +4414,13 @@
+@@ -4519,13 +4419,13 @@
          (toolCall) => toolCall.response.terminateTurn === true,
        );
        if (terminatesGoalTurn && toolGoalBinding) {
@@ -105648,7 +105797,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
              currentPermit &&
              sameGoalPermit(currentPermit, toolGoalBinding.permit)
            ) {
-@@ -4841,70 +4736,90 @@
+@@ -4841,70 +4741,90 @@
          const checkpointDir = storage.getProjectTempCheckpointsDir();
  
          if (!checkpointDir) {
@@ -105775,7 +105924,7 @@ diff --git a/packages/cli/src/ui/hooks/useGeminiStream.ts b/packages/cli/src/ui/
        }
      };
      saveRestorableToolCalls();
-@@ -5387,10 +5302,8 @@
+@@ -5387,10 +5307,8 @@
      preemptGoalTurn,
      retryLastPrompt,
      pendingToolCalls: toolCalls,
@@ -234758,7 +234907,38 @@ diff --git a/packages/core/src/goals/goal-checkpoint-verifier.ts b/packages/core
 diff --git a/packages/core/src/goals/goal-evidence.test.ts b/packages/core/src/goals/goal-evidence.test.ts
 --- a/packages/core/src/goals/goal-evidence.test.ts
 +++ b/packages/core/src/goals/goal-evidence.test.ts
-@@ -852,12 +852,29 @@
+@@ -796,12 +796,30 @@
+     const validated = validate(records, complete(['user']));
+ 
+     expect(catalog.entries[0]?.preview).toBe(modelText);
+     expect(validated.citedRecords[0]?.content).toBe(modelText);
+   });
+ 
++  it("never offers a mid-turn message the runtime wrote as the user's", () => {
++    const notice = record('notice', 'user', {
++      provenance: 'system',
++      subtype: 'mid_turn_user_message',
++      turnId: 'turn-3',
++      text: '<system-reminder>\nYour previous answer was refused.\n</system-reminder>',
++    });
++    const records = [record('cursor', 'system'), notice];
++
++    const catalog = buildGoalEvidenceCatalog({
++      records,
++      goal: goal(),
++      permit: permit(),
++    });
++
++    expect(catalog.entries).toEqual([]);
++  });
++
+   it.each([
+     ['cursor_unset', null, [record('root', 'system')]],
+     ['cursor_not_found', 'absent', [record('root', 'system')]],
+   ] as const)('reports %s as a source failure', (code, cursor, records) => {
+     expect(() =>
+       buildGoalEvidenceCatalog({
+@@ -852,12 +870,29 @@
        expect.objectContaining({ code: 'missing_goal_context' }),
      );
    });
@@ -254446,7 +254626,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      it('orders new appends after an authoritative read barrier', async () => {
        let releaseRead!: () => void;
        let markReadStarted!: () => void;
-@@ -240,54 +297,116 @@
+@@ -240,55 +297,118 @@
          markReadStarted();
          await readGate;
          return 'snapshot';
@@ -254569,12 +254749,14 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
 -      chatRecordingService.recordMidTurnUserMessage(
 +      await chatRecordingService.recordMidTurnUserMessage(
          modelFacingParts,
++        'real_user',
          'save logs',
        );
        await chatRecordingService.flush();
  
        expect(jsonl.writeLine).toHaveBeenCalledTimes(1);
-@@ -311,17 +430,17 @@
+       const record = vi.mocked(jsonl.writeLine).mock.calls[0][1] as ChatRecord;
+@@ -311,18 +431,19 @@
        const midTurnPermit: GoalTurnPermit = {
          goalId: 'goal-1',
          revision: 2,
@@ -254589,12 +254771,42 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
 -      chatRecordingService.recordMidTurnUserMessage(
 +      await chatRecordingService.recordMidTurnUserMessage(
          [{ text: 'mid-turn evidence' }],
++        'real_user',
          'mid-turn evidence',
          midTurnPermit,
        );
        topLevelPermit.revision = 99;
        midTurnPermit.turnId = 'mutated';
-@@ -431,13 +550,15 @@
+       await chatRecordingService.flush();
+@@ -346,9 +467,27 @@
+           revision: 2,
+           turnId: 'turn-mid-turn',
+         },
+       });
+     });
+ 
++    it('records a mid-turn message the runtime wrote as the runtime\'s', async () => {
++      const notice =
++        '<system-reminder>\nYour previous answer to this request was refused.\n</system-reminder>';
++      await chatRecordingService.recordMidTurnUserMessage(
++        [{ text: notice }],
++        'system',
++      );
++      await chatRecordingService.flush();
++
++      const record = vi.mocked(jsonl.writeLine).mock.calls[0][1] as ChatRecord;
++      expect(record).toMatchObject({
++        type: 'user',
++        subtype: 'mid_turn_user_message',
++        provenance: 'system',
++        message: { role: 'user', parts: [{ text: notice }] },
++      });
++    });
++
+     it('classifies notification-like records as system provenance', async () => {
+       const permit: GoalTurnPermit = {
+         goalId: 'goal-1',
+@@ -431,13 +570,15 @@
        expect(chatRecordingService.getTranscriptCursor()).toEqual({
          recordId: 'goal-record',
        });
@@ -254611,7 +254823,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        let rejectStrict!: (error: Error) => void;
        vi.mocked(jsonl.writeLine).mockImplementationOnce(
          () =>
-@@ -447,19 +568,22 @@
+@@ -447,19 +588,22 @@
        );
  
        const strict = chatRecordingService.recordGoalState(
@@ -254636,7 +254848,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
      });
  
-@@ -481,15 +605,17 @@
+@@ -481,15 +625,17 @@
        };
  
        chatRecordingService.recordGoalRuntimeMessage(
@@ -254656,7 +254868,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          [{ functionResponse: { name: 'run', response: { ok: true } } }],
          undefined,
          { goalContext: toolPermit },
-@@ -538,26 +664,33 @@
+@@ -538,26 +684,33 @@
            turnId: 'tool-override-turn',
          },
        });
@@ -254695,7 +254907,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(rewind).toMatchObject({
          subtype: 'rewind',
          parentUuid: null,
-@@ -565,12 +698,13 @@
+@@ -565,12 +718,13 @@
      });
  
      it('flushes before reading the canonical active transcript', async () => {
@@ -254709,7 +254921,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            timestamp: '2026-07-21T00:00:00.000Z',
            type: 'user' as const,
            provenance: 'real_user' as const,
-@@ -582,18 +716,18 @@
+@@ -582,18 +736,18 @@
        const originalFlush =
          chatRecordingService.flush.bind(chatRecordingService);
        vi.spyOn(chatRecordingService, 'flush').mockImplementation(async () => {
@@ -254730,7 +254942,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          chatRecordingService.readActiveTranscriptChain(),
        ).resolves.toEqual(activeChain);
        expect(order).toEqual(['flush', 'load']);
-@@ -644,32 +778,60 @@
+@@ -644,32 +798,60 @@
        ).rejects.toMatchObject({ name: 'SessionWriterUnavailableError' });
        expect(jsonl.writeLine).not.toHaveBeenCalled();
      });
@@ -254795,7 +255007,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            displayText: 'C',
            hookContext: '',
          },
-@@ -684,13 +846,13 @@
+@@ -684,13 +866,13 @@
      });
  
      it('compensates the rewind splice for the display-text cap window', async () => {
@@ -254810,7 +255022,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
              displayText: `visible ${index}`,
              hookContext: '',
            },
-@@ -699,13 +861,16 @@
+@@ -699,13 +881,16 @@
        expect(chatRecordingService.getUserDisplayTextsForTitle()).toHaveLength(
          20,
        );
@@ -254828,7 +255040,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
        await chatRecordingService.flush();
        vi.mocked(jsonl.writeLine).mockClear();
-@@ -718,90 +883,103 @@
+@@ -718,90 +903,103 @@
        chatRecordingService = activateRecording(
          new ChatRecordingService(mockConfig),
        );
@@ -254933,7 +255145,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            timestamp: '2026-06-27T00:00:04.000Z',
            type: 'user',
            cwd: '/test/project/root',
-@@ -810,25 +988,30 @@
+@@ -810,25 +1008,30 @@
          },
        ]);
  
@@ -254965,7 +255177,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            timestamp: '2026-06-27T00:00:00.000Z',
            type: 'assistant',
            cwd: '/test/project/root',
-@@ -836,13 +1019,15 @@
+@@ -836,13 +1039,15 @@
            message: { role: 'model', parts: [{ text: 'persisted response' }] },
            model: 'gemini-pro',
          },
@@ -254982,7 +255194,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          recordId: 'persisted-tail',
        });
      });
-@@ -872,13 +1057,13 @@
+@@ -872,13 +1077,13 @@
          filesRead: ['foo.txt'],
          status: 'success',
          message: 'Success',
@@ -254997,7 +255209,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(jsonl.writeLine).toHaveBeenCalledTimes(2);
        const userRecord = vi.mocked(jsonl.writeLine).mock
          .calls[0][1] as ChatRecord;
-@@ -887,12 +1072,39 @@
+@@ -887,12 +1092,39 @@
  
        expect(userRecord.type).toBe('user');
        expect(systemRecord.type).toBe('system');
@@ -255037,7 +255249,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
    describe('recordFileHistorySnapshot', () => {
      const oldSnapshot: FileHistorySnapshot = {
        promptId: 'p1',
-@@ -1003,12 +1215,42 @@
+@@ -1003,12 +1235,42 @@
                  backupTime: '2026-06-13T00:01:02.000Z',
                },
              },
@@ -255080,7 +255292,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        chatRecordingService.recordFileHistorySnapshot(oldSnapshot);
        chatRecordingService.recordFileHistorySnapshot(updatedSnapshot);
        await chatRecordingService.flush();
-@@ -1103,15 +1345,20 @@
+@@ -1103,15 +1365,20 @@
          ]),
        ).toEqual([failedSnapshot]);
      });
@@ -255104,7 +255316,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const staleSnapshot = vi.mocked(jsonl.writeLine).mock
          .calls[0][1] as ChatRecord;
        const rewind = vi.mocked(jsonl.writeLine).mock.calls[1][1] as ChatRecord;
-@@ -1134,74 +1381,399 @@
+@@ -1134,74 +1401,399 @@
            },
          ],
        });
@@ -255525,7 +255737,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
    describe('recordRealtimeConversation', () => {
      it('durably records direct Realtime dialogue as non-model history', async () => {
        await chatRecordingService.recordRealtimeConversation(
-@@ -1233,16 +1805,18 @@
+@@ -1233,16 +1825,18 @@
      });
    });
  
@@ -255547,7 +255759,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const toolResultParts: Part[] = [
          {
            functionResponse: {
-@@ -1330,13 +1904,26 @@
+@@ -1330,13 +1924,26 @@
  
        chatRecordingService.recordToolResult(toolResultParts, metadata);
        await chatRecordingService.flush();
@@ -255575,7 +255787,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      });
  
      it('compacts large resultDisplay metadata before recording', async () => {
-@@ -1412,13 +1999,26 @@
+@@ -1412,13 +2019,26 @@
  
        chatRecordingService.recordToolResult(toolResultParts, metadata);
        await chatRecordingService.flush();
@@ -255603,7 +255815,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
      });
  
      it('should shrink large file diff resultDisplay without mutating input', async () => {
-@@ -1513,12 +2113,17 @@
+@@ -1513,12 +2133,17 @@
            taskDescription: 'Run task',
            taskPrompt: 'Run task',
            status: 'completed' as const,
@@ -255621,7 +255833,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
                args: {},
                result: 'nested result',
              },
-@@ -1537,16 +2142,18 @@
+@@ -1537,16 +2162,18 @@
          type: 'task_execution',
          toolCalls: [],
        });
@@ -255643,7 +255855,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            functionResponse: {
              id: 'call-1',
              name: 'shell',
-@@ -1567,13 +2174,93 @@
+@@ -1567,13 +2194,93 @@
        expect(userRecord.parentUuid).toBeNull();
        expect(assistantRecord.parentUuid).toBe(userRecord.uuid);
        expect(toolResultRecord.parentUuid).toBe(assistantRecord.uuid);
@@ -255737,7 +255949,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          rawCommand: '/about',
        });
        await chatRecordingService.flush();
-@@ -1587,13 +2274,13 @@
+@@ -1587,13 +2294,13 @@
          phase: 'invocation',
          rawCommand: '/about',
        });
@@ -255752,7 +255964,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        });
        await chatRecordingService.flush();
  
-@@ -1617,50 +2304,61 @@
+@@ -1617,50 +2324,61 @@
        expect(jsonl.writeLine).not.toHaveBeenCalled();
      });
  
@@ -255824,7 +256036,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(firstFailure).toEqual(new Error('disk full'));
        await expect(chatRecordingService.flush()).rejects.toBe(firstFailure);
      });
-@@ -1674,20 +2372,27 @@
+@@ -1674,20 +2392,27 @@
        );
        const listener = vi.fn();
        const service = activateRecording(
@@ -255855,7 +256067,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(listener).toHaveBeenCalledWith({
          sessionId: 'test-session-id',
          error: writeError,
-@@ -1701,19 +2406,23 @@
+@@ -1701,19 +2426,23 @@
          .mockRejectedValueOnce(new Error('first failure'))
          .mockRejectedValueOnce(new Error('second failure'));
  
@@ -255881,7 +256093,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(secondListener).toHaveBeenCalledOnce();
      });
  
-@@ -1727,169 +2436,373 @@
+@@ -1727,169 +2456,373 @@
              throw new Error('listener threw');
            }),
          );
@@ -256350,7 +256562,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
    describe('recordAttributionSnapshot', () => {
      const baseSnapshot = {
        type: 'attribution-snapshot' as const,
-@@ -1897,12 +2810,45 @@
+@@ -1897,12 +2830,45 @@
        surface: 'cli',
        fileStates: {},
        promptCount: 0,
@@ -256396,7 +256608,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          ...baseSnapshot,
          promptCount: 1,
        });
-@@ -1916,13 +2862,13 @@
+@@ -1916,13 +2882,13 @@
  
      it('refreshes the cached git branch at the attribution turn boundary', async () => {
        vi.mocked(execSync)
@@ -256411,7 +256623,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          promptCount: 1,
        });
        await chatRecordingService.flush();
-@@ -1950,18 +2896,21 @@
+@@ -1950,18 +2916,21 @@
  
      // After rewindRecording, the previous attribution snapshot lives on
      // the abandoned branch, so the dedup key has to clear — otherwise
@@ -256435,7 +256647,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        // 1 rewind record + 1 fresh snapshot = 2 more writes after rewind.
        expect(vi.mocked(jsonl.writeLine).mock.calls.length).toBe(
          beforeRewind + 2,
-@@ -1976,19 +2925,21 @@
+@@ -1976,19 +2945,21 @@
  
        chatRecordingService.recordAttributionSnapshot(baseSnapshot);
        await expect(chatRecordingService.flush()).rejects.toBe(writeError);
@@ -256459,7 +256671,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        } finally {
          process.off('unhandledRejection', handler);
        }
-@@ -2007,20 +2958,27 @@
+@@ -2007,20 +2978,27 @@
          v: 2,
          sessionId: 'test-session-id',
          sequence: 1,
@@ -256490,7 +256702,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
            sessionId: 'test-session-id',
            sequence: 2,
            recordedAt: '2026-07-04T00:00:01.000Z',
-@@ -2088,24 +3046,28 @@
+@@ -2088,24 +3066,28 @@
          chatRecordingService.recordSessionArtifactEvent(payload),
        ).resolves.toBeUndefined();
        expect(jsonl.writeLine).toHaveBeenCalledOnce();
@@ -256521,7 +256733,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        const artifact = vi.mocked(jsonl.writeLine).mock
          .calls[1][1] as ChatRecord;
        const after = vi.mocked(jsonl.writeLine).mock.calls[2][1] as ChatRecord;
-@@ -2114,26 +3076,31 @@
+@@ -2114,26 +3096,31 @@
        expect(after.parentUuid).not.toBe(artifact.uuid);
      });
    });
@@ -256555,7 +256767,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        );
        expect(mockLease.sealForHandoff).not.toHaveBeenCalled();
        expect(mockLease.release).not.toHaveBeenCalled();
-@@ -2141,13 +3108,15 @@
+@@ -2141,13 +3128,15 @@
      });
  
      it('releases the writer lease before reporting a flush failure', async () => {
@@ -256572,7 +256784,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
      });
  
-@@ -2156,19 +3125,24 @@
+@@ -2156,19 +3145,24 @@
        vi.mocked(mockLease.appendJsonLine).mockImplementationOnce(
          () =>
            new Promise<void>((resolve) => {
@@ -256599,7 +256811,7 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
          undefined,
        ]);
        expect(mockLease.appendJsonLine).toHaveBeenCalledTimes(1);
-@@ -2197,10 +3171,141 @@
+@@ -2197,10 +3191,145 @@
  
        await expect(chatRecordingService.close()).rejects.toBe(cleanupFailure);
        expect(chatRecordingService.hasWriteOwnership()).toBe(false);
@@ -256621,7 +256833,11 @@ diff --git a/packages/core/src/services/chatRecordingService.test.ts b/packages/
 +      const operations = {
 +        user: () => chatRecordingService.recordUserMessage(parts),
 +        midturn: () =>
-+          chatRecordingService.recordMidTurnUserMessage(parts, 'display only'),
++          chatRecordingService.recordMidTurnUserMessage(
++            parts,
++            'real_user',
++            'display only',
++          ),
 +        assistant: () =>
 +          recordAcceptedTurn(chatRecordingService, {
 +            origin: testGenerationOrigin(),
@@ -257110,7 +257326,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    async (modelRequest) => {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_request'),
++          ...this.createBaseRecord('model_request', 'system'),
 +          type: 'model_request',
 +          modelRequest,
 +        },
@@ -257123,7 +257339,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    async (modelResponse) => {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_response'),
++          ...this.createBaseRecord('model_response', 'system'),
 +          type: 'model_response',
 +          modelResponse,
 +        },
@@ -257133,7 +257349,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    async (modelUtilityRequest) => {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_utility_request'),
++          ...this.createBaseRecord('model_utility_request', 'system'),
 +          type: 'model_utility_request',
 +          modelUtilityRequest,
 +        },
@@ -257143,7 +257359,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    async (modelUtilityCompletion) => {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_utility_completion'),
++          ...this.createBaseRecord('model_utility_completion', 'system'),
 +          type: 'model_utility_completion',
 +          modelUtilityCompletion,
 +        },
@@ -257341,15 +257557,24 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        this.state !== 'inactive' ||
        lease.sessionId !== this.config.getSessionId()
      ) {
-@@ -932,11 +1045,23 @@
+@@ -927,32 +1040,40 @@
+     }
+     this.state = 'active';
+     this.acceptingWrites = true;
+   }
+ 
    /**
-    * Creates base fields for a ChatRecord.
+-   * Creates base fields for a ChatRecord.
++   * Creates base fields for a ChatRecord. Its author is stated by the writer
++   * that makes it, never inferred from its type: user-role content may be the
++   * user's or the runtime's, and only the code that wrote it knows which.
     */
 -  private createBaseRecord(
 -    type: ChatRecord['type'],
 -  ): Omit<ChatRecord, 'message' | 'tokens' | 'model' | 'toolCallsMetadata'> {
 +  private createBaseRecord<T extends ChatRecord['type']>(
 +    type: T,
++    provenance: ChatRecordProvenance,
 +  ): Pick<
 +    ChatRecordFields,
 +    | 'recordingVersion'
@@ -257368,7 +257593,24 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        uuid: randomUUID(),
        parentUuid: this.lastRecordUuid,
        sessionId: this.getSessionId(),
-@@ -1007,21 +1132,21 @@
+       timestamp: new Date().toISOString(),
+       type,
+-      provenance:
+-        type === 'user'
+-          ? 'real_user'
+-          : type === 'assistant'
+-            ? 'assistant_output'
+-            : type === 'tool_result'
+-              ? 'tool_result'
+-              : 'system',
++      provenance,
+       cwd,
+       version: this.config.getCliVersion() || 'unknown',
+       gitBranch: this.getCachedGitBranch(cwd),
+     };
+   }
+ 
+@@ -1007,21 +1128,21 @@
    }
  
    private enqueueRecordWrite(
@@ -257399,7 +257641,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          if (updateActiveTail) {
            this.lastPersistedRecordUuid = record.uuid;
          }
-@@ -1042,135 +1167,55 @@
+@@ -1042,135 +1163,55 @@
     * descendants are skipped and later fire-and-forget calls become no-ops.
     */
    private appendRecord(
@@ -257561,7 +257803,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1178,6 +1223,11 @@
+@@ -1178,6 +1219,11 @@
     * teardown to ensure no records are dropped.
     */
    async flush(): Promise<void> {
@@ -257573,7 +257815,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      await this.operationTail;
      if (this.writeFailure) throw this.writeFailure;
    }
-@@ -1190,29 +1240,38 @@
+@@ -1190,29 +1236,38 @@
      const pending = this.operationTail.then(async () => {
        if (this.writeFailure) throw this.writeFailure;
        const lease = this.binding?.lease;
@@ -257626,7 +257868,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      });
      this.operationTail = pending.then(
        () => undefined,
-@@ -1258,6 +1317,7 @@
+@@ -1258,6 +1313,7 @@
    private async closeOnce(): Promise<void> {
      let flushFailure: unknown;
      try {
@@ -257634,7 +257876,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        await this.flush();
      } catch (error) {
        flushFailure = error;
-@@ -1297,12 +1357,28 @@
+@@ -1297,12 +1353,28 @@
      return this.binding !== undefined;
    }
  
@@ -257665,16 +257907,27 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      if (!session) {
        throw new Error(
          `Unable to load active transcript for session ${sessionId}`,
-@@ -1319,7 +1395,7 @@
+@@ -1317,17 +1389,16 @@
+ 
+   async recordGoalState(
      recordUuid: string,
      payload: GoalStateRecordPayloadV2,
    ): Promise<ChatRecord> {
 -    const record: ChatRecord = {
+-      ...this.createBaseRecord('system'),
 +    const record: StoredChatRecord = {
-       ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'goal_control'),
        uuid: recordUuid,
        type: 'system',
-@@ -1335,19 +1411,6 @@
+       subtype: 'goal_state',
+-      provenance: 'goal_control',
+       systemPayload: {
+         ...payload,
+         snapshot: { ...payload.snapshot, activity: 'idle' },
+       },
+     };
+     await this.appendRecordStrict(record);
+@@ -1335,19 +1406,6 @@
    }
  
    /**
@@ -257694,7 +257947,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
     * Records a user message.
     * Queues the write immediately on the serialized async writer.
     *
-@@ -1355,24 +1418,20 @@
+@@ -1355,24 +1413,20 @@
     * @param goalContext Goal identity and turn that own this message
     * @param promptPayload User-authored display text and hook-context provenance
     */
@@ -257721,7 +257974,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    this.trackUserDisplayTextForTitle(promptPayload?.displayText);
 +    this.turnParentUuids.push(this.lastRecordUuid);
 +    const record: StoredChatRecord = {
-+      ...this.createBaseRecord('user'),
++      ...this.createBaseRecord('user', 'real_user'),
 +      ...(goalContext ? { goalContext: copyGoalContext(goalContext) } : {}),
 +      message: createUserContent(message),
 +      ...(promptPayload ? { systemPayload: promptPayload } : {}),
@@ -257730,7 +257983,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    getUserDisplayTextsForTitle(): ReadonlyArray<string | undefined> {
-@@ -1380,49 +1439,40 @@
+@@ -1380,49 +1434,43 @@
    }
  
    recordGoalRuntimeMessage(
@@ -257750,16 +258003,19 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -      debugLogger.error('Error saving Goal runtime message:', error);
 -    }
 +    this.queueModelInput('goal_runtime', () => ({
-+      ...this.createBaseRecord('user'),
++      ...this.createBaseRecord('user', 'goal_runtime'),
 +      subtype: 'goal_runtime',
-+      provenance: 'goal_runtime',
 +      goalContext: copyGoalContext(goalContext),
 +      message: createUserContent(message),
 +    }));
    }
  
    /**
-    * Records a user message drained while tool results are being submitted.
+-   * Records a user message drained while tool results are being submitted.
++   * Records a user-role message added while tool results are being
++   * submitted, with the author its writer names: a message the user typed,
++   * or one the runtime wrote, such as the notice a refused or slipped turn is
++   * answered with.
     *
     * The model sees these as extra user-role parts in the same API Content as
     * tool results. Keeping a distinct subtype lets resume reconstruct that shape
@@ -257768,6 +258024,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -  recordMidTurnUserMessage(
 +  async recordMidTurnUserMessage(
      message: PartListUnion,
++    provenance: Extract<ChatRecordProvenance, 'real_user' | 'system'>,
      displayText?: string,
      goalContext?: GoalTurnPermit,
 -  ): void {
@@ -257787,7 +258044,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -    }
 +  ): Promise<void> {
 +    const record: StoredChatRecord = {
-+      ...this.createBaseRecord('user'),
++      ...this.createBaseRecord('user', provenance),
 +      subtype: 'mid_turn_user_message',
 +      ...(goalContext ? { goalContext: copyGoalContext(goalContext) } : {}),
 +      message: createUserContent(message),
@@ -257799,7 +258056,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1488,30 +1538,43 @@
+@@ -1488,85 +1536,169 @@
      message: PartListUnion,
      subtype: 'notification' | 'cron',
      displayText?: string,
@@ -257848,9 +258105,15 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -  ): ChatRecord {
 +  ): StoredChatRecord {
      return {
-       ...this.createBaseRecord('user'),
+-      ...this.createBaseRecord('user'),
++      ...this.createBaseRecord('user', 'system'),
        subtype,
-@@ -1524,49 +1587,121 @@
+-      provenance: 'system',
+       ...(goalContext ? { goalContext: copyGoalContext(goalContext) } : {}),
+       message: createUserContent(message),
+       systemPayload: displayText
+         ? ({ displayText, backgroundTask } as NotificationRecordPayload)
+         : undefined,
      };
    }
  
@@ -257879,24 +258142,6 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -          ? { goalContext: copyGoalContext(data.goalContext) }
 -          : {}),
 -      };
--
--      if (data.message !== undefined) {
--        record.message = createModelContent(data.message);
--      }
--
--      if (data.tokens) {
--        record.usageMetadata = data.tokens;
--      }
--
--      if (data.contextWindowSize !== undefined) {
--        record.contextWindowSize = data.contextWindowSize;
--      }
--
--      this.appendRecord(record);
--      this.maybeTriggerAutoTitle();
--    } catch (error) {
--      debugLogger.error('Error saving assistant turn:', error);
--    }
 +  async recordGeneration(data: GenerationCommit): Promise<void> {
 +    const accepted = data.historyLength !== null;
 +    const metadata = {
@@ -257909,14 +258154,14 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    };
 +    const record: StoredChatRecord = accepted
 +      ? {
-+          ...this.createBaseRecord('assistant'),
++          ...this.createBaseRecord('assistant', 'assistant_output'),
 +          type: 'assistant',
 +          ...metadata,
 +          historyLength: data.historyLength!,
 +          generation: data.generation,
 +        }
 +      : {
-+          ...this.createBaseRecord('model_generation'),
++          ...this.createBaseRecord('model_generation', 'system'),
 +          type: 'model_generation',
 +          historyDisposition: 'abandoned',
 +          placement: 'local',
@@ -257926,13 +258171,16 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    await this.appendRecordStrict(record, { updateActiveTail: accepted });
 +    if (accepted) this.maybeTriggerAutoTitle();
 +  }
-+
+ 
+-      if (data.message !== undefined) {
+-        record.message = createModelContent(data.message);
+-      }
 +  recordNormalizationSeed(
 +    seed: import('../core/model-generation.js').ModelNormalizationSeed,
 +  ): Promise<void> {
 +    const persisted = this.appendRecordStrict(
 +      {
-+        ...this.createBaseRecord('model_normalization_seed'),
++        ...this.createBaseRecord('model_normalization_seed', 'system'),
 +        type: 'model_normalization_seed',
 +        normalizationSeed: seed,
 +      },
@@ -257942,13 +258190,16 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +      this.modelRequests.publishNormalizationSeed(seed),
 +    );
 +  }
-+
+ 
+-      if (data.tokens) {
+-        record.usageMetadata = data.tokens;
+-      }
 +  recordChildNormalizationSeed(
 +    seed: import('../core/model-generation.js').ModelNormalizationSeed,
 +  ): Promise<void> {
 +    const persisted = this.appendRecordStrict(
 +      {
-+        ...this.createBaseRecord('model_normalization_seed'),
++        ...this.createBaseRecord('model_normalization_seed', 'system'),
 +        type: 'model_normalization_seed',
 +        normalizationSeed: seed,
 +        placement: 'child',
@@ -257959,21 +258210,29 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +      this.modelRequests.publishNormalizationSeed(seed),
 +    );
 +  }
-+
+ 
+-      if (data.contextWindowSize !== undefined) {
+-        record.contextWindowSize = data.contextWindowSize;
+-      }
 +  publishGeneration(
 +    generation: ModelGenerationEvidence,
 +    _disposition: import('../core/chat-attempt.js').AttemptDisposition,
 +  ): Promise<void> {
 +    return this.modelRequests.publishGeneration(generation);
 +  }
-+
+ 
+-      this.appendRecord(record);
+-      this.maybeTriggerAutoTitle();
+-    } catch (error) {
+-      debugLogger.error('Error saving assistant turn:', error);
+-    }
 +  async publishChildGeneration(
 +    generation: ModelGenerationEvidence,
 +    historyDisposition: import('../core/chat-attempt.js').ChatHistoryDisposition,
 +  ): Promise<void> {
 +    await this.appendRecordStrict(
 +      {
-+        ...this.createBaseRecord('model_generation'),
++        ...this.createBaseRecord('model_generation', 'system'),
 +        type: 'model_generation',
 +        historyDisposition,
 +        placement: 'child',
@@ -257988,7 +258247,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    return this.modelRequests.recordCompletion(completion, (value) =>
 +      this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_attempt_completion'),
++          ...this.createBaseRecord('model_attempt_completion', 'system'),
 +          type: 'model_attempt_completion',
 +          completion: value,
 +        },
@@ -258004,7 +258263,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    return this.modelRequests.recordCompletion(completion, async (value) => {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_attempt_completion'),
++          ...this.createBaseRecord('model_attempt_completion', 'system'),
 +          type: 'model_attempt_completion',
 +          completion: value,
 +        },
@@ -258015,15 +258274,25 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    async recordRealtimeConversation(
-@@ -1577,7 +1712,7 @@
+@@ -1575,13 +1707,16 @@
+       text: string;
+     }>,
      model: string,
    ): Promise<void> {
      for (const entry of entries) {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord(entry.role),
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord(entry.role),
++        ...this.createBaseRecord(
++          entry.role,
++          entry.role === 'user' ? 'real_user' : 'assistant_output',
++        ),
          subtype: 'realtime_message',
          message:
+           entry.role === 'user'
+             ? createUserContent([{ text: entry.text }])
+             : createModelContent([{ text: entry.text }]),
+         ...(entry.role === 'assistant' ? { model } : {}),
 @@ -1605,6 +1740,7 @@
     * as a user-visible error or interrupt recording.
     */
@@ -258101,7 +258370,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          if (this.autoTitleController === controller) {
            this.autoTitleController = undefined;
          }
-@@ -1699,106 +1796,244 @@
+@@ -1699,106 +1796,248 @@
     */
    recordToolResult(
      message: PartListUnion,
@@ -258110,6 +258379,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    ): void {
 -    try {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('tool_result'),
 +    this.queueModelInput('tool_result', () => {
 +      const recordingToolCallResult =
 +        toolCallResult === undefined
@@ -258124,11 +258394,14 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +          ? (recordingToolCallResult.resultDisplay as AgentResultDisplay)
 +          : undefined;
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('tool_result'),
++        ...this.createBaseRecord(
++          'tool_result',
++          options?.provenance ?? 'tool_result',
++        ),
          ...(options?.goalContext
            ? { goalContext: copyGoalContext(options.goalContext) }
            : {}),
-         ...(options?.provenance ? { provenance: options.provenance } : {}),
+-        ...(options?.provenance ? { provenance: options.provenance } : {}),
          message: createUserContent(message),
 +        ...(recordingToolCallResult === undefined
 +          ? {}
@@ -258186,11 +258459,12 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    if (this.writeFailure) return;
      try {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      if (!this.acceptingWrites || this.state !== 'active') {
 +        throw new SessionWriterUnavailableError();
 +      }
 +      this.appendRecord({
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'slash_command',
          systemPayload: payload,
@@ -258207,10 +258481,12 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    }
 +    const type = message.role === 'model' ? 'assistant' : 'user';
 +    await this.appendRecordStrict({
-+      ...this.createBaseRecord(type),
++      ...this.createBaseRecord(
++        type,
++        message.role === 'model' ? 'assistant_output' : 'system',
++      ),
 +      type,
 +      subtype: 'adopted_message',
-+      provenance: message.role === 'model' ? 'assistant_output' : 'system',
 +      message,
 +    });
 +  }
@@ -258226,7 +258502,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +      throw this.enterWriteFailure(cause, this.getSessionId(), 'runtime_history');
 +    }
 +    const record: StoredChatRecord = {
-+      ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
 +      subtype: 'runtime_history',
 +      systemPayload: change,
 +    };
@@ -258277,23 +258553,23 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    try {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_history_binding'),
++          ...this.createBaseRecord('model_history_binding', 'system'),
 +          runtimeHistoryBinding: requireRuntimeHistoryBinding(binding),
 +        },
 +        { updateActiveTail: false },
 +      );
 +    } catch (cause) {
 +      throw this.enterWriteFailure(cause, this.getSessionId(), 'history_binding');
-+    }
-+  }
-+
+     }
+   }
+ 
 +  async recordChildHistoryBinding(
 +    binding: RuntimeHistoryBinding,
 +  ): Promise<void> {
 +    try {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_history_binding'),
++          ...this.createBaseRecord('model_history_binding', 'system'),
 +          runtimeHistoryBinding: requireRuntimeHistoryBinding(binding),
 +          placement: 'child',
 +        },
@@ -258301,16 +258577,16 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +      );
 +    } catch (cause) {
 +      throw this.enterWriteFailure(cause, this.getSessionId(), 'child_history_binding');
-     }
-   }
- 
++    }
++  }
++
 +  async recordChildScope(
 +    declaration: import('../core/model-request-evidence.js').ChildScopeDeclaration,
 +  ): Promise<void> {
 +    try {
 +      await this.appendRecordStrict(
 +        {
-+          ...this.createBaseRecord('model_child_scope'),
++          ...this.createBaseRecord('model_child_scope', 'system'),
 +          childScope: requireChildScopeDeclaration(declaration),
 +          placement: 'child',
 +        },
@@ -258344,7 +258620,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +  ): Promise<void> {
 +    await this.appendRecordStrict(
 +      {
-+        ...this.createBaseRecord('model_history_assertion'),
++        ...this.createBaseRecord('model_history_assertion', 'system'),
 +        runtimeHistoryAssertion: assertion,
 +        ...(placement ? { placement } : {}),
 +      },
@@ -258369,7 +258645,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    payload: ChatCompressionRecordPayload,
 +  ): Promise<void> {
 +    const record: StoredChatRecord = {
-+      ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
 +      type: 'system',
 +      subtype: 'chat_compression',
 +      systemPayload: payload,
@@ -258400,7 +258676,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -    }
 +  async recordUiTelemetryEvent(uiEvent: UiEvent): Promise<void> {
 +    await this.appendRecordStrict({
-+      ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
 +      type: 'system',
 +      subtype: 'ui_telemetry',
 +      systemPayload: { uiEvent },
@@ -258408,7 +258684,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    }
  
    /**
-@@ -1811,18 +2046,27 @@
+@@ -1811,18 +2050,27 @@
     *
     * @param targetTurnIndex 0-based index of the user turn to rewind to.
     *   For example, 0 means rewind to the very first user message (keeping
@@ -258438,13 +258714,16 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          0,
          this.turnParentUuids.length - this.userDisplayTextsForTitle.length,
        );
-@@ -1837,36 +2081,46 @@
+@@ -1835,38 +2083,48 @@
+       // branch — clear the dedup key so the next snapshot lands on the
+       // active branch and `/resume` can find it. Without this, a
        // post-rewind identical snapshot would be skipped and the rewound
        // session would lose all attribution state on restore.
        this.lastAttributionSnapshotJson = undefined;
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'rewind',
          systemPayload: payload,
@@ -258491,7 +258770,8 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        const record = messages[i];
        if (
          record.type === 'user' &&
-@@ -1954,10 +2208,8 @@
+@@ -1953,15 +2211,13 @@
+   private async persistCustomTitle(
      customTitle: string,
      titleSource: TitleSource,
    ): Promise<boolean> {
@@ -258499,11 +258779,16 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 -    let persisted = false;
      try {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'custom_title',
-@@ -1976,23 +2228,12 @@
+         systemPayload: { customTitle, titleSource },
+       };
+ 
+       await this.appendRecordStrict(record);
+@@ -1976,23 +2232,12 @@
        } catch {
          // Observer errors must never break title recording.
        }
@@ -258527,25 +258812,39 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      }
    }
  
-@@ -2015,7 +2256,7 @@
+@@ -2013,13 +2258,13 @@
+     // Idempotent: the lineage is immutable and written once. A bridge retry
+     // (the write succeeded but its response was lost) must not append a second
      // record — the session would then carry two `parent_session` entries.
      if (this.currentParentSessionId === parentSessionId) return true;
      try {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'parent_session',
-@@ -2044,7 +2285,7 @@
+         systemPayload: { parentSessionId },
+       };
+       await this.appendRecordStrict(record);
+       this.currentParentSessionId = parentSessionId;
+@@ -2042,13 +2287,13 @@
+         this.currentSourceType === sourceType &&
+         this.currentSourceId === sourceId
        );
      }
      try {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'session_source',
-@@ -2065,74 +2306,34 @@
+         systemPayload: {
+           sourceType,
+           ...(sourceId !== undefined ? { sourceId } : {}),
+         },
+@@ -2065,74 +2310,34 @@
      }
    }
  
@@ -258610,11 +258909,12 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    if (this.writeFailure) return;
      try {
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      if (!this.acceptingWrites || this.state !== 'active') {
 +        throw new SessionWriterUnavailableError();
 +      }
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'at_command',
          systemPayload: payload,
@@ -258631,7 +258931,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    /**
     * Records an attribution state snapshot for session persistence.
     * Called at the start of every non-retry turn so that a resumed session
-@@ -2142,93 +2343,99 @@
+@@ -2142,109 +2347,115 @@
     * form is byte-identical to the last one we wrote, skip the append.
     * Without this, sessions that touch many files would write a full
     * duplicate of the entire snapshot to the JSONL on every turn, even
@@ -258661,8 +258961,9 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          return;
        }
 -      const record: ChatRecord = {
+-        ...this.createBaseRecord('system'),
 +      const record: StoredChatRecord = {
-         ...this.createBaseRecord('system'),
++        ...this.createBaseRecord('system', 'system'),
          type: 'system',
          subtype: 'attribution_snapshot',
 -        systemPayload: { snapshot },
@@ -258710,8 +259011,9 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      payload: UserTextElementsRecordPayload,
    ): Promise<void> {
 -    const record: ChatRecord = {
+-      ...this.createBaseRecord('system'),
 +    const record: StoredChatRecord = {
-       ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
        type: 'system',
        subtype: 'user_text_elements',
        systemPayload: payload,
@@ -258746,36 +259048,46 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
 +    } catch (cause) {
 +      this.enterWriteFailure(cause, this.getSessionId(), 'file_history_snapshot');
      }
-+  }
-+
+   }
+ 
 +  private createFileHistorySnapshotBatchRecord(
 +    snapshots: SerializedFileHistorySnapshot[],
 +  ): StoredChatRecord {
 +    return {
-+      ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
 +      type: 'system',
 +      subtype: 'file_history_snapshot',
 +      systemPayload: { snapshots },
 +    };
-   }
- 
++  }
++
    async recordSessionArtifactEvent(
      payload: SessionArtifactEventRecordPayload,
    ): Promise<void> {
 -    const record: ChatRecord = {
+-      ...this.createBaseRecord('system'),
 +    const record: StoredChatRecord = {
-       ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
        type: 'system',
        subtype: 'session_artifact_event',
-@@ -2240,7 +2447,7 @@
+       systemPayload: payload,
+     };
+     await this.appendRecordStrict(record, { updateActiveTail: false });
+   }
+ 
    async recordSessionArtifactSnapshot(
      payload: SessionArtifactSnapshotRecordPayload,
    ): Promise<void> {
 -    const record: ChatRecord = {
+-      ...this.createBaseRecord('system'),
 +    const record: StoredChatRecord = {
-       ...this.createBaseRecord('system'),
++      ...this.createBaseRecord('system', 'system'),
        type: 'system',
        subtype: 'session_artifact_snapshot',
+       systemPayload: payload,
+     };
+     await this.appendRecordStrict(record, { updateActiveTail: false });
+   }
 diff --git a/packages/core/src/services/compactionInputSlimming.test.ts b/packages/core/src/services/compactionInputSlimming.test.ts
 --- a/packages/core/src/services/compactionInputSlimming.test.ts
 +++ b/packages/core/src/services/compactionInputSlimming.test.ts

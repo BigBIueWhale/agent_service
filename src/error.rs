@@ -74,8 +74,14 @@ pub enum ServiceError {
     Staging(String),
     /// 504 — wall-clock timeout waiting for an internal step.
     Timeout(String),
-    /// 502 — agent ran but produced no result event (or unparseable result file).
+    /// 502 — a file the agent's run must leave (its event stream, its exit
+    /// code, its stderr) is absent, was not proved complete, or cannot be read
+    /// whole and safely; the message names the file and what was observed.
     AgentOutputMissing(String),
+    /// 502 — the agent's event stream was read and a record in it breaks a rule
+    /// the stream is held to; the message names the record and the rule. The
+    /// output exists: this is a refusal of what it says, not of its absence.
+    AgentRecordRefused(String),
     /// 500 — anything else genuinely internal.
     Internal(String),
 }
@@ -84,7 +90,7 @@ impl From<runtime_contract::ContractError> for ServiceError {
     fn from(error: runtime_contract::ContractError) -> Self {
         match error {
             runtime_contract::ContractError::InvalidRecord(cause) => {
-                Self::AgentOutputMissing(cause)
+                Self::AgentRecordRefused(cause)
             }
             runtime_contract::ContractError::InvalidDefinition(cause)
             | runtime_contract::ContractError::InvalidConfiguration(cause) => Self::Internal(cause),
@@ -111,7 +117,9 @@ impl ServiceError {
             | Self::SourceChanged(_) => StatusCode::CONFLICT,
             Self::DockerUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::ServiceShuttingDown => StatusCode::SERVICE_UNAVAILABLE,
-            Self::DockerCommand(_) | Self::AgentOutputMissing(_) => StatusCode::BAD_GATEWAY,
+            Self::DockerCommand(_) | Self::AgentOutputMissing(_) | Self::AgentRecordRefused(_) => {
+                StatusCode::BAD_GATEWAY
+            }
             Self::Staging(_)
             | Self::AcceptanceDurabilityFailed { .. }
             | Self::CancellationDurabilityFailed { .. }
@@ -142,6 +150,7 @@ impl ServiceError {
             Self::Staging(_) => "staging_failed",
             Self::Timeout(_) => "timeout",
             Self::AgentOutputMissing(_) => "agent_output_missing",
+            Self::AgentRecordRefused(_) => "agent_record_refused",
             Self::Internal(_) => "internal",
         }
     }
@@ -159,6 +168,7 @@ impl ServiceError {
             | Self::Staging(m)
             | Self::Timeout(m)
             | Self::AgentOutputMissing(m)
+            | Self::AgentRecordRefused(m)
             | Self::Internal(m) => m.clone(),
             Self::NotFound { session_id } => format!(
                 "session {session_id} is not known to this server — it was never durably accepted or its terminal resource was explicitly DELETE'd; service restarts recover every accepted handle into an explicit terminal result before listening"
@@ -239,4 +249,26 @@ pub type ServiceResult<T> = Result<T, ServiceError>;
 /// this in many places, so the helper deduplicates the boilerplate.
 pub fn io_msg(context: &str, path: &std::path::Path, err: &std::io::Error) -> String {
     format!("{context} at {}: {err}", path.display())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_contract_error_is_named_by_what_was_observed() {
+        let refused = ServiceError::from(runtime_contract::ContractError::InvalidRecord(
+            "events.jsonl line 7 repeats tool result \"a\"".into(),
+        ));
+        assert_eq!(refused.kind_str(), "agent_record_refused");
+        assert_eq!(refused.http_status(), StatusCode::BAD_GATEWAY);
+        assert_eq!(refused.message(), "events.jsonl line 7 repeats tool result \"a\"");
+        for internal in [
+            runtime_contract::ContractError::InvalidDefinition("schema".into()),
+            runtime_contract::ContractError::InvalidConfiguration("bindings".into()),
+            runtime_contract::ContractError::ValidationUnavailable("limits".into()),
+        ] {
+            assert_eq!(ServiceError::from(internal).kind_str(), "internal");
+        }
+    }
 }

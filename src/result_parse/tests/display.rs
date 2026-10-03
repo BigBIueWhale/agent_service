@@ -150,6 +150,17 @@ fn a_request_before_its_scope_reports_a_returned_call_is_refused() {
     }
 }
 
+/// A stream that was read whole and refused is named for what was observed:
+/// a record it carries broke a rule. It is not output that went missing.
+#[test]
+fn a_refused_record_is_named_a_refusal_of_the_record() {
+    let mut trace = two_turns(true);
+    trace.rows.remove(user_row(&trace));
+    let error = trace.snapshot().certified.unwrap_err();
+    assert_eq!(error.kind_str(), "agent_record_refused");
+    assert!(error.to_string().starts_with("agent_record_refused: events.jsonl line "));
+}
+
 #[test]
 fn a_user_row_between_a_settled_turn_and_its_display_is_refused() {
     let mut trace = two_turns(false);

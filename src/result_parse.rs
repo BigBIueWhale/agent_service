@@ -148,7 +148,7 @@ fn verify_physical_generations(path: &Path, bytes: u64, digest: &str) -> Service
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|error| ServiceError::AgentOutputMissing(format!(
+        .map_err(|error| ServiceError::Internal(format!(
             "cannot start the pinned physical response verifier for {}: {error}; inspect the service image and the retained recording, then retry",
             path.display(),
         )))?;
@@ -175,7 +175,7 @@ fn verify_physical_generations(path: &Path, bytes: u64, digest: &str) -> Service
                 let reason = reason
                     .join()
                     .unwrap_or_else(|_| "the verifier's refusal reason could not be read".into());
-                return Err(ServiceError::AgentOutputMissing(format!(
+                return Err(ServiceError::AgentRecordRefused(format!(
                     "physical response replay refused {} with status {status}: {reason}; inspect the original recording with its matching client or start a new session",
                     path.display(),
                 )));
@@ -184,7 +184,7 @@ fn verify_physical_generations(path: &Path, bytes: u64, digest: &str) -> Service
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(ServiceError::AgentOutputMissing(format!(
+                return Err(ServiceError::Timeout(format!(
                     "physical response replay exceeded its local verification deadline for {}; inspect the retained recording and service load, then retry",
                     path.display(),
                 )));
@@ -192,7 +192,7 @@ fn verify_physical_generations(path: &Path, bytes: u64, digest: &str) -> Service
             Err(error) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(ServiceError::AgentOutputMissing(format!(
+                return Err(ServiceError::Internal(format!(
                     "physical response replay could not settle for {}: {error}; inspect the retained recording and service process state, then retry",
                     path.display(),
                 )));

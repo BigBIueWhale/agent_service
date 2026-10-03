@@ -6458,6 +6458,24 @@ def _validate_incomplete_generation_after(state: State) -> None:
     # refused at its limit, and answer it the same way: the notice, written to
     # the stream and recorded, is the whole message of a redraw, and the
     # MAX_GENERATION_DRAWS-th refusal in a row ends the run naming the limit.
+    # A record's author is stated by the code that writes it: the runtime's
+    # notice is the runtime's, and nothing infers an author from a type.
+    recording = "packages/core/src/services/chatRecordingService.ts"
+    _require_all(
+        state,
+        recording,
+        (
+            "  private createBaseRecord<T extends ChatRecord['type']>(\n"
+            "    type: T,\n"
+            "    provenance: ChatRecordProvenance,\n"
+            "  ): Pick<",
+            "    provenance: Extract<ChatRecordProvenance, 'real_user' | 'system'>,",
+            "      ...this.createBaseRecord('user', provenance),\n"
+            "      subtype: 'mid_turn_user_message',",
+        ),
+        label=label,
+    )
+    forbid_text(state, recording, "type === 'user'\n          ? 'real_user'", label=label)
     _require(
         cli_source.count("refusedTurn(lastGenerationTerminal);") == 2
         and cli_source.count("await noticeForRefusedTurn(") == 2
@@ -6476,7 +6494,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
             "message: describeRefusedTurns(terminal, turnCount),",
             "const parts: Part[] = [{ text: refusedTurnNotice(terminal) }];",
-            ".recordMidTurnUserMessage(parts);",
+            ".recordMidTurnUserMessage(parts, 'system');",
             "return parts;",
             "if (redrawRefusedTurn) {",
             "sendType = SendMessageType.Redraw;",
@@ -6997,7 +7015,7 @@ def _validate_final_message_slip_after(state: State) -> None:
             "if (consecutiveFinalMessageSlips >= FINAL_MESSAGE_SLIP_LIMIT) {",
             "terminateMode: AgentTerminateMode.SLIPPED_FINAL_MESSAGE,",
             "message: describeSlippedFinalMessage(kind),",
-            "recordMidTurnUserMessage(notice)",
+            "recordMidTurnUserMessage(notice, 'system')",
             "? describeFinalMessageSlip(turnText)",
             "? describeFinalMessageSlip(itemText)",
         ),
@@ -7007,7 +7025,7 @@ def _validate_final_message_slip_after(state: State) -> None:
         cli_source,
         (
             "const noticeForFinalMessageSlip = async (",
-            "recordMidTurnUserMessage(notice)",
+            "recordMidTurnUserMessage(notice, 'system')",
             "return notice;",
         ),
         label=label,
@@ -9931,11 +9949,11 @@ def _validate_served_accounting_after(state: State) -> None:
         "recordChildHistoryAssertion(",
         "recordChildHistoryBinding(",
         "async recordChildScope(",
-        "this.createBaseRecord('model_child_scope')",
+        "this.createBaseRecord('model_child_scope', 'system')",
         "binding: RuntimeHistoryBinding,",
         "assertion: RuntimeHistoryAssertion,",
-        "this.createBaseRecord('model_history_assertion')",
-        "this.createBaseRecord('model_history_binding')",
+        "this.createBaseRecord('model_history_assertion', 'system')",
+        "this.createBaseRecord('model_history_binding', 'system')",
         "{ updateActiveTail: false }",
     ), label=label)
     _require_all(state, core + "agents/agent-transcript.ts", (
@@ -12380,7 +12398,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "stop cost -- a call the model had not completed, which was not made, and where what "
             "was served of it is kept; a message cut to a prefix; or nothing visible -- and that "
             "the run carries no final answer. A redraw notice is admitted to the canonical "
-            "recording before it appears as a user row in the stream."
+            "recording, as the runtime's, before the request that carries it is sent; every "
+            "record's author is stated by the code that writes it, never inferred from its type."
         ),
         removal_condition=(
             "Upstream distinguishes self-ended generation from a severed response, asks for a turn "
@@ -12402,7 +12421,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "subagent alike, after the incomplete-generation check and never in its place. Detection "
             "is an exact string test on the turn's visible text; no next-speaker judgment returns: "
             "the check, its telemetry event and the setting that switched it off are gone. "
-            "The canonical mid-turn input is admitted before the notice is displayed."
+            "The canonical mid-turn input, recorded as the runtime's, is admitted before the "
+            "notice is sent."
         ),
         removal_condition=(
             "Upstream answers an empty or markup-carrying self-ended turn with the same notice in "
