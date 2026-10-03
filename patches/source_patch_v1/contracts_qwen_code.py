@@ -6129,12 +6129,12 @@ def _validate_compaction_accounting_after(state: State) -> None:
         f"{label}: all post-generation outcomes must retain the same served evidence",
     )
     # The count used to accept a replacement names the completed tokenizer
-    # operation whose physical request and response supplied it. The reader
-    # replays those bytes and consumes the operation once in its own scope.
+    # operation whose physical request and response supplied it. The readers
+    # replay those bytes, and a measurement cites the completed operation of
+    # its own scope that counted its body, whenever that operation ran.
     _require_all(state, service, (
         "const result = await count();",
-        "if (!result.evidence || !result.operationId)",
-        "const served = replayVllmTokenCount(",
+        "if (!result.operationId)",
         "const sessionModel = config.getModel();",
         "model: sessionModel,",
         "tokenMeasurements.push({ role, operationId: result.operationId });",
@@ -6152,15 +6152,25 @@ def _validate_compaction_accounting_after(state: State) -> None:
         "const response = await call.asResponse();",
         "const raw = Buffer.from(await response.clone().arrayBuffer());",
         "const served = replayVllmTokenCount(",
-        "value: { ...served, evidence, operationId },",
+        "value: { ...served, operationId },",
+    ), label=label)
+    # A count is a function of what was counted, so the pipeline shows a body
+    # to the tokenizer once and answers every later count of it with the
+    # operation that counted it; only a completed count is kept.
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.ts", (
+        "private readonly tokenCounts = new Map<",
+        "createHash('sha256').update(requestJson).digest('hex'),",
+        "const known = this.tokenCounts.get(counted);",
+        "if (known) return known;",
+        "this.tokenCounts.set(counted, count);",
     ), label=label)
     forbid_text(state, "packages/core/src/core/token-count-evidence.ts",
                 "compactionTokenEvidenceContext", label=label)
     _require_all(state, "packages/core/src/core/model-response-evidence.ts", (
         "claimCompactionRecord(",
-        "claimTokenCount(measurement.operationId, scope)",
-        "count.firstSequence <= counts[index - 1]!.lastSequence",
-        "compaction candidate count precedes its physical draw",
+        "tokenCount(measurement.operationId, scope)",
+        "...counts.slice(0, 3).map((count) => count.lastSequence),",
+        "compaction preflight or draw reorders physical requests",
         "compaction tokenizer measurements use different models",
         "compaction tokenizer model differs from physical draw model",
         "compaction candidate count differs from tokenizer response bytes",
@@ -6170,9 +6180,11 @@ def _validate_compaction_accounting_after(state: State) -> None:
     _require_all(state, "packages/core/src/core/model-utility-replay.ts", (
         "replayModelUtilityResult(final.request,",
         "this.completedTokenCounts.set(completion.operation_id,",
-        "claimTokenCount(operationId: string, scope: string): CompletedTokenizerCount",
-        "this.claimedTokenCounts.add(operationId);",
+        "tokenCount(operationId: string, scope: string): CompletedTokenizerCount",
+        "'compaction measurement has no completed tokenizer operation in its scope'",
     ), label=label)
+    forbid_text(state, "packages/core/src/core/model-utility-replay.ts",
+                "claimedTokenCounts", label=label)
     _require_all(state, "packages/core/src/core/model-request-evidence.ts", (
         "if (owned === 0 && ids.length > 0) return;",
         "a utility operation spans disconnected output windows",
@@ -6188,6 +6200,11 @@ def _validate_compaction_accounting_after(state: State) -> None:
     _require_all(state, "packages/core/src/core/openaiContentGenerator/pipeline.test.ts", (
         "refuses a parsed count that differs from the physical response",
         "refuses a tokenizer body changed by the SDK before dispatch",
+        "shows a body to the tokenizer once and answers it again with the same operation",
+        "keeps no failed count, so the body is counted again",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/model-compaction-physical.test.ts", (
+        "admits a measurement that cites the operation which counted its body, wherever it ran",
     ), label=label)
     _require_ordered(_source(state, "packages/core/src/core/geminiChat.ts", label=label), (
         "await candidate.afterCommit()",
@@ -6199,7 +6216,6 @@ def _validate_compaction_accounting_after(state: State) -> None:
         (
             "[compaction-event] records where every truncated draw spent its output budget",
             "[compaction-event] leaves the accounting null when no generation ran",
-            "refuses a tokenizer measurement for another model before drawing",
         ),
         label=label,
     )
@@ -8950,7 +8966,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "claimCompactionSystemRecord(record: Record<string, unknown>): void",
         "refusal('compaction system record has no scope or object data')",
         "this.claimCompaction(data as CompactionRecord, scope);",
-        "this.utilities.claimTokenCount(id, owner)",
+        "this.utilities.tokenCount(id, owner)",
     ), label=label)
     # The closed record shape, with the decode policy it was dispatched under,
     # is read by the pure record module that browser bundles share.

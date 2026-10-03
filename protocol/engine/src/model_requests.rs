@@ -675,7 +675,6 @@ pub(crate) struct ModelRequests {
     utilities: BTreeMap<String, UtilityOperation>,
     completed_utilities: BTreeSet<String>,
     completed_token_counts: BTreeMap<String, CompletedTokenCount>,
-    claimed_token_counts: BTreeSet<String>,
     scopes: BTreeMap<String, RequestBody>,
     responses: BTreeMap<String, ResponseState>,
     response_values: BTreeMap<String, ResponseValues>,
@@ -1388,8 +1387,8 @@ impl ModelRequests {
         scope: &str,
     ) -> ContractResult<(u64, u64, String, u64, u64)> {
         let count = self.completed_token_counts.get(operation_id)
-            .filter(|count| count.scope == scope && !self.claimed_token_counts.contains(operation_id))
-            .ok_or_else(|| refusal("compaction measurement has no unclaimed completed chat tokenizer operation in its scope"))?;
+            .filter(|count| count.scope == scope)
+            .ok_or_else(|| refusal("compaction measurement has no completed chat tokenizer operation in its scope"))?;
         Ok((
             count.count,
             count.window,
@@ -1397,15 +1396,6 @@ impl ModelRequests {
             count.first_sequence,
             count.last_sequence,
         ))
-    }
-
-    pub(crate) fn commit_token_measurement_claims(&mut self, ids: Vec<String>) {
-        for id in ids {
-            self.completed_token_counts
-                .remove(&id)
-                .expect("planned completed token measurement");
-            self.claimed_token_counts.insert(id);
-        }
     }
 
     pub(crate) fn plan_origin(

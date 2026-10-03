@@ -684,7 +684,15 @@ impl Trace {
     /// record's scope (preflight tokenizer measurements, every drawn
     /// candidate's requests, a measurement per measured candidate), then the
     /// record itself naming that evidence.
-    fn compaction(&mut self, parent: Option<&str>, mut record: Value) {
+    fn compaction(&mut self, parent: Option<&str>, record: Value) {
+        self.compaction_citing(parent, record, &[]);
+    }
+
+    /// A compaction whose preflight cites, for each role named in `cited`,
+    /// the tokenizer operation that already counted that role's body, as a
+    /// client that counts a body once cites it; every other role is counted
+    /// here.
+    fn compaction_citing(&mut self, parent: Option<&str>, mut record: Value, cited: &[(&str, &str)]) {
         let kv = parent.unwrap_or("a").to_string();
         let original = record["data"]["originalTokenCount"].as_u64().unwrap();
         let budget = record["data"]["output"]["maxOutputTokens"]
@@ -692,7 +700,10 @@ impl Trace {
             .unwrap_or(COMPACTION_BUDGET);
         let mut measurements = Vec::new();
         for (role, count) in [("original", original), ("summary_request", 20), ("prompt_only", 18)] {
-            let operation = self.tokenizer(&kv, role, count);
+            let operation = match cited.iter().find(|(cited, _)| *cited == role) {
+                Some((_, operation)) => operation.to_string(),
+                None => self.tokenizer(&kv, role, count),
+            };
             measurements.push(json!({"role":role,"operationId":operation}));
         }
         let transition = self.rows.len();

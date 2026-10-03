@@ -459,3 +459,47 @@ fn compaction_measurement_and_budget_counts_accept_exact_safe_boundaries() {
     draw["usage"] = usage;
     trace_with(record(draw, json!([])), false).certify();
 }
+
+/// A token count is a function of the body counted, so a client that counts a
+/// body once cites the operation that already counted it, whenever it ran:
+/// the turn's own count as the original, the earlier count of the prompt the
+/// turn was issued against, and one operation for every compaction that
+/// counted the same body. The draws still follow every count they stand on.
+#[test]
+fn a_measurement_cites_the_operation_that_counted_its_body_whenever_it_ran() {
+    let mut trace = Trace::new();
+    let first = record(output(), json!([]));
+    let original = first["data"]["originalTokenCount"].as_u64().unwrap();
+    let prompt_only = trace.tokenizer("a", "prompt_only", 18);
+    let turn = trace.tokenizer("a", "original", original);
+    let cited = [("original", turn.as_str()), ("prompt_only", prompt_only.as_str())];
+    trace.compaction_citing(None, first, &cited);
+    trace.compaction_citing(None, record(output(), json!([])), &cited);
+    trace.terminal(None, 0, None);
+    trace.certify();
+    assert_eq!(
+        trace
+            .rows
+            .iter()
+            .filter(|row| row["subtype"] == "compaction")
+            .map(|row| row["data"]["tokenMeasurements"][0]["operationId"].clone())
+            .collect::<Vec<_>>(),
+        vec![json!(turn), json!(turn)]
+    );
+}
+
+/// A cited count must be one this scope's tokenizer completed.
+#[test]
+fn a_measurement_cannot_cite_another_scopes_count() {
+    let mut trace = Trace::new();
+    trace.chat(None, "child");
+    let first = record(output(), json!([]));
+    let original = first["data"]["originalTokenCount"].as_u64().unwrap();
+    let elsewhere = trace.tokenizer("child", "original", original);
+    trace.compaction_citing(None, first, &[("original", elsewhere.as_str())]);
+    trace.terminal(None, 1, None);
+    assert_refused_at(
+        &trace,
+        "compaction measurement has no completed chat tokenizer operation in its scope",
+    );
+}

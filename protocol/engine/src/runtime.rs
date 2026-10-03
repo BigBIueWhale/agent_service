@@ -109,7 +109,7 @@ fn validate_compaction_event(
     json_limits: Limits,
     requests: &crate::model_requests::ModelRequests,
     kv_scope: &str,
-) -> ContractResult<(Vec<String>, Vec<String>)> {
+) -> ContractResult<Vec<String>> {
     let refuse = |what: &str| {
         ContractError::InvalidRecord(format!(
             "events.jsonl line {line} carries a compaction record in {} {what}",
@@ -183,28 +183,20 @@ fn validate_compaction_event(
             "with an unknown compaction trigger reason; retain the original stream and recapture with a corrected compaction producer",
         ));
     }
-    let mut token_claims = Vec::new();
-    let mut unique_tokens = BTreeSet::new();
+    // A token count is a function of the body counted, so a measurement
+    // cites the completed tokenizer operation that counted its body, whenever
+    // it ran: one operation may answer several roles and several records.
     let measurements = field(record, "tokenMeasurements", line)?
         .elements()
         .ok_or_else(|| refuse("without a tokenMeasurements array"))?
         .map(|measurement| {
             let role = text(measurement, "role", line)?.to_string();
             let id = text(measurement, "operationId", line)?;
-            if !unique_tokens.insert(id.to_string()) {
-                return Err(refuse("whose tokenizer measurements repeat an operation"));
-            }
             let (count, window, model, first_sequence, last_sequence) =
                 requests.check_token_measurement(id, kv_scope)?;
-            token_claims.push(id.to_string());
             Ok((role, count, window, model, first_sequence, last_sequence))
         })
         .collect::<ContractResult<Vec<_>>>()?;
-    if measurements.windows(2).any(|pair| pair[1].4 <= pair[0].5) {
-        return Err(refuse(
-            "whose tokenizer measurements reorder physical operations",
-        ));
-    }
     if measurements
         .first()
         .is_some_and(|first| measurements.iter().any(|value| value.2 != first.2))
@@ -495,25 +487,22 @@ fn validate_compaction_event(
         draw_ranges.push((first_sequence, last_sequence));
         claims.push(id.to_string());
     }
+    // A draw is issued on the preflight's counts, so it follows every
+    // operation they cite, and each draw follows the one before it.
     if !draw_ranges.is_empty() {
-        let mut previous = measurements[2].5;
-        let mut next_candidate = 3;
-        for (index, (first, last)) in draw_ranges.into_iter().enumerate() {
+        let mut previous = measurements[..3]
+            .iter()
+            .map(|measurement| measurement.5)
+            .max()
+            .expect("three preflight measurements");
+        for (first, last) in draw_ranges {
             if first <= previous {
                 return Err(refuse("whose preflight or draw reorders physical requests"));
             }
             previous = last;
-            if draw_counts[index].is_some() {
-                let candidate = &measurements[next_candidate];
-                next_candidate += 1;
-                if candidate.4 <= previous {
-                    return Err(refuse("whose candidate count precedes its physical draw"));
-                }
-                previous = candidate.5;
-            }
         }
     }
-    Ok((claims, token_claims))
+    Ok(claims)
 }
 
 /// What a compaction's draw was, read from the status that names it: an
@@ -729,7 +718,6 @@ struct AdmissionPlan {
     generation: Option<crate::model_requests::GenerationAdmission>,
     completion: Option<crate::model_requests::CompletionAdmission>,
     compaction_claims: Vec<String>,
-    token_measurement_claims: Vec<String>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -1086,8 +1074,6 @@ impl RuntimeContract {
         }
         self.requests
             .commit_compaction_claims(plan.compaction_claims);
-        self.requests
-            .commit_token_measurement_claims(plan.token_measurement_claims);
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -1221,7 +1207,6 @@ impl RuntimeContract {
         let mut generation = None;
         let mut completion = None;
         let mut compaction_claims = Vec::new();
-        let mut token_measurement_claims = Vec::new();
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         let mut runtime_operation_id = None;
@@ -1471,7 +1456,7 @@ impl RuntimeContract {
                         let kv_scope = scope.or(self.session_id.as_deref()).ok_or_else(|| {
                             ContractError::InvalidRecord(format!("events.jsonl line {line} has no compaction request scope; retain the complete stream_start and request evidence"))
                         })?;
-                        (compaction_claims, token_measurement_claims) = validate_compaction_event(
+                        compaction_claims = validate_compaction_event(
                             object, line, scope, self.limits.json, &self.requests, kv_scope,
                         )?;
                     },
@@ -1615,7 +1600,6 @@ impl RuntimeContract {
             generation,
             completion,
             compaction_claims,
-            token_measurement_claims,
             row,
             state,
             additions,

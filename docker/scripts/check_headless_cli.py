@@ -44,8 +44,9 @@ SYSTEM_SETTINGS_FILES = (
 # and the todo reminder, the framing
 # text alone, the message, turn and tool-result probes, and the preamble in the shape a
 # compaction request carries it), then for each turn the request it is about to issue,
-# counted once because compaction leaves it as it was, and the generation. A tool result is
-# bounded where it is made, so no turn counts a baseline without it.
+# counted once -- the client shows a body to the tokenizer once, and compaction leaves the
+# request as it was -- and the generation. A tool result is bounded where it is made, so no
+# turn counts a baseline without it.
 EXPECTED_ROUTES = ["/tokenize"] * 8 + ["/v1/chat/completions"] + ["/tokenize"] + ["/v1/chat/completions"]
 EXPECTED_ROLES = [
     ["system"],

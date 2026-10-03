@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `9a6986ce72ee27e506bb633e51cf7d02c04ab2564742537722c3cccb7c65e9b8`
+- Review-diff SHA-256: `5803efd30534581fd912a99d3fd12ab7337715ae23a744ca57db2a04be12a72d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `24c515afd156b777bb129cbd987d85d26694ba3488a51bcba28f7ffd4fcd5b49`
+- Transformer-manifest SHA-256: `dd0da89a240a582fe37d36690f171958e2b1b4bc1d84cfb966d7360e95ecf4c5`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -194,10 +194,15 @@ since the preamble is counted in every request and a snapshot is never
 generated as a turn. `C` is the output limit of every turn
 whatever its prompt, and the least a compaction's draw is issued with. The route refuses a configured ceiling, including
 `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate histories are
-counted using the actual rendered request, and a request is counted once: the
-tokenizer's answer is a function of what it is shown, so the count a turn takes
-before compaction is the count of the request it sends whenever compaction left
-that request as it was.
+counted using the actual rendered request, and a body is shown to the
+tokenizer once: its answer is a function of what it is shown, so the client
+keeps each completed count by the scope, endpoint, window, model and exact
+request bytes it counted, answers every later count of that body with it, and
+the record cites the operation that counted it. The count a turn takes before
+compaction is the count of the request it sends whenever compaction left that
+request as it was, and a compaction's own count of a body already counted is
+that same operation; both certifiers admit one operation cited by several
+measurements, and order a draw only after every count it was issued on.
 
 A tool result says whether it is complete. One notice states what was asked
 for, what came back, the bound and its unit, the real total or why the tool
