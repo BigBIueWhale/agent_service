@@ -20,6 +20,22 @@ usage it observed. Completed processing requires a 2xx status and an EOF or
 cancelled transport end. The chat's history decision, or a utility caller's
 delivery receipt, is a further record of its own.
 
+Every generation request asks for `return_token_ids`, so the body records
+carry the model's own tokens beside their text: the prompt's ids on the first
+chunk and, on each chunk's choice, the ids the engine generated, reasoning and
+call markup included, before any parser. Whether a turn re-entered its history
+as the tokens the model generated is then read from the record: within one
+`kv_scope`, the next request's prompt ids against this request's prompt ids
+followed by its generated ids. A text chat request re-tokenizes its history,
+so a turn the model sampled as another split of the same text -- `' veget'`
+then `'arian'` where the tokenizer writes `' vegetarian'` -- re-enters as the
+canonical split; the record shows which turns did, where, and whether the text
+itself changed, which a decode with the pinned tokenizer settles. No certifier
+rule is held over it: it is what the model received, observed, not a
+composition the client must keep. The prompt's ids repeat what the `/tokenize`
+evidence already records for the same request, as the served engine's own
+reading of it rather than the count taken before it was sent.
+
 The recorder reads the transport from the moment the response exists and keeps
 one read outstanding until it ends, because an HTTP client discards bytes it
 still holds unread when its connection fails: a provider that sent a prefix and

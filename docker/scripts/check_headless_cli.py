@@ -553,6 +553,9 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     # One result a turn rests on one call a turn, which the client's request builder
                     # asks for itself: no setting carries it, so the bundle is what must send it.
                     require(body.get("parallel_tool_calls") is False, "CLI did not ask for one call per turn")
+                    # The model's own tokens travel in the recorded response only when the request
+                    # asks for them, which the request builder does for every request.
+                    require(body.get("return_token_ids") is True, "CLI did not ask for the generated token ids")
                     generation_count += 1
                     if generation_count == 1:
                         require(nonce not in json.dumps(body), "fixture content leaked into the initial prompt")

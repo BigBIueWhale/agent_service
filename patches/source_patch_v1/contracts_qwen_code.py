@@ -8290,8 +8290,10 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "let providerRequest = this.config.provider.buildRequest(",
             "    typed['parallel_tool_calls'] = false;\n"
             "    // Invocation ownership is authoritative after provider and extra-body decoration.\n"
-            "    typed['kv_scope'] = request.generationContext.kvScope;\n"
-            "    return providerRequest;",
+            "    typed['kv_scope'] = request.generationContext.kvScope;\n",
+            # The model's generated token ids are asked for on every request,
+            # after decoration, so the recorded bytes always carry them.
+            "    typed['return_token_ids'] = true;\n    return providerRequest;",
         ),
         label=label,
         location=pipeline,

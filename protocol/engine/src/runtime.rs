@@ -3378,6 +3378,57 @@ mod tests {
         assert_eq!(result.response, "before  after");
     }
 
+    /// A request that asks for return_token_ids is answered with the prompt's
+    /// ids on the first chunk and the generated ids on each choice. They are
+    /// recorded with the response bytes and change nothing the stream
+    /// certifies: the fixture's generation, unchanged, still certifies.
+    #[test]
+    fn a_response_carrying_token_ids_certifies_with_the_same_generation() {
+        let mut rows = fixture();
+        let body = rows
+            .iter()
+            .position(|row| row["type"] == "model_response" && row["response"]["event"]["kind"] == "body")
+            .unwrap();
+        let raw = String::from_utf8(
+            STANDARD
+                .decode(rows[body]["response"]["event"]["base64"].as_str().unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let mut next = 100_u64;
+        let mut first = true;
+        let with_ids = raw
+            .split('\n')
+            .map(|line| match line.strip_prefix("data: ") {
+                Some(json) if json.starts_with('{') => {
+                    let mut chunk: serde_json::Value = serde_json::from_str(json).unwrap();
+                    for choice in chunk["choices"].as_array_mut().unwrap() {
+                        choice["token_ids"] = serde_json::json!([next, next + 1]);
+                        next += 2;
+                    }
+                    if first {
+                        chunk["prompt_token_ids"] = serde_json::json!([1, 2, 3]);
+                        first = false;
+                    }
+                    format!("data: {chunk}")
+                }
+                _ => line.to_string(),
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_ne!(with_ids, raw);
+        rows[body]["response"]["event"]["base64"] = serde_json::json!(STANDARD.encode(&with_ids));
+        let end = rows
+            .iter()
+            .position(|row| row["type"] == "model_response" && row["response"]["event"]["kind"] == "end")
+            .unwrap();
+        rows[end]["response"]["event"]["body_bytes"] = serde_json::json!(with_ids.len());
+        rows[end]["response"]["event"]["body_sha256"] =
+            serde_json::json!(crate::generation::sha256(with_ids.as_bytes()));
+        let result = first_refusal(&rows).unwrap();
+        assert_eq!(result.response, "before  after");
+    }
+
     #[test]
     fn an_accepted_turn_shows_exactly_its_generation_display() {
         let rows = fixture();
