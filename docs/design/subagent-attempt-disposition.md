@@ -4,7 +4,8 @@
 provider finish reason alone does not prove that decision: stream validation
 and the durable assistant write must succeed first. Each processed chunk
 therefore carries either no decision yet, `accepted`, `refused` (the turn
-reached its output limit and is drawn again), or `abandoned`. Only `accepted`
+reached its output limit, or the backend refused it, and it is drawn again), or
+`abandoned`. Only `accepted`
 enters history. The terminal decision is emitted only after the history
 operation succeeds.
 

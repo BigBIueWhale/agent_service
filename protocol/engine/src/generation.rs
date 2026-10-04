@@ -508,13 +508,22 @@ impl Generation {
         Ok(generation)
     }
 
-    /// A refused draw is a turn the provider completed at its output limit; a
-    /// length stop serves any call it was writing as text, so it has none.
-    pub fn require_refused(&self) -> ContractResult<()> {
-        if self.usage.is_none() || self.finish.as_deref() != Some("MAX_TOKENS") || !self.calls.is_empty()
-        {
+    /// A refused draw is a turn the runtime draws again, and it has no call.
+    /// The provider completed it at its output limit -- a length stop serves
+    /// any call it was writing as text -- or the backend refused it
+    /// (`by_backend`), and its response ended in that refusal having served
+    /// no terminal, no usage and no call.
+    pub fn require_refused(&self, by_backend: bool) -> ContractResult<()> {
+        let limit = !by_backend
+            && self.usage.is_some()
+            && self.finish.as_deref() == Some("MAX_TOKENS");
+        let backend = by_backend
+            && self.usage.is_none()
+            && self.finish.is_none()
+            && self.incomplete.is_empty();
+        if !(limit || backend) || !self.calls.is_empty() {
             return Err(refusal(
-                "a refused draw must stop at its output limit without a call",
+                "a refused draw must stop at its output limit, or end in its backend's refusal, without a call",
             ));
         }
         Ok(())

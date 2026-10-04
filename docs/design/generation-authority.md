@@ -64,10 +64,14 @@ the attempt and scope, the exact ordered physical request identities, the
 number of observations the chat incorporated, and one disposition:
 
 - `accepted`: the turn entered history; its calls become executable.
-- `refused`: the provider completed the turn at its output limit (finish
-  `MAX_TOKENS`) with no executable call. It never enters history; the turn is
-  drawn again on the same request with the refusal notice added, up to
-  `MAX_GENERATION_DRAWS`.
+- `refused`: the turn is drawn again, and it has no executable call. Either
+  the provider completed it at its output limit (finish `MAX_TOKENS`), or its
+  response ended in the backend's typed refusal (`RepeatedToolParameterError`)
+  with no finish and no served usage; the client records that response's
+  failure as `RepeatedToolParameterRefusal: ...` exactly when its bytes end in
+  the refusal's error payload, which both certifiers check. It never enters
+  history; the turn is drawn again on the same request with the refusal
+  notice added, up to `MAX_GENERATION_DRAWS`.
 - `abandoned`: the attempt ended without a turn, for example a retried or
   cancelled stream. It is evidence only.
 
@@ -76,7 +80,8 @@ observed for that attempt, each with the same journal, attempt and scope.
 Every observation names the final physical request, and earlier retry requests
 must have delivered no decoded output. An accepted or refused completion
 consumes every output its final response delivered and carries that
-response's served usage; an abandoned one can keep a shorter prefix. Served
+response's served usage -- none for a response the backend refused, which
+served none; an abandoned one can keep a shorter prefix. Served
 usage is owned by physical response outcomes; completion does not create a
 second billed source.
 

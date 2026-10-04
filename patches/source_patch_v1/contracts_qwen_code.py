@@ -620,22 +620,28 @@ def _validate_stream_commit_after(state: State) -> None:
         ),
         label=label,
     )
-    # A generation a length terminal stopped is refused, not committed: its
-    # attempt settles `refused` (which history reads as `abandoned`), it is
-    # recorded as a draw that committed no turn, nothing of it enters the
-    # history a request is rendered from, and it names the message it was
-    # issued on so the turn can be drawn again. Anything else is committed.
+    # A generation a length terminal stopped, or one its backend refused, is
+    # refused, not committed: its attempt settles `refused` (which history
+    # reads as `abandoned`), it is recorded as a draw that committed no turn,
+    # nothing of it enters the history a request is rendered from, and it
+    # names the message it was issued on, and why, so the turn can be drawn
+    # again. The backend's refusal is the one stream error that settles an
+    # attempt; anything else that ends a stream is thrown. Anything else is
+    # committed.
     _require_ordered(
         source,
         (
-            "const refused = deferredFinishReason === FinishReason.MAX_TOKENS;",
-            "if (refused) {",
+            "streamError?.error instanceof RepeatedToolParameterRefusal",
+            "if (streamError && !servedRefusal) throw streamError.error;",
+            ": deferredFinishReason === FinishReason.MAX_TOKENS",
+            "const refused = refusal !== undefined;",
+            "if (refusal) {",
             "if (consolidatedHistoryParts.some((part) => part.functionCall)) {",
             "await this.chatRecordingService.recordGeneration({",
             "historyLength: null,",
             "attempt.commitGeneration(generation);",
             "recorded = true;",
-            "this.refusal = { answered, draws: refusedBefore + 1 };",
+            "this.refusal = { answered, draws: refusedBefore + 1, cause: refusal };",
             "} else {",
             "const committed = this.chatRecordingService.recordGeneration({",
             "this.history.push(accepted);",
@@ -648,7 +654,7 @@ def _validate_stream_commit_after(state: State) -> None:
         label=label,
         location=chat,
     )
-    refused_branch = source[source.index("if (refused) {") :]
+    refused_branch = source[source.index("if (refusal) {") :]
     refused_branch = refused_branch[: refused_branch.index("} else {")]
     _require(
         "this.history" not in refused_branch.replace("this.history.at(-1)", ""),
@@ -4794,7 +4800,9 @@ def _validate_compaction_budget_after(state: State) -> None:
             "if (draw === 'redraw') {",
             "if (!refusal || this.history.at(-1) !== refusal.answered) {",
             "if (refusal.draws >= MAX_GENERATION_DRAWS) {",
-            "const notice = turnRefusalNotice(turnOutputLimit(partition));",
+            "          refusal.cause === 'output_limit'\n"
+            "            ? turnRefusalNotice(turnOutputLimit(partition))\n"
+            "            : REPEATED_TOOL_PARAMETER_NOTICE;",
             "          parts.length !== 1 ||\n"
             "          Object.keys(parts[0]).length !== 1 ||\n"
             "          parts[0].text !== notice\n",
@@ -6349,24 +6357,33 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "      `A finished generation carries its terminal reason and its served prompt, "
             "output and reasoning counts, on a route that declares its context window;",
             "export function describeIncompleteGeneration(\n"
-            "  terminal: GenerationTerminal | undefined,\n"
+            "  ending: GenerationEnding | undefined,\n"
             "  turn: number,\n"
             "): string | null {",
+            # A turn ends with its terminal or with its backend's refusal,
+            # which has none; a refused turn is one or the other, and nothing
+            # else is.
+            "export type GenerationEnding = GenerationTerminal | ServedTurnRefusal;",
+            "export type RefusedTurn = GenerationTerminal | ServedTurnRefusal;",
             # The limit the model is told about is read from the rule that
             # sets it, not restated as arithmetic beside it, so the sentence
             # cannot drift from the partition: in the notice a refused turn is
             # answered with, and in the ending of a run of refusals.
             "export function refusedTurn(\n"
-            "  terminal: GenerationTerminal | undefined,\n"
-            "): GenerationTerminal | undefined {\n"
-            "  return terminal?.reason === FinishReason.MAX_TOKENS ? terminal : undefined;\n"
+            "  ending: GenerationEnding | undefined,\n"
+            "): RefusedTurn | undefined {\n"
+            "  if (ending === undefined || 'cause' in ending) return ending;\n"
+            "  return ending.reason === FinishReason.MAX_TOKENS ? ending : undefined;\n"
             "}",
-            "export function refusedTurnNotice(terminal: GenerationTerminal): string {\n"
-            "  return turnRefusalNotice(\n"
-            "    turnOutputLimit(partitionContextWindow(terminal.issued.window)),\n"
-            "  );",
+            "export function refusedTurnNotice(refused: RefusedTurn): string {\n"
+            "  return 'cause' in refused\n"
+            "    ? REPEATED_TOOL_PARAMETER_NOTICE\n"
+            "    : turnRefusalNotice(\n"
+            "        turnOutputLimit(partitionContextWindow(refused.issued.window)),\n"
+            "      );",
             "export function describeRefusedTurns(",
-            "`${turnOutputLimit(partitionContextWindow(terminal.issued.window))}-token ` +",
+            "`${turnOutputLimit(partitionContextWindow(refused.issued.window))}-token ` +",
+            "export function endedOnItsOwn(ending: GenerationEnding | undefined): boolean {",
             # Where the generation stood is read from what the turn produced:
             # a call its limit stopped, carried as served, outranks any text,
             # and whitespace is not a message.
@@ -6391,18 +6408,21 @@ def _validate_incomplete_generation_after(state: State) -> None:
         ),
         label=label,
     )
-    # A run of refusals ends with the numbers of its last, as the last of
-    # MAX_GENERATION_DRAWS turns in a row refused at their limit.
+    # A run of refusals ends with why its last was refused, as the last of
+    # MAX_GENERATION_DRAWS turns in a row refused: the backend's refusal as it
+    # was served, or the numbers of a turn its limit stopped.
     _require_ordered(
         turn_source,
         (
             "export function describeRefusedTurns(",
-            "limit on ${MAX_GENERATION_DRAWS} turns in a row. A turn refused at its ",
-            "limit is asked for again, told why, and ${MAX_GENERATION_DRAWS} ",
-            "refusals in a row end the run. The last, turn ${turn}, was issued at a ",
-            "${terminal.issued.promptTokens}-token prompt and generated ",
-            "of them reasoning. ",
-            "${describeGenerationPosition(terminal.position)} ${INCOMPLETE_RUN_LEAVES}",
+            "the backend refused: ` +",
+            "${JSON.stringify(refused.message)} Nothing of it was made, and the ` +",
+            "limit: it was issued at a ${refused.issued.promptTokens}-token ` +",
+            "of them reasoning. ` +",
+            "${describeGenerationPosition(refused.position)}",
+            "`The turn was refused ${MAX_GENERATION_DRAWS} times in a row. A refused ` +",
+            "`turn is asked for again, told why, and ${MAX_GENERATION_DRAWS} ` +",
+            "`refusals in a row end the run. ${last} ${INCOMPLETE_RUN_LEAVES}`",
         ),
         label=label,
         location=turn,
@@ -6411,9 +6431,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
         turn_source,
         (
             "export function describeIncompleteGeneration(",
-            "if (terminal?.reason === FinishReason.STOP) {",
+            "if (endedOnItsOwn(ending)) {",
             "return null;",
-            "const refused = refusedTurn(terminal);",
+            "const refused = refusedTurn(ending);",
             "return describeRefusedTurns(refused, turn);",
             "terminal === undefined",
             "ended with no terminal reason, so nothing ",
@@ -6461,9 +6481,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
         state,
         cli,
         (
-            "let lastGenerationTerminal: GenerationTerminal | undefined;",
+            "let lastGenerationEnding: GenerationEnding | undefined;",
             "const incompleteGeneration = describeIncompleteGeneration(\n"
-            "                lastGenerationTerminal,\n"
+            "                lastGenerationEnding,\n"
             "                turnCount,\n"
             "              );",
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
@@ -6472,14 +6492,18 @@ def _validate_incomplete_generation_after(state: State) -> None:
     )
     _require(
         cli_source.count(
-            "lastGenerationTerminal = generationTerminal(\n"
+            "lastGenerationEnding = generationTerminal(\n"
         ) == 2
-        and cli_source.count("event.value.usageMetadata,\n") == 2,
-        f"{label}: the main-turn and drain loops do not both record the terminal with the served usage it belongs to",
+        and cli_source.count("event.value.usageMetadata,\n") == 2
+        and cli_source.count(
+            "if (event.type === GeminiEventType.TurnRefused) {"
+        ) == 2
+        and cli_source.count("lastGenerationEnding = event.value;") == 2,
+        f"{label}: the main-turn and drain loops do not both record how the turn ended, a terminal with the served usage it belongs to or the backend's refusal",
     )
     _require(
-        cli_source.count("lastGenerationTerminal = undefined;") == 2,
-        f"{label}: a turn head can inherit a stale terminal, or its numbers",
+        cli_source.count("lastGenerationEnding = undefined;") == 2,
+        f"{label}: a turn head can inherit a stale ending, or its numbers",
     )
     # Both loops ask the one predicate whether the turn they just read was
     # refused at its limit, and answer it the same way: the notice, written to
@@ -6504,7 +6528,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
     )
     forbid_text(state, recording, "type === 'user'\n          ? 'real_user'", label=label)
     _require(
-        cli_source.count("refusedTurn(lastGenerationTerminal);") == 2
+        cli_source.count("refusedTurn(lastGenerationEnding);") == 2
         and cli_source.count("await noticeForRefusedTurn(") == 2
         and cli_source.count("if (!refused) {\n              consecutiveTurnRefusals = 0;") == 1
         and cli_source.count("if (!itemRefused) {\n                    consecutiveTurnRefusals = 0;") == 1,
@@ -6519,21 +6543,21 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "consecutiveTurnRefusals += 1;",
             "if (consecutiveTurnRefusals >= MAX_GENERATION_DRAWS) {",
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
-            "message: describeRefusedTurns(terminal, turnCount),",
-            "const parts: Part[] = [{ text: refusedTurnNotice(terminal) }];",
+            "message: describeRefusedTurns(refused, turnCount),",
+            "const parts: Part[] = [{ text: refusedTurnNotice(refused) }];",
             ".recordMidTurnUserMessage(parts, 'system');",
             "return parts;",
             "if (redrawRefusedTurn) {",
             "sendType = SendMessageType.Redraw;",
             "redrawRefusedTurn = false;",
-            "const refused = refusedTurn(lastGenerationTerminal);",
+            "const refused = refusedTurn(lastGenerationEnding);",
             "consecutiveFinalMessageSlips = 0;",
             "if (refused) {",
             "redrawRefusedTurn = true;",
             "let itemRedraw = false;",
             "? SendMessageType.Redraw",
             "itemRedraw = false;",
-            "const itemRefused = refusedTurn(lastGenerationTerminal);",
+            "const itemRefused = refusedTurn(lastGenerationEnding);",
             "if (itemRefused) {",
             "itemRedraw = true;",
         ),
@@ -6594,8 +6618,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
         state,
         agent_core,
         (
-            "let roundTerminal: GenerationTerminal | undefined;",
-            "roundTerminal = generationTerminal(\n"
+            "let roundEnding: GenerationEnding | undefined;",
+            "roundEnding = streamEvent.servedRefusal;",
+            "roundEnding = generationTerminal(\n"
             "                chunkFinishReason,\n"
             "                resp.usageMetadata,",
             "generationPosition(roundText, roundIncompleteToolCalls),",
@@ -6607,9 +6632,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
     _require_ordered(
         agent_core_source,
         (
-            "roundTerminal = undefined;",
-            "roundTerminal = generationTerminal(",
-            "describeIncompleteGeneration(roundTerminal, this.reasoningTurnsUsed)",
+            "roundEnding = undefined;",
+            "roundEnding = generationTerminal(",
+            "describeIncompleteGeneration(roundEnding, this.reasoningTurnsUsed)",
             "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
         ),
         label=label,
@@ -6629,7 +6654,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "const responseStream = redrawRefusedRound",
             "? await chat.redrawRefusedTurn(roundModel, messageParams, promptId)",
             "redrawRefusedRound = false;",
-            "const refusedRound = refusedTurn(roundTerminal);",
+            "const refusedRound = refusedTurn(roundEnding);",
             "consecutiveTurnRefusals = 0;",
             "} else if (refusedRound) {",
             "consecutiveTurnRefusals += 1;",
@@ -6652,7 +6677,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
     require_text(
         state,
         subagent_result,
-        "reason = `was cut off mid-generation${turns}`;",
+        "reason = `ended on a generation that was cut off or refused${turns}`;",
         label=label,
     )
 
@@ -6674,6 +6699,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
         "answers a turn that reached its limit with the notice for the room its window gives a turn",
         "refuses no turn stopped by %s",
         "refuses no turn that has no terminal",
+        "is refused, and answered with the notice that names no text the model wrote",
+        "ends a run of refusals with the backend refusal it ended on, and no numbers it did not serve",
         "names the prompt, the limit and the output, reasoning included, when a generation reached its limit",
         "names the call a limit stopped, what was served of it and where it is kept, and never calls it a text prefix",
         "counts every call a limit stopped and names one the provider left unnamed",
@@ -6721,6 +6748,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
     for name in (
         "asks for the refused turn again, told why, as the next turn, and continues the run",
         "ends the run on the refusal that makes ${MAX_GENERATION_DRAWS} in a row, as error_incomplete_generation naming the limit",
+        "asks for a turn the backend refused again, told why as the runtime, and continues the run",
+        "ends the run on the refusal that makes ${MAX_GENERATION_DRAWS} in a row, of either cause, naming the last",
         "counts only refusals in a row: a turn that is not refused starts the count again",
         "charges every redraw to the turn budget before it is issued",
         "asks for a refused drain turn again in the drain loop, as a redraw of the same item",
@@ -6729,6 +6758,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
     for name in (
         "stops the agent at once when its generation was stopped for a reason other than its limit",
         "asks for a round refused at its limit again, told why, and stops the agent on the refusal that makes ${MAX_GENERATION_DRAWS} in a row",
+        "asks for a round the backend refused again, told why, and stops the agent on the refusal that makes ${MAX_GENERATION_DRAWS} in a row",
         "takes the report from a redraw that ends on its own",
     ):
         require_text(
@@ -7065,7 +7095,7 @@ def _validate_final_message_slip_after(state: State) -> None:
         label=label,
     )
     _require(
-        cli_source.count("lastGenerationTerminal?.reason === FinishReason.STOP") == 2,
+        cli_source.count("endedOnItsOwn(lastGenerationEnding)") == 2,
         f"{label}: both reasoning loops must read a slip only from a turn the "
         "model ended itself",
     )
@@ -7083,7 +7113,7 @@ def _validate_final_message_slip_after(state: State) -> None:
         cli_source,
         (
             "return emitLoopDetectedResult();",
-            "lastGenerationTerminal?.reason === FinishReason.STOP",
+            "endedOnItsOwn(lastGenerationEnding)",
             "? describeFinalMessageSlip(turnText)",
             "await noticeForFinalMessageSlip(",
             "hasUnsentContinuation = true;",
@@ -8403,7 +8433,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "if (streamError) throw streamError.error;",
+            "if (streamError && !servedRefusal) throw streamError.error;",
             "assertOneToolCallPerTurn(consolidatedHistoryParts);",
             "const committed = this.chatRecordingService.recordGeneration({",
             "this.history.push(accepted);",

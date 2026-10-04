@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `5803efd30534581fd912a99d3fd12ab7337715ae23a744ca57db2a04be12a72d`
+- Review-diff SHA-256: `35be7796a62898224e3dc199774e592e779c8e8fe84ca43d104a0946e1bef883`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `dd0da89a240a582fe37d36690f171958e2b1b4bc1d84cfb966d7360e95ecf4c5`
+- Transformer-manifest SHA-256: `e6354ab07919ced053f8ba082e210e89118ae5595c7c3378058b81e07e31f401`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -76,23 +76,30 @@ history never rewrites an argument from the current plan file. Operational
 tool-call telemetry can omit a structured answer payload; that diagnostic
 projection is never a conversation turn.
 
-A turn refused at its limit is drawn again, told why, as the next turn, in the
-headless session and every subagent alike, the way a refused compaction draw is
-drawn again. The chat names the message the refused draw answered and admits
-one kind of send against it, `redrawRefusedTurn`: its whole message is the
-refusal notice, in upstream's `<system-reminder>` envelope and in the voice a
-refused compaction draw is told in -- the answer reached its limit before it was
-complete, is not in the conversation and ran nothing, and the next should reason
-more briefly and write a long file in parts -- and it joins the conversation on
-that message, so the redraw is the refused request with the notice added,
-rendered from the history as every request is, never compacted in between and
-joined by no reminder, context or hook. Every draw is a turn, charged to the
-turn budget and billed in the record like any other. `MAX_GENERATION_DRAWS`, the
-one bound every refused answer is drawn under, ends the run on the fourth
-refusal in a row as the incomplete-generation state, with the limit and the last
-draw's numbers; a generation stopped for any other reason is not drawn again
-and is that state at once. One predicate in core (`refusedTurn`) decides it for
-both reasoning loops.
+A refused turn is drawn again, told why, as the next turn, in the headless
+session and every subagent alike, the way a refused compaction draw is drawn
+again. A turn is refused for reaching its limit, or because the backend refused
+it: a call that names one parameter twice is answered with the backend's typed
+refusal, `RepeatedToolParameterError`, inside the stream, which publishes no
+call and serves no usage. The chat names the message the refused draw answered,
+and why it was refused, and admits one kind of send against it,
+`redrawRefusedTurn`: its whole message is the refusal notice for that cause, in
+upstream's `<system-reminder>` envelope and in the voice a refused compaction
+draw is told in -- the answer reached its limit before it was complete, or a
+tool call in it named one parameter more than once; it is not in the
+conversation and ran nothing; and the next should reason more briefly and write
+a long file in parts, or name each parameter once -- and it joins the
+conversation on that message, so the redraw is the refused request with the
+notice added, rendered from the history as every request is, never compacted in
+between and joined by no reminder, context or hook. The notice is recorded as
+the runtime's (`system`), which wrote it. Every draw is a turn, charged to the
+turn budget and billed in the record with the usage its response served, none
+for a refused response. `MAX_GENERATION_DRAWS`, the one bound every refused
+answer is drawn under, ends the run on the fourth refusal in a row, of either
+cause, as the incomplete-generation state, naming why the last was refused; a
+generation stopped for any other reason is not drawn again and is that state at
+once. One predicate in core (`refusedTurn`) decides it for both reasoning
+loops.
 
 A turn the model ended itself with no tool call is its final answer only when
 its visible text is one. A message with no visible text, or one carrying the

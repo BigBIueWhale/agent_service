@@ -3348,6 +3348,95 @@ mod tests {
         rows
     }
 
+    const BACKEND_REFUSAL: &str =
+        "The model's call to 'audit_probe' names parameter 'value' more than once.";
+    /// Rewrite the fixture's one response body and bind its end record to it.
+    fn rewrite_body(rows: &mut [serde_json::Value], edit: impl FnOnce(&str) -> String) {
+        let body = rows
+            .iter()
+            .position(|row| {
+                row["type"] == "model_response" && row["response"]["event"]["kind"] == "body"
+            })
+            .unwrap();
+        let raw = String::from_utf8(
+            STANDARD
+                .decode(rows[body]["response"]["event"]["base64"].as_str().unwrap())
+                .unwrap(),
+        )
+        .unwrap();
+        let bytes = edit(&raw);
+        rows[body]["response"]["event"]["base64"] = serde_json::json!(STANDARD.encode(&bytes));
+        let end = rows
+            .iter()
+            .position(|row| {
+                row["type"] == "model_response" && row["response"]["event"]["kind"] == "end"
+            })
+            .unwrap();
+        rows[end]["response"]["event"]["body_bytes"] = serde_json::json!(bytes.len());
+        rows[end]["response"]["event"]["body_sha256"] =
+            serde_json::json!(crate::generation::sha256(bytes.as_bytes()));
+    }
+    /// The fixture's turn as one its backend refused: after the reasoning, the
+    /// stream ends in the refusal's error payload, with no terminal, no usage
+    /// and no call. The client records the response as failing with that
+    /// refusal, the runtime refuses the turn, and the turn shows what the
+    /// model wrote. Four refusals in a row end the run, so the root ends in
+    /// error.
+    fn backend_refused_draw(error_type: &str) -> Vec<serde_json::Value> {
+        let mut rows = fixture();
+        rows.retain(|row| row["type"] != "stream_event");
+        rewrite_body(&mut rows, |raw| {
+            let first = raw.split("\n\n").next().unwrap();
+            let refusal = serde_json::json!({"error":{"message":BACKEND_REFUSAL,
+                "type":error_type,"param":null,"code":422}});
+            format!("{first}\n\ndata: {refusal}\n\ndata: [DONE]\n\n")
+        });
+        let outcome = rows
+            .iter()
+            .position(|row| row["response"]["event"]["kind"] == "outcome")
+            .unwrap();
+        let event = &mut rows[outcome]["response"]["event"];
+        event["status"] = serde_json::json!("failed");
+        event["error"] =
+            serde_json::json!(format!("RepeatedToolParameterRefusal: {BACKEND_REFUSAL}"));
+        event["served_usage"] = serde_json::Value::Null;
+        event["sdk_values_seen"] = serde_json::json!(1);
+        event["pipeline_outputs_delivered"] = serde_json::json!(1);
+        rewrite_generation(&mut rows, |envelope| {
+            envelope["finish_reason"] = serde_json::Value::Null;
+            envelope["usage"] = serde_json::Value::Null;
+            envelope["observations"].as_array_mut().unwrap().truncate(1);
+        });
+        let history = rows
+            .iter()
+            .position(|row| row["response"]["event"]["kind"] == "history")
+            .unwrap();
+        rows[history]["response"]["event"]["disposition"] = serde_json::json!("abandoned");
+        let completion = position(&rows, "model_attempt_completion");
+        rows[completion]["completion"]["disposition"] = serde_json::json!("refused");
+        rows[completion]["completion"]["consumer_observations"] = serde_json::json!(1);
+        let session = rows[0]["session_id"].clone();
+        let display = shown_rows(&rows);
+        rows.splice(
+            display[0]..=display[display.len() - 1],
+            [shown(
+                &session,
+                "refused-0",
+                serde_json::json!([{"type":"thinking","thinking":"  **raw thought**\n"}]),
+                serde_json::Value::Null,
+                serde_json::Value::Null,
+            )],
+        );
+        let terminal = rows.last_mut().unwrap();
+        terminal.as_object_mut().unwrap().remove("result");
+        terminal["subtype"] = serde_json::json!("error_incomplete_generation");
+        terminal["is_error"] = serde_json::json!(true);
+        terminal["error"] = serde_json::json!({"message":"the backend refused the turn"});
+        terminal["usage"] = serde_json::json!({"requests":1,"usageReports":0,
+            "unfinalizedRequests":0,"unreportedUsageRequests":1,"usage":null});
+        rows
+    }
+
     #[test]
     fn the_wire_fixture_is_a_complete_stream_of_the_compiled_contract() {
         let rows: Vec<serde_json::Value> =
@@ -3592,8 +3681,8 @@ mod tests {
             .unwrap();
         accepted_history[history]["response"]["event"]["disposition"] = serde_json::json!("accepted");
         for (name, rows, cause) in [
-            ("finished turn", stopped, "a refused draw must stop at its output limit without a call"),
-            ("executable call", called, "a refused draw must stop at its output limit without a call"),
+            ("finished turn", stopped, "a refused draw must stop at its output limit, or end in its backend's refusal, without a call"),
+            ("executable call", called, "a refused draw must stop at its output limit, or end in its backend's refusal, without a call"),
             ("partial delivery", partial_delivery, "consumer receipt contradicts"),
             ("other usage", other_usage, "completed turn usage contradicts its physical response"),
             ("history acceptance", accepted_history, "logical disposition contradicts physical history decisions"),
@@ -3602,6 +3691,59 @@ mod tests {
             assert_eq!(index, completion(&rows), "{name}: {refusal}");
             assert!(refusal.contains(cause), "{name}: {refusal}");
         }
+    }
+
+    #[test]
+    fn a_draw_its_backend_refused_shows_what_it_wrote_and_certifies_with_no_usage() {
+        let rows = backend_refused_draw("RepeatedToolParameterError");
+        let result = first_refusal(&rows).unwrap();
+        assert!(result.is_error);
+        assert_eq!(result.subtype, "error_incomplete_generation");
+        // The response served no usage, so the draw bills none.
+        assert!(result.usage.usage.is_none());
+        let mut reader = owner();
+        for row in &rows {
+            admit(&mut reader, &row.to_string()).unwrap();
+        }
+        assert!(reader.tool_uses.is_empty(), "a refused draw issues no tool");
+    }
+
+    #[test]
+    fn a_backend_refusal_is_read_from_the_bytes_that_carry_it() {
+        let outcome = |rows: &[serde_json::Value]| {
+            rows.iter()
+                .position(|row| row["response"]["event"]["kind"] == "outcome")
+                .unwrap()
+        };
+        // Recorded as the refusal, but the bytes end in another failure.
+        let other_failure = backend_refused_draw("InternalServerError");
+        // The bytes end in the refusal, but it was recorded as another failure.
+        let mut renamed = backend_refused_draw("RepeatedToolParameterError");
+        let index = outcome(&renamed);
+        renamed[index]["response"]["event"]["error"] = serde_json::json!("Error: refused");
+        for (name, rows) in [
+            ("other failure", other_failure),
+            ("renamed refusal", renamed),
+        ] {
+            let (index, refusal) = first_refusal(&rows).expect_err(name);
+            assert_eq!(index, outcome(&rows), "{name}: {refusal}");
+            assert!(
+                refusal.contains("the response's recorded refusal differs from its physical bytes"),
+                "{name}: {refusal}"
+            );
+        }
+        // A completion that claims refusal for a response that ended in
+        // another failure, recorded as that failure, is no refused draw.
+        let mut failed = backend_refused_draw("InternalServerError");
+        let index = outcome(&failed);
+        failed[index]["response"]["event"]["error"] = serde_json::json!("Error: refused");
+        let completion = position(&failed, "model_attempt_completion");
+        let (index, refusal) = first_refusal(&failed).expect_err("failed draw");
+        assert_eq!(index, completion, "{refusal}");
+        assert!(
+            refusal.contains("a refused draw must stop at its output limit, or end in its backend's refusal, without a call"),
+            "{refusal}"
+        );
     }
 
     #[test]

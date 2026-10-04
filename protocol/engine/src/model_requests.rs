@@ -278,6 +278,15 @@ fn nonstream_json_value(body: &[u8]) -> Option<serde_json::Value> {
     serde_json::from_str(&String::from_utf8_lossy(second)).ok()
 }
 
+/// The type the backend gives its refusal of a turn whose call names one
+/// parameter twice: an error payload ending the stream, after which the SDK
+/// yields nothing. The client's `REPEATED_TOOL_PARAMETER_ERROR`.
+const REPEATED_TOOL_PARAMETER_ERROR: &str = "RepeatedToolParameterError";
+
+/// How the client names a response that failed with that refusal: its
+/// outcome's error opens with the client's `REPEATED_TOOL_PARAMETER_REFUSAL`.
+const REPEATED_TOOL_PARAMETER_REFUSAL: &str = "RepeatedToolParameterRefusal: ";
+
 /// The lead every refusal notice opens with, the client's `REFUSED_ANSWER`
 /// (`generation-refusal.ts`, pinned by the transformer's contract). No
 /// compaction directive opens with it.
@@ -446,6 +455,23 @@ impl ResponseValues {
         }
     }
 
+    /// Whether a successful streamed body ends in the backend's refusal of
+    /// its turn right after the `seen` values the SDK yielded.
+    fn refused(&self, seen: u64, status: Option<u64>, transport_eof: bool) -> bool {
+        if !status.is_some_and(|status| (200..300).contains(&status)) {
+            return false;
+        }
+        match self {
+            Self::Stream(values) => {
+                let settled = values.eof_tail(transport_eof);
+                settled.failed
+                    && settled.count == seen
+                    && settled.error_type.as_deref() == Some(REPEATED_TOOL_PARAMETER_ERROR)
+            }
+            Self::Nonstream(_) => false,
+        }
+    }
+
     fn require_prefix(
         &self,
         seen: u64,
@@ -501,6 +527,8 @@ struct SseValues {
     usage_reports: Vec<(u64, ServedUsage)>,
     retain_values: bool,
     failed: bool,
+    /// The type the provider gave the error payload that ended the values.
+    error_type: Option<String>,
     done: bool,
     after_cr: bool,
 }
@@ -537,6 +565,7 @@ impl SseValues {
             usage_reports: Vec::new(),
             retain_values: false,
             failed: self.failed,
+            error_type: self.error_type.clone(),
             done: self.done,
             after_cr: self.after_cr,
         };
@@ -627,6 +656,11 @@ impl SseValues {
             .as_deref()
             .is_some_and(|event| event.starts_with("thread."));
         if ordinary && value.get("error").is_some_and(js_truthy) {
+            self.error_type = value
+                .get("error")
+                .and_then(|error| error.get("type"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string);
             self.failed = true;
             return;
         }
@@ -804,7 +838,8 @@ pub(crate) struct GenerationAdmission {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Disposition {
     Accepted,
-    /// A turn the provider completed at its output limit and the runtime refused.
+    /// A turn the runtime refused and draws again: one the provider completed
+    /// at its output limit, or one its backend refused.
     Refused,
     Abandoned,
 }
@@ -819,6 +854,8 @@ pub(crate) struct ResponseOutcome {
     pub scope: String,
     pub usage: Option<ServedUsage>,
     pub completed: bool,
+    /// The response failed with the backend's refusal of its turn.
+    pub refused: bool,
     pub pipeline_outputs_delivered: u64,
     pub sdk_values_seen: u64,
 }
@@ -1910,7 +1947,8 @@ impl ModelRequests {
                 }
             }
             "outcome" => {
-                let completed = text(event, "status", line)? == "completed";
+                let status = text(event, "status", line)?;
+                let completed = status == "completed";
                 if completed && state.decoded_failure.is_some() {
                     return Err(refusal(
                         "completed response contains a failed decode observation",
@@ -1990,6 +2028,25 @@ impl ModelRequests {
                         "served usage differs from processed physical response bytes",
                     ));
                 }
+                // The client names a failure by the backend's refusal exactly
+                // when the bytes end in that refusal after the values it saw.
+                let failed = status == "failed";
+                let refused = failed
+                    && field(event, "error", line)?
+                        .as_str()
+                        .is_some_and(|error| error.starts_with(REPEATED_TOOL_PARAMETER_REFUSAL));
+                if refused
+                    != (failed
+                        && values.refused(
+                            sdk_values_seen,
+                            state.http_status,
+                            state.termination.as_deref() == Some("eof"),
+                        ))
+                {
+                    return Err(refusal(
+                        "the response's recorded refusal differs from its physical bytes",
+                    ));
+                }
                 // Exact served usage is the client's only decode mode: a
                 // generation response (chat or utility-owned; `state.utility`
                 // marks a tokenizer or embedding call, which serves none)
@@ -2015,6 +2072,7 @@ impl ModelRequests {
                     scope: state.scope.clone(),
                     usage: recorded_usage,
                     completed,
+                    refused,
                     pipeline_outputs_delivered,
                     sdk_values_seen,
                 });
@@ -2463,12 +2521,21 @@ impl ModelRequests {
                 "consumer receipt contradicts decoded output or generation observations",
             ));
         }
+        // A turn the backend refused served no usage, so it bills none; every
+        // other turn bills exactly the usage its completed response served.
+        let refused_by_backend = disposition == Disposition::Refused && final_outcome.refused;
         match disposition {
             Disposition::Accepted => generation.require_accepted()?,
-            Disposition::Refused => generation.require_refused()?,
+            Disposition::Refused => generation.require_refused(refused_by_backend)?,
             Disposition::Abandoned => {}
         }
-        if turn && (!final_outcome.completed || final_outcome.usage != generation.usage) {
+        if turn
+            && if refused_by_backend {
+                final_outcome.usage.is_some()
+            } else {
+                !final_outcome.completed || final_outcome.usage != generation.usage
+            }
+        {
             return Err(refusal(
                 "completed turn usage contradicts its physical response",
             ));
@@ -3318,6 +3385,7 @@ mod tests {
                                 scope: generation.origin.scope.clone(),
                                 usage: None,
                                 completed: false,
+                                refused: false,
                                 pipeline_outputs_delivered: earlier_outputs,
                                 sdk_values_seen: 0,
                             },
@@ -3328,6 +3396,7 @@ mod tests {
                                 scope: generation.origin.scope.clone(),
                                 usage: generation.usage,
                                 completed: true,
+                                refused: false,
                                 pipeline_outputs_delivered: generation.observation_count
                                     + u64::from(extra_final_output),
                                 sdk_values_seen: 0,

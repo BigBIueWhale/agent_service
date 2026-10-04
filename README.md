@@ -275,9 +275,9 @@ call it answers.
 
 `A` is the room the window keeps above the trigger for what a request adds to
 the prompt it was admitted at, and it is a capacity proved the same way. Two
-requests stand on an admitted prompt. A turn refused at its limit is drawn again
-on it with the notice of each refusal added: three notices at most, each 343
-bytes framed in 61, 1,212. The request that compacts it carries that prompt,
+requests stand on an admitted prompt. A refused turn is drawn again on it with
+the notice of each refusal added: three notices at most, each at most 343 bytes
+framed in 61, 1,212. The request that compacts it carries that prompt,
 those notices included, with the snapshot's declaration after the turn's tools,
 786, and the directive, 654 — 1,440, counted by the startup proof in the shape
 every compaction request carries them, with the directive stating the widest
@@ -840,8 +840,11 @@ stop_reason, usage}`): one block kind per message in production order --
 `incomplete_tool_use` -- with usage on the last message only and `stop_reason`
 `"tool_use"` exactly when every block is a call. The rows are derived from the
 admitted generation, and the native certifier refuses any row that differs, is
-missing, is extra or is out of place. A `refused` turn is one the provider completed at its output limit
-with no executable call: it never enters history and is drawn again. An
+missing, is extra or is out of place. A `refused` turn is one the runtime draws again, with no
+executable call: the provider completed it at its output limit, or the backend
+refused it -- its response ended in the backend's typed refusal of a call that
+named one parameter twice, having served no terminal and no usage, so its last
+row carries none. It never enters history. An
 `abandoned` attempt is evidence only and shows no row. Assistant rows and
 partial `stream_event`s carry no origin field; a partial belongs to the latest
 chat request in its scope. A runtime-authored answer is a
@@ -896,8 +899,9 @@ run instead, one name per state:
 `error_during_execution` when the run failed on its own terms, `error_max_turns`
 when the turn budget ran out, `error_loop_detected` when the loop detector halted
 a run that had stopped making progress, `error_incomplete_generation` when the last
-generation did not end on its own -- its turn refused at its limit on every draw
-a turn is given, or stopped for another reason, which is not asked for again --
+generation did not end as a usable turn -- its turn refused on every draw a turn
+is given, at its limit or by the backend, or stopped for another reason, which is
+not asked for again --
 `error_slipped_final_message` when the model ended three
 consecutive turns with a message that was not a final answer after being told
 twice, `error_missing_deliverables` when the model wrote its final message but a
@@ -1014,13 +1018,22 @@ in the conversation and nothing it called was run, and to reason more briefly
 and write a long file in parts. Nothing compacts between a refusal and its
 redraw, and nothing else joins it. Each draw is a turn: charged to the turn
 budget, billed, and recorded as it was served, the refused one with its
-`incomplete_tool_use` block and the notice as a `user` record. Four draws of a
-turn in a row that reach the limit -- the bound every refused answer is drawn
-under, a compaction's snapshot draws included -- end the run as
-`error_incomplete_generation`: a limit that keeps being reached is a turn that will not fit, or reasoning that
-has degenerated, and the run says so loudly rather than drawing again. The
-record names the limit and the prompt the last refused generation was issued
-at, and what it generated, reasoning included; a generation stopped for any
+`incomplete_tool_use` block and the notice as a `system`-authored record. A turn
+the backend refuses is drawn again the same way, on the same bound. The backend
+refuses a turn whose call names one parameter twice, which a call's arguments
+cannot hold, with a typed 422 inside the stream, `RepeatedToolParameterError`,
+naming the call and the parameter; it publishes no call and serves no usage, so
+nothing of the turn is made or billed, and the redraw is told, in the same
+envelope and voice, that a tool call in its answer named one parameter more than
+once and to name each once. The notice names neither, so it carries no text the
+model wrote. Four refused draws of a turn in a row, of either cause -- the bound
+every refused answer is drawn under, a compaction's snapshot draws included --
+end the run as `error_incomplete_generation`: a limit that keeps being reached is
+a turn that will not fit, or reasoning that has degenerated, a repeat that keeps
+being written is a call the model will not write once, and the run says so
+loudly rather than drawing again. The record names why the last draw was
+refused: the limit, the prompt it was issued at and what it generated, reasoning
+included, or the backend's refusal as served; a generation stopped for any
 other reason ends the run at once, with its reason. Either says what the stop
 cost, from what the generation was writing: a call the model had not completed,
 which was not made and whose served arguments the turn's `incomplete_tool_use`
