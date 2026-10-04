@@ -118,8 +118,9 @@ and never in its place. One core module (`describeFinalMessageSlip`,
 `finalMessageSlipNotice`, `FINAL_MESSAGE_SLIP_LIMIT`) decides it for both
 reasoning loops by an exact string test on the turn's visible text; no judgment
 about task completion is made, and the removed next-speaker check does not
-return. The notice reaches the stream as a user record, the session recording as
-a mid-turn user record, and a subagent's transcript under its own input kind; the
+return. The notice reaches the model in the next request body, which is the
+record; the session recording carries it as a mid-turn message the system wrote
+rather than the user, and a subagent's transcript under its own input kind; the
 subagent's terminal event carries the shape of the slip and the number of
 notices, and its parent is told the assignment is unfinished.
 
