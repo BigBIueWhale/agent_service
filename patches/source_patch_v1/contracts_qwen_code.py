@@ -3554,6 +3554,37 @@ def _validate_literal_response_after(state: State) -> None:
     for path in state:
         for retired in _RETIRED_ARGUMENT_DISPLACEMENT:
             forbid_text(state, path, retired, label=label)
+    # A request carries the history as it was committed. Upstream's converter
+    # dropped a call nothing answered, a result not beside its call, and a
+    # turn left empty by either, and merged consecutive model turns into one;
+    # its chat wrote a result for an unanswered call on every send and when a
+    # chat started, moved stray results and dropped duplicates. Each rewrites
+    # what the model wrote, or puts runtime text where the world's result
+    # belongs, and none has anything to do in the service's deployment: a
+    # turn that leaves a call unanswered ends the run, compaction keeps each
+    # call with its result, a refused turn commits nothing, and the scheduler
+    # answers every call by its id. A history that did pair a call with no
+    # result is refused by the server, naming the message, before the model
+    # reads it. Session recovery keeps the free function for its declared,
+    # recorded repair when a crashed session is resumed; nothing else calls it.
+    converter = core + "core/openaiContentGenerator/converter.ts"
+    for symbol in (
+        "cleanOrphanedToolCalls",
+        "cleanOrphanToolCalls",
+        "mergeConsecutiveAssistantMessages",
+    ):
+        forbid_text(state, converter, symbol, label="history sent as committed")
+    forbid_text(
+        state,
+        core + "core/client.ts",
+        "repairOrphanedToolUseTurns",
+        label="history sent as committed",
+    )
+    _require(
+        chat_source.count("repairOrphanedToolUseTurns") == 1,
+        "history sent as committed: packages/core/src/core/geminiChat.ts uses "
+        "the orphan repair beyond defining it for session recovery",
+    )
 
 
 def _validate_no_repair_validation_before(state: State) -> None:
@@ -4828,7 +4859,6 @@ def _validate_compaction_budget_after(state: State) -> None:
     for added in (
         "tryCompress",
         "takePendingManualPlanExitNotice",
-        "repairOrphanedToolUseTurns",
     ):
         _require(
             added not in redraw_branch,
@@ -12435,11 +12465,14 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         rationale=(
             "Visible text and reasoning retain their original bytes through stream, history, and "
             "recording, including XML-like text beside real structured calls. Execution depends on "
-            "validated structured calls rather than text classification."
+            "validated structured calls rather than text classification. A request carries the "
+            "history's calls and results as they were committed: no layer between history and "
+            "request drops, writes or moves a call or a result, or merges two model turns into one."
         ),
         removal_condition=(
             "Upstream preserves arbitrary literal response text with the same strict executable-call "
-            "separation."
+            "separation, and sends committed history without repairing, merging or dropping calls, "
+            "results or model turns."
         ),
         validate_before=_validate_literal_response_before,
         validate_after=_validate_literal_response_after,

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `35be7796a62898224e3dc199774e592e779c8e8fe84ca43d104a0946e1bef883`
+- Review-diff SHA-256: `fc263083ceb07b9abb8e9443862a6139391bd763bb9c429369e45b35151adce1`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `e6354ab07919ced053f8ba082e210e89118ae5595c7c3378058b81e07e31f401`
+- Transformer-manifest SHA-256: `8cabf9f6d8d95de1c6d0e6622f0b789f2ccb5bdac236a9cb23dd6138b88469cf`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -75,6 +75,18 @@ through tool completion, ordinary resume, indexed restore, and fork. Loading
 history never rewrites an argument from the current plan file. Operational
 tool-call telemetry can omit a structured answer payload; that diagnostic
 projection is never a conversation turn.
+
+A request carries that history as it was committed: each history content
+becomes its own messages, and nothing between history and request drops a call
+no result answers, drops or moves a result, writes a result for an unanswered
+call, or merges consecutive model turns into one. No headless path sends again
+after leaving a call unanswered -- such a turn ends the run, compaction keeps
+each call with its result, a refused turn commits nothing, and the scheduler
+answers every call by its id -- and a history that did pair a call with no
+result is refused by the backend, naming the message, before the model reads
+it. The one place a result is written for a call is session recovery's
+declared repair of a crashed session's unanswered call, and the service has no
+resume.
 
 A refused turn is drawn again, told why, as the next turn, in the headless
 session and every subagent alike, the way a refused compaction draw is drawn
