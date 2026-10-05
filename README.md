@@ -108,8 +108,8 @@ vision-capable model logs 21.34 GiB of loaded model memory. After hybrid-state
 paging and alignment, its explicit 6.45 GiB cache reservation provides 264,115
 cache tokens, only 1,971 above the native limit. CUDA graphs remain enabled. The
 vision encoder temporarily receives the already reserved 1,024 MiB TurboQuant
-workspace plus 640 MiB fixed headroom without changing cache capacity, text-prefill
-chunking, weight precision, image precision, or the context window.
+workspace without changing cache capacity, text-prefill chunking, weight precision,
+image precision, or the context window.
 
 Accordingly, the only honest quality-first maximum on this GPU is native 262,144.
 The exact final backend proved a 262,143-token prompt plus one output token with all

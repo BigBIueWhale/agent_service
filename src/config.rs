@@ -1107,7 +1107,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         "TRANSFORMERS_OFFLINE=1",
         "VLLM_DEBUG_WORKSPACE=1",
         "VLLM_ENFORCE_STRICT_TOOL_CALLING=1",
-        "VLLM_QWEN38_VISION_HEADROOM_BYTES=671088640",
         "GLOO_SOCKET_IFNAME=lo",
         "NCCL_SOCKET_IFNAME=lo",
     ];
