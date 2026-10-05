@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `a79e5ace1d5dd74337f6aec3e7550957b76f19d44f3f6118b48e1d0ea24127ee`
+- Review-diff SHA-256: `6a4831ee3e099a74c9121a0c890519aaa5ae0ad1968607485e5adee00112175e`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `98a27920a3ec4f9d32bacc77f6e9bc3ac541133383bdfe06ca814db5fd9f34ec`
+- Transformer-manifest SHA-256: `dc4147d1bf1c0a6b014a11c596c656e5f23efcbdbdea9608b2f813ad47ca6502`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -76,15 +76,17 @@ history never rewrites an argument from the current plan file. Operational
 tool-call telemetry can omit a structured answer payload; that diagnostic
 projection is never a conversation turn.
 
-A request carries that history as it was committed: each history content
-becomes its own messages, and nothing between history and request drops a call
-no result answers, drops or moves a result, writes a result for an unanswered
-call, or merges consecutive model turns into one. No headless path sends again
-after leaving a call unanswered -- such a turn ends the run, compaction keeps
-each call with its result, a refused turn commits nothing, and the scheduler
-answers every call by its id -- and a history that did pair a call with no
-result is refused by the backend, naming the message, before the model reads
-it. The one place a result is written for a call is session recovery's
+A request carries that history as it was committed: each model turn becomes
+its own assistant message -- one the model ended with no reasoning, text or call
+included, sent with empty content -- consecutive user contents join into one
+user message, and nothing between history and request drops a model turn, drops
+a call no result answers, drops or moves a result, writes a result for an
+unanswered call, or merges consecutive model turns into one. No headless path
+sends again after leaving a call unanswered -- such a turn ends the run,
+compaction keeps each call with its result, a refused turn commits nothing, and
+the scheduler answers every call by its id -- and a history that did pair a call
+with no result is refused by the backend, naming the message, before the model
+reads it. The one place a result is written for a call is session recovery's
 declared repair of a crashed session's unanswered call, and the service has no
 resume.
 

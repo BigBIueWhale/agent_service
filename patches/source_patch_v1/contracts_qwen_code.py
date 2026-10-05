@@ -3567,6 +3567,13 @@ def _validate_literal_response_after(state: State) -> None:
     # result is refused by the server, naming the message, before the model
     # reads it. Session recovery keeps the free function for its declared,
     # recorded repair when a crashed session is resumed; nothing else calls it.
+    # Upstream also dropped a model turn with no reasoning, text or call, in
+    # history curation (with every model turn beside it) and in the converter.
+    # Upstream never commits one -- it silently redraws an empty answer -- but
+    # here the model's turn is committed as produced, and one it ends with
+    # nothing written is the empty slip: answered by a notice that speaks of
+    # it, so it reaches the request as its own assistant message. Curation
+    # judges no model turn, and only a call-only message has null content.
     converter = core + "core/openaiContentGenerator/converter.ts"
     for symbol in (
         "cleanOrphanedToolCalls",
@@ -3574,6 +3581,18 @@ def _validate_literal_response_after(state: State) -> None:
         "mergeConsecutiveAssistantMessages",
     ):
         forbid_text(state, converter, symbol, label="history sent as committed")
+    require_text(
+        state,
+        converter,
+        "(toolCalls.length > 0 && reasoningParts.length === 0 ? null : '')",
+        label="history sent as committed",
+    )
+    forbid_text(
+        state,
+        core + "services/rendered-request-history.ts",
+        "isValidGenerationContent",
+        label="history sent as committed",
+    )
     forbid_text(
         state,
         core + "core/client.ts",
@@ -12466,8 +12485,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "Visible text and reasoning retain their original bytes through stream, history, and "
             "recording, including XML-like text beside real structured calls. Execution depends on "
             "validated structured calls rather than text classification. A request carries the "
-            "history's calls and results as they were committed: no layer between history and "
-            "request drops, writes or moves a call or a result, or merges two model turns into one."
+            "history as it was committed: no layer between history and request drops a model "
+            "turn, one with no reasoning, text or call included; drops, writes or moves a call or "
+            "a result; or merges two model turns into one."
         ),
         removal_condition=(
             "Upstream preserves arbitrary literal response text with the same strict executable-call "
