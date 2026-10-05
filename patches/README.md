@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `fc263083ceb07b9abb8e9443862a6139391bd763bb9c429369e45b35151adce1`
+- Review-diff SHA-256: `a79e5ace1d5dd74337f6aec3e7550957b76f19d44f3f6118b48e1d0ea24127ee`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `8cabf9f6d8d95de1c6d0e6622f0b789f2ccb5bdac236a9cb23dd6138b88469cf`
+- Transformer-manifest SHA-256: `98a27920a3ec4f9d32bacc77f6e9bc3ac541133383bdfe06ca814db5fd9f34ec`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -726,7 +726,10 @@ Child rounds and compactions retain their owning scope, including failures and
 cancellation. Child status is bounded; detail and transcript views expose the
 recorded evidence. Execution rounds, API requests, and reported usage remain
 different facts. A workflow watchdog cancels stalled execution without replaying
-the delegated task; its cleanup and accounting settle before completion. Child totals never become a parent's provider-response usage.
+the delegated task; its cleanup and accounting settle before completion. A
+workflow run reports its end only once every journal line its dispatches
+appended is written, so a caller told it ended never finds its journal still
+being written. Child totals never become a parent's provider-response usage.
 
 ## Artifact retention
 

@@ -146130,7 +146130,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-orchestrator.ts b/package
 diff --git a/packages/core/src/agents/runtime/workflow-runner.test.ts b/packages/core/src/agents/runtime/workflow-runner.test.ts
 --- a/packages/core/src/agents/runtime/workflow-runner.test.ts
 +++ b/packages/core/src/agents/runtime/workflow-runner.test.ts
-@@ -1,21 +1,22 @@
+@@ -1,21 +1,25 @@
  /**
   * @license
   * Copyright 2026 Qwen Team
@@ -146140,6 +146140,9 @@ diff --git a/packages/core/src/agents/runtime/workflow-runner.test.ts b/packages
 -import { beforeEach, describe, expect, it, vi } from 'vitest';
 +import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  import { getEventListeners } from 'node:events';
++import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
++import * as os from 'node:os';
++import * as path from 'node:path';
  import type { Config } from '../../config/config.js';
  import {
    isTerminalWorkflowStatus,
@@ -146154,7 +146157,7 @@ diff --git a/packages/core/src/agents/runtime/workflow-runner.test.ts b/packages
    logWorkflowRunMock,
    writeWorkflowSnapshotMock,
  } = vi.hoisted(() => ({
-@@ -77,12 +78,255 @@
+@@ -77,12 +81,255 @@
  
  describe('WorkflowRunner', () => {
    beforeEach(() => {
@@ -146410,6 +146413,57 @@ diff --git a/packages/core/src/agents/runtime/workflow-runner.test.ts b/packages
      const production = configWithRegistry();
      const productionBridge = vi.spyOn(
        production.registry,
+@@ -656,12 +903,50 @@
+     }
+ 
+     expect(writeWorkflowSnapshotMock).toHaveBeenCalledTimes(2);
+     expect(logWorkflowRunMock).toHaveBeenCalledTimes(2);
+   });
+ 
++  it('reports its end only after the run journal lines are written', async () => {
++    const journalDirectory = mkdtempSync(
++      path.join(os.tmpdir(), 'workflow-runner-journal-'),
++    );
++    try {
++      const registry = new WorkflowRunRegistry();
++      const config = {
++        getWorkflowRunRegistry: () => registry,
++        storage: {
++          getWorkflowRunJournalPath: (runId: string) =>
++            path.join(journalDirectory, `${runId}.jsonl`),
++        },
++      } as unknown as Config;
++      const handle = await WorkflowRunner.start({
++        config,
++        signal: new AbortController().signal,
++        script: 'return await agent("work")',
++        args: undefined,
++        dispatch: async (prompt) => `done:${prompt}`,
++      });
++      await expect(handle.completion).resolves.toMatchObject({
++        ok: true,
++        outcome: { result: 'done:work' },
++      });
++      const lines = readFileSync(
++        path.join(journalDirectory, `${handle.runId}.jsonl`),
++        'utf8',
++      )
++        .trimEnd()
++        .split('\n')
++        .map((line) => JSON.parse(line) as { type: string; result?: unknown });
++      expect(lines.map((line) => line.type)).toEqual(['started', 'result']);
++      expect(lines[1]!.result).toBe('done:work');
++    } finally {
++      rmSync(journalDirectory, { recursive: true, force: true });
++    }
++  });
++
+   it('classifies the internal wall-clock timeout as failed', async () => {
+     vi.useFakeTimers();
+     const originalTimeout = process.env['QWEN_CODE_MAX_WORKFLOW_SECONDS'];
+     process.env['QWEN_CODE_MAX_WORKFLOW_SECONDS'] = '1';
+     try {
+       const timedOut = configWithRegistry();
 diff --git a/packages/core/src/agents/runtime/workflow-runner.ts b/packages/core/src/agents/runtime/workflow-runner.ts
 --- a/packages/core/src/agents/runtime/workflow-runner.ts
 +++ b/packages/core/src/agents/runtime/workflow-runner.ts
@@ -146454,6 +146508,23 @@ diff --git a/packages/core/src/agents/runtime/workflow-runner.ts b/packages/core
        );
      const orchestrator = new WorkflowOrchestrator(dispatch);
      let entry: WorkflowTask | undefined;
+@@ -256,12 +275,16 @@
+             try {
+               logWorkflowRun(config, telemetryEvent);
+             } catch {
+               // Telemetry must not affect workflow execution.
+             }
+           }
++          // Dispatches append their journal lines without waiting for them;
++          // the run reports its end only once every line appended so far is
++          // written, so its caller never finds the journal still being written.
++          await journal?.settled();
+           registry?.releaseHandle(runId, handle);
+         }
+       },
+     );
+     registry?.attachHandle(handle);
+     return handle;
 diff --git a/packages/core/src/agents/runtime/workflow-stall.test.ts b/packages/core/src/agents/runtime/workflow-stall.test.ts
 --- a/packages/core/src/agents/runtime/workflow-stall.test.ts
 +++ b/packages/core/src/agents/runtime/workflow-stall.test.ts
@@ -439281,3 +439352,111 @@ diff --git a/patches/@lydell+node-pty-linux-x64+1.2.0-beta.10.patch b/patches/@l
 +         if (encoding !== null) {
 +             _this._socket.setEncoding(encoding);
 +         }
+diff --git a/packages/core/src/agents/runtime/workflow-journal.test.ts b/packages/core/src/agents/runtime/workflow-journal.test.ts
+--- a/packages/core/src/agents/runtime/workflow-journal.test.ts
++++ b/packages/core/src/agents/runtime/workflow-journal.test.ts
+@@ -2,13 +2,13 @@
+  * @license
+  * Copyright 2026 Qwen Team
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+-import { promises as fs } from 'node:fs';
++import { promises as fs, readFileSync } from 'node:fs';
+ import * as os from 'node:os';
+ import * as path from 'node:path';
+ import {
+   canonicalizeAgentOpts,
+   deriveAgentKey,
+   deriveArgsSeed,
+@@ -129,12 +129,37 @@
+   it('load on a missing file returns empty maps', async () => {
+     const j = new WorkflowJournal(path.join(dir, 'nope.jsonl'));
+     const replay = await j.load();
+     expect(replay.results.size).toBe(0);
+     expect(replay.started.size).toBe(0);
+   });
++
++  it('settled() resolves once every unawaited append is written', async () => {
++    const file = path.join(dir, 'sub', 'journal.jsonl');
++    const j = new WorkflowJournal(file);
++    const entries: JournalEntry[] = [
++      { type: 'started', key: 'k1', agentId: '1' },
++      { type: 'result', key: 'k1', agentId: '1', result: 'r' },
++    ];
++    for (const entry of entries) void j.append(entry);
++    await j.settled();
++    const written = readFileSync(file, 'utf8')
++      .trimEnd()
++      .split('\n')
++      .map((line) => JSON.parse(line));
++    expect(written).toEqual(entries);
++  });
++
++  it('settled() resolves when an append fails, which its own promise reports', async () => {
++    const notADirectory = path.join(dir, 'file');
++    await fs.writeFile(notADirectory, '');
++    const j = new WorkflowJournal(path.join(notADirectory, 'journal.jsonl'));
++    const append = j.append({ type: 'started', key: 'k1', agentId: '1' });
++    await expect(j.settled()).resolves.toBeUndefined();
++    await expect(append).rejects.toThrow();
++  });
+ });
+ 
+ // #7: the resume prefix chain is seeded with the run's args, so a resume with
+ // different args yields a disjoint key space (cache misses → live re-run).
+ describe('deriveArgsSeed', () => {
+   it('is deterministic for equal args and differs for different args', () => {
+diff --git a/packages/core/src/agents/runtime/workflow-journal.ts b/packages/core/src/agents/runtime/workflow-journal.ts
+--- a/packages/core/src/agents/runtime/workflow-journal.ts
++++ b/packages/core/src/agents/runtime/workflow-journal.ts
+@@ -162,15 +162,20 @@
+ }
+ 
+ /**
+  * Append-only JSONL journal for one workflow run. Reads tolerate a missing
+  * file (fresh run); appends are fire-and-forget at the call site (the
+  * orchestrator does not await them on the hot path — a journal write
+- * failure must not fail the dispatch).
++ * failure must not fail the dispatch). The journal keeps every append it
++ * has not finished, and the run that owns it waits for them with
++ * `settled()` before it reports its end, so a caller told that a run ended
++ * finds every line appended until then on disk.
+  */
+ export class WorkflowJournal {
++  private readonly unfinishedAppends = new Set<Promise<void>>();
++
+   constructor(readonly path: string) {}
+ 
+   /** Load + parse all entries into replay maps. Empty maps if no file. */
+   async load(): Promise<JournalReplay> {
+     try {
+       const entries = await read<JournalEntry>(this.path);
+@@ -180,9 +185,25 @@
+       return { results: new Map(), started: new Map() };
+     }
+   }
+ 
+   /** Append one entry. Rejects only on I/O error (callers `.catch`). */
+   append(entry: JournalEntry): Promise<void> {
+-    return writeLine(this.path, entry);
++    const write = writeLine(this.path, entry);
++    const finished = write.then(
++      () => undefined,
++      () => undefined,
++    );
++    this.unfinishedAppends.add(finished);
++    void finished.then(() => this.unfinishedAppends.delete(finished));
++    return write;
++  }
++
++  /**
++   * Resolves once every append made so far has finished, written or failed.
++   * A failed append is reported through its own promise, so this never
++   * rejects.
++   */
++  async settled(): Promise<void> {
++    await Promise.all(this.unfinishedAppends);
+   }
+ }
