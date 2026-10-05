@@ -1109,9 +1109,7 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         "VLLM_NO_USAGE_STATS=1",
         "VLLM_DEBUG_WORKSPACE=1",
         "VLLM_ENFORCE_STRICT_TOOL_CALLING=1",
-        "VLLM_QWEN38_STRICT_IMAGE_CONTRACT=1",
         "VLLM_QWEN38_VISION_HEADROOM_BYTES=671088640",
-        "VLLM_MAX_IMAGE_PIXELS=16777216",
         "GLOO_SOCKET_IFNAME=lo",
         "NCCL_SOCKET_IFNAME=lo",
     ];
