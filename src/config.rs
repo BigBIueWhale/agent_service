@@ -1105,8 +1105,6 @@ fn validate_lock(lock: &StackLock) -> ServiceResult<()> {
         "PYTHONDONTWRITEBYTECODE=1",
         "HF_HUB_OFFLINE=1",
         "TRANSFORMERS_OFFLINE=1",
-        "DO_NOT_TRACK=1",
-        "VLLM_NO_USAGE_STATS=1",
         "VLLM_DEBUG_WORKSPACE=1",
         "VLLM_ENFORCE_STRICT_TOOL_CALLING=1",
         "VLLM_QWEN38_VISION_HEADROOM_BYTES=671088640",
