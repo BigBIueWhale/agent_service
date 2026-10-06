@@ -16,15 +16,21 @@ leading UTF-8 byte-order mark per line, ignores `[DONE]`, and can stop before
 the rest of a body after a parser or caller failure. Its nonstreaming path
 follows HTTP status and media type: a non-2xx response is rejected before
 parsing, HTTP 204 yields `null`, JSON media types go through `Response.json()`
-and any other type returns its text as one value. The converter then suppresses
-cumulative content and reasoning prefixes, splits tagged thinking, buffers
-content behind reasoning, assembles fragmented tool arguments, remaps
+and any other type returns its text as one value. The converter then appends
+each content and reasoning delta as it was served, splits tagged thinking,
+buffers content behind reasoning, assembles fragmented tool arguments, remaps
 colliding call indices, holds the terminal until the finish reason and usage
-arrive, and can expand one failed value into several diagnostics.
+arrive, and can expand one failed value into several diagnostics. A delta is
+the text generated since the one before it -- the only route this client
+generates through, the OpenAI-compatible vLLM server, streams each as the text
+decoded since the last -- so no delta's text decides how much of it is kept.
+Where the selected provider declares no tagged thinking -- the default
+provider a vLLM route selects declares none -- the text and reasoning a
+generation records are its served content and reasoning deltas, each joined.
 
 So neither equality of event and observation counts nor presence of bytes in
-the body establishes an observation: a cumulative or fragmented stream has
-fewer observations than events, and a failed conversion leaves recorded events
+the body establishes an observation: a fragmented stream has fewer
+observations than events, and a failed conversion leaves recorded events
 that never reached the converter. A cancelled caller is not determined by the
 body either: two cancellations after different deliveries can leave identical
 HTTP, body, end and outcome records. Each response outcome therefore records

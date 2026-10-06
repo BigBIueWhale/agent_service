@@ -3455,6 +3455,14 @@ def _validate_literal_response_before(state: State) -> None:
         state, chat, "const consolidatedHistoryParts: Part[] = [];", label=label
     )
     forbid_text(state, chat, "stripTrailingToolCallResidue", label=label)
+    # Upstream guesses from a delta's text whether a provider resent the whole
+    # text so far, and keeps only what it judges new.
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.ts",
+        "function normalizeStreamingTextDelta(",
+        label=label,
+    )
 
 
 # The write-argument displacement, retired. A completed write_file's `content`
@@ -3482,6 +3490,37 @@ def _validate_literal_response_after(state: State) -> None:
             "protocolTagSanitized",
         ):
             forbid_text(state, path, symbol, label=label)
+    # A delta is appended as it was served. No provider this client generates
+    # through -- the OpenAI-compatible vLLM route, which streams each delta as
+    # the text decoded since the one before -- sends the text so far, and a
+    # delta's text never decides how much of it is kept: a model that samples
+    # "-" then "--" wrote both.
+    converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
+    for symbol in (
+        "normalizeStreamingTextDelta",
+        "CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH",
+        "CUMULATIVE_DETECTION_WINDOW_BYTES",
+        "textDeltaState",
+        "reasoningDeltaState",
+    ):
+        forbid_text(state, converter, symbol, label=label)
+    forbid_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/types.ts",
+        "StreamingTextDeltaState",
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.test.ts",
+        (
+            "appends every streamed content delta exactly as it was served",
+            "appends every streamed reasoning delta exactly as it was served",
+            "keeps a delta that repeats everything streamed before it, however long",
+            "keeps interleaved reasoning and content deltas on their own channels, each as served",
+        ),
+        label=label,
+    )
     for path in (
         "packages/core/src/utils/toolCallResidue.ts",
         "packages/core/src/utils/toolCallResidue.test.ts",
@@ -12723,7 +12762,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="literal-response-fidelity",
         rationale=(
             "Visible text and reasoning retain their original bytes through stream, history, and "
-            "recording, including XML-like text beside real structured calls. Execution depends on "
+            "recording, including XML-like text beside real structured calls. A streamed delta is "
+            "the text generated since the one before it, and each is appended as it was served: "
+            "nothing reads a delta's text to decide how much of it to keep, so the recorded "
+            "generation is the text that arrived. Execution depends on "
             "validated structured calls rather than text classification. A request carries the "
             "history as it was committed: no layer between history and request drops a model "
             "turn, one with no reasoning, text or call included; drops, writes or moves a call or "
@@ -12731,8 +12773,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         removal_condition=(
             "Upstream preserves arbitrary literal response text with the same strict executable-call "
-            "separation, and sends committed history without repairing, merging or dropping calls, "
-            "results or model turns."
+            "separation, appends every streamed delta as it was served, and sends committed history "
+            "without repairing, merging or dropping calls, results or model turns."
         ),
         validate_before=_validate_literal_response_before,
         validate_after=_validate_literal_response_after,

@@ -220647,7 +220647,966 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5178,13 +4641,12 @@
+@@ -4295,83 +3758,95 @@
+       );
+ 
+       const parts = chunk.candidates?.[0]?.content?.parts;
+       expect(parts).toEqual([]);
+     });
+ 
+-    it('should normalize cumulative streaming content deltas to suffixes', () => {
++    // A streamed delta is the text generated since the previous one. Each is
++    // appended as it was served, whatever it has in common with the text
++    // before it: these are streams a model generates token by token.
++    function streamDeltas(
++      deltas: ReadonlyArray<{
++        content?: string;
++        reasoning?: string;
++        reasoning_content?: string;
++      }>,
++    ): Part[][] {
+       const ctx = withStreamParser();
+-      const chunks = [
++      return deltas.map(
++        (delta, index) =>
++          converter.convertOpenAIChunkToGemini(
++            {
++              object: 'chat.completion.chunk',
++              id: `chunk-served-${index}`,
++              created: 456 + index,
++              choices: [
++                { index: 0, delta, finish_reason: null, logprobs: null },
++              ],
++              model: 'gpt-test',
++            } as unknown as OpenAI.Chat.ChatCompletionChunk,
++            ctx,
++          ).candidates?.[0]?.content?.parts ?? [],
++      );
++    }
++
++    const servedSequences: ReadonlyArray<readonly string[]> = [
++      ['a', 'ab', 'c'],
++      ['-', '--', '- item'],
++      ['\n', '\n\n', 'x'],
++      ['#', '##', ' Title'],
++      ['1', '100', ' ms'],
++      ['a', 'ab', 'a', 'b'],
++      ['Hello', 'Hello World', 'Hello', 'Hello World!'],
++      [
+         'Here',
+         'Here is a Flowchart Syntax Reference:',
+         'Here is a Flowchart Syntax Reference:\n| `flowchart TD` | Direction |',
+-        'Here is a Flowchart Syntax Reference:\n| `flowchart TD` | Direction |\n| `A[Text]` | Node |',
+-      ];
+-
+-      const emitted = chunks.map((content, index) => {
+-        const chunk = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-cumulative-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        );
++      ],
++    ];
+ 
+-        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+-      });
+-
+-      expect(emitted).toEqual([
+-        'Here',
+-        ' is a Flowchart Syntax Reference:',
+-        '\n| `flowchart TD` | Direction |',
+-        '\n| `A[Text]` | Node |',
+-      ]);
+-      expect(emitted.join('')).toBe(chunks[chunks.length - 1]);
++    it('appends every streamed content delta exactly as it was served', () => {
++      for (const sequence of servedSequences) {
++        const emitted = streamDeltas(sequence.map((content) => ({ content })));
++        expect(emitted).toEqual(sequence.map((text) => [{ text }]));
++      }
+     });
+ 
+-    it('should ignore repeated cumulative chunks with no new suffix', () => {
+-      const ctx = withStreamParser();
+-      // Must be ≥ CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH (64 chars) so the
+-      // exact-repeat branch enters cumulative mode rather than treating this
+-      // as a short legitimate repeat. Realistic cumulative providers replay
+-      // buffers of hundreds of bytes, so this length is representative.
+-      const content =
+-        'The following section starts with more than enough text for cumulative-mode detection.';
+-      const emitted = [content, content].map((chunkContent, index) => {
+-        const chunk = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-cumulative-repeat-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { content: chunkContent },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        );
+-
+-        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+-      });
++    it('appends every streamed reasoning delta exactly as it was served', () => {
++      for (const field of ['reasoning', 'reasoning_content'] as const) {
++        for (const sequence of servedSequences) {
++          const emitted = streamDeltas(
++            sequence.map((text) => ({ [field]: text })),
++          );
++          expect(emitted).toEqual(
++            sequence.map((text) => [{ text, thought: true }]),
++          );
++        }
++      }
++    });
+ 
+-      expect(emitted).toEqual([content, '']);
++    it('keeps a delta that repeats everything streamed before it, however long', () => {
++      const line = 'x'.repeat(64);
++      const content = streamDeltas([
++        { content: line },
++        { content: line },
++        { content: 'y' },
++      ]);
++      expect(content).toEqual([
++        [{ text: line }],
++        [{ text: line }],
++        [{ text: 'y' }],
++      ]);
++      const reasoning = streamDeltas([
++        { reasoning: line },
++        { reasoning: line },
++      ]);
++      expect(reasoning).toEqual([
++        [{ text: line, thought: true }],
++        [{ text: line, thought: true }],
++      ]);
+     });
+ 
+     it('should preserve repeated short incremental content chunks', () => {
+       const ctx = withStreamParser();
+       const emitted = ['ha', 'ha'].map((content, index) => {
+         const chunk = converter.convertOpenAIChunkToGemini(
+@@ -4395,726 +3870,38 @@
+         return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+       });
+ 
+       expect(emitted).toEqual(['ha', 'ha']);
+     });
+ 
+-    it('should normalize cumulative streaming reasoning_content deltas to suffixes', () => {
+-      const ctx = withStreamParser();
+-      const chunks = [
+-        'Let me think',
+-        'Let me think about the request carefully.',
+-        'Let me think about the request carefully.\nFirst, identify the table format.',
+-      ];
+-
+-      const emitted = chunks.map((reasoning_content, index) => {
+-        const chunk = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-reasoning-cumulative-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { reasoning_content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        );
+-
+-        const part = chunk.candidates?.[0]?.content?.parts?.[0];
+-        return { text: part?.text ?? '', thought: part?.thought ?? false };
+-      });
+-
+-      expect(emitted).toEqual([
+-        { text: 'Let me think', thought: true },
+-        { text: ' about the request carefully.', thought: true },
+-        { text: '\nFirst, identify the table format.', thought: true },
+-      ]);
+-      expect(emitted.map((e) => e.text).join('')).toBe(
+-        chunks[chunks.length - 1],
+-      );
+-    });
+-
+-    it('should exit cumulative mode when a chunk does not match prior accumulated text', () => {
+-      const ctx = withStreamParser();
+-      // Three chunks that establish cumulative mode, then one that breaks it.
+-      const chunks = [
+-        'Step one is to gather inputs.',
+-        'Step one is to gather inputs.\nStep two is to validate them.',
+-        'Brand new unrelated message.',
+-      ];
+-
+-      const emitted = chunks.map((content, index) => {
+-        const chunk = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-cumulative-exit-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        );
+-
+-        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+-      });
+-
+-      // Chunk 1: emits as-is (initial)
+-      // Chunk 2: cumulative mode entered, emits suffix only
+-      // Chunk 3: NOT a prefix-extension — cumulative mode must exit and the
+-      //          new chunk must be appended verbatim (no silent loss)
+-      expect(emitted[0]).toBe('Step one is to gather inputs.');
+-      expect(emitted[1]).toBe('\nStep two is to validate them.');
+-      expect(emitted[2]).toBe('Brand new unrelated message.');
+-    });
+-
+-    it('should resume prefix detection cleanly after exiting cumulative mode', () => {
+-      const ctx = withStreamParser();
+-      // Establish cumulative mode, then break it, then send another cumulative
+-      // stream — the fresh baseline should allow re-entry into cumulative mode.
+-      const chunks = [
+-        'Step one is to gather inputs.',
+-        'Step one is to gather inputs.\nStep two is to validate them.',
+-        'Brand new unrelated message.',
+-        'Brand new unrelated message. And more.',
+-      ];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-reentry-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      expect(emitted[0]).toBe('Step one is to gather inputs.');
+-      expect(emitted[1]).toBe('\nStep two is to validate them.');
+-      // Cumulative mode exits; fresh baseline = chunk 3
+-      expect(emitted[2]).toBe('Brand new unrelated message.');
+-      // Chunk 4 prefix-extends chunk 3 — re-enters cumulative, emits suffix only
+-      expect(emitted[3]).toBe(' And more.');
+-    });
+-
+-    it('should not poison the baseline when short chunks repeat before threshold', () => {
+-      const ctx = withStreamParser();
+-      // Short exact-repeat followed by a prefix-extending chunk.
+-      // The repeat must NOT corrupt emittedText so the extension is detected.
+-      const chunks = ['Hi', 'Hi', 'Hi there, how are you today?'];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-short-repeat-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // Chunk 1: initial
+-      expect(emitted[0]).toBe('Hi');
+-      // Chunk 2: short exact repeat — passthrough, baseline stays 'Hi'
+-      expect(emitted[1]).toBe('Hi');
+-      // Chunk 3: prefix-extends 'Hi' — enters cumulative, emits suffix
+-      expect(emitted[2]).toBe(' there, how are you today?');
+-    });
+-
+-    it('should normalize cumulative reasoning_content deltas across multi-line growth (newline-prefixed suffixes)', () => {
+-      // Distinct from the single-line cumulative reasoning test above:
+-      // this case grows the accumulated text across newline boundaries so the
+-      // emitted suffixes themselves begin with '\n', exercising the slice
+-      // arithmetic at the newline.
+-      const ctx = withStreamParser();
+-      const chunks = [
+-        'Let me reason step by step.',
+-        'Let me reason step by step.\nFirst: check the inputs.',
+-        'Let me reason step by step.\nFirst: check the inputs.\nSecond: validate.',
+-      ];
+-
+-      const emitted = chunks.map((reasoning_content, index) => {
+-        const part = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-reasoning-cumulative2-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { reasoning_content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        ).candidates?.[0]?.content?.parts?.[0];
+-        return { text: part?.text ?? '', thought: part?.thought ?? false };
+-      });
+-
+-      expect(emitted[0]).toEqual({
+-        text: 'Let me reason step by step.',
+-        thought: true,
+-      });
+-      expect(emitted[1]).toEqual({
+-        text: '\nFirst: check the inputs.',
+-        thought: true,
+-      });
+-      expect(emitted[2]).toEqual({
+-        text: '\nSecond: validate.',
+-        thought: true,
+-      });
+-    });
+-
+-    it('should ignore repeated cumulative reasoning_content chunks with no new suffix', () => {
+-      // Mirrors the content-channel `should ignore repeated cumulative chunks
+-      // with no new suffix` test: the reasoning channel uses a separate state
+-      // object, so the exact-repeat entry path is exercised independently.
+-      const ctx = withStreamParser();
+-      // Must be ≥ CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH (64 chars).
+-      const reasoning =
+-        'The reasoning section also starts with more than enough text to pass detection.';
+-      const emitted = [reasoning, reasoning].map((reasoning_content, index) => {
+-        const part = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-reasoning-repeat-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { reasoning_content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        ).candidates?.[0]?.content?.parts?.[0];
+-        return { text: part?.text ?? '', thought: part?.thought ?? false };
+-      });
+-
+-      // Chunk 1: emits as a thought part.
+-      expect(emitted[0]).toEqual({ text: reasoning, thought: true });
+-      // Chunk 2: exact repeat — enters cumulative mode, suppressed (no part).
+-      expect(emitted[1]).toEqual({ text: '', thought: false });
+-    });
+-
+-    it('should exit cumulative mode on reasoning_content channel when chunk does not match prior accumulated text', () => {
+-      // Mirrors the content-channel `should exit cumulative mode` test against
+-      // the reasoning channel's independent state.
+-      const ctx = withStreamParser();
+-      const chunks = [
+-        'Step one of my reasoning is to gather inputs.',
+-        'Step one of my reasoning is to gather inputs.\nStep two: validate.',
+-        'Brand new unrelated reasoning.',
+-      ];
+-
+-      const emitted = chunks.map((reasoning_content, index) => {
+-        const part = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-reasoning-exit-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { reasoning_content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        ).candidates?.[0]?.content?.parts?.[0];
+-        return { text: part?.text ?? '', thought: part?.thought ?? false };
+-      });
+-
+-      // Chunk 1: initial passthrough.
+-      expect(emitted[0]).toEqual({
+-        text: 'Step one of my reasoning is to gather inputs.',
+-        thought: true,
+-      });
+-      // Chunk 2: cumulative mode entered, emits suffix only.
+-      expect(emitted[1]).toEqual({
+-        text: '\nStep two: validate.',
+-        thought: true,
+-      });
+-      // Chunk 3: NOT a prefix-extension — cumulative mode must exit and the
+-      //          new chunk must be appended verbatim (no silent loss).
+-      expect(emitted[2]).toEqual({
+-        text: 'Brand new unrelated reasoning.',
+-        thought: true,
+-      });
+-    });
+-
+-    it('should resume prefix detection on reasoning_content channel after exiting cumulative mode', () => {
+-      // Mirrors the content-channel `should resume prefix detection cleanly
+-      // after exiting cumulative mode` test. After the exit path resets the
+-      // baseline to the new chunk, the reasoning channel must be able to
+-      // re-enter cumulative mode on the next prefix-extending chunk.
+-      const ctx = withStreamParser();
+-      const chunks = [
+-        'Step one of my reasoning is to gather inputs.',
+-        'Step one of my reasoning is to gather inputs.\nStep two: validate.',
+-        'Brand new unrelated reasoning.',
+-        'Brand new unrelated reasoning. And further reflection.',
+-      ];
+-
+-      const emitted = chunks.map((reasoning_content, index) => {
+-        const part = converter.convertOpenAIChunkToGemini(
+-          {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-reasoning-reentry-${index}`,
+-            created: 456 + index,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { reasoning_content },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        ).candidates?.[0]?.content?.parts?.[0];
+-        return { text: part?.text ?? '', thought: part?.thought ?? false };
+-      });
+-
+-      expect(emitted[0]).toEqual({
+-        text: 'Step one of my reasoning is to gather inputs.',
+-        thought: true,
+-      });
+-      expect(emitted[1]).toEqual({
+-        text: '\nStep two: validate.',
+-        thought: true,
+-      });
+-      // Cumulative mode exits; fresh baseline = chunk 3.
+-      expect(emitted[2]).toEqual({
+-        text: 'Brand new unrelated reasoning.',
+-        thought: true,
+-      });
+-      // Chunk 4 prefix-extends chunk 3 — re-enters cumulative, emits suffix only.
+-      expect(emitted[3]).toEqual({
+-        text: ' And further reflection.',
+-        thought: true,
+-      });
+-    });
+-
+-    it('should deduplicate interleaved reasoning_content and content channels independently', () => {
+-      const ctx = withStreamParser();
+-      // reasoning_content and content each use a separate state object;
+-      // cumulative detection in one channel must not bleed into the other.
+-      const chunks: Array<{ reasoning_content?: string; content?: string }> = [
++    it('keeps interleaved reasoning and content deltas on their own channels, each as served', () => {
++      const emitted = streamDeltas([
+         { reasoning_content: 'Let me think about this carefully.' },
+         { content: 'Here' },
+         { reasoning_content: 'Let me think about this carefully.\nStep two.' },
+         { content: 'Here is the answer.' },
+-      ];
+-
+-      const emitted = chunks.map(
+-        (delta, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-interleaved-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta,
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts ?? [],
+-      );
+-
+-      // Reasoning chunk 1: emits as thought
+-      expect(emitted[0]).toEqual([
+-        { text: 'Let me think about this carefully.', thought: true },
+       ]);
+-      // Content chunk 1: emits as text (independent state)
+-      expect(emitted[1]).toEqual([{ text: 'Here' }]);
+-      // Reasoning chunk 2: cumulative extension — emits suffix only
+-      expect(emitted[2]).toEqual([{ text: '\nStep two.', thought: true }]);
+-      // Content chunk 2: cumulative extension of content channel
+-      expect(emitted[3]).toEqual([{ text: ' is the answer.' }]);
+-    });
+-
+-    it('should enter cumulative mode on exact 64-char repeat (at threshold)', () => {
+-      const ctx = withStreamParser();
+-      // Exactly 64 chars — meets CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH.
+-      // The threshold sits well above realistic legit-repeat lengths (e.g. a
+-      // duplicate `import { foo } from './module';` is ~31 chars) so that
+-      // legitimate repeats are never silently suppressed.
+-      const atThreshold = 'A'.repeat(64);
+-      const chunks = [atThreshold, atThreshold, atThreshold + ' and more'];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-threshold64-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // Chunk 1: initial passthrough
+-      expect(emitted[0]).toBe(atThreshold);
+-      // Chunk 2: exact 64-char repeat — enters cumulative mode, suppressed
+-      expect(emitted[1]).toBe('');
+-      // Chunk 3: cumulative extension — emits suffix only
+-      expect(emitted[2]).toBe(' and more');
+-    });
+-
+-    it('should pass through 63-char exact repeat without entering cumulative mode (below threshold)', () => {
+-      const ctx = withStreamParser();
+-      // 63 chars — one short of CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH
+-      const belowThreshold = 'A'.repeat(63);
+-      const chunks = [
+-        belowThreshold,
+-        belowThreshold,
+-        belowThreshold + ' extra',
+-      ];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-threshold63-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // Chunk 1: initial passthrough
+-      expect(emitted[0]).toBe(belowThreshold);
+-      // Chunk 2: 63-char repeat — below threshold, passes through unchanged
+-      expect(emitted[1]).toBe(belowThreshold);
+-      // Chunk 3: prefix-extends prior — enters cumulative, emits suffix only
+-      expect(emitted[2]).toBe(' extra');
+-    });
+-
+-    it('should preserve legitimate duplicate import-line chunks (regression: silent data loss)', () => {
+-      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review
+-      // (wenshao, 2026-05-13 CHANGES_REQUESTED, finding #1). Realistic
+-      // incremental streams emit duplicate import/boilerplate lines and the
+-      // exact-repeat threshold must be high enough that those legitimate
+-      // repeats are NOT silently suppressed. A duplicate ~31-char import is
+-      // the canonical motivating case.
+-      const ctx = withStreamParser();
+-      const importLine = "import { foo } from './module';"; // 31 chars
+-      const chunks = [importLine, importLine, '\nconst x = 1;'];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-import-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // All three chunks must reach the user — no suppression.
+-      expect(emitted[0]).toBe(importLine);
+-      expect(emitted[1]).toBe(importLine);
+-      expect(emitted[2]).toBe('\nconst x = 1;');
+-      // Sanity: the reassembled stream equals the user-visible total.
+-      expect(emitted.join('')).toBe(importLine + importLine + '\nconst x = 1;');
+-    });
+-
+-    it('should pass incremental chunks through verbatim past the detection window cap (none of them overlap)', () => {
+-      // Incremental providers send fresh, non-overlapping chunks. Even after
+-      // emittedText growth exceeds CUMULATIVE_DETECTION_WINDOW_BYTES (1024)
+-      // and the baseline stops growing, every subsequent chunk that lacks
+-      // prefix overlap with the frozen baseline must still be emitted
+-      // verbatim (i.e., it must fall through to the final passthrough
+-      // branch). This guards against any future regression that would, e.g.,
+-      // wrongly short-circuit the passthrough path once the cap is reached.
+-      //
+-      // Note: this test does NOT cover the (currently unhandled) case where a
+-      // later chunk happens to start with the frozen baseline — that chunk
+-      // would still trigger prefix-overlap detection against a stale
+-      // baseline. Such a chunk is vanishingly unlikely on a true incremental
+-      // stream (≥1024 bytes of exact-prefix coincidence) but is not
+-      // explicitly defended against here.
+-      const ctx = withStreamParser();
+-      // 100 distinct incremental chunks of 20 chars = 2000 chars, well past the cap.
+-      const incrementalChunks = Array.from(
+-        { length: 100 },
+-        (_, i) => `chunk${String(i).padStart(3, '0')}-payload__`,
+-      );
+-      const allEmitted = incrementalChunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-cap-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // Every chunk should pass through verbatim — none of them overlap
+-      // with prior emittedText, so prefix/exact-repeat detection never fires.
+-      expect(allEmitted).toEqual(incrementalChunks);
+-    });
+-
+-    it('should detect cumulative mode even when the first chunk exceeds the detection window cap', () => {
+-      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review:
+-      // Some cumulative providers ship a large initial chunk (>1024 chars)
+-      // and then accumulate more text on subsequent chunks. The detection
+-      // window cap must not short-circuit prefix-overlap detection before the
+-      // second chunk gets a chance to be classified, otherwise the entire
+-      // first chunk gets duplicated.
+-      const ctx = withStreamParser();
+-      const firstChunk = 'A'.repeat(1500); // well past CUMULATIVE_DETECTION_WINDOW_BYTES (1024)
+-      const secondChunk = firstChunk + 'B'.repeat(200); // cumulative extension
+-      const thirdChunk = secondChunk + 'C'.repeat(50); // further cumulative extension
+-
+-      const emitted = [firstChunk, secondChunk, thirdChunk].map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-large-first-${index}`,
+-              created: 789 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // Chunk 1: initial passthrough.
+-      expect(emitted[0]).toBe(firstChunk);
+-      // Chunk 2: prefix-extends → cumulative mode, emits the 200-char suffix only.
+-      expect(emitted[1]).toBe('B'.repeat(200));
+-      // Chunk 3: continues in cumulative mode, emits only the new 50-char suffix.
+-      expect(emitted[2]).toBe('C'.repeat(50));
+-    });
+-
+-    it('should not duplicate emitted bytes when an incremental stream transitions into cumulative mode past the window cap', () => {
+-      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review
+-      // (wenshao, 2026-05-13 CHANGES_REQUESTED, finding #2). Hybrid scenario:
+-      // upstream emits 200 distinct incremental chunks of 8 bytes each (1600
+-      // bytes of user-visible content, well past the 1024-byte detection-
+-      // window cap), then sends a single cumulative chunk that replays the
+-      // full 1600 bytes and appends new content. The internal baseline froze
+-      // at 1024 bytes; without tracking the true emitted length, the suffix
+-      // would be sliced from byte 1024 of the cumulative chunk and the user
+-      // would see bytes 1024..1600 a second time. The fix tracks emittedLength
+-      // separately so the slice starts from the real user-visible boundary
+-      // (1600). The chunks must be DISTINCT (otherwise the short-exact-repeat
+-      // branch keeps emittedText pinned and the cap is never reached).
+-      const ctx = withStreamParser();
+-      const incremental = Array.from(
+-        { length: 200 },
+-        (_, i) => `c${String(i).padStart(3, '0')}=AB_`, // 8 bytes, distinct per chunk
+-      );
+-      const accumulated = incremental.join(''); // 1600 bytes
+-      const tail = '|CONTINUATION|'; // 14 bytes
+-      const cumulativeChunk = accumulated + tail; // 1614 bytes
+-
+-      const incrementalEmitted = incremental.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-hybrid-incr-${index}`,
+-              created: 1000 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      const cumulativeEmitted =
+-        converter.convertOpenAIChunkToGemini(
++      expect(emitted).toEqual([
++        [{ text: 'Let me think about this carefully.', thought: true }],
++        [{ text: 'Here' }],
++        [
+           {
+-            object: 'chat.completion.chunk',
+-            id: 'chunk-hybrid-cum',
+-            created: 2000,
+-            choices: [
+-              {
+-                index: 0,
+-                delta: { content: cumulativeChunk },
+-                finish_reason: null,
+-                logprobs: null,
+-              },
+-            ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        ).candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+-
+-      // Incremental phase: every chunk passes through verbatim.
+-      expect(incrementalEmitted).toEqual(incremental);
+-      // Cumulative chunk: only the new 14-byte tail must be emitted — not the
+-      // ~576 bytes between the cap (1024) and the true emitted total (1600).
+-      expect(cumulativeEmitted).toBe(tail);
+-      // Sanity: reassembled stream equals the original accumulated text.
+-      const userVisible = incrementalEmitted.join('') + cumulativeEmitted;
+-      expect(userVisible).toBe(cumulativeChunk);
+-      expect(userVisible.length).toBe(1614);
+-    });
+-
+-    it('should suppress cumulative rewind (provider re-sends shorter accumulated string)', () => {
+-      const ctx = withStreamParser();
+-      // Scenario: provider sends Hello → Hello World (extension) → Hello (rewind) → Hello World! (extension again)
+-      const chunks = ['Hello', 'Hello World', 'Hello', 'Hello World!'];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
+-            {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-rewind-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
+-      );
+-
+-      // Chunk 1: initial passthrough
+-      expect(emitted[0]).toBe('Hello');
+-      // Chunk 2: prefix-extends 'Hello' → enters cumulative, emits suffix
+-      expect(emitted[1]).toBe(' World');
+-      // Chunk 3: rewind — 'Hello' is a strict prefix of emitted 'Hello World' → suppressed
+-      expect(emitted[2]).toBe('');
+-      // Chunk 4: extension resumes from 'Hello World' → emits '!'
+-      expect(emitted[3]).toBe('!');
++            text: 'Let me think about this carefully.\nStep two.',
++            thought: true,
++          },
++        ],
++        [{ text: 'Here is the answer.' }],
++      ]);
+     });
+ 
+-    it('should still call into convertOpenAITextToParts on finish_reason when the cumulative-mode normalized delta is empty', () => {
+-      // Targets the `normalizedContent || choice.finish_reason` guard on the
+-      // content path: in cumulative mode an exact-repeat final chunk yields a
+-      // normalized delta of '' but must still flush buffered tagged-thinking
+-      // content (and any other finish-time side effects) via
+-      // convertOpenAITextToParts. The earlier cumulative tests all use
+-      // `finish_reason: null`, so this exercises the empty-normalized +
+-      // non-null finish_reason path in a cumulative context.
++    it('ends the stream on an empty final content delta, adding no text', () => {
+       const ctx = withStreamParser();
+-      // 1) Prefix-extension chunk pair establishes cumulative mode and primes
+-      //    `emittedText` so the next exact-repeat is the cumulative branch.
+       converter.convertOpenAIChunkToGemini(
+         {
+           object: 'chat.completion.chunk',
+-          id: 'chunk-cum-empty-finish-0',
++          id: 'chunk-empty-finish-0',
+           created: 456,
+           choices: [
+             {
+               index: 0,
+               delta: { content: 'Answer: forty-two' },
+               finish_reason: null,
+@@ -5122,69 +3909,40 @@
+             },
+           ],
+           model: 'gpt-test',
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         ctx,
+       );
+-      converter.convertOpenAIChunkToGemini(
+-        {
+-          object: 'chat.completion.chunk',
+-          id: 'chunk-cum-empty-finish-1',
+-          created: 457,
+-          choices: [
+-            {
+-              index: 0,
+-              delta: { content: 'Answer: forty-two and more.' },
+-              finish_reason: null,
+-              logprobs: null,
+-            },
+-          ],
+-          model: 'gpt-test',
+-        } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-        ctx,
+-      );
+-
+-      // 2) Final chunk: re-sends the accumulated string verbatim along with
+-      //    `finish_reason: 'stop'`. The normalized delta is '' (cumulative
+-      //    suffix-of-self), but the finish_reason must still drive
+-      //    convertOpenAITextToParts.
+       const finalChunk = converter.convertOpenAIChunkToGemini(
+         {
+           object: 'chat.completion.chunk',
+-          id: 'chunk-cum-empty-finish-2',
+-          created: 458,
++          id: 'chunk-empty-finish-1',
++          created: 457,
+           choices: [
+             {
+               index: 0,
+-              delta: { content: 'Answer: forty-two and more.' },
++              delta: { content: '' },
+               finish_reason: 'stop',
+               logprobs: null,
+             },
+           ],
+           model: 'gpt-test',
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         ctx,
+       );
+-
+-      // The cumulative-suppressed empty delta produces no text part, but
+-      // because finish_reason is set, the converter still reaches the parts
+-      // pipeline; on a clean (no buffered tag) state this yields parts: [].
+-      // The crucial invariant: no exception thrown, finishReason propagates,
+-      // and no spurious duplicate text emerges.
+       expect(finalChunk.candidates?.[0]?.finishReason).toBe('STOP');
+       const finalText =
+         finalChunk.candidates?.[0]?.content?.parts
+           ?.filter((p) => 'text' in p)
+           ?.map((p) => (p as { text: string }).text)
            ?.join('') ?? '';
        expect(finalText).toBe('');
      });
@@ -220661,7 +221620,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              object: 'chat.completion.chunk',
              id: 'chunk-dual-1',
              created: 456,
-@@ -5215,12 +4677,13 @@
+@@ -5215,12 +3973,13 @@
    describe('OpenAI -> Gemini tagged thinking content', () => {
      it('should convert MiniMax <think> content to thought parts for non-streaming responses', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -220675,7 +221634,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5243,12 +4706,13 @@
+@@ -5243,12 +4002,13 @@
  
      it('should preserve ordering around <thinking> blocks', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -220689,7 +221648,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5272,12 +4736,13 @@
+@@ -5272,12 +4032,13 @@
  
      it('should parse multiple tagged thinking blocks case-insensitively', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -220703,7 +221662,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5301,12 +4766,13 @@
+@@ -5301,12 +4062,13 @@
  
      it('should leave tags visible when tagged thinking parsing is disabled', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -220717,7 +221676,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5317,13 +4783,13 @@
+@@ -5317,13 +4079,13 @@
                logprobs: null,
              },
            ],
@@ -220732,7 +221691,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        expect(response.candidates?.[0]?.content?.parts).toEqual([
          { text: '<think>visible xml example</think>' },
        ]);
-@@ -5331,12 +4797,13 @@
+@@ -5331,12 +4093,13 @@
  
      it('should preserve incomplete tags as visible text on final non-streaming parse', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -220746,7 +221705,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -6237,17 +5704,68 @@
+@@ -6237,17 +5000,68 @@
        converter.convertGeminiToolParametersToOpenAI(original);
  
        expect(original).toEqual(originalCopy);
@@ -220817,7 +221776,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
                { text: 'First reasoning.', thought: true },
                { text: 'First answer.' },
              ],
-@@ -6264,76 +5782,28 @@
+@@ -6264,76 +5078,28 @@
  
        const messages = converter.convertGeminiRequestToOpenAI(
          request,
@@ -220908,7 +221867,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [
-@@ -6385,26 +5855,23 @@
+@@ -6385,26 +5151,23 @@
          ],
        };
  
@@ -220936,7 +221895,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [{ text: 'First assistant' }],
-@@ -6427,64 +5894,11 @@
+@@ -6427,64 +5190,11 @@
  
        expect(messages).toHaveLength(3);
        expect(messages[0].role).toBe('assistant');
@@ -221001,7 +221960,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  
  describe('MCP tool result end-to-end through OpenAI converter (issue #1520)', () => {
    /**
-@@ -6822,15 +6236,19 @@
+@@ -6822,15 +5532,19 @@
        index: number;
        id?: string;
        name?: string;
@@ -221022,7 +221981,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7249,46 +6667,50 @@
+@@ -7249,46 +5963,50 @@
        'stop',
      );
  
@@ -221102,7 +222061,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      const result = feedToolCallChunks(
        converter,
        [
-@@ -7302,13 +6724,13 @@
+@@ -7302,13 +6020,13 @@
        'length',
      );
  
@@ -221117,7 +222076,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          {
            index: 0,
            id: 'call_1',
-@@ -7317,18 +6739,183 @@
+@@ -7317,18 +6035,183 @@
          },
        ],
        'stop',
@@ -221307,7 +222266,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      // Feed arguments in multiple small chunks like real streaming
      const conv = OpenAIContentConverter;
      const ctx = createStreamingRequestContext();
-@@ -7420,14 +7007,14 @@
+@@ -7420,14 +6303,14 @@
      [FinishReason.PROHIBITED_CONTENT, 'content_filter'],
      [FinishReason.SPII, 'content_filter'],
      [FinishReason.IMAGE_SAFETY, 'content_filter'],
@@ -221324,7 +222283,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          candidates: [{ finishReason: geminiReason, content: { parts: [] } }],
        } as unknown as GenerateContentResponse,
        {
-@@ -7494,30 +7081,25 @@
+@@ -7494,30 +6377,25 @@
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -221393,7 +222352,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -  estimateTextTokenUnits,
 -  TOKEN_ESTIMATE_UNITS_PER_TOKEN,
 -} from '../../utils/request-tokenizer/textTokenizer.js';
- import type { RequestContext, StreamingTextDeltaState } from './types.js';
+-import type { RequestContext, StreamingTextDeltaState } from './types.js';
++import type { RequestContext } from './types.js';
  import { parseTaggedThinkingText } from './taggedThinkingParser.js';
 +import { parseToolCallArguments } from './streamingToolCallParser.js';
  import {
@@ -221475,7 +222435,161 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    extends OpenAI.Chat.ChatCompletionAssistantMessageParam {
    reasoning_content?: string | null;
  }
-@@ -377,19 +423,27 @@
+@@ -71,153 +117,10 @@
+ export interface ExtendedCompletionChunkDelta
+   extends OpenAI.Chat.ChatCompletionChunk.Choice.Delta {
+   reasoning_content?: string | null;
+   reasoning?: string | null;
+ }
+ 
+-// Threshold for treating an exact-repeat chunk as a cumulative marker rather
+-// than legitimate repeated content. Cumulative providers replay the entire
+-// accumulated buffer (typically hundreds of bytes) on each re-send, while
+-// legitimate repeats in real output (duplicated import lines, repeated short
+-// boilerplate like "</div>\n</div>", repeated emoji sequences) are usually
+-// well under this threshold. 64 sits comfortably above realistic legit-repeat
+-// lengths while remaining far below any practical cumulative-buffer replay,
+-// so it preserves catch-rate without silently suppressing legitimate chunks.
+-const CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH = 64;
+-
+-// Once this many bytes have been emitted without entering cumulative mode the
+-// stream is almost certainly a standard incremental provider. Stop growing
+-// emittedText beyond this point to bound per-stream memory and CPU. The true
+-// emitted total is preserved separately in `state.emittedLength` so a late
+-// transition into cumulative mode still slices the correct suffix.
+-const CUMULATIVE_DETECTION_WINDOW_BYTES = 1024;
+-
+-/**
+- * Some OpenAI-compatible providers (e.g. DashScope) send the entire
+- * accumulated content in each `delta.content` field instead of incremental
+- * suffixes. Normalize that shape to incremental suffixes before the Gemini
+- * stream layer appends it to the live transcript.
+- *
+- * State invariants and lifecycle:
+- * - `state` is per-stream and per-channel — the content and reasoning
+- *   channels are tracked independently to avoid cross-contamination. State
+- *   MUST NOT be shared or reused across requests; stale state will silently
+- *   corrupt text output.
+- * - In cumulative mode `state.emittedText` retains the full accumulated text
+- *   for the request lifetime (worst case: ~final response size, e.g. ~100KB
+- *   for a long answer). This is single-request scoped and bounded by request
+- *   completion. A future optimization could retain only the last N bytes once
+- *   cumulative mode is firmly established, but is not required today.
+- * - In non-cumulative mode `state.emittedText` is capped at
+- *   CUMULATIVE_DETECTION_WINDOW_BYTES; `state.emittedLength` tracks the true
+- *   user-visible total separately so a late transition into cumulative mode
+- *   still produces the correct suffix.
+- * - The "exit cumulative" path is a verbatim-emit path with no overlap
+- *   reconciliation: the diverged chunk is assumed to be fully fresh content.
+- *   Cumulative providers that emit a half-overlapping chunk on exit (not
+- *   observed on DashScope-class providers) would produce visible duplication
+- *   on the overlap.
+- */
+-function normalizeStreamingTextDelta(
+-  rawDelta: string,
+-  state: StreamingTextDeltaState,
+-): string {
+-  if (rawDelta.length === 0) {
+-    return '';
+-  }
+-
+-  if (state.emittedText.length === 0) {
+-    state.emittedText = rawDelta;
+-    state.emittedLength = rawDelta.length;
+-    return rawDelta;
+-  }
+-
+-  if (state.cumulativeMode) {
+-    if (rawDelta.startsWith(state.emittedText)) {
+-      const suffix = rawDelta.slice(state.emittedText.length);
+-      state.emittedText = rawDelta;
+-      state.emittedLength = rawDelta.length;
+-      return suffix;
+-    }
+-
+-    if (state.emittedText.startsWith(rawDelta)) {
+-      debugLogger.debug(
+-        `normalizeStreamingTextDelta: cumulative rewind suppression (emitted=${state.emittedText.length}b, chunk=${rawDelta.length}b)`,
+-      );
+-      return '';
+-    }
+-
+-    debugLogger.debug(
+-      'normalizeStreamingTextDelta: exiting cumulative mode (chunk does not match prior accumulated text)',
+-    );
+-    state.cumulativeMode = false;
+-    // Reset baseline to current chunk so future prefix checks use fresh state.
+-    // Note: this is a verbatim-emit path with no overlap reconciliation — the
+-    // diverged chunk is assumed to be fully fresh content. If a cumulative
+-    // provider were to emit a half-overlapping chunk on exit (rare; not
+-    // observed on DashScope-class providers) the overlap would be visible.
+-    state.emittedText = rawDelta;
+-    state.emittedLength += rawDelta.length;
+-    return rawDelta;
+-  }
+-
+-  if (
+-    rawDelta.length > state.emittedText.length &&
+-    rawDelta.startsWith(state.emittedText)
+-  ) {
+-    const baselineLen = state.emittedText.length;
+-    // The baseline may have been frozen at CUMULATIVE_DETECTION_WINDOW_BYTES
+-    // during a long incremental phase. If the cap actually kicked in and the
+-    // real emitted total exceeds the (frozen) baseline, slice the suffix from
+-    // the real total so an incremental-then-cumulative hybrid stream doesn't
+-    // re-emit bytes the user already saw between the cap and the true total.
+-    // Outside that hybrid-after-cap case, use the baseline so the historical
+-    // short-repeat-then-extend behaviour is preserved (the baseline is kept
+-    // unmodified across short exact repeats specifically to support that
+-    // case).
+-    const baselineFrozenAtCap =
+-      baselineLen >= CUMULATIVE_DETECTION_WINDOW_BYTES &&
+-      state.emittedLength > baselineLen;
+-    const sliceFrom = baselineFrozenAtCap ? state.emittedLength : baselineLen;
+-    if (rawDelta.length > sliceFrom) {
+-      const suffix = rawDelta.slice(sliceFrom);
+-      state.emittedText = rawDelta;
+-      state.emittedLength = rawDelta.length;
+-      state.cumulativeMode = true;
+-      debugLogger.debug(
+-        `normalizeStreamingTextDelta: entered cumulative mode (prefix overlap, baseline=${baselineLen}b sliceFrom=${sliceFrom}b -> curr=${rawDelta.length}b)`,
+-      );
+-      return suffix;
+-    }
+-    // rawDelta startsWith baseline but isn't strictly longer than sliceFrom.
+-    // Only reachable in the baselineFrozenAtCap branch when the cumulative
+-    // chunk is shorter than the real emitted total (a cumulative-rewind-like
+-    // shape during the transition). Treat as a no-op: don't enter cumulative
+-    // mode here, fall through to the rewind/passthrough branches below.
+-  }
+-
+-  if (rawDelta === state.emittedText) {
+-    if (rawDelta.length >= CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH) {
+-      state.cumulativeMode = true;
+-      debugLogger.debug(
+-        `normalizeStreamingTextDelta: entered cumulative mode (exact repeat, ${rawDelta.length}b)`,
+-      );
+-      return '';
+-    }
+-    // Short exact repeat: don't mutate emittedText so it remains a valid
+-    // prefix baseline for the next prefix-overlap check. The chunk is still
+-    // emitted verbatim, so bump emittedLength to track user-visible bytes.
+-    state.emittedLength += rawDelta.length;
+-    return rawDelta;
+-  }
+-
+-  if (state.emittedText.length < CUMULATIVE_DETECTION_WINDOW_BYTES) {
+-    state.emittedText += rawDelta;
+-  }
+-  state.emittedLength += rawDelta.length;
+-  return rawDelta;
+-}
+-
+ /**
+  * Tool call accumulator for streaming responses
+  */
+ export interface ToolCallAccumulator {
+@@ -377,19 +280,27 @@
              // mutually exclusive optional fields (Agent working_dir vs
              // isolation). Relax the wire schema; client-side
              // validateToolParams still enforces the source schema.
@@ -221508,7 +222622,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      }
    }
  
-@@ -399,38 +453,38 @@
+@@ -399,38 +310,38 @@
  /**
   * Convert Gemini request to OpenAI message format.
   */
@@ -221556,7 +222670,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    // Parse parts inline
    const thoughtParts: string[] = [];
    const contentParts: string[] = [];
-@@ -474,27 +528,25 @@
+@@ -474,27 +385,25 @@
      message.tool_calls = toolCalls;
    }
  
@@ -221596,7 +222710,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      : Date.now();
    const createdSeconds = Number.isFinite(createdMs)
      ? Math.floor(createdMs / 1000)
-@@ -528,17 +580,85 @@
+@@ -528,17 +437,85 @@
  
    const systemText = extractTextFromContentUnion(
      request.config.systemInstruction,
@@ -221684,7 +222798,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * Process contents and convert to OpenAI messages.
   */
  function processContents(
-@@ -570,13 +690,16 @@
+@@ -570,13 +547,16 @@
  
    if (!isContentObject(content)) return;
    const parts = content.parts || [];
@@ -221701,7 +222815,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    const emittedFunctionResponseIds = new Set<string>();
    // New history is normalized before reaching this converter. These local
    // guards only keep already-corrupted or programmatic duplicate parts from
-@@ -590,23 +713,33 @@
+@@ -590,23 +570,33 @@
    // break that contract when multiple parallel tool calls return media.
    const accumulatedSplitMedia: OpenAIContentPart[] = [];
  
@@ -221736,7 +222850,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      if (mediaPart && role === 'user') {
        contentParts.push(mediaPart);
      }
-@@ -623,16 +756,16 @@
+@@ -623,16 +613,16 @@
          emittedFunctionCallIds.add(callId);
        }
  
@@ -221755,7 +222869,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      if (part.functionResponse && role === 'user') {
        const responseId = part.functionResponse.id;
-@@ -644,12 +777,13 @@
+@@ -644,12 +634,13 @@
        }
  
        // Create tool message for the function response (with embedded media)
@@ -221769,7 +222883,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          // resolved in pipeline.ts). OpenAI spec only permits string / text-part
          // content on `role: "tool"` messages. Strict OpenAI-compatible servers
          // (e.g. doubao / new-api / LM Studio) silently drop or reject tool
-@@ -682,12 +816,17 @@
+@@ -682,12 +673,17 @@
              }
            }
            if (mediaParts.length > 0) {
@@ -221787,7 +222901,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          if (
            requestContext.toolResultContentFormat === 'string' &&
            Array.isArray(toolMessage.content)
-@@ -697,12 +836,13 @@
+@@ -697,12 +693,13 @@
              toolContent.every(
                (cp): cp is OpenAI.Chat.ChatCompletionContentPartText =>
                  cp?.type === 'text',
@@ -221801,7 +222915,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
    }
-@@ -711,53 +851,62 @@
+@@ -711,53 +708,62 @@
    // tool messages in this group. Runs after the parts loop so all tool
    // messages remain contiguous (OpenAI requirement for parallel tool calls).
    if (accumulatedSplitMedia.length > 0) {
@@ -221881,7 +222995,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      return;
    }
  
-@@ -767,74 +916,112 @@
+@@ -767,74 +773,112 @@
        content:
          contentParts as unknown as OpenAI.Chat.ChatCompletionContentPart[],
      });
@@ -222026,7 +223140,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    }
  
    // IMPORTANT: Always return a tool message, even if content is empty
-@@ -857,16 +1044,72 @@
+@@ -857,16 +901,72 @@
        | string
        | OpenAI.Chat.ChatCompletionContentPartText[],
    };
@@ -222100,7 +223214,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    const { modalities } = requestContext;
  
    if (part.inlineData?.mimeType && part.inlineData?.data) {
-@@ -879,12 +1122,17 @@
+@@ -879,12 +979,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -222118,7 +223232,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1208,15 @@
+@@ -960,16 +1065,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -222138,7 +223252,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,106 +1355,27 @@
+@@ -1108,106 +1212,27 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -222258,7 +223372,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * Convert OpenAI response to Gemini format.
   */
  export function convertOpenAIResponseToGemini(
-@@ -1233,107 +1401,172 @@
+@@ -1233,107 +1258,172 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -222501,13 +223615,55 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1417,21 +1650,12 @@
-         cumulativeMode: false,
-       });
-       const normalizedReasoningText = normalizeStreamingTextDelta(
-         reasoningText,
-         reasoningDeltaState,
-       );
+@@ -1364,27 +1454,21 @@
+ 
+     // Handle reasoning content (thoughts).
+     const reasoningText =
+       (choice.delta as ExtendedCompletionChunkDelta)?.reasoning_content ??
+       (choice.delta as ExtendedCompletionChunkDelta)?.reasoning;
+ 
+-    // Handle text content
++    // Handle text content. A streamed delta is the text generated since the
++    // previous one, so each is appended exactly as it was served.
+     if (typeof choice.delta?.content === 'string') {
+-      const normalizedContent = normalizeStreamingTextDelta(
+-        choice.delta.content,
+-        (requestContext.textDeltaState ??= {
+-          emittedText: '',
+-          emittedLength: 0,
+-          cumulativeMode: false,
+-        }),
+-      );
++      const content = choice.delta.content;
+       // Skip empty-string push mid-stream; still call on finish_reason to
+       // flush any buffered tagged-thinking content.
+-      if (normalizedContent || choice.finish_reason) {
++      if (content || choice.finish_reason) {
+         contentParts = convertOpenAITextToParts(
+-          normalizedContent,
++          content,
+           requestContext,
+           Boolean(choice.finish_reason),
+         );
+       }
+     } else if (choice.finish_reason) {
+       // Flush any buffered tagged-thinking content on stream end
+@@ -1408,41 +1492,17 @@
+ 
+     if (
+       reasoningText &&
+       (!requestContext.responseParsingOptions?.taggedThinkingTags ||
+         !requestContext.hasTaggedThinkingThought)
+     ) {
+-      const reasoningDeltaState = (requestContext.reasoningDeltaState ??= {
+-        emittedText: '',
+-        emittedLength: 0,
+-        cumulativeMode: false,
+-      });
+-      const normalizedReasoningText = normalizeStreamingTextDelta(
+-        reasoningText,
+-        reasoningDeltaState,
+-      );
 -      if (normalizedReasoningText) {
 -        reasoningDeltaState.emittedTokenUnits =
 -          (reasoningDeltaState.emittedTokenUnits ?? 0) +
@@ -222517,13 +223673,28 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 -          requestContext.hasThinkingTagInReasoning = true;
 -        }
 -      }
-       if (
-         normalizedReasoningText &&
-         !requestContext.responseParsingOptions?.taggedThinkingTags
-       ) {
-         parts.push(createOpenAIReasoningThoughtPart(normalizedReasoningText));
-       } else if (
-@@ -1482,12 +1706,25 @@
+-      if (
+-        normalizedReasoningText &&
+-        !requestContext.responseParsingOptions?.taggedThinkingTags
+-      ) {
+-        parts.push(createOpenAIReasoningThoughtPart(normalizedReasoningText));
+-      } else if (
+-        normalizedReasoningText &&
+-        !requestContext.hasTaggedThinkingThought
+-      ) {
++      if (!requestContext.responseParsingOptions?.taggedThinkingTags) {
++        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
++      } else if (!requestContext.hasTaggedThinkingThought) {
+         requestContext.pendingReasoningText =
+-          (requestContext.pendingReasoningText ?? '') + normalizedReasoningText;
++          (requestContext.pendingReasoningText ?? '') + reasoningText;
+         debugLogger.debug(
+           `convertOpenAIChunkToGemini: buffered reasoning text (${requestContext.pendingReasoningText.length} chars) for tagged stream`,
+         );
+       }
+     }
+ 
+@@ -1482,12 +1542,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -222549,7 +223720,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,241 +1752,118 @@
+@@ -1515,241 +1588,118 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -222860,7 +224031,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          parts,
          role: 'model' as const,
        },
-@@ -1764,70 +1878,26 @@
+@@ -1764,70 +1714,26 @@
      response.candidates = [candidate];
    } else {
      response.candidates = [];
@@ -222939,7 +224110,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1917,19 @@
+@@ -1847,17 +1753,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -222964,7 +224135,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,323 +1939,17 @@
+@@ -1867,323 +1775,17 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:
@@ -233864,7 +235035,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
 diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/core/src/core/openaiContentGenerator/types.ts
 --- a/packages/core/src/core/openaiContentGenerator/types.ts
 +++ b/packages/core/src/core/openaiContentGenerator/types.ts
-@@ -1,13 +1,14 @@
+@@ -1,73 +1,50 @@
  /**
   * @license
   * Copyright 2025 Qwen
@@ -233880,18 +235051,34 @@ diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/c
    InputModalities,
  } from '../contentGenerator.js';
  import type { OpenAICompatibleProvider } from './provider/index.js';
-@@ -31,21 +32,31 @@
-    * the correct suffix when an incremental-then-cumulative hybrid stream
-    * transitions into cumulative mode after the cap (otherwise the suffix would
-    * re-include bytes between the cap and the true emitted length, producing
-    * visible duplication).
-    */
-   emittedLength: number;
+ import type { OpenAIResponseParsingOptions } from './responseParsingOptions.js';
+ import type { StreamingToolCallParser } from './streamingToolCallParser.js';
+ import type { TaggedThinkingParser } from './taggedThinkingParser.js';
+ 
+-export interface StreamingTextDeltaState {
+-  /**
+-   * Rolling baseline used for prefix/exact-repeat detection. Once the stream
+-   * has been classified as incremental and the buffer reaches
+-   * CUMULATIVE_DETECTION_WINDOW_BYTES bytes it is frozen at the cap to bound
+-   * memory; the true emitted total is tracked separately in `emittedLength`.
+-   * In cumulative mode this always reflects the full accumulated text.
+-   */
+-  emittedText: string;
+-  /**
+-   * Monotonic count of user-visible bytes already emitted on this channel.
+-   * Diverges from `emittedText.length` only on long incremental streams where
+-   * `emittedText` is capped at CUMULATIVE_DETECTION_WINDOW_BYTES. Used to slice
+-   * the correct suffix when an incremental-then-cumulative hybrid stream
+-   * transitions into cumulative mode after the cap (otherwise the suffix would
+-   * re-include bytes between the cap and the true emitted length, producing
+-   * visible duplication).
+-   */
+-  emittedLength: number;
 -  /** Integer token-estimate units accumulated from normalized emitted text. */
 -  emittedTokenUnits?: number;
-   cumulativeMode: boolean;
- }
- 
+-  cumulativeMode: boolean;
+-}
+-
 +/**
 + * Tool calls are decoded strictly and served usage is required exactly: the
 + * deployment's one mode (`validateModelConfig`), so a context has no switch
@@ -233914,7 +235101,29 @@ diff --git a/packages/core/src/core/openaiContentGenerator/types.ts b/packages/c
    // When true, media parts in tool-result messages are split into a follow-up
    // user message for strict OpenAI-compat servers. See ContentGeneratorConfig
    // for details.
-@@ -81,24 +92,12 @@
+   splitToolMedia?: boolean;
+   // Default keeps tool result text as content parts; "string" is an opt-in
+   // compatibility mode for older OpenAI-compatible tool templates.
+   toolResultContentFormat?: ContentGeneratorConfig['toolResultContentFormat'];
+-  /**
+-   * Per-stream mutable state for cumulative-delta normalization on the visible
+-   * content channel. Initialised lazily on first use. Must NOT be shared or
+-   * reused across requests — stale state will silently corrupt text output.
+-   */
+-  textDeltaState?: StreamingTextDeltaState;
+-  /**
+-   * Same as textDeltaState but for the reasoning/thinking content channel.
+-   * The two channels are tracked independently so interleaved chunks on each
+-   * channel are deduplicated correctly.
+-   */
+-  reasoningDeltaState?: StreamingTextDeltaState;
+   /**
+    * Tracks whether tagged-thinking parsing has emitted a thought part in the
+    * current stream. Once true, separate reasoning_content deltas are considered
+    * duplicate reasoning and are suppressed.
+    */
+   hasTaggedThinkingThought?: boolean;
+@@ -81,24 +58,12 @@
     * emitted after the reasoning thought if no tagged thought appears.
     */
    pendingContentParts?: Part[];
