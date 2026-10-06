@@ -1250,7 +1250,9 @@ a start with no language set finds none — the image build has upstream's write
 produce it and refuses different bytes — and it refuses to start without it. It
 also disables managed memory, auto-memory/dream, team memory/synchronization,
 auto-skill, custom slash commands, workflows, include directories, and
-permission-rule persistence. The submitted prompt is literal task text: a
+permission-rule persistence, and it has no scheduled tasks: a run ends with its
+final answer, and no tool and no tasks file on disk, the model's included,
+starts a turn after it. The submitted prompt is literal task text: a
 leading slash and an `@path` in it are ordinary text, no file it names is read
 into it, and the model's first message carries it as written, followed by the
 blank line the client puts after it, as does every compaction after. Init

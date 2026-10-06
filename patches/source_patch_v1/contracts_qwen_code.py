@@ -139,6 +139,23 @@ def _validate_locked_boundary_before(state: State) -> None:
         label=label,
     )
     forbid_text(state, core, "getForegroundAgentsOnly()", label=label)
+    # Upstream schedules tasks in every run that settings and the environment
+    # leave cron on, and its headless runner fires the durable ones after the
+    # final answer.
+    require_text(
+        state,
+        core,
+        "  isCronEnabled(): boolean {\n"
+        "    if (process.env['QWEN_CODE_DISABLE_CRON'] === '1') return false;\n"
+        "    return this.cronEnabled;\n",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/nonInteractiveCli.ts",
+        ".enableDurable(config.getSessionId())",
+        label=label,
+    )
     # Upstream expands every headless task's @paths, rewriting its text and
     # reading the files it names into the operator's turn.
     require_text(
@@ -292,6 +309,31 @@ def _validate_locked_boundary_after(state: State) -> None:
     _require(
         core_source.count("getForegroundAgentsOnly()") >= 13,
         f"{label}: the mode no longer dominates every initialization/getter gate",
+    )
+    # Upstream's headless runner starts the cron scheduler after the final
+    # answer and fires the durable tasks a file in the runtime directory holds
+    # -- a file the model can write. The locked run has no scheduler at all,
+    # whatever the settings or the environment say, so it ends where its last
+    # answer does.
+    require_text(
+        state,
+        core,
+        "  isCronEnabled(): boolean {\n"
+        "    if (this.getForegroundAgentsOnly()) return false;\n"
+        "    if (process.env['QWEN_CODE_DISABLE_CRON'] === '1') return false;\n"
+        "    return this.cronEnabled;\n",
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/config/config.test.ts",
+        (
+            "has no scheduled tasks in a locked agent-service run, whatever its settings "
+            "and environment say",
+            "registers no scheduling tool in a locked agent-service run, whatever its "
+            "settings say",
+        ),
+        label=label,
     )
     # A subagent definition is a prompt, a tool list, a model and a run
     # configuration under a name the caller asks for by that name. The
@@ -12384,7 +12426,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "neither a leading slash command nor an @path in it is acted on, so the task reaches "
             "the model as the operator wrote it, followed by the blank line the client puts after "
             "it, and no workspace file enters the operator's turn. A compaction carries forward "
-            "the same bytes. Subagent definitions come from the built-ins alone, and one offered by the "
+            "the same bytes. The run has no scheduled tasks: it ends with its final answer, and "
+            "neither a tool nor a tasks file on disk, whoever wrote it, starts a turn after it. "
+            "Subagent definitions come from the built-ins alone, and one offered by the "
             "workspace is refused by path rather than skipped, so the work cannot choose the agent "
             "that works on it."
         ),

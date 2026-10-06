@@ -149698,7 +149698,52 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      it('allows explicitly clearing the configured pager', () => {
        const config = new Config(baseParams);
  
-@@ -1424,132 +1707,19 @@
+@@ -983,8 +1266,44 @@
+           enableTeamMemory: true,
+         }).getTeamMemoryEnabled(),
+       ).toBe(false);
+     });
+   });
+ 
++  describe('isCronEnabled', () => {
++    const prevEnv = process.env['QWEN_CODE_DISABLE_CRON'];
++    afterEach(() => {
++      if (prevEnv === undefined) {
++        delete process.env['QWEN_CODE_DISABLE_CRON'];
++      } else {
++        process.env['QWEN_CODE_DISABLE_CRON'] = prevEnv;
++      }
++    });
++
++    it('follows the setting and QWEN_CODE_DISABLE_CRON outside the locked run', () => {
++      delete process.env['QWEN_CODE_DISABLE_CRON'];
++      expect(
++        new Config({ ...baseParams, cronEnabled: true }).isCronEnabled(),
++      ).toBe(true);
++      expect(
++        new Config({ ...baseParams, cronEnabled: false }).isCronEnabled(),
++      ).toBe(false);
++      process.env['QWEN_CODE_DISABLE_CRON'] = '1';
++      expect(
++        new Config({ ...baseParams, cronEnabled: true }).isCronEnabled(),
++      ).toBe(false);
++    });
++
++    it('has no scheduled tasks in a locked agent-service run, whatever its settings and environment say', () => {
++      delete process.env['QWEN_CODE_DISABLE_CRON'];
++      expect(
++        new Config({
++          ...baseParams,
++          cronEnabled: true,
++          foregroundAgentsOnly: true,
++        }).isCronEnabled(),
++      ).toBe(false);
++    });
++  });
++
+   describe('getCronRecurringMaxAgeDays', () => {
+     const prevEnv = process.env['QWEN_CODE_CRON_MAX_AGE_DAYS'];
+@@ -1424,132 +1743,19 @@
          id: 'openai:vl-same-provider',
          baseUrl: 'https://primary.example.com',
        });
@@ -149831,7 +149876,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        recordedSnapshots.push(structuredClone(snapshot));
      });
      vi.spyOn(config, 'getChatRecordingService').mockReturnValue({
-@@ -1600,13 +1770,13 @@
+@@ -1600,13 +1806,13 @@
      try {
        const trackedFile = path.join(projectDir, 'a.txt');
        await writeFile(trackedFile, 'original');
@@ -149846,7 +149891,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      } finally {
        getGlobalQwenDirSpy.mockRestore();
        await rm(projectDir, { recursive: true, force: true });
-@@ -2066,13 +2236,13 @@
+@@ -2066,13 +2272,13 @@
        const config = new Config(baseParams);
        await config.initialize({ skipGeminiInitialization: true });
        const monitor = config.getMemoryPressureMonitor();
@@ -149861,7 +149906,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
    });
  
    describe('MemoryPressure configuration environment', () => {
-@@ -2233,35 +2403,77 @@
+@@ -2233,35 +2439,77 @@
  
        expect(child.getMemoryPressureMonitor()?.getPressureLevel()).toBe('soft');
      });
@@ -149959,7 +150004,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const config = new Config({ ...baseParams });
        await config.initialize({
          skipGeminiInitialization: true,
-@@ -2275,13 +2487,13 @@
+@@ -2275,13 +2523,13 @@
        vi.mocked(logSessionEnd).mockClear();
        vi.mocked(logStartSession).mockClear();
        vi.mocked(logSessionEnd).mockImplementationOnce((cfg: Config) => {
@@ -149974,7 +150019,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
          config,
          expect.anything(),
          undefined,
-@@ -2289,72 +2501,75 @@
+@@ -2289,72 +2537,75 @@
        expect(vi.mocked(logSessionEnd).mock.invocationCallOrder[0]).toBeLessThan(
          vi.mocked(logStartSession).mock.invocationCallOrder[0],
        );
@@ -150089,7 +150134,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
          timestamp: new Date(0).toISOString(),
          type: 'system',
          subtype: 'goal_state',
-@@ -2386,22 +2601,24 @@
+@@ -2386,22 +2637,24 @@
            sessionId: 'resumed-session',
            projectHash: 'test',
            startTime: new Date(0).toISOString(),
@@ -150114,7 +150159,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
          timestamp: new Date(0).toISOString(),
          type: 'system',
          subtype: 'slash_command',
-@@ -2411,21 +2628,22 @@
+@@ -2411,21 +2664,22 @@
          systemPayload: {
            phase: 'result',
            outputHistoryItems: [
@@ -150138,7 +150183,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      };
  
      // Under a writer lease the recorder is `inactive` until it is handed the
-@@ -2435,19 +2653,17 @@
+@@ -2435,19 +2689,17 @@
      // the migrated goal was dropped and the whole resumed session lost goal
      // persistence. Ordering is the deciding variable, so this asserts the
      // deferred restore lands the goal rather than bricking the runtime.
@@ -150159,7 +150204,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const ready = config.getGoalRuntimeReady().then(
          (runtime) => {
            settled = true;
-@@ -2484,70 +2700,78 @@
+@@ -2484,70 +2736,78 @@
        expect(() => runtime.beginTurn('turn-1')).not.toThrow();
      });
  
@@ -150247,7 +150292,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
            started.push(permit.goalId);
          }),
          preemptGoalTurn: vi.fn(),
-@@ -2564,96 +2788,103 @@
+@@ -2564,96 +2824,103 @@
        config.finalizeSessionRestore();
  
        await expect(config.getGoalRuntimeReady()).resolves.toBe(
@@ -150373,7 +150418,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        expect(() => child.getGoalRuntime()).toThrow(
          GoalPersistenceUnavailableError,
        );
-@@ -2668,13 +2899,13 @@
+@@ -2668,13 +2935,13 @@
        ).rejects.toThrow(GoalPersistenceUnavailableError);
        await child.shutdown();
        expect(() => canonical.getSnapshot()).not.toThrow();
@@ -150388,7 +150433,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        // conversation. /clear and resume both go through
        // startNewSession(), so it must drop cache entries the new
        // session has never seen.
-@@ -2689,50 +2920,49 @@
+@@ -2689,50 +2956,49 @@
            size: 42,
          } as unknown as import('node:fs').Stats,
          { full: true, cacheable: true },
@@ -150448,7 +150493,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
    describe('chat recording failure listeners', () => {
      const notify = (config: Config, event: ChatRecordingFailureEvent) => {
        (
-@@ -2758,33 +2988,52 @@
+@@ -2758,33 +3024,52 @@
  
        expect(first).toHaveBeenCalledTimes(1);
        expect(second).toHaveBeenCalledTimes(2);
@@ -150515,7 +150560,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const config = new Config(baseParams);
        const unhandled: unknown[] = [];
        const onUnhandled = (error: unknown) => unhandled.push(error);
-@@ -3130,68 +3379,25 @@
+@@ -3130,68 +3415,25 @@
              sessionWriterHandoffRequested: boolean;
            }
          ).sessionWriterHandoffRequested,
@@ -150585,7 +150630,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const transcript = Buffer.alloc(2 * 1024 * 1024, 0x20);
        transcript[transcript.byteLength - 1] = 0x0a;
        await writeFile(transcriptPath, transcript);
-@@ -3247,13 +3453,13 @@
+@@ -3247,13 +3489,13 @@
          releaseRead();
          await expect(close).resolves.toBeUndefined();
          await expect(initialize).rejects.toMatchObject({
@@ -150600,7 +150645,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
          releaseRead();
          read.mockRestore();
          Storage.setRuntimeBaseDir(null);
-@@ -3261,15 +3467,14 @@
+@@ -3261,15 +3503,14 @@
        }
      });
  
@@ -150617,7 +150662,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
          resolveAcquire = resolve;
        });
        let released = false;
-@@ -3301,17 +3506,15 @@
+@@ -3301,17 +3542,15 @@
        acquire.mockRestore();
      });
  
@@ -150637,7 +150682,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const acquire = vi
          .spyOn(SessionWriterLease, 'acquire')
          .mockResolvedValue({
-@@ -3339,15 +3542,14 @@
+@@ -3339,15 +3578,14 @@
        acquire.mockRestore();
      });
  
@@ -150654,7 +150699,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const acquisitionFailure = new SessionWriterUnavailableError({
          cause: new AggregateError([activationError, releaseError]),
        });
-@@ -3370,15 +3572,14 @@
+@@ -3370,15 +3608,14 @@
        acquire.mockRestore();
      });
  
@@ -150671,7 +150716,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const acquireGate = new Promise<SessionWriterLease>(
          (_resolve, reject) => {
            rejectAcquire = reject;
-@@ -3407,23 +3608,18 @@
+@@ -3407,23 +3644,18 @@
        vi.spyOn(
          config as unknown as {
            initializeInternal: () => Promise<void>;
@@ -150701,7 +150746,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        expect(result).toMatchObject({
          name: 'SessionWriterUnavailableError',
          cause: expect.any(AggregateError),
-@@ -3664,16 +3860,18 @@
+@@ -3664,16 +3896,18 @@
        };
        vi.spyOn(internal, 'initializeInternal').mockImplementation(async () => {
          internal.toolRegistry = { stop } as unknown as ToolRegistry;
@@ -150724,7 +150769,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        });
  
        expect(stop).toHaveBeenCalledTimes(2);
-@@ -3746,31 +3944,17 @@
+@@ -3746,31 +3980,17 @@
            config as unknown as {
              initializeInternal: () => Promise<void>;
            },
@@ -150761,7 +150806,39 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        const shutdown = config.shutdown({ shutdownTelemetry: false });
  
        expect(beginClose).toHaveBeenCalledOnce();
-@@ -4572,47 +4756,39 @@
+@@ -3920,10 +4140,31 @@
+       const registeredNames = (
+         ToolRegistry.prototype.registerFactory as Mock
+       ).mock.calls.map((call) => call[0]);
+       expect(registeredNames).toContain(ToolNames.LOOP_WAKEUP);
+     });
+ 
++    it('registers no scheduling tool in a locked agent-service run, whatever its settings say', async () => {
++      const config = new Config({
++        ...baseParams,
++        cronEnabled: true,
++        foregroundAgentsOnly: true,
++      });
++      await config.initialize();
++
++      const registeredNames = (
++        ToolRegistry.prototype.registerFactory as Mock
++      ).mock.calls.map((call) => call[0]);
++      for (const name of [
++        ToolNames.CRON_CREATE,
++        ToolNames.CRON_LIST,
++        ToolNames.CRON_DELETE,
++        ToolNames.LOOP_WAKEUP,
++      ]) {
++        expect(registeredNames).not.toContain(name);
++      }
++    });
++
+     it('does not register loop_wakeup when cron is disabled', async () => {
+       const config = new Config({ ...baseParams, cronEnabled: false });
+       await config.initialize();
+ 
+@@ -4572,47 +4813,39 @@
  
    describe('reasoning effort override', () => {
      it('reports a higher-priority DashScope knob that shadows reasoning effort', () => {
@@ -150815,7 +150892,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      });
  
      it.each([
-@@ -4675,52 +4851,45 @@
+@@ -4675,52 +4908,45 @@
          expected: { source: 'samplingParams', field: 'thinking_budget' },
        },
      ])('resolves $name', ({ extra_body, samplingParams, expected }) => {
@@ -150875,7 +150952,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        };
  
        vi.mocked(resolveContentGeneratorConfigWithSources).mockReturnValue({
-@@ -4745,105 +4914,74 @@
+@@ -4745,105 +4971,74 @@
      });
  
      it('preserves the user reasoning effort across an auth refresh that wipes it', async () => {
@@ -151009,7 +151086,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        };
  
        vi.mocked(resolveContentGeneratorConfigWithSources).mockReturnValue({
-@@ -4860,18 +4998,19 @@
+@@ -4860,18 +5055,19 @@
          'auth_success',
          'Authentication successful',
        );
@@ -151031,7 +151108,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        };
  
        vi.mocked(resolveContentGeneratorConfigWithSources).mockReturnValue({
-@@ -4885,178 +5024,94 @@
+@@ -4885,178 +5081,94 @@
        await config.refreshAuth(authType);
  
        // Verify that fireNotificationHook was not called
@@ -151258,7 +151335,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
    });
  
    describe('model switching with different credentials (OpenAI)', () => {
-@@ -5232,13 +5287,13 @@
+@@ -5232,13 +5344,13 @@
          },
        });
  
@@ -151273,7 +151350,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
          model: 'claude-opus-4-7',
          fastModel: 'missing-fast-model',
          modelProvidersConfig: {
-@@ -5249,14 +5304,12 @@
+@@ -5249,14 +5361,12 @@
                baseUrl: 'https://idealab.alibaba-inc.com/api/anthropic',
                envKey: 'IDEALAB_OPUS_API_KEY',
              },
@@ -151288,7 +151365,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
      it('returns undefined when the fast model selector is malformed', () => {
        const config = new Config({
-@@ -5303,230 +5356,13 @@
+@@ -5303,230 +5413,13 @@
 -    describe('getCompactionModel', () => {
 -      it('returns the compaction model when set', async () => {
 -        const config = new Config({
@@ -151520,7 +151597,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
                id: 'model-a',
                name: 'Model A',
                baseUrl: 'https://api.example.com/v1',
-@@ -5567,13 +5403,13 @@
+@@ -5567,13 +5460,13 @@
          },
        );
  
@@ -151535,7 +151612,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        // Initialize with model-a
        await configWithModelProviders.refreshAuth(AuthType.USE_OPENAI);
  
-@@ -5605,10 +5441,51 @@
+@@ -5605,10 +5498,51 @@
      delete paramsWithoutMemory.userMemory;
      const config = new Config(paramsWithoutMemory);
  
@@ -151587,7 +151664,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config(baseParams);
  
      expect(config.getPreventSystemSleepEnabled()).toBe(true);
-@@ -5951,41 +5828,46 @@
+@@ -5951,41 +5885,46 @@
      expect(getTeamMemoryShareabilityWarning).toHaveBeenCalledTimes(1);
      expect(config.getWarnings()).toContainEqual(
        expect.stringContaining('is git-ignored'),
@@ -151643,7 +151720,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      });
  
      vi.mocked(loadServerHierarchicalMemory).mockResolvedValueOnce({
-@@ -5995,59 +5877,45 @@
+@@ -5995,59 +5934,45 @@
        conditionalRules: [],
        projectRoot: '/tmp',
      });
@@ -151725,7 +151802,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        memoryContent: 'short project context',
        fileCount: 1,
        ruleCount: 0,
-@@ -6055,21 +5923,14 @@
+@@ -6055,21 +5980,14 @@
        projectRoot: '/tmp',
      });
      vi.mocked(readAutoMemoryIndexWithStats).mockResolvedValueOnce(null);
@@ -151749,7 +151826,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config(baseParams);
      const disposeResidentAgents = vi.spyOn(
        config.getBackgroundTaskRegistry(),
-@@ -6090,13 +5951,13 @@
+@@ -6090,13 +6008,13 @@
      expect(config.getTargetDir()).toBe(newDir);
      expect(config.getProjectRoot()).toBe(newDir);
      expect(config.getCwd()).toBe(newDir);
@@ -151764,7 +151841,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        newDir,
        expect.any(Array),
        expect.any(Object),
-@@ -6108,48 +5969,52 @@
+@@ -6108,48 +6026,52 @@
      );
  
      chdirSpy.mockRestore();
@@ -151852,7 +151929,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const newDir = path.resolve('/path/to/other');
      const chdirSpy = vi.spyOn(process, 'chdir').mockImplementation(() => {
        // Keep the test process in its original directory.
-@@ -6220,264 +6085,71 @@
+@@ -6220,264 +6142,71 @@
      expect(result.mcpRefreshError).toEqual(new Error('MCP failed'));
  
      chdirSpy.mockRestore();
@@ -152167,7 +152244,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config(baseParams);
      const oldDir = config.getTargetDir();
      const newDir = path.resolve('/path/to/other');
-@@ -7321,27 +6993,12 @@
+@@ -7321,27 +7050,12 @@
        };
        const config = new Config(paramsWithUndefinedBuiltinRipgrep);
        expect(config.getUseBuiltinRipgrep()).toBe(true);
@@ -152195,7 +152272,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        // A first-run / text-only session reports no image modality, yet the tool
        // must still register: the gate moved to execute time so a hot /model
        // switch to an image model picks it up without re-running initialize().
-@@ -7802,191 +7459,31 @@
+@@ -7802,191 +7516,31 @@
          ).mock.calls.some((call) => call[0] === ToolNames.SHELL);
          expect(wasShellToolRegistered).toBe(true);
        });
@@ -152397,7 +152474,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
 -    });
 -  });
 -
-@@ -8104,13 +7601,12 @@
+@@ -8104,13 +7658,12 @@
  describe('setApprovalMode with folder trust', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -152411,7 +152488,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      // #4297 fold-in 1 (16:32:44-round S3): assert on the typed class,
      // not just message text. The 403 mapping in `serve/server.ts`
      // matches `err instanceof TrustGateError`; an accidental revert
-@@ -9107,13 +8603,12 @@
+@@ -9107,13 +8660,12 @@
  describe('disabledTools runtime sync (#4282 fold-in 5 P2-2 / #4297 fold-in 5)', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -152425,7 +152502,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config({
        ...baseParams,
        disabledTools: ['Foo', 'Bar'],
-@@ -9170,13 +8665,12 @@
+@@ -9170,13 +8722,12 @@
  describe('visibleTools', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -152439,7 +152516,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config({
        ...baseParams,
        visibleTools: ['Foo', 'Bar'],
-@@ -9217,13 +8711,12 @@
+@@ -9217,13 +8768,12 @@
  describe('computer use settings', () => {
    const baseParams: ConfigParameters = {
      targetDir: '.',
@@ -152453,7 +152530,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      const config = new Config({
        ...baseParams,
        computerUseIdleTimeoutMs: 12_345,
-@@ -9231,12 +8724,236 @@
+@@ -9231,12 +8781,236 @@
      expect(config.getComputerUseIdleTimeoutMs()).toBe(12_345);
    });
  
@@ -152690,7 +152767,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  describe('BaseLlmClient Lifecycle', () => {
    const MODEL = 'gemini-pro';
    const SANDBOX: SandboxConfig = {
-@@ -9256,51 +8973,48 @@
+@@ -9256,51 +9030,48 @@
      targetDir: TARGET_DIR,
      debugMode: DEBUG_MODE,
      question: QUESTION,
@@ -152752,7 +152829,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
      expect(llmService.clearPerModelGeneratorCache).toHaveBeenCalledOnce();
    });
-@@ -9309,28 +9023,29 @@
+@@ -9309,28 +9080,29 @@
  describe('Model Switching and Config Updates', () => {
    const baseParams: ConfigParameters = {
      cwd: '/tmp',
@@ -152786,7 +152863,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        ['enableCacheControl']: true,
        ['forceGlobalCacheScope']: true,
      };
-@@ -9340,23 +9055,24 @@
+@@ -9340,23 +9112,24 @@
        sources: {
          model: { kind: 'settings' },
          contextWindowSize: { kind: 'computed', detail: 'auto' },
@@ -152814,7 +152891,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        ['enableCacheControl']: false,
        ['forceGlobalCacheScope']: false,
        ['toolResultContentFormat']: 'string',
-@@ -9373,31 +9089,23 @@
+@@ -9373,31 +9146,23 @@
          forceGlobalCacheScope: { kind: 'settings' },
          toolResultContentFormat: { kind: 'settings' },
          modalities: { kind: 'computed', detail: 'auto' },
@@ -152849,7 +152926,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
      // Verify sources are also updated
      const sources = config.getContentGeneratorConfigSources();
-@@ -9409,107 +9117,78 @@
+@@ -9409,107 +9174,78 @@
      expect(sources['enableCacheControl']?.kind).toBe('settings');
      expect(sources['forceGlobalCacheScope']?.kind).toBe('settings');
      expect(sources['toolResultContentFormat']?.kind).toBe('settings');
@@ -153019,7 +153096,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      it('should return false when hookSystem is not initialized', () => {
        const config = new Config(baseParams);
        expect(config.hasHooksForEvent('Stop')).toBe(false);
-@@ -9551,23 +9230,12 @@
+@@ -9551,23 +9287,12 @@
    describe('runtime ContentGenerator view (AsyncLocalStorage)', () => {
      // The Config getters consult the per-run ALS view published by the
      // agent runtime when a sub-agent runs on a different model than the
@@ -153043,7 +153120,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        );
        const config = new Config(baseParams);
        const parentGenerator = {
-@@ -9575,75 +9243,74 @@
+@@ -9575,75 +9300,74 @@
        } as unknown as ContentGenerator;
        const parentGeneratorConfig: ContentGeneratorConfig = {
          model: 'parent-model',
@@ -153133,7 +153210,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
    });
  
    describe('Config runtime MCP overlay', () => {
-@@ -9805,27 +9472,33 @@
+@@ -9805,27 +9529,33 @@
      });
    });
  
@@ -153170,7 +153247,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
  
        // String values (MCP might send strings): Number.isFinite rejects strings
        // @ts-expect-error - testing runtime validation
-@@ -10060,14 +9733,20 @@
+@@ -10060,14 +9790,20 @@
        expect(response.success).toBe(true);
      });
    });
@@ -153193,7 +153270,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      expect(config.getActiveTodoReminder('prompt-retry')).toBe(
        'unfinished user work',
      );
-@@ -10077,24 +9756,24 @@
+@@ -10077,24 +9813,24 @@
      expect(config.getActiveTodoReminder('prompt-cron')).toBeUndefined();
    });
  
@@ -153220,7 +153297,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
      expect(config.takeActiveTodoReminder('prompt-user')).toBe(
        'unfinished work',
      );
-@@ -10106,22 +9785,25 @@
+@@ -10106,22 +9842,25 @@
      expect(config.takeActiveTodoReminder('prompt-user')).toBeUndefined();
      expect(config.takeActiveTodoReminder('prompt-user')).toBeUndefined();
      expect(config.takeActiveTodoReminder('prompt-user')).toBe(
@@ -153249,7 +153326,7 @@ diff --git a/packages/core/src/config/config.test.ts b/packages/core/src/config/
        'prompt-related-notification',
        'prompt-user',
      );
-@@ -10155,38 +9837,41 @@
+@@ -10155,38 +9894,41 @@
      config.startAutomaticActiveTodoWorkChain(
        'prompt-stale-notification',
        'prompt-stale-owner',
@@ -155866,7 +155943,28 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        reminders.set(owner, reminder);
        // The todo_write result itself just presented the full state.
        this.getOwnActiveTodoReminderTurns().set(owner, 0);
-@@ -6974,13 +6678,13 @@
+@@ -6763,13 +6467,20 @@
+    * make the tool description, tool output, and scheduler disagree.
+    */
+   getCronRecurringMaxAgeDays(): number {
+     return this.cronRecurringMaxAgeDays;
+   }
+ 
++  /**
++   * Whether this run has scheduled tasks. A locked agent-service run has
++   * none: it ends with its final answer, so no tool schedules a turn and no
++   * tasks file on disk -- whoever wrote it, the model included -- starts one
++   * after it, whatever the settings or the environment say.
++   */
+   isCronEnabled(): boolean {
++    if (this.getForegroundAgentsOnly()) return false;
+     if (process.env['QWEN_CODE_DISABLE_CRON'] === '1') return false;
+     return this.cronEnabled;
+   }
+ 
+   isAgentTeamEnabled(): boolean {
+     // Agent team is experimental and opt-in: enabled via settings or env var
+@@ -6974,13 +6685,13 @@
        const service = new FileHistoryService(
          this.sessionId,
          this.fileCheckpointingEnabled,
@@ -155881,7 +155979,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        const snapshots = this.sessionData?.fileHistorySnapshots;
        if (snapshots?.length && service.isEnabled()) {
          service.restoreFromSnapshots(snapshots);
-@@ -7031,16 +6735,12 @@
+@@ -7031,16 +6742,12 @@
    }
  
    getExperimentalZedIntegration(): boolean {
@@ -155898,7 +155996,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
  
    getExtensionManager(): ExtensionManager {
      return this.extensionManager;
-@@ -7069,32 +6769,40 @@
+@@ -7069,32 +6776,40 @@
    }
  
    /**
@@ -155942,7 +156040,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7108,13 +6816,13 @@
+@@ -7108,13 +6823,13 @@
     * Whether the daemon/session should auto-sync team memory with the git
     * remote (pull + commit + push). Resolves the `memory.enableTeamMemorySync`
     * setting, with env `QWEN_CODE_MEMORY_TEAM_SYNC` ('0'/'1') as an override.
@@ -155957,7 +156055,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      if (override === '0') {
        return false;
      }
-@@ -7122,23 +6830,35 @@
+@@ -7122,23 +6837,35 @@
        return true;
      }
      return this.enableTeamMemorySync;
@@ -155996,7 +156094,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Toggle auto-skill for the running session. The startup value is copied from
     * settings, so persisting a settings change alone would not take effect until
     * the next launch; the skill-review scheduler reads `getAutoSkillEnabled()`
-@@ -7149,13 +6869,17 @@
+@@ -7149,13 +6876,17 @@
     */
    setAutoSkillEnabled(enabled: boolean): void {
      this.enableAutoSkill = enabled;
@@ -156015,7 +156113,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
     * Max runtime in minutes for background memory agents (extraction, dream,
     * remember, skill review). Resolves the `memory.agentTimeoutMinutes`
     * setting. Unset → each agent's built-in default; 0 → no time limit.
-@@ -7418,20 +7142,12 @@
+@@ -7418,20 +7149,12 @@
    setFileSystemService(fileSystemService: FileSystemService): void {
      this.fileSystemService = fileSystemService;
    }
@@ -156036,7 +156134,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      return this.interactive;
    }
  
-@@ -7456,10 +7172,6 @@
+@@ -7456,10 +7179,6 @@
      return this.shouldUseNodePtyShell;
    }
  
@@ -156047,7 +156145,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    getShellExecutionConfig(): ShellExecutionConfig {
      return this.shellExecutionConfig;
    }
-@@ -7487,26 +7199,4 @@
+@@ -7487,26 +7206,4 @@
    getSkipLoopDetection(): boolean {
      return this.skipLoopDetection;
    }
@@ -156074,7 +156172,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.maxToolCallsPerTurnExplicit;
 -  }
 -
-@@ -7523,26 +7213,6 @@
+@@ -7523,26 +7220,6 @@
     * extensions, skills, MCP servers, rules) for troubleshooting.
     */
    isSafeMode(): boolean {
@@ -156101,7 +156199,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
 -    return this.truncateToolOutputLines;
 -  }
 -
-@@ -7562,52 +7232,25 @@
+@@ -7562,52 +7239,25 @@
     * default). 0 disables heartbeats.
     */
    getShellHeartbeatIntervalMs(): number | undefined {
@@ -156156,7 +156254,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    }
  
    getGoalRuntimeReady(): Promise<GoalRuntime> {
-@@ -7624,15 +7267,12 @@
+@@ -7624,15 +7274,12 @@
      return runtime.getPreparedRestore().then(() => runtime);
    }
  
@@ -156172,7 +156270,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      runtime.dispose();
      this.initializeGoalRuntime(records);
      await this.goalRuntimeReady;
-@@ -7666,20 +7306,15 @@
+@@ -7666,20 +7313,15 @@
      return () => {
        this.chatRecordingFailureListeners.delete(listener);
      };
@@ -156196,7 +156294,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      records?: readonly GoalRecoveryRecord[],
      restoreRuntime?: SessionRuntimeResumeState,
    ): void {
-@@ -7694,35 +7329,25 @@
+@@ -7694,35 +7336,25 @@
      // writer: its records belong to the outgoing session.
      this.settlePendingGoalRestore(
        new GoalPersistenceUnavailableError(
@@ -156234,7 +156332,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          restoreRuntime.goalCheckpointWindow,
        );
        let resolveActivation!: () => void;
-@@ -7737,16 +7362,13 @@
+@@ -7737,16 +7369,13 @@
          void started.then(resolveActivation, rejectActivation);
          return started;
        };
@@ -156252,7 +156350,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        this.goalRuntimeReady = ready;
      } else {
        this.goalRuntimeReady = runtime
-@@ -7815,11 +7437,13 @@
+@@ -7815,11 +7444,13 @@
      );
      this.goalRestoreActivation = undefined;
      this.rejectGoalRestoreActivation = undefined;
@@ -156266,7 +156364,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
          const notification = listener(event);
          if (notification) {
            void notification.catch((error) => {
-@@ -7835,34 +7459,32 @@
+@@ -7835,34 +7466,32 @@
      }
    }
  
@@ -156307,7 +156405,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
    setSessionWriterReclaimPolicy(policy: 'local' | 'never'): void {
      if (this.initialized) {
        throw new SessionWriterUnavailableError();
-@@ -7879,13 +7501,13 @@
+@@ -7879,13 +7508,13 @@
  
    closeSessionWriter(options?: { handoff?: boolean }): Promise<void> {
      if (options?.handoff && this.sessionWriterTakeoverPolicy === 'certified') {
@@ -156322,7 +156420,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
      this.sessionWriterClosePromise ??= this.closeSessionWriterOnce();
      return this.sessionWriterClosePromise;
    }
-@@ -7898,13 +7520,13 @@
+@@ -7898,13 +7527,13 @@
      } catch (error) {
        if (!(error instanceof SessionWriterShutdownError)) {
          failures.push(error);
@@ -156337,7 +156435,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        failures.push(error);
      }
      const pendingLease = activation
-@@ -8332,7 +7954,10 @@
+@@ -8332,7 +7961,10 @@
        });
        await registerLazy(ToolNames.SHELL, async () => {
          const { ShellTool } = await import('../tools/shell.js');
@@ -156349,7 +156447,7 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        });
        await registerGoalWorkerTools();
        await registerStructuredOutputIfRequested();
-@@ -8444,7 +8069,10 @@
+@@ -8444,7 +8076,10 @@
      });
      await registerLazy(ToolNames.SHELL, async () => {
        const { ShellTool } = await import('../tools/shell.js');

@@ -645,6 +645,14 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
             # the one compact form the launcher passes it.
             command = [node, "--expose-gc", str(entry), *arguments, f"--max-session-turns={turn_budget}",
                        "--deliverables=" + json.dumps(deliverables, ensure_ascii=False, separators=(",", ":"))]
+            # A run ends with its final answer. A scheduled-tasks file in the runtime directory,
+            # where the model can write one, with a task long overdue, starts no turn after it:
+            # the locked run has no scheduler, so the request sequence stays the two turns'.
+            tasks = runtime / "tmp" / hashlib.sha256(str(workspace).encode()).hexdigest()
+            tasks.mkdir(parents=True)
+            (tasks / "scheduled_tasks.json").write_text(json.dumps([{
+                "id": "written-in-the-run", "cron": "* * * * *", "prompt": "A turn after the final answer.",
+                "recurring": True, "createdAt": 0, "lastFiredAt": None}]))
             # The task is literal text. The @paths name the fixture and the address has an @ in
             # it, and they, the paragraph break between the paths and the whitespace around the
             # task reach the model as written: the fixture is read by the call the model makes,
