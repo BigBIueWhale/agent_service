@@ -76,7 +76,7 @@ evidence remains mandatory even if cancellation precedes network dispatch.
 The shared proxy error redactor constructs native `DOMException` clones so abort
 classification and diagnostic accessors remain valid after redaction.
 
-The stream contract is v19 and the canonical recording is version 22. Response
+The stream contract is v20 and the canonical recording is version 23. Response
 evidence is structurally separate from conversation messages and cannot
 advance the parent chain. Readers validate physical ordering, hashes and
 ownership before projecting a branch. Live checkpoints list unfinished

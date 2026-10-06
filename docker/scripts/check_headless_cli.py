@@ -30,7 +30,7 @@ from request_evidence import require_request_evidence, require_response_evidence
 # The canonical recording format this release's client writes
 # (`CHAT_RECORDING_VERSION` in its transcript records); a recording of any
 # other version is one this client refuses to resume.
-CHAT_RECORDING_VERSION = 22
+CHAT_RECORDING_VERSION = 23
 WORKSPACE = Path("/workspace")
 # The client's own system-scope settings files. Production names no override for them and
 # the image carries neither, so the sealed settings are the one source; a host that had
@@ -115,13 +115,21 @@ def smoke_assistant_content(record: dict) -> dict:
     return {"role": "model", "parts": parts}
 
 
-def certify(stdout: bytes, certifier: Path, events_path: Path) -> dict:
+def certify(stdout: bytes, certifier: Path, events_path: Path, prompt: bytes) -> dict:
     with events_path.open("xb") as stream:
         os.fchmod(stream.fileno(), 0o600)
         stream.write(stdout)
         stream.flush()
         os.fsync(stream.fileno())
-    result = subprocess.run([str(certifier), str(events_path)], capture_output=True, timeout=45)
+    # The task the session was started with, as the service keeps it in the
+    # session's prompt record: every run of operator text is held to it.
+    prompt_path = events_path.with_name("prompt.txt")
+    with prompt_path.open("xb") as record:
+        record.write(prompt)
+        record.flush()
+        os.fsync(record.fileno())
+    result = subprocess.run([str(certifier), str(events_path), str(prompt_path)],
+                            capture_output=True, timeout=45)
     require(result.returncode == 0,
             f"production stream certification refused: {result.stdout!r}; {result.stderr!r}")
     certificate = json.loads(result.stdout)
@@ -236,10 +244,10 @@ def require_production_requests(requests: list[dict], settings: dict, instructio
 
 
 def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], certifier: Path,
-            deliverables: list[str]) -> dict:
+            deliverables: list[str], prompt: bytes) -> dict:
     require(bool(stdout.strip()), "CLI emitted no events")
     require(stdout.endswith(b"\n"), "CLI emitted an unterminated event")
-    certificate = certify(stdout, certifier, runtime / "events.jsonl")
+    certificate = certify(stdout, certifier, runtime / "events.jsonl", prompt)
     events = [json.loads(line) for line in stdout.splitlines()]
     require(not any(event.get("type", "").startswith("control_") for event in events),
             "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
@@ -643,7 +651,7 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
                     f"CLI exited {process.returncode}, not {expected_exit}; stdout={stdout!r}; stderr={stderr!r}")
             require(not failures, f"provider protocol failed: {failures}")
             require(sealed_digests(sealed_home) == sealed_before, "the run changed a file in the sealed home")
-            result = qualify(stdout, runtime, nonce, requests, certifier, deliverables)
+            result = qualify(stdout, runtime, nonce, requests, certifier, deliverables, prompt.encode())
             require_production_requests(requests, settings, instructions,
                                         os.path.relpath(instructions_path, workspace), output_language,
                                         os.path.relpath(output_language_path, workspace),

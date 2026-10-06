@@ -1,11 +1,13 @@
 //! Exact captured-stream admission and native validation of the shared schema.
 
+mod authorship;
 mod model_requests;
 mod generation;
 mod partial_stream;
 
 mod stream;
 pub use stream::*;
+pub use authorship::OperatorTask;
 
 pub mod json;
 pub mod number;

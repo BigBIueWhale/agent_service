@@ -109,7 +109,7 @@ fn validate_compaction_event(
     json_limits: Limits,
     requests: &crate::model_requests::ModelRequests,
     kv_scope: &str,
-) -> ContractResult<Vec<String>> {
+) -> ContractResult<Vec<(String, crate::authorship::DrawOutput)>> {
     let refuse = |what: &str| {
         ContractError::InvalidRecord(format!(
             "events.jsonl line {line} carries a compaction record in {} {what}",
@@ -460,7 +460,7 @@ fn validate_compaction_event(
         // A rejected attempt is named by its own status, the draw `output`
         // describes by the record's.
         let kind = draw_kind(draw.get("status").and_then(Value::as_str).unwrap_or(status));
-        let (issued, first_sequence, last_sequence) = requests.check_compaction_draw(
+        let (issued, first_sequence, last_sequence, output) = requests.check_compaction_draw(
             id,
             kv_scope,
             &measurements[0].3,
@@ -485,7 +485,7 @@ fn validate_compaction_event(
         physical_budget = Some(issued);
         previous_last_sequence = Some(last_sequence);
         draw_ranges.push((first_sequence, last_sequence));
-        claims.push(id.to_string());
+        claims.push((id.to_string(), output));
     }
     // A draw is issued on the preflight's counts, so it follows every
     // operation they cite, and each draw follows the one before it.
@@ -717,7 +717,7 @@ struct AdmissionPlan {
     seed: Option<crate::model_requests::SeedAdmission>,
     generation: Option<crate::model_requests::GenerationAdmission>,
     completion: Option<crate::model_requests::CompletionAdmission>,
-    compaction_claims: Vec<String>,
+    compaction_claims: Vec<(String, crate::authorship::DrawOutput)>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -744,6 +744,9 @@ pub struct RuntimeContract {
     identity: std::sync::Arc<()>,
     bindings: RuntimeBindings,
     limits: RuntimeLimits,
+    /// The task the session was started with, which runs of operator text
+    /// are held to.
+    operator: crate::authorship::OperatorTask,
     session_id: Option<String>,
     runtime_initialized: bool,
     seen_uuids: BTreeSet<String>,
@@ -764,12 +767,17 @@ pub struct RuntimeContract {
     pending: Option<PendingAdmission>,
 }
 impl RuntimeContract {
-    pub fn new(bindings: RuntimeBindings, limits: RuntimeLimits) -> Self {
+    pub fn new(
+        bindings: RuntimeBindings,
+        limits: RuntimeLimits,
+        operator: crate::authorship::OperatorTask,
+    ) -> Self {
         Self {
             requests: crate::model_requests::ModelRequests::default(),
             identity: std::sync::Arc::new(()),
             bindings,
             limits,
+            operator,
             session_id: None,
             runtime_initialized: false,
             seen_uuids: BTreeSet::new(),
@@ -1218,7 +1226,9 @@ impl RuntimeContract {
                         "events.jsonl line {line} dispatches model work without the pinned runtime init; retain the complete initialized invocation"
                     )));
                 }
-                let admission = self.requests.plan(object, line, self.limits.json)?;
+                let admission =
+                    self.requests
+                        .plan(object, line, self.limits.json, &self.operator)?;
                 if let Some(attempt) = admission.attempt() {
                     // The display scope a chat request renders for: the root for
                     // the session's own scope, a subagent scope for the call that
@@ -1916,7 +1926,12 @@ mod tests {
             },
         };
         let document = Document::decode(manifest.as_bytes(), limits.json).unwrap();
-        RuntimeContract::new(RuntimeBindings::new(document).unwrap(), limits)
+        RuntimeContract::new(
+            RuntimeBindings::new(document).unwrap(),
+            limits,
+            // The task the shared wire stream's session was started with.
+            crate::authorship::OperatorTask::new(b"work"),
+        )
     }
     fn init() -> String {
         format!(
@@ -2068,7 +2083,7 @@ mod tests {
                 "journal_id":"fixture", "request_id":"compaction-physical", "sequence":4,
                 "kv_scope":"session", "segment_id":"compaction-segment", "prompt_id":"compaction-prompt",
                 "owner":{"kind":"utility","operation_id":"compaction-operation","purpose":"compaction"},
-                "body":{"kind":"full","json":body},
+                "body":{"kind":"full","json":body,"authors":[{"author":"harness","bytes":body.len()}]},
                 "decode_policy":{"mode":"stream","model":"fixture-model","strict_tool_calling":true,
                     "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
                 "body_bytes":body_bytes, "body_sha256":body_hash
@@ -2600,7 +2615,8 @@ mod tests {
             "request":{
                 "journal_id":"fixture", "request_id":id, "sequence":sequence,
                 "kv_scope":"internal-utility", "segment_id":format!("utility-segment-{id}"), "prompt_id":"utility-prompt",
-                "owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"}, "body":{"kind":"full","json":body},
+                "owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"},
+                "body":{"kind":"full","json":body,"authors":[{"author":"harness","bytes":body.len()}]},
                 "decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":true,
                     "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
                 "body_bytes":body.len(), "body_sha256":crate::generation::sha256(body.as_bytes())

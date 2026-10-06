@@ -724,7 +724,9 @@ pub async fn run_one(
     // certified, so its stream is read for observations alone.
     let events = paths.events_jsonl();
     let (final_output_observations, parsed) = if proved_event_bytes.is_some() {
-        match result_parse::read_event_snapshot(&events) {
+        match read_operator_task(&paths)
+            .and_then(|operator| result_parse::read_event_snapshot(&events, &operator))
+        {
             Ok(Some(snapshot)) => (Some(snapshot.observed), snapshot.certified),
             Ok(None) => (
                 Some(crate::runtime::OutputProgress::default()),
@@ -738,8 +740,8 @@ pub async fn run_one(
             }
         }
     } else {
-        let observations = match result_parse::read_event_observations(&events) {
-            Ok(observed) => Some(observed.unwrap_or_default()),
+        let observations = match read_session_output_progress(&paths) {
+            Ok(observed) => Some(observed),
             Err(error) => {
                 diagnostics.push(format!("read final event snapshot: {error}"));
                 None
@@ -1457,13 +1459,44 @@ fn read_output_progress_for_recovery(
     paths: &SessionPaths,
     diagnostics: &mut Vec<String>,
 ) -> Option<crate::runtime::OutputProgress> {
-    match crate::runtime::read_output_progress(&paths.events_jsonl()) {
+    match read_session_output_progress(paths) {
         Ok(observed) => Some(observed),
         Err(error) => {
             diagnostics.push(format!("read recovery event observations: {error}"));
             None
         }
     }
+}
+
+/// The task the session was started with, read from its prompt record: what
+/// the certifier holds every run of operator text in the session's requests
+/// to.
+pub(crate) fn read_operator_task(
+    paths: &SessionPaths,
+) -> ServiceResult<result_parse::OperatorTask> {
+    read_exact_owned_regular_file(
+        &paths.control.join("prompt.txt"),
+        0o644,
+        crate::config::MAX_PROMPT_BYTES as u64,
+        "prompt record",
+    )
+    .map(|bytes| result_parse::OperatorTask::new(&bytes))
+}
+
+/// The observations of a session's stream, read against the task it was
+/// started with. A session with no stream yet has observed nothing, whether
+/// or not its prompt record was written.
+pub(crate) fn read_session_output_progress(
+    paths: &SessionPaths,
+) -> ServiceResult<crate::runtime::OutputProgress> {
+    let events = paths.events_jsonl();
+    match std::fs::symlink_metadata(&events) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(crate::runtime::OutputProgress::default())
+        }
+        _ => {}
+    }
+    crate::runtime::read_output_progress(&events, &read_operator_task(paths)?)
 }
 
 fn ensure_prompt_record(paths: &SessionPaths, prompt: &str) -> ServiceResult<()> {
@@ -1921,7 +1954,7 @@ async fn finalize_setup_failure(
             process_error = true;
             None
         });
-    let output_observations = match crate::runtime::read_output_progress(&paths.events_jsonl()) {
+    let output_observations = match read_session_output_progress(&paths) {
         Ok(observed) => Some(observed),
         Err(progress_error) => {
             diagnostics.push(format!(

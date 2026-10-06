@@ -6,7 +6,7 @@ evidence under the separate stream contract and never serves as history.
 
 ## Version
 
-Every physical canonical record carries `recordingVersion: 21`
+Every physical canonical record carries `recordingVersion: 23`
 (`CHAT_RECORDING_VERSION`), independently of the client release string. A
 record with any other version, or none, is refused with the file location,
 what the record declares (a version, or no version), and the action: open it

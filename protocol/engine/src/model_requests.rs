@@ -1,5 +1,6 @@
 //! Replay provider request evidence without reserializing its JSON body.
 use crate::{
+    authorship::{self, DrawOutput, ModelOutputs, OperatorTask},
     generation::{Generation, Origin},
     json::{Document, Limits, Value},
     schema::ValidationLimits,
@@ -715,7 +716,11 @@ pub(crate) struct ModelRequests {
     attempts: BTreeMap<String, AttemptState>,
     compactions: BTreeMap<String, CompactionOperation>,
     claimed_compactions: BTreeSet<String>,
-    generation_ids: BTreeSet<String>,
+    /// Every admitted generation, by its identity: what runs of model text
+    /// in a later request may cite.
+    generations: BTreeMap<String, Arc<Generation>>,
+    /// What each claimed compaction draw wrote, by its physical operation.
+    draws: BTreeMap<String, DrawOutput>,
     usage: BTreeMap<String, GenerationUsageSummary>,
     all_usage: GenerationUsageSummary,
 }
@@ -1463,6 +1468,7 @@ impl ModelRequests {
         record: Value<'_>,
         line: usize,
         limits: Limits,
+        operator: &OperatorTask,
     ) -> ContractResult<RequestAdmission> {
         let request = field(record, "request", line)?;
         let journal_id = text(request, "journal_id", line)?;
@@ -1640,6 +1646,18 @@ impl ModelRequests {
             }
             messages.push(message.raw().to_string());
         }
+        authorship::check(
+            body,
+            &json,
+            &document,
+            &messages.iter().map(String::len).collect::<Vec<_>>(),
+            &ModelOutputs {
+                generations: &self.generations,
+                draws: &self.draws,
+            },
+            operator,
+            line,
+        )?;
         let compaction = if let Some(id) = compaction_id {
             if !stream {
                 return Err(refusal("compaction request is not a streamed draw"));
@@ -2405,7 +2423,7 @@ impl ModelRequests {
             || attempt.completed
             || attempt.generation.is_some()
             || attempt.seed.is_none()
-            || self.generation_ids.contains(&generation.id)
+            || self.generations.contains_key(&generation.id)
         {
             return Err(refusal(
                 "generation has no unique open logical request owner",
@@ -2417,7 +2435,8 @@ impl ModelRequests {
     }
 
     pub(crate) fn commit_generation(&mut self, admission: GenerationAdmission) {
-        self.generation_ids.insert(admission.generation.id.clone());
+        self.generations
+            .insert(admission.generation.id.clone(), admission.generation.clone());
         let attempt = admission.generation.origin.attempt.clone();
         self.attempts
             .get_mut(&attempt)
@@ -2565,7 +2584,7 @@ impl ModelRequests {
         physical_requests: u64,
         draw: Value<'_>,
         kind: DrawKind,
-    ) -> ContractResult<(u64, u64, u64)> {
+    ) -> ContractResult<(u64, u64, u64, DrawOutput)> {
         let operation = self
             .compactions
             .get(operation_id)
@@ -2710,19 +2729,36 @@ impl ModelRequests {
                 ));
             }
         }
+        let text = |key: &str| {
+            projection
+                .get(key)
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string()
+        };
         Ok((
             operation.budget,
             operation.first_sequence,
             operation.last_sequence,
+            DrawOutput {
+                reasoning: text("reasoning"),
+                text: text("text"),
+                calls: projection
+                    .get("functionCalls")
+                    .and_then(serde_json::Value::as_array)
+                    .cloned()
+                    .unwrap_or_default(),
+            },
         ))
     }
 
-    pub(crate) fn commit_compaction_claims(&mut self, ids: Vec<String>) {
-        for id in ids {
+    pub(crate) fn commit_compaction_claims(&mut self, claims: Vec<(String, DrawOutput)>) {
+        for (id, output) in claims {
             self.compactions
                 .remove(&id)
                 .expect("planned compaction draw");
-            self.claimed_compactions.insert(id);
+            self.claimed_compactions.insert(id.clone());
+            self.draws.insert(id, output);
         }
     }
 
@@ -2807,12 +2843,16 @@ mod tests {
         );
         assert_eq!(snapshot_bytes(&calls), Some(expected.len()));
     }
+    /// A full body whose every byte the fixture attributes to the harness.
+    fn harness_full(json: &str) -> serde_json::Value {
+        json!({"kind":"full","json":json,"authors":[{"author":"harness","bytes":json.len()}]})
+    }
     fn request(sequence: u64, id: &str, body: serde_json::Value, json: &str) -> String {
         json!({"request":{"journal_id":"j","sequence":sequence,"request_id":id,"owner":{"kind":"utility","operation_id":"utility-operation","purpose":"other"},"kv_scope":"owner","segment_id":"segment","prompt_id":"p","decode_policy":{"mode":"nonstream","model":"fixture-model","strict_tool_calling":true,"named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},"body_bytes":json.len(),"body_sha256":sha256(json),"body":body}}).to_string()
     }
     fn admit(state: &mut ModelRequests, json: &str) -> ContractResult<()> {
         let document = Document::decode(json.as_bytes(), LIMITS).unwrap();
-        let admission = state.plan(document.root(), 1, LIMITS)?;
+        let admission = state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b""))?;
         state.commit(admission);
         Ok(())
     }
@@ -2867,7 +2907,7 @@ mod tests {
             "kv_scope":"owner","segment_id":"segment","prompt_id":"p",
             "decode_policy":{"mode":"stream","model":"fixture-model","strict_tool_calling":true,
                 "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
-            "body_bytes":body.len(),"body_sha256":sha256(&body),"body":{"kind":"full","json":body}}})
+            "body_bytes":body.len(),"body_sha256":sha256(&body),"body":harness_full(&body)}})
         .to_string();
         admit(&mut state, &request).unwrap();
 
@@ -3219,7 +3259,7 @@ mod tests {
         let mut record: serde_json::Value = serde_json::from_str(&request(
             1,
             "request",
-            json!({"kind":"full","json":body}),
+            harness_full(&body),
             body,
         ))
         .unwrap();
@@ -3237,7 +3277,7 @@ mod tests {
         let mut record: serde_json::Value = serde_json::from_str(&request(
             1,
             "request",
-            json!({"kind":"full","json":body}),
+            harness_full(&body),
             body,
         ))
         .unwrap();
@@ -3267,7 +3307,7 @@ mod tests {
             .find(|row| row["type"] == "model_request")
             .unwrap();
         let document = Document::decode(request.to_string().as_bytes(), LIMITS).unwrap();
-        let admission = state.plan(document.root(), 1, LIMITS).unwrap();
+        let admission = state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"work")).unwrap();
         state.commit(admission);
         let seed = rows
             .iter()
@@ -3282,7 +3322,7 @@ mod tests {
         later["request"]["request_id"] = json!("retry-after-seed");
         later["request"]["segment_id"] = json!("new-segment");
         let document = Document::decode(later.to_string().as_bytes(), LIMITS).unwrap();
-        let refusal = match state.plan(document.root(), 1, LIMITS) {
+        let refusal = match state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"")) {
             Ok(_) => panic!("chat request followed its normalization seed"),
             Err(error) => error,
         };
@@ -3294,13 +3334,13 @@ mod tests {
         let mut state = ModelRequests::default();
         admit(
             &mut state,
-            &request(1, "first", json!({"kind":"full","json":body}), body),
+            &request(1, "first", harness_full(&body), body),
         )
         .unwrap();
         let mut second: serde_json::Value = serde_json::from_str(&request(
             2,
             "second",
-            json!({"kind":"full","json":body}),
+            harness_full(&body),
             body,
         ))
         .unwrap();
@@ -3460,7 +3500,7 @@ mod tests {
                     r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
                 admit(
                     &mut state,
-                    &request(1, "r", json!({"kind":"full","json":body}), body),
+                    &request(1, "r", harness_full(&body), body),
                 )
                 .unwrap();
                 // A successful response other than No Content serves its usage.
@@ -3555,7 +3595,7 @@ mod tests {
                     let mut record: serde_json::Value = serde_json::from_str(&request(
                         1,
                         "r",
-                        json!({"kind":"full","json":body}),
+                        harness_full(&body),
                         &body,
                     ))
                     .unwrap();
@@ -3636,7 +3676,7 @@ mod tests {
                     r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
                 admit(
                     &mut state,
-                    &request(1, "r", json!({"kind":"full","json":body}), body),
+                    &request(1, "r", harness_full(&body), body),
                 )
                 .unwrap();
                 let physical = json!({"id":"usage-test","object":"chat.completion",
@@ -3706,11 +3746,19 @@ mod tests {
     fn exact_request_replay_and_omission_refusals() {
         let first = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[{"role":"system","content":"tools \\"}],"tools":[{"messages":"nested"}]}"#;
         let second = r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[{"role":"system","content":"tools \\"},{"role":"user","content":"שלום\n"}],"tools":[]}"#;
-        let a = request(3, "a", json!({"kind":"full","json":first}), first);
+        let a = request(3, "a", harness_full(first), first);
         let b = request(
             4,
             "b",
-            json!({"kind":"delta","base_request_id":"a","retain_messages":1,"prefix":"{\"kv_scope\":\"owner\",\"model\":\"fixture-model\",\"stream\":false,\"messages\":[","suffix":"],\"tools\":[]}","added_messages":[r#"{"role":"user","content":"שלום\n"}"#]}),
+            {
+                let prefix = "{\"kv_scope\":\"owner\",\"model\":\"fixture-model\",\"stream\":false,\"messages\":[";
+                let suffix = "],\"tools\":[]}";
+                let added = r#"{"role":"user","content":"שלום\n"}"#;
+                json!({"kind":"delta","base_request_id":"a","retain_messages":1,"prefix":prefix,"suffix":suffix,"added_messages":[added],
+                    "authors":{"prefix":[{"author":"harness","bytes":prefix.len()}],
+                        "added_messages":[[{"author":"harness","bytes":added.len()}]],
+                        "suffix":[{"author":"harness","bytes":suffix.len()}]}})
+            },
             second,
         );
         let mut state = ModelRequests::default();
@@ -3756,6 +3804,118 @@ mod tests {
         changed["request"]["body_bytes"] = json!(1);
         assert!(admit(&mut ModelRequests::default(), &changed.to_string()).is_err());
     }
+    /// The shared wire stream's state after its one turn: the request, its
+    /// response and the generation it accepted.
+    fn after_wire_turn() -> (ModelRequests, serde_json::Value) {
+        let rows: Vec<serde_json::Value> =
+            serde_json::from_str(include_str!("../../test-vectors/ordinary-tool-wire.json")).unwrap();
+        let mut state = ModelRequests::default();
+        let mut request = serde_json::Value::Null;
+        for row in rows {
+            let raw = row.to_string();
+            let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+            match row["type"].as_str().unwrap() {
+                "system" => {
+                    let origin = state
+                        .plan_origin(field(document.root(), "request_evidence_origin", 1).unwrap(), 1)
+                        .unwrap();
+                    state.commit_origin(origin);
+                }
+                "model_request" => {
+                    let plan = state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"work")).unwrap();
+                    state.commit(plan);
+                    request = row["request"].clone();
+                }
+                "model_response" => {
+                    let plan = state.plan_response(document.root(), 1).unwrap();
+                    state.commit_response(plan);
+                }
+                "model_normalization_seed" => {
+                    let plan = state.plan_seed(document.root(), 1).unwrap();
+                    state.commit_seed(plan);
+                }
+                "model_generation" => {
+                    let plan = state
+                        .plan_generation(document.root(), 1, LIMITS, ValidationLimits { operations: 1_000_000 })
+                        .unwrap();
+                    state.commit_generation(plan);
+                }
+                "model_attempt_completion" => {
+                    let plan = state.plan_completion(document.root(), 1).unwrap();
+                    state.commit_completion(plan);
+                }
+                _ => {}
+            }
+        }
+        (state, request)
+    }
+
+    /// The next request carries the accepted turn as the model wrote it: its
+    /// reasoning, its text and its call's name are the model's, each held
+    /// byte for byte to the generation it cites; the call's arguments are
+    /// the harness's serialization, which holds no string of the model's.
+    #[test]
+    fn model_text_in_a_request_is_held_to_the_generation_it_cites() {
+        let (state, first) = after_wire_turn();
+        let generation = "b8153dce-26f4-468d-acb3-3b546078998f";
+        let content = "before  after";
+        let reasoning = "  **raw thought**\n";
+        let assistant = json!({"role":"assistant","content":content,"reasoning_content":reasoning,
+            "tool_calls":[{"id":"provider__qwen_dup_2","type":"function",
+                "function":{"name":"audit_probe","arguments":"{\"value\":1}"}}]})
+        .to_string();
+        let json = first["body"]["json"].as_str().unwrap();
+        let close = json.find("]}],").unwrap() + 2;
+        let (prefix_end, suffix_start) = (json.find('[').unwrap() + 1, close);
+        let prefix = &json[..prefix_end];
+        let suffix = &json[suffix_start..];
+        let retained = &json[prefix_end..suffix_start];
+        let body_json = format!("{prefix}{retained},{assistant}{suffix}");
+        let model = |text: &str, field: &str, offset: usize| {
+            json!({"author":"model","bytes":text.len(),
+                "source":{"kind":"generation","id":generation,"field":field,"offset":offset}})
+        };
+        let runs = |content_field: &str, content_offset: usize| {
+            let at = |needle: &str| assistant.find(needle).unwrap();
+            let reasoning_at = at("  **raw");
+            let name_at = at("audit_probe");
+            let content_at = at(content);
+            // The stored reasoning spells its line break as an escape: its
+            // run spans those stored bytes and is held to the decoded ones.
+            let stored_reasoning = "  **raw thought**\\n";
+            json!([[
+                json!({"author":"harness","bytes":content_at}),
+                model(content, content_field, content_offset),
+                json!({"author":"harness","bytes":reasoning_at - content_at - content.len()}),
+                model(stored_reasoning, "/reasoning", 0),
+                json!({"author":"harness","bytes":name_at - reasoning_at - stored_reasoning.len()}),
+                model("audit_probe", "/calls/0/name", 0),
+                json!({"author":"harness","bytes":assistant.len() - name_at - "audit_probe".len()}),
+            ]])
+        };
+        let request = |added: serde_json::Value| {
+            json!({"request":{"journal_id":first["journal_id"],"sequence":2,"request_id":"second",
+                "owner":{"kind":"chat","attempt_id":"second-attempt"},"kv_scope":first["kv_scope"],
+                "segment_id":first["segment_id"],"prompt_id":"p","decode_policy":first["decode_policy"],
+                "body_bytes":body_json.len(),"body_sha256":sha256(&body_json),
+                "body":{"kind":"delta","base_request_id":first["request_id"],"retain_messages":1,
+                    "prefix":prefix,"suffix":suffix,"added_messages":[assistant],
+                    "authors":{"prefix":[{"author":"harness","bytes":prefix.len()}],
+                        "added_messages":added,"suffix":[{"author":"harness","bytes":suffix.len()}]}}}})
+            .to_string()
+        };
+        let plan = |added: serde_json::Value| {
+            let raw = request(added);
+            let document = Document::decode(raw.as_bytes(), LIMITS).unwrap();
+            state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"work")).map(|_| ())
+        };
+        plan(runs("/text", 0)).unwrap();
+        for (field, offset) in [("/text", 1), ("/reasoning", 0)] {
+            let error = plan(runs(field, offset)).unwrap_err().to_string();
+            assert!(error.contains("not the bytes of generation"), "{error}");
+        }
+    }
+
     #[test]
     fn captured_physical_and_logical_closure_requires_exact_terminal_usage() {
         let rows: Vec<serde_json::Value> =
@@ -3775,7 +3935,7 @@ mod tests {
                     state.commit_origin(origin);
                 }
                 "model_request" => {
-                    let plan = state.plan(document.root(), 1, LIMITS).unwrap();
+                    let plan = state.plan(document.root(), 1, LIMITS, &OperatorTask::new(b"work")).unwrap();
                     state.commit(plan);
                 }
                 "model_response" => {
@@ -3834,7 +3994,7 @@ mod tests {
             let body =
                 r#"{"kv_scope":"owner","model":"fixture-model","stream":false,"messages":[]}"#;
             let mut value: serde_json::Value =
-                serde_json::from_str(&request(1, "r", json!({"kind":"full","json":body}), body))
+                serde_json::from_str(&request(1, "r", harness_full(&body), body))
                     .unwrap();
             value["request"]["owner"] = json!({"kind":"chat","attempt_id":"attempt"});
             admit(&mut state, &value.to_string()).unwrap();

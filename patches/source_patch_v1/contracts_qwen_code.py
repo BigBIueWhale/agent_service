@@ -1008,18 +1008,20 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
             "export const GIT_SNAPSHOT_REPOSITORY_BYTES =",
             "MAX_BRANCH_LINE_BYTES + MAX_STATUS_BYTES + MAX_LOG_BYTES;",
             "function repositoryLines(",
-            "const lines = tokenizerText(",
-            ".map((line) => `git: ${line}\\n`)",
-            "if (lines.bytes <= maxBytes) return lines.text;",
-            "const kept = cutToTokenizerBytes(",
+            "const lines = tokenizerAuthored(",
+            # Each line of a value is the repository's, between the harness's
+            # prefix and newline.
+            "authored(harnessText('git: '), line, harnessText('\\n')),",
+            "if (lines.bytes <= maxBytes) return lines.value;",
+            "const kept = cutAuthoredToTokenizerBytes(",
             "if (rendered.bytes > maxBytes) {",
             # A value over its cap is a defect in the cut, and must not pass
             # for a repository that had no snapshot.
             "  return renderGitSnapshot(values);\n}",
-            "    '```text\\n' +\n    value(\n      `Current branch: ${values?.branch ?? ''}`,\n      MAX_BRANCH_LINE_BYTES,\n      'branch --show-current',\n    ) +\n    'git: Status:\\n' +",
-            "value(values?.status ?? '', MAX_STATUS_BYTES, 'status')",
-            "value(values?.log ?? '', MAX_LOG_BYTES, 'log --oneline -n 5')",
-            "export const GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA = renderGitSnapshot();",
+            "    harnessText(`${GIT_SNAPSHOT_HEADER}\\n` + '```text\\n'),\n    value(\n      authored(harnessText('Current branch: '), values?.branch ?? NO_TEXT),\n      MAX_BRANCH_LINE_BYTES,\n      'branch --show-current',\n    ),\n    harnessText('git: Status:\\n'),",
+            "value(values?.status ?? NO_TEXT, MAX_STATUS_BYTES, 'status')",
+            "value(values?.log ?? NO_TEXT, MAX_LOG_BYTES, 'log --oneline -n 5')",
+            "export const GIT_SNAPSHOT_WITHOUT_REPOSITORY_DATA = renderGitSnapshot().text;",
         ),
         label=label,
     )
@@ -1489,8 +1491,8 @@ def _validate_image_after(state: State) -> None:
             "const shouldRenderImageOverview = fileType === 'image';",
             "Raster image did not enter the required PNG validator.",
             "const view = await renderImageOverview(",
-            "data: view.bytes.toString('base64')",
-            "mimeType: view.mimeType",
+            "const data = view.bytes.toString('base64');",
+            "                inlineData: {\n                  data,\n                  mimeType: view.mimeType,",
             "if (!(error instanceof ImageViewError)) throw error;",
         ),
         label=label,
@@ -2651,19 +2653,37 @@ def _validate_subagent_result_scope_after(state: State) -> None:
             "      loopType,\n"
             "      finalMessageSlip,\n"
             "    );\n",
-            "      ? `[${summary}; its assignment is unfinished and the report below is partial]\\n\\n${partial}`\n"
-            "      : `[${summary} and produced no report; its assignment is unfinished]`;",
+            # The label is the harness's; the report keeps the authors it
+            # states, the subagent model's.
+            "    return partial.text.trim()\n"
+            "      ? authored(\n"
+            "          harnessText(\n"
+            "            `[${summary}; its assignment is unfinished and the report below is partial]\\n\\n`,\n"
+            "          ),\n"
+            "          partial,\n"
+            "        )\n"
+            "      : harnessText(\n"
+            "          `[${summary} and produced no report; its assignment is unfinished]`,\n"
+            "        );",
         ),
         label=label,
     )
     _require_ordered(
         _source(state, agent_tool, label=label),
         (
+            # Each result is the text it always was, with the authors its
+            # pieces state when every piece states them (`resultPart`).
             "          if (terminateMode === AgentTerminateMode.GOAL) {\n"
             "            const visibleFinalText =\n"
             "              finalText || '(subagent produced no model-visible output)';\n"
             "            return {\n"
-            "              llmContent: [{ text: visibleFinalText + wtSuffix }],\n"
+            "              llmContent: [\n"
+            "                resultPart(\n"
+            "                  visibleFinalText + wtSuffix,\n"
+            "                  finalText ? authoredFinalText : harnessText(visibleFinalText),\n"
+            "                  worktree,\n"
+            "                ),\n"
+            "              ],\n"
             "              returnDisplay: this.currentDisplay!,\n"
             "            };\n"
             "          }\n",
@@ -2676,19 +2696,21 @@ def _validate_subagent_result_scope_after(state: State) -> None:
             "              subagent.getFinalMessageSlip(),\n"
             "            ),\n"
             "          };\n",
-            "                  text: `Agent was cancelled by the user. Partial result follows:\\n\\n${finalText}${wtSuffix}`,\n"
-            "                },\n"
-            "              ],\n"
+            "                  `Agent was cancelled by the user. Partial result follows:\\n\\n${finalText}${wtSuffix}`,\n",
             "              returnDisplay: this.currentDisplay!,\n"
             "              error: unfinished,\n"
             "            };\n",
-            "            llmContent: [{ text: finalText + wtSuffix }],\n"
+            "              resultPart(finalText + wtSuffix, authoredFinalText, worktree),\n"
+            "            ],\n"
             "            returnDisplay: this.currentDisplay!,\n"
             "            error: unfinished,\n"
             "          };\n",
-            "      const failedToRun = `Failed to run subagent: ${errorMessage}`;\n"
-            "      return {\n"
-            "        llmContent: `${failedToRun}${wtSuffix}${effectSuffix}`,\n"
+            "      const failedToRun = `Failed to run subagent: ${errorMessage}`;\n",
+            "        harnessText(`${failedToRun}${wtSuffix}`),\n"
+            "        qwen38EffectSummary\n"
+            "          ? authored(harnessText('\\n\\n'), qwen38EffectSummary)\n"
+            "          : NO_TEXT,\n",
+            "        llmContent: [authoredTextPart(failedText)],\n"
             "        returnDisplay: this.currentDisplay!,\n"
             "        error: { type: ToolErrorType.EXECUTION_FAILED, message: failedToRun },\n"
             "      };\n",
@@ -3070,10 +3092,17 @@ def _validate_param_contract_after(state: State) -> None:
     # resume line is the only value the reading layer computes; the limit is
     # the caller's, never the size of the page that happened to fit, which
     # would shrink every page after a long one.
-    require_text(
+    # The path is the JSON string of the call's own file_path, re-serialized
+    # by JSON.stringify (`modelArgumentJson`), so the call can be made as
+    # written.
+    _require_all(
         state,
         read_file,
-        "`Continue with: read_file with file_path: ${JSON.stringify(filePath)}, offset: ${page.nextOffset}${limit}`",
+        (
+            "        `Continue with: read_file with file_path: `,\n    ),\n    filePath,\n    harnessText(`, offset: ${page.nextOffset}${limit}`),",
+            "  return modelArgumentJson('/file_path', filePath);",
+            "pageContinues(readOnPath(this.params.file_path), {",
+        ),
         label=label,
     )
     require_text(state, files, "  nextRead?: { offset: number };", label=label)
@@ -3338,7 +3367,8 @@ def _validate_text_read_fidelity_after(state: State) -> None:
             "        const rangeReachedEof =",
             "        const linesIncluded = pageLines.length;",
             "            index === pageLines.length - 1 && rangeReachedEof",
-            "              : `${line}\\n`,",
+            # Each line and the newline after it are the file's.
+            "              ? [line]\n              : [line, worldText('\\n')],",
             "            ? { nextRead: { offset: actualEndLine } }",
         ),
         label=label,
@@ -3469,7 +3499,7 @@ def _validate_literal_response_after(state: State) -> None:
             "const observed = observationNormalizer.accept(chunk)",
             "observations.push(observed)",
             "generation = freezeModelGeneration(attempt.journalId, {",
-            "const accepted = generationHistory(readModelGeneration(generation))",
+            "const accepted = authoredGenerationHistory(\n        generation.generation_id,\n        readModelGeneration(generation),\n      );",
             "const committed = this.chatRecordingService.recordGeneration({",
         ),
         label=label,
@@ -3511,7 +3541,7 @@ def _validate_literal_response_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "const accepted = generationHistory(readModelGeneration(generation));",
+            "const accepted = authoredGenerationHistory(\n        generation.generation_id,\n        readModelGeneration(generation),\n      );",
             "const committed = this.chatRecordingService.recordGeneration({\n          historyLength: this.history.length,\n          generation,",
             "this.pendingAssistant = accepted;",
             "this.history.push(accepted);",
@@ -3754,18 +3784,21 @@ def _validate_model_facing_failure_after(state: State) -> None:
         scheduler,
         (
             "export function mergeModelFacingFailureText(",
-            "        const modelFacingText = mergeModelFacingFailureText(\n"
+            # The merge with the authors of what it composes; its text alone
+            # is `mergeModelFacingFailureText`.
+            "        const modelFacingText = mergeModelFacingFailure(\n"
             "          toolResult.llmContent,\n"
-            "          errorMessage,\n"
-            "        );",
+            "          toolResult.llmContentAuthors ?? undefined,\n"
+            "          errorMessage === operationalErrorMessage\n",
+            "  return mergeModelFacingFailure(\n    llmContent,\n    undefined,\n    unstated(operationalMessage),\n  ).text;",
             # The merged text reaches the model and nothing else. Folding it
             # into `errorMessage` instead leaked tool output into the
             # scrollback, the PostToolUseFailure hook and the sanitized
             # telemetry span -- three readers that want the operational
             # summary, not the model's copy.
-            "  modelFacingText?: string,",
-            "  const modelText = modelFacingText ?? error.message;",
-            "        response: { error: modelText },",
+            "  modelFacingText?: ResponseText,",
+            "  const modelText =\n    modelFacingText ?? errorAuthors(error) ?? unstated(error.message);",
+            "            response: { error: modelText.text },",
             "    resultDisplay: resultDisplay ?? error.message,",
         ),
         label=label,
@@ -3775,7 +3808,7 @@ def _validate_model_facing_failure_after(state: State) -> None:
     _require_ordered(
         source,
         (
-            "const modelFacingText = mergeModelFacingFailureText(",
+            "const modelFacingText = mergeModelFacingFailure(",
             "const error = new Error(errorMessage);",
             "          modelFacingText,",
         ),
@@ -3825,12 +3858,12 @@ def _validate_model_facing_failure_after(state: State) -> None:
     # `error.message` is deliberately left whole. The scrollback, the
     # PostToolUseFailure hook and the sanitized telemetry span read it and
     # want the operational summary in full.
-    merge = source.split("export function mergeModelFacingFailureText(", 1)[1].split(
+    merge = source.split("function mergeModelFacingFailure(", 1)[1].split(
         "\n}\n", 1
     )[0]
     _require(
-        "return `${modelFacing}\\n${operational}`;" in merge
-        and "return `${operational}\\n${modelFacing}`;" not in merge,
+        "return joinedResponseText([modelFacing, operational], '\\n');" in merge
+        and "[operational, modelFacing]" not in merge,
         f"{label}: the operational summary no longer follows the model-facing "
         f"half of a merged failure, where the end a bound keeps holds it.",
     )
@@ -4540,7 +4573,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "const instructions = collectInstructions(history);",
             "instructions.forEach((instruction, index) => {",
-            "if (index > 0) parts.push({ text: RETAINED_INPUT_SEPARATOR });",
+            "if (index > 0)",
+            "parts.push(authoredTextPart(harnessText(RETAINED_INPUT_SEPARATOR)));",
             "...attachInstructions(structuredClone(instruction.parts), [instruction])",
             "return parts;",
         ),
@@ -4629,11 +4663,16 @@ def _validate_compaction_budget_after(state: State) -> None:
             # child per section, its tags laid out as upstream's compression
             # prompt lays them out, and each section's text between them
             # exactly as the model wrote it: nothing is escaped, indented or
-            # trimmed.
-            "    [`    <${section}>`, snapshot[section], `    </${section}>`].join('\\n');",
+            # trimmed. The tags, their indentation and the breaks around them
+            # are the harness's runs; each section is the run its caller
+            # states -- the model's, cited to the draw's call -- and the text
+            # alone reads the same renderer.
+            "      harnessText(`    <${section}>\\n`),\n      sectionText(section),\n      harnessText(`\\n    </${section}>`),",
+            "        : [harnessText('\\n\\n'), element(section)],",
             "  const at = STATE_SNAPSHOT_ELEMENTS.indexOf(RETAINED_INPUTS_ELEMENT);",
-            "      `<state_snapshot>\\n${before.join('\\n\\n')}\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n`,",
-            "      `\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n${after.join('\\n\\n')}\\n</state_snapshot>`,",
+            "        harnessText('<state_snapshot>\\n'),\n        ...before,\n        harnessText(`\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n`),",
+            "        harnessText(`\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n`),\n        ...after,\n        harnessText('\\n</state_snapshot>'),",
+            "const { opening, closing } = renderAuthoredStateSnapshot(",
             "export function stateSnapshotText(snapshot: StateSnapshot): string {",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
             "(section) => !String(record[section]).trim(),",
@@ -4984,12 +5023,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export const STARTUP_LISTING_BYTES = 1024;",
             "export const STARTUP_CONTEXT_WORKSPACE_BYTES =",
             "export const STARTUP_CONTEXT_WITHOUT_WORKSPACE_DATA = `${STARTUP_CONTEXT_HEAD}${STARTUP_CONTEXT_FOLDERS}${SYSTEM_REMINDER_CLOSE}`;",
-            "return `${STARTUP_CONTEXT_HEAD}${environment}${STARTUP_CONTEXT_FOLDERS}${listing}${SYSTEM_REMINDER_CLOSE}`;",
+            "  return authored(\n    harnessText(\n      `${STARTUP_CONTEXT_HEAD}${environment}${STARTUP_CONTEXT_FOLDERS}`,\n    ),\n    listing,\n    harnessText(SYSTEM_REMINDER_CLOSE),\n  );",
             "if (lines.bytes > STARTUP_ENVIRONMENT_BYTES) {",
-            "if (listing.bytes <= STARTUP_LISTING_BYTES) return listing.text;",
+            "if (listing.bytes <= STARTUP_LISTING_BYTES) return listing.value;",
             "if (cut.bytes > STARTUP_LISTING_BYTES) {",
             "export function declareStartupContext(",
-            "return { ...part, text: STARTUP_CONTEXT_WITHOUT_WORKSPACE_DATA };",
+            "    return withAuthoredText(\n      part,\n      harnessText(STARTUP_CONTEXT_WITHOUT_WORKSPACE_DATA),\n    );",
         ),
         label=label,
     )
@@ -5400,7 +5439,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "let outcome = await drawCandidate(contents);",
             "const notice = drawRefusalNotice(outcome.refusal);",
             "rejectedAttempts.push({",
-            "contents = [\n          ...sideQueryOptions.contents,\n          { role: 'user', parts: [{ text: notice }] },\n        ];",
+            "contents = [\n          ...sideQueryOptions.contents,\n          { role: 'user', parts: [authoredTextPart(harnessText(notice))] },\n        ];",
             "outcome = await drawCandidate(contents);",
         ),
         label=label,
@@ -5546,7 +5585,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const requestContents = (maxOutputTokens: number): Content[] => [\n"
             "      ...issuedPrompt,\n",
             "      promptCacheSharing: true,",
-            "            turn,\n          },\n        );",
+            "            turn,\n            // Acceptance holds the draw to exactly one call, the snapshot's.\n            draw: { operationId: accounting.operationId, call: 0 },\n          },\n        );",
         ),
         label=label,
     )
@@ -5574,7 +5613,8 @@ def _validate_compaction_budget_after(state: State) -> None:
     # The closing message and the snapshot's declaration are built in one
     # place, which the startup proof counts and every draw is issued from.
     for construct in (
-        "text: `${instructions}\\n\\n${compactionRequestDirective(maxOutputTokens)}`",
+        "const directive = `\\n\\n${compactionRequestDirective(maxOutputTokens)}`;",
+        ": authoredTextPart(authored(instructions, harnessText(directive))),",
         "compactionDirectiveMessage(systemInstruction, maxOutputTokens),",
         "  return [...turnTools, stateSnapshotTool(partition.snapshotBytes)];",
         "tools: compactionRequestTools(turnTools, partition),",
@@ -5686,8 +5726,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         "packages/core/src/core/authored-instructions.ts",
         (
-            "retainUserInput",
-            "retainDelegatedTask",
+            "export function retainInput(",
             "retainedInstructionParts",
             "carryHistoryInstructions",
             "Conflicting authored instruction",
@@ -5708,10 +5747,14 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "export function composePostCompactHistory(",
             "): Content[] {",
-            "const { planModeActive, runningSubagents, turn = [] } = options;",
-            "function snapshotMessage(snapshot: StateSnapshot, inputs: Part[]): Content {",
-            "      { text: opening },\n      ...inputs,\n      { text: `${closing}\\n\\n${RESUME_TRAILER}` },",
-            "const snapshot = snapshotMessage(declared, retainedInstructionParts(history));",
+            "const { planModeActive, runningSubagents, turn = [], draw } = options;",
+            # A snapshot is composed only with the draw that wrote it: its
+            # sections cite that draw's call as the model's text.
+            "  draw: StateSnapshotDraw;",
+            "function snapshotMessage(\n  snapshot: StateSnapshot,\n  inputs: Part[],\n  draw: StateSnapshotDraw,\n): Content {",
+            "(section) => stateSnapshotSectionText(snapshot, draw, section),",
+            "      authoredTextPart(opening),\n      ...inputs,\n      authoredTextPart(authored(closing, harnessText(`\\n\\n${RESUME_TRAILER}`))),",
+            "  const snapshot = snapshotMessage(\n    declared,\n    retainedInstructionParts(history),\n    draw,\n  );",
             "export function compactionDeclaration(",
             "const BLOCK_SEPARATOR = '\\n\\n';",
             "    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],",
@@ -6558,8 +6601,9 @@ def _validate_incomplete_generation_after(state: State) -> None:
     # refused at its limit, and answer it the same way: the notice, written to
     # the stream and recorded, is the whole message of a redraw, and the
     # MAX_GENERATION_DRAWS-th refusal in a row ends the run naming the limit.
-    # A record's author is stated by the code that writes it: the runtime's
-    # notice is the runtime's, and nothing infers an author from a type.
+    # A recorded message's author is read from the authors its parts state,
+    # the one determination its requests publish: the runtime's notice states
+    # that the harness wrote it, and nothing infers an author from a type.
     recording = "packages/core/src/services/chatRecordingService.ts"
     _require_all(
         state,
@@ -6569,8 +6613,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "    type: T,\n"
             "    provenance: ChatRecordProvenance,\n"
             "  ): Pick<",
-            "    provenance: Extract<ChatRecordProvenance, 'real_user' | 'system'>,",
-            "      ...this.createBaseRecord('user', provenance),\n"
+            "export function userMessageProvenance(",
+            "      ...this.createBaseRecord('user', userMessageProvenance(content)),\n"
             "      subtype: 'mid_turn_user_message',",
         ),
         label=label,
@@ -6593,8 +6637,8 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "if (consecutiveTurnRefusals >= MAX_GENERATION_DRAWS) {",
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
             "message: describeRefusedTurns(refused, turnCount),",
-            "const parts: Part[] = [{ text: refusedTurnNotice(refused) }];",
-            ".recordMidTurnUserMessage(parts, 'system');",
+            "authoredTextPart(harnessText(refusedTurnNotice(refused))),",
+            ".recordMidTurnUserMessage(parts);",
             "return parts;",
             "if (redrawRefusedTurn) {",
             "sendType = SendMessageType.Redraw;",
@@ -7121,7 +7165,7 @@ def _validate_final_message_slip_after(state: State) -> None:
             "if (consecutiveFinalMessageSlips >= FINAL_MESSAGE_SLIP_LIMIT) {",
             "terminateMode: AgentTerminateMode.SLIPPED_FINAL_MESSAGE,",
             "message: describeSlippedFinalMessage(kind),",
-            "recordMidTurnUserMessage(notice, 'system')",
+            "recordMidTurnUserMessage(notice)",
             "? describeFinalMessageSlip(turnText)",
             "? describeFinalMessageSlip(itemText)",
         ),
@@ -7131,7 +7175,8 @@ def _validate_final_message_slip_after(state: State) -> None:
         cli_source,
         (
             "const noticeForFinalMessageSlip = async (",
-            "recordMidTurnUserMessage(notice, 'system')",
+            "harnessText(\n                  finalMessageSlipNotice(kind, consecutiveFinalMessageSlips),",
+            "recordMidTurnUserMessage(notice)",
             "return notice;",
         ),
         label=label,
@@ -7293,8 +7338,10 @@ def _validate_final_message_slip_after(state: State) -> None:
         ),
         label=label,
     )
+    # The parent's result reads it twice -- its text and the same text with
+    # its authors -- its failed call and the terminal display once each.
     _require(
-        _source(state, agent_tool, label=label).count("subagent.getFinalMessageSlip()") == 4,
+        _source(state, agent_tool, label=label).count("subagent.getFinalMessageSlip()") == 5,
         f"{label}: {agent_tool} does not carry the shape of the slip to the "
         "parent, its failed call and the terminal display",
     )
@@ -8195,8 +8242,11 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const maxBytes = config.getInlineBlockBytes();",
             "function withNestedTextJoined(",
             "export function assertToolResponsesBounded(",
-            "  keepLeadingLines,\n  keepTrailingLines,\n  SLICED_LINE_MARK,\n  tokenizerText,\n  type KeptLines,\n} from './tokenLimits.js';",
-            "import { middleCutContent, type OutputBound } from '../tools/tools.js';",
+            "  keepLeadingLines,\n  keepTrailingLines,\n  normalizeAuthored,\n  SLICED_LINE_MARK,\n  tokenizerText,\n  type KeptLines,\n} from './tokenLimits.js';",
+            # The cut with its authors is the same layout, and is held to be
+            # the text the bound emitted.
+            "import {\n  authoredMiddleCutContent,\n  middleCutContent,\n  type OutputBound,\n} from '../tools/tools.js';",
+            "  if (authoredCut.text !== emitted.text) {",
             "SESSION_ARTIFACT_CAPACITY_BYTES,",
             "widestSessionArtifactPath,",
         ),
@@ -8232,10 +8282,10 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "? readBack(retention.filepath, firstCut, lastCut - firstCut + 1)",
             "if (emitted.bytes > maxBytes) {",
             "async function boundedPart(",
-            "const functionResponse = withNestedTextJoined(part.functionResponse);",
+            "  const joined = withNestedTextJoined(part);\n  const functionResponse = joined.functionResponse!;",
             "const whole = tokenizerText(text);",
             "if (whole.bytes <= maxBytes) {",
-            "handedOn = await boundedText(config, maxBytes, text, whole);",
+            "handedOn = await boundedText(config, maxBytes, text, whole, wholeAuthored);",
         ),
         label=label,
         location=seam_path,
@@ -8263,7 +8313,9 @@ def _validate_tool_result_bound_after(state: State) -> None:
         "packages/core/src/tools/tools.ts",
         (
             "export function middleCutContent(",
-            "  return `${head}\\n\\n---\\n${MIDDLE_CUT_LEAD}${formatOutputBound(bound)}\\n---\\n\\n${tail}`;",
+            # The text form is the authored form's text: one layout.
+            "  return authoredMiddleCutContent(\n    harnessText(head),\n    harnessBound(bound),\n    harnessText(tail),\n  ).text;",
+            "    head,\n    harnessText(`\\n\\n---\\n${MIDDLE_CUT_LEAD}`),\n    authoredOutputBound(bound),\n    harnessText('\\n---\\n\\n'),\n    tail,",
             "'The middle of this result is cut here: above is its start, below is its end. ';",
         ),
         label=label,
@@ -9016,7 +9068,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 22;",
+            "export const CHAT_RECORDING_VERSION = 23;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -9057,7 +9109,8 @@ def _validate_served_accounting_after(state: State) -> None:
         "request.chatAttempt?.assertRequestContents(request.contents);",
         "openaiRequest = await this.buildRequest(",
         "request.chatAttempt?.assertRequestContents(request.contents);",
-        "const body = JSON.stringify(openaiRequest);",
+        "const authored = serializeAuthoredRequest(openaiRequest);",
+        "const body = authored.json;",
     ), label=label, location="provider request render remains bound to canonical contents")
     require_text(state, core + "core/openaiContentGenerator/pipeline.test.ts",
                  "refuses a provider mutation of rendered contents before request admission",
@@ -9071,7 +9124,8 @@ def _validate_served_accounting_after(state: State) -> None:
     capture = _source(state, pipeline, label=label).split("const executeAttempt = async () => {", 1)[1]
     _require_ordered(capture, (
         "openaiRequest = await this.buildRequest(",
-        "const body = JSON.stringify(openaiRequest)",
+        "const authored = serializeAuthoredRequest(openaiRequest);",
+        "const body = authored.json;",
         "const decodePolicy = selectOpenAIResponseDecodePolicy(",
         "openaiRequest.model,",
         "openaiRequest.stream !== (decodePolicy.mode === 'stream')",
@@ -9398,7 +9452,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "readCompleteStoredCanonicalChatRecords(file)",
         "refuses a provider request the SDK changes before dispatch",
         "keeps a complete abandoned attempt when transport fails before stream acquisition",
-        "accepted turn after actual compaction commit retains later runtime reminder",
+        "a turn after an actual compaction commit resumes exactly",
     ), label=label)
     _require_all(state, pipeline, (
         "const decoder = new OpenAIStreamDecoder(context)",
@@ -9947,7 +10001,8 @@ def _validate_served_accounting_after(state: State) -> None:
     _require_all(state, core + "utils/transcript-records.ts", (
         "readGenerationEnvelope(\n        value['generation'],\n        integrity?.generation,\n      );",
         "export function resolveTranscriptRecord(",
-        "generationHistory(envelope)", "Stored generation records cannot contain derived history or presentation fields",
+        "    message: authoredGenerationHistory(\n      record.generation.generation_id,\n      envelope,\n    ),",
+        "Stored generation records cannot contain derived history or presentation fields",
         "requireRuntimeConversationContent(value['message'], 'model')",
         "requireRuntimeConversationContent(value['message'], 'user')",
         "Adopted and realtime messages cannot claim locally served model usage",
@@ -10925,7 +10980,10 @@ def _validate_stream_admission_after(state: State) -> None:
 _OUTPUT_CAP = re.compile(
     r"\.slice\(\s*0,\s*[\w$.]*(?:[Ll]imit|[Mm]axResults|[Mm]axShown|[Cc]ap)\b"
 )
-_BOUND_HELPER = re.compile(r"\b(?:boundedContent|formatOutputBound)\(")
+# The helper, in its text form or in its form with authors.
+_BOUND_HELPER = re.compile(
+    r"\b(?:boundedContent|authoredBoundedContent|formatOutputBound|authoredOutputBound)\("
+)
 
 # Phrasings the tools used before there was one notice. They are forbidden by
 # name so a tool cannot quietly grow its own vocabulary again: to say a result
@@ -11037,23 +11095,29 @@ def _validate_bounded_output_after(state: State) -> None:
         state,
         tools_ts,
         (
-            "export type OutputBound = OutputBoundFacts &",
+            # The texts a bound is given -- a reason a total is unknown, the
+            # call that continues -- are strings, or authored texts that keep
+            # their authors inside the harness's notice.
+            "export type OutputBound<T = string> = OutputBoundFacts<T> &",
             "        limit: number;",
             "        limitUnit: string;",
             "        limit?: undefined;",
             "        limitUnit?: undefined;",
-            "interface OutputBoundFacts {",
+            "interface OutputBoundFacts<T> {",
             "  requested?: number;",
             "  returned: number;",
-            "  total: number | { readonly unknown: string };",
-            "  continuation?: string | { readonly unretained: string };",
+            "  total: number | { readonly unknown: T };",
+            "  continuation?: T | { readonly unretained: T };",
             "  coverageUnknown?: boolean;",
-            "export function formatOutputBound(bound: OutputBound): string {",
-            "    `${asked}${coverage}${next}`",
-            ": ` The rest was not retained: ${bound.continuation.unretained}`;",
+            # One notice: the text alone is the authored notice's text.
+            "export function formatOutputBound(bound: OutputBound): string {\n  return authoredOutputBound(harnessBound(bound)).text;\n}",
+            "export function authoredOutputBound(\n  bound: OutputBound<AuthoredText>,\n): AuthoredText {",
+            "    harnessText(`${cut}.${asked}${coverage}`),\n    next,",
+            "            harnessText(' The rest was not retained: '),\n            bound.continuation.unretained,",
             ": `, cut at a limit of ${bound.limit} ${bound.limitUnit}`;",
             "export function boundedContent(content: string, bound: OutputBound): string {",
-            "  return `${formatOutputBound(bound)}\\n\\n---\\n\\n${content}`;",
+            "  return authoredBoundedContent(harnessText(content), harnessBound(bound)).text;",
+            "    authoredOutputBound(bound),\n    harnessText('\\n\\n---\\n\\n'),\n    content,",
         ),
         label=label,
     )
@@ -11117,7 +11181,8 @@ def _validate_bounded_output_after(state: State) -> None:
         f"{', '.join(offenders)}. A result that is quietly short is one the "
         f"model cannot tell from a complete one, so it spends the context and "
         f"misreports coverage at the same time. Return the cut content through "
-        f"boundedContent() in packages/core/src/tools/tools.ts, which states "
+        f"boundedContent() in packages/core/src/tools/tools.ts (or "
+        f"authoredBoundedContent(), its form with authors), which states "
         f"what was asked for, what came back, the bound and its unit, the true "
         f"total or why the tool cannot know it, and the exact call that "
         f"continues. Do not phrase a notice here: there is one, so that every "
@@ -11157,10 +11222,10 @@ def _validate_bounded_output_after(state: State) -> None:
             "tokenizerText(`${pageEnds(most, 0, most)}${PAGE_STATEMENT_BREAK}`).bytes,",
             "if (result.nextRead && result.linesShown && trueTotal !== undefined) {",
             "            : { lines: trueTotal, remaining: trueTotal - last },",
-            "        nextOffset: result.nextRead.offset,\n        limit: this.params.limit,\n      })}${PAGE_STATEMENT_BREAK}${page}`;",
+            "          nextOffset: result.nextRead.offset,\n          limit: this.params.limit,\n        }),\n        harnessText(PAGE_STATEMENT_BREAK),\n        page,\n      );",
             "result.originalLineCount - (result.endsWithNewline === true ? 1 : 0);",
             "import { countTextLines } from '../utils/lineCount.js';",
-            "      const last = this.params.offset + countTextLines(page);",
+            "      const last = this.params.offset + countTextLines(page.text);",
             'A read that returns less than the whole file is led by "Showing lines X-Y of N total lines." and then either "The file continues past line Y: R lines remain. Continue with:" and the exact call that reads on, with the same \'limit\', or "The file ends here."',
         ),
         label=label,
@@ -11216,7 +11281,7 @@ def _validate_bounded_output_after(state: State) -> None:
     require_text(
         state,
         edit_tool,
-        "        const snippetText = `Showing lines ${snippetResult.startLine}-${snippetResult.endLine} of ${snippetResult.totalLines} from the edited file:\\n\\n---\\n\\n${snippetResult.content}`;",
+        "            `Showing lines ${snippetResult.startLine}-${snippetResult.endLine} of ${snippetResult.totalLines} from the edited file:\\n\\n---\\n\\n`,\n          ),\n          worldText(snippetResult.content),",
         label=label,
     )
     for retired in ("boundedContent", "lines around the edit", "Bounded result"):
@@ -11282,7 +11347,7 @@ def _validate_bounded_output_after(state: State) -> None:
             "const maxOutputBytes = options.pageBytes ?? DEFAULT_RANGE_READ_BYTES;",
             "const normalized = tokenizerText(line);",
             "if (pageBytes + separator + normalized.bytes > maxOutputBytes) break;",
-            "const page = tokenizerText(pageLines.join('\\n'));",
+            "const page = tokenizerText(\n          pageLines.map((line) => line.text).join('\\n'),\n        );",
         ),
         label=label,
     )
@@ -11290,8 +11355,8 @@ def _validate_bounded_output_after(state: State) -> None:
         state,
         "packages/core/src/tools/read-file.ts",
         (
-            "if (typeof llmContent === 'string' && result.linesShown !== undefined) {",
-            "const block = tokenizerText(llmContent);",
+            "if (isReadText(llmContent) && result.linesShown !== undefined) {",
+            "const block = tokenizerText(llmContent.text);",
             "const maxBytes = this.config.getInlineBlockBytes();",
         ),
         label=label,
@@ -11338,15 +11403,17 @@ def _validate_bounded_output_after(state: State) -> None:
 
     # The known capping tools are named so the detector cannot be satisfied by
     # a tree that simply stopped capping anything. Each cap they keep is the
-    # caller's own or a scan's, and each is stated through boundedContent.
-    for path in (
-        "packages/core/src/tools/glob.ts",
-        "packages/core/src/tools/grep.ts",
-        "packages/core/src/tools/lsp.ts",
-        "packages/core/src/tools/ripGrep.ts",
-        "packages/core/src/tools/tool-search.ts",
+    # caller's own or a scan's, and each is stated through boundedContent --
+    # in its form with authors where the tool states who wrote its result,
+    # ripgrep's search stating its text and its authored text by it alike.
+    for path, helper, count in (
+        ("packages/core/src/tools/glob.ts", "authoredBoundedContent(", 1),
+        ("packages/core/src/tools/grep.ts", "authoredBoundedContent(", 1),
+        ("packages/core/src/tools/lsp.ts", "boundedContent(", 1),
+        ("packages/core/src/tools/ripGrep.ts", "authoredBoundedContent(", 2),
+        ("packages/core/src/tools/tool-search.ts", "boundedContent(", 1),
     ):
-        require_text(state, path, "boundedContent(", count=1, label=label)
+        require_text(state, path, helper, count=count, label=label)
     # A listing is not cut to a count nobody asked for: glob keeps only its
     # scan ceiling, and ls returns every entry.
     for path, retired in (
@@ -11373,7 +11440,15 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "export const ACTIVE_TODO_LIST_BYTES = 800;",
             "const TRUNCATION_MARK = '\\n[truncated]';",
-            "  return `<system-reminder>\\nThe current task still has unfinished todo items:\\n${list}\\nKeep the todo list current and continue the task. Do not treat a successful intermediate tool call as task completion.\\n</system-reminder>`;",
+            "const REMINDER_OPENING =\n  '<system-reminder>\\nThe current task still has unfinished todo items:\\n';",
+            "const REMINDER_CLOSING =\n  '\\nKeep the todo list current and continue the task. Do not treat a successful intermediate tool call as task completion.\\n</system-reminder>';",
+            "  return `${REMINDER_OPENING}${list}${REMINDER_CLOSING}`;",
+            # The reminder a request carries states its authors: each item's
+            # status and content as the call wrote them, the rest the
+            # harness's, and it is the reminder its items render to.
+            "export function authoredActiveTodoReminder(",
+            "    harnessText(REMINDER_OPENING),\n    listed.value,",
+            "  if (reminder.text !== text) {",
             "unfinished.map((todo) => `- [${todo.status}] ${todo.content}`).join('\\n'),",
             "const listed = cutToTokenizerBytes(serialized.text, ACTIVE_TODO_LIST_BYTES);",
             "export function activeTodoReminderBound(): {",
@@ -11387,7 +11462,7 @@ def _validate_bounded_output_after(state: State) -> None:
     require_text(
         state,
         "packages/core/src/tools/todoWrite.ts",
-        "        this.config.setActiveTodoReminder(\n          promptId,\n          activeTodoReminder(unfinishedTodos),\n        );",
+        "        this.config.setActiveTodoReminder(\n          promptId,\n          authoredActiveTodoReminder(\n            unfinishedTodos.map((todo) => {",
         label=label,
     )
     _require_all(
@@ -11397,15 +11472,16 @@ def _validate_bounded_output_after(state: State) -> None:
             "const ACTIVE_TODO_REMINDER_REFRESH_TURNS = 3;",
             "  getActiveTodoWorkChainOwner(",
             "  takeActiveTodoReminder(promptId: string, force = false): string | undefined {",
+            "  takeActiveTodoReminderPart(\n    promptId: string,\n    force = false,\n  ): Part | undefined {",
             "    if (!force && elapsed < ACTIVE_TODO_REMINDER_REFRESH_TURNS) {",
-            "  setActiveTodoReminder(promptId: string, reminder: string | undefined): void {",
+            "  setActiveTodoReminder(\n    promptId: string,\n    reminder: AuthoredText | undefined,\n  ): void {",
         ),
         label=label,
     )
     client_source = _source(state, "packages/core/src/core/client.ts", label=label)
     _require(
-        client_source.count("this.config.takeActiveTodoReminder(") == 2
-        and "        const activeTodoReminder =\n          this.config.takeActiveTodoReminder(prompt_id);" in client_source,
+        client_source.count("this.config.takeActiveTodoReminderPart(") == 2
+        and "        const activeTodoReminder =\n          this.config.takeActiveTodoReminderPart(prompt_id);" in client_source,
         f"{label}: the client does not re-send the todo reminder beside a tool result and on an automatic turn",
     )
     _require(
@@ -11467,7 +11543,7 @@ def _validate_bounded_output_after(state: State) -> None:
             "outputCaptureLimitExceeded?: boolean;",
             "unit: 'bytes of output',",
             "total: capture.totalBytesReceived,",
-            "return capture.binary || !output ? notice : `${output}\\n\\n${notice}`;",
+            "  return capture.binary || !output\n    ? harnessText(notice)\n    : authored(worldText(output), harnessText(`\\n\\n${notice}`));",
         ),
         label=label,
     )
@@ -11481,11 +11557,11 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "packages/core/src/tools/shell.ts",
             (
-                "`Output: ${result.output || '(empty)'}`,",
-                "`Error: ${finalError}`,",
-                "`Exit Code: ${result.exitCode ?? '(none)'}`,",
-                "`Signal: ${result.signal ?? '(none)'}`,",
-                "`Process Group PGID: ${result.pid ?? '(none)'}`,",
+                "harnessText('\\nOutput: '),\n        result.output ? output : harnessText('(empty)'),",
+                "harnessText('\\nError: '),\n        finalError,",
+                "harnessText('\\nExit Code: '),\n        reported(result.exitCode),",
+                "harnessText('\\nSignal: '),\n        reported(result.signal),",
+                "harnessText('\\nProcess Group PGID: '),\n        reported(result.pid),",
             ),
         ),
         (
@@ -11508,8 +11584,8 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "packages/core/src/tools/ls.ts",
             (
-                "let resultMessage = `Listed ${totalEntryCount} item(s) in ${this.params.path}:\\n---\\n${directoryContent}`;",
-                "resultMessage += `\\n\\n(${ignoredMessages.join(', ')})`;",
+                "harnessText(`Listed ${totalEntryCount} item(s) in `),\n        shownPath,\n        harnessText(':\\n---\\n'),\n        directoryContent,",
+                "          resultMessage,\n          harnessText('\\n\\n('),\n          joinAuthored(ignoredMessages, ', '),\n          harnessText(')'),",
             ),
         ),
     ):
@@ -11517,13 +11593,19 @@ def _validate_bounded_output_after(state: State) -> None:
             _source(state, path, label=label), ordered, label=label, location=path
         )
     for path, needle in (
-        ("packages/core/src/tools/shell.ts", "llmContent += `\\n\\n${longRunHint}`;"),
-        ("packages/core/src/tools/shell.ts", "llmContent += `\\n\\n${attributionWarning}`;"),
+        (
+            "packages/core/src/tools/shell.ts",
+            "llmContent = joinShellText(llmContent, harnessText(`\\n\\n${longRunHint}`));",
+        ),
+        (
+            "packages/core/src/tools/shell.ts",
+            "      llmContent = joinShellText(\n        llmContent,\n        harnessText('\\n\\n'),\n        attributionWarning,\n      );",
+        ),
         (
             "packages/core/src/tools/web-fetch.ts",
             "llmContent: `${header}\\n\\n${entry.content}${sourceNote}`,",
         ),
-        ("packages/core/src/tools/agent/agent.ts", "            ) + effectSuffix;"),
+        ("packages/core/src/tools/agent/agent.ts", "            ) + effectSuffix.text;"),
     ):
         require_text(state, path, needle, label=label)
     require_text(
@@ -11998,12 +12080,12 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         state,
         _SHELL_SERVICE,
         (
-            "function capturedOutputText(output: string, capture: CapturedOutput): string {",
+            "function capturedOutputText(\n  output: string,\n  capture: CapturedOutput,\n): AuthoredText {",
             "          continuation: { unretained: BINARY_OUTPUT_NOT_SHOWN },",
             "          continuation: { unretained: CAPTURE_LIMIT_DISCARDED },",
             "'that file with a command that prints bytes as text, such as `od -c`.';",
             "`with its output redirected to a file, then read that file with ${ToolNames.READ_FILE}.`;",
-            "  return capture.binary || !output ? notice : `${output}\\n\\n${notice}`;",
+            "  return capture.binary || !output\n    ? harnessText(notice)\n    : authored(worldText(output), harnessText(`\\n\\n${notice}`));",
         ),
         label=label,
     )
@@ -12021,6 +12103,164 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         "refuses one sequence that scrolls past the whole window rather than render it short",
     ):
         require_text(state, _SHELL_CAPTURE_TEST, case, label=label)
+
+
+_TEXT_AUTHORSHIP_MODULE = "packages/core/src/core/text-authorship.ts"
+_REQUEST_AUTHORSHIP_MODULE = (
+    "packages/core/src/core/openaiContentGenerator/request-authorship.ts"
+)
+
+
+def _validate_text_authorship_before(state: State) -> None:
+    label = "text authorship precondition"
+    # Upstream hands the request to the SDK, which writes its body, and
+    # records no author for any byte of it; a converted text is a bare string.
+    for path in (_TEXT_AUTHORSHIP_MODULE, _REQUEST_AUTHORSHIP_MODULE):
+        _require(path not in state, f"{label}: {path} already exists upstream")
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    require_text(
+        state, pipeline, "this.client.chat.completions.create(", count=2, label=label
+    )
+    forbid_text(state, pipeline, "serializeAuthoredRequest", label=label)
+    _require_all(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.ts",
+        ("contentParts.push({ type: 'text' as const, text: part.text });",),
+        label=label,
+    )
+
+
+def _validate_text_authorship_after(state: State) -> None:
+    label = "text authorship result"
+    # Four authors, and the operations that keep them: a copy, a cut, a
+    # rewrite or a normalization says which bytes it did not write.
+    _require_all(
+        state,
+        _TEXT_AUTHORSHIP_MODULE,
+        (
+            "export type TextAuthor = 'model' | 'world' | 'operator' | 'harness';",
+            "export function requireAuthored(text: string, authors: unknown): AuthoredText {",
+            "export function sliceAuthored(",
+            "export function rewriteAuthored(",
+            "export function replaceAuthored(",
+            "export function authoredJson(",
+            "export function runsOf(value: AuthoredText): AuthoredText[] {",
+        ),
+        label=label,
+    )
+    # A normalization is the tokenizer's, made in the one place text is
+    # normalized: a character it changed is the harness's.
+    require_text(
+        state,
+        "packages/core/src/core/tokenLimits.ts",
+        "export function normalizeAuthored(value: AuthoredText): AuthoredText {\n"
+        "  const whole = tokenizerText(value.text).text;",
+        label=label,
+    )
+    # One serialization: the bytes JSON.stringify writes, every byte with its
+    # author, and a string no composer attributed refused, naming its place,
+    # before the request is recorded or sent.
+    _require_all(
+        state,
+        _REQUEST_AUTHORSHIP_MODULE,
+        (
+            "export function serializeAuthoredRequest(request: object): {",
+            "has no stated author: the code that composed it did not say who wrote it",
+            "if (out.json !== JSON.stringify(request))",
+            "export function storedRunsBetween(",
+        ),
+        label=label,
+    )
+    pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
+    _require_ordered(
+        _source(state, pipeline, label=label),
+        (
+            "const authored = serializeAuthoredRequest(openaiRequest);",
+            "const body = authored.json;",
+        ),
+        label=label,
+        location=pipeline,
+    )
+    forbid_text(state, pipeline, "JSON.stringify(openaiRequest)", label=label)
+    # The record carries the runs: over the whole body, or over a delta's
+    # prefix, each added message and its suffix.
+    _require_all(
+        state,
+        "packages/core/src/core/model-request-evidence.ts",
+        (
+            "authors: storedRunsBetween(authors, 0, bodyBytes),",
+            "prefix: storedRunsBetween(authors, 0, prefixBytes),",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/core/model-evidence-records.ts",
+        ("function isAuthorRuns(value: unknown): boolean {",),
+        label=label,
+    )
+    # One determination. The model's history cites the generation it copies;
+    # a snapshot's sections cite the draw that wrote them; a recorded user
+    # message reads its provenance from the runs its parts state; and an
+    # original input is retained by one function, with no author beside it.
+    _require_all(
+        state,
+        "packages/core/src/core/generation-envelope.ts",
+        ("export function authoredGenerationHistory(",),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/state-snapshot.ts",
+        (
+            "export function stateSnapshotSectionText(",
+            "    kind: 'compaction_draw',",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        "packages/core/src/services/chatRecordingService.ts",
+        (
+            "export function userMessageProvenance(",
+            "...this.createBaseRecord('user', userMessageProvenance(content)),",
+        ),
+        label=label,
+    )
+    instructions = "packages/core/src/core/authored-instructions.ts"
+    require_text(state, instructions, "export function retainInput(", label=label)
+    for retired in (
+        "author: 'user' | 'delegator';",
+        "export function retainUserInput(",
+        "export function retainDelegatedTask(",
+    ):
+        forbid_text(state, instructions, retired, label=label)
+    # A tool's argument is the model's only where the text is a verbatim copy
+    # of what the call wrote, and the call is the one whose arguments the
+    # tool runs with.
+    _require_all(
+        state,
+        "packages/core/src/core/tool-call-arguments.ts",
+        (
+            "export function modelArgument(",
+            "export function modelArgumentJson(",
+            "export function toolArgumentsSourceIn(",
+        ),
+        label=label,
+    )
+    # Executable evidence, in the suites the image runs.
+    for case in (
+        "writes the bytes JSON.stringify writes, every byte with its author",
+        "refuses a text whose composer stated no author, naming where it is",
+        "refuses a stated author whose text is not the text sent",
+        "tiles a full body whole, and a delta by its prefix, each added message and its suffix",
+    ):
+        require_text(
+            state,
+            "packages/core/src/core/openaiContentGenerator/request-authorship.test.ts",
+            case,
+            label=label,
+        )
 
 
 CONCERNS: tuple[SemanticConcern, ...] = (
@@ -12726,6 +12966,28 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         ),
         validate_before=_validate_shell_output_completeness_before,
         validate_after=_validate_shell_output_completeness_after,
+    ),
+    SemanticConcern(
+        name="text-authorship",
+        rationale=(
+            "Every byte of every request records who wrote it -- the model, the world, the "
+            "operator or the harness -- assigned once, where the text is composed, to whoever "
+            "produced it, and kept through every copy, cut and rewrite. The request is serialized "
+            "once, as JSON.stringify writes it, with its runs; a string no composer attributed "
+            "refuses the request, naming where it is, before it is recorded or sent. The model's "
+            "text cites the generation or compaction draw it copies and the operator's text the "
+            "task it slices, so the engine can hold both to their source; a recorded user "
+            "message reads its provenance from the same runs. Nothing the model reads changes. "
+            "The composition sites this deployment cannot reach -- hooks, MCP, the IDE, the "
+            "interactive UI, ACP, side queries and other providers' request rewrites -- state no "
+            "authors by design: reaching one refuses the request rather than recording a guess."
+        ),
+        removal_condition=(
+            "Upstream records an author for every byte of every request it sends, attributed "
+            "where the text is composed, and refuses a request with text no composer attributed."
+        ),
+        validate_before=_validate_text_authorship_before,
+        validate_after=_validate_text_authorship_after,
     ),
 )
 

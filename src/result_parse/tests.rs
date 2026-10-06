@@ -11,6 +11,18 @@ mod display;
 mod evidence;
 mod framing;
 
+
+/// Every byte of a fixture body is the harness's: these streams test how a
+/// recording is certified, not who wrote what the model read.
+pub(crate) fn harness_authors(text: &str) -> Value {
+    json!([{"author":"harness","bytes":text.len()}])
+}
+
+/// The task a fixture session was started with: the shared wire stream's.
+pub(crate) fn fixture_task() -> OperatorTask {
+    OperatorTask::new(b"work")
+}
+
 fn hash(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
@@ -175,7 +187,7 @@ impl Trace {
             "owner":{"kind":"utility","operation_id":format!("operation-{sequence}"),"purpose":"other"},
             "kv_scope":scope,"segment_id":format!("segment-{sequence}"),"prompt_id":"fixture",
             "decode_policy":decode_policy("nonstream","fixture"),
-            "body":{"kind":"full","json":body},"body_bytes":body.len(),"body_sha256":hash(body.as_bytes())}}));
+            "body":{"kind":"full","json":body,"authors":harness_authors(&body)},"body_bytes":body.len(),"body_sha256":hash(body.as_bytes())}}));
         self.last_request.insert(scope.into(), id.clone());
         self.response(
             &id,
@@ -341,12 +353,15 @@ impl Trace {
             (
                 json!({"kind":"delta","base_request_id":previous.request_id,
                     "retain_messages":retained,"prefix":&prefix,"suffix":&suffix,
+                    "authors":{"prefix":harness_authors(&prefix),
+                        "added_messages":added.iter().map(|message| harness_authors(message)).collect::<Vec<_>>(),
+                        "suffix":harness_authors(&suffix)},
                     "added_messages":added}),
                 previous.segment_id.clone(),
             )
         } else {
             (
-                json!({"kind":"full","json":body_json}),
+                json!({"kind":"full","json":body_json,"authors":harness_authors(&body_json)}),
                 format!("segment-{sequence}"),
             )
         };
@@ -607,7 +622,7 @@ impl Trace {
                 "segment_id":format!("segment-{sequence}"),"prompt_id":"compaction",
                 "owner":{"kind":"utility","operation_id":operation,"purpose":"compaction"},
                 "decode_policy":decode_policy("stream",COMPACTION_MODEL),
-                "body":{"kind":"full","json":body},"body_bytes":body.len(),
+                "body":{"kind":"full","json":body,"authors":harness_authors(&body)},"body_bytes":body.len(),
                 "body_sha256":hash(body.as_bytes())}}));
             self.last_request.insert(kv.into(), id.clone());
             self.response(
@@ -921,7 +936,7 @@ fn owned_event_file(bytes: &[u8]) -> std::path::PathBuf {
 fn snapshot_bytes(bytes: &[u8]) -> ServiceResult<EventSnapshot> {
     let path = owned_event_file(bytes);
     let result = open_event_prefix(&path).and_then(|prefix| {
-        read_opened_event_snapshot(&path, prefix.expect("test event file exists"))
+        read_opened_event_snapshot(&path, prefix.expect("test event file exists"), &fixture_task())
     });
     std::fs::remove_file(path).unwrap();
     result
@@ -931,7 +946,8 @@ fn snapshot_bytes(bytes: &[u8]) -> ServiceResult<EventSnapshot> {
 fn full_snapshot_bytes(bytes: &[u8]) -> ServiceResult<EventSnapshot> {
     let path = owned_event_file(bytes);
     let result =
-        read_event_snapshot(&path).map(|snapshot| snapshot.expect("test event file exists"));
+        read_event_snapshot(&path, &fixture_task())
+            .map(|snapshot| snapshot.expect("test event file exists"));
     std::fs::remove_file(path).unwrap();
     result
 }

@@ -5,7 +5,7 @@
     "session_id": "9c75c72a-33b5-4944-af41-d9d95b5dd300",
     "parent_tool_use_id": null,
     "subtype": "stream_start",
-    "stream_contract_sha256": "d6f13ceb2fdab3e7019129e59c2b053fb457c103cf3f060ed63b20f9508d9d17",
+    "stream_contract_sha256": "38114d4b0831bd18a6d4fad4d13a16c161bce601f3ac1fdb84145acfc8122383",
     "request_evidence_origin": {
       "journal_id": "3c17ab4b-b058-412e-92d9-220bac8f2fa3",
       "first_sequence": 1
@@ -31,7 +31,22 @@
       "body_bytes": 237,
       "body": {
         "kind": "full",
-        "json": "{\"model\":\"test\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"work\"}]}],\"max_tokens\":1000,\"stream\":true,\"stream_options\":{\"include_usage\":true},\"parallel_tool_calls\":false,\"kv_scope\":\"9c75c72a-33b5-4944-af41-d9d95b5dd300\"}"
+        "json": "{\"model\":\"test\",\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"work\"}]}],\"max_tokens\":1000,\"stream\":true,\"stream_options\":{\"include_usage\":true},\"parallel_tool_calls\":false,\"kv_scope\":\"9c75c72a-33b5-4944-af41-d9d95b5dd300\"}",
+        "authors": [
+          {
+            "author": "harness",
+            "bytes": 77
+          },
+          {
+            "author": "operator",
+            "bytes": 4,
+            "offset": 0
+          },
+          {
+            "author": "harness",
+            "bytes": 156
+          }
+        ]
       },
       "decode_policy": {
         "mode": "stream",

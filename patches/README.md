@@ -12,14 +12,14 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `6a4831ee3e099a74c9121a0c890519aaa5ae0ad1968607485e5adee00112175e`
+- Review-diff SHA-256: `d93d48eae9d3dfc6f8c18a5c7ea9a9ea15026adff3dda273fe0dd1a36e79f0e1`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `dc4147d1bf1c0a6b014a11c596c656e5f23efcbdbdea9608b2f813ad47ca6502`
+- Transformer-manifest SHA-256: `83c7766c1c1f7f34d85b1e8fb022ae9b9455706ed507e33ba9dc91ba9e8f5383`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
 The transformer validates the pinned source, the reviewed diff, exact final file
-identities, and 36 semantic concerns before changing the private source tree.
+identities, and 37 semantic concerns before changing the private source tree.
 Removed files have an explicit absent final identity. Applying the same result
 again verifies it without writing. A failed commit restores the original bytes,
 permissions, and file presence. The image derives its unit test selection from the
@@ -462,6 +462,46 @@ Synthetic user-role messages do not acquire authored provenance. Strict framed
 UTF-8 transcript readers refuse corruption, conflicting record identities, and
 incomplete active histories rather than silently dropping retained instructions.
 
+## Text authorship
+
+Every byte of every request the client sends has a recorded author, stated
+once by the code that composes the text: `model` (its own past output),
+`world` (what a tool or the client read: a file's contents, a command's
+output, directory entries, workspace `QWEN.md` and `AGENTS.md`), `operator`
+(the task the session was started with) or `harness` (the client's own
+words: labels, frames, reminders, notices, the compaction directive). A text
+carries its runs beside it (`authors` on a Part, `callAuthors` on a call), and
+a copy keeps them: the model's text copied verbatim -- its history turns, a
+call's argument a tool echoes, a snapshot section, a delegated task -- stays
+the model's and names the output it copies, and a copy of the task names the
+byte of the task it starts at. Bytes the client rewrites are no longer a copy
+and are the harness's: `normalizeAuthored`, `replaceAuthored`, the cuts and
+trims carry every run through a transformation and give the harness exactly
+the span it changed, and `authoredJson` writes a call's arguments as the
+model's strings in the harness's JSON. A request's history turns cite their
+generation through `authoredGenerationHistory`; a tool echoes an argument
+through `modelArgument`, which cites the call that supplied it when the echo
+is verbatim.
+
+Nothing defaults. The converter states the author of every string it emits,
+and `serializeAuthoredRequest` writes the request exactly as `JSON.stringify`
+does while refusing any string inside a message or a tool declaration whose
+author no composer stated, naming its path -- before the request is recorded
+or sent. The journal stores the runs in the stored body's own terms
+(`storedRunsBetween`), and the certifier holds them to the bytes. Paths this
+deployment cannot take -- hooks, MCP and extension tools, the IDE, the
+interactive UI and ACP, side queries, other providers' request rewrites --
+compose text that states no author and are refused if reached: authoring
+text nothing here can produce would be a claim nothing could check. Nothing
+the model reads changes: every composed text is the text it was, with its
+authors beside it.
+
+The canonical recording stores the same authored parts and the same request
+evidence, and a recorded user message's provenance is read from its parts
+(`userMessageProvenance`): the user's when it carries the operator's text,
+the runtime's when it carries none. A retained input keeps its original
+parts with their authors (`retainInput`); it names no author of its own.
+
 ## Durable session evidence
 
 Every initialized recording session owns the same exclusive writer lease.
@@ -471,7 +511,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 21`, independently
+Every physical canonical chat record carries `recordingVersion: 23`, independently
 of the client release string. A record with any other version, or none, is
 refused with the file location, what the record declares (a version, or no
 version), and the action: open it with the client release that wrote it, or
@@ -503,7 +543,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused with the action above. They are not promoted into
-complete version 22 histories.
+complete version 23 histories.
 The complete-record evidence replay and the resume reader use the same
 projection for runtime checkpoints, compaction, and rewind.
 Adopted and realtime conversation records must carry content with the role
@@ -586,7 +626,7 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream contract v19 exposes these same request records, declares the journal
+Stream contract v20 exposes these same request records, declares the journal
 origin in `system/stream_start`, and accounts for the output window at every root result.
 Complete `system/init` runtime metadata has its own owner and does not reset that
 journal. Each checkpoint lists open response and logical attempt identities.
@@ -656,7 +696,7 @@ after one minute without progress
 Synchronous child-transcript file I/O cannot be preempted by that budget and is
 unbounded.
 
-Canonical recording version 22 structurally excludes response evidence from
+Canonical recording version 23 structurally excludes response evidence from
 messages, conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix

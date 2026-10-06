@@ -608,6 +608,24 @@ impl Generation {
             .collect())
     }
 
+    /// The reasoning the generation's history carries: its thought text from
+    /// every response it showed, in order.
+    pub fn shown_reasoning(&self) -> &str {
+        &self.shown_thinking
+    }
+
+    /// The text the generation's history carries: every text part it showed,
+    /// in order, as one text.
+    pub fn shown_text(&self) -> String {
+        self.shown
+            .iter()
+            .filter_map(|shown| match shown {
+                Shown::Text(text) => Some(text.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+
     pub fn require_accepted(&self) -> ContractResult<()> {
         if self.usage.is_none()
             || self.finish.is_none()

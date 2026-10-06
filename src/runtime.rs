@@ -2203,7 +2203,10 @@ fn running_body_for_entry(cfg: &Config, entry: &RunningEntry) -> ServiceResult<S
     let progress = progress_events.last().cloned().ok_or_else(|| {
         ServiceError::Internal("progress snapshot has no initial accepted event".into())
     })?;
-    let output = read_output_progress(&events_jsonl_path(cfg, &entry.snapshot.session_id))?;
+    let output = crate::session::read_session_output_progress(&crate::staging::SessionPaths::new(
+        &cfg.state_dir,
+        &entry.snapshot.session_id,
+    ))?;
     Ok(running_body(
         &entry.snapshot,
         &progress,
@@ -2244,25 +2247,16 @@ pub(crate) fn merge_progress_counters(
     }
 }
 
-/// Path to a session's live `events.jsonl` while it is running. Once the
-/// session reaches a terminal state, this file is bundled and removed
-/// from staging — the on-disk path is no longer valid, and frozen values
-/// from `finished.json` are returned instead.
-pub fn events_jsonl_path(cfg: &Config, session_id: &str) -> PathBuf {
-    cfg.state_dir
-        .join("sessions")
-        .join(session_id)
-        .join("output")
-        .join("events.jsonl")
-}
-
 pub use crate::result_parse::OutputProgress;
 
 /// Read the observations of an immutable event prefix, by the same scan
 /// terminal certification makes, without certifying it. No file means no
 /// output has been observed; unreadable storage is an error.
-pub fn read_output_progress(events_path: &Path) -> ServiceResult<OutputProgress> {
-    Ok(crate::result_parse::read_event_observations(events_path)?.unwrap_or_default())
+pub fn read_output_progress(
+    events_path: &Path,
+    operator: &crate::result_parse::OperatorTask,
+) -> ServiceResult<OutputProgress> {
+    Ok(crate::result_parse::read_event_observations(events_path, operator)?.unwrap_or_default())
 }
 
 pub fn preview(s: &str) -> String {
@@ -6747,7 +6741,7 @@ mod tests {
         private_write(&events, bytes.as_bytes());
         make_service_owned(&events);
 
-        let observed = read_output_progress(&events).expect("read exact event snapshot");
+        let observed = read_output_progress(&events, &crate::result_parse::OperatorTask::new(b"task")).expect("read exact event snapshot");
         assert_eq!(observed.num_turns, None);
         assert_eq!(observed.observed_unaccounted_records, 2);
         assert_eq!(observed.output_event_bytes, bytes.len() as u64);
@@ -6759,7 +6753,7 @@ mod tests {
         private_write(&outside, bytes.as_bytes());
         std::fs::remove_file(&events).expect("remove original event file");
         symlink(&outside, &events).expect("replace event path with hostile symlink");
-        let error = read_output_progress(&events)
+        let error = read_output_progress(&events, &crate::result_parse::OperatorTask::new(b"task"))
             .expect_err("descriptor open must reject a symlink rather than follow it");
         assert!(error.to_string().contains("without following links"));
         assert_eq!(
@@ -6775,7 +6769,7 @@ mod tests {
         private_write(&events, b"{not-json}\n");
         make_service_owned(&events);
         let observed =
-            read_output_progress(&events).expect("malformed record is explicitly unaccounted");
+            read_output_progress(&events, &crate::result_parse::OperatorTask::new(b"task")).expect("malformed record is explicitly unaccounted");
         assert_eq!(observed.observed_unaccounted_records, 1);
         assert_eq!(
             observed.observed_usage,
@@ -6846,7 +6840,8 @@ mod tests {
                 "owner":{"kind":"utility","operation_id":format!("operation-{id}"),"purpose":"other"},
                 "decode_policy":{"mode":"nonstream","model":"fixture","strict_tool_calling":true,
                     "named_tool_choice":null,"exact_token_counting":true,"tagged_thinking_tags":false},
-                "body_bytes":body.len(),"body_sha256":hash(body.as_bytes()),"body":{"kind":"full","json":body}
+                "body_bytes":body.len(),"body_sha256":hash(body.as_bytes()),
+                "body":{"kind":"full","json":body,"authors":[{"author":"harness","bytes":body.len()}]}
             }});
             bytes.push_str(&request.to_string());
             bytes.push('\n');
@@ -6867,8 +6862,11 @@ mod tests {
         bytes.push_str(r#"{"type":"result"}"#);
         private_write(&events, bytes.as_bytes());
         make_service_owned(&events);
-        let observed = read_output_progress(&events).unwrap();
-        let snapshot = crate::result_parse::read_event_snapshot(&events)
+        let observed = read_output_progress(&events, &crate::result_parse::OperatorTask::new(b"task")).unwrap();
+        let snapshot = crate::result_parse::read_event_snapshot(
+            &events,
+            &crate::result_parse::OperatorTask::new(b"task"),
+        )
             .unwrap()
             .unwrap();
         assert_eq!(observed, snapshot.observed);

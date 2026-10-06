@@ -11,12 +11,11 @@ use std::sync::Arc;
 fn certify_available_stream() {
     let fixture = fixture::Fixture::read();
     assert_eq!(fixture.session_ids.len(), 1);
-    let path = fixture
-        .root
-        .join("state/sessions")
-        .join(&fixture.session_ids[0])
-        .join("output/events.jsonl");
-    let snapshot = agent_service::result_parse::read_event_snapshot(&path)
+    let paths =
+        crate::staging::SessionPaths::new(&fixture.root.join("state"), &fixture.session_ids[0]);
+    let operator =
+        crate::session::read_operator_task(&paths).expect("read the session's prompt record");
+    let snapshot = agent_service::result_parse::read_event_snapshot(&paths.events_jsonl(), &operator)
         .expect("read actual captured stream")
         .expect("captured stream exists");
     let result = snapshot.certified
@@ -31,12 +30,11 @@ fn certify_available_stream() {
 fn refuse_available_stream() {
     let fixture = fixture::Fixture::read();
     assert_eq!(fixture.session_ids.len(), 1);
-    let path = fixture
-        .root
-        .join("state/sessions")
-        .join(&fixture.session_ids[0])
-        .join("output/events.jsonl");
-    let snapshot = agent_service::result_parse::read_event_snapshot(&path)
+    let paths =
+        crate::staging::SessionPaths::new(&fixture.root.join("state"), &fixture.session_ids[0]);
+    let operator =
+        crate::session::read_operator_task(&paths).expect("read the session's prompt record");
+    let snapshot = agent_service::result_parse::read_event_snapshot(&paths.events_jsonl(), &operator)
         .expect("read actual captured stream")
         .expect("captured stream exists");
     let refusal = snapshot

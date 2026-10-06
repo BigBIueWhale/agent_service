@@ -122,10 +122,18 @@ fn a_request_body_is_the_one_record_of_what_the_model_received() {
         .collect();
     assert!(messages.contains(&rewritten));
     let body = &mut trace.rows[request]["request"]["body"];
-    for added in body["added_messages"].as_array_mut().unwrap() {
-        if *added == json!(carried) {
-            *added = json!(rewritten);
-        }
+    let replaced: Vec<usize> = body["added_messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .filter(|(_, added)| **added == json!(carried))
+        .map(|(index, _)| index)
+        .collect();
+    for index in replaced {
+        // The record says who wrote the message it now carries.
+        body["added_messages"][index] = json!(rewritten);
+        body["authors"]["added_messages"][index] = harness_authors(&rewritten);
     }
     let full = format!(
         "{}{}{}",

@@ -31,6 +31,7 @@ fn read_failure_keeps_observations_and_independent_protocol_and_io_causes() {
                     bytes: all.len() as u64,
                     last_event_at_unix: 123,
                 },
+                &fixture_task(),
             )
             .unwrap();
             assert!(matches!(&snapshot.replay_completion,
@@ -78,7 +79,7 @@ fn shortening_opened_source_cannot_certify_a_complete_retained_stream() {
     file.write_all(all.as_bytes()).unwrap();
     let prefix = open_event_prefix(&path).unwrap().unwrap();
     file.set_len(retained.len() as u64).unwrap();
-    let snapshot = read_opened_event_snapshot(&path, prefix).unwrap();
+    let snapshot = read_opened_event_snapshot(&path, prefix, &fixture_task()).unwrap();
     std::fs::remove_file(&path).unwrap();
     assert_eq!(
         snapshot.replay_completion,
@@ -127,12 +128,12 @@ fn observations_are_the_certifying_scan_without_its_replay() {
     let trace = Trace::delegated();
     trace.certify();
     let path = owned_event_file(trace.text().as_bytes());
-    let observed = read_event_observations(&path).unwrap().unwrap();
-    let snapshot = read_event_snapshot(&path).unwrap().unwrap();
+    let observed = read_event_observations(&path, &fixture_task()).unwrap().unwrap();
+    let snapshot = read_event_snapshot(&path, &fixture_task()).unwrap().unwrap();
     std::fs::remove_file(&path).unwrap();
     assert_eq!(observed, snapshot.observed);
     assert_eq!(observed.num_turns, Some(1));
-    assert!(read_event_observations(&path).unwrap().is_none());
+    assert!(read_event_observations(&path, &fixture_task()).unwrap().is_none());
 }
 
 #[test]
@@ -269,7 +270,7 @@ fn full_snapshot_drains_oversized_records_without_losing_adjacent_usage() {
         }
         let expected_bytes = file.metadata().unwrap().len();
         drop(file);
-        let snapshot = read_event_snapshot(&path).unwrap().unwrap();
+        let snapshot = read_event_snapshot(&path, &fixture_task()).unwrap().unwrap();
         std::fs::remove_file(&path).unwrap();
         assert_eq!(snapshot.observed.output_event_bytes, expected_bytes);
         if initialized {

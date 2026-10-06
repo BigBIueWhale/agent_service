@@ -548,7 +548,7 @@ The source pins describe this checkout. The independently pinned
 pins does not build, release, or update those images.
 
 The [source transformer](patches/source_patch_v1) applies the reviewed changes to
-that exact upstream tree. It checks source identities, structural landmarks, 36
+that exact upstream tree. It checks source identities, structural landmarks, 37
 semantic concerns, and final identities, including explicit absent identities for
 removed paths. Drift, ambiguous landmarks, intermediate states, or concurrent
 mutation refuse application. Failed publication restores original bytes, modes,
@@ -866,8 +866,41 @@ record of it: exact bytes, hash-verified, with every tool message, reminder and
 notice the client composed into them, however it composed them. A `user` row
 reports only that a tool returned a call -- `tool_use_id` and `is_error` -- and
 carries no copy of the result or of any other input, so nothing on the stream
-can disagree with the request and the certifier holds no rule about how the
-client composes its messages. The certifier refuses a chat request sent while
+can disagree with the request. The certifier holds no rule about how the
+client composes its messages, with two narrow exceptions that belong to
+compaction: it reads a draw's output ceiling from the directive that states
+it, and it measures the snapshot frame it rebuilds.
+
+Every byte of a request body has a recorded author. Beside the bytes it
+stores, each `model_request` carries `authors`: runs that tile them -- the
+whole body for a full request, the prefix, each added message and the suffix
+for a delta -- each naming who wrote it and how many stored bytes it spans.
+`model` is the model's own output, `world` what a tool read (a file's
+contents, a command's output), `operator` the task the session was started
+with, and `harness` the client's own text: frames, reminders, notices, the
+compaction directive, and the JSON the request is written in. The client
+states the author once, where it composes the text, and a copy keeps it:
+the model's text copied verbatim is the model's and names the output it
+copies (a generation's reasoning, text, call name, or a string inside a
+call's arguments, or a compaction draw's call), and the operator's names the
+byte of `control/prompt.txt` it starts at; workspace `QWEN.md` and
+`AGENTS.md` are files the client read, so they are the world's. Bytes the
+client rewrites -- normalized, escaped, cut, re-serialized -- are no longer a
+copy and are the harness's. A text whose author its composer did not state
+is never sent: the client refuses to serialize the request, naming where the
+text is. The certifier holds the table to the bytes and to the authors it
+can read, and to nothing about composition: every stored byte is in exactly
+one run, a run any author but the harness wrote lies inside one JSON string
+value and starts and ends on whole characters, a model run is byte for byte
+the output it cites, and an operator run is byte for byte the session's
+prompt record at its offset -- the service reads that record from
+`control/prompt.txt` and the bundle carries it. World and harness runs are
+the client's own claims, a stated limit like `is_error`. The canonical
+recording stores the same request evidence and the same authored parts, and
+a recorded user message's provenance is read from its parts' authors, so
+the stream and the transcript read one determination.
+
+The certifier refuses a chat request sent while
 a call an accepted generation issued in that scope has no row reporting its
 return. Upstream 0.21.12's own 65,536-byte stream-only cut of textual tool
 results (`headless-tool-result-text-projection.ts` in the pinned upstream
@@ -910,7 +943,7 @@ file the creation body declared is not in `/artifacts`, and `error_cancelled` fo
 abort from outside. The names, whether each
 is an error, and the exit code a process that ended with each leaves are one
 table in the stream contract, `terminalOutcome` in
-`protocol/stream-contract-v19.json`, which validates a record's pairing and from
+`protocol/stream-contract-v20.json`, which validates a record's pairing and from
 which both the client's and the service's bindings are generated: `success`
 exits 0, `error_max_turns` 53, `error_cancelled` 130, and every other error 1.
 The table also names `error_timeout`, which no session ends in: only a subagent
@@ -1085,7 +1118,7 @@ ends this way is reported to its parent as unfinished, with the shape of the sli
 and its turn count, in the same form as an exhausted budget or a cut-off
 generation, and its scoped terminal record carries the same name. The name is a
 row of the terminal table, `terminalOutcome` in
-`protocol/stream-contract-v19.json`, which is the one place the vocabulary is
+`protocol/stream-contract-v20.json`, which is the one place the vocabulary is
 written: the parser's list, the
 service's closed-set check and the client's own stream admission are all
 compiled from that schema, so the record is admitted on both sides.

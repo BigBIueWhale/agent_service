@@ -6,6 +6,7 @@ pub use runtime_contract::runtime::{
     MISSING_DELIVERABLES_SUBTYPE, SUCCESS_SUBTYPE,
 };
 pub use runtime_contract::usage::GenerationUsageSummary;
+pub use runtime_contract::OperatorTask;
 use runtime_contract::{
     json::{Document, Limits},
     runtime::{RuntimeBindings, RuntimeContract, RuntimeLimits},
@@ -19,7 +20,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-fn pinned_contract() -> ServiceResult<RuntimeContract> {
+fn pinned_contract(operator: &OperatorTask) -> ServiceResult<RuntimeContract> {
     // The build validates and embeds only the fixed deployment facts used here.
     let bytes = env!("CAPTURED_STREAM_BINDINGS_JSON").as_bytes();
     let document = Document::decode(
@@ -43,6 +44,7 @@ fn pinned_contract() -> ServiceResult<RuntimeContract> {
                 operations: u32::MAX as usize,
             },
         },
+        operator.clone(),
     ))
 }
 
@@ -101,10 +103,13 @@ struct EventPrefix<R> {
 /// the native verdict together, and only a stream the native contract certified
 /// is replayed physically. A reader that wants observations and no certificate
 /// uses `read_event_observations`, which is the same scan without the replay.
-pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> {
+pub fn read_event_snapshot(
+    path: &Path,
+    operator: &OperatorTask,
+) -> ServiceResult<Option<EventSnapshot>> {
     open_event_prefix(path)?
         .map(|prefix| {
-            let mut snapshot = read_opened_event_snapshot(path, prefix)?;
+            let mut snapshot = read_opened_event_snapshot(path, prefix, operator)?;
             if snapshot.certified.is_ok() {
                 if let Err(cause) = verify_physical_generations(
                     path,
@@ -122,9 +127,14 @@ pub fn read_event_snapshot(path: &Path) -> ServiceResult<Option<EventSnapshot>> 
 /// The observations of the captured prefix, for a run still in progress or a
 /// record that is not being certified: the same descriptor scan as
 /// `read_event_snapshot`, without the physical replay a certificate needs.
-pub fn read_event_observations(path: &Path) -> ServiceResult<Option<OutputProgress>> {
+pub fn read_event_observations(
+    path: &Path,
+    operator: &OperatorTask,
+) -> ServiceResult<Option<OutputProgress>> {
     open_event_prefix(path)?
-        .map(|prefix| read_opened_event_snapshot(path, prefix).map(|snapshot| snapshot.observed))
+        .map(|prefix| {
+            read_opened_event_snapshot(path, prefix, operator).map(|snapshot| snapshot.observed)
+        })
         .transpose()
 }
 
@@ -253,10 +263,11 @@ fn open_event_prefix(path: &Path) -> ServiceResult<Option<EventPrefix<std::fs::F
 fn read_opened_event_snapshot<R: Read>(
     path: &Path,
     prefix: EventPrefix<R>,
+    operator: &OperatorTask,
 ) -> ServiceResult<EventSnapshot> {
     let mut reader = BufReader::new(prefix.file.take(prefix.bytes));
     let mut replay_completion = ReplayCompletion::ReachedBoundary;
-    let mut contract = pinned_contract()?;
+    let mut contract = pinned_contract(operator)?;
     let mut wire_digest = Sha256::new();
     let mut physical_line = 0usize;
     let mut record = Vec::new();
