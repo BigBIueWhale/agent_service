@@ -60182,7 +60182,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    Kind,
    OutputFormat,
    uiTelemetryService,
-@@ -44,30 +66,197 @@
+@@ -44,30 +66,199 @@
    ToolNames,
    PLAN_MODE_ENTRY_SIBLING_SKIP_MESSAGE,
    createGoalRuntime,
@@ -60192,6 +60192,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +  REPEATED_TOOL_PARAMETER_NOTICE,
 +  turnRefusalNotice,
 +  RecordingRefusal,
++  authoredTextPart,
  } from '@qwen-code/qwen-code-core';
 -import type { Part } from '@google/genai';
 +import {
@@ -60215,6 +60216,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  import * as os from 'node:os';
  import * as path from 'node:path';
  import type { LoadedSettings } from './config/settings.js';
++import { operatorTask } from './utils/operatorTask.js';
  import { StreamJsonOutputAdapter } from './nonInteractive/io/StreamJsonOutputAdapter.js';
 +import { JsonOutputAdapter } from './nonInteractive/io/JsonOutputAdapter.js';
 +import type { JsonOutputAdapterInterface } from './nonInteractive/io/BaseJsonOutputAdapter.js';
@@ -60385,7 +60387,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
  // Mock core modules
  const runVisionBridgeSpy = vi.hoisted(() => vi.fn());
-@@ -76,16 +265,12 @@
+@@ -76,16 +267,12 @@
  const addAgentOutputMessageAttributesSpy = vi.hoisted(() => vi.fn());
  const interactionSpan = vi.hoisted(() => ({}));
  vi.mock('./ui/hooks/atCommandProcessor.js');
@@ -60405,7 +60407,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    return {
      ...original,
-@@ -96,10 +281,9 @@
+@@ -96,10 +283,9 @@
      getActiveInteractionSpan: getActiveInteractionSpanSpy,
      shutdownTelemetry: vi.fn(),
      isTelemetrySdkInitialized: vi.fn().mockReturnValue(true),
@@ -60417,7 +60419,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      },
    };
  });
-@@ -118,12 +302,13 @@
+@@ -118,12 +304,13 @@
      getTranscriptCursor: () => ({ recordId: null }),
      async recordGoalState(
        recordUuid: string,
@@ -60431,7 +60433,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          timestamp: new Date(0).toISOString(),
          type: 'system',
          subtype: 'goal_state',
-@@ -133,12 +318,20 @@
+@@ -133,12 +320,20 @@
          systemPayload: structuredClone(payload),
        };
      },
@@ -60452,7 +60454,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      // sessionSize > 0, so the headless hold-open never resolves and the run
      // hangs. Skipping the sentinel must delete the job, not just no-op the tick.
      const scheduler = new CronScheduler();
-@@ -248,23 +441,28 @@
+@@ -248,23 +443,28 @@
    let processStderrSpy: MockInstance;
    let mockGeminiClient: {
      sendMessageStream: Mock;
@@ -60486,7 +60488,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      mockCoreExecuteToolCall = vi.mocked(executeToolCall);
      runVisionBridgeSpy.mockReset();
-@@ -272,10 +470,19 @@
+@@ -272,10 +472,19 @@
      addAgentOutputMessageAttributesSpy.mockReset();
      getActiveInteractionSpanSpy.mockReset();
      getActiveInteractionSpanSpy.mockReturnValue(interactionSpan);
@@ -60507,7 +60509,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockGetCommandsForMode.mockImplementation((mode: ExecutionMode) =>
        filterCommandsForMode(mockGetCommands(), mode),
      );
-@@ -284,12 +491,13 @@
+@@ -284,12 +493,13 @@
        getCommandsForMode: mockGetCommandsForMode,
      });
  
@@ -60523,7 +60525,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      vi.spyOn(process, 'exit').mockImplementation((code) => {
        throw new Error(`process.exit(${code}) called`);
      });
-@@ -313,41 +521,46 @@
+@@ -313,41 +523,46 @@
        setRegisterCallback: vi.fn(),
        getRunning: vi.fn().mockReturnValue([]),
        get: vi.fn().mockReturnValue({ status: 'running' }),
@@ -60578,7 +60580,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getMcpServers: vi.fn().mockReturnValue(undefined),
        getCliVersion: vi.fn().mockReturnValue('test-version'),
        storage: {
-@@ -355,7 +568,9 @@
+@@ -355,7 +570,9 @@
        },
        getIdeMode: vi.fn().mockReturnValue(false),
        getFullContext: vi.fn().mockReturnValue(false),
@@ -60589,7 +60591,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getDebugMode: vi.fn().mockReturnValue(false),
        getOutputFormat: vi.fn().mockReturnValue('text'),
        getJsonSchema: vi.fn().mockReturnValue(undefined),
-@@ -369,9 +584,16 @@
+@@ -369,9 +586,16 @@
          currentModel = model;
        }),
        getExperimentalZedIntegration: vi.fn().mockReturnValue(false),
@@ -60606,7 +60608,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        getCronScheduler: vi.fn().mockReturnValue(null),
        getTeamManager: vi.fn().mockReturnValue(null),
        onTeamManagerChange: vi.fn(),
-@@ -441,6 +663,13 @@
+@@ -441,6 +665,13 @@
      overrides?: Partial<SessionMetrics>,
    ): SessionMetrics {
      return {
@@ -60620,7 +60622,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        models: {},
        tools: {
          totalCalls: 0,
-@@ -470,27 +699,717 @@
+@@ -470,27 +701,717 @@
    }
  
    /**
@@ -61343,7 +61345,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      input: string;
      prepare: 'none' | 'active' | 'paused';
      expectedStatus: 'active' | 'paused' | null;
-@@ -581,15 +1500,19 @@
+@@ -581,15 +1502,19 @@
      }
    }
  
@@ -61365,7 +61367,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -615,9 +1538,9 @@
+@@ -615,9 +1540,9 @@
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(
          testCase.expectedWorkers,
        );
@@ -61378,7 +61380,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(goalRuntime.getSnapshot()).toMatchObject({
          goal:
            testCase.expectedStatus === null
-@@ -630,33 +1553,30 @@
+@@ -630,33 +1555,30 @@
      },
    );
  
@@ -61426,7 +61428,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      },
    );
  
-@@ -664,7 +1584,7 @@
+@@ -664,7 +1586,7 @@
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
      mockConfig.getGoalRuntimeReady = vi.fn(async () => {
@@ -61435,7 +61437,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      });
  
      const exitCode = await runNonInteractive(
-@@ -713,42 +1633,38 @@
+@@ -713,42 +1635,38 @@
  
    it('keeps the exact Goal permit through a ToolResult continuation', async () => {
      setupMetricsMock();
@@ -61492,7 +61494,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]);
-@@ -791,45 +1707,43 @@
+@@ -791,45 +1709,43 @@
        getEventEmitter: () => teamEvents,
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
@@ -61557,7 +61559,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]);
-@@ -866,20 +1780,19 @@
+@@ -866,20 +1782,19 @@
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
      await prepareGoalState('paused');
@@ -61585,7 +61587,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          _signal: AbortSignal,
          _promptId: string,
          sendOptions: { goalPermit?: GoalTurnPermit },
-@@ -896,6 +1809,13 @@
+@@ -896,6 +1811,13 @@
                goalContext: sendOptions.goalPermit,
              },
            },
@@ -61599,7 +61601,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          ]),
      );
  
-@@ -907,17 +1827,176 @@
+@@ -907,17 +1829,176 @@
      );
  
      expect(exitCode).toBe(0);
@@ -61777,7 +61779,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('streams Goal state changes that happen while a headless turn settles', async () => {
      setupMetricsMock();
      mockGetCommands.mockReturnValue([goalCommand]);
-@@ -929,16 +2008,15 @@
+@@ -929,16 +2010,15 @@
        await goalRuntime.dispatch({
          action: 'pause',
          expectedGoalId: permit.goalId,
@@ -61797,7 +61799,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          _signal: AbortSignal,
          _promptId: string,
          sendOptions: { goalPermit?: GoalTurnPermit },
-@@ -955,6 +2033,13 @@
+@@ -955,6 +2035,13 @@
                goalContext: sendOptions.goalPermit,
              },
            },
@@ -61811,7 +61813,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          ]),
      );
  
-@@ -989,12 +2074,13 @@
+@@ -989,12 +2076,13 @@
      const finishTurn = vi
        .spyOn(goalRuntime, 'finishTurn')
        .mockResolvedValue(undefined);
@@ -61825,7 +61827,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
-@@ -1002,8 +2088,8 @@
+@@ -1002,8 +2090,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -61836,7 +61838,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -1023,225 +2109,60 @@
+@@ -1023,225 +2111,60 @@
      );
    });
  
@@ -62096,7 +62098,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    expect(exitCode).toBe(53);
 +    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
 +    expect(goalRuntime.getSnapshot().goal?.status).toBe('paused');
-@@ -1344,12 +2265,15 @@
+@@ -1344,12 +2267,15 @@
      { text: 'inspect this image' },
      { inlineData: { mimeType: 'image/png', data: 'AAAA' } },
    ];
@@ -62114,7 +62116,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      },
    ];
-@@ -1393,7 +2317,10 @@
+@@ -1393,7 +2319,10 @@
        { type: GeminiEventType.Content, value: ' World' },
        {
          type: GeminiEventType.Finished,
@@ -62126,7 +62128,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -1417,7 +2344,9 @@
+@@ -1417,7 +2346,9 @@
          submittedPrompt: 'Test input',
        },
      );
@@ -62137,7 +62139,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockShutdownTelemetry).toHaveBeenCalled();
    });
  
-@@ -1429,35 +2358,38 @@
+@@ -1429,35 +2360,38 @@
      });
      const handleWorkflowApproval = vi.fn().mockResolvedValue(undefined);
      const controlService = {
@@ -62199,7 +62201,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        controlService,
      });
  
-@@ -1478,11 +2410,12 @@
+@@ -1478,11 +2412,12 @@
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -62214,7 +62216,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -1504,7 +2437,10 @@
+@@ -1504,7 +2439,10 @@
        createStreamFromEvents([
          {
            type: GeminiEventType.Finished,
@@ -62226,7 +62228,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -1554,7 +2490,10 @@
+@@ -1554,7 +2492,10 @@
        createStreamFromEvents([
          {
            type: GeminiEventType.Finished,
@@ -62238,7 +62240,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -1574,7 +2513,7 @@
+@@ -1574,7 +2515,7 @@
          functionResponse: {
            id: 'call-1',
            name: 'shell',
@@ -62247,7 +62249,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        },
      ]);
-@@ -1590,38 +2529,41 @@
+@@ -1590,38 +2531,41 @@
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
      };
@@ -62314,7 +62316,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -1631,14 +2573,14 @@
+@@ -1631,14 +2575,14 @@
      await vi.waitFor(() =>
        expect(respond).toHaveBeenCalledWith(ToolConfirmationOutcome.Cancel),
      );
@@ -62333,7 +62335,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('describes the active mode when explicit teammate approval cannot be shown', async () => {
-@@ -1651,38 +2593,41 @@
+@@ -1651,38 +2595,41 @@
        hasActiveTeammates: () => false,
        drainLeaderInbox: vi.fn().mockResolvedValue(undefined),
      };
@@ -62400,7 +62402,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -1692,17 +2637,19 @@
+@@ -1692,17 +2639,19 @@
      await vi.waitFor(() =>
        expect(respond).toHaveBeenCalledWith(ToolConfirmationOutcome.Cancel),
      );
@@ -62423,7 +62425,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('cannot be bypassed by YOLO mode'),
      );
    });
-@@ -1725,7 +2672,10 @@
+@@ -1725,7 +2674,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62435,7 +62437,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1758,7 +2708,10 @@
+@@ -1758,7 +2710,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62447,7 +62449,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1793,7 +2746,10 @@
+@@ -1793,7 +2748,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62459,7 +62461,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1812,7 +2768,7 @@
+@@ -1812,7 +2770,7 @@
            functionResponse: {
              id: 'call-1',
              name: 'shell',
@@ -62468,7 +62470,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]);
-@@ -1834,7 +2790,10 @@
+@@ -1834,7 +2792,10 @@
          createStreamFromEvents([
            {
              type: GeminiEventType.Finished,
@@ -62480,7 +62482,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          ]),
        );
-@@ -1859,7 +2818,7 @@
+@@ -1859,7 +2820,7 @@
            functionResponse: {
              id: 'call-1',
              name: 'shell',
@@ -62489,7 +62491,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
          { text: expect.stringContaining(SYSTEM_REMINDER_OPEN) },
-@@ -1883,41 +2842,85 @@
+@@ -1883,41 +2844,85 @@
      });
    });
  
@@ -62592,7 +62594,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        type: GeminiEventType.ToolCallRequest,
        value: {
          callId: 'tool-1',
-@@ -1931,7 +2934,7 @@
+@@ -1931,7 +2936,7 @@
        toolCallEvent,
        {
          type: GeminiEventType.LoopDetected,
@@ -62601,7 +62603,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -1948,7 +2951,7 @@
+@@ -1948,7 +2953,7 @@
      expect(exitCode).toBe(1);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      expect(processStdoutSpy).not.toHaveBeenCalled();
@@ -62610,7 +62612,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Loop detection halted the run'),
      );
    });
-@@ -1987,12 +2990,14 @@
+@@ -1987,12 +2992,14 @@
      // The consecutive guard is always-on, so the headless message must flag it
      // as always-on and must NOT suggest the skipLoopDetection escape hatch,
      // which cannot disable it.
@@ -62627,7 +62629,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining(
          'Set the `model.skipLoopDetection` setting to true',
        ),
-@@ -2033,49 +3038,13 @@
+@@ -2033,49 +3040,13 @@
      // A heuristic loop IS gated by skipLoopDetection, so the message must offer
      // that escape hatch and must NOT claim it is an always-on guard. (Mutation
      // guard: routing all types into the always-on hint would fail here.)
@@ -62681,7 +62683,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 -    );
 -  });
 -
-@@ -2086,7 +3055,7 @@
+@@ -2086,7 +3057,7 @@
        { type: GeminiEventType.Content, value: 'Partial work' },
        {
          type: GeminiEventType.LoopDetected,
@@ -62690,7 +62692,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -2108,17 +3077,1311 @@
+@@ -2108,17 +3079,1311 @@
      expect(typeof lastOutput).toBe('string');
      const parsed = JSON.parse(lastOutput as string) as Array<{
        type?: string;
@@ -64003,7 +64005,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock();
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -2126,11 +4389,20 @@
+@@ -2126,11 +4391,20 @@
          { type: GeminiEventType.Content, value: 'Answer' },
          {
            type: GeminiEventType.Finished,
@@ -64025,7 +64027,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      let recordingFailureListener:
        | ((event: { sessionId: string; error: Error }) => void)
        | undefined;
-@@ -2153,48 +4425,670 @@
+@@ -2153,48 +4427,670 @@
          getChatRecordingService: () => {
            finalize: () => void;
            flush: () => Promise<void>;
@@ -64719,7 +64721,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('flushes but does not finalize when the caller owns the stream adapter', async () => {
-@@ -2207,7 +5101,10 @@
+@@ -2207,7 +5103,10 @@
          { type: GeminiEventType.Content, value: 'Answer' },
          {
            type: GeminiEventType.Finished,
@@ -64731,7 +64733,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -2217,13 +5114,13 @@
+@@ -2217,13 +5116,13 @@
        mockConfig as unknown as {
          getChatRecordingService: () => {
            finalize: () => void;
@@ -64746,7 +64748,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -2232,10 +5129,103 @@
+@@ -2232,10 +5131,103 @@
      );
  
      expect(flush).toHaveBeenCalledOnce();
@@ -64850,7 +64852,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -2244,21 +5234,24 @@
+@@ -2244,21 +5236,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -64882,7 +64884,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -2291,18 +5284,21 @@
+@@ -2291,18 +5286,21 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -64907,7 +64909,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      // Verify recordCompletedToolCall is called with the tool name and args.
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledWith(
        'testTool',
-@@ -2363,21 +5359,25 @@
+@@ -2363,21 +5361,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64935,7 +64937,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        2,
        [{ text: 'Tool response with image' }, { text: 'Skill response' }],
        expect.any(AbortSignal),
-@@ -2441,21 +5441,25 @@
+@@ -2441,21 +5443,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64963,7 +64965,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
-@@ -2533,8 +5537,8 @@
+@@ -2533,8 +5539,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -64974,7 +64976,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -2569,21 +5573,25 @@
+@@ -2569,21 +5575,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65002,7 +65004,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        4,
-@@ -2591,15 +5599,42 @@
+@@ -2591,15 +5601,42 @@
        expect.any(AbortSignal),
        'prompt-drain/automatic/3',
        { type: SendMessageType.ToolResult, modelOverride: first },
@@ -65047,7 +65049,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -2620,23 +5655,23 @@
+@@ -2620,23 +5657,23 @@
        }));
      }
  
@@ -65074,7 +65076,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        vi.mocked(mockToolRegistry.getTool).mockImplementation(
          (name: string) =>
            ({
-@@ -2665,13 +5700,13 @@
+@@ -2665,13 +5702,13 @@
            resultDisplay: 'entered plan mode',
          }),
        );
@@ -65089,7 +65091,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
                'p-plan-boundary',
              ),
              ...toolCallEvents(
-@@ -2683,19 +5718,20 @@
+@@ -2683,19 +5720,20 @@
                ['read-after-entry-1', 'read-after-entry-2'],
                ToolNames.READ_FILE,
                'p-plan-boundary',
@@ -65111,7 +65113,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall.mock.calls[0][1]).toMatchObject({
          callId: 'enter-plan',
          name: ToolNames.ENTER_PLAN_MODE,
-@@ -2758,23 +5794,25 @@
+@@ -2758,23 +5796,25 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -65140,7 +65142,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(total);
      });
  
-@@ -2802,19 +5840,19 @@
+@@ -2802,19 +5842,19 @@
                });
            }),
        );
@@ -65165,7 +65167,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
        resolvers['c']();
        resolvers['a']();
-@@ -2826,72 +5864,15 @@
+@@ -2826,72 +5866,15 @@
        const nextTurnParts = mockGeminiClient.sendMessageStream.mock
          .calls[1][0] as Part[];
        const ids = nextTurnParts
@@ -65241,7 +65243,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        setupMetricsMock();
        // Kind.Edit is a mutator: each unsafe call forms its own sequential
        // batch, so call #2 must not start until call #1 has settled.
-@@ -2910,17 +5891,19 @@
+@@ -2910,17 +5893,19 @@
              );
            }),
        );
@@ -65264,7 +65266,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['e1']);
        resolvers[0]();
-@@ -2931,47 +5914,6 @@
+@@ -2931,47 +5916,6 @@
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(2);
      });
  
@@ -65312,7 +65314,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      it('partitions a mixed batch: parallel reads, sequential edit, parallel reads', async () => {
        setupMetricsMock();
        // read → Kind.Read (safe), edit → Kind.Edit (unsafe). The batch
-@@ -2994,21 +5936,23 @@
+@@ -2994,21 +5938,23 @@
                resolve({ responseParts: [{ text: `resp-${req.callId}` }] });
            }),
        );
@@ -65339,7 +65341,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['r1', 'r2']);
        resolvers['r1']();
-@@ -3056,19 +6000,21 @@
+@@ -3056,19 +6002,21 @@
                };
              }),
          );
@@ -65364,7 +65366,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          await new Promise((resolve) => setImmediate(resolve));
          expect(startOrder).toEqual(['c1', 'c2']);
          // Freeing one slot admits the next call, one at a time.
-@@ -3125,19 +6071,21 @@
+@@ -3125,19 +6073,21 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -65389,7 +65391,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // would deadlock.
        expect(started).toBe(total);
        expect(startOrder).toEqual(['s1', 's2']);
-@@ -3146,7 +6094,6 @@
+@@ -3146,7 +6096,6 @@
  
    it('should ignore duplicate provider tool-call ids across rounds', async () => {
      setupMetricsMock();
@@ -65397,7 +65399,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3155,23 +6102,32 @@
+@@ -3155,23 +6104,32 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -65436,7 +65438,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -3192,7 +6148,9 @@
+@@ -3192,7 +6150,9 @@
      expect(duplicateParts[0].functionResponse?.response?.['error']).toContain(
        'Duplicate provider tool call id "tool-1"',
      );
@@ -65447,13 +65449,13 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should stop repeated duplicate provider tool-call responses', async () => {
-@@ -3199,5 +6157,4 @@
+@@ -3199,5 +6159,4 @@
      setupMetricsMock();
 -    vi.mocked(mockConfig.getMaxToolCalls).mockReturnValue(1);
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3228,40 +6185,41 @@
+@@ -3228,40 +6187,41 @@
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(
@@ -65506,7 +65508,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should stop repeated duplicate provider tool-call responses from drain items', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3316,25 +6274,30 @@
+@@ -3316,25 +6276,30 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65539,7 +65541,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(3);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      const drainPromptIds = mockGeminiClient.sendMessageStream.mock.calls
-@@ -3346,14 +6309,15 @@
+@@ -3346,14 +6311,15 @@
  
      const duplicateParts = mockGeminiClient.sendMessageStream.mock
        .calls[2][0] as Part[];
@@ -65557,7 +65559,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should ignore duplicate provider tool-call ids already present in chat history', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3367,20 +6331,24 @@
+@@ -3367,20 +6333,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -65585,7 +65587,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -3404,26 +6372,28 @@
+@@ -3404,26 +6374,28 @@
      expect(duplicateParts[0].functionResponse?.response?.['error']).toContain(
        'Duplicate provider tool call id "tool-history"',
      );
@@ -65617,7 +65619,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const firstToolCall: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -3486,21 +6456,26 @@
+@@ -3486,21 +6458,26 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -65646,7 +65648,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledTimes(1);
  
-@@ -3515,13 +6490,16 @@
+@@ -3515,13 +6492,16 @@
        'success',
        'error',
      ]);
@@ -65664,7 +65666,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -3530,39 +6508,38 @@
+@@ -3530,39 +6510,38 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -65720,7 +65722,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool error',
-@@ -3573,38 +6550,43 @@
+@@ -3573,38 +6552,43 @@
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
@@ -65777,7 +65779,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should not exit if a tool is not found, and should send error back to model', async () => {
-@@ -3616,30 +6598,39 @@
+@@ -3616,30 +6600,39 @@
          name: 'nonexistentTool',
          args: {},
          isClientInitiated: false,
@@ -65824,7 +65826,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool not found',
-@@ -3648,22 +6639,71 @@
+@@ -3648,22 +6641,71 @@
  
      expect(mockCoreExecuteToolCall).toHaveBeenCalled();
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
@@ -65906,7 +65908,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should preprocess @include commands before sending to the model', async () => {
-@@ -3694,7 +6734,10 @@
+@@ -3694,7 +6736,10 @@
        { type: GeminiEventType.Content, value: 'Summary complete.' },
        {
          type: GeminiEventType.Finished,
@@ -65918,7 +65920,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -3717,7 +6760,9 @@
+@@ -3717,10 +6762,65 @@
      );
  
      // 6. Assert the final output is correct
@@ -65926,10 +65928,66 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    expect(processStdoutSpy.mock.calls.map(([chunk]) => chunk)).toContainEqual(
 +      'Summary complete.\n',
 +    );
++  });
++
++  it('sends a locked task to the model as the operator wrote it, @paths and all', async () => {
++    setupMetricsMock();
++    vi.mocked(mockConfig.getForegroundAgentsOnly).mockReturnValue(true);
++    const { handleAtCommand } = await import(
++      './ui/hooks/atCommandProcessor.js'
++    );
++    vi.mocked(handleAtCommand).mockClear();
++    // Everything @ processing would rewrite: an address split at its @, a
++    // file read into the turn, the paragraph break between two @paths, and
++    // the whitespace around the task, the client's blank line after it
++    // included.
++    const piped =
++      '  Email ops@example.com, then read @notes.md\n\n@notes.md as it is.  \n';
++    const task = operatorTask('', piped);
++    mockGeminiClient.sendMessageStream.mockReturnValue(
++      createStreamFromEvents([
++        { type: GeminiEventType.Content, value: 'Done.' },
++        {
++          type: GeminiEventType.Finished,
++          value: {
++            reason: FinishReason.STOP,
++            usageMetadata: servedOutputTokens(10),
++          },
++        },
++      ]),
++    );
++
++    await runNonInteractive(
++      mockConfig,
++      mockSettings,
++      task,
++      'prompt-id-literal',
++    );
++
++    expect(handleAtCommand).not.toHaveBeenCalled();
++    expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledWith(
++      [authoredTextPart(task)],
++      expect.any(AbortSignal),
++      'prompt-id-literal',
++      {
++        type: SendMessageType.UserQuery,
++        modelOverride: undefined,
++        submittedPrompt: task,
++      },
++    );
++    // The operator's bytes, whole and from the first, then the client's.
++    expect(task.text).toBe(`${piped}\n\n`);
++    expect(task.authors).toEqual([
++      { author: 'operator', length: piped.length, offset: 0 },
++      { author: 'harness', length: 2 },
++    ]);
    });
  
    it('keeps an agent-capable image route for the full headless tool chain', async () => {
-@@ -3738,28 +6783,31 @@
+     setupMetricsMock();
+     await mockHeadlessImageInput();
+     const { resolveForModel, runtimeView } = configureHeadlessVisionModel({
+@@ -3738,28 +6838,31 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -65966,7 +66024,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            ...finishedEvents,
          ]),
        );
-@@ -3771,9 +6819,7 @@
+@@ -3771,9 +6874,7 @@
        'prompt-vision-route',
      );
  
@@ -65977,7 +66035,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(acceptedSameSelector).toBe(true);
      expect(rejectedDifferentSelector).toBe(true);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
-@@ -3786,13 +6832,13 @@
+@@ -3786,13 +6887,13 @@
          modelOverride: selector,
          submittedPrompt: 'inspect @image.png',
        },
@@ -65992,7 +66050,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3800,7 +6846,7 @@
+@@ -3800,7 +6901,7 @@
        expect.any(AbortSignal),
        expect.objectContaining({ runtimeView }),
      );
@@ -66001,7 +66059,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Routing this image turn to vision-agent'),
      );
    });
-@@ -3828,18 +6874,22 @@
+@@ -3828,18 +6929,22 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -66028,7 +66086,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'inspect @image.png',
-@@ -3855,13 +6905,17 @@
+@@ -3855,13 +6960,17 @@
          type: SendMessageType.Notification,
          modelOverride: undefined,
        }),
@@ -66047,7 +66105,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3911,7 +6965,7 @@
+@@ -3911,7 +7020,7 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -66056,7 +66114,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('Converted 1 image(s)'),
      );
    });
-@@ -3937,12 +6991,16 @@
+@@ -3937,12 +7046,16 @@
        createStreamFromEvents(finishedEvents),
      );
      const writes: string[] = [];
@@ -66079,7 +66137,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      await runNonInteractive(
        mockConfig,
-@@ -3992,7 +7050,7 @@
+@@ -3992,7 +7105,7 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -66088,7 +66146,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Vision bridge failed; proceeding without the image(s).\n',
      );
    });
-@@ -4030,10 +7088,10 @@
+@@ -4030,10 +7143,10 @@
          submittedPrompt: 'inspect @image.png',
        },
      );
@@ -66101,7 +66159,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.stringContaining('were sent to vision-bridge'),
      );
    });
-@@ -4088,18 +7146,18 @@
+@@ -4088,18 +7201,18 @@
      });
      resolveForModel.mockRejectedValue(new Error('route unavailable'));
  
@@ -66132,7 +66190,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).not.toHaveBeenCalled();
    });
  
-@@ -4108,24 +7166,28 @@
+@@ -4108,24 +7221,28 @@
        { type: GeminiEventType.Content, value: 'Hello World' },
        {
          type: GeminiEventType.Finished,
@@ -66163,7 +66221,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.any(AbortSignal),
        'prompt-id-1',
        {
-@@ -4153,13 +7215,16 @@
+@@ -4153,13 +7270,16 @@
      expect(resultMessage).toBeTruthy();
      expect(resultMessage?.result).toBe('Hello World');
      // Get the actual metrics that were used
@@ -66184,7 +66242,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
-@@ -4167,32 +7232,51 @@
+@@ -4167,32 +7287,51 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -66242,7 +66300,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock({
-@@ -4224,14 +7308,15 @@
+@@ -4224,14 +7363,15 @@
        },
      });
  
@@ -66260,7 +66318,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({ name: 'testTool' }),
-@@ -4240,6 +7325,10 @@
+@@ -4240,6 +7380,10 @@
          outputUpdateHandler: expect.any(Function),
        }),
      );
@@ -66271,7 +66329,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      // JSON adapter emits array of messages, last one is result with stats
      const outputCalls = processStdoutSpy.mock.calls.filter(
-@@ -4257,33 +7346,43 @@
+@@ -4257,33 +7401,43 @@
          msg.type === 'result',
      );
      expect(resultMessage).toBeTruthy();
@@ -66322,7 +66380,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        [{ text: 'Empty response test' }],
        expect.any(AbortSignal),
        'prompt-id-empty',
-@@ -4309,13 +7408,30 @@
+@@ -4309,13 +7463,30 @@
          'type' in msg &&
          msg.type === 'result',
      );
@@ -66358,7 +66416,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should handle errors in JSON format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
      setupMetricsMock();
-@@ -4325,35 +7441,43 @@
+@@ -4325,35 +7496,43 @@
        throw testError;
      });
  
@@ -66431,7 +66489,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle API errors in text mode and exit with error code', async () => {
-@@ -4375,24 +7499,14 @@
+@@ -4375,24 +7554,14 @@
        createStreamFromEvents([apiErrorEvent]),
      );
  
@@ -66464,7 +66522,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      // Verify error was written to stderr
      expect(processStderrSpy).toHaveBeenCalled();
-@@ -4403,16 +7517,14 @@
+@@ -4403,16 +7572,14 @@
    });
  
    it('does not double-wrap or double-format an API error in non-interactive mode', async () => {
@@ -66487,7 +66545,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.TEXT);
      setupMetricsMock();
      const finalize = vi.fn();
-@@ -4421,13 +7533,13 @@
+@@ -4421,13 +7588,13 @@
        mockConfig as unknown as {
          getChatRecordingService: () => {
            finalize: () => void;
@@ -66502,7 +66560,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        value: {
          error: {
            message: '402 Model gpt-oss-120b is not available for billing.',
-@@ -4440,15 +7552,14 @@
+@@ -4440,15 +7607,14 @@
        createStreamFromEvents([apiErrorEvent]),
      );
  
@@ -66526,7 +66584,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(finalize).toHaveBeenCalledOnce();
      expect(flush).toHaveBeenCalledOnce();
  
-@@ -4487,35 +7598,45 @@
+@@ -4487,35 +7653,45 @@
        throw fatalError;
      });
  
@@ -66601,7 +66659,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should execute a slash command that returns a prompt', async () => {
-@@ -4535,7 +7656,10 @@
+@@ -4535,7 +7711,10 @@
        { type: GeminiEventType.Content, value: 'Response from command' },
        {
          type: GeminiEventType.Finished,
@@ -66613,7 +66671,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4561,7 +7685,9 @@
+@@ -4561,7 +7740,9 @@
        },
      );
  
@@ -66624,7 +66682,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle command that requires confirmation by returning early', async () => {
-@@ -4585,7 +7711,7 @@
+@@ -4585,7 +7766,7 @@
      );
  
      // Should write error message through adapter to stdout (TEXT mode goes through JsonOutputAdapter)
@@ -66633,7 +66691,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Shell command confirmation is not supported in non-interactive mode. Use YOLO mode or pre-approve commands.\n',
      );
    });
-@@ -4599,7 +7725,10 @@
+@@ -4599,7 +7780,10 @@
        { type: GeminiEventType.Content, value: 'Response to unknown' },
        {
          type: GeminiEventType.Finished,
@@ -66645,7 +66703,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4625,7 +7754,9 @@
+@@ -4625,7 +7809,9 @@
        },
      );
  
@@ -66656,7 +66714,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should handle known but unsupported slash commands like /help by returning early', async () => {
-@@ -4647,7 +7778,7 @@
+@@ -4647,7 +7833,7 @@
      );
  
      // Should write error message through adapter to stdout (TEXT mode goes through JsonOutputAdapter)
@@ -66665,7 +66723,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'The command "/help" is not supported in this mode.\n',
      );
    });
-@@ -4672,7 +7803,7 @@
+@@ -4672,7 +7858,7 @@
      );
  
      // Should write error message to stderr
@@ -66674,7 +66732,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        'Unknown command result type: unhandled\n',
      );
    });
-@@ -4695,7 +7826,10 @@
+@@ -4695,7 +7881,10 @@
        { type: GeminiEventType.Content, value: 'Acknowledged' },
        {
          type: GeminiEventType.Finished,
@@ -66686,7 +66744,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4711,7 +7845,9 @@
+@@ -4711,7 +7900,9 @@
  
      expect(mockAction).toHaveBeenCalledWith(expect.any(Object), 'arg1 arg2');
  
@@ -66697,7 +66755,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    });
  
    it('should emit stream-json envelopes when output format is stream-json', async () => {
-@@ -4720,20 +7856,25 @@
+@@ -4720,20 +7911,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66732,7 +66790,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -4750,61 +7891,72 @@
+@@ -4750,61 +7946,72 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -66830,7 +66888,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
  
      const envelopes = writes
-@@ -4816,6 +7968,7 @@
+@@ -4816,6 +8023,7 @@
      expect(process.exit).not.toHaveBeenCalled();
      expect(envelopes.at(-1)).toMatchObject({
        type: 'result',
@@ -66838,7 +66896,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        is_error: true,
        error: { message: 'Operation cancelled.' },
      });
-@@ -4832,12 +7985,16 @@
+@@ -4832,12 +8040,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66861,7 +66919,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockBackgroundTaskRegistry.setRegisterCallback.mockImplementation(
        (callback) => {
          callback?.({
-@@ -4854,8 +8011,8 @@
+@@ -4854,8 +8066,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -66872,7 +66930,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -4894,14 +8051,16 @@
+@@ -4894,14 +8106,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -66897,7 +66955,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const notificationXml =
        '<task-notification>\n' +
-@@ -4963,8 +8122,8 @@
+@@ -4963,8 +8177,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66908,7 +66966,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -4975,8 +8134,8 @@
+@@ -4975,8 +8189,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66919,7 +66977,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5078,8 +8237,8 @@
+@@ -5078,8 +8292,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66930,7 +66988,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5090,8 +8249,8 @@
+@@ -5090,8 +8304,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66941,7 +66999,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5102,8 +8261,8 @@
+@@ -5102,8 +8316,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -66952,7 +67010,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5137,26 +8296,32 @@
+@@ -5137,26 +8351,32 @@
      );
    });
  
@@ -66995,7 +67053,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -5202,14 +8367,16 @@
+@@ -5202,14 +8422,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67020,7 +67078,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const notificationXml =
        '<task-notification>\n' +
-@@ -5239,8 +8406,8 @@
+@@ -5239,8 +8461,8 @@
          {
            type: GeminiEventType.Finished,
            value: {
@@ -67031,7 +67089,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            },
          },
        ]),
-@@ -5291,14 +8458,16 @@
+@@ -5291,14 +8513,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67056,7 +67114,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const firstNotificationXml =
        '<task-notification>\n' +
-@@ -5377,8 +8546,8 @@
+@@ -5377,8 +8601,8 @@
        yield {
          type: GeminiEventType.Finished,
          value: {
@@ -67067,7 +67125,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        };
      }
-@@ -5390,16 +8559,16 @@
+@@ -5390,16 +8614,16 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -67087,7 +67145,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Watch the logs',
        'prompt-monitor-cutover',
-@@ -5438,14 +8607,16 @@
+@@ -5438,14 +8662,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67112,7 +67170,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      let keepBackgroundTaskOpen = true;
      let lateMonitorEventEmitted = false;
-@@ -5535,8 +8706,8 @@
+@@ -5535,8 +8761,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -67123,7 +67181,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5547,8 +8718,8 @@
+@@ -5547,8 +8773,8 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -67134,7 +67192,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              },
            },
          ]),
-@@ -5594,52 +8765,376 @@
+@@ -5594,52 +8820,376 @@
      });
    });
  
@@ -67531,7 +67589,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      await runNonInteractive(
        mockConfig,
        mockSettings,
-@@ -5655,12 +9150,7 @@
+@@ -5655,12 +9205,7 @@
      const resultEnvelope = envelopes.at(-1);
      expect(resultEnvelope?.type).toBe('result');
      expect(resultEnvelope?.duration_api_ms).toBeGreaterThan(0);
@@ -67545,7 +67603,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      nowSpy.mockRestore();
    });
-@@ -5671,20 +9161,25 @@
+@@ -5671,20 +9216,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67580,7 +67638,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -5750,14 +9245,16 @@
+@@ -5750,14 +9300,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67605,7 +67663,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -5766,25 +9263,24 @@
+@@ -5766,25 +9318,24 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -67641,7 +67699,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
  
-@@ -5802,24 +9298,36 @@
+@@ -5802,24 +9353,36 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -67689,7 +67747,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -5836,15 +9344,17 @@
+@@ -5836,15 +9399,17 @@
        (block: unknown) =>
          typeof block === 'object' &&
          block !== null &&
@@ -67710,7 +67768,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should emit tool errors in tool_result blocks in stream-json format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
-@@ -5852,14 +9362,16 @@
+@@ -5852,14 +9417,16 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67735,7 +67793,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -5868,41 +9380,40 @@
+@@ -5868,41 +9435,40 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -67791,7 +67849,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger error',
-@@ -5934,14 +9445,17 @@
+@@ -5934,14 +9500,17 @@
        (block: unknown) =>
          typeof block === 'object' &&
          block !== null &&
@@ -67811,7 +67869,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should emit partial messages when includePartialMessages is true', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
-@@ -5949,21 +9463,26 @@
+@@ -5949,21 +9518,26 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67847,7 +67905,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6006,24 +9525,33 @@
+@@ -6006,24 +9580,33 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -67891,7 +67949,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6040,38 +9568,40 @@
+@@ -6040,38 +9623,40 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -67954,7 +68012,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const toolCall1: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -6091,32 +9621,37 @@
+@@ -6091,32 +9676,37 @@
          args: { param: 'value2' },
          isClientInitiated: false,
          prompt_id: 'prompt-id-multi',
@@ -68003,7 +68061,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Multiple tools',
        'prompt-id-multi',
-@@ -6125,36 +9660,32 @@
+@@ -6125,36 +9715,32 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -68059,7 +68117,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -6174,12 +9705,16 @@
+@@ -6174,12 +9760,16 @@
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
      const writes: string[] = [];
@@ -68082,7 +68140,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const duplicateToolCall: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -6223,21 +9758,26 @@
+@@ -6223,21 +9813,26 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -68111,7 +68169,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({
-@@ -6255,30 +9795,15 @@
+@@ -6255,30 +9850,15 @@
      );
      expect(toolResultParts[1].functionResponse?.id).toBe('dup_id_0001');
      expect(toolResultParts[1].functionResponse?.response?.['error']).toContain(
@@ -68145,7 +68203,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
-@@ -6325,21 +9850,25 @@
+@@ -6325,21 +9905,25 @@
            {
              type: GeminiEventType.Finished,
              value: {
@@ -68173,7 +68231,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenNthCalledWith(
        1,
        mockConfig,
-@@ -6368,20 +9897,25 @@
+@@ -6368,20 +9952,25 @@
      setupMetricsMock();
  
      const writes: string[] = [];
@@ -68208,7 +68266,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        },
      ];
      mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -6481,7 +10015,10 @@
+@@ -6481,7 +10070,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68220,7 +68278,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ]),
      );
-@@ -6499,31 +10036,32 @@
+@@ -6499,31 +10091,32 @@
        true,
      );
      expect(predicate({ prompt: 'regular cron job' } as CronJob)).toBe(false);
@@ -68272,7 +68330,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          properties: { summary: { type: 'string' } },
        });
        (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
-@@ -6542,14 +10080,16 @@
+@@ -6542,14 +10135,16 @@
        });
  
        const writes: string[] = [];
@@ -68297,7 +68355,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Same turn: the model emits structured_output FIRST, then a second
        // (hypothetical side-effecting) tool. The break must prevent the
-@@ -6573,25 +10113,28 @@
+@@ -6573,25 +10168,28 @@
            args: {},
            isClientInitiated: false,
            prompt_id: 'prompt-id-structured',
@@ -68329,7 +68387,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // should have been skipped because structured output ended the session.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const firstCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6615,44 +10158,25 @@
+@@ -6615,44 +10213,25 @@
          'tool_call',
        );
        expect(
@@ -68383,7 +68441,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6670,14 +10194,16 @@
+@@ -6670,14 +10249,16 @@
        });
  
        const writes: string[] = [];
@@ -68408,7 +68466,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Same turn, reverse order: a side-effecting tool comes BEFORE
        // structured_output. The pre-scan must drop the leading call so the
-@@ -6703,25 +10229,28 @@
+@@ -6703,25 +10284,28 @@
            args: structuredArgs,
            isClientInitiated: false,
            prompt_id: 'prompt-id-leading',
@@ -68440,7 +68498,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // leading side-effect tool must have been suppressed by the pre-scan.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const onlyCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6729,54 +10258,35 @@
+@@ -6729,54 +10313,35 @@
        };
        expect(onlyCallArg.name).toBe('structured_output');
        // No follow-up turn should have been issued.
@@ -68507,7 +68565,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      it('tries multiple structured_output calls in the same turn until one succeeds', async () => {
        // Same-turn batch: [structured_output(bad), structured_output(good)].
-@@ -6802,14 +10312,16 @@
+@@ -6802,14 +10367,16 @@
        });
  
        const writes: string[] = [];
@@ -68532,7 +68590,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const goodArgs = { summary: 'ok' };
        const badStructured: ServerGeminiStreamEvent = {
-@@ -6850,21 +10362,24 @@
+@@ -6850,21 +10417,24 @@
                  name: 'structured_output',
                  response: { error: 'args invalid' },
                },
@@ -68560,7 +68618,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // order; the loop stops at the first success so no third execution.
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string; callId: string }).name,
-@@ -6881,27 +10396,17 @@
+@@ -6881,27 +10451,17 @@
        // No retry turn was needed.
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
        expect(abortAllSpy).toHaveBeenCalledTimes(1);
@@ -68593,7 +68651,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6933,28 +10438,35 @@
+@@ -6933,28 +10493,35 @@
            args: { summary: 'second try' },
            isClientInitiated: false,
            prompt_id: 'prompt-id-retry',
@@ -68639,7 +68697,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Emit structured output',
          'prompt-id-retry',
-@@ -6986,20 +10498,25 @@
+@@ -6986,20 +10553,25 @@
        setupMetricsMock();
  
        const writes: string[] = [];
@@ -68674,7 +68732,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValueOnce(
-@@ -7030,8 +10547,8 @@
+@@ -7030,8 +10602,8 @@
        expect(result?.error?.message).toMatch(/structured_output/);
        expect(endInteractionSpanSpy).toHaveBeenCalledWith('error', {
          promptId: 'prompt-id-plaintext',
@@ -68685,7 +68743,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        });
      });
  
-@@ -7104,17 +10621,22 @@
+@@ -7104,17 +10676,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -68708,7 +68766,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string }).name,
        );
-@@ -7260,17 +10782,22 @@
+@@ -7260,17 +10837,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -68731,7 +68789,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          (call) => (call[1] as { name: string }).name,
        );
        expect(executedNames).toEqual([
-@@ -7334,14 +10861,16 @@
+@@ -7334,14 +10916,16 @@
        setupMetricsMock();
  
        const writes: string[] = [];
@@ -68756,7 +68814,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        // Inject a monitor notification synchronously when the registry
        // wires up — same trick the existing notification tests use to
-@@ -7386,20 +10915,29 @@
+@@ -7386,20 +10970,29 @@
              {
                type: GeminiEventType.Finished,
                value: {
@@ -68792,7 +68850,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Watch the logs',
          'prompt-drain-struct',
-@@ -7507,14 +11045,16 @@
+@@ -7507,14 +11100,16 @@
        });
  
        const writes: string[] = [];
@@ -68817,7 +68875,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const structuredArgs = { summary: 'done' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -7524,17 +11064,24 @@
+@@ -7524,17 +11119,24 @@
            name: 'structured_output',
            args: structuredArgs,
            isClientInitiated: false,
@@ -68846,7 +68904,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const exitCode = await runNonInteractive(
          mockConfig,
          mockSettings,
-@@ -7603,14 +11150,16 @@
+@@ -7603,14 +11205,16 @@
        });
  
        const writes: string[] = [];
@@ -68871,7 +68929,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
        const structuredArgs = { summary: 'text-mode-ok' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -7620,17 +11169,24 @@
+@@ -7620,17 +11224,24 @@
            name: 'structured_output',
            args: structuredArgs,
            isClientInitiated: false,
@@ -68900,7 +68958,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockConfig,
          mockSettings,
          'Emit structured output (text mode)',
-@@ -7701,7 +11257,10 @@
+@@ -7701,7 +11312,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68912,7 +68970,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7742,7 +11301,10 @@
+@@ -7742,7 +11356,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68924,7 +68982,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7797,7 +11359,10 @@
+@@ -7797,7 +11414,10 @@
          { type: GeminiEventType.Content, value: 'ok' },
          {
            type: GeminiEventType.Finished,
@@ -68936,7 +68994,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          },
        ];
        mockGeminiClient.sendMessageStream.mockReturnValue(
-@@ -7825,6 +11390,22 @@
+@@ -7825,6 +11445,22 @@
        } finally {
          await fs.rm(realTmpDir, { recursive: true, force: true });
        }
@@ -69193,7 +69251,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
  
  import {
    normalizePartList,
-+  shouldInterpretSlashCommands,
++  interpretsTaskCommands,
    extractPartsFromUserMessage,
    buildSystemMessage,
    createToolProgressHandler,
@@ -70198,7 +70256,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +
 +          if (!initialPartList) {
 +            let slashHandled = false;
-+            if (shouldInterpretSlashCommands(config) && isSlashCommand(input)) {
++            if (interpretsTaskCommands(config) && isSlashCommand(input)) {
 +              const slashCommandResult = await handleSlashCommand(
 +                input,
 +                abortController,
@@ -70379,7 +70437,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +              }
 +            }
 +
-+            if (!slashHandled) {
++            if (!slashHandled && interpretsTaskCommands(config)) {
 +              const { processedQuery, shouldProceed } = await handleAtCommand({
 +                query: operatorTask ?? input,
                  config,
@@ -70531,7 +70589,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +          const recoveredAgentsNotice =
 +            resumedSessionData &&
 +            !options.continueInterrupted &&
-+            (!shouldInterpretSlashCommands(config) || !isSlashCommand(input))
++            (!interpretsTaskCommands(config) || !isSlashCommand(input))
 +              ? config.consumePendingRecoveredAgentsNotice()
 +              : null;
 +          if (recoveredAgentsNotice) {
@@ -117890,7 +117948,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +import { getAvailableCommands } from '../nonInteractiveCliCommands.js';
  import {
    normalizePartList,
-+  shouldInterpretSlashCommands,
++  interpretsTaskCommands,
    extractPartsFromUserMessage,
 -  computeUsageFromMetrics,
    buildSystemMessage,
@@ -117900,8 +117958,8 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
    insertAfterFunctionResponses,
  } from './nonInteractiveHelpers.js';
  
-+describe('shouldInterpretSlashCommands', () => {
-+  it('treats every locked agent-service prompt as literal task text', () => {
++describe('interpretsTaskCommands', () => {
++  it('treats every locked agent-service task as literal text', () => {
 +    const lockedConfig = {
 +      getForegroundAgentsOnly: () => true,
 +    } as Config;
@@ -117909,8 +117967,8 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.test.ts b/packages/cli
 +      getForegroundAgentsOnly: () => false,
 +    } as Config;
 +
-+    expect(shouldInterpretSlashCommands(lockedConfig)).toBe(false);
-+    expect(shouldInterpretSlashCommands(ordinaryConfig)).toBe(true);
++    expect(interpretsTaskCommands(lockedConfig)).toBe(false);
++    expect(interpretsTaskCommands(ordinaryConfig)).toBe(true);
 +  });
 +});
 +
@@ -119131,7 +119189,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
   * @param parts - Input parts in various formats (string, Part, Part[], or null)
   * @returns Normalized array of Part objects
   */
-@@ -61,12 +58,21 @@
+@@ -61,12 +58,25 @@
      );
    }
  
@@ -119139,11 +119197,15 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
  }
  
 +/**
-+ * The agent-service prompt is always literal task text. Interpreting a leading
-+ * slash would let copied workspace commands or workflows execute before the
-+ * model and outside the locked native-tool history.
++ * Whether the task's own commands -- a leading slash command, an `@path` --
++ * are acted on. The agent-service task is literal text, the operator's words
++ * as written, and neither is. Interpreting a leading slash would let copied
++ * workspace commands or workflows execute before the model and outside the
++ * locked native-tool history; expanding an `@path` would rewrite the task's
++ * text and put a workspace file's contents into the operator's turn, with the
++ * operator's authority.
 + */
-+export function shouldInterpretSlashCommands(config: Config): boolean {
++export function interpretsTaskCommands(config: Config): boolean {
 +  return !config.getForegroundAgentsOnly();
 +}
 +
@@ -119153,7 +119215,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
   * @param message - User message sourced from the CLI protocol layer
   * @returns Extracted parts or null if the message lacks textual content
   */
-@@ -97,47 +103,12 @@
+@@ -97,47 +107,12 @@
      return parts.length > 0 ? parts : null;
    }
  
@@ -119201,7 +119263,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
    if (config.getApprovalMode() === ApprovalMode.PLAN) {
      reminders.push({ text: getPlanModeSystemReminder(config.getSdkMode?.()) });
    }
-@@ -183,17 +154,16 @@
+@@ -183,17 +158,16 @@
        'non_interactive',
      );
  
@@ -119222,7 +119284,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
  }
  
  /**
-@@ -216,40 +186,58 @@
+@@ -216,40 +190,58 @@
  export async function buildSystemMessage(
    config: Config,
    sessionId: string,
@@ -119286,7 +119348,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
      model: config.getModel(),
      permission_mode: permissionMode,
      slash_commands: slashCommands,
-@@ -303,30 +291,34 @@
+@@ -303,30 +295,34 @@
  /**
   * Creates an output update handler specifically for Agent tool subagent execution.
   * This handler monitors AgentResultDisplay updates and converts them to protocol messages
@@ -119323,7 +119385,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
     *
     * @param toolCall - The tool call information
     * @returns ToolCallRequestInfo object
-@@ -513,12 +505,28 @@
+@@ -513,12 +509,28 @@
          !adapter.emitSubagentErrorResult
        ) {
          previousTaskStates.set(callId, taskDisplay);
@@ -119352,7 +119414,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
            for (const toolCall of taskDisplay.toolCalls) {
              processToolCall(toolCall);
            }
-@@ -530,57 +538,61 @@
+@@ -530,57 +542,61 @@
              );
              processToolCall(toolCall, previousCall);
            }
@@ -119440,7 +119502,7 @@ diff --git a/packages/cli/src/utils/nonInteractiveHelpers.ts b/packages/cli/src/
  }
  
  /**
-@@ -591,14 +603,12 @@
+@@ -591,14 +607,12 @@
   * @returns String representation of the parts
   */
  export function functionResponsePartsToString(parts: Part[]): string {
@@ -175699,7 +175761,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      };
  
      const priv = () =>
-@@ -13199,12 +13268,224 @@
+@@ -13199,12 +13268,270 @@
        );
        expect(priv().announcedAgentReminderNames).toEqual(
          new Set(['old-agent']),
@@ -175790,6 +175852,52 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
 +            .filter((part) => part.text === task),
 +        ).toHaveLength(1);
 +      }
++    });
++    it('retains the headless task as the bytes the model reads, so a compaction carries the same task', async () => {
++      setupInputRecording();
++      // The task as the headless runner hands it over: the operator's bytes,
++      // which nothing interprets, then the client's blank line.
++      const task =
++        '  Email ops@example.com, then read @notes.md\n\n@notes.md as it is.  \n';
++      const submitted = authored(operatorText(task, 0), harnessText('\n\n'));
++      const read = authoredTextPart(submitted);
++      const declared = {
++        primary_request_and_intent: 'Derived state',
++        key_technical_concepts: 'Repository',
++        files_and_code_sections: 'Files',
++        errors_and_fixes: 'Verified state',
++        problem_solving: 'Inspection',
++        pending_tasks: 'Plan',
++        current_work: 'Implementation',
++        next_step: 'Test',
++      };
++
++      await fromAsync(
++        client.sendMessageStream(
++          [read],
++          new AbortController().signal,
++          'authored-headless',
++          { type: SendMessageType.UserQuery, submittedPrompt: submitted },
++        ),
++      );
++
++      const sent = mockTurnRunFn.mock.calls[0][1];
++      const retained = originals(sent);
++      expect(retained).toEqual([
++        {
++          ...read,
++          authoredInstructions: [{ id: expect.any(String), parts: [read] }],
++        },
++      ]);
++      const history = composePostCompactHistory(
++        [
++          createUserContent(sent),
++          { role: 'model', parts: [{ text: 'answer' }] },
++        ],
++        declared,
++        { draw: SNAPSHOT_DRAW },
++      );
++      expect(retainedInstructionParts(history)).toEqual(retained);
 +    });
 +    it('records and sends the same original separately from expansion and hook additions', async () => {
 +      const record = setupInputRecording();
@@ -175924,7 +176032,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
    mgr: Record<string, ReturnType<typeof vi.fn>>,
  ): Config {
    return {
-@@ -13233,6 +13514,7 @@
+@@ -13233,6 +13560,7 @@
      }),
      getFileReadCache: vi.fn().mockReturnValue({
        clear: vi.fn(),
@@ -175932,7 +176040,7 @@ diff --git a/packages/core/src/core/client.test.ts b/packages/core/src/core/clie
      }),
      getExtensionLoader: vi.fn().mockReturnValue(undefined),
      getWorkspaceContext: vi.fn().mockReturnValue(undefined),
-@@ -13245,5 +13527,6 @@
+@@ -13245,5 +13573,6 @@
      getChatRecordingService: vi.fn().mockReturnValue(undefined),
      isInteractive: vi.fn().mockReturnValue(false),
      getStdinReader: vi.fn().mockReturnValue(undefined),

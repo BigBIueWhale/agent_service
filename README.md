@@ -1250,11 +1250,14 @@ a start with no language set finds none — the image build has upstream's write
 produce it and refuses different bytes — and it refuses to start without it. It
 also disables managed memory, auto-memory/dream, team memory/synchronization,
 auto-skill, custom slash commands, workflows, include directories, and
-permission-rule persistence. A leading slash in
-the submitted prompt is ordinary task text, and init metadata must report
-`slash_commands: []`. These files remain ordinary copied source files and may be
-inspected when relevant to the task, but they cannot replace the pinned model,
-xhigh thinking, sampling tuple, tokenizer path, tool allowlist, or network boundary.
+permission-rule persistence. The submitted prompt is literal task text: a
+leading slash and an `@path` in it are ordinary text, no file it names is read
+into it, and the model's first message carries it as written, followed by the
+blank line the client puts after it, as does every compaction after. Init
+metadata must report `slash_commands: []`. These files remain ordinary copied
+source files and may be inspected when relevant to the task, but they cannot
+replace the pinned model, xhigh thinking, sampling tuple, tokenizer path, tool
+allowlist, or network boundary.
 Source-level tests cover these isolation invariants; live acceptance also uses a
 deliberately contradictory workspace configuration.
 

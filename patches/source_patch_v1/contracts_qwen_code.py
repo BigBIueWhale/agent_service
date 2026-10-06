@@ -139,6 +139,16 @@ def _validate_locked_boundary_before(state: State) -> None:
         label=label,
     )
     forbid_text(state, core, "getForegroundAgentsOnly()", label=label)
+    # Upstream expands every headless task's @paths, rewriting its text and
+    # reading the files it names into the operator's turn.
+    require_text(
+        state,
+        "packages/cli/src/nonInteractiveCli.ts",
+        "        if (!slashHandled) {\n"
+        "          const { processedQuery, shouldProceed } = await handleAtCommand({\n"
+        "            query: input,\n",
+        label=label,
+    )
     _require_all(
         state,
         metadata,
@@ -349,13 +359,45 @@ def _validate_locked_boundary_after(state: State) -> None:
         state,
         helpers,
         (
-            "export function shouldInterpretSlashCommands(config: Config): boolean",
+            "export function interpretsTaskCommands(config: Config): boolean",
             "return !config.getForegroundAgentsOnly();",
             "const slashCommands = config.getForegroundAgentsOnly()",
             "name === 'general-purpose' || name === 'Explore'",
         ),
         label=label,
     )
+    # The task is literal text: one predicate gates both of the task's own
+    # commands, so a locked task's slash and @paths alike reach the model as
+    # written. The test runs a task with an address, two @paths and the
+    # whitespace around it; the client test holds a compaction to carry the
+    # same bytes the model read.
+    _require_all(
+        state,
+        "packages/cli/src/nonInteractiveCli.ts",
+        (
+            "if (interpretsTaskCommands(config) && isSlashCommand(input)) {",
+            "if (!slashHandled && interpretsTaskCommands(config)) {",
+        ),
+        label=label,
+    )
+    for path in ("packages/cli/src/nonInteractiveCli.ts", helpers):
+        forbid_text(state, path, "shouldInterpretSlashCommands", label=label)
+    for path, case in (
+        (
+            "packages/cli/src/nonInteractiveCli.test.ts",
+            "sends a locked task to the model as the operator wrote it, @paths and all",
+        ),
+        (
+            "packages/cli/src/utils/nonInteractiveHelpers.test.ts",
+            "treats every locked agent-service task as literal text",
+        ),
+        (
+            "packages/core/src/core/client.test.ts",
+            "retains the headless task as the bytes the model reads, so a compaction "
+            "carries the same task",
+        ),
+    ):
+        require_text(state, path, case, label=label)
     _require_all(
         state,
         metadata,
@@ -12338,8 +12380,11 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="locked-config-and-literal-cli",
         rationale=(
             "A sealed deployment loads its explicit settings, prompt, tools, and local task guidance "
-            "without admitting workspace executable policy or interpreting the submitted task as a CLI "
-            "command. Subagent definitions come from the built-ins alone, and one offered by the "
+            "without admitting workspace executable policy or interpreting the submitted task: "
+            "neither a leading slash command nor an @path in it is acted on, so the task reaches "
+            "the model as the operator wrote it, followed by the blank line the client puts after "
+            "it, and no workspace file enters the operator's turn. A compaction carries forward "
+            "the same bytes. Subagent definitions come from the built-ins alone, and one offered by the "
             "workspace is refused by path rather than skipped, so the work cannot choose the agent "
             "that works on it."
         ),

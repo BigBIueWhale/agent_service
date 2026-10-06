@@ -252,6 +252,24 @@ def qualify(stdout: bytes, runtime: Path, nonce: str, requests: list[dict], cert
     require(not any(event.get("type", "").startswith("control_") for event in events),
             "SDK control records entered the non-SDK evidence stream; inspect stdout routing")
     request_evidence = require_request_evidence(events, requests)
+    # The first request carries the task as the operator wrote it: one run the operator
+    # wrote, the whole prompt from its first byte, opening a text part that ends with the
+    # blank line the client puts after it. The certifier holds the run's bytes to the prompt;
+    # this holds the prompt to arriving whole and unedited.
+    first = request_evidence[0]["body"]
+    require(first["kind"] == "full", "the first request is not a whole body")
+    stored = json.dumps(prompt.decode("utf-8"), ensure_ascii=False)[1:-1].encode("utf-8")
+    body = first["json"].encode("utf-8")
+    at, operator = 0, []
+    for run in first["authors"]:
+        if run["author"] == "operator":
+            operator.append((at, run))
+        at += run["bytes"]
+    require(len(operator) == 1 and operator[0][1]["offset"] == 0
+            and operator[0][1]["bytes"] == len(stored)
+            and body[operator[0][0] - 1:operator[0][0] + len(stored) + 5] == b'"' + stored + b'\\n\\n"',
+            "the task did not reach the model as the operator wrote it; inspect how the headless "
+            f"runner composes its first message: operator runs {[run for _, run in operator]!r}")
     normalization_seeds = [event["normalization_seed"] for event in events
                            if event["type"] == "model_normalization_seed"]
     require(len(normalization_seeds) == 2 and
@@ -627,7 +645,13 @@ def check(entry: Path, settings_path: Path, launcher_source: Path, certifier: Pa
             # the one compact form the launcher passes it.
             command = [node, "--expose-gc", str(entry), *arguments, f"--max-session-turns={turn_budget}",
                        "--deliverables=" + json.dumps(deliverables, ensure_ascii=False, separators=(",", ":"))]
-            prompt = f"Read {fixture} with read_file using offset 0, then reply HEADLESS_SMOKE_OK followed by its exact content.\n"
+            # The task is literal text. The @paths name the fixture and the address has an @ in
+            # it, and they, the paragraph break between the paths and the whitespace around the
+            # task reach the model as written: the fixture is read by the call the model makes,
+            # never into the operator's turn.
+            prompt = (f"  Read {fixture} with read_file using offset 0, then reply HEADLESS_SMOKE_OK "
+                      f"followed by its exact content.\n\n@{fixture.name}\n\n@{fixture.name} and "
+                      "smoke@example.com are text.  \n")
             try:
                 with subprocess.Popen(
                     command, cwd=workspace, env=env, start_new_session=True, umask=0o077,
