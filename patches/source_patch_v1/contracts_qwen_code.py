@@ -5012,12 +5012,15 @@ def _validate_compaction_budget_after(state: State) -> None:
             "if (draw === 'redraw') {",
             "if (!refusal || this.history.at(-1) !== refusal.answered) {",
             "if (refusal.draws >= MAX_GENERATION_DRAWS) {",
+            # The redraw's message is admitted against the one definition the
+            # reasoning loops compose it with -- its text, its author and its
+            # shape -- never against a shape restated here.
+            "        const notice = turnRefusalMessage(\n"
             "          refusal.cause === 'output_limit'\n"
-            "            ? turnRefusalNotice(turnOutputLimit(partition))\n"
-            "            : REPEATED_TOOL_PARAMETER_NOTICE;",
-            "          parts.length !== 1 ||\n"
-            "          Object.keys(parts[0]).length !== 1 ||\n"
-            "          parts[0].text !== notice\n",
+            "            ? { cause: 'output_limit', limit: turnOutputLimit(partition) }\n"
+            "            : { cause: refusal.cause },\n"
+            "        );",
+            "          !isDeepStrictEqual(createUserContent(params.message).parts, notice)\n",
             "'A redraw carries the refusal notice of the turn it redraws and nothing else.',",
             "refusedBefore = refusal.draws;",
             "if (draw === 'redraw') {",
@@ -5520,7 +5523,29 @@ def _validate_compaction_budget_after(state: State) -> None:
             "    '\\n</system-reminder>'\n"
             "  );\n"
             "}",
+            # A redraw's message is defined once: the notice for its cause, as
+            # the harness's text, alone. The loops compose it here and the chat
+            # admits it against this, so the two cannot disagree.
+            "export function turnRefusalMessage(refusal: TurnRefusal): Part[] {",
+            "      return [authoredTextPart(harnessText(turnRefusalNotice(refusal.limit)))];",
+            "      return [authoredTextPart(harnessText(REPEATED_TOOL_PARAMETER_NOTICE))];",
         ),
+        label=label,
+    )
+    for composer in (
+        chat,
+        "packages/core/src/core/turn.ts",
+        "packages/cli/src/nonInteractiveCli.ts",
+        "packages/core/src/agents/runtime/agent-core.ts",
+    ):
+        for restated in ("turnRefusalNotice(", "REPEATED_TOOL_PARAMETER_NOTICE"):
+            forbid_text(state, composer, restated, label=label)
+    # The guard drives the message the loops compose through the real chat,
+    # pipeline and request serializer, each of which refuses any other.
+    require_text(
+        state,
+        "packages/core/src/core/geminiChat.test.ts",
+        "admits the notice the reasoning loops compose, and sends it through the request serializer",
         label=label,
     )
     _require_all(
@@ -6590,12 +6615,15 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "  if (ending === undefined || 'cause' in ending) return ending;\n"
             "  return ending.reason === FinishReason.MAX_TOKENS ? ending : undefined;\n"
             "}",
-            "export function refusedTurnNotice(refused: RefusedTurn): string {\n"
-            "  return 'cause' in refused\n"
-            "    ? REPEATED_TOOL_PARAMETER_NOTICE\n"
-            "    : turnRefusalNotice(\n"
-            "        turnOutputLimit(partitionContextWindow(refused.issued.window)),\n"
-            "      );",
+            "export function refusedTurnMessage(refused: RefusedTurn): Part[] {\n"
+            "  return turnRefusalMessage(\n"
+            "    'cause' in refused\n"
+            "      ? { cause: refused.cause }\n"
+            "      : {\n"
+            "          cause: 'output_limit',\n"
+            "          limit: turnOutputLimit(partitionContextWindow(refused.issued.window)),\n"
+            "        },\n"
+            "  );",
             "export function describeRefusedTurns(",
             "`${turnOutputLimit(partitionContextWindow(refused.issued.window))}-token ` +",
             "export function endedOnItsOwn(ending: GenerationEnding | undefined): boolean {",
@@ -6760,7 +6788,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "if (consecutiveTurnRefusals >= MAX_GENERATION_DRAWS) {",
             "terminateMode: AgentTerminateMode.INCOMPLETE_GENERATION,",
             "message: describeRefusedTurns(refused, turnCount),",
-            "authoredTextPart(harnessText(refusedTurnNotice(refused))),",
+            "const parts = refusedTurnMessage(refused);",
             ".recordMidTurnUserMessage(parts);",
             "return parts;",
             "if (redrawRefusedTurn) {",
@@ -6876,7 +6904,7 @@ def _validate_incomplete_generation_after(state: State) -> None:
             "consecutiveTurnRefusals += 1;",
             "if (consecutiveTurnRefusals >= MAX_GENERATION_DRAWS) {",
             "terminateMode = AgentTerminateMode.INCOMPLETE_GENERATION;",
-            "const notice = refusedTurnNotice(refusedRound);",
+            "const noticeParts = refusedTurnMessage(refusedRound);",
             "kind: 'turn_refusal',",
             "currentMessages = [{ role: 'user', parts: noticeParts }];",
             "redrawRefusedRound = true;",
@@ -12880,7 +12908,9 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "and what the generation was writing when it ended, so the description says what the "
             "stop cost -- a call the model had not completed, which was not made, and where what "
             "was served of it is kept; a message cut to a prefix; or nothing visible -- and that "
-            "the run carries no final answer. A redraw notice is admitted to the canonical "
+            "the run carries no final answer. A redraw's message is the refusal notice alone, as "
+            "the runtime's text, defined once for the loops that compose it and the chat that "
+            "admits it, so the two cannot disagree; it is admitted to the canonical "
             "recording, as the runtime's, before the request that carries it is sent; every "
             "record's author is stated by the code that writes it, never inferred from its type."
         ),

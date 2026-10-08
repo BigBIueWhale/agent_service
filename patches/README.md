@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `22cb5945454db0ad43ff771c26fae9d132d63b4a9f8fb7ea9f12ad964b69ebd6`
+- Review-diff SHA-256: `3b942bb046570a6f39123d4181d72193c8a55135977aa8de3b517da56832d596`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `6cca27f334400c76a2e95e04615217b36cff51080ed7a49ca9a54c9a45ee49ce`
+- Transformer-manifest SHA-256: `1bf185decded8f6d73b4289e599017c11fcd4a9e4dba3e5ac6f16c6e64ab727c`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -105,15 +105,19 @@ conversation and ran nothing; and the next should reason more briefly and write
 a long file in parts, or name each parameter once -- and it joins the
 conversation on that message, so the redraw is the refused request with the
 notice added, rendered from the history as every request is, never compacted in
-between and joined by no reminder, context or hook. The notice is recorded as
-the runtime's (`system`), which wrote it. Every draw is a turn, charged to the
-turn budget and billed in the record with the usage its response served, none
-for a refused response. `MAX_GENERATION_DRAWS`, the one bound every refused
-answer is drawn under, ends the run on the fourth refusal in a row, of either
-cause, as the incomplete-generation state, naming why the last was refused; a
-generation stopped for any other reason is not drawn again and is that state at
-once. One predicate in core (`refusedTurn`) decides it for both reasoning
-loops.
+between and joined by no reminder, context or hook. That message is defined
+once, `turnRefusalMessage`: the notice as text the harness wrote, alone. Both
+reasoning loops compose it there, and the chat admits a redraw only when its
+message is exactly that -- the same text, the same stated author, the same shape
+-- so the code that sends a redraw and the code that admits it cannot disagree.
+The notice is recorded as the runtime's (`system`), which wrote it. Every draw
+is a turn, charged to the turn budget and billed in the record with the usage
+its response served, none for a refused response. `MAX_GENERATION_DRAWS`, the
+one bound every refused answer is drawn under, ends the run on the fourth
+refusal in a row, of either cause, as the incomplete-generation state, naming
+why the last was refused; a generation stopped for any other reason is not
+drawn again and is that state at once. One predicate in core (`refusedTurn`)
+decides it for both reasoning loops.
 
 A turn the model ended itself with no tool call is its final answer only when
 its visible text is one. A message with no visible text, or one carrying the
