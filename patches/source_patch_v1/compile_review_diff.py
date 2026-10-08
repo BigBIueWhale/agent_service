@@ -14,7 +14,13 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from framework import PatchRefusedError, _parse_review_diff, sha256_bytes, sha256_text
+from framework import (
+    PatchRefusedError,
+    _parse_review_diff,
+    sha256_bytes,
+    sha256_text,
+    text_lines,
+)
 
 
 @dataclass(frozen=True)
@@ -58,7 +64,7 @@ def emit_python(value: object) -> str:
 
 def line_offset(text: str, one_based_line: int) -> int:
     """Character offset in the current preimage after preceding hunks."""
-    lines = text.splitlines(keepends=True)
+    lines = text_lines(text)
     if one_based_line < 1 or one_based_line > len(lines):
         raise PatchRefusedError(f"invalid current source line {one_based_line}")
     return sum(len(line) for line in lines[: one_based_line - 1])
@@ -93,7 +99,7 @@ def expand_to_unique_landmark(
     start_line = max(i for i, offset in enumerate(line_starts) if offset <= selected)
     review_end = selected + len(review_before)
     end_line = max(i for i, offset in enumerate(line_starts) if offset < review_end)
-    source_lines = current.splitlines(keepends=True)
+    source_lines = text_lines(current)
 
     for radius in range(1, max(len(source_lines), 2)):
         expanded_start = max(0, start_line - radius)

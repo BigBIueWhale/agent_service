@@ -8,6 +8,7 @@ import runpy
 import sys
 import tempfile
 import unittest
+from collections.abc import Mapping
 from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
@@ -25,6 +26,7 @@ from .framework import (
     require_python_symbols,
     sha256_bytes,
     sha256_text,
+    text_lines,
 )
 
 
@@ -32,21 +34,38 @@ def _noop(_state) -> None:
     return None
 
 
-def _review(path: str, before: str | None, after: str | None) -> str:
+def _review(
+    path: str,
+    before: str | None,
+    after: str | None,
+    *,
+    start: int = 1,
+    deleted_mode: str = "100644",
+) -> str:
+    """A review diff of one hunk replacing `before` with `after`, which start
+    on line `start` of the file; a deleted file states `deleted_mode`."""
     old_text = before if before is not None else ""
     new_text = after if after is not None else ""
     old_lines = old_text.count("\n")
     new_lines = new_text.count("\n")
-    old = "".join(f"-{line}" for line in old_text.splitlines(keepends=True))
-    new = "".join(f"+{line}" for line in new_text.splitlines(keepends=True))
+    old = "".join(f"-{line}" for line in text_lines(old_text))
+    new = "".join(f"+{line}" for line in text_lines(new_text))
     old_path = f"a/{path}" if before is not None else "/dev/null"
     new_path = f"b/{path}" if after is not None else "/dev/null"
+    mode = (
+        "new file mode 100644\n"
+        if before is None
+        else f"deleted file mode {deleted_mode}\n"
+        if after is None
+        else ""
+    )
     return (
         f"diff --git a/{path} b/{path}\n"
+        f"{mode}"
         f"--- {old_path}\n"
         f"+++ {new_path}\n"
-        f"@@ -{1 if old_lines else 0},{old_lines} "
-        f"+{1 if new_lines else 0},{new_lines} @@\n"
+        f"@@ -{start if old_lines else 0},{old_lines} "
+        f"+{start if new_lines else 0},{new_lines} @@\n"
         f"{old}{new}"
     )
 
@@ -58,10 +77,19 @@ def _stage(
     transformations: tuple[tuple[str, str | None, str | None], ...],
     validate_before=_noop,
     validate_after=_noop,
+    starts: Mapping[str, int] | None = None,
+    deleted_modes: Mapping[str, str] | None = None,
 ) -> PatchStage:
     review_path = f"{name}.patch"
     review = "".join(
-        _review(path, before, after) for path, before, after in transformations
+        _review(
+            path,
+            before,
+            after,
+            start=(starts or {}).get(path, 1),
+            deleted_mode=(deleted_modes or {}).get(path, "100644"),
+        )
+        for path, before, after in transformations
     )
     (artifact_root / review_path).write_text(review, encoding="utf-8", newline="\n")
     return PatchStage(
@@ -456,8 +484,8 @@ class SourcePatchTransactionTests(unittest.TestCase):
             after_lines = after.count("\n")
             review += (
                 f"@@ -{old_start},{before_lines} +{new_start},{after_lines} @@\n"
-                + "".join(f"-{line}" for line in before.splitlines(keepends=True))
-                + "".join(f"+{line}" for line in after.splitlines(keepends=True))
+                + "".join(f"-{line}" for line in text_lines(before))
+                + "".join(f"+{line}" for line in text_lines(after))
             )
         (self.artifact / f"{name}.patch").write_text(review, encoding="utf-8")
 
@@ -519,6 +547,7 @@ class SourcePatchTransactionTests(unittest.TestCase):
                 ("created.py", None, created),
             ),
             validate_after=validate_after,
+            deleted_modes={"removed.py": "100755"},
         )
         transaction = SourcePatchTransaction(
             self.source,
@@ -752,6 +781,11 @@ class SourcePatchTransactionTests(unittest.TestCase):
                         ("c-edited.py", edited, final),
                         ("z-last.py", edited, final),
                     ),
+                    # The review states the mode git gives the file it
+                    # deletes: executable when any execute bit is set.
+                    deleted_modes={
+                        "a-removed.py": "100755" if deleted_mode & 0o111 else "100644"
+                    },
                 )
                 transaction = SourcePatchTransaction(
                     self.source,
@@ -1075,6 +1109,7 @@ class SourcePatchTransactionTests(unittest.TestCase):
             self.artifact,
             name="same-result",
             transformations=(("module.py", "value = 1\n", "value = 2\n"),),
+            starts={"module.py": 3},
         )
         stage = replace(
             stage,
@@ -1133,6 +1168,7 @@ class SourcePatchTransactionTests(unittest.TestCase):
             self.artifact,
             name="wrong-final-hash",
             transformations=(("module.py", "value = 1\n", "value = 2\n"),),
+            starts={"module.py": 3},
         )
         stage = replace(
             stage,
@@ -1155,6 +1191,146 @@ class SourcePatchTransactionTests(unittest.TestCase):
         self.assertEqual(target.stat().st_mtime_ns, prior.st_mtime_ns)
         self.assertEqual(target.stat().st_ino, prior.st_ino)
         self.assertFalse(tuple(self.source.rglob("*.qwen-source-patch.*")))
+
+
+    def _restated(self, stage: PatchStage, review: str) -> PatchStage:
+        """`stage` with its review diff replaced by `review`, sealed as its own."""
+        (self.artifact / stage.review_patch).write_text(review, encoding="utf-8")
+        return replace(stage, review_sha256=sha256_bytes(review.encode("utf-8")))
+
+    def _apply(self, stage: PatchStage, final_files: dict[str, str | None]):
+        return SourcePatchTransaction(
+            self.source,
+            self.artifact,
+            _patchset((stage,), final_files=final_files),
+        ).apply()
+
+    def test_a_review_line_ends_only_at_a_newline(self) -> None:
+        # U+2028, U+2029 and U+0085 end no line, in the files or for any
+        # tool that reads a unified diff, so a hunk counts them as text.
+        before = "a\u2028b\u0085c\n"
+        after = "a\u2029b\n"
+        (self.source / "module.txt").write_text(before, encoding="utf-8")
+        stage = _stage(
+            self.artifact,
+            name="unicode-line-breaks",
+            transformations=(("module.txt", before, after),),
+        )
+        self.assertIn("@@ -1,1 +1,1 @@\n", (self.artifact / stage.review_patch).read_text())
+        self.assertEqual(
+            self._apply(stage, {"module.txt": sha256_text(after)}).state, "applied"
+        )
+        self.assertEqual((self.source / "module.txt").read_text(), after)
+
+    def test_a_hunk_carries_exactly_the_lines_its_header_counts(self) -> None:
+        (self.source / "module.py").write_text("value = 1\n", encoding="utf-8")
+        stage = _stage(
+            self.artifact,
+            name="hunk-counts",
+            transformations=(("module.py", "value = 1\n", "value = 2\n"),),
+        )
+        review = (self.artifact / stage.review_patch).read_text()
+        for header, reason in (
+            ("@@ -1,1 +1,2 @@", "ends inside a file"),
+            ("@@ -1,2 +1,1 @@", "ends inside a file"),
+            ("@@ -1,0 +1,1 @@", "carries more lines|is not one|neither a file header"),
+        ):
+            with self.subTest(header=header):
+                restated = self._restated(stage, review.replace("@@ -1,1 +1,1 @@", header))
+                with self.assertRaisesRegex(PatchRefusedError, reason):
+                    self._apply(restated, {"module.py": sha256_text("value = 2\n")})
+        self.assertEqual((self.source / "module.py").read_text(), "value = 1\n")
+
+    def test_a_hunk_is_held_to_where_its_blocks_stand(self) -> None:
+        # The second hunk's block stands on line 4 before the change and,
+        # after the line the first hunk adds, on line 5 of the result.
+        source = "a\nb\nc\nd\ne\n"
+        result = "a\nA\nb\nc\nD\ne\n"
+        (self.source / "module.txt").write_text(source, encoding="utf-8")
+        edits = (
+            LandmarkEdit("positions:first", "module.txt", "a\n", "a\nA\n", "a\n", "a\nA\n"),
+            LandmarkEdit("positions:second", "module.txt", "d\n", "D\n", "d\n", "D\n"),
+        )
+
+        def review(second: str) -> str:
+            return (
+                "diff --git a/module.txt b/module.txt\n--- a/module.txt\n+++ b/module.txt\n"
+                "@@ -1 +1,2 @@\n a\n+A\n"
+                f"{second}\n-d\n+D\n"
+            )
+
+        stage = PatchStage(
+            name="positions",
+            rationale="Hunk positions are held to the text.",
+            removal_condition="Remove with this test.",
+            review_patch="positions.patch",
+            review_sha256="0" * 64,
+            files=(FileIdentity("module.txt", sha256_text(source), sha256_text(result)),),
+            edits=edits,
+            validate_before=_noop,
+            validate_after=_noop,
+        )
+        final = {"module.txt": sha256_text(result)}
+        for second in ("@@ -4 +4 @@", "@@ -5 +5 @@", "@@ -3 +5 @@"):
+            with self.subTest(second=second):
+                with self.assertRaisesRegex(
+                    PatchRefusedError, r"its blocks stand at -4 \+5"
+                ):
+                    self._apply(self._restated(stage, review(second)), final)
+                self.assertEqual((self.source / "module.txt").read_text(), source)
+        self.assertEqual(
+            self._apply(self._restated(stage, review("@@ -4 +5 @@")), final).state,
+            "applied",
+        )
+        self.assertEqual((self.source / "module.txt").read_text(), result)
+
+    def test_a_review_states_creation_and_deletion_in_its_paths_and_mode(self) -> None:
+        created = "def created():\n    pass\n"
+        removed = "def removed():\n    pass\n"
+        (self.source / "removed.py").write_text(removed, encoding="utf-8")
+        (self.source / "removed.py").chmod(0o755)
+        final = {"created.py": sha256_text(created), "removed.py": None}
+
+        def stage() -> PatchStage:
+            return _stage(
+                self.artifact,
+                name="create-delete",
+                transformations=(
+                    ("created.py", None, created),
+                    ("removed.py", removed, None),
+                ),
+                deleted_modes={"removed.py": "100755"},
+            )
+
+        review = (self.artifact / stage().review_patch).read_text()
+        for wrong, reason in (
+            (("new file mode 100644\n", ""), "names the old side '--- /dev/null'"),
+            (("new file mode 100644", "new file mode 100755"), "transaction writes 100644"),
+            (("deleted file mode 100755", "deleted file mode 100644"), "the file has mode 100755"),
+            (("--- a/removed.py", "--- /dev/null"), "names the old side"),
+        ):
+            with self.subTest(wrong=wrong):
+                with self.assertRaisesRegex(PatchRefusedError, reason):
+                    self._apply(self._restated(stage(), review.replace(*wrong, 1)), final)
+                self.assertTrue((self.source / "removed.py").exists())
+                self.assertFalse((self.source / "created.py").exists())
+        self.assertEqual(self._apply(stage(), final).state, "applied")
+
+    def test_a_review_refuses_a_line_no_rule_admits(self) -> None:
+        (self.source / "module.py").write_text("value = 1\n", encoding="utf-8")
+        stage = _stage(
+            self.artifact,
+            name="stray-line",
+            transformations=(("module.py", "value = 1\n", "value = 2\n"),),
+        )
+        review = (self.artifact / stage.review_patch).read_text()
+        for stray in ("index 0123456..789abcd 100644\n", "# a comment\n"):
+            with self.subTest(stray=stray):
+                with self.assertRaisesRegex(PatchRefusedError, "names the old side|neither a file header"):
+                    self._apply(
+                        self._restated(stage, review.replace("--- a/module.py", stray + "--- a/module.py", 1)),
+                        {"module.py": sha256_text("value = 2\n")},
+                    )
 
 
 class SourceVectorTransactionTests(unittest.TestCase):
