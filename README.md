@@ -346,7 +346,9 @@ window has left. What
 stands in the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; three of those four
 are bounded in bytes before they exist, the snapshot by `S` and the input and
-the result by `M`, and the fourth is the turn, bounded by `C`. So the largest
+the result by `M` -- the input where it is submitted, the operator's task by
+the service and a subagent's delegated task by the agent tool, which refuses a
+task past one inline block -- and the fourth is the turn, bounded by `C`. So the largest
 request a compaction can leave behind is `D + (S + F) + 2(M + F) + (C + F)`,
 184,564 at the served window, and it stands below the trigger by the margin
 above; a window where it would not is refused rather
@@ -1768,7 +1770,9 @@ are bounded by the bytes of its NFC form rather than the bytes it is written
 in, so a prompt not already in NFC is refused with the instruction to normalize
 it, and one in NFC is measured by its length. Prompt bytes enter Qwen through
 text stdin, not a shell argument, so Linux's per-argument limit does not
-invalidate the API contract or expose the prompt in a process listing. The
+invalidate the API contract or expose the prompt in a process listing; the
+locked client reads its stdin to the end, however late the first byte arrives,
+so a slow start cannot read the task as none. The
 deliverables list is the one request value that travels as an argument, which
 is why that limit is its bound.
 

@@ -424,6 +424,29 @@ def _validate_locked_boundary_after(state: State) -> None:
         ),
         label=label,
     )
+    # The locked run's stdin is the operator's task, which its launcher writes
+    # and closes, so it is read to its end rather than given up on after
+    # upstream's half second: a slow start cannot read the task as none.
+    require_text(
+        state,
+        "packages/cli/src/gemini.tsx",
+        "      const stdinData = await readStdin({\n"
+        "        untilEnd: config.getForegroundAgentsOnly(),\n"
+        "      });",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/utils/readStdin.ts",
+        "    let pipedInputTimerId: null | NodeJS.Timeout = options.untilEnd\n      ? null",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/utils/readStdin.test.ts",
+        "reads to the end of a stream read until its end, however late its first byte",
+        label=label,
+    )
     # The task is literal text: one predicate gates both of the task's own
     # commands, so a locked task's slash and @paths alike reach the model as
     # written. The test runs a task with an address, two @paths and the
@@ -4864,6 +4887,25 @@ def _validate_compaction_budget_after(state: State) -> None:
 
     # The arithmetic itself, evaluated against the shares the tree declares.
     _validate_context_partition(state, label=label)
+    # The fit charges a retained input one inline block. The service holds the
+    # operator's task to one; the agent tool holds a subagent's delegated
+    # task, its retained input, to one too, measured as every block is.
+    _require_all(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        (
+            "    const taskBytes = tokenizerText(params.prompt).bytes;\n"
+            "    const taskBound = this.config.getInlineBlockBytes();\n"
+            "    if (taskBytes > taskBound) {",
+        ),
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.test.ts",
+        "refuses a delegated task past one inline block, naming its size and the bound",
+        label=label,
+    )
 
     # One derivation, in one place, from five declared quantities. A turn's
     # limit is one inline block and the reasoning share beside it, and nothing
@@ -8788,15 +8830,29 @@ def _validate_tool_result_bound_after(state: State) -> None:
     require_text(state, "packages/core/src/index.ts", "export * from './core/toolResultBound.js';", label=label)
 
     # Tools do not bound themselves. A producer asks the session for no
-    # inline block and retains nothing of its own output; web_fetch retains
-    # the original response bytes it fetched, which is what it reads a PDF
-    # from, and says where they are.
+    # inline block for its output and retains nothing of its own output;
+    # web_fetch retains the original response bytes it fetched, which is what
+    # it reads a PDF from, and says where they are. The agent tool reads the
+    # block once, for its input rather than its output: the delegated task it
+    # is given is the subagent's retained input, which the partition's fit
+    # charges one inline block.
     for path in _UNBOUNDED_PRODUCERS:
-        forbid_text(state, path, "getInlineBlockBytes", label=label)
+        _require(
+            _source(state, path, label=label).count("getInlineBlockBytes")
+            == (1 if path == "packages/core/src/tools/agent/agent.ts" else 0),
+            f"{label}: {path} asks the session for an inline block; a tool's output "
+            "is bounded where the session bounds every result, not by the tool",
+        )
         for retired in ("boundedTokenizerText", "boundedEchoText", "boundedFailureText", "requireSessionConfig"):
             forbid_text(state, path, retired, label=label)
         if path != "packages/core/src/tools/web-fetch.ts":
             forbid_text(state, path, "persistSessionArtifact(", label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "    const taskBound = this.config.getInlineBlockBytes();",
+        label=label,
+    )
     require_text(
         state, "packages/core/src/tools/web-fetch.ts", "persistSessionArtifact(", label=label
     )
@@ -13325,7 +13381,7 @@ CONCERNS: tuple[SemanticConcern, ...] = (
     SemanticConcern(
         name="text-authorship",
         rationale=(
-            "Every byte of every request records who wrote it -- the model, the world, the "
+            "Every byte of every request for a generation records who wrote it -- the model, the world, the "
             "operator or the harness -- assigned once, where the text is composed, to whoever "
             "produced it, and kept through every copy, cut and rewrite. The request is serialized "
             "once, as JSON.stringify writes it, with its runs; a string no composer attributed "
@@ -13335,7 +13391,10 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "message reads its provenance from the same runs. Nothing the model reads changes. "
             "The composition sites this deployment cannot reach -- hooks, MCP, the IDE, the "
             "interactive UI, ACP, side queries and other providers' request rewrites -- state no "
-            "authors by design: reaching one refuses the request rather than recording a guess."
+            "authors by design: reaching one refuses the request rather than recording a guess. "
+            "A count request asks the tokenizer for no generation and states no authors. What "
+            "is checked is what is claimed: a run stated as the model's or the operator's is "
+            "held to its source, and one stated as the harness's or the world's is not."
         ),
         removal_condition=(
             "Upstream records an author for every byte of every request it sends, attributed "

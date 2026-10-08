@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `1e787cab06682dea90299a1f045e5e9b463418f5e4454d946bbe91a5e581556a`
+- Review-diff SHA-256: `9b1df0dcc6db0b7092ee81c386040d70603e5216ca984430e7e942ba7b27e9a0`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4d64b76928b2e99fc26712ff74e640867b6793fe288752a348231fb37d617612`
+- Transformer-manifest SHA-256: `469fdad9f048f1946d7687577968491afce1ad336c2d4f58b77c8453c1134772`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -448,7 +448,9 @@ upstream's, but for what upstream adds in the model's voice. The accepted
 sections are rendered as upstream's `<state_snapshot>` block, one element per
 section, its tags laid out as upstream's compression prompt lays them out, and
 each section's text between its tags exactly as the model wrote it -- not
-indented, trimmed or escaped, so whatever a section holds re-enters as written.
+indented, trimmed or escaped, so whatever a section holds re-enters as written
+-- in the NFC form the served tokenizer reads, which is the form acceptance
+measured; a character NFC changed is the harness's.
 Its `all_user_messages` holds the retained original inputs verbatim, as the
 parts they are, so their provenance survives the next compaction. The block is
 bounded at acceptance with that element empty; the inputs are bounded where
@@ -484,8 +486,9 @@ incomplete active histories rather than silently dropping retained instructions.
 
 ## Text authorship
 
-Every byte of every request the client sends has a recorded author, stated
-once by the code that composes the text: `model` (its own past output),
+Every byte of every request the client sends for a generation -- a turn or a
+compaction draw -- has a recorded author, stated once by the code that
+composes the text: `model` (its own past output),
 `world` (what a tool or the client read: a file's contents, a command's
 output, directory entries, workspace `QWEN.md` and `AGENTS.md`), `operator`
 (the task the session was started with) or `harness` (the client's own
@@ -512,7 +515,17 @@ or sent. The journal stores the runs in the stored body's own terms
 deployment cannot take -- hooks, MCP and extension tools, the IDE, the
 interactive UI and ACP, side queries, other providers' request rewrites --
 compose text that states no author and are refused if reached: authoring
-text nothing here can produce would be a claim nothing could check. A tool the
+text nothing here can produce would be a claim nothing could check. A count
+request to `/tokenize` carries the same messages to the served tokenizer and
+asks for no generation; its body states no authors and is not recorded, and the
+record binds what it counted by its scope, window and model. What is checked is
+what is claimed: the engine holds every run stated as the model's or the
+operator's to the bytes it cites, and the client holds a text's runs to it by
+length; a run stated as the harness's or the world's is not checked against
+anything, so an under-claim -- the model's or the operator's bytes stated as
+another's -- passes both. One is known and stated: a refusal of undeclared
+parameters names the parameters the model sent as the harness's, because no
+source a run can cite names an argument's key. A tool the
 launcher allows is not such a path: a call it refuses is answered with the
 refusal, which the model reads, so its validation returns a `StatedRefusal` --
 the text of an authored refusal, which only `stateParamsRefusal` makes -- and
@@ -792,9 +805,11 @@ cancellation. Child status is bounded; detail and transcript views expose the
 recorded evidence. Execution rounds, API requests, and reported usage remain
 different facts. A workflow watchdog cancels stalled execution without replaying
 the delegated task; its cleanup and accounting settle before completion. A
-workflow run reports its end only once every journal line its dispatches
-appended is written, so a caller told it ended never finds its journal still
-being written. Child totals never become a parent's provider-response usage.
+workflow run whose dispatches have all settled reports its end only once
+every journal line they appended is written, so a caller told it ended never
+finds its journal still being written; a run that is cancelled, fails or times
+out with a dispatch still draining reports its end first, and that dispatch's
+result line is appended after it. Child totals never become a parent's provider-response usage.
 
 ## Artifact retention
 

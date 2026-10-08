@@ -55675,7 +55675,77 @@ diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
  // Custom error to identify mock process.exit calls
  class MockProcessExitError extends Error {
    constructor(readonly code?: string | number | null | undefined) {
-@@ -1757,20 +1790,17 @@
+@@ -104,12 +137,13 @@
+ 
+ vi.mock('./config/config.js', () => ({
+   loadCliConfig: vi.fn().mockResolvedValue({
+     getSandbox: vi.fn(() => false),
+     getQuestion: vi.fn(() => ''),
+     isInteractive: () => false,
++    getForegroundAgentsOnly: () => false,
+     isLspEnabled: () => false,
+     getLspClient: () => undefined,
+     getWarnings: vi.fn(() => []),
+     isSafeMode: vi.fn(() => false),
+     getModelsConfig: vi.fn(() => ({ getCurrentAuthType: () => null })),
+   } as unknown as Config),
+@@ -375,12 +409,13 @@
+       },
+     );
+     vi.mocked(loadCliConfig).mockImplementation(async () => {
+       callOrder.push('loadCliConfig');
+       return {
+         isInteractive: () => false,
++        getForegroundAgentsOnly: () => false,
+         getQuestion: () => '',
+         getSandbox: () => false,
+         getApprovalMode: () => ApprovalMode.DEFAULT,
+         getDebugMode: () => false,
+         getListExtensions: () => false,
+         getMcpServers: () => ({}),
+@@ -772,12 +807,13 @@
+       migrationWarnings: [],
+       getUserHooks: () => undefined,
+       getProjectHooks: () => undefined,
+     };
+     const configStub = {
+       isInteractive: () => false,
++      getForegroundAgentsOnly: () => false,
+       getQuestion: () => 'bare prompt',
+       getSandbox: () => false,
+       getApprovalMode: () => ApprovalMode.DEFAULT,
+       getDebugMode: () => false,
+       getListExtensions: () => false,
+       getMcpServers: () => ({}),
+@@ -1065,12 +1101,13 @@
+       .spyOn(nonInteractiveModule, 'runNonInteractive')
+       .mockResolvedValue(0);
+ 
+     let initialized = false;
+     const configStub = {
+       isInteractive: () => false,
++      getForegroundAgentsOnly: () => false,
+       getQuestion: () => 'hello',
+       getSandbox: () => false,
+       getApprovalMode: () => ApprovalMode.DEFAULT,
+       getDebugMode: () => false,
+       getListExtensions: () => false,
+       getMcpServers: () => ({}),
+@@ -1486,12 +1523,13 @@
+     vi.mocked(parseArguments).mockResolvedValue({
+       extensions: [],
+     } as never);
+ 
+     const configStub = {
+       isInteractive: () => false,
++      getForegroundAgentsOnly: () => false,
+       getQuestion: () => '  hello stream  ',
+       getSandbox: () => false,
+       getApprovalMode: () => ApprovalMode.DEFAULT,
+       getDebugMode: () => false,
+       getListExtensions: () => false,
+       getMcpServers: () => ({}),
+@@ -1757,20 +1795,17 @@
        resume: undefined,
        coreTools: undefined,
        excludeTools: undefined,
@@ -55697,7 +55767,7 @@ diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
  
      expect(setRawModeSpy).toHaveBeenCalledWith(true);
      expect(detectAndEnableKittyProtocol).toHaveBeenCalledTimes(1);
-@@ -1882,20 +1912,17 @@
+@@ -1882,20 +1917,17 @@
        resume: undefined,
        coreTools: undefined,
        excludeTools: undefined,
@@ -55719,7 +55789,7 @@ diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
  
      expect(initializeAppSpy).toHaveBeenCalledWith(
        expect.any(Object),
-@@ -2006,20 +2033,17 @@
+@@ -2006,20 +2038,17 @@
        resume: undefined,
        coreTools: undefined,
        excludeTools: undefined,
@@ -55741,7 +55811,7 @@ diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
  
      expect(initializeAppSpy).toHaveBeenCalledWith(
        expect.any(Object),
-@@ -2126,20 +2150,17 @@
+@@ -2126,20 +2155,17 @@
        resume: undefined,
        coreTools: undefined,
        excludeTools: undefined,
@@ -55763,7 +55833,7 @@ diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
      const originalExit = process.exit;
      process.exit = ((code?: string | number | null | undefined) => {
        throw new MockProcessExitError(code);
-@@ -3101,12 +3122,75 @@
+@@ -3101,12 +3127,75 @@
  
      expect(mockWriteStderrLine).not.toHaveBeenCalledWith(
        expect.stringContaining('Rendering error'),
@@ -55839,7 +55909,7 @@ diff --git a/packages/cli/src/gemini.test.tsx b/packages/cli/src/gemini.test.tsx
    describe('exit-time resume echo', () => {
      async function runCleanup(config: Config): Promise<void> {
        const unmount = vi.fn();
-@@ -3230,33 +3314,12 @@
+@@ -3230,33 +3319,12 @@
          );
        } finally {
          rmSync(projectDir, { recursive: true, force: true });
@@ -56061,7 +56131,7 @@ diff --git a/packages/cli/src/gemini.tsx b/packages/cli/src/gemini.tsx
  
      // Install the uncaughtException handler once the session ID is known.
      // Before this point VP mode is not active, so Node's default stderr
-@@ -1279,19 +1277,29 @@
+@@ -1279,19 +1277,33 @@
        // the file. Finalizing here would write an empty profile and the
        // module-level `finalized` guard would suppress every subsequent
        // event.
@@ -56076,7 +56146,12 @@ diff --git a/packages/cli/src/gemini.tsx b/packages/cli/src/gemini.tsx
      // In stream-json mode, stdin is used for protocol messages (control requests, etc.)
      // and should be consumed by StreamJsonInputReader instead
      if (inputFormat !== InputFormat.STREAM_JSON && !process.stdin.isTTY) {
-       const stdinData = await readStdin();
+-      const stdinData = await readStdin();
++      // The locked run's stdin is the operator's task, which its launcher
++      // writes and closes, so it is read to its end.
++      const stdinData = await readStdin({
++        untilEnd: config.getForegroundAgentsOnly(),
++      });
        if (stdinData) {
          input = `${stdinData}\n\n${input}`;
 +        task = operatorTask(promptArgument, stdinData);
@@ -56091,7 +56166,7 @@ diff --git a/packages/cli/src/gemini.tsx b/packages/cli/src/gemini.tsx
      const { validateNonInteractiveAuth } = await import(
        './validateNonInterActiveAuth.js'
      );
-@@ -1359,13 +1367,13 @@
+@@ -1359,13 +1371,13 @@
      );
      let exitCode: number;
      try {
@@ -141966,6 +142041,94 @@ new file mode 100644
 +  writer.write('');
 +  await writer.flush();
 +}
+diff --git a/packages/cli/src/utils/readStdin.test.ts b/packages/cli/src/utils/readStdin.test.ts
+--- a/packages/cli/src/utils/readStdin.test.ts
++++ b/packages/cli/src/utils/readStdin.test.ts
+@@ -87,12 +87,33 @@
+ 
+     await expect(promise).resolves.toBe('');
+ 
+     vi.useRealTimers();
+   });
+ 
++  it('reads to the end of a stream read until its end, however late its first byte', async () => {
++    vi.useFakeTimers();
++    try {
++      mockStdin.read.mockReturnValueOnce('the task').mockReturnValueOnce(null);
++      let settled = false;
++      const promise = readStdin({ untilEnd: true }).then((data) => {
++        settled = true;
++        return data;
++      });
++      // Far past the half second after which a stdin that has said nothing
++      // is otherwise taken to carry nothing.
++      await vi.advanceTimersByTimeAsync(10_000);
++      expect(settled).toBe(false);
++      onReadableHandler();
++      onEndHandler();
++      await expect(promise).resolves.toBe('the task');
++    } finally {
++      vi.useRealTimers();
++    }
++  });
++
+   it('should clear timeout once when data is received and resolve with data', async () => {
+     const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');
+     mockStdin.read
+       .mockReturnValueOnce('chunk1')
+       .mockReturnValueOnce('chunk2')
+       .mockReturnValueOnce(null);
+diff --git a/packages/cli/src/utils/readStdin.ts b/packages/cli/src/utils/readStdin.ts
+--- a/packages/cli/src/utils/readStdin.ts
++++ b/packages/cli/src/utils/readStdin.ts
+@@ -19,27 +19,40 @@
+     end += char.length;
+   }
+ 
+   return value.slice(0, end);
+ }
+ 
+-export async function readStdin(): Promise<string> {
++/**
++ * Read what stdin carries. By default a stdin that has delivered nothing
++ * within half a second is taken to carry nothing, as upstream does for
++ * terminals that are not a TTY and pipe nothing. A caller whose stdin is
++ * always its input -- the locked agent-service run, whose launcher writes the
++ * operator's task there and closes it -- reads `untilEnd`: to the end of the
++ * stream, however long the first byte takes, so the task is never lost to a
++ * slow start and read as no task at all.
++ */
++export async function readStdin(
++  options: { readonly untilEnd?: boolean } = {},
++): Promise<string> {
+   const MAX_STDIN_SIZE = 8 * 1024 * 1024; // 8MB
+   return new Promise((resolve, reject) => {
+     let data = '';
+     let totalSize = 0;
+     let settled = false;
+     process.stdin.setEncoding('utf8');
+ 
+     const pipedInputShouldBeAvailableInMs = 500;
+-    let pipedInputTimerId: null | NodeJS.Timeout = setTimeout(() => {
+-      // stop reading if input is not available yet, this is needed
+-      // in terminals where stdin is never TTY and nothing's piped
+-      // which causes the program to get stuck expecting data from stdin
+-      onEnd();
+-    }, pipedInputShouldBeAvailableInMs);
++    let pipedInputTimerId: null | NodeJS.Timeout = options.untilEnd
++      ? null
++      : setTimeout(() => {
++          // stop reading if input is not available yet, this is needed
++          // in terminals where stdin is never TTY and nothing's piped
++          // which causes the program to get stuck expecting data from stdin
++          onEnd();
++        }, pipedInputShouldBeAvailableInMs);
+ 
+     const onReadable = () => {
+       let chunk;
+       while ((chunk = process.stdin.read()) !== null) {
+         if (pipedInputTimerId) {
+           clearTimeout(pipedInputTimerId);
 diff --git a/packages/cli/src/utils/relaunch-ownership-fixtures/child.mjs b/packages/cli/src/utils/relaunch-ownership-fixtures/child.mjs
 new file mode 100644
 --- /dev/null
@@ -298252,7 +298415,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
  /**
   * Token limit types for different use cases.
   * - 'input': Maximum input context window size
-@@ -8,88 +16,696 @@
+@@ -8,88 +16,698 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -298391,7 +298554,9 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * What stands in the window after a compaction is the preamble plus
 + * `snapshot + authored input + carried turn + one result`. Three of those
 + * four are bounded in bytes before they exist -- the snapshot by `S`, the
-+ * input and the result by `M`; the fourth is the turn, bounded by `C`. The
++ * input and the result by `M`, the input where it is submitted: the
++ * operator's task by the service, a subagent's delegated task by the agent
++ * tool; the fourth is the turn, bounded by `C`. The
 + * fixed text a compaction puts around them -- the resume trailer -- is
 + * counted in the preamble, as the startup context is. So the largest request a compaction can leave behind is
 + *
@@ -299002,7 +299167,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -150,14 +766,14 @@
+@@ -150,14 +768,14 @@
    // 128K carve-outs for Opus 4.6+. Rewrite the dotted minor to hyphenated
    // up front so every downstream regex sees the canonical form regardless
    // of which alias the proxy exposed.
@@ -299019,7 +299184,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
    // the version parser and the limit tables agree on every alias shape.
    s = s.replace(/^(claude-[a-z]+-\d+(?:-\d+)?)\.(\d+)(?:\.\d+)*/, '$1-$2');
  
-@@ -392,18 +1008,19 @@
+@@ -392,18 +1010,19 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -299696,7 +299861,7 @@ diff --git a/packages/core/src/core/tool-result-authorship.test.ts b/packages/co
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/core/tool-result-authorship.test.ts
-@@ -0,0 +1,919 @@
+@@ -0,0 +1,924 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -300542,6 +300707,7 @@ new file mode 100644
 +      getTeamManager: () => undefined,
 +      getBareMode: () => false,
 +      isSafeMode: () => false,
++      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
 +    } as unknown as Config);
 +
 +  const task = { description: 'find the tests', prompt: 'Find the tests.' };
@@ -300564,6 +300730,10 @@ new file mode 100644
 +    ['a working directory', { ...task, working_dir: '/tmp' }],
 +    ['a teammate name', { ...task, name: 'helper' }],
 +    ['a parameter it does not have', { ...task, timeout: 5 }],
++    [
++      'a task past one inline block',
++      { ...task, prompt: 'x'.repeat(INLINE_BLOCK_BYTES + 1) },
++    ],
 +  ])(
 +    'refuses %s, and the request that tells the model so is sent',
 +    async (_case, args) => {
@@ -331785,7 +331955,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        throw new SessionWriterUnavailableError();
      }
      this.binding = { sessionId: lease.sessionId, lease };
-@@ -927,32 +1065,40 @@
+@@ -927,32 +1065,42 @@
      }
      this.state = 'active';
      this.acceptingWrites = true;
@@ -331793,9 +331963,11 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
  
    /**
 -   * Creates base fields for a ChatRecord.
-+   * Creates base fields for a ChatRecord. Its author is stated by the writer
-+   * that makes it, never inferred from its type: user-role content may be the
-+   * user's or the runtime's, and only the code that wrote it knows which.
++   * Creates base fields for a ChatRecord. Its provenance is stated by the
++   * writer that makes it, never inferred from its type: user-role content may
++   * be the user's or the runtime's, and a user record's is read from the
++   * authors its parts state (`userMessageProvenance`) -- the user's when it
++   * carries the operator's text, the runtime's when it carries none.
     */
 -  private createBaseRecord(
 -    type: ChatRecord['type'],
@@ -331838,7 +332010,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      };
    }
  
-@@ -1004,27 +1150,27 @@
+@@ -1004,27 +1152,27 @@
        }
      }
      return this.integrityFailure ?? this.writeFailure;
@@ -331875,7 +332047,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        } catch (error) {
          throw this.enterWriteFailure(error, record.sessionId);
        }
-@@ -1039,183 +1185,117 @@
+@@ -1039,183 +1187,117 @@
    /**
     * Fire-and-forget: queues a JSONL write on the internal operation tail.
     * A failed write permanently degrades this recorder; already-queued
@@ -332109,7 +332281,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        () => undefined,
      );
      return pending;
-@@ -1255,12 +1335,13 @@
+@@ -1255,12 +1337,13 @@
      }
    }
  
@@ -332123,7 +332295,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
      }
      if (this.handoffRequested && flushFailure !== undefined) {
        // Fail closed: a handoff whose final flush did not durably land must
-@@ -1294,18 +1375,34 @@
+@@ -1294,18 +1377,34 @@
    }
  
    hasWriteOwnership(): boolean {
@@ -332160,7 +332332,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        );
      }
      return session.conversation.messages;
-@@ -1316,116 +1413,93 @@
+@@ -1316,116 +1415,93 @@
    }
  
    async recordGoalState(
@@ -332314,7 +332486,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
     * Records a cron-fired prompt.
     * Stored as a user-role message with subtype 'cron' so the UI
     * restores it as a notification item instead of a user turn.
-@@ -1488,100 +1562,187 @@
+@@ -1488,100 +1564,187 @@
      message: PartListUnion,
      subtype: 'notification' | 'cron',
      displayText?: string,
@@ -332552,7 +332724,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
              ? createUserContent([{ text: entry.text }])
              : createModelContent([{ text: entry.text }]),
          ...(entry.role === 'assistant' ? { model } : {}),
-@@ -1602,41 +1763,30 @@
+@@ -1602,41 +1765,30 @@
     *   there's no point.
     *
     * Errors are swallowed. The title is best-effort and must never surface
@@ -332596,7 +332768,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
            controller.signal,
            this.userDisplayTextsForTitle,
          );
-@@ -1644,48 +1794,21 @@
+@@ -1644,48 +1796,21 @@
          if (controller.signal.aborted) return;
          // Any explicit title, including `/rename --auto`, wins over this
          // background attempt even while its durable write is still pending.
@@ -332645,7 +332817,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        }
      })();
    }
-@@ -1699,109 +1822,251 @@
+@@ -1699,109 +1824,251 @@
     */
    recordToolResult(
      message: PartListUnion,
@@ -332962,7 +333134,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
     * Records a conversation rewind and re-roots the parentUuid chain.
     *
     * Sets `lastRecordUuid` back to the UUID that was current just before the
-@@ -1811,18 +2076,27 @@
+@@ -1811,18 +2078,27 @@
     *
     * @param targetTurnIndex 0-based index of the user turn to rewind to.
     *   For example, 0 means rewind to the very first user message (keeping
@@ -332992,7 +333164,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
          0,
          this.turnParentUuids.length - this.userDisplayTextsForTitle.length,
        );
-@@ -1834,39 +2108,49 @@
+@@ -1834,39 +2110,49 @@
        // The previous attribution snapshot now sits on the abandoned
        // branch — clear the dedup key so the next snapshot lands on the
        // active branch and `/resume` can find it. Without this, a
@@ -333049,7 +333221,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        const record = messages[i];
        if (
          record.type === 'user' &&
-@@ -1951,17 +2235,15 @@
+@@ -1951,17 +2237,15 @@
    }
  
    private async persistCustomTitle(
@@ -333069,7 +333241,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        };
  
        await this.appendRecordStrict(record);
-@@ -1973,29 +2255,18 @@
+@@ -1973,29 +2257,18 @@
            titleSource,
            record.sessionId,
          );
@@ -333099,7 +333271,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    /**
     * Records the session that spawned this one (a `create_sub_session` caller).
     * Appended as a system record near the start of the transcript so the parent
-@@ -2012,14 +2283,14 @@
+@@ -2012,14 +2285,14 @@
    async recordParentSession(parentSessionId: string): Promise<boolean> {
      // Idempotent: the lineage is immutable and written once. A bridge retry
      // (the write succeeded but its response was lost) must not append a second
@@ -333116,7 +333288,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
        };
        await this.appendRecordStrict(record);
        this.currentParentSessionId = parentSessionId;
-@@ -2041,14 +2312,14 @@
+@@ -2041,14 +2314,14 @@
        return (
          this.currentSourceType === sourceType &&
          this.currentSourceId === sourceId
@@ -333133,7 +333305,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
            sourceType,
            ...(sourceId !== undefined ? { sourceId } : {}),
          },
-@@ -2062,77 +2333,37 @@
+@@ -2062,77 +2335,37 @@
          debugLogger.error('Error saving session source:', error);
        }
        return false;
@@ -333223,7 +333395,7 @@ diff --git a/packages/core/src/services/chatRecordingService.ts b/packages/core/
    /**
     * Records an attribution state snapshot for session persistence.
     * Called at the start of every non-retry turn so that a resumed session
-@@ -2142,109 +2373,115 @@
+@@ -2142,109 +2375,115 @@
     * form is byte-identical to the last one we wrote, skip the append.
     * Without this, sessions that touch many files would write a full
     * duplicate of the entire snapshot to the JSONL on every turn, even
@@ -380735,7 +380907,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      // Create mock config. The outer describe covers foreground execution
      // paths, which now register/unregister in the BackgroundTaskRegistry
      // to surface the run in the pill+dialog. A no-op stub registry is
-@@ -194,53 +270,63 @@
+@@ -194,53 +270,64 @@
        copyDiscoveredToolsFrom: vi.fn(),
        registerFactory: vi.fn(),
        getAllTools: vi.fn().mockReturnValue([]),
@@ -380777,6 +380949,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      requireContentGeneratorConfig: readPreparedModel,
        getBareMode: vi.fn().mockReturnValue(false),
        isSafeMode: vi.fn().mockReturnValue(false),
++      getInlineBlockBytes: vi.fn().mockReturnValue(32_768),
        getSandbox: vi.fn().mockReturnValue(undefined),
        getScreenReader: vi.fn().mockReturnValue(false),
        getMaxSessionTurns: vi.fn().mockReturnValue(-1),
@@ -380805,7 +380978,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      changeListeners = [];
  
      // Setup SubagentManager mock
-@@ -271,12 +357,13 @@
+@@ -271,12 +358,13 @@
  
      // Allow async initialization to complete
      await vi.runAllTimersAsync();
@@ -380819,7 +380992,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
    describe('initialization', () => {
      it('should initialize with correct name and properties', () => {
        expect(agentTool.name).toBe('agent');
-@@ -446,12 +533,57 @@
+@@ -446,12 +534,57 @@
          'Launch multiple agents concurrently whenever possible',
        );
      });
@@ -380877,7 +381050,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          properties: {
            subagent_type: {
              type?: string;
-@@ -507,87 +639,101 @@
+@@ -507,87 +640,101 @@
        const withoutGrades = agentTool.schema.parametersJsonSchema as {
          properties: { model?: { enum?: string[] } };
        };
@@ -380985,7 +381158,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'Only valid with subagent_type "fork"',
        );
        expect(properties.properties.fork_tools.description).toContain(
-@@ -605,14 +751,14 @@
+@@ -605,14 +752,14 @@
              description?: string;
            };
          };
@@ -381002,7 +381175,35 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(properties.properties.fork_profile.description).toContain(
          'Cannot be combined with fork_tools',
        );
-@@ -792,12 +938,44 @@
+@@ -770,12 +917,27 @@
+       });
+       expect(result).toBe(
+         'Parameter "subagent_type" must be a non-empty string.',
+       );
+     });
+ 
++    it('refuses a delegated task past one inline block, naming its size and the bound', () => {
++      // The task is the subagent's retained input, which the partition's fit
++      // charges one inline block.
++      const prompt = 'é'.repeat(16_385);
++      expect(agentTool.validateToolParams({ ...validParams, prompt })).toBe(
++        'Parameter "prompt" is 32770 bytes, past the 32768 a delegated task may be: the subagent keeps its task through every compaction, so it is one inline block at most. Write the task more briefly, and put long material in a file the subagent can read.',
++      );
++      expect(
++        agentTool.validateToolParams({
++          ...validParams,
++          prompt: 'x'.repeat(32_768),
++        }),
++      ).toBeNull();
++    });
++
+     it('rejects an empty model grade', () => {
+       expect(
+         agentTool.validateToolParams({
+           ...validParams,
+           model: '  ',
+         }),
+@@ -792,12 +954,44 @@
            ...validParams,
            model: 'high',
          }),
@@ -381047,7 +381248,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            ...validParams,
            subagent_type: 'fork',
            model: 'high',
-@@ -999,13 +1177,15 @@
+@@ -999,13 +1193,15 @@
        };
  
        expect(agentTool.validateToolParams(params)).toMatch(
@@ -381064,7 +381265,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('rejects project fork profiles in bare mode', () => {
        vi.mocked(config.getBareMode).mockReturnValue(true);
        const params: AgentParams = {
-@@ -1015,13 +1195,15 @@
+@@ -1015,13 +1211,15 @@
        };
  
        expect(agentTool.validateToolParams(params)).toMatch(
@@ -381081,7 +381282,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it.each([undefined, 'file-search'])(
        'rejects fork_profile for non-fork subagent_type=%s',
        (subagentType) => {
-@@ -1236,19 +1418,21 @@
+@@ -1236,19 +1434,21 @@
          working_dir: '',
          isolation: 'worktree' as const,
        };
@@ -381110,7 +381311,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('accepts redundant worktree isolation when working_dir is set', () => {
-@@ -1259,23 +1443,25 @@
+@@ -1259,23 +1459,25 @@
            isolation: 'worktree',
          }),
        ).toBeNull();
@@ -381147,7 +381348,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('rejects working_dir without an explicit subagent_type', () => {
-@@ -1452,17 +1638,19 @@
+@@ -1452,17 +1654,19 @@
    });
  
    describe('execution with an unknown subagent', () => {
@@ -381172,7 +381373,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'non-existent',
        );
        expect(result.llmContent).toBe(
-@@ -1473,34 +1661,38 @@
+@@ -1473,34 +1677,38 @@
      it('still reports not-found when listing available subagents fails', async () => {
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(null);
        vi.mocked(mockSubagentManager.listSubagents).mockRejectedValue(
@@ -381222,7 +381423,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockSubagentManager.loadSubagent).toHaveBeenCalledWith(
          'file-search',
        );
-@@ -1509,19 +1701,21 @@
+@@ -1509,19 +1717,21 @@
      it('passes plan_mode_required through to TeamManager for named teammates', async () => {
        const spawnTeammate = vi.fn().mockResolvedValue(undefined);
        vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381251,7 +381452,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(spawnTeammate).toHaveBeenCalledWith(
          expect.objectContaining({
            name: 'planner',
-@@ -1533,18 +1727,20 @@
+@@ -1533,18 +1743,20 @@
      it('passes enforced read-only mode through to TeamManager', async () => {
        const spawnTeammate = vi.fn().mockResolvedValue(undefined);
        vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381278,7 +381479,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(spawnTeammate).toHaveBeenCalledWith(
          expect.objectContaining({
            name: 'reader',
-@@ -1556,20 +1752,20 @@
+@@ -1556,20 +1768,20 @@
      it('blocks a model grade if a team becomes active after validation', async () => {
        const spawnTeammate = vi.fn().mockResolvedValue(undefined);
        vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381307,7 +381508,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          /not supported for a named teammate/i,
        );
        expect(spawnTeammate).not.toHaveBeenCalled();
-@@ -1578,21 +1774,21 @@
+@@ -1578,21 +1790,21 @@
      it('blocks isolation if a team becomes active after validation', async () => {
        const spawnTeammate = vi.fn().mockResolvedValue(undefined);
        vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381338,7 +381539,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          /isolation.*named teammate/i,
        );
        expect(spawnTeammate).not.toHaveBeenCalled();
-@@ -1601,42 +1797,56 @@
+@@ -1601,42 +1813,56 @@
      it('rejects plan_mode_required direct execution from a subagent context', async () => {
        const spawnTeammate = vi.fn().mockResolvedValue(undefined);
        vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381411,7 +381612,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(spawnTeammate).not.toHaveBeenCalled();
      });
  
-@@ -1667,20 +1877,22 @@
+@@ -1667,20 +1893,22 @@
        try {
          const spawnTeammate = vi.fn().mockResolvedValue(undefined);
          vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381442,7 +381643,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(spawnTeammate).toHaveBeenCalledWith(
            expect.objectContaining({
              name: 'reviewer',
-@@ -1720,19 +1932,21 @@
+@@ -1720,19 +1948,21 @@
        try {
          const spawnTeammate = vi.fn().mockResolvedValue(undefined);
          vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381471,7 +381672,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(partToString(result.llmContent)).toContain(
            'spawn aborted before "writer" was registered',
          );
-@@ -1742,21 +1956,28 @@
+@@ -1742,21 +1972,28 @@
      });
    });
  
@@ -381507,7 +381708,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // The user-facing display mirrors a failed task execution, not a bare
        // string, so the UI renders it like any other failed sub-agent run.
        expect(result.returnDisplay).toMatchObject({
-@@ -1778,17 +1999,19 @@
+@@ -1778,17 +2015,19 @@
        expect(display.status).toBe('failed');
      });
  
@@ -381532,7 +381733,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
        expect(mockSubagentManager.loadSubagent).toHaveBeenCalledWith(
          'file-search',
-@@ -1800,63 +2023,79 @@
+@@ -1800,63 +2039,79 @@
        // passing `name` must NOT reach executeTeammate (which would bypass the
        // depth guard and the v1 "teammates do not nest" rule). With max depth 1
        // and one agent frame, the spawn falls through team routing to the depth
@@ -381632,7 +381833,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
        expect(result.llmContent).toContain(
          'Cannot spawn sub-agents from within a fork',
-@@ -1872,22 +2111,35 @@
+@@ -1872,22 +2127,35 @@
        expect(display.status).toBe('failed');
      });
  
@@ -381677,7 +381878,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'file-search',
        );
      });
-@@ -1900,39 +2152,53 @@
+@@ -1900,39 +2168,53 @@
        vi.mocked(config.getMaxSubagentDepth).mockReturnValue(5);
        const spawnTeammate = vi.fn().mockResolvedValue(undefined);
        vi.mocked(config.getTeamManager).mockReturnValue({
@@ -381747,7 +381948,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'subagent_type "fork" is not supported',
        );
        expect(result.error?.message).toContain(
-@@ -2000,27 +2266,28 @@
+@@ -2000,27 +2282,28 @@
          result: 'Task completed successfully',
          terminateMode: AgentTerminateMode.GOAL,
          getCore: vi.fn().mockReturnValue({
@@ -381779,7 +381980,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
                count: 2,
                success: 2,
                failure: 0,
-@@ -2034,20 +2301,16 @@
+@@ -2034,20 +2317,16 @@
                failure: 0,
                totalDurationMs: 200,
                averageDurationMs: 200,
@@ -381803,7 +382004,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -2059,74 +2322,980 @@
+@@ -2059,70 +2338,976 @@
        vi.mocked(mockSubagentManager.createAgentHeadless).mockResolvedValue({
          subagent: mockAgent,
          dispose: vi.fn().mockResolvedValue(undefined),
@@ -381899,8 +382100,6 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 -      const result = await invocation.execute();
  
 -      expect(partToString(result.llmContent)).toMatch(/background agent/i);
--      expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
--    });
 +      function invocationFor(subagentType: 'fork' | 'file-search') {
 +        return ownedInvocation(
 +          (agentTool as AgentToolWithProtectedMethods).createInvocation({
@@ -381911,8 +382110,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +          }),
 +        );
 +      }
- 
--    it('allows working_dir for a background:true subagent that downgrades to foreground when nested', async () => {
++
 +      it.each(['file-search', 'fork'] as const)(
 +        'provides a canonical recorder before %s execution can commit',
 +        async (subagentType) => {
@@ -382830,17 +383028,13 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      const result = await invocation.execute();
 +
 +      expect(partToString(result.llmContent)).toMatch(/background agent/i);
-+      expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
-+    });
-+
-+    it('allows working_dir for a background:true subagent that downgrades to foreground when nested', async () => {
+       expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
+     });
+ 
+     it('allows working_dir for a background:true subagent that downgrades to foreground when nested', async () => {
        // Nested → isTopLevelSession() is false → the config's background: true
        // is downgraded to an awaited foreground run, so shouldRunInBackground
-       // is false and the background guard must NOT fire. Execution proceeds to
-       // worktree validation (which rejects this non-worktree path), proving
-       // the guard keys off the effective decision and does not over-reject the
-       // foreground path. A regression back to `backgroundRequested` would flip
-@@ -2146,34 +3315,39 @@
+@@ -2146,34 +3331,39 @@
          vi.mocked(config.getWorkingDir).mockReturnValue(nonRepo);
          vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
            ...mockSubagents[0],
@@ -382891,7 +383085,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            'Scratchpad details should stay out of the parent context.',
            '</analysis>',
            '',
-@@ -2189,23 +3363,146 @@
+@@ -2189,23 +3379,146 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -383046,7 +383240,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const raw = '<analysis>debug</analysis><summary>partial</summary>';
        vi.mocked(mockAgent.getFinalText).mockReturnValue(raw);
        vi.mocked(mockAgent.getTerminateMode).mockReturnValue(
-@@ -2216,39 +3513,322 @@
+@@ -2216,39 +3529,322 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -383086,9 +383280,8 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      const invocation = ownedInvocation(
 +        (agentTool as AgentToolWithProtectedMethods).createInvocation(params),
 +      );
-       const result = await invocation.execute();
- 
--      expect(partToString(result.llmContent)).toBe(raw);
++      const result = await invocation.execute();
++
 +      // This is the text the parent model reads. The identical construction
 +      // inside runSubagentWithHooks only feeds the display, so carrying the
 +      // count there is not enough: the budget is the one bound on a session
@@ -383181,8 +383374,9 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      const invocation = ownedInvocation(
 +        (agentTool as AgentToolWithProtectedMethods).createInvocation(params),
 +      );
-+      const result = await invocation.execute();
-+
+       const result = await invocation.execute();
+ 
+-      expect(partToString(result.llmContent)).toBe(raw);
 +      const text = partToString(result.llmContent);
 +      expect(text).toContain('exhausted its turn budget after 1 turn;');
 +      expect(text).not.toContain('1 turns');
@@ -383242,8 +383436,9 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      expect(terminal.map((snapshot) => snapshot.turnsUsed)).toEqual(
 +        terminal.map(() => 3),
 +      );
-+    });
-+
+     });
+ 
+-    it('explains successful subagents with no model-visible output', async () => {
 +    it('[subagent-scope] publishes the turn count when the run ends by throwing', async () => {
 +      // A run that dies mid-flight announces itself through ERROR, and that
 +      // announcement is the first update leaving `running`. It is therefore
@@ -383346,9 +383541,8 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 +      const modelVisible = JSON.stringify(result.llmContent);
 +      expect(modelVisible).toContain('consecutive_identical_tool_calls');
 +      expect(modelVisible).toContain('after 11 turns');
-     });
- 
--    it('explains successful subagents with no model-visible output', async () => {
++    });
++
 +    it('preserves a successful literal analysis-only report', async () => {
        vi.mocked(mockAgent.getFinalText).mockReturnValue(
          '<analysis>scratch only</analysis>',
@@ -383378,7 +383572,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('passes custom ignore files into worktree isolation file service', async () => {
        vi.useRealTimers();
        const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-agent-wt-'));
-@@ -2275,25 +3855,25 @@
+@@ -2275,25 +3871,25 @@
          vi.mocked(config.getFileFilteringOptions).mockReturnValue({
            respectGitIgnore: true,
            respectQwenIgnore: true,
@@ -383413,7 +383607,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          ).toBe('.qwenignore, .cursorignore');
          expect(
            agentConfig.getFileService().shouldQwenIgnoreFile('secret.txt'),
-@@ -2341,25 +3921,25 @@
+@@ -2341,25 +3937,25 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383448,7 +383642,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(agentConfig.getCwd()).toBe(wt);
          expect(agentConfig.getWorkingDir()).toBe(wt);
          expect(agentConfig.getProjectRoot()).not.toBe(repo);
-@@ -2422,20 +4002,20 @@
+@@ -2422,20 +4018,20 @@
            subagent_type: 'file-search',
            working_dir: wt,
            isolation: 'worktree',
@@ -383473,7 +383667,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            execFileSync('git', ['worktree', 'list', '--porcelain'], {
              cwd: repo,
              encoding: 'utf8',
-@@ -2479,21 +4059,21 @@
+@@ -2479,21 +4075,21 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383504,7 +383698,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // launch through the background registry path.
          expect(partToString(result.llmContent)).not.toContain(
            'Background agent launched',
-@@ -2531,20 +4111,20 @@
+@@ -2531,20 +4127,20 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383533,7 +383727,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            /not a registered linked worktree/i,
          );
          expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
-@@ -2580,25 +4160,25 @@
+@@ -2580,25 +4176,25 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383568,7 +383762,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        }
      }, 20000);
  
-@@ -2632,26 +4212,26 @@
+@@ -2632,26 +4228,26 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383605,7 +383799,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(agentConfig.getCwd()).toBe(wt);
          expect(agentConfig.getWorkingDir()).toBe(wt);
        } finally {
-@@ -2680,22 +4260,22 @@
+@@ -2680,22 +4276,22 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383638,7 +383832,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockSubagentManager.createAgentHeadless).not.toHaveBeenCalled();
        } finally {
          fs.rmSync(repo, { recursive: true, force: true });
-@@ -2711,20 +4291,20 @@
+@@ -2711,20 +4307,20 @@
        try {
          vi.mocked(config.getProjectRoot).mockReturnValue(nonRepo);
          vi.mocked(config.getTargetDir).mockReturnValue(nonRepo);
@@ -383667,7 +383861,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // the confusing "not a registered git worktree" fallback.
          expect(partToString(result.llmContent)).toMatch(
            /not a git repository/i,
-@@ -2764,25 +4344,25 @@
+@@ -2764,25 +4360,25 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(repo);
          vi.mocked(config.getTargetDir).mockReturnValue(repo);
@@ -383702,7 +383896,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          fs.rmSync(repo, { recursive: true, force: true });
          vi.useFakeTimers();
        }
-@@ -2822,20 +4402,20 @@
+@@ -2822,20 +4418,20 @@
          // must still stop it from removing the caller's worktree — this is the
          // error-recovery path where teardown bugs hide.
          vi.mocked(mockAgent.execute).mockRejectedValue(
@@ -383731,7 +383925,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(partToString(result.llmContent)).not.toContain(
            '[worktree preserved',
          );
-@@ -2877,26 +4457,26 @@
+@@ -2877,26 +4473,26 @@
          // helper's `repoRoot !== parentCwd` re-anchoring branch executes.
          vi.mocked(config.getProjectRoot).mockReturnValue(subdir);
          vi.mocked(config.getTargetDir).mockReturnValue(subdir);
@@ -383768,7 +383962,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          fs.rmSync(repo, { recursive: true, force: true });
          vi.useFakeTimers();
        }
-@@ -2943,27 +4523,27 @@
+@@ -2943,27 +4539,27 @@
  
          vi.mocked(config.getProjectRoot).mockReturnValue(subdir);
          vi.mocked(config.getTargetDir).mockReturnValue(subdir);
@@ -383807,7 +384001,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          fs.rmSync(repo, { recursive: true, force: true });
          vi.useFakeTimers();
        }
-@@ -2975,15 +4555,15 @@
+@@ -2975,15 +4571,15 @@
        const params: AgentParams = {
          description: 'Search files',
          prompt: 'Find all TypeScript files',
@@ -383826,7 +384020,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Subagent "non-existent" not found');
        const display = result.returnDisplay as AgentResultDisplay;
        expect(display.status).toBe('failed');
-@@ -2999,19 +4579,31 @@
+@@ -2999,19 +4595,31 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -383861,7 +384055,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('should execute subagent without live output callback', async () => {
-@@ -3019,15 +4611,15 @@
+@@ -3019,15 +4627,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -383880,7 +384074,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(result.llmContent).toBeDefined();
        expect(result.returnDisplay).toBeDefined();
  
-@@ -3043,15 +4635,15 @@
+@@ -3043,15 +4651,15 @@
        const params: AgentParams = {
          description: 'Search files',
          prompt: 'Find all TypeScript files',
@@ -383899,7 +384093,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'task_prompt',
          'Find all TypeScript files',
        );
-@@ -3062,15 +4654,15 @@
+@@ -3062,15 +4670,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -383918,7 +384112,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(result.returnDisplay).toHaveProperty('type', 'task_execution');
        expect(result.returnDisplay).toHaveProperty(
          'subagentName',
-@@ -3093,30 +4685,30 @@
+@@ -3093,30 +4701,30 @@
        const params: AgentParams = {
          description: 'Search files',
          prompt: 'Find all TypeScript files',
@@ -383955,7 +384149,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      describe('qwen-code.subagent span outcome (#4410 wenshao)', () => {
-@@ -3129,15 +4721,15 @@
+@@ -3129,15 +4737,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -383974,7 +384168,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        function lastEndMeta(): {
          status?: string;
          terminateReason?: string;
-@@ -3213,24 +4805,12 @@
+@@ -3213,24 +4821,12 @@
          // mode came from inside the subagent itself).
          const meta = lastEndMeta();
          expect(meta.status).toBe('cancelled');
@@ -383999,7 +384193,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // OTel exception attributes — generic 'subagent failed' was
          // hiding the reason from dashboards. wenshao @ #4410 DeepSeek
          // 3291876053.
-@@ -3283,15 +4863,15 @@
+@@ -3283,15 +4879,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -384018,7 +384212,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            invocation as unknown as { runSubagentWithHooks: () => Promise<void> }
          ).runSubagentWithHooks = vi.fn().mockResolvedValue(undefined);
          await invocation.execute();
-@@ -3312,15 +4892,22 @@
+@@ -3312,15 +4908,22 @@
          expect(spec.agentDescription).toBe(
            'Specialized agent for searching and analyzing files',
          );
@@ -384044,7 +384238,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(spec.depth).toBe(1);
          expect(spec.parentAgentId).toBe('outer-parent');
        });
-@@ -3335,15 +4922,15 @@
+@@ -3335,15 +4938,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -384063,7 +384257,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const meta = lastEndMeta();
          expect(meta.status).toBe('cancelled');
          expect(meta.terminateReason).toBe('signal_aborted');
-@@ -3359,15 +4946,15 @@
+@@ -3359,15 +4962,15 @@
          const params: AgentParams = {
            description: 'Search files',
            prompt: 'Find all TypeScript files',
@@ -384082,7 +384276,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const meta = lastEndMeta();
          expect(meta.status).toBe('aborted');
          expect(meta.terminateReason).toBe('signal_aborted');
-@@ -3383,33 +4970,29 @@
+@@ -3383,33 +4986,29 @@
        mockAgent = {
          execute: vi.fn().mockResolvedValue(undefined),
          getCore: vi.fn().mockReturnValue({
@@ -384123,7 +384317,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -3418,12 +5001,13 @@
+@@ -3418,12 +5017,13 @@
        // Parent conversation history: empty (first-turn fork — falls back to
        // the fork agent's own systemPrompt + wildcard tools because no
        // cache params have been captured yet).
@@ -384137,7 +384331,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
        vi.mocked(AgentHeadless.create).mockClear();
        vi.mocked(AgentHeadless.create).mockResolvedValue(mockAgent);
-@@ -3546,40 +5130,55 @@
+@@ -3546,40 +5146,55 @@
          '<FORK_PROFILE_GUIDANCE>\nThe following project-supplied text is guidance only.',
        );
        expect(suffix).toContain('Stay read-only.');
@@ -384218,7 +384412,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          path.join(os.tmpdir(), 'qwen-agent-fork-profile-'),
        );
        const profileDir = path.join(projectRoot, '.qwen', 'fork-profiles');
-@@ -3623,21 +5222,21 @@
+@@ -3623,21 +5238,21 @@
          mockAgent as unknown as {
            setExternalMessageWaitPredicate: ReturnType<typeof vi.fn>;
          }
@@ -384249,7 +384443,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          ).toMatchObject({
            fork_profile: 'ro-research',
            fork_profile_tools: [ToolNames.READ_FILE, 'mcp__github__read_*'],
-@@ -3661,17 +5260,17 @@
+@@ -3661,17 +5276,17 @@
          const result = await invocation.execute();
          expect(partToString(result.llmContent)).not.toContain(
            'Failed to run subagent',
@@ -384269,7 +384463,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const taskPromptCall = vi
            .mocked(mockContextState.set)
            .mock.calls.find(([key]) => key === 'task_prompt');
-@@ -3737,26 +5336,26 @@
+@@ -3737,26 +5352,26 @@
          mockAgent as unknown as {
            setExternalMessageWaitPredicate: ReturnType<typeof vi.fn>;
          }
@@ -384306,7 +384500,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          const taskPromptCall = vi
            .mocked(mockContextState.set)
            .mock.calls.find(([key]) => key === 'task_prompt');
-@@ -3783,19 +5382,21 @@
+@@ -3783,19 +5398,21 @@
        const registry = config.getBackgroundTaskRegistry();
        vi.mocked(config.createToolRegistry).mockClear();
        vi.mocked(AgentHeadless.create).mockClear();
@@ -384335,7 +384529,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(hookSystem.fireSubagentStartEvent).not.toHaveBeenCalled();
          expect(registry.register).not.toHaveBeenCalled();
        } finally {
-@@ -3835,28 +5436,29 @@
+@@ -3835,28 +5452,29 @@
              secondModel,
            ]),
          getHistoryForForkWindow: vi
@@ -384374,7 +384568,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
      });
  
-@@ -3895,32 +5497,33 @@
+@@ -3895,32 +5513,33 @@
            secondUser,
            secondModel,
          ]);
@@ -384417,7 +384611,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
              firstUser,
              firstModel,
              secondUser,
-@@ -3970,29 +5573,30 @@
+@@ -3970,29 +5589,30 @@
        const getHistoryShallow = vi
          .fn()
          .mockReturnValue([startup, firstUser, forkLaunch]);
@@ -384457,7 +384651,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'SIBLING_SECRET_DIRECTIVE',
        );
        // The seed still ends on a model message so the task_prompt can follow.
-@@ -4058,31 +5662,32 @@
+@@ -4058,31 +5678,32 @@
              firstModel,
              secondUser,
              secondModel,
@@ -384499,7 +384693,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
      });
  
-@@ -4095,28 +5700,26 @@
+@@ -4095,28 +5716,26 @@
          filePath: '<builtin:general-purpose>',
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -384538,7 +384732,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('passes fork_tools separately from inherited tool names', async () => {
        const parentToolDecls = [
          {
-@@ -4135,31 +5738,32 @@
+@@ -4135,31 +5754,32 @@
            parameters: { type: 'object', properties: {} },
          },
        ];
@@ -384581,7 +384775,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(toolConfig?.tools).toStrictEqual([
          ToolNames.READ_FILE,
          ToolNames.EDIT,
-@@ -4190,32 +5794,33 @@
+@@ -4190,32 +5810,33 @@
            parameters: { type: 'object', properties: {} },
          },
        ];
@@ -384625,7 +384819,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          ToolNames.EDIT,
        ]);
        expect(toolConfig?.executionAllowedTools).toEqual([ToolNames.READ_FILE]);
-@@ -4232,139 +5837,149 @@
+@@ -4232,139 +5853,149 @@
        // Omission resolves to the regular general-purpose subagent, never a
        // context-inheriting fork — even in interactive mode.
        const mockLoadedSubagent: SubagentConfig = {
@@ -384895,7 +385089,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'subagent_type "fork" is not supported',
        );
        expect(result.error?.message).toContain(
-@@ -4376,66 +5991,53 @@
+@@ -4376,66 +6007,53 @@
  
      it('should call AgentHeadless.create directly and execute without options', async () => {
        const params: AgentParams = {
@@ -384972,7 +385166,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          getAllTools: vi.fn().mockReturnValue([]),
          getAllToolNames: vi.fn().mockReturnValue([]),
          stop: stopSpy,
-@@ -4458,21 +6060,19 @@
+@@ -4458,21 +6076,19 @@
        );
  
        const params: AgentParams = {
@@ -384998,7 +385192,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      it('routes owned monitor notifications and cleanup for forks', async () => {
        let releaseExecute: (() => void) | undefined;
        vi.mocked(mockAgent.execute).mockImplementation(
-@@ -4492,80 +6092,99 @@
+@@ -4492,80 +6108,99 @@
        ] = vi.fn();
  
        const params: AgentParams = {
@@ -385156,7 +385350,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // Removing the `!isFork` guard from the slot-reservation condition
        // silently subjected fork agents to background slot reservation and
        // per-model concurrency caps. This test pins the contract: a fork
-@@ -4601,15 +6220,15 @@
+@@ -4601,15 +6236,15 @@
          description: 'fork task',
          prompt: 'do the thing',
          subagent_type: 'fork',
@@ -385175,7 +385369,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // branch, so AgentHeadless.create fires once for the foreground
        // probe and again for the background agent body. The load-bearing
        // assertions are on the registry calls below.
-@@ -4645,34 +6264,30 @@
+@@ -4645,34 +6280,30 @@
          result: 'Task completed successfully',
          terminateMode: AgentTerminateMode.GOAL,
          getCore: vi.fn().mockReturnValue({
@@ -385217,7 +385411,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4705,15 +6320,15 @@
+@@ -4705,15 +6336,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385236,7 +385430,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.stringContaining('file-search-'),
          'file-search',
          PermissionMode.AutoEdit,
-@@ -4738,15 +6353,15 @@
+@@ -4738,15 +6369,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385255,7 +385449,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'hook_context',
          'Extra context from hook',
        );
-@@ -4764,15 +6379,15 @@
+@@ -4764,15 +6395,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385274,7 +385468,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // systemPrompt does not throw even when hook returns no additional context.
        expect(mockContextState.set).toHaveBeenCalledWith('hook_context', '');
        expect(mockContextState.set).not.toHaveBeenCalledWith(
-@@ -4790,15 +6405,15 @@
+@@ -4790,15 +6421,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385293,7 +385487,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const llmText = partToString(result.llmContent);
        expect(llmText).toBe('Task completed successfully');
        const display = result.returnDisplay as AgentResultDisplay;
-@@ -4814,15 +6429,15 @@
+@@ -4814,15 +6445,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385312,7 +385506,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // hook_context is always set so ${hook_context} in systemPrompt does not throw.
        expect(mockContextState.set).toHaveBeenCalledWith('hook_context', '');
        const llmText = partToString(result.llmContent);
-@@ -4841,34 +6456,30 @@
+@@ -4841,34 +6472,30 @@
          result: 'Task completed successfully',
          terminateMode: AgentTerminateMode.GOAL,
          getCore: vi.fn().mockReturnValue({
@@ -385354,7 +385548,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          set: vi.fn(),
        } as unknown as ContextState;
  
-@@ -4901,15 +6512,15 @@
+@@ -4901,15 +6528,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385373,7 +385567,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.stringContaining('file-search-'),
          'file-search',
          '/test/transcript',
-@@ -4942,15 +6553,15 @@
+@@ -4942,15 +6569,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385392,7 +385586,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockAgent.execute).toHaveBeenCalledTimes(2);
        // Stop hook should have been called twice
        expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledTimes(2);
-@@ -4983,15 +6594,15 @@
+@@ -4983,15 +6610,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385411,7 +385605,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('uses the configured SubagentStop blocking cap', async () => {
-@@ -5014,15 +6625,15 @@
+@@ -5014,15 +6641,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385430,7 +385624,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockAgent.execute).toHaveBeenCalledTimes(2);
        expect(partToString(result.llmContent)).toContain(
          'SubagentStop hook blocked continuation 2 consecutive times; overriding and ending the turn.',
-@@ -5038,15 +6649,15 @@
+@@ -5038,15 +6665,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385449,7 +385643,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const llmText = partToString(result.llmContent);
        expect(llmText).toBe('Task completed successfully');
        const display = result.returnDisplay as AgentResultDisplay;
-@@ -5061,15 +6672,15 @@
+@@ -5061,15 +6688,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385468,7 +385662,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('should stop re-execution loop when signal is aborted during block handling', async () => {
-@@ -5097,15 +6708,15 @@
+@@ -5097,15 +6724,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385487,7 +385681,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockAgent.execute).toHaveBeenCalledTimes(2);
      });
  
-@@ -5129,15 +6740,15 @@
+@@ -5129,15 +6756,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385506,7 +385700,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
      });
  
      it('should pass consistent agentId to both start and stop hooks', async () => {
-@@ -5145,15 +6756,15 @@
+@@ -5145,15 +6772,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -385525,7 +385719,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          .calls[0]?.[0] as string;
        const stopAgentId = vi.mocked(mockHookSystem.fireSubagentStopEvent).mock
          .calls[0]?.[0] as string;
-@@ -5193,33 +6804,30 @@
+@@ -5193,33 +6820,30 @@
          result: 'Done',
          terminateMode: AgentTerminateMode.GOAL,
          getCore: vi.fn().mockReturnValue({
@@ -385566,7 +385760,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          emitDuringExecute(capturedInvocation.eventEmitter);
        });
  
-@@ -5232,26 +6840,31 @@
+@@ -5232,26 +6856,31 @@
          description: 'Edit files',
          prompt: 'Fix the bug',
          subagent_type: 'file-search',
@@ -385601,7 +385795,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            name: 'read_file',
            args: { path: '/test.ts' },
            description: 'Reading test.ts',
-@@ -5283,19 +6896,217 @@
+@@ -5283,19 +6912,217 @@
          (entry) => entry.callId === 'call-read-1',
        );
        expect(toolCall?.args).toEqual({ path: '/test.ts' });
@@ -385820,7 +386014,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            name: 'read_file',
            args: { path: '/test.ts' },
            description: 'Reading test.ts',
-@@ -5326,27 +7137,133 @@
+@@ -5326,27 +7153,133 @@
        );
        const toolCall = resultSnapshot?.toolCalls?.find(
          (entry) => entry.callId === 'call-read-1',
@@ -385956,7 +386150,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            name: 'edit_file',
            args: { path: '/test.ts' },
            description: 'Editing test.ts',
-@@ -5416,23 +7333,33 @@
+@@ -5416,23 +7349,33 @@
          toolStatuses: Array<{ callId: string; status: string }>;
        }> = [];
  
@@ -385990,7 +386184,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            name: 'edit_file',
            args: {},
            description: 'Editing',
-@@ -5497,12 +7424,17 @@
+@@ -5497,12 +7440,17 @@
          | ((outcome: ToolConfirmationOutcome) => Promise<void>)
          | undefined;
        const snapshots: Array<{ hasPendingConfirmation: boolean }> = [];
@@ -386008,7 +386202,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            name: 'edit_file',
            args: {},
            description: 'Editing',
-@@ -5589,13 +7521,17 @@
+@@ -5589,13 +7537,17 @@
  
      beforeEach(() => {
        mockAgent = {
@@ -386026,7 +386220,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          // whose getEventEmitter() yields a minimal on/off surface so the
          // test-time listener hookup doesn't throw.
          getCore: vi.fn().mockReturnValue({
-@@ -5641,13 +7577,13 @@
+@@ -5641,13 +7593,13 @@
          .fn()
          .mockReturnValue(true);
        (config as unknown as Record<string, unknown>)[
@@ -386041,7 +386235,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        ] = vi.fn();
        (mockAgent as unknown as Record<string, unknown>)[
          'setExternalMessageWaiter'
-@@ -5670,15 +7606,15 @@
+@@ -5670,15 +7622,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -386060,7 +386254,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Background agent launched');
        expect(llmText).toContain(
          `Use ${ToolNames.SEND_MESSAGE} to continue this agent`,
-@@ -5724,44 +7660,53 @@
+@@ -5724,44 +7676,53 @@
            }),
          }),
        );
@@ -386124,7 +386318,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            modelConfigOverrides: { model: 'mapped-model' },
          }),
        );
-@@ -5783,86 +7728,86 @@
+@@ -5783,86 +7744,86 @@
              authType: AuthType.USE_ANTHROPIC,
            },
          },
@@ -386239,7 +386433,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
          setAgentLifecycleCallback: ReturnType<typeof vi.fn>;
-@@ -5899,15 +7844,15 @@
+@@ -5899,15 +7860,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -386258,7 +386452,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
          setAgentLifecycleCallback: ReturnType<typeof vi.fn>;
-@@ -5942,19 +7887,19 @@
+@@ -5942,19 +7903,19 @@
          );
        });
        expect(mockSubagentDispose).toHaveBeenCalledOnce();
@@ -386285,7 +386479,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalledTimes(1);
        });
  
-@@ -5975,12 +7920,13 @@
+@@ -5975,12 +7936,13 @@
        expect(mockContextState.set).toHaveBeenCalledWith(
          'task_prompt',
          'Now inspect the helper',
@@ -386299,7 +386493,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            modelConfigOverrides: { model: 'parent-model' },
            runtimeAuthOverrides: expect.objectContaining({
              authType: 'openai',
-@@ -5991,19 +7937,19 @@
+@@ -5991,19 +7953,19 @@
      });
  
      it('claims finishing-window input before publishing completion', async () => {
@@ -386326,7 +386520,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalledOnce();
        });
  
-@@ -6017,19 +7963,19 @@
+@@ -6017,19 +7979,19 @@
          vi.mocked(mockAgent.executeExternalInputs).mock.invocationCallOrder[0],
        ).toBeLessThan(mockRegistry.complete.mock.invocationCallOrder[0]!);
      });
@@ -386353,7 +386547,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
        });
  
-@@ -6045,19 +7991,19 @@
+@@ -6045,19 +8007,19 @@
  
      it('does not retain an agent whose frontmatter hooks are globally registered', async () => {
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -386380,7 +386574,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
          expect(mockSubagentDispose).toHaveBeenCalledOnce();
        });
-@@ -6073,19 +8019,19 @@
+@@ -6073,19 +8035,19 @@
            }),
        );
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -386407,7 +386601,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        releaseExecution?.();
        await vi.waitFor(() => {
          expect(mockRegistry.complete).toHaveBeenCalled();
-@@ -6097,19 +8043,19 @@
+@@ -6097,19 +8059,19 @@
      it('disposes an idle AUTO resident if the parent leaves AUTO mode', async () => {
        vi.mocked(config.getApprovalMode).mockReturnValue(ApprovalMode.AUTO);
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue({
@@ -386434,7 +386628,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect(mockRegistry.complete).toHaveBeenCalled();
        });
        const resident = mockRegistry.registerResidentAgent.mock.calls[0]?.[1] as
-@@ -6119,13 +8065,16 @@
+@@ -6119,13 +8081,16 @@
        expect(mockSubagentDispose).not.toHaveBeenCalled();
  
        vi.mocked(config.getApprovalMode).mockReturnValue(ApprovalMode.DEFAULT);
@@ -386452,7 +386646,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const fgSubagent: SubagentConfig = {
          ...bgSubagent,
          name: 'file-search',
-@@ -6137,15 +8086,15 @@
+@@ -6137,15 +8102,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -386471,7 +386665,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Background agent launched');
        expect(mockRegistry.register).toHaveBeenCalled();
      });
-@@ -6157,19 +8106,19 @@
+@@ -6157,19 +8122,19 @@
          background: undefined,
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -386498,7 +386692,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          'Background agent launched',
        );
        expect(mockRegistry.register).toHaveBeenCalled();
-@@ -6189,21 +8138,21 @@
+@@ -6189,21 +8154,21 @@
          background: undefined,
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -386529,7 +386723,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // the background registry path.
        expect(partToString(result.llmContent)).not.toContain(
          'Background agent launched',
-@@ -6211,20 +8160,20 @@
+@@ -6211,20 +8176,20 @@
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
@@ -386558,7 +386752,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6240,20 +8189,20 @@
+@@ -6240,20 +8205,20 @@
          name: 'file-search',
        };
        vi.mocked(mockSubagentManager.loadSubagent).mockResolvedValue(
@@ -386587,7 +386781,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6268,17 +8217,22 @@
+@@ -6268,17 +8233,22 @@
          description: 'Start monitor from a nested sub-agent',
          prompt: 'Watch for changes',
          subagent_type: 'monitor',
@@ -386615,7 +386809,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('run_in_background: true');
        expect(llmText).toContain('not supported from within a sub-agent');
        expect(result.error?.message).toBe(llmText);
-@@ -6293,22 +8247,27 @@
+@@ -6293,22 +8263,27 @@
        expect(mockRegistry.register).not.toHaveBeenCalled();
        expect(mockRegistry.tryReserveBackgroundSlot).not.toHaveBeenCalled();
      });
@@ -386652,7 +386846,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6319,31 +8278,44 @@
+@@ -6319,31 +8294,44 @@
        const errorMessage =
          'Cannot start background agent: maximum concurrent background agents ' +
          '(1) reached. Stop an existing agent first.';
@@ -386702,7 +386896,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        } finally {
          attachSpy.mockRestore();
        }
-@@ -6367,15 +8339,15 @@
+@@ -6367,15 +8355,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -386721,7 +386915,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockHookSystem.fireSubagentStartEvent).toHaveBeenCalledOnce();
        expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledWith(
          expect.stringContaining('monitor-'),
-@@ -6415,15 +8387,15 @@
+@@ -6415,15 +8403,15 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -386740,7 +386934,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        });
        await Promise.resolve();
  
-@@ -6471,18 +8443,18 @@
+@@ -6471,18 +8459,18 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -386763,7 +386957,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
        await vi.waitFor(() => {
          expect(mockHookSystem.fireSubagentStopEvent).toHaveBeenCalledWith(
-@@ -6511,15 +8483,15 @@
+@@ -6511,15 +8499,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -386782,7 +386976,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).not.toContain('Background agent launched');
        // Foreground subagents register in the same registry with
        // isBackgrounded: false so the pill+dialog can surface them while
-@@ -6569,20 +8541,20 @@
+@@ -6569,20 +8557,20 @@
          name: 'file-search',
          background: undefined,
        };
@@ -386811,7 +387005,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(mockRegistry.register).toHaveBeenCalledWith(
          expect.objectContaining({ isBackgrounded: false }),
        );
-@@ -6608,15 +8580,15 @@
+@@ -6608,15 +8596,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -386830,7 +387024,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        const agentId = mockRegistry.register.mock.calls[0][0].agentId as string;
        const monitorRegistry = config.getMonitorRegistry() as unknown as {
          setAgentNotificationCallback: ReturnType<typeof vi.fn>;
-@@ -6687,15 +8659,15 @@
+@@ -6687,15 +8675,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -386849,7 +387043,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          expect.objectContaining({
            isBackgrounded: false,
            outputFile: expect.stringMatching(
-@@ -6707,16 +8679,24 @@
+@@ -6707,16 +8695,24 @@
          }),
        );
        // Writer attached to the AgentTool's emitter so foreground tool
@@ -386876,7 +387070,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        // discovery can surface paused foreground runs.
        expect(writeMetaSpy).toHaveBeenCalledWith(
          expect.stringMatching(/agent-file-search-.*\.meta\.json$/),
-@@ -6728,13 +8708,12 @@
+@@ -6728,13 +8724,12 @@
              approvalMode: 'auto-edit',
              bare: false,
              sandbox: null,
@@ -386890,7 +387084,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        );
        // Finally block patches the sidecar to the terminal status —
        // without this a completed foreground run leaves the on-disk meta
-@@ -6780,15 +8759,15 @@
+@@ -6780,15 +8775,15 @@
            description: 'Search files',
            prompt: 'Find all TypeScript files',
            subagent_type: 'file-search',
@@ -386909,7 +387103,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
            expect.stringMatching(/agent-file-search-.*\.meta\.json$/),
            expect.objectContaining({ status: expectedStatus }),
          );
-@@ -6820,15 +8799,15 @@
+@@ -6820,15 +8815,15 @@
          description: 'Search files',
          prompt: 'Find all TypeScript files',
          subagent_type: 'file-search',
@@ -386928,7 +387122,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        expect(llmText).toContain('Agent was cancelled by the user.');
        expect(llmText).toContain('halfway through');
      });
-@@ -6841,57 +8820,55 @@
+@@ -6841,57 +8836,55 @@
        const params: AgentParams = {
          description: 'Start monitor',
          prompt: 'Watch for changes',
@@ -387002,7 +387196,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        await invocation.execute();
  
        expect(mockRegistry.register).toHaveBeenCalledWith(
-@@ -6932,48 +8909,73 @@
+@@ -6932,48 +8925,73 @@
          const params: AgentParams = {
            description: 'Start monitor',
            prompt: 'Watch for changes',
@@ -387101,7 +387295,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
        {
          policy: 'explicit caller allowlist',
          forkTools: ['Read'] as string[] | undefined,
-@@ -7009,12 +9011,13 @@
+@@ -7009,12 +9027,13 @@
          };
          const geminiClient = {
            getHistory: vi
@@ -387115,7 +387309,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
          vi.mocked(config.getGeminiClient).mockReturnValue(
            geminiClient as unknown as ReturnType<Config['getGeminiClient']>,
          );
-@@ -7022,38 +9025,43 @@
+@@ -7022,38 +9041,43 @@
          const attachSpy = vi.spyOn(transcript, 'attachJsonlTranscriptWriter');
          const writeMetaSpy = vi.spyOn(transcript, 'writeAgentMeta');
          const createSpy = vi
@@ -387164,7 +387358,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
  
          attachSpy.mockRestore();
          writeMetaSpy.mockRestore();
-@@ -7160,6 +9168,62 @@
+@@ -7160,6 +9184,62 @@
      );
      expect(
        resolveSubagentApprovalMode(ApprovalMode.AUTO_EDIT, 'bubble', true),
@@ -387230,7 +387424,7 @@ diff --git a/packages/core/src/tools/agent/agent.test.ts b/packages/core/src/too
 diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/agent/agent.ts
 --- a/packages/core/src/tools/agent/agent.ts
 +++ b/packages/core/src/tools/agent/agent.ts
-@@ -1,15 +1,26 @@
+@@ -1,15 +1,27 @@
 +import { runCleanupSteps, withCleanup } from '../../utils/cleanup.js';
 +import { retainInput } from '../../core/authored-instructions.js';
  /**
@@ -387252,13 +387446,14 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
 +  type StatedRefusal,
 +} from '../tools.js';
 +import { modelArgument } from '../../core/tool-call-arguments.js';
++import { tokenizerText } from '../../core/tokenLimits.js';
  import { ToolNames, ToolDisplayNames } from '../tool-names.js';
  import {
    EXCLUDED_TOOLS_FOR_SUBAGENTS,
    extractParentToolNames,
  } from '../../agents/runtime/agent-core.js';
  import type {
-@@ -33,18 +44,17 @@
+@@ -33,18 +45,17 @@
  } from '../../agents/runtime/agent-types.js';
  import {
    AgentHeadless,
@@ -387278,7 +387473,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    buildPinnedWorktreeNotice,
    buildWorktreeNotice,
    normalizeForkTurns,
-@@ -70,12 +80,13 @@
+@@ -70,12 +81,13 @@
  import { getStartupContextLength } from '../../utils/environmentContext.js';
  import {
    childLaunchDepth,
@@ -387292,7 +387487,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  import {
    endSubagentSpan,
    runInSubagentSpanContext,
-@@ -85,37 +96,52 @@
+@@ -85,37 +97,52 @@
  } from '../../telemetry/index.js';
  import {
    AgentEventEmitter,
@@ -387348,7 +387543,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  import {
    buildAgentTranscriptAttach,
    getAgentMetaPath,
-@@ -127,82 +153,30 @@
+@@ -127,82 +154,30 @@
  import type {
    BackgroundSlotReservation,
    ResidentBackgroundAgent,
@@ -387437,7 +387632,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    /** Todo ID this top-level execution implements, when a visible plan exists. */
    todo_id?: string;
    subagent_type?: string;
-@@ -537,15 +511,24 @@
+@@ -537,15 +512,24 @@
    // eslint-disable-next-line @typescript-eslint/no-explicit-any
    const ov = override as any;
    const agentRegistry = await ov.createToolRegistry(undefined, {
@@ -387465,7 +387660,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
   * Handle returned by {@link createApprovalModeOverride}.
   *
   * The `cleanup` callback MUST be invoked in a `finally` block after the
-@@ -591,15 +574,12 @@
+@@ -591,15 +575,12 @@
      ov.getModel = () => flags.model;
    }
    if (flags.maxSessionTurns !== undefined) {
@@ -387481,7 +387676,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // JSON file — a malformed or hand-edited copy (out-of-range numbers,
      // `1e309` → Infinity, or a literal null) must not bypass the nesting
      // cap for resumed agents. Same semantics as the Config constructor.
-@@ -611,26 +591,25 @@
+@@ -611,26 +592,25 @@
  function capturePersistedCliFlags(
    config: Config,
    resolvedApprovalMode: ApprovalMode,
@@ -387509,7 +387704,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
  /**
   * Creates a Config override with a different approval mode.
-@@ -750,29 +729,40 @@
+@@ -750,29 +730,40 @@
  /**
   * Agent tool that enables primary agents to delegate tasks to specialized agents.
   * The tool dynamically loads available agents and includes them in its description
@@ -387557,7 +387752,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          description: {
            type: 'string',
            description: 'A short (3-5 word) description of the task',
-@@ -780,56 +770,42 @@
+@@ -780,56 +771,42 @@
          prompt: {
            type: 'string',
            description: 'The task for the agent to perform',
@@ -387616,7 +387811,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                name: TEAM_AGENT_NAME_PROPERTY,
                plan_mode_required: TEAM_AGENT_PLAN_REQUIRED_PROPERTY,
                read_only: TEAM_AGENT_READ_ONLY_PROPERTY,
-@@ -859,12 +835,36 @@
+@@ -859,12 +836,36 @@
        Kind.Agent,
        initialSchema,
        true, // isOutputMarkdown
@@ -387653,7 +387848,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      });
  
      // Initialize the tool asynchronously
-@@ -949,13 +949,13 @@
+@@ -949,13 +950,13 @@
  - If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
  - If the user asks for agents "in parallel", group independent launches in a single message with multiple Agent tool use content blocks. Do not parallelize overlapping code changes.
  - Top-level regular subagents run in the background by default. Set \`run_in_background: false\` when the current turn must wait for the result before continuing. Nested agent launches run in the foreground and return to their direct parent; an explicit \`run_in_background: true\` request is rejected because nested agents cannot receive background completion notifications. Unnamed caller-owned \`working_dir\` launches default to foreground and cannot run in the background; named teammates may use one, but must be shut down before it is removed.
@@ -387668,7 +387863,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  Forks are cheap because they share your prompt cache. Don't set \`model\` on a fork — a different model can't reuse the parent's cache. Pass a short \`name\` (one or two words, lowercase) so the user can track the fork.
  
  **Don't peek.** For a background fork, do not read or tail its output unless the user explicitly asks for a progress check. You get a completion notification; trust it. Reading the transcript mid-flight pulls the fork's tool noise into your context, which defeats the point of forking.
-@@ -1001,14 +1001,52 @@
+@@ -1001,14 +1002,52 @@
  Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
  </commentary>
  assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -387723,7 +387918,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        properties?: {
          model?: {
            type: string;
-@@ -1032,58 +1070,114 @@
+@@ -1032,58 +1071,127 @@
          delete schema.properties.read_only;
        }
  
@@ -387780,6 +387975,19 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      ) {
 -      return 'Parameter "prompt" must be a non-empty string.';
 +      return harnessText('Parameter "prompt" must be a non-empty string.');
++    }
++
++    // The task a subagent is given is its retained input: it stands in its
++    // context through every compaction, and the partition's fit charges a
++    // retained input one inline block, as the service holds the operator's
++    // task to one. So a delegated task is one inline block at most, measured
++    // as every block is, in the form the served tokenizer reads.
++    const taskBytes = tokenizerText(params.prompt).bytes;
++    const taskBound = this.config.getInlineBlockBytes();
++    if (taskBytes > taskBound) {
++      return harnessText(
++        `Parameter "prompt" is ${taskBytes} bytes, past the ${taskBound} a delegated task may be: the subagent keeps its task through every compaction, so it is one inline block at most. Write the task more briefly, and put long material in a file the subagent can read.`,
++      );
      }
  
      if (
@@ -387844,7 +388052,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        const lowerType = params.subagent_type.toLowerCase();
        if (lowerType !== FORK_SUBAGENT_TYPE) {
          const subagentExists = this.availableSubagents.some(
-@@ -1101,30 +1195,40 @@
+@@ -1101,30 +1209,40 @@
          }
        }
      }
@@ -387891,7 +388099,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // Some models emit an empty placeholder for the unused optional field.
      // With isolation selected, normalize it away before downstream routing.
      if (
-@@ -1139,75 +1243,97 @@
+@@ -1139,75 +1257,97 @@
        if (
          typeof params.fork_turns !== 'string' ||
          !(
@@ -388003,7 +388211,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (
        params.isolation === 'worktree' &&
        typeof params.working_dir === 'string' &&
-@@ -1218,18 +1344,22 @@
+@@ -1218,18 +1358,22 @@
  
      if (params.working_dir !== undefined) {
        if (
@@ -388028,7 +388236,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // the optional `isolation: "worktree"` alongside it. Accept that
        // redundant combination; createInvocation drops isolation so the
        // caller-owned worktree is reused rather than provisioning another one.
-@@ -1238,56 +1368,84 @@
+@@ -1238,56 +1382,84 @@
        // a different directory; and the pin is only meaningful for an
        // explicit subagent_type.
        if (
@@ -388122,7 +388330,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1372,22 +1530,12 @@
+@@ -1372,22 +1544,12 @@
      return {
        status: 'cancelled',
        terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
@@ -388145,7 +388353,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
    // `error`/`errorType` so endSubagentSpan sets standard OTel exception
    // attributes instead of a generic `'subagent failed'` placeholder.
-@@ -1421,41 +1569,95 @@
+@@ -1421,41 +1583,95 @@
    };
  }
  
@@ -388242,7 +388450,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        updateOutput(this.currentDisplay);
      }
    }
-@@ -1484,25 +1686,25 @@
+@@ -1484,25 +1700,25 @@
     * Sets up event listeners for real-time subagent progress updates
     */
    private setupEventListeners(
@@ -388270,7 +388478,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        this.updateDisplay(
          {
-@@ -1519,13 +1721,13 @@
+@@ -1519,13 +1735,13 @@
        );
        if (toolCallIndex >= 0) {
          this.currentToolCalls![toolCallIndex] = {
@@ -388285,7 +388493,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
              ? { resultDisplay: event.resultDisplay }
              : {}),
          };
-@@ -1549,54 +1751,83 @@
+@@ -1549,54 +1765,83 @@
            },
            updateOutput,
          );
@@ -388391,7 +388599,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        (...args: unknown[]) => {
          const event = args[0] as AgentApprovalRequestEvent;
          const idx = this.currentToolCalls!.findIndex(
-@@ -1605,18 +1836,15 @@
+@@ -1605,18 +1850,15 @@
          if (idx >= 0) {
            this.currentToolCalls![idx] = {
              ...this.currentToolCalls![idx],
@@ -388413,7 +388621,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          pendingConfirmationCallId = event.callId;
          const details: ToolCallConfirmationDetails = {
            ...(event.confirmationDetails as Omit<
-@@ -1702,12 +1930,13 @@
+@@ -1702,12 +1944,13 @@
      agentConfig: Config,
      eventEmitter: AgentEventEmitter = this.eventEmitter,
    ): Promise<{
@@ -388427,7 +388635,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const generationConfig = geminiClient?.getChat().getGenerationConfig();
      const parentToolNames = generationConfig?.systemInstruction
        ? extractParentToolNames(generationConfig)
-@@ -1762,17 +1991,16 @@
+@@ -1762,17 +2005,16 @@
              forkTurns,
            ),
          ];
@@ -388447,7 +388655,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          const forkedMessages = buildForkedMessages(
            this.params.prompt,
            lastMessage,
-@@ -1789,22 +2017,20 @@
+@@ -1789,22 +2031,20 @@
                role: 'model' as const,
                parts: [{ text: 'Understood. Executing directive now.' }],
              },
@@ -388472,7 +388680,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // Default: directive with fork boilerplate as task_prompt
      if (!taskPrompt) {
        taskPrompt = buildChildMessage(
-@@ -1840,12 +2066,13 @@
+@@ -1840,12 +2080,13 @@
  
        promptConfig = {
          renderedSystemPrompt: generationConfig.systemInstruction as
@@ -388486,7 +388694,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          executionAllowedTools: resolveForkExecutionAllowedTools(
            parentToolNames,
            buildForkExecutionAllowlist(
-@@ -1859,33 +2086,41 @@
+@@ -1859,33 +2100,41 @@
          .getToolRegistry()
          .getAllToolNames()
          .filter((toolName) => !EXCLUDED_TOOLS_FOR_SUBAGENTS.has(toolName));
@@ -388529,7 +388737,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // the reason back and re-executes until the configured cap prevents a
    // misconfigured hook from looping forever.
    private async runSubagentStopHookLoop(
-@@ -2171,17 +2406,22 @@
+@@ -2171,17 +2420,22 @@
        }
  
        // Get the results
@@ -388554,7 +388762,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // still reach telemetry instead of being clobbered by the catch
        // branch's exception derivation. Review wenshao @ #4410.
        //
-@@ -2196,28 +2436,40 @@
+@@ -2196,28 +2450,40 @@
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -388600,7 +388808,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2230,13 +2482,16 @@
+@@ -2230,13 +2496,16 @@
          error instanceof Error ? error.message : String(error);
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
@@ -388618,7 +388826,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        );
        return undefined;
      }
-@@ -2256,16 +2511,16 @@
+@@ -2256,16 +2525,16 @@
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -388639,7 +388847,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2273,13 +2528,22 @@
+@@ -2273,13 +2542,22 @@
          status: 'failed' as const,
          terminateReason,
        },
@@ -388663,7 +388871,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (this.params.plan_mode_required === true) {
        if (
          !this.params.name ||
-@@ -2557,28 +2821,44 @@
+@@ -2557,28 +2835,44 @@
      // Hoisted so the outer catch can restore parent PermissionManager
      // state when an exception lands between `createApprovalModeOverride`
      // and the fg / bg / fork inner finallys (e.g. worktree provisioning
@@ -388708,7 +388916,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // (general-purpose by default). Its execution mode is decided separately
        // below; a fork is opt-in, never the default.
        const requestedType = this.params.subagent_type;
-@@ -2600,19 +2880,12 @@
+@@ -2600,19 +2894,12 @@
          return this.buildSpawnBlockedResult(
            'Error: run_in_background: true is not supported from within a sub-agent. Run this agent in the foreground by omitting run_in_background or setting it to false.',
            'Background execution is not supported from a nested sub-agent',
@@ -388728,7 +388936,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        let subagentConfig: SubagentConfig;
  
        if (isFork) {
-@@ -2654,62 +2927,28 @@
+@@ -2654,62 +2941,28 @@
          this.params.model,
          subagentConfig,
        );
@@ -388804,7 +389012,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // agent — the caller could reap the worktree while the detached agent
          // is still running in it. validateToolParams rejects an explicit
          // run_in_background up front; this covers the other route into the
-@@ -2738,13 +2977,13 @@
+@@ -2738,13 +2991,13 @@
            subagentConfig.model,
            buildModelIdContext(this.config),
          );
@@ -388819,7 +389027,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentRuntimeAuthOverrides = authType
            ? {
                authType,
-@@ -3022,38 +3261,35 @@
+@@ -3022,38 +3275,35 @@
          updateOutput,
        };
  
@@ -388861,7 +389069,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Per-spawn cleanup the subagent manager returns. The caller MUST
        // invoke this in the same `finally` block that wraps `execute()` —
        // see SubagentManager.createAgentHeadless's JSDoc for the leak
-@@ -3066,33 +3302,56 @@
+@@ -3066,33 +3316,56 @@
          const fork = await this.createForkSubagent(
            subagentRuntimeConfig as Config,
            backgroundEventEmitter,
@@ -388920,7 +389128,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // above guarantees correctness; the notice reduces user-visible
        // surprises when the model summarises file paths.
        //
-@@ -3113,16 +3372,41 @@
+@@ -3113,16 +3386,41 @@
            ? buildPinnedWorktreeNotice(worktreeIsolation.path)
            : buildWorktreeNotice(
                this.config.getTargetDir(),
@@ -388962,7 +389170,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        // ── Background (async) execution path ──────────────────────
        if (shouldRunInBackground) {
-@@ -3150,47 +3434,23 @@
+@@ -3150,47 +3448,23 @@
          }
  
          // Create an independent AbortController — background agents
@@ -389013,7 +389221,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            hookOpts.agentId,
          );
          try {
-@@ -3259,12 +3519,13 @@
+@@ -3259,12 +3533,13 @@
              );
            }
  
@@ -389027,7 +389235,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            );
            void agentConfig
              .getToolRegistry()
-@@ -3272,25 +3533,22 @@
+@@ -3272,25 +3547,22 @@
              .catch((stopError) => {
                debugLogger.warn(
                  `[Agent] ToolRegistry stop after background registration failure failed: ${stopError}`,
@@ -389056,7 +389264,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            toolUseId: this.callId,
            // Populated when a subagent (whose reasoning loop is wrapped in
            // runWithAgentContext below) launches a nested agent. Null at
-@@ -3341,14 +3599,13 @@
+@@ -3341,14 +3613,13 @@
          let liveToolCallCount = 0;
          const refreshLiveStats = () => {
            const entry = registry.get(hookOpts.agentId);
@@ -389072,7 +389280,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
          const onToolCall = (event: AgentToolCallEvent) => {
            liveToolCallCount += 1;
-@@ -3393,14 +3650,13 @@
+@@ -3393,14 +3664,13 @@
            this.config.getMonitorRegistry().hasRunningForOwner(hookOpts.agentId),
          );
  
@@ -389088,7 +389296,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
  
          // Some launch modes have resources whose lifecycle cannot safely span
-@@ -3422,43 +3678,47 @@
+@@ -3422,43 +3692,47 @@
          let currentAbortController: AbortController | undefined =
            bgAbortController;
          let currentTurnPromise: Promise<void> | undefined;
@@ -389155,7 +389363,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // Fire-and-forget: start the subagent without blocking the parent.
          // For forks, wrap the body in runInForkContext so the recursive-fork
          // guard in execute() fires if the fork child's model calls `agent`
-@@ -3533,15 +3793,14 @@
+@@ -3533,15 +3807,14 @@
                  );
                }
  
@@ -389173,7 +389381,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                const hadWorktreeIsolation = worktreeIsolation !== null;
                const recordTerminalOutcome = () =>
                  recordSpanOutcome(
-@@ -3617,21 +3876,13 @@
+@@ -3617,21 +3890,13 @@
                  patchAgentMeta(metaPath, {
                    status: 'completed',
                    lastUpdatedAt: new Date().toISOString(),
@@ -389196,7 +389404,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                    completionStats,
                  );
                  persistBackgroundCancellation(
-@@ -3711,16 +3962,19 @@
+@@ -3711,16 +3976,19 @@
                  lastUpdatedAt: new Date().toISOString(),
                  lastError: errorMsg,
                });
@@ -389220,7 +389428,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // frame. The depth override is load-bearing for hot continuations:
          // send_message runs from the top level, but the continued agent must
          // retain the nesting budget it had when it was created.
-@@ -3737,12 +3991,13 @@
+@@ -3737,12 +4005,13 @@
                  isFork ? 'fork' : 'background',
                ),
                turnAbortController.signal,
@@ -389234,7 +389442,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                        turnAbortController,
                        recordOutcome,
                        fireStartHook,
-@@ -3825,12 +4080,13 @@
+@@ -3825,12 +4094,13 @@
            registry.registerResidentAgent(hookOpts.agentId, residentController);
            residentRegistered = true;
          }
@@ -389248,7 +389456,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            false,
          );
          currentTurnPromise.catch(reportUnexpectedBackgroundError);
-@@ -3850,89 +4106,12 @@
+@@ -3850,89 +4120,12 @@
        }
  
        // Same agent-identity frame as the background path: a foreground
@@ -389338,7 +389546,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Parent abort still propagates down (so ESC at the parent kills
        // the subagent), but child abort does NOT propagate up.
        const fgAbortController = new AbortController();
-@@ -3941,28 +4120,67 @@
+@@ -3941,28 +4134,67 @@
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -389413,7 +389621,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // the gating logic).
        //
        // Persistence wiring mirrors the background path so foreground
-@@ -3970,32 +4188,18 @@
+@@ -3970,32 +4202,18 @@
        // as their backgrounded counterparts. Without this, post-mortem of a
        // cancelled / crashed foreground subagent has no on-disk evidence
        // beyond what made it into the parent's tool result.
@@ -389447,7 +389655,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            (input) => registry.queueExternalInput(hookOpts.agentId, input),
            () => registry.wakeExternalInputWaiters(hookOpts.agentId),
          );
-@@ -4024,14 +4228,13 @@
+@@ -4024,14 +4242,13 @@
        let fgLiveToolCallCount = 0;
        const refreshFgLiveStats = () => {
          const entry = registry.get(hookOpts.agentId);
@@ -389463,7 +389671,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        };
        const onFgToolCall = (...args: unknown[]) => {
          const event = args[0] as AgentToolCallEvent;
-@@ -4046,191 +4249,262 @@
+@@ -4046,191 +4263,262 @@
        const onFgUsageMetadata = () => {
          refreshFgLiveStats();
        };
@@ -389892,7 +390100,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // happened between provisioning and the inner try (e.g. inside
        // `createApprovalModeOverride`, the agent constructor, or
        // anywhere else upstream of the foreground/background try blocks
-@@ -4257,21 +4531,38 @@
+@@ -4257,21 +4545,38 @@
        } catch (restoreError) {
          debugLogger.warn(
            `[AgentTool] restoreParentPM after error failed: ${restoreError}`,
