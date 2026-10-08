@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `9af45f7695bb073fb8f11d7f714495f8bc6253e908331e39861088fd1982eee9`
+- Review-diff SHA-256: `c80e883930a65957c654ea7b189f6e576349f8540cdb57c62d409e43ff251309`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `9208b2814c9960acd015445805b86ea0ed1150bbdaa3e85ddaeb0c32d37ac068`
+- Transformer-manifest SHA-256: `6d2c135361ec579784c84c652615d87939d087a5e02424d50c1f4509deb0d54a`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -61,7 +61,13 @@ processing failure and history abandonment remain separate decisions. The
 shared recorder, replay, native certifier and fake-provider verifier enforce
 this relationship; see `docs/design/model-response-outcomes.md`.
 A fresh bounded retry is permitted only before answer content
-has been delivered. Text, whitespace, and literal protocol-like XML remain
+has been delivered. A tokenizer count is a request like any other: one whose
+transport fails before its answer is issued again, fresh, once, under the
+bound and the test a turn's broken stream is issued again under
+(`FRESH_RESAMPLE_MAX_RETRIES`, `retryableStreamTransportCode`), so a broken
+connection costs a count rather than the session, and a second fault in a row
+is the count's outcome; the operation that failed stays in the journal, and
+both certifiers admit it beside the one that answered. Text, whitespace, and literal protocol-like XML remain
 verbatim. Transport failures, invalid usage, malformed calls, and post-terminal
 content retain diagnostic text without publishing executable calls or a normal
 terminal. Empty normally completed output is a valid response. A generation a

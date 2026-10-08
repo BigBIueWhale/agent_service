@@ -400,7 +400,9 @@ transport before the model had answered is no refused answer and spends no
 draw: it is kept in the record, named `COMPRESSION_FAILED_TRANSPORT_ERROR`,
 with what it had received, and the same request is issued again, untold, once,
 as a turn's broken stream is; a fresh request that fails the same way ends the
-compaction with that status, naming both faults. The record says which each
+compaction with that status, naming both faults. Every tokenizer count -- a
+compaction's, and each one before a turn -- is issued again the same way, once,
+when its own request breaks in transport. The record says which each
 draw was, and both certifiers hold it to its physical request: an answer, refused
 or accepted, completed and was delivered; a transport fault did not complete. A
 compaction the session's recording stopped under commits nothing and writes no

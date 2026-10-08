@@ -746,7 +746,9 @@ def _validate_stream_commit_after(state: State) -> None:
     pipeline = "packages/core/src/core/openaiContentGenerator/pipeline.ts"
     # A request whose transport fails before it has an answer is issued again
     # once, fresh: one bound and one transport test, declared beside the
-    # retryable codes, for a turn and a compaction draw alike.
+    # retryable codes, for a turn, a compaction draw and a tokenizer count
+    # alike. A transport fault is nobody's mistake, so a count -- before a
+    # turn, or a compaction's -- does not end the run on its first one.
     _require_all(
         state,
         "packages/core/src/core/stream-transport-retry.ts",
@@ -755,6 +757,33 @@ def _validate_stream_commit_after(state: State) -> None:
             "export function retryableStreamTransportCode(",
             "RETRYABLE_STREAM_TRANSPORT_CODES.has(classification.transportCode)",
         ),
+        label=label,
+    )
+    _require_ordered(
+        _source(state, pipeline, label=label),
+        (
+            "import {\n  FRESH_RESAMPLE_MAX_RETRIES,\n  retryableStreamTransportCode,\n} from '../stream-transport-retry.js';",
+            "  private async countVllmTokens(",
+            "    for (let faults = 0; ; faults++) {",
+            "await this.countPhysicalTokens(",
+            "this.tokenCounts.set(counted, count);",
+            "faults < FRESH_RESAMPLE_MAX_RETRIES &&",
+            "retryableStreamTransportCode(error, {",
+            "  private countPhysicalTokens(",
+        ),
+        label=label,
+        location=pipeline,
+    )
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/pipeline.test.ts",
+        "issues a count again, once, after a transport fault, and ends on the second",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/core/src/core/model-utility-replay.test.ts",
+        "admits a count that failed in transport, and the count issued again as its own operation",
         label=label,
     )
     source = _require_all(

@@ -3115,6 +3115,103 @@ mod tests {
         state.validate_summary(terminal.root(), 1).unwrap();
     }
     #[test]
+    fn a_count_whose_request_failed_in_transport_is_completed_and_issued_again() {
+        // A count's connection resets before any response: its operation
+        // completes with the error, and the count issued again after it is
+        // another operation, answered. The client records exactly this when a
+        // tokenizer count meets a transport fault.
+        let mut state = ModelRequests::default();
+        state.commit_origin(RequestOrigin {
+            journal_id: "j".into(),
+            first_sequence: 1,
+        });
+        let body =
+            json!({"model":"selected","prompt":"text","add_special_tokens":false}).to_string();
+        let send = |state: &mut ModelRequests,
+                    sequence: u64,
+                    id: &str,
+                    operation: &str,
+                    events: Vec<serde_json::Value>| {
+            let request = json!({"utility_request":{
+                "journal_id":"j","sequence":sequence,"request_id":id,
+                "operation_id":operation,"kv_scope":"root","kind":"tokenize_text",
+                "requested_model":"selected","requested_input_count":null,
+                "expected_max_model_len":4096,"request_url":"https://fixture.invalid/tokenize",
+                "body_json":body,"body_bytes":body.len(),"body_sha256":sha256(&body)
+            }})
+            .to_string();
+            let document = Document::decode(request.as_bytes(), LIMITS).unwrap();
+            let admission = state
+                .plan_utility_request(document.root(), 1, LIMITS)
+                .unwrap();
+            state.commit_utility_request(admission);
+            for (position, event) in events.into_iter().enumerate() {
+                let response = json!({"response":{"journal_id":"j","request_id":id,"sequence":position+1,"event":event}}).to_string();
+                let document = Document::decode(response.as_bytes(), LIMITS).unwrap();
+                let admission = state.plan_response(document.root(), 1).unwrap();
+                state.commit_response(admission);
+            }
+        };
+        let complete = |state: &mut ModelRequests,
+                        operation: &str,
+                        id: &str,
+                        result: serde_json::Value,
+                        error: serde_json::Value| {
+            let completion = json!({"utility_completion":{
+                "journal_id":"j","operation_id":operation,"kv_scope":"root",
+                "kind":"tokenize_text","requested_model":"selected",
+                "requested_input_count":null,"expected_max_model_len":4096,
+                "request_ids":[id],"result":result,"error":error
+            }})
+            .to_string();
+            let document = Document::decode(completion.as_bytes(), LIMITS).unwrap();
+            let admission = state.plan_utility_completion(document.root(), 1).unwrap();
+            state.commit_utility_completion(admission);
+        };
+        send(
+            &mut state,
+            1,
+            "physical-1",
+            "count-1",
+            vec![
+                json!({"kind":"end","termination":"failed","body_bytes":0,"body_sha256":sha256(""),"error":"Connection error."}),
+                json!({"kind":"outcome","status":"failed","error":"Connection error.","served_usage":null,"sdk_values_seen":0,"pipeline_outputs_delivered":0}),
+                json!({"kind":"delivery","outputs_delivered":0}),
+            ],
+        );
+        complete(
+            &mut state,
+            "count-1",
+            "physical-1",
+            serde_json::Value::Null,
+            json!("Connection error."),
+        );
+        let raw = json!({"count":2,"max_model_len":4096}).to_string();
+        send(
+            &mut state,
+            2,
+            "physical-2",
+            "count-2",
+            vec![
+                json!({"kind":"http","status":200,"content_type":"application/json"}),
+                json!({"kind":"body","offset":0,"base64":STANDARD.encode(raw.as_bytes())}),
+                json!({"kind":"end","termination":"eof","body_bytes":raw.len(),"body_sha256":sha256(&raw),"error":null}),
+                json!({"kind":"outcome","status":"completed","error":null,"served_usage":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+                json!({"kind":"delivery","outputs_delivered":0}),
+            ],
+        );
+        complete(
+            &mut state,
+            "count-2",
+            "physical-2",
+            json!({"kind":"token_count","total_tokens":2,"max_model_len":4096}),
+            serde_json::Value::Null,
+        );
+        let terminal = br#"{"request_evidence":{"journal_id":"j","first_sequence":1,"request_count":2,"open_response_ids":[],"open_attempt_ids":[]},"usage":{"requests":0,"usageReports":0,"unfinalizedRequests":0,"unreportedUsageRequests":0,"usage":null}}"#;
+        let terminal = Document::decode(terminal, LIMITS).unwrap();
+        state.validate_summary(terminal.root(), 1).unwrap();
+    }
+    #[test]
     fn physical_value_reader_follows_sdk_sse_boundaries_and_errors() {
         let mut stream = ResponseValues::new(true, true);
         for chunk in [
