@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `3b942bb046570a6f39123d4181d72193c8a55135977aa8de3b517da56832d596`
+- Review-diff SHA-256: `336e924c30a1bed26d7028118026efc29e603954d6265f051b5aa88cc2315c15`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `1bf185decded8f6d73b4289e599017c11fcd4a9e4dba3e5ac6f16c6e64ab727c`
+- Transformer-manifest SHA-256: `6d341c8c8d0a52b06d68ca21ac3680d6676f8e057114c5b2f77513a61603115d`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -496,9 +496,12 @@ or sent. The journal stores the runs in the stored body's own terms
 deployment cannot take -- hooks, MCP and extension tools, the IDE, the
 interactive UI and ACP, side queries, other providers' request rewrites --
 compose text that states no author and are refused if reached: authoring
-text nothing here can produce would be a claim nothing could check. Nothing
-the model reads changes: every composed text is the text it was, with its
-authors beside it.
+text nothing here can produce would be a claim nothing could check. A tool the
+launcher allows is not such a path: a call it refuses is answered with the
+refusal, which the model reads, so its validation returns a `StatedRefusal` --
+the text of an authored refusal, which only `stateParamsRefusal` makes -- and
+a refusal written as a plain string does not compile. Nothing the model reads
+changes: every composed text is the text it was, with its authors beside it.
 
 The canonical recording stores the same authored parts and the same request
 evidence, and a recorded user message's provenance is read from its parts

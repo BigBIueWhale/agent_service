@@ -12257,6 +12257,29 @@ def _validate_shell_output_completeness_after(state: State) -> None:
 
 
 _TEXT_AUTHORSHIP_MODULE = "packages/core/src/core/text-authorship.ts"
+# The tools the launcher allows -- its `--strict-tools`, the runtime contract's
+# `native_tools`, to which check-documented-identifiers.sh holds these names --
+# each with the validation that refuses its calls. `grep_search` is ripgrep's,
+# or the built-in grep's where ripgrep cannot run.
+ALLOWED_TOOL_VALIDATIONS: dict[str, tuple[tuple[str, str], ...]] = {
+    "agent": (("packages/core/src/tools/agent/agent.ts", "validateToolParams"),),
+    "edit": (("packages/core/src/tools/edit.ts", "validateToolParamValues"),),
+    "glob": (("packages/core/src/tools/glob.ts", "validateToolParamValues"),),
+    "grep_search": (
+        ("packages/core/src/tools/ripGrep.ts", "validateToolParamValues"),
+        ("packages/core/src/tools/grep.ts", "validateToolParamValues"),
+    ),
+    "list_directory": (("packages/core/src/tools/ls.ts", "validateToolParamValues"),),
+    "notebook_edit": (
+        ("packages/core/src/tools/notebook-edit.ts", "validateToolParamValues"),
+    ),
+    "read_file": (("packages/core/src/tools/read-file.ts", "validateToolParamValues"),),
+    "run_shell_command": (
+        ("packages/core/src/tools/shell.ts", "validateToolParamValues"),
+    ),
+    "todo_write": (("packages/core/src/tools/todoWrite.ts", "validateToolParams"),),
+    "write_file": (("packages/core/src/tools/write-file.ts", "validateToolParamValues"),),
+}
 _REQUEST_AUTHORSHIP_MODULE = (
     "packages/core/src/core/openaiContentGenerator/request-authorship.ts"
 )
@@ -12399,7 +12422,49 @@ def _validate_text_authorship_after(state: State) -> None:
         ),
         label=label,
     )
+    # A refused call is answered with its refusal, which the model reads, so
+    # every refusal an allowed tool's validation composes states its authors
+    # by type: a StatedRefusal is made only by stateParamsRefusal, from an
+    # authored text, and each allowed tool's validation returns one or null.
+    # A refusal written as a plain string does not compile, rather than
+    # reaching a request the client refuses to send and ending the session.
+    tools_module = "packages/core/src/tools/tools.ts"
+    _require_all(
+        state,
+        tools_module,
+        (
+            "export type StatedRefusal = string & { readonly [statedRefusal]: true };",
+            "  refusal: AuthoredText,\n): StatedRefusal {\n"
+            "  paramsRefusals.set(params, refusal);\n"
+            "  return refusal.text as StatedRefusal;\n}",
+        ),
+        label=label,
+    )
+    for tool, validations in ALLOWED_TOOL_VALIDATIONS.items():
+        for path, method in validations:
+            typed = re.findall(
+                rf"override {method}\(\s*params: \w+,?\s*\): (\w+(?: \| null)?) {{",
+                _source(state, path, label=label),
+            )
+            _require(
+                typed == ["StatedRefusal | null"],
+                f"{label}: {path} validates {tool} calls returning {typed!r}; an "
+                "allowed tool's refusal reaches the model and states its authors, "
+                "so its validation returns StatedRefusal | null",
+            )
+    require_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "  private paramsRefusal(params: AgentParams): AuthoredText | null {",
+        label=label,
+    )
     # Executable evidence, in the suites the image runs.
+    require_text(
+        state,
+        "packages/core/src/core/tool-result-authorship.test.ts",
+        "a refused delegation reaches the model in the words that refused it",
+        label=label,
+    )
     for case in (
         "writes the bytes JSON.stringify writes, every byte with its author",
         "refuses a text whose composer stated no author, naming where it is",

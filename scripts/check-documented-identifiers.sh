@@ -2,7 +2,9 @@
 # Every code identifier the transformation README names is one the
 # transformation ships, every count of its semantic concerns a document states
 # is the count the transformer validates, and no document states a
-# context-partition number the partition does not derive.
+# context-partition number the partition does not derive, and the tools whose
+# refusals the transformer holds to stated authors are the tools the runtime
+# contract allows.
 #
 # The README describes the result of applying the review diff to pinned
 # upstream source, so an identifier it quotes must appear in that result. An
@@ -113,6 +115,28 @@ PY
 if [[ -n "${retired}" ]]; then
   printf 'ERROR: a document states a context-partition number the partition does not derive:\n%s\n' \
     "${retired}" >&2
+  exit 1
+fi
+
+# The tools whose refusals the transformer holds to stated authors are the
+# tools the runtime contract lets the launcher allow, read from both rather
+# than restated, so a tool allowed later cannot be one whose refusals the
+# transformer never checked.
+unbound="$(
+  cd -- "${PROJECT_DIR}" &&
+    PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'
+import json
+from patches.source_patch_v1.contracts_qwen_code import ALLOWED_TOOL_VALIDATIONS
+with open('config/agent-runtime-contract-v1.json', encoding='utf-8') as contract:
+    allowed = json.load(contract)['native_tools']
+if sorted(allowed) != sorted(ALLOWED_TOOL_VALIDATIONS):
+    print(f'runtime contract allows {sorted(allowed)}; '
+          f'the transformer checks {sorted(ALLOWED_TOOL_VALIDATIONS)}')
+PY
+)"
+if [[ -n "${unbound}" ]]; then
+  printf 'ERROR: the tools whose refusals the transformer checks are not the tools the runtime contract allows: %s\n' \
+    "${unbound}" >&2
   exit 1
 fi
 
