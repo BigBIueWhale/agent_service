@@ -1664,7 +1664,13 @@ release. A session record that names no release (schema 2) still ran on one, so
 every release available before the newest such record counts as referenced.
 Evidence kept where no store covers it is not read, which is why its keeper
 registers it; the report lists every store it read, so what counts is visible
-before anything is removed.
+before anything is removed. Nothing can see evidence nobody registered, and a
+removal cannot be undone, so `--delete` removes nothing unless it is also given
+the statement that every directory on this host that keeps evidence is one of
+the stores the report lists (`--all-evidence-registered`); without it the report
+is printed and the delete refuses, naming the stores and how to register
+another, so an unregistered store stops a removal rather than losing a release
+only it references.
 
 Only objects a lock pins, a lock derives the name of, or this project labels are
 ever considered; anything else is never touched. The report names each object,
@@ -1676,7 +1682,7 @@ holds a directory it cannot read -- stops it with a next step:
 
 ```bash
 ./collect.sh            # report only; nothing is removed
-./collect.sh --delete   # remove exactly what the report marks COLLECT
+./collect.sh --delete --all-evidence-registered   # remove exactly what the report marks COLLECT
 ./scripts/register-evidence-store.sh <directory>   # read the evidence kept there
 ```
 

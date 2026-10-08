@@ -52,6 +52,15 @@ its keeper registers it.
 and the rule that decides it, then one summary line. `delete` evaluates the
 same way, then removes exactly the objects marked COLLECT, re-proving each one
 immediately before removing it, and stops at the first removal that is refused.
+
+A removal cannot be undone, and a release is collected because no evidence
+this evaluation read references it; evidence kept where no store covers it is
+not read, and nothing here can see that it exists. So `delete` removes nothing
+unless it is given, with the delete, the operator's statement that every
+directory on this host that keeps evidence is a store the report lists
+(`all-evidence-registered`). Without it the report is printed and the delete
+is refused, naming the stores and how to register another, so a store nobody
+registered stops a removal instead of losing the release it alone keeps.
 """
 
 import hashlib
@@ -893,6 +902,26 @@ def plural(count, noun):
     return f"{count} {noun}{'' if count == 1 else 's'}"
 
 
+# The statement a delete is given: every evidence store on this host is registered.
+ALL_EVIDENCE_REGISTERED = "all-evidence-registered"
+
+
+def require_all_evidence_registered(evidence, statement):
+    """Refuse a delete not given the statement that the stores read are every
+    store on this host, naming them and the next step."""
+    if statement == ALL_EVIDENCE_REGISTERED:
+        return
+    stores = "; ".join(f"{store['path']} ({store['declared']})" for store in evidence["stores"])
+    refuse("Nothing was removed. A release is collected when no evidence references it, and "
+           f"evidence was read only from these stores: {stores}. Evidence kept anywhere else on "
+           "this host is not read, so a release only it references is marked COLLECT, and a "
+           "removal cannot be undone.",
+           "Next: register every other directory on this host that keeps session records, "
+           "judgements or benchmark passes with ./scripts/register-evidence-store.sh <directory>, "
+           "run ./collect.sh again to see what that keeps, then run "
+           "./collect.sh --delete --all-evidence-registered.")
+
+
 def delete(result):
     devices = {}
     for path in sorted(result["filesystems"]):
@@ -932,15 +961,17 @@ def delete(result):
 
 
 def main():
-    if len(sys.argv) != 4 or sys.argv[3] not in ("report", "delete"):
-        print("usage: collect.py <agent_service checkout> <evidence-store registry> report|delete",
-              file=sys.stderr)
+    if not (len(sys.argv) == 4 and sys.argv[3] in ("report", "delete")
+            or len(sys.argv) == 5 and sys.argv[3] == "delete"):
+        print("usage: collect.py <agent_service checkout> <evidence-store registry> "
+              f"report|delete [{ALL_EVIDENCE_REGISTERED}]", file=sys.stderr)
         return 2
     try:
         result = evaluate(Path(sys.argv[1]).resolve(), Path(sys.argv[2]))
         report(result)
         if sys.argv[3] == "delete":
             print()
+            require_all_evidence_registered(result["evidence"], sys.argv[4] if len(sys.argv) == 5 else None)
             delete(result)
     except Refusal as refusal:
         print(f"ERROR: {refusal}", file=sys.stderr)

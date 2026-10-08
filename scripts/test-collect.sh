@@ -7,8 +7,9 @@
 #     and nothing looser;
 #   * each keep-or-collect rule decides the way the policy states;
 #   * evidence is read from the service's store and the registered stores and
-#     from nowhere else, registering a store is idempotent, and a registered
-#     store that is gone or unreadable refuses, naming its registration;
+#     from nowhere else, registering a store is idempotent, a registered
+#     store that is gone or unreadable refuses, naming its registration, and a
+#     delete not told that every evidence store is registered removes nothing;
 #   * the storage hook answers in exactly one line of valid hook JSON and exits
 #     0 even when its check cannot run at all.
 set -Eeuo pipefail
@@ -208,7 +209,22 @@ message = refusal("a registered store that is gone")
 shutil.move(registered + ".moved", registered)
 if registered not in message or registration not in message or "is gone" not in message:
     fail(f"the refusal for a store that is gone does not name it and its registration: {message}")
-print("COLLECT_EVIDENCE_OK stores=declared+registered unregistered=unread unreadable-outside=untouched refusals=named")
+# A delete removes nothing without the statement that every evidence store on
+# the host is registered, and its refusal names the stores it read and the
+# commands that register another and delete with the statement.
+try:
+    collect.require_all_evidence_registered(evidence, None)
+except collect.Refusal as refused:
+    message = str(refused)
+    for needed in ("Nothing was removed", results, registered, "./scripts/register-evidence-store.sh",
+                   "./collect.sh --delete --all-evidence-registered"):
+        if needed not in message:
+            fail(f"the refusal of an unstated delete does not say {needed!r}: {message}")
+else:
+    fail("a delete without the statement that every evidence store is registered was not refused")
+collect.require_all_evidence_registered(evidence, collect.ALL_EVIDENCE_REGISTERED)
+print("COLLECT_EVIDENCE_OK stores=declared+registered unregistered=unread unreadable-outside=untouched "
+      "refusals=named delete=stated")
 PY
 chmod 755 -- "${stores_root}/unreadable-outside"
 
