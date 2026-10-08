@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `e5edb5bdb3fc7c5758b7ebef1b07332471d7b549132646aba30e20fe96e0543f`
+- Review-diff SHA-256: `19824b51959f0d947127b0950bda296bb1c1f19a9c723c07fc67d08d8121582d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `39d8eb8fed8eeb53c340bc1defaf3b48929f1c32357b70fead9b9a0b2afc509a`
+- Transformer-manifest SHA-256: `2911cd1479e0a094373bd757f847a72203ddd4299217ca4f5c43ac9e743054a4`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -331,10 +331,12 @@ the screen, where nothing a program writes can address it again, and writes
 the output in pieces no write can scroll past, so a long output keeps its
 start. A program's own erasures, and an alternate screen still shown at the
 end, render as upstream renders them; one sequence that scrolls past the whole
-window is refused rather than rendered short. Binary output, which is not
-shown, and output past the capture limit, which is discarded as it arrives, are
-stated through the one notice with the true total and the command to run
-instead.
+window is refused rather than rendered short, and a result whose rendering the
+replay or the decoder refused states that refusal, in their words, in place of
+the output; none of the output is shown some other way instead, at an exit or
+in a promoted snapshot. Binary output, which is not shown, and output past the
+capture limit, which is discarded as it arrives, are stated through the same
+notice with the true total and the command to run instead.
 
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary

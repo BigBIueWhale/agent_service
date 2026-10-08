@@ -12266,7 +12266,7 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         state,
         _SHELL_SERVICE,
         (
-            "function capturedOutputText(\n  output: string,\n  capture: CapturedOutput,\n): AuthoredText {",
+            "function capturedOutputText(\n  rendered: RenderedOutput,\n  capture: CapturedOutput,\n): AuthoredText {",
             "          continuation: { unretained: BINARY_OUTPUT_NOT_SHOWN },",
             "          continuation: { unretained: CAPTURE_LIMIT_DISCARDED },",
             "'that file with a command that prints bytes as text, such as `od -c`.';",
@@ -12280,6 +12280,33 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         f"{label}: {_SHELL_SERVICE} finishes a result without stating binary output; "
         "each of the four paths that resolve a result passes it to capturedOutputText",
     )
+    # One rendering. A pty result, and a promoted snapshot, is the replay's
+    # text or the replay's refusal, which the result states in place of the
+    # output through the one notice; no other rendering of the output stands
+    # in for a refused one, and none is silently empty.
+    _require_all(
+        state,
+        _SHELL_SERVICE,
+        (
+            "type RenderedOutput =\n"
+            "  | { readonly text: string }\n"
+            "  | { readonly refused: AuthoredText };",
+            "async function renderCapturedOutput(",
+            "    return { refused: caughtErrorText(error) };",
+            "  if ('refused' in rendered) {\n    return authoredOutputBound({",
+            "'the output could not be rendered as a terminal shows it, so none of it is shown. ' +",
+            "`then read that file with ${ToolNames.READ_FILE}. Why it could not be rendered: `,",
+        ),
+        label=label,
+    )
+    _require(
+        service.count("await renderCapturedOutput(") == 2
+        and service.count("replayTerminalOutput(decoded, cols, rows, Terminal)") == 1,
+        f"{label}: {_SHELL_SERVICE} renders a pty result other than through "
+        "renderCapturedOutput; the exit and the promoted snapshot render one way",
+    )
+    for retired in ("decodeBufferedOutput", "Ignore fallback rendering errors"):
+        forbid_text(state, _SHELL_SERVICE, retired, label=label)
     for case in (
         "delivers output a command finished writing past one pty read before the client read any of it",
         "renders an output with more rows than the replay window whole",
@@ -12289,6 +12316,17 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         "refuses one sequence that scrolls past the whole window rather than render it short",
     ):
         require_text(state, _SHELL_CAPTURE_TEST, case, label=label)
+    for case in (
+        "states the refusal in place of the output, and shows none of it another way",
+        "states a background-promote replay refusal in place of the output, as an exit does",
+        "states a refused replay of a capture past its limit, and shows none of it",
+    ):
+        require_text(
+            state,
+            "packages/core/src/services/shellExecutionService.test.ts",
+            case,
+            label=label,
+        )
 
 
 _TEXT_AUTHORSHIP_MODULE = "packages/core/src/core/text-authorship.ts"

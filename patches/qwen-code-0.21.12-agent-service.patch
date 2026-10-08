@@ -291787,7 +291787,8 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
 +      ]);
      });
  
-     it('keeps PTY replay fallback bounded after the capture limit is exceeded', async () => {
+-    it('keeps PTY replay fallback bounded after the capture limit is exceeded', async () => {
++    it('states a refused replay of a capture past its limit, and shows none of it', async () => {
 -      mockSerializeTerminalToText.mockImplementationOnce(() => {
 +      mockAppendTerminalRows.mockImplementationOnce(() => {
          throw new Error('replay failed');
@@ -291796,24 +291797,35 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        const { result } = await simulateExecution(
          'large-output-replay-fallback',
          (pty) => {
-@@ -529,14 +554,13 @@
+@@ -527,17 +552,22 @@
+           pty.onExit.mock.calls[0][0]({ exitCode: 0, signal: null });
+         },
          { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
        );
  
        expect(result.rawOutput.toString()).toBe('12345678ab');
-       expect(result.output).toContain('12345678ab');
+-      expect(result.output).toContain('12345678ab');
 -      expect(result.output).toContain(
 -        'Output exceeded the maximum captured size',
 -      );
-+      expect(result.output).toContain('cut at a limit of 10 bytes of output');
 +      expect(result.outputCaptureLimitExceeded).toBe(true);
-       expect(result.output).not.toContain('cdefg');
+-      expect(result.output).not.toContain('cdefg');
++      // The rendering was refused, so the result states that, with every
++      // byte the command wrote counted, and carries none of the output.
++      expect(result.output).toBe(
++        'Bounded result: 0 of 15 bytes of output in total. The rest was not ' +
++          'retained: the output could not be rendered as a terminal shows it, ' +
++          'so none of it is shown. To read it, run the command again with its ' +
++          'output redirected to a file, then read that file with read_file. ' +
++          'Why it could not be rendered: replay failed',
++      );
      });
  
      it('does not add a capture-limit notice at the exact PTY buffer boundary', async () => {
        const { result } = await simulateExecution(
          'exact-output',
-@@ -546,15 +570,17 @@
+         (pty) => {
+@@ -546,15 +576,17 @@
          },
          { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
        );
@@ -291834,12 +291846,15 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        await simulateExecution('touch file', (pty) => {
          pty.onExit.mock.calls[0][0]({ exitCode: 0, signal: null });
        });
-@@ -900,13 +926,13 @@
+@@ -898,15 +930,15 @@
+       );
+       expect(terminalDisposeSpy).toHaveBeenCalled();
  
        terminalDisposeSpy.mockRestore();
      });
  
-     it('background-promote replay failure falls back to full decoded raw output', async () => {
+-    it('background-promote replay failure falls back to full decoded raw output', async () => {
++    it('states a background-promote replay refusal in place of the output, as an exit does', async () => {
        const terminalDisposeSpy = vi.spyOn(Terminal.prototype, 'dispose');
 -      mockSerializeTerminalToText.mockImplementationOnce(() => {
 +      mockAppendTerminalRows.mockImplementationOnce(() => {
@@ -291849,7 +291864,69 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
          { length: 250 },
          (_, index) => `line-${index}`,
        ).join('\n');
-@@ -1853,12 +1879,23 @@
+@@ -920,14 +952,21 @@
+             shellId: 'bg_replay_fallback',
+           } satisfies ShellAbortReason);
+         },
+       );
+ 
+       expect(result.promoted).toBe(true);
+-      expect(result.output).toContain('line-0');
+-      expect(result.output).toContain('line-249');
++      // The snapshot is rendered as a result is: a refused rendering is
++      // stated, and none of the output is shown another way.
++      expect(result.output).toBe(
++        `Bounded result: 0 of ${Buffer.byteLength(output)} bytes of output in ` +
++          'total. The rest was not retained: the output could not be rendered ' +
++          'as a terminal shows it, so none of it is shown. To read it, run the ' +
++          'command again with its output redirected to a file, then read that ' +
++          'file with read_file. Why it could not be rendered: replay failed',
++      );
+       // One terminal is used for replay, another for the promoted snapshot.
+       expect(terminalDisposeSpy).toHaveBeenCalledTimes(2);
+ 
+       terminalDisposeSpy.mockRestore();
+     });
+ 
+@@ -1836,12 +1875,37 @@
+           HIDDEN_WINDOW,
+         );
+       } finally {
+         mockProcessKill.mockImplementation(() => true);
+       }
+     });
++  });
++
++  describe('a rendering the replay refuses', () => {
++    it('states the refusal in place of the output, and shows none of it another way', async () => {
++      // A repeat of the preceding character scrolls more rows than it has
++      // characters, past what the replay can take, so the replay refuses it.
++      const { result } = await simulateExecution('repeat', (pty) => {
++        pty.onData.mock.calls[0][0](Buffer.from('x\x1b[2000000b\r\nend\r\n'));
++        pty.onExit.mock.calls[0][0]({ exitCode: 3, signal: null });
++      });
++
++      expect(result.exitCode).toBe(3);
++      expect(result.output).toBe(
++        'Bounded result: 0 of 18 bytes of output in total. The rest was not ' +
++          'retained: the output could not be rendered as a terminal shows it, ' +
++          'so none of it is shown. To read it, run the command again with its ' +
++          'output redirected to a file, then read that file with read_file. ' +
++          'Why it could not be rendered: One write scrolled 10000 rows or more ' +
++          'before the replay could take them, so its rendering would be ' +
++          'missing rows.',
++      );
++      expect(spellRuns(result.output, result.outputAuthors)).toEqual([
++        { author: 'harness', text: result.output },
++      ]);
++    }, 60_000);
+   });
+ 
+   describe('Binary Output', () => {
+     it('should detect binary output and switch to progress events', async () => {
+       mockIsBinary.mockReturnValueOnce(true);
+       const binaryChunk1 = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+@@ -1853,12 +1917,23 @@
          pty.onExit.mock.calls[0][0]({ exitCode: 0, signal: null });
        });
  
@@ -291873,7 +291950,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        });
        expect(onOutputEventMock.mock.calls[1][0]).toEqual({
          type: 'binary_progress',
-@@ -2428,22 +2465,32 @@
+@@ -2428,22 +2503,32 @@
        mockChildProcess.emit('exit', 0, null);
        mockChildProcess.emit('close', 0, null);
  
@@ -291913,7 +291990,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
      it('does not add a capture-limit notice at the exact child_process buffer boundary', async () => {
        const { result } = await simulateExecutionWithConfig(
          'exact-output',
-@@ -2454,15 +2501,17 @@
+@@ -2454,15 +2539,17 @@
          },
          { ...shellExecutionConfig, maxBufferedOutputBytes: 10 },
        );
@@ -291934,7 +292011,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        0,
        0.5,
        -1,
-@@ -2485,15 +2534,14 @@
+@@ -2485,15 +2572,14 @@
              maxBufferedOutputBytes: configuredValue as unknown as number,
            },
          );
@@ -291952,7 +292029,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
      it('reports capture-limit notice for streaming child_process output', async () => {
        const { result } = await simulateExecutionWithConfig(
          'streaming-large-output',
-@@ -2509,14 +2557,13 @@
+@@ -2509,14 +2595,13 @@
        expect(onOutputEventMock).toHaveBeenCalledWith({
          type: 'data',
          chunk: 'abcdef',
@@ -291969,7 +292046,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        const { result } = await simulateExecutionWithConfig(
          'empty-captured-output',
          (cp) => {
-@@ -2525,15 +2572,14 @@
+@@ -2525,15 +2610,14 @@
            cp.emit('close', 0, null);
          },
          { ...shellExecutionConfig, maxBufferedOutputBytes: 1 },
@@ -291987,7 +292064,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
        const { result } = await simulateExecution('touch file', (cp) => {
          cp.emit('exit', 0, null);
          cp.emit('close', 0, null);
-@@ -3212,12 +3258,19 @@
+@@ -3212,12 +3296,19 @@
          cp.emit('exit', 0, null);
        });
  
@@ -292010,7 +292087,7 @@ diff --git a/packages/core/src/services/shellExecutionService.test.ts b/packages
 diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core/src/services/shellExecutionService.ts
 --- a/packages/core/src/services/shellExecutionService.ts
 +++ b/packages/core/src/services/shellExecutionService.ts
-@@ -8,34 +8,51 @@
+@@ -8,34 +8,52 @@
  import type { PtyImplementation } from '../utils/getPty.js';
  import { getPty } from '../utils/getPty.js';
  import { spawn as cpSpawn, spawnSync } from 'node:child_process';
@@ -292035,7 +292112,8 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
  import { normalizePathEnvForWindows } from '../utils/windowsPath.js';
  import { sanitizeChildEnv } from '../utils/sanitize-child-env.js';
 -import { formatMemoryUsage } from '../utils/formatters.js';
-+import { formatOutputBound } from '../tools/tools.js';
++import { authoredOutputBound, formatOutputBound } from '../tools/tools.js';
++import { caughtErrorText } from '../tools/caught-error-authorship.js';
 +import {
 +  authored,
 +  harnessText,
@@ -292064,7 +292142,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
  // Live PTY rendering only needs a short scrollback for interactive tailing.
  // The full transcript is preserved separately in raw output and final replay.
  const MAX_LIVE_TERMINAL_SCROLLBACK_LINES = 200;
-@@ -171,11 +188,20 @@
+@@ -171,11 +189,20 @@
     * exceeded.
     */
    rawOutput: Buffer;
@@ -292085,7 +292163,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
     */
    exitCode: number | null;
    /**
-@@ -205,12 +231,21 @@
+@@ -205,12 +232,21 @@
     */
    promoted?: boolean;
    /** The process ID of the spawned shell. */
@@ -292107,7 +292185,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
  export interface ShellExecutionHandle {
    /** The process ID of the spawned shell. */
    pid: number | undefined;
-@@ -221,12 +256,13 @@
+@@ -221,12 +257,13 @@
  function createPreSpawnAbortedHandle(): ShellExecutionHandle {
    return {
      pid: undefined,
@@ -292121,13 +292199,18 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
        aborted: true,
        pid: undefined,
        executionMethod: 'none',
-@@ -265,30 +301,73 @@
- 
- function decodeBufferedOutput(finalBuffer: Buffer): string {
-   const fallbackEncoding = getCachedEncodingForBuffer(finalBuffer);
-   return new TextDecoder(fallbackEncoding).decode(finalBuffer);
+@@ -260,35 +297,103 @@
+       : 0;
+   return floored > 0
+     ? Math.min(floored, MAX_BUFFERED_OUTPUT_BYTES_CEILING)
+     : DEFAULT_MAX_BUFFERED_OUTPUT_BYTES;
  }
  
+-function decodeBufferedOutput(finalBuffer: Buffer): string {
+-  const fallbackEncoding = getCachedEncodingForBuffer(finalBuffer);
+-  return new TextDecoder(fallbackEncoding).decode(finalBuffer);
+-}
+-
 -function appendOutputCaptureLimitNotice(
 -  output: string,
 -  didExceedLimit: boolean,
@@ -292159,6 +292242,15 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 -    `${formatMemoryUsage(maxBufferedOutputBytes)} of ` +
 -    `${formatMemoryUsage(totalBytesReceived)} and discarded the rest to ` +
 -    `avoid constructing an oversized JavaScript string.]`;
++/**
++ * What the terminal replay made of a command's output: the text it rendered,
++ * or why it would not render it. A refused rendering is stated in place of
++ * the output; the output is never shown some other way instead.
++ */
++type RenderedOutput =
++  | { readonly text: string }
++  | { readonly refused: AuthoredText };
++
 +const CAPTURE_LIMIT_DISCARDED =
 +  'it was discarded as it arrived. To read all of it, run the command again ' +
 +  `with its output redirected to a file, then read that file with ${ToolNames.READ_FILE}.`;
@@ -292175,9 +292267,30 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 + * cases, so coverage is partial rather than unknown.
 + */
 +function capturedOutputText(
-+  output: string,
++  rendered: RenderedOutput,
 +  capture: CapturedOutput,
 +): AuthoredText {
++  // Output the terminal would not render is not shown at all, as binary
++  // output is not: the notice says why, in the replay's words, and how to
++  // read it instead.
++  if ('refused' in rendered) {
++    return authoredOutputBound({
++      returned: 0,
++      unit: 'bytes of output',
++      total: capture.totalBytesReceived,
++      continuation: {
++        unretained: authored(
++          harnessText(
++            'the output could not be rendered as a terminal shows it, so none of it is shown. ' +
++              'To read it, run the command again with its output redirected to a file, ' +
++              `then read that file with ${ToolNames.READ_FILE}. Why it could not be rendered: `,
++          ),
++          rendered.refused,
++        ),
++      },
++    });
++  }
++  const output = rendered.text;
 +  // The output is the command's -- the world's -- as the terminal (or the
 +  // child-process path's ANSI stripping) rendered it: the emulator is the
 +  // instrument the client reads the command's bytes with, and it adds no
@@ -292211,7 +292324,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
   * Optional caller-side handlers for the *post-promote* lifetime of a
   * background-promoted child process. PR-2 (#3894) detached every
   * service-side listener at promote time and froze `result.output` at
-@@ -405,34 +484,128 @@
+@@ -405,37 +510,160 @@
    return (
      message.includes('ioctl(2) failed, EBADF') ||
      message.includes('Cannot resize a pty that has already exited')
@@ -292343,10 +292456,42 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
      replayTerminal.dispose();
    }
  };
++
++/**
++ * A pty command's captured output as the result renders it: the bytes
++ * decoded with the encoding detected over all of them -- the streaming
++ * decoder decided from the first chunk, which can misdetect when early
++ * output is ASCII and later output is not (e.g. GBK) -- and replayed through
++ * a terminal so escape sequences land where they put the cursor. Binary
++ * output renders to nothing, for its notice to stand in. A decoder or replay
++ * that refuses the output is the rendering's outcome, stated in its place.
++ */
++async function renderCapturedOutput(
++  finalBuffer: Buffer,
++  isStreamingRawContent: boolean,
++  cols: number,
++  rows: number,
++  Terminal: XtermHeadlessModule['Terminal'],
++): Promise<RenderedOutput> {
++  if (!isStreamingRawContent) return { text: '' };
++  try {
++    const decoded = new TextDecoder(
++      getCachedEncodingForBuffer(finalBuffer),
++    ).decode(finalBuffer);
++    return {
++      text: await replayTerminalOutput(decoded, cols, rows, Terminal),
++    };
++  } catch (error) {
++    return { refused: caughtErrorText(error) };
++  }
++}
  
  const getLastNonEmptyAnsiLineIndex = (output: AnsiOutput): number => {
    for (let i = output.length - 1; i >= 0; i--) {
-@@ -957,18 +1130,19 @@
+     const line = output[i];
+     if (
+       line
+@@ -957,18 +1185,22 @@
            // Ensure we don't add an extra newline if stdout already ends with one.
            const separator = stdout.endsWith('\n') ? '' : '\n';
            const combinedOutput =
@@ -292357,13 +292502,17 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 -            finalStrippedOutput,
 -            outputCaptureLimitExceeded,
 -            totalOutputBytes,
-+          const captured = capturedOutputText(finalStrippedOutput, {
-+            binary: !isStreamingRawContent,
-+            limitExceeded: outputCaptureLimitExceeded,
-+            totalBytesReceived: totalOutputBytes,
-             maxBufferedOutputBytes,
+-            maxBufferedOutputBytes,
 -          );
-+          });
++          const captured = capturedOutputText(
++            { text: finalStrippedOutput },
++            {
++              binary: !isStreamingRawContent,
++              limitExceeded: outputCaptureLimitExceeded,
++              totalBytesReceived: totalOutputBytes,
++              maxBufferedOutputBytes,
++            },
++          );
 +          const boundedOutput = captured.text;
  
            if (isStreamingRawContent) {
@@ -292371,7 +292520,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
              // re-emitting the final blob would duplicate everything.
              if (!streamStdout && boundedOutput) {
                onOutputEvent({ type: 'data', chunk: boundedOutput });
-@@ -977,18 +1151,20 @@
+@@ -977,18 +1209,20 @@
              onOutputEvent({ type: 'binary_detected' });
            }
  
@@ -292392,7 +292541,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          // Named handler refs so the background-promote branch below can
          // detach them all and hand ownership of the child cleanly to the
          // caller. Anonymous arrows here would leak: the still-running child
-@@ -1077,18 +1253,19 @@
+@@ -1077,18 +1311,22 @@
              finalBuffer,
            } = cleanup();
            const separator = snapStdout.endsWith('\n') ? '' : '\n';
@@ -292403,13 +292552,17 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 -            stripAnsi(combined).trim(),
 -            outputCaptureLimitExceeded,
 -            totalOutputBytes,
-+          const captured = capturedOutputText(stripAnsi(combined).trim(), {
-+            binary: !isStreamingRawContent,
-+            limitExceeded: outputCaptureLimitExceeded,
-+            totalBytesReceived: totalOutputBytes,
-             maxBufferedOutputBytes,
+-            maxBufferedOutputBytes,
 -          );
-+          });
++          const captured = capturedOutputText(
++            { text: stripAnsi(combined).trim() },
++            {
++              binary: !isStreamingRawContent,
++              limitExceeded: outputCaptureLimitExceeded,
++              totalBytesReceived: totalOutputBytes,
++              maxBufferedOutputBytes,
++            },
++          );
 +          const boundedOutput = captured.text;
            // PR-2.5: re-attach post-promote listeners that forward to the
            // caller's handlers. Attach AFTER `detachServiceListeners()`
@@ -292417,7 +292570,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            // the foreground listeners that just got removed; attach
            // BEFORE `resolve()` so a sub-millisecond data burst right
            // after promote still lands on the caller. The new listeners
-@@ -1309,12 +1486,13 @@
+@@ -1309,12 +1547,13 @@
                );
              }
            }
@@ -292431,7 +292584,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
              // `aborted: false` (despite the abort signal having fired) is
              // intentional — this is the result-shape decision settled in
              // #3831 design question 7 (raised by @tanzhenxin in the PR-1
-@@ -1328,12 +1506,13 @@
+@@ -1328,12 +1567,13 @@
              // before `aborted` to avoid emitting "cancelled" copy for a
              // process that's still running.
              aborted: false,
@@ -292445,7 +292598,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
          const performCancelKill = async (): Promise<void> => {
            if (!child.pid || exited) return;
            if (isWindows) {
-@@ -1451,12 +1630,13 @@
+@@ -1451,12 +1691,13 @@
        return {
          pid: undefined,
          result: Promise.resolve({
@@ -292459,27 +292612,62 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
            pid: undefined,
            executionMethod: 'none',
          }),
-@@ -1889,40 +2069,40 @@
-                     fullOutput = await replayTerminalOutput(
-                       decodedOutput,
-                       cols,
-                       rows,
-                       Terminal,
-                     );
+@@ -1861,68 +2102,49 @@
+           ({ exitCode, signal }: { exitCode: number; signal?: number }) => {
+             exited = true;
+             abortSignal.removeEventListener('abort', abortHandler);
+ 
+             const finalize = async () => {
+               const finalBuffer = Buffer.concat(outputChunks);
+-              let fullOutput = '';
+ 
+               try {
+                 try {
+                   render(true);
+                 } catch (e) {
+                   debugLogger.warn(
+                     `Final PTY render threw during cleanup: ${e instanceof Error ? e.message : String(e)}`,
+                   );
+                 }
+ 
+-                try {
+-                  if (isStreamingRawContent) {
+-                    // Re-decode the captured buffer with proper encoding detection.
+-                    // The streaming decoder used the first-chunk heuristic which
+-                    // can misdetect when early output is ASCII-only but later
+-                    // output is in a different encoding (e.g. GBK).
+-                    const finalEncoding =
+-                      getCachedEncodingForBuffer(finalBuffer);
+-                    const decodedOutput = new TextDecoder(finalEncoding).decode(
+-                      finalBuffer,
+-                    );
+-                    fullOutput = await replayTerminalOutput(
+-                      decodedOutput,
+-                      cols,
+-                      rows,
+-                      Terminal,
+-                    );
 -                  } else {
 -                    fullOutput = serializeTerminalToText(headlessTerminal);
-                   }
-                 } catch {
-                   try {
-                     fullOutput = decodeBufferedOutput(finalBuffer);
-                   } catch {
-                     // Ignore fallback rendering errors and resolve with empty text.
-                   }
-                 }
+-                  }
+-                } catch {
+-                  try {
+-                    fullOutput = decodeBufferedOutput(finalBuffer);
+-                  } catch {
+-                    // Ignore fallback rendering errors and resolve with empty text.
+-                  }
+-                }
 -                fullOutput = appendOutputCaptureLimitNotice(
 -                  fullOutput,
 -                  outputCaptureLimitExceeded,
-+                const captured = capturedOutputText(fullOutput, {
++                const rendered = await renderCapturedOutput(
++                  finalBuffer,
++                  isStreamingRawContent,
++                  cols,
++                  rows,
++                  Terminal,
++                );
++                const captured = capturedOutputText(rendered, {
 +                  binary: !isStreamingRawContent,
 +                  limitExceeded: outputCaptureLimitExceeded,
                    totalBytesReceived,
@@ -292507,32 +292695,70 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                }
              };
  
-@@ -2244,14 +2424,12 @@
-               snapshot = await replayTerminalOutput(
-                 decodedOutput,
-                 cols,
-                 rows,
-                 Terminal,
-               );
+@@ -2221,77 +2443,44 @@
+                 `before promote (rawOutput in the result still has the ` +
+                 `bounded captured buffer the caller can re-render).`,
+             );
+           }
+ 
+           const finalBuffer = Buffer.concat(outputChunks);
+-          let snapshot = '';
+-          try {
+-            // Mirror the normal exit path's snapshot logic: re-decode
+-            // the captured buffer with the final encoding (the streaming
+-            // decoder fed `headlessTerminal` from a first-chunk
+-            // heuristic, which can mis-detect when early output is
+-            // ASCII-only but later output is in a different encoding,
+-            // e.g. GBK). Then replay through a fresh terminal so ANSI
+-            // sequences land at the right cursor position. Falling back
+-            // to `serializeTerminalToText(headlessTerminal)` would risk
+-            // mojibake on the promoted snapshot that the normal exit
+-            // path doesn't produce.
+-            if (isStreamingRawContent) {
+-              const finalEncoding = getCachedEncodingForBuffer(finalBuffer);
+-              const decodedOutput = new TextDecoder(finalEncoding).decode(
+-                finalBuffer,
+-              );
+-              snapshot = await replayTerminalOutput(
+-                decodedOutput,
+-                cols,
+-                rows,
+-                Terminal,
+-              );
 -            } else {
 -              snapshot = serializeTerminalToText(headlessTerminal) ?? '';
-             }
-           } catch (serErr) {
-             // Best-effort snapshot — re-decode + replay may fail (encoding
-             // detection error, terminal write throw, etc.). Empty snapshot
-             // is acceptable since the caller has rawOutput, but log so
-             // the failure leaves a diagnostic trail (otherwise an empty
-@@ -2265,33 +2443,35 @@
-             try {
-               snapshot = decodeBufferedOutput(finalBuffer);
-             } catch {
-               // Both paths failed — leave snapshot empty.
-             }
-           }
+-            }
+-          } catch (serErr) {
+-            // Best-effort snapshot — re-decode + replay may fail (encoding
+-            // detection error, terminal write throw, etc.). Empty snapshot
+-            // is acceptable since the caller has rawOutput, but log so
+-            // the failure leaves a diagnostic trail (otherwise an empty
+-            // `output` is indistinguishable from "command produced no
+-            // output"). Fall back to the bounded captured buffer so the
+-            // snapshot cannot exceed maxBufferedOutputBytes.
+-            debugLogger.warn(
+-              `Background-promote snapshot replay failed: ${serErr instanceof Error ? serErr.message : String(serErr)}. ` +
+-                `Falling back to bounded raw buffer decode; if that also fails, output stays empty.`,
+-            );
+-            try {
+-              snapshot = decodeBufferedOutput(finalBuffer);
+-            } catch {
+-              // Both paths failed — leave snapshot empty.
+-            }
+-          }
 -          snapshot = appendOutputCaptureLimitNotice(
 -            snapshot,
 -            outputCaptureLimitExceeded,
-+          const captured = capturedOutputText(snapshot, {
++          // The promoted snapshot is rendered as the normal exit path renders
++          // a result, refusal included.
++          const rendered = await renderCapturedOutput(
++            finalBuffer,
++            isStreamingRawContent,
++            cols,
++            rows,
++            Terminal,
++          );
++          const captured = capturedOutputText(rendered, {
 +            binary: !isStreamingRawContent,
 +            limitExceeded: outputCaptureLimitExceeded,
              totalBytesReceived,
@@ -292563,7 +292789,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
                headlessTerminal.dispose();
              } catch (e) {
                debugLogger.warn(
-@@ -2404,12 +2584,13 @@
+@@ -2404,12 +2593,13 @@
          return {
            pid: undefined,
            result: Promise.resolve({
