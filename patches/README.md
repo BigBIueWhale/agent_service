@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `336e924c30a1bed26d7028118026efc29e603954d6265f051b5aa88cc2315c15`
+- Review-diff SHA-256: `e5edb5bdb3fc7c5758b7ebef1b07332471d7b549132646aba30e20fe96e0543f`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `6d341c8c8d0a52b06d68ca21ac3680d6676f8e057114c5b2f77513a61603115d`
+- Transformer-manifest SHA-256: `39d8eb8fed8eeb53c340bc1defaf3b48929f1c32357b70fead9b9a0b2afc509a`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -246,8 +246,14 @@ the exact call that reads on -- the next line, and the caller's own limit
 rather than the size of the page that fit, which would shrink every page
 after a long one -- or "The file ends here."; the tool description quotes
 the same words. A count that says lines means lines: the split-segment
-count every range calculation uses is one higher whenever a file ends with a
-newline, and only the sentence subtracts it. The edit leads the excerpt it
+count every range calculation uses ends with an empty segment whenever a file
+ends with a newline or holds nothing, and that segment is not a line. Every
+reader that counts a file to its end -- the whole-file read and the stream a
+file of 10 MiB or more is read as -- decides it from the text it decoded, the
+read states the file's line count once (`fileLineCount`), and every sentence
+says that number. A stream that stops where the file's last byte was consumed
+has counted the file, so its count is exact rather than a lower bound. The
+edit leads the excerpt it
 returns with upstream's "Showing lines X-Y of N from the edited file:", and
 counts the edited file's lines with the one helper read_file counts a page
 with, so the two state one number for one file. Upstream's periodic todo reminder

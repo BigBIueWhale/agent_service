@@ -11374,7 +11374,7 @@ def _validate_bounded_output_after(state: State) -> None:
             "if (result.nextRead && result.linesShown && trueTotal !== undefined) {",
             "            : { lines: trueTotal, remaining: trueTotal - last },",
             "          nextOffset: result.nextRead.offset,\n          limit: this.params.limit,\n        }),\n        harnessText(PAGE_STATEMENT_BREAK),\n        page,\n      );",
-            "result.originalLineCount - (result.endsWithNewline === true ? 1 : 0);",
+            "    const trueTotal = result.fileLineCount;",
             "import { countTextLines } from '../utils/lineCount.js';",
             "      const last = this.params.offset + countTextLines(page.text);",
             'A read that returns less than the whole file is led by "Showing lines X-Y of N total lines." and then either "The file continues past line Y: R lines remain. Continue with:" and the exact call that reads on, with the same \'limit\', or "The file ends here."',
@@ -11463,14 +11463,30 @@ def _validate_bounded_output_after(state: State) -> None:
         label=label,
     )
     # A sentence that says "lines" means lines. `originalLineCount` counts the
-    # segments a split on "\n" yields, which is one more than the lines
-    # whenever the file ends with a newline; every arithmetic use of it counts
-    # segments and stays as it is, so the fact travels instead of the count
-    # changing under the paging that depends on it.
-    require_text(
+    # segments a split on "\n" yields, which ends with an empty segment
+    # whenever the file ends with a newline or holds nothing; every arithmetic
+    # use of it counts segments and stays as it is, so the fact travels
+    # instead of the count changing under the paging that depends on it. A
+    # count that is the file's states the fact by type, so every reader that
+    # counts a file to its end -- read whole or streamed -- decides it, and a
+    # stream that stops where the file's last byte was consumed has counted
+    # the file.
+    _require_all(
         state,
         "packages/core/src/utils/read-text-range.ts",
-        "    endsWithNewline: content.endsWith('\\n'),",
+        (
+            "      originalLineCountExact: true;\n"
+            "      /**",
+            "      lastSegmentEmpty: boolean;",
+            "      originalLineCountExact: false;\n"
+            "      lastSegmentEmpty?: undefined;",
+            "    lastSegmentEmpty: lines[lines.length - 1] === '',",
+            "        lastSegmentLength = 0;",
+            "        lastSegmentLength += tail.length;",
+            "  const reachedEnd =\n"
+            "    !stoppedEarly || consumedBytes >= (sourceSize ?? Number.POSITIVE_INFINITY);",
+            "          lastSegmentEmpty: lastSegmentLength === 0,",
+        ),
         label=label,
     )
     # The fact has to survive the seam it crosses: the file-system response
@@ -11479,17 +11495,21 @@ def _validate_bounded_output_after(state: State) -> None:
         state,
         "packages/core/src/services/fileSystemService.ts",
         (
-            "    endsWithNewline?: boolean;",
-            "      ...(readResult.endsWithNewline !== undefined",
+            "    lastSegmentEmpty?: boolean;",
+            "      ...(readResult.lastSegmentEmpty !== undefined",
         ),
         label=label,
     )
+    # The read states the file's lines once, and every sentence says that
+    # number rather than subtracting again.
     _require_all(
         state,
         "packages/core/src/utils/fileUtils.ts",
         (
-            "  endsWithNewline?: boolean;",
-            "          endsWithNewline: _meta?.endsWithNewline,",
+            "    lastSegmentEmpty: lines[lines.length - 1] === '',",
+            "          originalLineCountExact && _meta?.lastSegmentEmpty === true ? 1 : 0;",
+            "  fileLineCount?: number;",
+            "          fileLineCount: originalLineCountExact ? fileLines : originalLineCount,",
             "          truncatedByBytes,",
             # A page is budgeted in the NFC form it is handed on in, which the
             # range reader's count of the file's own bytes is not; its size is
@@ -11515,10 +11535,25 @@ def _validate_bounded_output_after(state: State) -> None:
     require_text(
         state,
         "packages/core/src/utils/readManyFiles.ts",
-        "          (fileReadResult.endsWithNewline === true ? 1 : 0);",
+        "        const total = fileReadResult.fileLineCount;",
+        label=label,
+    )
+    for path in (
+        "packages/core/src/utils/read-text-range.ts",
+        "packages/core/src/services/fileSystemService.ts",
+        "packages/core/src/utils/fileUtils.ts",
+        "packages/core/src/tools/read-file.ts",
+        "packages/core/src/utils/readManyFiles.ts",
+    ):
+        forbid_text(state, path, "endsWithNewline", label=label)
+    require_text(
+        state,
+        "packages/core/src/utils/read-text-range.test.ts",
+        "decides on both paths alike whether a file that %s has an empty last segment",
         label=label,
     )
     for case in (
+        "states the lines of a file past the fast path, and of an empty file, as lines",
         "says the last page of a file read in pages is its end, counting its lines, not its final newline",
         "says a read that starts past the end of a file has no lines, and where the file ends",
         "counts the lines of a page by the page",
