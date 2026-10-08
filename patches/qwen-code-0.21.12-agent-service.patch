@@ -165142,7 +165142,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          expect(executedTools).not.toContain('edit_file');
          expect(editFileInvocation.execute).not.toHaveBeenCalled();
  
-@@ -3007,13 +3922,13 @@
+@@ -3007,104 +3922,94 @@
          // 5. Verify allowed tool result has success=true
          const readResult = toolResultEvents.find((e) => e.name === 'read_file');
          expect(readResult).toBeDefined();
@@ -165157,7 +165157,15 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
            parameters: { type: Type.OBJECT, properties: {} },
          };
  
-@@ -3028,83 +3943,73 @@
+         const { config } = await createMockConfig({
+           getFunctionDeclarationsFiltered: vi
+             .fn()
+             .mockReturnValue([writeFileToolDef]),
+           getTool: vi.fn().mockImplementation((name: string) => {
+             if (name === WriteFileTool.Name) {
+-              return new WriteFileTool(config);
++              return new WriteFileTool(config, 'interactive');
+             }
              return undefined;
            }),
          });
@@ -165278,6 +165286,21 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          const writeFileToolDef: FunctionDeclaration = {
            name: WriteFileTool.Name,
            description: 'Writes a file',
+@@ -3114,13 +4019,13 @@
+         const { config } = await createMockConfig({
+           getFunctionDeclarationsFiltered: vi
+             .fn()
+             .mockReturnValue([writeFileToolDef]),
+           getTool: vi.fn().mockImplementation((name: string) => {
+             if (name === WriteFileTool.Name) {
+-              return new WriteFileTool(config);
++              return new WriteFileTool(config, 'interactive');
+             }
+             return undefined;
+           }),
+         });
+ 
+         const toolConfig: ToolConfig = { tools: [WriteFileTool.Name] };
 @@ -3173,12 +4078,13 @@
                yield {
                  type: 'chunk',
@@ -165328,7 +165351,7 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
          );
          expect(writeResult).toBeDefined();
          // After retry the wasOutputTruncated flag must have been cleared, so
-@@ -3220,13 +4131,13 @@
+@@ -3220,26 +4131,26 @@
          );
          expect(writeResult!.error).not.toContain(
            'rejected to prevent writing truncated content',
@@ -165343,6 +165366,20 @@ diff --git a/packages/core/src/agents/runtime/agent-headless.test.ts b/packages/
            parameters: { type: Type.OBJECT, properties: {} },
          };
  
+         const { config } = await createMockConfig({
+           getFunctionDeclarationsFiltered: vi
+             .fn()
+             .mockReturnValue([writeFileToolDef]),
+           getTool: vi.fn().mockImplementation((name: string) => {
+             if (name === WriteFileTool.Name) {
+-              return new WriteFileTool(config);
++              return new WriteFileTool(config, 'interactive');
+             }
+             return undefined;
+           }),
+         });
+ 
+         const toolConfig: ToolConfig = { tools: [WriteFileTool.Name] };
 @@ -3247,35 +4158,35 @@
          mockSendMessageStream.mockImplementation(async () => {
            callCount++;
@@ -179878,7 +179915,16 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        failures.push(error);
      }
      const pendingLease = activation
-@@ -8329,13 +7968,16 @@
+@@ -8321,21 +7960,24 @@
+       await registerLazy(ToolNames.READ_FILE, async () => {
+         const { ReadFileTool } = await import('../tools/read-file.js');
+         return new ReadFileTool(this);
+       });
+       await registerLazy(ToolNames.EDIT, async () => {
+         const { EditTool } = await import('../tools/edit.js');
+-        return new EditTool(this);
++        return new EditTool(this, resolveInteractionMode(this));
+       });
        await registerLazy(ToolNames.NOTEBOOK_EDIT, async () => {
          const { NotebookEditTool } = await import('../tools/notebook-edit.js');
          return new NotebookEditTool(this);
@@ -179886,28 +179932,42 @@ diff --git a/packages/core/src/config/config.ts b/packages/core/src/config/confi
        await registerLazy(ToolNames.SHELL, async () => {
          const { ShellTool } = await import('../tools/shell.js');
 -        return new ShellTool(this);
-+        return new ShellTool(
-+          this,
-+          registry.getAllToolNames().includes(ToolNames.TASK_STOP),
-+        );
++        return new ShellTool(this, {
++          declaredTools: new Set(registry.getAllToolNames()),
++          interactionMode: resolveInteractionMode(this),
++        });
        });
        await registerGoalWorkerTools();
        await registerStructuredOutputIfRequested();
        this.debugLogger.debug(
          `ToolRegistry created: ${JSON.stringify(registry.getAllToolNames())} (${registry.getAllToolNames().length} tools)`,
        );
-@@ -8441,13 +8083,16 @@
+@@ -8429,25 +8071,28 @@
+     await registerLazy(ToolNames.GLOB, async () => {
+       const { GlobTool } = await import('../tools/glob.js');
+       return new GlobTool(this);
+     });
+     await registerLazy(ToolNames.EDIT, async () => {
+       const { EditTool } = await import('../tools/edit.js');
+-      return new EditTool(this);
++      return new EditTool(this, resolveInteractionMode(this));
+     });
+     await registerLazy(ToolNames.NOTEBOOK_EDIT, async () => {
+       const { NotebookEditTool } = await import('../tools/notebook-edit.js');
+       return new NotebookEditTool(this);
+     });
      await registerLazy(ToolNames.WRITE_FILE, async () => {
        const { WriteFileTool } = await import('../tools/write-file.js');
-       return new WriteFileTool(this);
+-      return new WriteFileTool(this);
++      return new WriteFileTool(this, resolveInteractionMode(this));
      });
      await registerLazy(ToolNames.SHELL, async () => {
        const { ShellTool } = await import('../tools/shell.js');
 -      return new ShellTool(this);
-+      return new ShellTool(
-+        this,
-+        registry.getAllToolNames().includes(ToolNames.TASK_STOP),
-+      );
++      return new ShellTool(this, {
++        declaredTools: new Set(registry.getAllToolNames()),
++        interactionMode: resolveInteractionMode(this),
++      });
      });
      await registerLazy(ToolNames.TODO_WRITE, async () => {
        const { TodoWriteTool } = await import('../tools/todoWrite.js');
@@ -211490,14 +211550,13 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        // Should be cancelled, not timed out
        expect(completedCall.status).toBe('cancelled');
      } finally {
-@@ -2327,877 +2571,190 @@
-     ]);
+@@ -2328,876 +2572,189 @@
    });
  
    it('propagates a tool turn-termination boundary to the host', async () => {
      const execute = vi.fn().mockResolvedValue({
        llmContent: 'proposal recorded',
--      returnDisplay: 'proposal recorded',
+       returnDisplay: 'proposal recorded',
 -      terminateTurn: true,
 -    });
 -    const toolsByName = new Map<string, MockTool>([
@@ -212117,7 +212176,6 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -    const smallExecute = vi.fn().mockResolvedValue({
 -      llmContent: 'b'.repeat(3000),
 -      returnDisplay: 'small',
-+      returnDisplay: 'proposal recorded',
 +      terminateTurn: true,
      });
      const toolsByName = new Map<string, MockTool>([
@@ -213468,7 +213526,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        [TestApprovalTool.Name],
      );
  
-@@ -8486,12 +8138,13 @@
+@@ -8486,14 +8138,15 @@
        getFileSystemService: () => ({
          readTextFile: vi.fn(),
          writeTextFile: vi.fn(),
@@ -213477,12 +213535,15 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        setApprovalMode: vi.fn(),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
-     const writeFileTool = new WriteFileTool(writeFileConfig);
+-    const writeFileTool = new WriteFileTool(writeFileConfig);
++    const writeFileTool = new WriteFileTool(writeFileConfig, 'interactive');
      const { scheduler, onAllToolCallsComplete } = createTruncationTestScheduler(
        writeFileTool,
        [WriteFileTool.Name],
      );
-@@ -8539,12 +8192,13 @@
+ 
+     await scheduler.schedule(
+@@ -8539,14 +8192,15 @@
        getFileSystemService: () => ({
          readTextFile: vi.fn(),
          writeTextFile: vi.fn(),
@@ -213491,11 +213552,14 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        setApprovalMode: vi.fn(),
 +      getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
      } as unknown as Config;
-     const writeFileTool = new WriteFileTool(writeFileConfig);
+-    const writeFileTool = new WriteFileTool(writeFileConfig);
++    const writeFileTool = new WriteFileTool(writeFileConfig, 'interactive');
      const { scheduler, onAllToolCallsComplete } = createTruncationTestScheduler(
        writeFileTool,
        [WriteFileTool.Name],
      );
+ 
+     const messages: string[] = [];
 @@ -8631,12 +8285,13 @@
      } as unknown as ToolRegistry;
  
@@ -214708,7 +214772,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      class TestShellTool extends ShellTool {
        protected override createInvocation(params: ShellToolParams) {
          // Cast through unknown — the test invocation extends the real
-@@ -17895,19 +17569,23 @@
+@@ -17895,19 +17569,25 @@
          // the shell-tool-specific branch (which is the branch that
          // wires setPromoteAbortControllerCallback).
          return new TestShellInvocation(
@@ -214716,6 +214780,8 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
            (this as any).config,
            params,
 -        ) as unknown as ToolInvocation<ShellToolParams, ToolResult>;
++          // eslint-disable-next-line @typescript-eslint/no-explicit-any
++          (this as any).session,
 +        ) as unknown as ToolInvocation<ShellToolParams, AuthoredToolResult>;
        }
      }
@@ -214728,7 +214794,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 +        getShellDefaultTimeoutMs: () => undefined,
 +        getInlineBlockBytes: () => INLINE_BLOCK_BYTES,
 +      } as unknown as Config,
-+      false,
++      { declaredTools: new Set(), interactionMode: 'interactive' },
 +    );
      const mockToolRegistry = {
        getTool: () => tool,
@@ -214736,7 +214802,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getFunctionDeclarations: () => [],
        tools: new Map(),
        discovery: {},
-@@ -17920,12 +17598,13 @@
+@@ -17920,12 +17600,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -214750,7 +214816,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -17936,12 +17615,13 @@
+@@ -17936,12 +17617,13 @@
          terminalWidth: 80,
          terminalHeight: 24,
        }),
@@ -214764,7 +214830,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -18062,12 +17742,13 @@
+@@ -18062,12 +17744,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -214778,7 +214844,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18087,12 +17768,13 @@
+@@ -18087,12 +17770,13 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -214792,7 +214858,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -18144,12 +17826,13 @@
+@@ -18144,12 +17828,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -214806,7 +214872,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18169,12 +17852,13 @@
+@@ -18169,12 +17854,13 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -214820,7 +214886,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -18217,12 +17901,13 @@
+@@ -18217,12 +17903,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -214834,7 +214900,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18242,12 +17927,13 @@
+@@ -18242,12 +17929,13 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -214848,7 +214914,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -18273,12 +17959,13 @@
+@@ -18273,12 +17961,13 @@
    it('is a no-op when invocation does not expose setPromptId', async () => {
      // Reuses the existing TestApprovalTool which has no setPromptId.
      // The scheduler must not throw when the duck-type check fails.
@@ -214862,7 +214928,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getTool: () => tool,
        ensureTool: async () => tool,
        getFunctionDeclarations: () => [],
-@@ -18291,12 +17978,13 @@
+@@ -18291,12 +17980,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -214876,7 +214942,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18316,12 +18004,13 @@
+@@ -18316,12 +18006,13 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -214890,7 +214956,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -18348,6 +18037,65 @@
+@@ -18348,6 +18039,65 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -293445,6 +293511,29 @@ new file mode 100644
 +
 +export const physicalUtilityCallContext =
 +  new AsyncLocalStorage<PhysicalUtilityCall>();
+diff --git a/packages/core/src/core/prompt-tool-examples.test.ts b/packages/core/src/core/prompt-tool-examples.test.ts
+--- a/packages/core/src/core/prompt-tool-examples.test.ts
++++ b/packages/core/src/core/prompt-tool-examples.test.ts
+@@ -81,17 +81,17 @@
+           ),
+         [ToolNames.READ_FILE]: (args) =>
+           new ReadFileTool(config).validateToolParams(
+             args as unknown as ReadFileToolParams,
+           ),
+         [ToolNames.EDIT]: (args) =>
+-          new EditTool(config).validateToolParams(
++          new EditTool(config, 'interactive').validateToolParams(
+             args as unknown as EditToolParams,
+           ),
+         [ToolNames.WRITE_FILE]: (args) =>
+-          new WriteFileTool(config).validateToolParams(
++          new WriteFileTool(config, 'interactive').validateToolParams(
+             args as unknown as WriteFileToolParams,
+           ),
+       };
+       const calls = parse(examplesFor(style)).filter(
+         (call) => validators[call.name],
+       );
 diff --git a/packages/core/src/core/prompts.test.ts b/packages/core/src/core/prompts.test.ts
 --- a/packages/core/src/core/prompts.test.ts
 +++ b/packages/core/src/core/prompts.test.ts
@@ -374484,6 +374573,51 @@ diff --git a/packages/core/src/telemetry/loggers.test.ts b/packages/core/src/tel
          'event.timestamp': '2025-01-01T00:00:00.000Z',
          function_name: 'legacy_tool',
          function_args: {},
+@@ -1591,13 +1517,13 @@
+         },
+       );
+       qwenLoggerSpy.mockRestore();
+     });
+ 
+     it('should log a tool call with all fields', () => {
+-      const tool = new EditTool(mockConfig);
++      const tool = new EditTool(mockConfig, 'interactive');
+       const call: CompletedToolCall = {
+         status: 'success',
+         request: {
+           name: 'test-function',
+           args: {
+             arg1: 'value1',
+@@ -1811,13 +1737,13 @@
+           error: undefined,
+           errorType: undefined,
+           contentLength: 13,
+           executionStatus: 'success',
+         },
+         outcome: ToolConfirmationOutcome.ModifyWithEditor,
+-        tool: new EditTool(mockConfig),
++        tool: new EditTool(mockConfig, 'interactive'),
+         invocation: {} as AnyToolInvocation,
+         durationMs: 100,
+       };
+       const event = new ToolCallEvent(call);
+ 
+       logToolCall(mockConfig, event);
+@@ -1893,13 +1819,13 @@
+           resultDisplay: undefined,
+           error: undefined,
+           errorType: undefined,
+           contentLength: 13,
+           executionStatus: 'success',
+         },
+-        tool: new EditTool(mockConfig),
++        tool: new EditTool(mockConfig, 'interactive'),
+         invocation: {} as AnyToolInvocation,
+         durationMs: 100,
+       };
+       const event = new ToolCallEvent(call);
+ 
+       logToolCall(mockConfig, event);
 @@ -2113,13 +2039,13 @@
        });
      });
@@ -374499,6 +374633,21 @@ diff --git a/packages/core/src/telemetry/loggers.test.ts b/packages/core/src/tel
              recordUiTelemetryEvent: mockRecordUiTelemetryEvent,
            }),
          } as unknown as Config;
+@@ -2138,13 +2064,13 @@
+             responseParts: [{ text: 'ok' }],
+             resultDisplay: undefined,
+             error: undefined,
+             errorType: undefined,
+             executionStatus: 'success',
+           },
+-          tool: new EditTool(mockConfig),
++          tool: new EditTool(mockConfig, 'interactive'),
+           invocation: {} as AnyToolInvocation,
+           durationMs: 50,
+           outcome: ToolConfirmationOutcome.ProceedOnce,
+         };
+         const event = new ToolCallEvent(call);
+         logToolCall(configWithRecording, event);
 @@ -2238,47 +2164,12 @@
            programming_language: 'typescript',
          },
@@ -391492,7 +391641,51 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
  import os from 'node:os';
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
-@@ -577,12 +586,44 @@
+@@ -94,13 +103,13 @@
+ 
+     // Reset mocks before each test
+     (mockConfig.getApprovalMode as Mock).mockClear();
+     // Default to not skipping confirmation
+     (mockConfig.getApprovalMode as Mock).mockReturnValue(ApprovalMode.DEFAULT);
+ 
+-    tool = new EditTool(mockConfig);
++    tool = new EditTool(mockConfig, 'interactive');
+   });
+ 
+   afterEach(() => {
+     fs.rmSync(tempDir, { recursive: true, force: true });
+   });
+ 
+@@ -116,12 +125,28 @@
+     fileReadCache.recordRead(filePath, stats, {
+       full: true,
+       cacheable: true,
+     });
+   }
+ 
++  describe('description', () => {
++    it('says a person can change new_string only where one takes part in the session', () => {
++      const sentence =
++        'The user has the ability to modify the `new_string` content. If modified, this will be stated in the response.';
++      expect(new EditTool(mockConfig, 'interactive').description).toContain(
++        `before attempting a text replacement.\n\n      ${sentence}\n\nExpectation for required parameters:`,
++      );
++      expect(new EditTool(mockConfig, 'acp').description).toContain(sentence);
++      const headless = new EditTool(mockConfig, 'headless').description;
++      expect(headless).not.toContain('The user has the ability');
++      expect(headless).toContain(
++        'before attempting a text replacement.\n\nExpectation for required parameters:',
++      );
++    });
++  });
++
+   describe('applyReplacement', () => {
+     it('should return newString if isNewFile is true', () => {
+       expect(applyReplacement(null, 'old', 'new', true)).toBe('new');
+       expect(applyReplacement('existing', 'old', 'new', true)).toBe('new');
+     });
+ 
+@@ -577,12 +602,44 @@
          abortError,
        );
  
@@ -391537,7 +391730,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
        fs.writeFileSync(filePath, initialContent, 'utf8');
        seedPriorRead(filePath);
        const params: EditToolParams = {
-@@ -727,21 +768,26 @@
+@@ -727,21 +784,26 @@
          // with a positive contribution.
          expect(attribution!.aiContribution).toBeGreaterThan(0);
          // Length sanity: contribution is bounded by the new content.
@@ -391571,7 +391764,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          expect(
            CommitAttributionService.getInstance().getFileAttribution(filePath),
          ).toBeUndefined();
-@@ -955,13 +1001,12 @@
+@@ -955,13 +1017,12 @@
        const initialContent = 'This is some old text.';
        fs.writeFileSync(filePath, initialContent, 'utf8');
        const params: EditToolParams = {
@@ -391585,7 +391778,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          ApprovalMode.AUTO_EDIT,
        );
        const invocation = tool.build(params);
-@@ -969,13 +1014,13 @@
+@@ -969,13 +1030,13 @@
  
        expect(result.llmContent).not.toMatch(
          /User modified the `new_string` content/,
@@ -391600,7 +391793,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
          file_path: filePath,
          old_string: 'old',
          new_string: 'new',
-@@ -1474,12 +1519,16 @@
+@@ -1474,12 +1535,16 @@
          .execute(abortSignal);
  
        expect(result.error?.type).toBe(
@@ -391617,7 +391810,7 @@ diff --git a/packages/core/src/tools/edit.test.ts b/packages/core/src/tools/edit
      });
  
      it('does not let an unread file be probed via NO_OCCURRENCE_FOUND', async () => {
-@@ -1768,7 +1817,296 @@
+@@ -1768,7 +1833,296 @@
          new_string: 'hacked',
        };
        const error = tool.validateToolParams(externalPath);
@@ -391965,7 +392158,21 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
  import { isAnyAutoMemPath, isTeamAutoMemPath } from '../memory/paths.js';
-@@ -98,39 +120,56 @@
+@@ -30,12 +52,13 @@
+ import type { LineEnding } from '../services/fileSystemService.js';
+ import { createPatchSmart, getDiffStat } from './diffOptions.js';
+ import { checkPriorRead, StructuredToolError } from './priorReadEnforcement.js';
+ import { ReadFileTool } from './read-file.js';
+ import { createDebugLogger } from '../utils/debugLogger.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
++import type { SystemPromptInteractionMode } from '../core/prompts.js';
+ import { logFileOperation } from '../telemetry/loggers.js';
+ import { FileOperationEvent } from '../telemetry/types.js';
+ import { FileOperation } from '../telemetry/metrics.js';
+ import {
+   getSpecificMimeType,
+   fileExists as isFilefileExists,
+@@ -98,39 +121,56 @@
    new_string: string;
  
    /**
@@ -392032,7 +392239,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    ) {}
  
    toolLocations(): ToolLocation[] {
-@@ -148,15 +187,13 @@
+@@ -148,15 +188,13 @@
      let currentContent: string | null = null;
      let fileExists = await isFilefileExists(params.file_path);
      let isNewFile = false;
@@ -392049,7 +392256,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
      // Prior-read enforcement runs before any content is read so that
      // the read pipeline below (and the content-derived error codes
      // it can produce — NO_OCCURRENCE_FOUND, EXPECTED_OCCURRENCE_MISMATCH,
-@@ -171,21 +208,22 @@
+@@ -171,21 +209,22 @@
      // appeared in the race window is rejected as unread.
      if (!this.config.getFileReadCacheDisabled()) {
        const decision = await checkPriorRead(
@@ -392073,7 +392280,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
            encoding: 'utf-8',
            bom: false,
            lineEnding: 'lf',
-@@ -230,13 +268,13 @@
+@@ -230,13 +269,13 @@
      // returning a CalculatedEdit that the call sites would honour.
      if (fileExists && !this.config.getFileReadCacheDisabled()) {
        const postDecision = await checkPriorRead(
@@ -392088,7 +392295,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
          // rare ("file changed between stat and read") and the model
          // self-heals by re-reading, so without a debug record an
          // operator investigating "why did this Edit fail once?" has
-@@ -248,13 +286,13 @@
+@@ -248,13 +287,13 @@
          return {
            currentContent: null,
            newContent: '',
@@ -392103,7 +392310,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
            encoding: 'utf-8',
            bom: false,
            lineEnding: 'lf',
-@@ -274,13 +312,13 @@
+@@ -274,13 +313,13 @@
        // Creating a new file
        isNewFile = true;
      } else if (!fileExists) {
@@ -392118,7 +392325,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
        finalOldString = maybeAugmentOldStringForDeletion(
          currentContent,
          finalOldString,
-@@ -289,39 +327,57 @@
+@@ -289,39 +328,57 @@
  
        occurrences = countOccurrences(currentContent, finalOldString);
        if (params.old_string === '') {
@@ -392181,7 +392388,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
  
      const newContent = !error
        ? applyReplacement(
-@@ -333,13 +389,16 @@
+@@ -333,13 +390,16 @@
        : (currentContent ?? '');
  
      if (!error && fileExists && currentContent === newContent) {
@@ -392199,7 +392406,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
  
      // Scan the full resulting content, not just new_string, so a secret split
      // across multiple edits (each fragment alone undetectable) is still caught.
-@@ -356,17 +415,20 @@
+@@ -356,17 +416,20 @@
            currentContent !== null &&
            checkTeamMemorySecrets(
              params.file_path,
@@ -392224,7 +392431,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
        }
      }
  
-@@ -423,13 +485,16 @@
+@@ -423,13 +486,16 @@
        // Use the full `raw` message, not the short `display` form:
        // the scheduler propagates `error.message` straight into the
        // model-facing tool response. `raw` carries the remediation
@@ -392242,7 +392449,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
      const fileDiff = createPatchSmart(
        fileName,
        editData.currentContent ?? '',
-@@ -471,39 +536,33 @@
+@@ -471,39 +537,33 @@
  
    /**
     * Executes the edit operation with the given parameters.
@@ -392291,7 +392498,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
      try {
        // Backup the pre-edit content BEFORE the final freshness check.
        // Mirrors the upstream `claude-code/src/tools/FileEditTool` ordering,
-@@ -569,26 +628,27 @@
+@@ -569,26 +629,27 @@
            // read time and must still exist now — an ENOENT here
            // means the original target disappeared and we should
            // reject rather than fall through to a new-file write
@@ -392325,7 +392532,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
  
        // Create parent directories AFTER the pre-write enforcement
        // check passes. Doing it before would leak intermediate
-@@ -627,13 +687,13 @@
+@@ -627,13 +688,13 @@
              lineEnding: editData.lineEnding,
            },
          });
@@ -392340,7 +392547,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
            editData.newContent,
          );
        }
-@@ -656,13 +716,14 @@
+@@ -656,13 +717,14 @@
          // post-write, so the next ReadFile will report stale and
          // refresh the entry.
        }
@@ -392356,7 +392563,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
          originallyProposedContent,
          editData.newContent,
        );
-@@ -701,41 +762,55 @@
+@@ -701,41 +763,55 @@
            mimetype,
            extension,
            programmingLanguage,
@@ -392426,7 +392633,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    /**
     * Creates parent directories if they don't exist
     */
-@@ -744,17 +819,37 @@
+@@ -744,27 +820,60 @@
      if (!fs.existsSync(dirName)) {
        fs.mkdirSync(dirName, { recursive: true });
      }
@@ -392462,10 +392669,36 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    implements ModifiableDeclarativeTool<EditToolParams>
  {
    static readonly Name = ToolNames.EDIT;
-   constructor(private readonly config: Config) {
+-  constructor(private readonly config: Config) {
++  /**
++   * @param interactionMode how a person takes part in the session this tool
++   *   is built in (`resolveInteractionMode`). Only a person can change
++   *   `new_string` before the edit runs, so the description says one can
++   *   only where one takes part.
++   */
++  constructor(
++    private readonly config: Config,
++    interactionMode: SystemPromptInteractionMode,
++  ) {
      super(
        EditTool.Name,
-@@ -792,52 +887,60 @@
+       ToolDisplayNames.EDIT,
+-      `Replaces text within a file. By default, replaces a single occurrence. Set \`replace_all\` to true when you intend to modify every instance of \`old_string\`. This tool requires providing significant context around the change to ensure precise targeting. Always use the ${ReadFileTool.Name} tool to examine the file's current content before attempting a text replacement.
++      `Replaces text within a file. By default, replaces a single occurrence. Set \`replace_all\` to true when you intend to modify every instance of \`old_string\`. This tool requires providing significant context around the change to ensure precise targeting. Always use the ${ReadFileTool.Name} tool to examine the file's current content before attempting a text replacement.${
++        interactionMode === 'headless'
++          ? ''
++          : `
+ 
+-      The user has the ability to modify the \`new_string\` content. If modified, this will be stated in the response.
++      The user has the ability to modify the \`new_string\` content. If modified, this will be stated in the response.`
++      }
+ 
+ Expectation for required parameters:
+ 1. \`file_path\` MUST be an absolute path; otherwise an error will be thrown.
+ 2. \`old_string\` MUST be the exact literal text to replace (including all whitespace, indentation, newlines, and surrounding code etc.).
+ 3. \`new_string\` MUST be the exact literal text to replace \`old_string\` with (also including all whitespace, indentation, newlines, and surrounding code etc.). Ensure the resulting code is correct and idiomatic.
+ 4. NEVER escape \`old_string\` or \`new_string\`, that would break the exact literal text requirement.
+@@ -792,52 +901,60 @@
              type: 'boolean',
              description:
                'Replace all occurrences of old_string (default false).',
@@ -392531,7 +392764,7 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
    override toAutoClassifierInput(
      params: EditToolParams,
    ): Record<string, unknown> {
-@@ -891,26 +994,39 @@
+@@ -891,26 +1008,39 @@
                params.old_string,
                params.new_string,
                params.old_string === '' && currentContent === '',
@@ -404110,7 +404343,28 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
 diff --git a/packages/core/src/tools/shell.backgroundStatus.test.ts b/packages/core/src/tools/shell.backgroundStatus.test.ts
 --- a/packages/core/src/tools/shell.backgroundStatus.test.ts
 +++ b/packages/core/src/tools/shell.backgroundStatus.test.ts
-@@ -90,14 +90,12 @@
+@@ -15,13 +15,19 @@
+ import { tmpdir } from 'node:os';
+ import { join } from 'node:path';
+ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+ import type { Config } from '../config/config.js';
+ import { BackgroundShellRegistry } from '../services/backgroundShellRegistry.js';
+ import { createMockWorkspaceContext } from '../test-utils/mockWorkspaceContext.js';
+-import { ShellTool } from './shell.js';
++import { ShellTool, type ShellToolSession } from './shell.js';
++
++/** A session a person takes part in, whose registry declares task_stop and monitor. */
++const INTERACTIVE_SESSION: ShellToolSession = {
++  declaredTools: new Set(['task_stop', 'monitor']),
++  interactionMode: 'interactive',
++};
+ 
+ const POLL_INTERVAL_MS = 100;
+ const SETTLE_TIMEOUT_MS = 15_000;
+ 
+ let tmpDirs: string[] = [];
+ 
+@@ -90,14 +96,12 @@
          .mockReturnValue(createMockWorkspaceContext(cwd)),
        storage: {
          getUserSkillsDirs: vi.fn().mockReturnValue([]),
@@ -404125,7 +404379,7 @@ diff --git a/packages/core/src/tools/shell.backgroundStatus.test.ts b/packages/c
        getFileSystemService: vi.fn().mockReturnValue(undefined),
        getFileHistoryService: vi.fn().mockReturnValue(undefined),
        getFileReadCache: vi.fn().mockReturnValue(undefined),
-@@ -109,13 +107,13 @@
+@@ -109,13 +113,13 @@
        getShouldUseNodePtyShell: vi.fn().mockReturnValue(false),
        getShellDefaultTimeoutMs: vi.fn().mockReturnValue(undefined),
        getShellHeartbeatIntervalMs: vi.fn().mockReturnValue(undefined),
@@ -404133,7 +404387,7 @@ diff --git a/packages/core/src/tools/shell.backgroundStatus.test.ts b/packages/c
      } as unknown as Config;
  
 -    shellTool = new ShellTool(mockConfig);
-+    shellTool = new ShellTool(mockConfig, true);
++    shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
    });
  
    afterEach(async () => {
@@ -404143,7 +404397,25 @@ diff --git a/packages/core/src/tools/shell.backgroundStatus.test.ts b/packages/c
 diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/shell.test.ts
 --- a/packages/core/src/tools/shell.test.ts
 +++ b/packages/core/src/tools/shell.test.ts
-@@ -58,16 +58,33 @@
+@@ -37,15 +37,17 @@
+ vi.mock('fs');
+ vi.mock('os');
+ vi.mock('crypto');
+ 
+ import { isCommandAllowed } from '../utils/shell-utils.js';
+ import {
++  buildLongRunningForegroundHint,
+   ShellTool,
+   type ShellToolInvocation,
+   type ShellToolParams,
++  type ShellToolSession,
+ } from './shell.js';
+ import { detectBlockedSleepPattern } from './shell.js';
+ import { stripShellWrapper } from '../utils/shell-utils.js';
+ import { ApprovalMode, type Config } from '../config/config.js';
+ import {
+   ToolConfirmationOutcome,
+@@ -58,16 +60,39 @@
  } from '../services/shellExecutionService.js';
  import * as fs from 'node:fs';
  import * as os from 'node:os';
@@ -404171,13 +404443,19 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 +} from '../core/text-authorship.js';
 +import { runWithToolArguments } from '../core/tool-call-arguments.js';
 +import { spellAuthored, spellRuns } from '../test-utils/authored-runs.js';
++
++/** A session a person takes part in, whose registry declares task_stop and monitor. */
++const INTERACTIVE_SESSION: ShellToolSession = {
++  declaredTools: new Set(['task_stop', 'monitor']),
++  interactionMode: 'interactive',
++};
  
  interface ShellToolParameterJsonSchema {
    properties: {
      command: {
        description: string;
      };
-@@ -130,15 +147,12 @@
+@@ -130,15 +155,12 @@
          .mockReturnValue(createMockWorkspaceContext('/test/dir')),
        storage: {
          getUserSkillsDirs: vi.fn().mockReturnValue(['/test/dir/.qwen/skills']),
@@ -404193,7 +404471,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        getFileHistoryService: vi.fn().mockReturnValue(mockFileHistoryService),
        getFileReadCache: vi.fn().mockReturnValue(mockFileReadCache),
        getFileReadCacheDisabled: vi.fn().mockReturnValue(false),
-@@ -201,13 +215,13 @@
+@@ -201,13 +223,13 @@
      vi.mocked(os.platform).mockReturnValue('linux');
      vi.mocked(os.tmpdir).mockReturnValue('/tmp');
      (vi.mocked(crypto.randomBytes) as Mock).mockReturnValue(
@@ -404201,14 +404479,14 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      );
  
 -    shellTool = new ShellTool(mockConfig);
-+    shellTool = new ShellTool(mockConfig, true);
++    shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
  
      // Capture the output callback to simulate streaming events from the service
      mockShellExecutionService.mockImplementation((_cmd, _cwd, callback) => {
        mockShellOutputCallback = callback;
        return {
          pid: 12345,
-@@ -437,48 +451,36 @@
+@@ -437,48 +459,36 @@
          command: 'npm test',
          is_background: false,
        });
@@ -404275,7 +404553,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
    describe('execute', () => {
      const mockAbortSignal = new AbortController().signal;
  
-@@ -493,15 +495,54 @@
+@@ -493,15 +503,54 @@
          error: null,
          aborted: false,
          pid: 12345,
@@ -404330,7 +404608,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        const confirmSedEdit = async (
          invocation: ToolInvocation<ShellToolParams, ToolResult>,
        ) => {
-@@ -938,12 +979,15 @@
+@@ -938,12 +987,15 @@
            expect(result.returnDisplay).toBe(
              'Command timed out after 5000ms before it could complete. There was no output before it timed out.',
            );
@@ -404346,7 +404624,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          }
        });
  
-@@ -2877,13 +2921,16 @@
+@@ -2877,13 +2929,16 @@
        const result = await promise;
  
        expect(result.returnDisplay).toContain('failed output');
@@ -404363,7 +404641,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('reports a foreground signal termination as a tool error', async () => {
        const invocation = shellTool.build({
          command: 'signal-terminated-command',
-@@ -2900,13 +2947,15 @@
+@@ -2900,13 +2955,15 @@
  
        const result = await promise;
  
@@ -404379,7 +404657,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      });
  
      it('keeps a successful PTY exit code successful with signal 0 metadata', async () => {
-@@ -2944,12 +2993,308 @@
+@@ -2944,12 +3001,360 @@
  
        const result = await promise;
  
@@ -404608,6 +404886,29 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 +        ]);
 +      });
 +
++      it('suggests the Monitor tool for a foreground sleep only where the registry declares it', () => {
++        const refusal = (tool: ShellTool): string => {
++          try {
++            tool.build({ command: 'sleep 5', is_background: false });
++          } catch (error) {
++            return (error as Error).message;
++          }
++          throw new Error('the sleep was not refused');
++        };
++        const monitor =
++          'For streaming events (watching logs, polling APIs), use the Monitor tool. ';
++        const withMonitor = refusal(shellTool);
++        const withoutMonitor = refusal(
++          new ShellTool(mockConfig, {
++            ...INTERACTIVE_SESSION,
++            declaredTools: new Set(['task_stop']),
++          }),
++        );
++        expect(withMonitor).toContain(monitor);
++        expect(withoutMonitor).not.toContain('Monitor');
++        expect(withoutMonitor).toBe(withMonitor.replace(monitor, ''));
++      });
++
 +      it("refuses an out-of-range timeout in the harness's words", () => {
 +        let thrown: unknown;
 +        try {
@@ -404682,13 +404983,42 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 +          author: 'harness',
 +          text: expect.stringMatching(/^\noutput file: /),
 +        });
++        expect(result.llmContent).toMatch(
++          /To inspect: \/tasks \(text\) or the interactive Background tasks dialog \(focus the footer Background tasks pill, then Enter — detail view \+ live updates\)\. Read the output file directly to view the captured output\.$/,
++        );
++      });
++
++      it('names only the ways the session has of inspecting a background shell', async () => {
++        const started = async (
++          interactionMode: ShellToolSession['interactionMode'],
++        ) =>
++          (
++            await new ShellTool(mockConfig, {
++              ...INTERACTIVE_SESSION,
++              interactionMode,
++            })
++              .build({ command: 'npm run dev', is_background: true })
++              .execute(mockAbortSignal)
++          ).llmContent as string;
++
++        const acp = await started('acp');
++        expect(acp).toMatch(
++          /To inspect: \/tasks \(text\)\. Read the output file directly to view the captured output\.$/,
++        );
++        expect(acp).not.toContain('dialog');
++        const headless = await started('headless');
++        expect(headless).toMatch(
++          /\nRead the output file directly to view the captured output\.$/,
++        );
++        expect(headless).not.toContain('/tasks');
++        expect(headless).not.toContain('dialog');
        });
      });
  
      it('does not report a user-cancelled signal as a tool error', async () => {
        const invocation = shellTool.build({
          command: 'cancelled-command',
-@@ -3062,191 +3407,12 @@
+@@ -3062,191 +3467,12 @@
  
        const result = await promise;
  
@@ -404880,7 +405210,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        // assume. Tests use vi fake timers to drive the wall-clock past
        // the threshold without actually sleeping. Hint must fire on
        // success AND error completions (advice is the same), suppress
-@@ -3281,12 +3447,24 @@
+@@ -3281,12 +3507,24 @@
          const result = await promise;
          expect(result.llmContent).toContain(
            'this foreground command ran for 60s',
@@ -404905,7 +405235,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // Empty-output success: write-only commands (e.g. `tar czf …`,
          // `cp -r large-dir/`, `dd if=…`) frequently produce no stdout
          // and exit 0. The non-debug `returnDisplayMessage` build leaves
-@@ -3485,116 +3663,12 @@
+@@ -3485,116 +3723,12 @@
          await vi.advanceTimersByTimeAsync(59_999);
          resolveShellExecution({ output: 'hi', exitCode: 0 });
          const result = await promise;
@@ -405022,7 +405352,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // run should NOT trigger the advisory — the user already told
          // us this command is allowed to run long. Pins the per-
          // invocation coupling so a regression that goes back to the
-@@ -7473,13 +7547,13 @@
+@@ -7473,13 +7607,13 @@
  
      it('should return the windows description when on windows', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
@@ -405030,14 +405360,14 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        delete process.env['MSYSTEM'];
        delete process.env['TERM'];
 -      const shellTool = new ShellTool(mockConfig);
-+      const shellTool = new ShellTool(mockConfig, true);
++      const shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
        expect(shellTool.description).toMatchSnapshot();
        expect(shellTool.description).toContain(
          "Use '&' only when you need to run commands sequentially",
        );
        expect(shellTool.description).toContain(
          "DO NOT use ';' or newlines to separate commands in cmd.exe.",
-@@ -7488,27 +7562,45 @@
+@@ -7488,27 +7622,67 @@
          'Exact cmd.exe command to execute as `cmd.exe /d /s /c <command>`',
        );
      });
@@ -405045,19 +405375,41 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('should return the non-windows description when not on windows', async () => {
        vi.mocked(os.platform).mockReturnValue('linux');
 -      const shellTool = new ShellTool(mockConfig);
-+      const shellTool = new ShellTool(mockConfig, true);
++      const shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
        expect(shellTool.description).toMatchSnapshot();
        expect(getCommandParameterDescription(shellTool)).toBe(
          'Exact bash command to execute as `bash -c <command>`',
        );
      });
  
++    it('names only the ways the session has of inspecting a long run in the background', () => {
++      const interactive = buildLongRunningForegroundHint(60_000, 'interactive');
++      expect(interactive).toMatch(
++        /stays inspectable via \/tasks \(text\) or the on-disk output file; in interactive mode the Background tasks dialog also has a per-entry detail view \+ live updates\.$/,
++      );
++      const acp = buildLongRunningForegroundHint(60_000, 'acp');
++      expect(acp).toMatch(
++        /stays inspectable via \/tasks \(text\) or the on-disk output file\.$/,
++      );
++      const headless = buildLongRunningForegroundHint(60_000, 'headless');
++      expect(headless).toMatch(
++        /stays inspectable in the on-disk output file\.$/,
++      );
++      expect(headless).not.toContain('/tasks');
++      expect(headless).not.toContain('dialog');
++      expect(acp).not.toContain('dialog');
++    });
++
 +    it('names task_stop only when the session declares it', async () => {
 +      // A session without task_stop is told how to stop a process without
 +      // it; the rest of the description is the same text.
 +      vi.mocked(os.platform).mockReturnValue('linux');
-+      const withStop = new ShellTool(mockConfig, true).description;
-+      const withoutStop = new ShellTool(mockConfig, false).description;
++      const withStop = new ShellTool(mockConfig, INTERACTIVE_SESSION)
++        .description;
++      const withoutStop = new ShellTool(mockConfig, {
++        ...INTERACTIVE_SESSION,
++        declaredTools: new Set(['monitor']),
++      }).description;
 +      expect(withStop).toContain(
 +        'To stop a background command started by this tool, use `task_stop` when a task id is available. ',
 +      );
@@ -405078,14 +405430,14 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        delete process.env['TERM'];
  
 -      const shellTool = new ShellTool(mockConfig);
-+      const shellTool = new ShellTool(mockConfig, true);
++      const shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
  
        expect(shellTool.description).toContain(
          '`powershell.exe -NoProfile -Command <command>`',
        );
        expect(shellTool.description).toContain(
          'The active shell is PowerShell.',
-@@ -7530,13 +7622,13 @@
+@@ -7530,13 +7704,13 @@
      it('should describe pwsh when ComSpec points to pwsh.exe', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
        process.env['ComSpec'] = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
@@ -405093,14 +405445,14 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        delete process.env['TERM'];
  
 -      const shellTool = new ShellTool(mockConfig);
-+      const shellTool = new ShellTool(mockConfig, true);
++      const shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
  
        expect(shellTool.description).toContain(
          '`pwsh.exe -NoProfile -Command <command>`',
        );
        expect(shellTool.description).toContain(
          "use a single run_shell_command call with '&&'",
-@@ -7549,13 +7641,13 @@
+@@ -7549,13 +7723,13 @@
      it('should describe bash when Windows is running in Git Bash', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
        process.env['ComSpec'] = 'C:\\WINDOWS\\System32\\cmd.exe';
@@ -405108,14 +405460,14 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        delete process.env['TERM'];
  
 -      const shellTool = new ShellTool(mockConfig);
-+      const shellTool = new ShellTool(mockConfig, true);
++      const shellTool = new ShellTool(mockConfig, INTERACTIVE_SESSION);
  
        expect(shellTool.description).toContain('`bash -c <command>`');
        expect(shellTool.description).toContain('The active shell is Bash.');
        expect(shellTool.description).toContain('ANSI-C quoting');
        expect(shellTool.description).not.toContain(
          'Command process group can be terminated',
-@@ -7750,12 +7842,13 @@
+@@ -7750,12 +7924,13 @@
          'Command timed out after 5000ms before it could complete.',
        );
        expect(result.returnDisplay).toContain('partial output');
@@ -405129,7 +405481,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('returns a structured timeout when the command produced no output', async () => {
        const invocation = shellTool.build({
          command: 'long-running-command',
-@@ -7798,22 +7891,13 @@
+@@ -7798,22 +7973,13 @@
          expect(result.error?.type).toBe(ToolErrorType.EXECUTION_TIMEOUT);
        } finally {
          vi.stubGlobal('AbortSignal', originalAbortSignal);
@@ -405153,7 +405505,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          timeout: 5000,
        });
        const mockCombinedSignal = {
-@@ -7828,33 +7912,34 @@
+@@ -7828,33 +7994,34 @@
          timeout: vi.fn().mockReturnValue(mockCombinedSignal),
          any: vi.fn().mockReturnValue(mockCombinedSignal),
        });
@@ -405196,11 +405548,14 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
 diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 --- a/packages/core/src/tools/shell.ts
 +++ b/packages/core/src/tools/shell.ts
-@@ -10,30 +10,44 @@
+@@ -8,32 +8,47 @@
+ import path from 'node:path';
+ import os from 'node:os';
  import crypto from 'node:crypto';
  import * as childProcess from 'node:child_process';
  import { ApprovalMode, type Config } from '../config/config.js';
  import { ToolNames, ToolDisplayNames } from './tool-names.js';
++import type { SystemPromptInteractionMode } from '../core/prompts.js';
  import { ToolErrorType } from './tool-error.js';
  import type {
 +  AuthoredToolError,
@@ -405243,7 +405598,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  } from '../services/commitAttribution.js';
  import { buildGitNotesCommand } from '../services/attributionTrailer.js';
  import type {
-@@ -68,13 +82,17 @@
+@@ -68,13 +83,17 @@
    type ShellType,
    splitCommands,
    stripShellWrapper,
@@ -405262,7 +405617,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  } from '../utils/shellAstParser.js';
  import {
    applySedSubstitution,
-@@ -85,19 +103,12 @@
+@@ -85,19 +104,12 @@
    detectLineEnding,
    type ReadTextFileResponse,
  } from '../services/fileSystemService.js';
@@ -405282,7 +405637,96 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
   * launch paths (`executeBackground` and the foreground→background
   * promote), so the two copies cannot drift (#7626).
   */
-@@ -1239,12 +1250,16 @@
+@@ -1197,41 +1209,77 @@
+         bg: '',
+       },
+     ],
+   ];
+ }
+ 
++/**
++ * What the session a shell tool is built in offers beside the tool, which
++ * is all its texts may tell the model to use: the tools its registry
++ * declares, and how a person takes part in it (`resolveInteractionMode`).
++ * `/tasks` exists where a person can still send a command once the call has
++ * run -- not in a headless run -- and the Background tasks dialog only in
++ * the interactive terminal.
++ */
++export interface ShellToolSession {
++  readonly declaredTools: ReadonlySet<string>;
++  readonly interactionMode: SystemPromptInteractionMode;
++}
++
+ /**
+  * Format the long-run advisory appended to long foreground commands.
+  * Exported so tests and any future consumer (e.g. an alternative
+  * renderer) can render the same text without duplicating the threshold
+- * logic.
+- *
+- * Wording deliberately keeps the dialog mention conditional ("when
+- * running interactively") so the LLM doesn't relay misleading guidance
+- * to non-TTY users (`-p` headless / ACP / SDK consumers, where no
+- * dialog or footer pill exists). `/tasks` and the on-disk output file
+- * work in every mode.
++ * logic. It names only the ways of inspecting a background run that the
++ * session has.
+  */
+-export function buildLongRunningForegroundHint(elapsedMs: number): string {
++export function buildLongRunningForegroundHint(
++  elapsedMs: number,
++  interactionMode: SystemPromptInteractionMode,
++): string {
+   const seconds = Math.round(elapsedMs / 1000);
++  const inspection =
++    interactionMode === 'headless'
++      ? `in the on-disk output file.`
++      : `via /tasks (text) or the on-disk output file` +
++        (interactionMode === 'interactive'
++          ? `; in interactive mode the Background tasks dialog also has a ` +
++            `per-entry detail view + live updates.`
++          : `.`);
+   return (
+     `Note: this foreground command ran for ${seconds}s. ` +
+     `Next time you run a similar long-running process (build watchers, ` +
+     `dev servers, soak tests, polling loops), pass \`is_background: true\` ` +
+     `so the agent isn't blocked while the command runs. ` +
+     `(This is forward-looking guidance for FUTURE invocations — do NOT ` +
+     `re-run the command that just completed; for stateful operations ` +
+     `like deploys, migrations, or git push, that would cause double ` +
+     `side effects.) The output of background runs stays inspectable ` +
+-    `via /tasks (text, any mode) or the on-disk output file; in ` +
+-    `interactive mode the Background tasks dialog also has a per-entry ` +
+-    `detail view + live updates.`
++    inspection
+   );
+ }
+ 
++/**
++ * How the model is told to inspect a background shell it started: the
++ * output file in every session, and `/tasks` and the dialog where the
++ * session has them.
++ */
++function backgroundShellInspection(
++  interactionMode: SystemPromptInteractionMode,
++): string {
++  const ways = [
++    ...(interactionMode === 'headless' ? [] : ['/tasks (text)']),
++    ...(interactionMode === 'interactive'
++      ? [
++          'the interactive Background tasks dialog (focus the footer Background tasks pill, then Enter — detail view + live updates)',
++        ]
++      : []),
++  ];
++  return `${ways.length > 0 ? `To inspect: ${ways.join(' or ')}. ` : ''}Read the output file directly to view the captured output.`;
++}
++
+ /**
+  * Detect standalone or leading `sleep N` patterns that should use Monitor
+  * instead. Catches `sleep 5`, `sleep 2.5`, `sleep 2s`,
+  * `sleep 5 && check`, `sleep 5; check`, `sleep 5 # wait` -- but not sleep
+  * inside pipelines, subshells, backgrounded commands, or scripts (those are
+  * fine).
+@@ -1239,12 +1287,16 @@
  export function detectBlockedSleepPattern(command: string): string | null {
    return detectBlockedSleepPatternDetails(command)?.description ?? null;
  }
@@ -405299,7 +405743,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
  function detectBlockedSleepPatternDetails(
    command: string,
-@@ -1293,32 +1308,36 @@
+@@ -1293,32 +1345,36 @@
      trimmedComment?.startsWith(INTENTIONAL_SLEEP_COMMENT_PREFIX)
    ) {
      const reason = getIntentionalSleepReason(trimmedComment);
@@ -405337,7 +405781,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  const MAX_INTENTIONAL_SLEEP_SECONDS = 10 * 60;
  // Require a real reason, not a trivial opt-out like "wait".
  const MIN_INTENTIONAL_SLEEP_REASON_LENGTH = 8;
-@@ -1663,17 +1682,91 @@
+@@ -1663,25 +1719,100 @@
    ) {
      return reason.name;
    }
@@ -405430,7 +405874,16 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
    private sedEditPreviewFailed = false;
  
    constructor(
-@@ -1702,21 +1795,28 @@
+     private readonly config: Config,
+     params: ShellToolParams,
++    private readonly session: ShellToolSession,
+   ) {
+     super(params);
+   }
+ 
+   private getSedEditInfo(): SedEditInfo | null {
+     if (
+@@ -1702,21 +1833,28 @@
        return filePath;
      }
      const cwd = this.params.directory || this.config.getTargetDir();
@@ -405466,7 +405919,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          priorReadResult.type,
        );
      }
-@@ -1772,43 +1872,48 @@
+@@ -1772,43 +1910,48 @@
        newContent: edit.newContent,
        diffStat,
      };
@@ -405526,7 +405979,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    private waitForSedOperation<T>(
      operation: () => Promise<T>,
-@@ -1844,17 +1949,21 @@
+@@ -1844,17 +1987,21 @@
            reject(err);
          },
        );
@@ -405549,7 +406002,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          () => this.prepareSedEdit(sedInfo),
          signal,
        );
-@@ -1863,34 +1972,36 @@
+@@ -1863,34 +2010,36 @@
        if (err instanceof SedEditCancelledError) {
          return this.sedEditCancelledResult(signal, effectiveTimeout);
        }
@@ -405590,7 +406043,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      if (
        this.preparedSedEdit?.filePath === edit.filePath &&
-@@ -1902,13 +2013,13 @@
+@@ -1902,13 +2051,13 @@
        };
      }
  
@@ -405605,7 +406058,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      const display = this.makeSedEditDisplay(edit);
      let fileHistoryBackupRecorded = false;
-@@ -1971,13 +2082,13 @@
+@@ -1971,13 +2120,13 @@
            `file read cache recordWrite failed for sed edit ${edit.filePath}: ${getErrorMessage(err)}`,
          );
          // Non-fatal: a future read can refresh the cache from disk.
@@ -405620,7 +406073,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        if (err instanceof SedEditCancelledError) {
          return this.sedEditCancelledResult(signal, effectiveTimeout);
        }
-@@ -1997,13 +2108,13 @@
+@@ -1997,13 +2146,13 @@
            message = `No space left on device while writing sed edit to file: ${edit.filePath} (${err.code})`;
          } else if (err.code === 'EISDIR') {
            type = ToolErrorType.TARGET_IS_DIRECTORY;
@@ -405635,7 +406088,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
    getDescription(): string {
      let description = `${this.params.command}`;
      // append optional [in directory]
-@@ -2209,18 +2320,23 @@
+@@ -2209,18 +2358,23 @@
      signal: AbortSignal,
      updateOutput?: (output: ToolResultDisplay) => void,
      shellExecutionConfig?: ShellExecutionConfig,
@@ -405661,7 +406114,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      if (this.params.is_background) {
        return this.executeBackground(signal, shellExecutionConfig);
-@@ -2270,19 +2386,20 @@
+@@ -2270,19 +2424,20 @@
        if (this.preparedSedEdit) {
          debugLogger.debug('executing simulated sed edit', {
            command: this.params.command,
@@ -405689,7 +406142,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          { command: this.params.command },
        );
      }
-@@ -2726,68 +2843,97 @@
+@@ -2726,68 +2881,97 @@
        result.aborted &&
        getShellAbortReasonKind(combinedSignal.reason) === 'background';
      const timeoutSummary = wasTimeout
@@ -405816,7 +406269,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // span the entire amended commit (the amended commit's parent
        // is the original's parent, so diffing against it lumps both
        // commits' worth of changes). Detect the flag so
-@@ -2875,13 +3021,13 @@
+@@ -2875,13 +3059,13 @@
      // The pre-existing debug snapshot is captured here (pre-truncation,
      // pre-hint); both subsequent steps APPEND to it rather than
      // replacing, so all information accumulates rather than being lost
@@ -405831,7 +406284,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
            ? `${timeoutSummary}\n${result.output}`
            : result.output;
        } else {
-@@ -2902,106 +3048,51 @@
+@@ -2902,106 +3086,51 @@
          }
          // If output is empty and command succeeded (code 0, no error/signal/abort),
          // returnDisplayMessage will remain empty, which is fine.
@@ -405882,7 +406335,8 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 -    // output). The hint is process metadata about the command, not
 -    // command output, so it belongs outside the truncation envelope.
      const longRunHint = shouldAppendLongRunHint
-       ? buildLongRunningForegroundHint(elapsedMs)
+-      ? buildLongRunningForegroundHint(elapsedMs)
++      ? buildLongRunningForegroundHint(elapsedMs, this.session.interactionMode)
        : null;
      if (longRunHint) {
 -      if (typeof llmContent === 'string') {
@@ -405958,7 +406412,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // shellExecutionService.ts); non-zero exits leave it null. Real
      // spawn failures (ENOENT, permission denied) typically resolve in
      // <1s, so the elapsed >= threshold + spawn-error combination is
-@@ -3012,46 +3103,44 @@
+@@ -3012,46 +3141,44 @@
      //
      // Use a `---` divider line so downstream consumers of
      // `error.message` (firePostToolUseFailureHook, telemetry grouping,
@@ -406024,7 +406478,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Foreground → background promote handler. Called when the foreground
-@@ -3073,13 +3162,13 @@
+@@ -3073,13 +3200,13 @@
    private async handlePromotedForeground(
      result: ShellExecutionResult,
      cwd: string,
@@ -406039,7 +406493,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      const outputDir = path.join(
        this.config.storage.getProjectTempDir(),
        'background-shells',
-@@ -3548,14 +3637,16 @@
+@@ -3548,14 +3675,16 @@
      ].join('\n');
  
      debugLogger.debug(
@@ -406057,7 +406511,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Background-execution path: spawn the command into a managed registry
-@@ -3564,13 +3655,13 @@
+@@ -3564,13 +3693,13 @@
     * AbortController; the registry's terminal status is set when the process
     * exits. Returns immediately so the agent's turn isn't blocked.
     */
@@ -406072,7 +406526,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // the post-command attribution path — there's no clean place to
      // hook pre/post-HEAD comparison and `git notes` writes between
      // the early `Background shell started` return and the eventual
-@@ -3581,16 +3672,19 @@
+@@ -3581,16 +3710,19 @@
      //
      // Use the broader `hasCommit` flag rather than `attributableInCwd`:
      // `cd /elsewhere && git commit` should still be refused even
@@ -406096,7 +406550,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      }
      // Strip a single bare trailing `&` (the bash background operator) before
      // spawn: bash treats it as background-detach, exits the wrapper
-@@ -3764,21 +3858,30 @@
+@@ -3764,21 +3896,30 @@
          endStreamThenSettle(outputStream, 'background', shellId, () =>
            registry.fail(shellId, getErrorMessage(err), endTime),
          );
@@ -406125,7 +406579,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 +          harnessText(
 +            `output file: ${outputPath}\n` +
 +              `${statusFileGuidance(outputPath)}\n` +
-+              `To inspect: /tasks (text) or the interactive Background tasks dialog (focus the footer Background tasks pill, then Enter — detail view + live updates). Read the output file directly to view the captured output.`,
++              backgroundShellInspection(this.session.interactionMode),
 +          ),
 +        ),
 +      ),
@@ -406135,7 +406589,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Count the commits between `preHead` (exclusive) and `postHead`
-@@ -3912,13 +4015,13 @@
+@@ -3912,13 +4053,13 @@
     * the Co-authored-by trailer and the git-notes payload).
     */
    private async attachCommitAttribution(
@@ -406150,7 +406604,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // analysis) drops the AI-attribution note. Returns null when the
      // skip is intentional / inherent to the situation (no commit
      // landed, multi-commit chain, attribution toggle off, no tracked
-@@ -4002,13 +4105,15 @@
+@@ -4002,13 +4143,15 @@
      // NOT also delete the per-file attribution data the user might
      // need to amend & retry. `shouldClear` flips to the partial-clear
      // set only on (a) note-write success, or (b) attribution toggle
@@ -406167,7 +406621,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // diff calls are SHA-pinned so a post-commit hook / chained
        // `git tag` / parallel git process moving HEAD between the
        // analysis phase and the note write can't leave the note
-@@ -4028,16 +4133,17 @@
+@@ -4028,16 +4171,17 @@
        // wholesale clear here, but that erased pending unstaged AI
        // edits for files outside the just-failed commit; the
        // smaller-evil trade-off is documented in the finally block.)
@@ -406188,7 +406642,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // Pass the actual model name (e.g. `qwen3-coder-plus`) rather than the
        // co-author display label so the note's `generator` field reflects
        // which model produced the changes — and so generateNotePayload's
-@@ -4179,16 +4285,17 @@
+@@ -4179,16 +4323,17 @@
        const notesCommand = buildGitNotesCommand(note, postHead);
  
        if (!notesCommand) {
@@ -406209,7 +406663,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          return warning;
        }
  
-@@ -4238,23 +4345,41 @@
+@@ -4238,23 +4383,41 @@
          child.on('error', () => {});
        });
  
@@ -406260,7 +406714,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          // without losing attribution data they'd need to reproduce.
        } else {
          debugLogger.debug(
-@@ -4265,15 +4390,17 @@
+@@ -4265,15 +4428,17 @@
          shouldClear = committedAbsolutePaths;
        }
      } catch (err) {
@@ -406281,7 +406735,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // user disabled the toggle). `shouldClear` stays null when the
        // note was skipped (oversized payload, non-zero exit, exception)
        // so the user can amend & retry without their per-file
-@@ -4923,14 +5050,19 @@
+@@ -4923,14 +5088,19 @@
  }
  
  function getShellCommandSequencingGuidance({
@@ -406302,7 +406756,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        return `- When issuing multiple commands:
    ${independentGuidance}
    - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before run_shell_command for git operations, or git add before git commit), run these operations sequentially instead.
-@@ -4963,21 +5095,26 @@
+@@ -4963,21 +5133,26 @@
        const _exhaustive: never = shell;
        return _exhaustive;
      }
@@ -406332,7 +406786,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
  
  **Usage notes**:
-@@ -5036,25 +5173,28 @@
+@@ -5036,25 +5211,29 @@
      }
    }
  }
@@ -406350,25 +406804,26 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 -
 -  constructor(private readonly config: Config) {
 +  /**
-+   * @param declaresTaskStop whether the registry this tool is built in also
-+   *   holds `task_stop`, which decides whether the description may name it.
++   * @param session what the session this tool is built in offers beside
++   *   it, which decides what the tool's texts may name: `task_stop` and
++   *   the Monitor tool only where its registry declares them.
 +   */
 +  constructor(
 +    private readonly config: Config,
-+    declaresTaskStop: boolean,
++    private readonly session: ShellToolSession,
 +  ) {
      super(
        ShellTool.Name,
        ToolDisplayNames.SHELL,
 -      getShellToolDescription(),
-+      getShellToolDescription(declaresTaskStop),
++      getShellToolDescription(session.declaredTools.has(ToolNames.TASK_STOP)),
        Kind.Execute,
        {
          type: 'object',
          properties: {
            command: {
              type: 'string',
-@@ -5078,73 +5218,93 @@
+@@ -5078,76 +5257,97 @@
              type: 'string',
              description:
                '(OPTIONAL) The absolute path of the directory to run the command in. If not provided, the project root directory is used. Must be a directory within the workspace and must already exist.',
@@ -406469,11 +406924,16 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 +        );
        }
      }
-     // Sleep interception: block sleep >= 2s in foreground, suggest Monitor.
+-    // Sleep interception: block sleep >= 2s in foreground, suggest Monitor.
++    // Sleep interception: block sleep >= 2s in foreground, suggest Monitor
++    // where the registry declares it.
      // Strip shell wrappers first so `bash -c 'sleep 5'` / `sh -c '...'` etc.
      // cannot route around the check by hiding the foreground sleep inside a
      // `-c` script. This matches every other sensitive check in this file
-@@ -5155,26 +5315,46 @@
+     // (directory, read-only, command-root extraction, etc.).
+     if (!params.is_background) {
+       const sleepPattern = detectBlockedSleepPatternDetails(strippedCommand);
+@@ -5155,27 +5355,49 @@
          const intentionalSleepGuidance =
            sleepPattern.intentionalSleepRejection ??
            (sleepPattern.isStandalone
@@ -406506,7 +406966,9 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 +            harnessText(
 +              '. ' +
 +                'Run blocking commands in the background with is_background: true. ' +
-+                'For streaming events (watching logs, polling APIs), use the Monitor tool. ' +
++                (this.session.declaredTools.has(ToolNames.MONITOR)
++                  ? 'For streaming events (watching logs, polling APIs), use the Monitor tool. '
++                  : '') +
 +                intentionalSleepGuidance,
 +            ),
 +          ),
@@ -406519,13 +406981,15 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
    protected createInvocation(
      params: ShellToolParams,
 -  ): ToolInvocation<ShellToolParams, ToolResult> {
+-    return new ShellToolInvocation(this.config, params);
 +  ): ToolInvocation<ShellToolParams, AuthoredToolResult> {
-     return new ShellToolInvocation(this.config, params);
++    return new ShellToolInvocation(this.config, params, this.session);
    }
  
    override toAutoClassifierInput(
      params: ShellToolParams,
    ): Record<string, unknown> {
+     // The full command is required for safety classification — do not redact.
 diff --git a/packages/core/src/tools/skill.ts b/packages/core/src/tools/skill.ts
 --- a/packages/core/src/tools/skill.ts
 +++ b/packages/core/src/tools/skill.ts
@@ -406634,6 +407098,36 @@ diff --git a/packages/core/src/tools/team-plan-approval.test.ts b/packages/core/
 diff --git a/packages/core/src/tools/toAutoClassifierInput.test.ts b/packages/core/src/tools/toAutoClassifierInput.test.ts
 --- a/packages/core/src/tools/toAutoClassifierInput.test.ts
 +++ b/packages/core/src/tools/toAutoClassifierInput.test.ts
+@@ -28,13 +28,13 @@
+   } as unknown as Config;
+ }
+ 
+ // EditTool ────────────────────────────────────────────────────────────────
+ 
+ describe('EditTool.toAutoClassifierInput', () => {
+-  const tool = new EditTool(minimalConfig());
++  const tool = new EditTool(minimalConfig(), 'interactive');
+ 
+   it('truncates old_string and new_string to 300 chars and reports line delta + truncation flags', () => {
+     // 300-char window (raised from 80 in PR #4151 review feedback) so the
+     // classifier has enough headroom to spot a malicious registry / shell
+     // / env line hidden behind a benign-looking prefix for
+     // out-of-workspace edits (in-workspace edits take the acceptEdits
+@@ -76,13 +76,13 @@
+   });
+ });
+ 
+ // WriteFileTool ──────────────────────────────────────────────────────────
+ 
+ describe('WriteFileTool.toAutoClassifierInput', () => {
+-  const tool = new WriteFileTool(minimalConfig());
++  const tool = new WriteFileTool(minimalConfig(), 'interactive');
+ 
+   it('reports byte count and a 300-char content preview', () => {
+     // Raised from 80 → 300 chars in PR #4151 review feedback — same
+     // rationale as EditTool: out-of-workspace writes need enough
+     // headroom for the classifier to spot a hostile payload after a
+     // benign prefix.
 @@ -109,13 +109,16 @@
    });
  });
@@ -406642,10 +407136,10 @@ diff --git a/packages/core/src/tools/toAutoClassifierInput.test.ts b/packages/co
  
  describe('ShellTool.toAutoClassifierInput', () => {
 -  const tool = new ShellTool(minimalConfig({ getTargetDir: () => '/cwd' }));
-+  const tool = new ShellTool(
-+    minimalConfig({ getTargetDir: () => '/cwd' }),
-+    true,
-+  );
++  const tool = new ShellTool(minimalConfig({ getTargetDir: () => '/cwd' }), {
++    declaredTools: new Set(['task_stop', 'monitor']),
++    interactionMode: 'interactive',
++  });
  
    it('forwards the full command — no redaction (needed for safety judgement)', () => {
      const result = tool.toAutoClassifierInput({
@@ -407867,7 +408361,7 @@ new file mode 100644
 +    (key) => {
 +      const config = {} as Config;
 +      expect(() =>
-+        new EditTool(config).build({
++        new EditTool(config, 'interactive').build({
 +          file_path: '/tmp/example',
 +          old_string: 'old',
 +          new_string: 'new',
@@ -407875,7 +408369,7 @@ new file mode 100644
 +        }),
 +      ).toThrow(key);
 +      expect(() =>
-+        new WriteFileTool(config).build({
++        new WriteFileTool(config, 'interactive').build({
 +          file_path: '/tmp/example',
 +          content: 'text',
 +          [key]: true,
@@ -410414,7 +410908,49 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
  import { clearAutoMemoryRootCache } from '../memory/paths.js';
  import path from 'node:path';
  import fs from 'node:fs';
-@@ -426,13 +442,24 @@
+@@ -118,13 +134,13 @@
+ 
+     // Now that mockGeminiClientInstance is initialized, set the mock implementation for getGeminiClient
+     mockConfigInternal.getGeminiClient.mockReturnValue(
+       mockGeminiClientInstance,
+     );
+ 
+-    tool = new WriteFileTool(mockConfig);
++    tool = new WriteFileTool(mockConfig, 'interactive');
+ 
+     // Reset mocks before each test
+     mockConfigInternal.getApprovalMode.mockReturnValue(ApprovalMode.DEFAULT);
+     mockConfigInternal.setApprovalMode.mockClear();
+     mockConfigInternal.isRecordArtifactEnabled.mockReturnValue(false);
+   });
+@@ -168,12 +184,26 @@
+         'if the file does not exist, then create it',
+       );
+       expect(description).toContain(
+         'With prior-read enforcement enabled, blind overwrites are rejected.',
+       );
+     });
++
++    it('says a person can change the content only where one takes part in the session', () => {
++      const sentence =
++        'The user has the ability to modify `content`. If modified, this will be stated in the response.';
++      expect(new WriteFileTool(mockConfig, 'interactive').description).toMatch(
++        /resolve it against the project root first\.\n\nThe user has the ability to modify `content`\. If modified, this will be stated in the response\.$/,
++      );
++      expect(new WriteFileTool(mockConfig, 'acp').description).toContain(
++        sentence,
++      );
++      const headless = new WriteFileTool(mockConfig, 'headless').description;
++      expect(headless).not.toContain('The user has the ability');
++      expect(headless).toMatch(/resolve it against the project root first\.$/);
++    });
+   });
+ 
+   describe('build', () => {
+     it('should return an invocation for a valid absolute path within root', () => {
+       const params = {
+         file_path: path.join(rootDir, 'test.txt'),
+@@ -426,13 +456,24 @@
          /Error checking existing file: Simulated read error for execute/,
        );
        expect(result.error).toEqual({
@@ -410439,7 +410975,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
  
      it('should write a new file and return diff', async () => {
        const filePath = path.join(rootDir, 'execute_new_file.txt');
-@@ -890,39 +917,65 @@
+@@ -890,39 +931,65 @@
      });
  
      it('should include modification message when proposed content is modified', async () => {
@@ -410512,7 +411048,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        const params = {
          file_path: filePath,
          content,
-@@ -1335,19 +1388,24 @@
+@@ -1335,19 +1402,24 @@
        // session can be reconciled.
        expect(attribution!.aiCreated).toBe(true);
  
@@ -410543,7 +411079,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
          CommitAttributionService.getInstance().getFileAttribution(filePath),
        ).toBeUndefined();
  
-@@ -1486,15 +1544,14 @@
+@@ -1486,15 +1558,14 @@
        // `requireFullRead` (aligning with Claude Code), the truncated
        // read is enough to clear enforcement; the mtime/size drift
        // check remains the gate that distinguishes "model saw current
@@ -410561,7 +411097,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        // A future cache-entry schema change must update both halves to
        // keep the deadlock-free guarantee end-to-end.
        const filePath = path.join(rootDir, 'enforce-truncated-full.txt');
-@@ -1629,12 +1686,17 @@
+@@ -1629,12 +1700,17 @@
        // file — we just cannot verify because stat itself failed.
        // EDIT_REQUIRES_PRIOR_READ would imply "definitely not read".
        expect(result.error?.type).toBe(
@@ -410579,7 +411115,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        statSpy.mockRestore();
        fs.unlinkSync(filePath);
      });
-@@ -1686,12 +1748,357 @@
+@@ -1686,12 +1762,357 @@
        } finally {
          mockConfigInternal.getFileReadCacheDisabled = original;
          fs.unlinkSync(filePath);
@@ -410940,7 +411476,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
 diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/write-file.ts
 --- a/packages/core/src/tools/write-file.ts
 +++ b/packages/core/src/tools/write-file.ts
-@@ -1,35 +1,56 @@
+@@ -1,47 +1,69 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -410998,7 +411534,20 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
    needsUtf8Bom,
    detectLineEnding,
  } from '../services/fileSystemService.js';
-@@ -88,27 +109,41 @@
+ import type { LineEnding } from '../services/fileSystemService.js';
+ import { makeRelative, shortenPath, unescapePath } from '../utils/paths.js';
+ import { getErrorMessage, isNodeError } from '../utils/errors.js';
+ import { createPatchSmart, getDiffStat } from './diffOptions.js';
+ import { checkPriorRead, StructuredToolError } from './priorReadEnforcement.js';
+ import { ToolNames, ToolDisplayNames } from './tool-names.js';
++import type { SystemPromptInteractionMode } from '../core/prompts.js';
+ import type {
+   ModifiableDeclarativeTool,
+   ModifyContext,
+ } from './modifiable-tool.js';
+ import { logFileOperation } from '../telemetry/loggers.js';
+ import { FileOperationEvent } from '../telemetry/types.js';
+@@ -88,27 +110,41 @@
    file_path: string;
  
    /**
@@ -411049,7 +411598,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      params: WriteFileToolParams,
    ) {
      super(params);
-@@ -272,15 +307,15 @@
+@@ -272,15 +308,15 @@
          }
        },
      };
@@ -411068,7 +411617,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      let useBOM = false;
      let detectedEncoding: string | undefined;
      let detectedLineEnding: LineEnding | undefined;
-@@ -291,18 +326,22 @@
+@@ -291,18 +327,22 @@
        content,
        this.config.getProjectRoot(),
      );
@@ -411092,7 +411641,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  
      // Prior-read enforcement runs BEFORE we read the existing file:
      //  - rejecting a write should not first slurp the entire file
-@@ -318,22 +357,20 @@
+@@ -318,22 +358,20 @@
      // silently overwritten.
      if (!this.config.getFileReadCacheDisabled()) {
        const decision = await checkPriorRead(
@@ -411121,7 +411670,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      if (fileExists) {
        try {
          const fileInfo = await this.config
-@@ -355,23 +392,26 @@
+@@ -355,23 +393,26 @@
            fileExists = false;
          } else {
            const error = {
@@ -411158,7 +411707,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  
      // Post-read freshness re-check. Closes the TOCTOU window between
      // the pre-read checkPriorRead above and the readTextFile that
-@@ -381,27 +421,24 @@
+@@ -381,27 +422,24 @@
      // exactly that.
      if (fileExists && !this.config.getFileReadCacheDisabled()) {
        const postDecision = await checkPriorRead(
@@ -411192,7 +411741,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      if (!fileExists) {
        const userEncoding = this.config.getDefaultFileEncoding();
        if (userEncoding === FileEncoding.UTF8_BOM) {
-@@ -475,27 +512,27 @@
+@@ -475,27 +513,27 @@
          // true after readTextFile), ENOENT here means the original
          // target disappeared between the post-read check and now —
          // reject rather than fall through and silently re-create the
@@ -411229,7 +411778,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      // Create parent directories AFTER the pre-write enforcement
      // check passes. Doing it before would leak intermediate
      // directories on the failure path (rejected new-file writes
-@@ -517,13 +554,13 @@
+@@ -517,13 +555,13 @@
          },
        });
  
@@ -411244,7 +411793,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
            content,
          );
        }
-@@ -556,26 +593,32 @@
+@@ -556,26 +594,32 @@
          currentContentForDiff,
          content,
          'Original',
@@ -411284,7 +411833,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
        }
        const artifact = buildWorkspaceArtifactMetadata(
          this.config,
-@@ -614,54 +657,74 @@
+@@ -614,54 +658,74 @@
          fileName,
          originalContent,
          newContent: content,
@@ -411376,7 +411925,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  
  /**
   * Kept for the cross-package contract test in `workspace-file-read.test.ts`:
-@@ -764,13 +827,13 @@
+@@ -764,24 +828,37 @@
  }
  
  /**
@@ -411389,9 +411938,36 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  {
    static readonly Name: string = ToolNames.WRITE_FILE;
  
-   constructor(private readonly config: Config) {
+-  constructor(private readonly config: Config) {
++  /**
++   * @param interactionMode how a person takes part in the session this tool
++   *   is built in (`resolveInteractionMode`). Only a person can change
++   *   `content` before the write runs, so the description says one can only
++   *   where one takes part.
++   */
++  constructor(
++    private readonly config: Config,
++    interactionMode: SystemPromptInteractionMode,
++  ) {
      super(
-@@ -790,61 +853,86 @@
+       WriteFileTool.Name,
+       ToolDisplayNames.WRITE_FILE,
+-      `Writes content to a specified file in the local filesystem. A request to create or generate a file does not establish that the target path is new. Unless the target's absence or current text contents have already been established in this session, you MUST use the ${ToolNames.READ_FILE} tool first; if the file does not exist, then create it. With prior-read enforcement enabled, blind overwrites are rejected. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first.
++      `Writes content to a specified file in the local filesystem. A request to create or generate a file does not establish that the target path is new. Unless the target's absence or current text contents have already been established in this session, you MUST use the ${ToolNames.READ_FILE} tool first; if the file does not exist, then create it. With prior-read enforcement enabled, blind overwrites are rejected. The file_path argument MUST be an absolute path. Always construct it by combining the project root with the file's relative path (e.g. project root '/path/to/project/' + relative 'foo/bar.txt' = '/path/to/project/foo/bar.txt'). If the user provides a relative path, resolve it against the project root first.${
++        interactionMode === 'headless'
++          ? ''
++          : `
+ 
+-The user has the ability to modify \`content\`. If modified, this will be stated in the response.`,
++The user has the ability to modify \`content\`. If modified, this will be stated in the response.`
++      }`,
+       Kind.Edit,
+       {
+         properties: {
+           file_path: {
+             description:
+               "The absolute path to the file to write to (e.g., '/home/user/project/file.txt'). Relative paths are not supported.",
+@@ -790,61 +867,86 @@
            content: {
              description: 'The content to write to the file.',
              type: 'string',
@@ -411487,7 +412063,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
    override toAutoClassifierInput(
      params: WriteFileToolParams,
    ): Record<string, unknown> {
-@@ -884,18 +972,16 @@
+@@ -884,18 +986,16 @@
        },
        getProposedContent: async (params: WriteFileToolParams) => params.content,
        createUpdatedParams: (

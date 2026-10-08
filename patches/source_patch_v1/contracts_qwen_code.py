@@ -1418,9 +1418,15 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         "states the turn limit, that a turn reaching it is refused and asked for again, and what ends the session",
         label=label,
     )
-    # The tool descriptions tell the same facts: a child's budget is its own,
-    # as many turns as the parent's, and the shell names `task_stop` only in a
-    # registry that holds it -- this deployment's never does.
+    # The tool texts tell the same facts, and nothing the session does not
+    # have: a child's budget is its own, as many turns as the parent's; the
+    # shell names `task_stop` and the Monitor tool only where its registry
+    # declares them -- this deployment's declares neither -- and `/tasks`
+    # only where a person can still send a command and the Background tasks
+    # dialog only in the interactive terminal; edit and write_file say a
+    # person can change what they write only where one takes part. How a
+    # person takes part is the one predicate `resolveInteractionMode`, and a
+    # headless run, this deployment's, has none of these.
     agent_tool = "packages/core/src/tools/agent/agent.ts"
     require_text(
         state,
@@ -1430,28 +1436,72 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
     )
     forbid_text(state, agent_tool, "It runs under the same turn budget you do", label=label)
     forbid_text(state, agent_tool, "Use liberally", label=label)
+    shell_tool = "packages/core/src/tools/shell.ts"
     _require_all(
         state,
-        "packages/core/src/tools/shell.ts",
+        shell_tool,
         (
             "function getShellToolDescription(declaresTaskStop: boolean): string {",
             "${declaresTaskStop ? `To stop a background command started by this tool, use \\`${ToolNames.TASK_STOP}\\` when a task id is available. ` : ''}",
-            "      getShellToolDescription(declaresTaskStop),",
+            "export interface ShellToolSession {",
+            "      getShellToolDescription(session.declaredTools.has(ToolNames.TASK_STOP)),",
+            "(this.session.declaredTools.has(ToolNames.MONITOR)\n"
+            "                  ? 'For streaming events (watching logs, polling APIs), use the Monitor tool. '\n"
+            "                  : '') +",
+            "    ...(interactionMode === 'headless' ? [] : ['/tasks (text)']),",
+            "    ...(interactionMode === 'interactive'",
+            "backgroundShellInspection(this.session.interactionMode),",
+            "    interactionMode === 'headless'\n      ? `in the on-disk output file.`",
+            "? buildLongRunningForegroundHint(elapsedMs, this.session.interactionMode)",
+            "return new ShellToolInvocation(this.config, params, this.session);",
         ),
         label=label,
     )
+    for retired in (
+        "(text, any mode)",
+        "work in every mode.",
+        "To inspect: /tasks (text) or the interactive Background tasks dialog (focus the footer Background tasks pill, then Enter — detail view + live updates). Read the output file directly",
+    ):
+        forbid_text(state, shell_tool, retired, label=label)
+    for path, field in (
+        ("packages/core/src/tools/edit.ts", "the \\`new_string\\` content"),
+        ("packages/core/src/tools/write-file.ts", "\\`content\\`"),
+    ):
+        tool_source = _require_all(state, path, (
+            "    interactionMode: SystemPromptInteractionMode,\n  ) {",
+            "        interactionMode === 'headless'\n          ? ''",
+        ), label=label)
+        _require(
+            tool_source.count(f"The user has the ability to modify {field}.") == 1,
+            f"{label}: {path} does not say a person can change its text exactly once, behind the session's predicate",
+        )
     config_source = _source(state, "packages/core/src/config/config.ts", label=label)
     _require(
-        config_source.count("registry.getAllToolNames().includes(ToolNames.TASK_STOP),") == 2
-        and "new ShellTool(this)" not in config_source,
-        f"{label}: a shell tool is built without asking its registry whether it holds task_stop",
+        config_source.count("declaredTools: new Set(registry.getAllToolNames()),") == 2
+        and config_source.count("return new ShellTool(this, {") == 2
+        and config_source.count("new EditTool(this, resolveInteractionMode(this))") == 2
+        and config_source.count("new WriteFileTool(this, resolveInteractionMode(this))") == 1
+        and "new ShellTool(this)" not in config_source
+        and "new EditTool(this)" not in config_source
+        and "new WriteFileTool(this)" not in config_source,
+        f"{label}: a tool is built without the session facts its texts depend on",
     )
-    require_text(
-        state,
-        "packages/core/src/tools/shell.test.ts",
-        "names task_stop only when the session declares it",
-        label=label,
-    )
+    for test, cases in (
+        ("packages/core/src/tools/shell.test.ts", (
+            "names task_stop only when the session declares it",
+            "suggests the Monitor tool for a foreground sleep only where the registry declares it",
+            "names only the ways the session has of inspecting a background shell",
+            "names only the ways the session has of inspecting a long run in the background",
+        )),
+        ("packages/core/src/tools/edit.test.ts", (
+            "says a person can change new_string only where one takes part in the session",
+        )),
+        ("packages/core/src/tools/write-file.test.ts", (
+            "says a person can change the content only where one takes part in the session",
+        )),
+    ):
+        for case in cases:
+            require_text(state, test, case, label=label)
     for case in (
         "states every budget once, as a number of bytes, tokens or turns, and nothing else as one",
         "refuses a prompt that states a budget twice or one its ## Context section does not declare",
