@@ -2279,7 +2279,7 @@ def _validate_compaction_event_after(state: State) -> None:
         "sdkValuesJson: summaryResult.sdkValuesJson,",
         "sdkValuesJson: partial.sdkValuesJson,",
         "accounting.newTokenCount = newTokenCount;",
-        "snapshotBytes: acceptance.snapshot",
+        "snapshotBytes: declaredSnapshotBytes(summaryResult.functionCalls),",
         "afterCommit: async () =>",
         "renderedSnapshot = composed[0]!",
     ), label=label)
@@ -4798,7 +4798,14 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const { opening, closing } = renderAuthoredStateSnapshot(",
             "export function stateSnapshotText(snapshot: StateSnapshot): string {",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
-            "(section) => !String(record[section]).trim(),",
+            # Whether a section holds text is decided once, in acceptance; the
+            # measure a draw's record carries reads the declaration's shape
+            # alone, so the native certifier that recomputes it never decides
+            # it again.
+            "    (section) => !snapshot[section].trim(),",
+            "function declaredStateSnapshot(",
+            "export function declaredSnapshotBytes(",
+            "  const declared = declaredStateSnapshot(calls);\n  if (declared.lack) {",
             # A draw is refused for one of two things, and says which: it
             # declared no complete snapshot, or it declared one past the bound,
             # which it keeps, rendered, because that is what the draw produced.
@@ -6115,8 +6122,24 @@ def _validate_compaction_budget_after(state: State) -> None:
             "  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,",
             "status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],",
             "sdkValuesJson: summaryResult.sdkValuesJson,",
-            "          : acceptance.refused === 'over_bound'\n            ? acceptance.bytes",
+            "        snapshotBytes: declaredSnapshotBytes(summaryResult.functionCalls),",
         ),
+        label=label,
+    )
+    # The client's replay measures a draw as its record does, by the
+    # declaration's shape, and decides nothing about its sections.
+    evidence = "packages/core/src/core/model-response-evidence.ts"
+    require_text(
+        state,
+        evidence,
+        "    const snapshotBytes = declaredSnapshotBytes(",
+        label=label,
+    )
+    forbid_text(state, evidence, "acceptStateSnapshot(", label=label)
+    require_text(
+        state,
+        "packages/core/src/services/state-snapshot.test.ts",
+        "measures a declaration whose every section holds %s, whatever acceptance makes of it",
         label=label,
     )
     for retired in (

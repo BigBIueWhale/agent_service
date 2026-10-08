@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `19824b51959f0d947127b0950bda296bb1c1f19a9c723c07fc67d08d8121582d`
+- Review-diff SHA-256: `ada0eaaca8d2e5e73561dcac00c563c84600a9ca21c1210f891edd2d6a8259fb`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `2911cd1479e0a094373bd757f847a72203ddd4299217ca4f5c43ac9e743054a4`
+- Transformer-manifest SHA-256: `150af378753a651bbbaf3d1b3db108c2afb711172418bfaf7c3505f7e14047fd`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -398,7 +398,11 @@ request count; its `sdkValuesJson` must equal the values decoded from that
 operation's recorded response bodies, in order, so the draw is bound to the
 bytes the provider sent. Every draw states its measured candidate token
 count and snapshot byte count, using null when that measurement was not reached.
-Rejected draws retain these fields alongside the final draw. The committed
+The snapshot byte count is the declaration's, measured by its shape alone -- one
+call whose arguments are the sections, each a string -- whatever acceptance
+then makes of it (`declaredSnapshotBytes`): whether a section holds text is
+decided once, in acceptance, so neither certifier decides it again by its own
+notion of whitespace. Rejected draws retain these fields alongside the final draw. The committed
 post-compaction history has exact part boundaries and filled retained inputs.
 The runtime installs that history and stores it once, as the canonical chat
 checkpoint's `compressedHistory`; a canonical compaction record that also

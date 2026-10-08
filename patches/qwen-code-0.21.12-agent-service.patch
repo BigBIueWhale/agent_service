@@ -241307,7 +241307,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
      errorType: ToolErrorType.EXECUTION_FAILED,
      executionStatus: 'not_started',
    };
-@@ -328,58 +739,199 @@
+@@ -328,58 +739,207 @@
  
  export type ServerGeminiErrorEvent = {
    type: GeminiEventType.Error;
@@ -241381,7 +241381,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  functionCalls: readonly FunctionCall[];
 +  /** Rendered candidate request size, or null when no count was obtained. */
 +  newTokenCount: number | null;
-+  /** Measured snapshot bytes, or null when no complete snapshot was declared. */
++  /**
++   * The bytes the snapshot the draw declared renders to
++   * (`declaredSnapshotBytes`), or null when it declared none whose every
++   * section is a string; whether it was accepted is not this measure's.
++   */
 +  snapshotBytes: number | null;
    /**
 -   * The compression call produced a summary, but the output hit
@@ -241428,7 +241432,11 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  functionCalls: readonly FunctionCall[];
 +  /** Rendered candidate request size, or null when no count was obtained. */
 +  newTokenCount: number | null;
-+  /** Measured snapshot bytes, or null when no complete snapshot was declared. */
++  /**
++   * The bytes the snapshot the draw declared renders to
++   * (`declaredSnapshotBytes`), or null when it declared none whose every
++   * section is a string; whether it was accepted is not this measure's.
++   */
 +  snapshotBytes: number | null;
 +  /**
 +   * Calls the candidate's output limit stopped, exactly as served -- a
@@ -241544,7 +241552,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +}
 +
  export type ServerGeminiChatCompressedEvent = {
-@@ -387,23 +939,117 @@
+@@ -387,23 +947,117 @@
    value: ChatCompressionInfo | null;
  };
  
@@ -241667,7 +241675,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    // (tests, fixtures) stay valid. Real emissions in client.ts always populate
    // it so downstream consumers can surface a concrete reason to the user.
    value?: {
-@@ -451,25 +1097,27 @@
+@@ -451,25 +1105,27 @@
  
  // The original union type, now composed of the individual types
  export type ServerGeminiStreamEvent =
@@ -241697,7 +241705,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
    | ServerGeminiRetryEvent;
  
  function getDisplayContentParts(
-@@ -527,25 +1175,63 @@
+@@ -527,25 +1183,63 @@
      req: PartListUnion,
      signal: AbortSignal,
    ): AsyncGenerator<ServerGeminiStreamEvent> {
@@ -241775,7 +241783,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
          }
  
          // Handle the new RETRY event: clear accumulated state from the
-@@ -557,26 +1243,21 @@
+@@ -557,26 +1251,21 @@
            yield {
              type: GeminiEventType.Retry,
              retryInfo: streamEvent.retryInfo,
@@ -241812,7 +241820,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            };
            continue;
          }
-@@ -591,8 +1272,18 @@
+@@ -591,8 +1280,18 @@
              type: GeminiEventType.ChatCompressed,
              value: streamEvent.info,
            };
@@ -241831,7 +241839,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +
          // Assuming other events are chunks with a `value` property
          const resp = streamEvent.value as GenerateContentResponse;
-@@ -656,6 +1347,12 @@
+@@ -656,6 +1355,12 @@
              this.pendingCitations.clear();
            }
  
@@ -241844,7 +241852,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
            this.finishReason = finishReason;
            yield {
              type: GeminiEventType.Finished,
-@@ -664,6 +1361,13 @@
+@@ -664,6 +1369,13 @@
                usageMetadata: resp.usageMetadata,
              },
            };
@@ -259766,11 +259774,11 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/core/src/services/chatCompressionService.ts
 --- a/packages/core/src/services/chatCompressionService.ts
 +++ b/packages/core/src/services/chatCompressionService.ts
-@@ -1,3 +1,20 @@
+@@ -1,209 +1,291 @@
 +import {
 +  acceptStateSnapshot,
 +  compactionRequestDirective,
-+  stateSnapshotText,
++  declaredSnapshotBytes,
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  STATE_SNAPSHOT_SECTIONS,
 +  stateSnapshotTool,
@@ -259787,7 +259795,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
  /**
   * @license
   * Copyright 2025 Google LLC
-@@ -5,205 +22,270 @@
+  * SPDX-License-Identifier: Apache-2.0
   */
  
 -import type { Content, GenerateContentConfig } from '@google/genai';
@@ -260572,7 +260580,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        failure: null,
        };
      }
-@@ -512,616 +582,890 @@
+@@ -512,616 +582,886 @@
          // client.ts) — keep it consistent.
          const merged = result?.getAdditionalContext();
          if (merged && merged.trim().length > 0) {
@@ -261500,11 +261508,7 @@ diff --git a/packages/core/src/services/chatCompressionService.ts b/packages/cor
 +        sdkValuesJson: summaryResult.sdkValuesJson,
 +        functionCalls: summaryResult.functionCalls,
 +        newTokenCount: null,
-+        snapshotBytes: acceptance.snapshot
-+          ? tokenizerText(stateSnapshotText(acceptance.snapshot)).bytes
-+          : acceptance.refused === 'over_bound'
-+            ? acceptance.bytes
-+            : null,
++        snapshotBytes: declaredSnapshotBytes(summaryResult.functionCalls),
 +        // A draw its ceiling stopped mid-call made no snapshot, and what it
 +        // had written of one is its own output: kept as served.
 +        incompleteToolCalls: summaryResult.incompleteToolCalls,
@@ -292806,7 +292810,7 @@ diff --git a/packages/core/src/services/shellExecutionService.ts b/packages/core
 diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/src/services/state-snapshot.test.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.test.ts
-@@ -0,0 +1,412 @@
+@@ -0,0 +1,445 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -292818,6 +292822,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +import { convertGeminiToolsToOpenAI } from '../core/openaiContentGenerator/converter.js';
 +import {
 +  acceptStateSnapshot,
++  declaredSnapshotBytes,
 +  renderAuthoredStateSnapshot,
 +  renderStateSnapshot,
 +  stateSnapshotSectionText,
@@ -292831,6 +292836,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +  type StateSnapshot,
 +  type StateSnapshotLack,
 +} from './state-snapshot.js';
++import { tokenizerText } from '../core/tokenLimits.js';
 +
 +/**
 + * `S` at the served window: the most an accepted snapshot may render to.
@@ -292958,6 +292964,37 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 +    expect(
 +      acceptStateSnapshot([call(exact)], SNAPSHOT_BYTES).refusal,
 +    ).toBeUndefined();
++  });
++
++  // A draw's record carries what it declared, measured by its shape alone:
++  // whether a section holds text is acceptance's rule and nobody else's, so
++  // the native certifier, which measures every draw again, never decides it.
++  // Each body is one acceptance refuses, or one that JavaScript's and Rust's
++  // notions of whitespace disagree on; the bytes are the certifier's own for
++  // the same declaration (model_requests.rs).
++  it.each([
++    ['nothing', '', 492, true],
++    ['a space', ' ', 500, true],
++    ['a next-line control', '\u0085', 508, false],
++    ['a byte order mark', '\ufeff', 516, true],
++  ])(
++    'measures a declaration whose every section holds %s, whatever acceptance makes of it',
++    (_case, body, bytes, refused) => {
++      const declared = [call(sections(body))];
++      expect(declaredSnapshotBytes(declared)).toBe(bytes);
++      expect(declaredSnapshotBytes(declared)).toBe(
++        tokenizerText(stateSnapshotText(sections(body))).bytes,
++      );
++      expect(
++        acceptStateSnapshot(declared, SNAPSHOT_BYTES).refused === 'incomplete',
++      ).toBe(refused);
++    },
++  );
++
++  it('measures nothing where no snapshot was declared', () => {
++    expect(declaredSnapshotBytes([])).toBeNull();
++    expect(declaredSnapshotBytes([call(sections(), 'other')])).toBeNull();
++    expect(declaredSnapshotBytes([call({ current_work: 'x' })])).toBeNull();
 +  });
 +
 +  // The structure is carried by the call rather than typed into the text, so
@@ -293222,7 +293259,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/services/state-snapshot.ts
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.ts
-@@ -0,0 +1,406 @@
+@@ -0,0 +1,450 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -293434,20 +293471,25 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +    };
 +
 +/**
-+ * Judge one drawn candidate. The request declared one function and forced it,
-+ * so a response carrying anything else is a response to a different request.
++ * The snapshot one drawn candidate declares: its one call, to the snapshot's
++ * function, with an argument object the schema admits -- every section a
++ * string -- or what it lacks. This is the declaration's shape alone; whether
++ * each section holds text is acceptance's rule, and the measure a draw's
++ * record carries does not depend on it.
 + *
 + * The schema is checked here even though the engine was asked to enforce it:
 + * a client cannot observe whether a constraint it declared was actually
 + * applied, so it verifies the answer it got against the question it asked.
 + */
-+export function acceptStateSnapshot(
-+  calls: readonly FunctionCall[],
-+  maxBytes: number,
-+): StateSnapshotAcceptance {
++function declaredStateSnapshot(calls: readonly FunctionCall[]):
++  | { readonly snapshot: StateSnapshot; readonly lack?: undefined }
++  | {
++      readonly snapshot?: undefined;
++      readonly lack: StateSnapshotLack;
++      readonly refusal: string;
++    } {
 +  if (calls.length !== 1) {
 +    return {
-+      refused: 'incomplete',
 +      refusal: `expected one ${STATE_SNAPSHOT_FUNCTION_NAME} call, received ${calls.length}`,
 +      lack: { kind: 'call_count', calls: calls.length },
 +    };
@@ -293455,7 +293497,6 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +  const [call] = calls;
 +  if (call.name !== STATE_SNAPSHOT_FUNCTION_NAME) {
 +    return {
-+      refused: 'incomplete',
 +      refusal: `called ${String(call.name)} instead of ${STATE_SNAPSHOT_FUNCTION_NAME}`,
 +      lack: { kind: 'other_function' },
 +    };
@@ -293463,7 +293504,6 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +  const args = call.args;
 +  if (!args || typeof args !== 'object' || Array.isArray(args)) {
 +    return {
-+      refused: 'incomplete',
 +      refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} carried no argument object`,
 +      lack: { kind: 'no_arguments' },
 +    };
@@ -293471,14 +293511,58 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +  const schemaError = SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args);
 +  if (schemaError) {
 +    return {
-+      refused: 'incomplete',
 +      refusal: `${STATE_SNAPSHOT_FUNCTION_NAME} arguments ${schemaError}`,
 +      lack: { kind: 'schema' },
 +    };
 +  }
 +  const record = args as Record<string, unknown>;
++  return {
++    snapshot: Object.fromEntries(
++      STATE_SNAPSHOT_SECTIONS.map((section) => [
++        section,
++        String(record[section]),
++      ]),
++    ) as StateSnapshot,
++  };
++}
++
++/**
++ * The bytes the snapshot a draw declared renders to, in the form the served
++ * tokenizer reads, or null when the draw declared none. This is what a
++ * compaction draw's record carries and both certifiers recompute from the
++ * decoded draw: a measure of the declaration's shape alone, so no reader has
++ * to decide, as acceptance does, whether a section holds text.
++ */
++export function declaredSnapshotBytes(
++  calls: readonly FunctionCall[],
++): number | null {
++  const declared = declaredStateSnapshot(calls);
++  return declared.snapshot
++    ? tokenizerText(stateSnapshotText(declared.snapshot)).bytes
++    : null;
++}
++
++/**
++ * Judge one drawn candidate. The request declared one function and forced it,
++ * so a response carrying anything else is a response to a different request.
++ */
++export function acceptStateSnapshot(
++  calls: readonly FunctionCall[],
++  maxBytes: number,
++): StateSnapshotAcceptance {
++  const declared = declaredStateSnapshot(calls);
++  if (declared.lack) {
++    return {
++      refused: 'incomplete',
++      refusal: declared.refusal,
++      lack: declared.lack,
++    };
++  }
++  const { snapshot } = declared;
++  // A section holds text when anything but whitespace is in it; this is the
++  // one place that is decided.
 +  const empty = STATE_SNAPSHOT_SECTIONS.filter(
-+    (section) => !String(record[section]).trim(),
++    (section) => !snapshot[section].trim(),
 +  );
 +  if (empty.length > 0) {
 +    return {
@@ -293487,9 +293571,6 @@ diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/se
 +      lack: { kind: 'empty_sections', sections: empty },
 +    };
 +  }
-+  const snapshot = Object.fromEntries(
-+    STATE_SNAPSHOT_SECTIONS.map((section) => [section, String(record[section])]),
-+  ) as StateSnapshot;
 +  // What the history will carry is the rendered form, its framing included,
 +  // so that is what the bound is measured against, in the form the tokenizer
 +  // reads. A draw that does not fit is refused and redrawn: the generation
@@ -406023,7 +406104,7 @@ diff --git a/packages/core/src/core/model-response-evidence.test.ts b/packages/c
 diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/src/core/model-response-evidence.ts
 --- /dev/null
 +++ b/packages/core/src/core/model-response-evidence.ts
-@@ -0,0 +1,1494 @@
+@@ -0,0 +1,1488 @@
 +import { createHash } from 'node:crypto';
 +import { isDeepStrictEqual } from 'node:util';
 +import type { GenerateContentResponse } from '@google/genai';
@@ -406068,11 +406149,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +import { getResponseText, getResponseThoughtText } from '../utils/partUtils.js';
 +import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
 +import {
-+  acceptStateSnapshot,
 +  compactionRequestDirective,
-+  stateSnapshotText,
++  declaredSnapshotBytes,
 +} from '../services/state-snapshot.js';
-+import { tokenizerText } from './tokenLimits.js';
 +import { REFUSED_ANSWER } from './generation-refusal.js';
 +import { CompressionStatus, compactionDrawKind } from './compression-status.js';
 +import type { CompletedTokenizerCount } from './model-utility-replay.js';
@@ -407078,13 +407157,9 @@ diff --git a/packages/core/src/core/model-response-evidence.ts b/packages/core/s
 +      )
 +    )
 +      failure('compaction draw differs from decoded physical output');
-+    const snapshot = acceptStateSnapshot(
-+      functionCalls as import('@google/genai').FunctionCall[],
-+      Number.MAX_SAFE_INTEGER,
-+    ).snapshot;
-+    const snapshotBytes = snapshot
-+      ? tokenizerText(stateSnapshotText(snapshot)).bytes
-+      : null;
++    const snapshotBytes = declaredSnapshotBytes(
++      functionCalls as Array<import('@google/genai').FunctionCall>,
++    );
 +    if (draw.snapshotBytes !== snapshotBytes)
 +      failure('compaction snapshot size differs from decoded physical output');
 +    this.compactionOperations.delete(draw.operationId);

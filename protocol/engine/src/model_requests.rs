@@ -80,6 +80,13 @@ const SNAPSHOT_ELEMENTS: [&str; 9] = [
     "next_step",
 ];
 
+/// The bytes the snapshot a draw declared renders to, in NFC, or None when it
+/// declared none: one `state_snapshot` call whose arguments are exactly the
+/// sections, each a string. This is the client's `declaredSnapshotBytes`, a
+/// measure of the declaration's shape alone. Whether a section holds text is
+/// the client's acceptance rule, decided there once, and nothing here
+/// restates it, so no notion of whitespace this engine and the client could
+/// read differently decides whether a draw's record is believed.
 fn snapshot_bytes(calls: &[serde_json::Value]) -> Option<usize> {
     let call = calls.first()?.as_object()?;
     if calls.len() != 1 || call.get("name")?.as_str()? != "state_snapshot" {
@@ -93,7 +100,7 @@ fn snapshot_bytes(calls: &[serde_json::Value]) -> Option<usize> {
             .any(|section| {
                 args.get(*section)
                     .and_then(serde_json::Value::as_str)
-                    .is_none_or(|text| text.trim().is_empty())
+                    .is_none()
             })
     {
         return None;
@@ -2842,6 +2849,26 @@ mod tests {
             SNAPSHOT_ELEMENTS[6..].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
         );
         assert_eq!(snapshot_bytes(&calls), Some(expected.len()));
+    }
+
+    /// A declaration is measured by its shape alone, whatever its sections
+    /// hold: nothing, a space, or a character the client's and this engine's
+    /// notions of whitespace disagree on. The bytes are the client's own for
+    /// the same declarations (state-snapshot.test.ts), so a draw the client
+    /// refused for an empty section is believed as it was recorded.
+    #[test]
+    fn a_snapshot_is_measured_by_its_shape_whatever_its_sections_hold() {
+        for (body, bytes) in [("", 492), (" ", 500), ("\u{85}", 508), ("\u{feff}", 516)] {
+            let sections = SNAPSHOT_ELEMENTS
+                .iter()
+                .filter(|section| **section != "all_user_messages")
+                .map(|section| (section.to_string(), json!(body)))
+                .collect::<serde_json::Map<_, _>>();
+            let calls = [json!({"name":"state_snapshot","args":sections})];
+            assert_eq!(snapshot_bytes(&calls), Some(bytes), "{body:?}");
+        }
+        let missing = json!({"name":"state_snapshot","args":{"current_work":"x"}});
+        assert_eq!(snapshot_bytes(&[missing]), None);
     }
     /// A full body whose every byte the fixture attributes to the harness.
     fn harness_full(json: &str) -> serde_json::Value {
