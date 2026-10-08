@@ -198,8 +198,11 @@ that compacts it adds the snapshot's declaration and the directive, counted by
 the startup proof in the shape every compaction request carries them with the
 directive stating the widest ceiling, and a redraw's notice; their sum, 3,026,
 is held within `A` before the first turn, and each compaction's preflight holds
-what its own request adds to the same share, since a request can carry a user's
-`/compress` text or a PreCompact hook's that no startup proof sees. The
+what its own request adds to the same share. Instructions a user's `/compress`
+text or a PreCompact hook would add, which no startup proof sees, state no
+author, so a request carrying them is refused before it is sent; the locked run
+reaches neither, since it interprets no slash command, its task included, takes
+no input after its task, and initializes no hook. The
 startup context is kept whole at the head of every history a compaction builds
 rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof bounds the frame around a compacted
@@ -733,7 +736,12 @@ in the record's place as a `session_recording_degraded` record of reason
 `refused_record`: the stream admits no record its contract refuses, so this is
 where the record a refusal is about is kept, at its place, and nothing after it
 is judged against it. A storage failure is reason `write_failed` and keeps
-upstream's words. No further request is sent; what follows on the stream
+upstream's words. An ACP session tells its client every stop as `write_failed`,
+a refusal included: its notification, the bridge that relays it and the SDK that
+reads it know that one reason. The locked run never builds an ACP session -- it
+runs headless, `--input-format=text --output-format=stream-json` -- so that
+cannot occur there; telling an ACP client a refusal as one would add a reason
+to all three. No further request is sent; what follows on the stream
 settles the work that was in flight, and each stop is told once. A compaction
 in flight when the recording stops commits nothing and writes no checkpoint:
 its record, status `COMPRESSION_FAILED_RECORDING_STOPPED`, claiming only the

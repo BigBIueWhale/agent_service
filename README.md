@@ -288,9 +288,12 @@ notice of why the draw before it was refused, at most 313 bytes framed in 61,
 holds it: 46 tokens are left for the directive, the declaration and the notices
 to grow into before the startup proof refuses, naming one more share as the
 move. `floor(3W/256)` first reaches 3,026 at a 258,219-token window. Each
-compaction's preflight holds what its own request adds to the same share,
-because that request can carry instructions the startup proof cannot see, a
-user's `/compress` text and a PreCompact hook's.
+compaction's preflight holds what its own request adds to the same share. The
+startup proof cannot see instructions a user's `/compress` text or a PreCompact
+hook would add to that request, but they state no author, so a request carrying
+them is refused before it is sent, naming where they are; and the locked run
+reaches neither: it interprets no slash command, its task included, takes no
+input after its task, and initializes no hook.
 
 `M` is a declared magnitude and openly a policy: it is the most any
 single block placed inline may be — one tool result, one `read_file` page, one
