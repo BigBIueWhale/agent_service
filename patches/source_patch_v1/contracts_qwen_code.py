@@ -934,6 +934,37 @@ def _validate_stream_commit_after(state: State) -> None:
             f"{label}: {parser} getBufferedToolCalls uses {rewrite!r}; the "
             "stopped call's arguments are the buffer exactly as it arrived.",
         )
+    # A call's name is the one the provider served, which is what the model
+    # wrote, exactly: on both transports, for a call made and a call stopped.
+    # An empty name is no name, and nothing trims one; whether a name names a
+    # tool is the scheduler's question, answered to the model. The parser
+    # holds the name of every streamed call, so its rule is the stream's.
+    _require(
+        "    const servedName = name || undefined;\n" in parser_source,
+        f"{label}: {parser} does not keep a streamed call's name as served",
+    )
+    for path, source in ((parser, parser_source), (converter, _source(state, converter, label=label))):
+        for rewrite in ("name?.trim()", "name.trim()", "Name?.trim()", "Name.trim()"):
+            _require(
+                rewrite not in source,
+                f"{label}: {path} uses {rewrite!r}; a served call's name is "
+                "carried exactly as served.",
+            )
+    _require_all(state, converter, (
+        "          name: toolCall.function?.name || null,",
+        "        if (!toolCall.id || !toolCall.function.name) {",
+    ), label=label)
+    _require_all(state, "packages/core/src/core/openaiContentGenerator/converter.test.ts", (
+        "carries the names a batch response served its calls with exactly, stopped or made",
+        "carries the name a stopped call was streamed with exactly, its surrounding whitespace too",
+        "carries a function name exactly as served beside literal text, even one of whitespace alone",
+    ), label=label)
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/streamingToolCallParser.test.ts",
+        "carries a tool call name exactly as it was served",
+        label=label,
+    )
     converter_source = _require_all(
         state,
         converter,

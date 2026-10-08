@@ -270050,7 +270050,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const stream = withStreamParser();
        const partial = converter.convertOpenAIChunkToGemini(
          streamChunk('open', {
-@@ -472,923 +598,419 @@
+@@ -472,923 +598,425 @@
        expect(partial.candidates?.[0]?.content?.parts).toEqual([]);
        expect(() =>
          converter.convertOpenAIChunkToGemini(
@@ -270245,14 +270245,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          content: '</thi',
          }),
 -        stream,
-+        first,
-       );
+-      );
 -
 -      expect(opening.candidates?.[0]?.content?.parts).toEqual([]);
 -      expect(body.candidates?.[0]?.content?.parts).toEqual([]);
 -      expect(() => finishStream(stream, 'stop')).toThrowError(
 -        expect.objectContaining({ type: 'PROTOCOL_TAG_LEAK' }),
--      );
++        first,
+       );
 -    });
 -
 -    it('holds a long confirmed opening tag until its closing tag arrives', () => {
@@ -270308,14 +270308,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +      expect(a.candidates?.[0]?.content?.parts).toEqual([
 +        { thought: true, text: '<think>first' },
 +        { text: '</thi' },
-+      ]);
+       ]);
 +      expect(b.candidates?.[0]?.content?.parts).toEqual([
 +        { thought: true, text: 'second</thinking>' },
 +        { text: ' <thinking> ' },
 +      ]);
 +      expect(c.candidates?.[0]?.content?.parts).toEqual([
 +        { text: 'nk>first answer' },
-       ]);
++      ]);
 +      expect(d.candidates?.[0]?.content?.parts).toEqual([]);
      });
  
@@ -270407,7 +270407,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +    );
  
 -    it('rejects an unclosed whitespace-only block at stream finish', () => {
-+    it('rejects a whitespace-only function name beside literal text', () => {
++    it('carries a function name exactly as served beside literal text, even one of whitespace alone', () => {
        const stream = withStreamParser();
 -      stream.responseParsingOptions = { contentOnlyThinkingTagLeaks: true };
 -      const response = converter.convertOpenAIChunkToGemini(
@@ -270421,6 +270421,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +              index: 0,
 +              id: 'blank',
 +              function: { name: '   ', arguments: '{}' },
++            },
++            {
++              index: 1,
++              id: 'padded',
++              function: { name: ' read_file ', arguments: '{}' },
 +            },
 +          ],
          }),
@@ -270439,11 +270444,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      const response = converter.convertOpenAIChunkToGemini(
 -        streamChunk('literal', { content: text }, 'stop'),
 -        stream,
-+      expect(() => finishStream(stream)).toThrowError(
-+        expect.objectContaining({
-+          cause: expect.objectContaining({ type: 'MALFORMED_TOOL_CALL' }),
-+        }),
-       );
+-      );
 -
 -      expect(response.candidates?.[0]?.content?.parts).toEqual([{ text }]);
 -    });
@@ -270669,6 +270670,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -        tagName: 'think',
 -        toolCallCount: 2,
 -      });
++      // Whether a name names a tool is the scheduler's question, answered to
++      // the model; the converter neither refuses nor repairs one it was served.
++      expect(finishStream(stream).candidates?.[0]?.content?.parts).toEqual([
++        { functionCall: { id: 'blank', name: '   ', args: {} } },
++        { functionCall: { id: 'padded', name: ' read_file ', args: {} } },
++      ]);
      });
  
      it.each([
@@ -271308,7 +271315,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          {
            role: 'user',
            content: [
-@@ -1991,74 +1613,137 @@
+@@ -1991,74 +1619,137 @@
        );
        expect(
          toolContent.find((p) => p.type === 'image_url')?.image_url?.url,
@@ -271347,6 +271354,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
                    parts: [
 -                    {
 -                      fileData: {
+-                        mimeType: 'image/jpeg',
 +                    { inlineData: { mimeType: 'image/png', data: 'aaa' } },
 +                    { text: 'after-image' },
 +                  ],
@@ -271438,7 +271446,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +                  parts: [
 +                    {
 +                      fileData: {
-                         mimeType: 'image/jpeg',
++                        mimeType: 'image/jpeg',
                          fileUri: 'base64imagedata',
                        },
                      },
@@ -271482,7 +271490,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -2190,13 +1875,13 @@
+@@ -2190,13 +1881,13 @@
  
        // No separate user message should be created
        const userMessage = messages.find((message) => message.role === 'user');
@@ -271497,7 +271505,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [
-@@ -2231,32 +1916,15 @@
+@@ -2231,32 +1922,15 @@
                },
              ],
            },
@@ -271533,7 +271541,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -2668,2453 +2336,1572 @@
+@@ -2668,2453 +2342,1617 @@
          role: 'tool',
          tool_call_id: 'call_1',
          content: '',
@@ -272135,11 +272143,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      const toolMessages = messages.filter(
 -        (message): message is OpenAI.Chat.ChatCompletionToolMessageParam =>
 -          message.role === 'tool' && 'tool_call_id' in message,
+-      );
+-      const splitMediaMessages = messages.filter(isOpenAISplitMediaMessage);
 +      const messages = converter.convertGeminiRequestToOpenAI(
 +        request,
 +        requestContext,
-       );
--      const splitMediaMessages = messages.filter(isOpenAISplitMediaMessage);
++      );
  
 -      expect(toolMessages).toHaveLength(1);
 -      expect(toolMessages[0]?.content).toBe('first');
@@ -272232,21 +272241,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -        .map((message) => message.tool_call_id);
 -
 -      expect(toolCallIds).toEqual(['call_a']);
-+
-+      const toolMessage = messages.find((m) => m.role === 'tool');
-+      expect(toolMessage).toBeDefined();
-+      const toolContent = toolMessage?.content;
-+      // Either string or array, depending on how OpenAI shapes single-part
-+      // content. Either way the placeholder must be visible verbatim.
-+      const flattened =
-+        typeof toolContent === 'string'
-+          ? toolContent
-+          : JSON.stringify(toolContent);
-+      expect(flattened).toContain('[image: image/png]');
-+      // Crucially, NO base64 image bytes leaked through.
-+      expect(flattened).not.toContain('data:image/');
-     });
-+  });
+-    });
  
 -    it('should clean after merging consecutive assistant turns', () => {
 -      const request: GenerateContentParameters = {
@@ -272261,6 +272256,44 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -                  name: 'read_file',
 -                  args: { path: 'a.txt' },
 -                },
+-              },
+-            ],
+-          },
+-          {
+-            role: 'model',
+-            parts: [{ text: 'A short follow-up.' }],
+-          },
+-          {
+-            role: 'user',
+-            parts: [
+-              {
+-                functionResponse: {
+-                  id: 'call_a',
+-                  name: 'read_file',
+-                  response: { output: 'A' },
+-                },
+-              },
+-            ],
+-          },
+-        ],
+-      };
++      const toolMessage = messages.find((m) => m.role === 'tool');
++      expect(toolMessage).toBeDefined();
++      const toolContent = toolMessage?.content;
++      // Either string or array, depending on how OpenAI shapes single-part
++      // content. Either way the placeholder must be visible verbatim.
++      const flattened =
++        typeof toolContent === 'string'
++          ? toolContent
++          : JSON.stringify(toolContent);
++      expect(flattened).toContain('[image: image/png]');
++      // Crucially, NO base64 image bytes leaked through.
++      expect(flattened).not.toContain('data:image/');
++    });
++  });
+ 
+-      const messages = converter.convertGeminiRequestToOpenAI(
+-        request,
 +  describe('convertOpenAIResponseToGemini', () => {
 +    it('should handle empty choices array without crashing', () => {
 +      const response = converter.convertOpenAIResponseToGemini(
@@ -272272,13 +272305,38 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          model: 'test-model',
 +          choices: [],
 +        } as unknown as OpenAI.Chat.ChatCompletion,
-+        requestContext,
-+      );
-+
+         requestContext,
+       );
+ 
+-      expect(messages[0]).toMatchObject({
+-        role: 'assistant',
+-        content: 'A short follow-up.',
+-      });
+-      expect(
+-        (
+-          messages[0] as OpenAI.Chat.ChatCompletionAssistantMessageParam
+-        ).tool_calls?.map((toolCall) => toolCall.id),
+-      ).toEqual(['call_a']);
+-      expect(messages[1]).toMatchObject({
+-        role: 'tool',
+-        tool_call_id: 'call_a',
+-      });
 +      expect(response.candidates).toEqual([]);
 +      expect(response.modelVersion).toBe('test-model');
-+    });
-+
+     });
+ 
+-    it('should keep split media after all adjacent tool responses across content items', () => {
+-      const request: GenerateContentParameters = {
+-        model: 'models/test',
+-        contents: [
+-          {
+-            role: 'model',
+-            parts: [
+-              {
+-                functionCall: { id: 'call_a', name: 'shot_a', args: {} },
+-              },
+-              {
+-                functionCall: { id: 'call_b', name: 'shot_b', args: {} },
 +    it('carries a length-stopped call as served, never as a function call, in strict mode', () => {
 +      const response = converter.convertOpenAIResponseToGemini(
 +        {
@@ -272306,19 +272364,6 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
                },
 -            ],
 -          },
--          {
--            role: 'model',
--            parts: [{ text: 'A short follow-up.' }],
--          },
--          {
--            role: 'user',
--            parts: [
--              {
--                functionResponse: {
--                  id: 'call_a',
--                  name: 'read_file',
--                  response: { output: 'A' },
--                },
 +              finish_reason: 'length',
 +              logprobs: null,
 +            },
@@ -272338,6 +272383,72 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          name: 'run_shell_command',
 +          arguments: '{"command":"printf unsafe-prefix',
 +        },
++      ]);
++    });
++
++    it('carries the names a batch response served its calls with exactly, stopped or made', () => {
++      const served = (finish: 'length' | 'tool_calls', args: string) =>
++        converter.convertOpenAIResponseToGemini(
+           {
+-            role: 'user',
+-            parts: [
++            object: 'chat.completion',
++            id: `chatcmpl-padded-${finish}`,
++            usage: SERVED_USAGE,
++            created: 123,
++            model: 'test-model',
++            choices: [
+               {
+-                functionResponse: {
+-                  id: 'call_a',
+-                  name: 'shot_a',
+-                  response: { output: 'A' },
+-                  parts: [
+-                    { inlineData: { mimeType: 'image/png', data: 'aaa' } },
++                index: 0,
++                message: {
++                  role: 'assistant',
++                  content: null,
++                  tool_calls: [
++                    {
++                      id: 'call_1',
++                      type: 'function',
++                      function: { name: ' write_file ', arguments: args },
++                    },
++                    {
++                      id: 'call_2',
++                      type: 'function',
++                      function: { name: '  ', arguments: args },
++                    },
+                   ],
+                 },
++                finish_reason: finish,
++                logprobs: null,
+               },
+             ],
+-          },
+-          {
+-            role: 'user',
+-            parts: [
+-              {
+-                functionResponse: {
+-                  id: 'call_b',
+-                  name: 'shot_b',
+-                  response: { output: 'B' },
+-                  parts: [
+-                    { inlineData: { mimeType: 'image/png', data: 'bbb' } },
+-                  ],
+-                },
++          } as unknown as OpenAI.Chat.ChatCompletion,
++          requestContext,
++        );
++      expect(getIncompleteToolCalls(served('length', '{"cut":'))).toEqual([
++        { name: ' write_file ', arguments: '{"cut":' },
++        { name: '  ', arguments: '{"cut":' },
++      ]);
++      expect(served('tool_calls', '{}').functionCalls).toEqual([
++        { id: 'call_1', name: ' write_file ', args: {} },
++        { id: 'call_2', name: '  ', args: {} },
 +      ]);
 +    });
 +
@@ -272366,15 +272477,22 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -            ],
 -          },
 -        ],
+-      };
+-      const strictContext: RequestContext = {
 +              finish_reason: finish,
 +              logprobs: null,
 +            },
 +          ],
 +        }) as unknown as OpenAI.Chat.ChatCompletion;
 +      const named = {
-+        ...requestContext,
+         ...requestContext,
+-        splitToolMedia: true,
 +        namedToolChoice: 'state_snapshot',
        };
+-
+-      const messages = converter.convertGeminiRequestToOpenAI(
+-        request,
+-        strictContext,
 +      expect(
 +        converter.convertOpenAIResponseToGemini(
 +          served('state_snapshot', 'stop'),
@@ -272390,7 +272508,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        ),
 +      ).toThrow(
 +        'without the stop terminal a call to the forced state_snapshot ends with',
-+      );
+       );
+-      const assistantIndex = messages.findIndex(
+-        (message) => message.role === 'assistant',
 +      expect(() =>
 +        converter.convertOpenAIResponseToGemini(
 +          served('read_file', 'stop'),
@@ -272398,184 +272518,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        ),
 +      ).toThrow(
 +        'Model response called another function than the state_snapshot its request forced.',
-+      );
-+      expect(() =>
-+        converter.convertOpenAIResponseToGemini(
-+          served('state_snapshot', 'stop'),
-+          requestContext,
-+        ),
-+      ).toThrow('without a tool_calls terminal');
-+    });
- 
--      const messages = converter.convertGeminiRequestToOpenAI(
--        request,
-+    it('carries no stopped call when the generation made its call', () => {
-+      const response = converter.convertOpenAIResponseToGemini(
-+        {
-+          object: 'chat.completion',
-+          id: 'chatcmpl-complete-tool',
-+          usage: SERVED_USAGE,
-+          created: 123,
-+          model: 'test-model',
-+          choices: [
-+            {
-+              index: 0,
-+              message: {
-+                role: 'assistant',
-+                content: null,
-+                tool_calls: [
-+                  {
-+                    id: 'call_1',
-+                    type: 'function',
-+                    function: {
-+                      name: 'read_file',
-+                      arguments: '{"file_path":"README.md"}',
-+                    },
-+                  },
-+                ],
-+              },
-+              finish_reason: 'tool_calls',
-+              logprobs: null,
-+            },
-+          ],
-+        } as unknown as OpenAI.Chat.ChatCompletion,
-         requestContext,
        );
- 
--      expect(messages[0]).toMatchObject({
--        role: 'assistant',
--        content: 'A short follow-up.',
--      });
--      expect(
--        (
--          messages[0] as OpenAI.Chat.ChatCompletionAssistantMessageParam
--        ).tool_calls?.map((toolCall) => toolCall.id),
--      ).toEqual(['call_a']);
--      expect(messages[1]).toMatchObject({
--        role: 'tool',
--        tool_call_id: 'call_a',
--      });
-+      expect(response.functionCalls).toHaveLength(1);
-+      expect(getIncompleteToolCalls(response)).toEqual([]);
-     });
- 
--    it('should keep split media after all adjacent tool responses across content items', () => {
--      const request: GenerateContentParameters = {
--        model: 'models/test',
--        contents: [
--          {
--            role: 'model',
--            parts: [
--              {
--                functionCall: { id: 'call_a', name: 'shot_a', args: {} },
--              },
--              {
--                functionCall: { id: 'call_b', name: 'shot_b', args: {} },
-+    it('carries arguments a length-stopped call served as a non-text value as that value’s JSON text', () => {
-+      const response = converter.convertOpenAIResponseToGemini(
-+        {
-+          object: 'chat.completion',
-+          id: 'chatcmpl-truncated-object-arguments',
-+          usage: SERVED_USAGE,
-+          created: 123,
-+          model: 'test-model',
-+          choices: [
-+            {
-+              index: 0,
-+              message: {
-+                role: 'assistant',
-+                content: null,
-+                tool_calls: [
-+                  {
-+                    id: 'call_1',
-+                    type: 'function',
-+                    function: { name: 'write_file', arguments: { a: 1 } },
-+                  },
-+                ],
-               },
--            ],
--          },
-+              finish_reason: 'length',
-+              logprobs: null,
-+            },
-+          ],
-+        } as unknown as OpenAI.Chat.ChatCompletion,
-+        requestContext,
-+      );
-+
-+      expect(response.functionCalls).toBeUndefined();
-+      expect(getIncompleteToolCalls(response)).toEqual([
-+        { name: 'write_file', arguments: '{"a":1}' },
-+      ]);
-+    });
-+
-+    it('rejects malformed completed tool arguments in strict mode', () => {
-+      expect(() =>
-+        converter.convertOpenAIResponseToGemini(
-           {
--            role: 'user',
--            parts: [
-+            object: 'chat.completion',
-+            id: 'chatcmpl-malformed-tool',
-+            created: 123,
-+            model: 'test-model',
-+            choices: [
-               {
--                functionResponse: {
--                  id: 'call_a',
--                  name: 'shot_a',
--                  response: { output: 'A' },
--                  parts: [
--                    { inlineData: { mimeType: 'image/png', data: 'aaa' } },
-+                index: 0,
-+                message: {
-+                  role: 'assistant',
-+                  content: null,
-+                  tool_calls: [
-+                    {
-+                      id: 'call_1',
-+                      type: 'function',
-+                      function: {
-+                        name: 'read_file',
-+                        arguments: '{"file_path":',
-+                      },
-+                    },
-                   ],
-                 },
-+                finish_reason: 'tool_calls',
-+                logprobs: null,
-               },
-             ],
--          },
--          {
--            role: 'user',
--            parts: [
--              {
--                functionResponse: {
--                  id: 'call_b',
--                  name: 'shot_b',
--                  response: { output: 'B' },
--                  parts: [
--                    { inlineData: { mimeType: 'image/png', data: 'bbb' } },
--                  ],
--                },
--              },
--            ],
--          },
--        ],
--      };
--      const strictContext: RequestContext = {
--        ...requestContext,
--        splitToolMedia: true,
--      };
--
--      const messages = converter.convertGeminiRequestToOpenAI(
--        request,
--        strictContext,
--      );
--      const assistantIndex = messages.findIndex(
--        (message) => message.role === 'assistant',
--      );
 -
 -      expect(messages[assistantIndex + 1]).toMatchObject({
 -        role: 'tool',
@@ -272587,8 +272530,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      });
 -      expect(messages[assistantIndex + 3]?.role).toBe('user');
 -      expect(messages[assistantIndex + 4]?.role).toBe('user');
--    });
--
++      expect(() =>
++        converter.convertOpenAIResponseToGemini(
++          served('state_snapshot', 'stop'),
++          requestContext,
++        ),
++      ).toThrow('without a tool_calls terminal');
+     });
+ 
 -    it('should not keep split media from orphaned tool responses', () => {
 -      const request: GenerateContentParameters = {
 -        model: 'models/test',
@@ -273556,17 +273505,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -    });
 -
 -    it('should convert reasoning to a thought part for non-streaming responses', () => {
--      const response = converter.convertOpenAIResponseToGemini(
--        {
--          object: 'chat.completion',
++    it('carries no stopped call when the generation made its call', () => {
+       const response = converter.convertOpenAIResponseToGemini(
+         {
+           object: 'chat.completion',
 -          id: 'chatcmpl-2',
--          created: 123,
++          id: 'chatcmpl-complete-tool',
++          usage: SERVED_USAGE,
+           created: 123,
 -          model: 'gpt-test',
--          choices: [
--            {
--              index: 0,
--              message: {
--                role: 'assistant',
++          model: 'test-model',
+           choices: [
+             {
+               index: 0,
+               message: {
+                 role: 'assistant',
 -                content: 'final answer',
 -                reasoning: 'chain-of-thought',
 -              },
@@ -273632,16 +273585,31 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -              delta: {
 -                content: 'visible text',
 -                reasoning: 'thinking...',
--              },
++                content: null,
++                tool_calls: [
++                  {
++                    id: 'call_1',
++                    type: 'function',
++                    function: {
++                      name: 'read_file',
++                      arguments: '{"file_path":"README.md"}',
++                    },
++                  },
++                ],
+               },
 -              finish_reason: 'stop',
--              logprobs: null,
--            },
++              finish_reason: 'tool_calls',
+               logprobs: null,
+             },
 -          ],
 -          model: 'gpt-test',
 -        } as unknown as OpenAI.Chat.ChatCompletionChunk,
 -        withStreamParser(new StreamingToolCallParser()),
--      );
--
++          ],
++        } as unknown as OpenAI.Chat.ChatCompletion,
++        requestContext,
+       );
+ 
 -      const parts = chunk.candidates?.[0]?.content?.parts;
 -      expect(parts?.[0]).toEqual(
 -        expect.objectContaining({ thought: true, text: 'thinking...' }),
@@ -273649,34 +273617,57 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      expect(parts?.[1]).toEqual(
 -        expect.objectContaining({ text: 'visible text' }),
 -      );
--    });
--
++      expect(response.functionCalls).toHaveLength(1);
++      expect(getIncompleteToolCalls(response)).toEqual([]);
+     });
+ 
 -    it('should not throw when streaming chunk has no delta', () => {
 -      const chunk = converter.convertOpenAIChunkToGemini(
--        {
++    it('carries arguments a length-stopped call served as a non-text value as that value’s JSON text', () => {
++      const response = converter.convertOpenAIResponseToGemini(
+         {
 -          object: 'chat.completion.chunk',
 -          id: 'chunk-2',
 -          created: 456,
--          choices: [
--            {
--              index: 0,
++          object: 'chat.completion',
++          id: 'chatcmpl-truncated-object-arguments',
++          usage: SERVED_USAGE,
++          created: 123,
++          model: 'test-model',
+           choices: [
+             {
+               index: 0,
 -              // Some OpenAI-compatible providers may omit delta entirely.
 -              delta: undefined,
 -              finish_reason: null,
--              logprobs: null,
--            },
--          ],
++              message: {
++                role: 'assistant',
++                content: null,
++                tool_calls: [
++                  {
++                    id: 'call_1',
++                    type: 'function',
++                    function: { name: 'write_file', arguments: { a: 1 } },
++                  },
++                ],
++              },
++              finish_reason: 'length',
+               logprobs: null,
+             },
+           ],
 -          model: 'gpt-test',
 -        } as unknown as OpenAI.Chat.ChatCompletionChunk,
 -        withStreamParser(new StreamingToolCallParser()),
--      );
--
++        } as unknown as OpenAI.Chat.ChatCompletion,
++        requestContext,
+       );
+ 
 -      const parts = chunk.candidates?.[0]?.content?.parts;
 -      expect(parts).toEqual([]);
-+          } as unknown as OpenAI.Chat.ChatCompletion,
-+          requestContext,
-+        ),
-+      ).toThrow('malformed tool arguments');
++      expect(response.functionCalls).toBeUndefined();
++      expect(getIncompleteToolCalls(response)).toEqual([
++        { name: 'write_file', arguments: '{"a":1}' },
++      ]);
      });
  
 -    it('should normalize cumulative streaming content deltas to suffixes', () => {
@@ -273690,12 +273681,77 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -
 -      const emitted = chunks.map((content, index) => {
 -        const chunk = converter.convertOpenAIChunkToGemini(
++    it('rejects malformed completed tool arguments in strict mode', () => {
++      expect(() =>
++        converter.convertOpenAIResponseToGemini(
+           {
+-            object: 'chat.completion.chunk',
+-            id: `chunk-cumulative-${index}`,
+-            created: 456 + index,
++            object: 'chat.completion',
++            id: 'chatcmpl-malformed-tool',
++            created: 123,
++            model: 'test-model',
+             choices: [
+               {
+                 index: 0,
+-                delta: { content },
+-                finish_reason: null,
++                message: {
++                  role: 'assistant',
++                  content: null,
++                  tool_calls: [
++                    {
++                      id: 'call_1',
++                      type: 'function',
++                      function: {
++                        name: 'read_file',
++                        arguments: '{"file_path":',
++                      },
++                    },
++                  ],
++                },
++                finish_reason: 'tool_calls',
+                 logprobs: null,
+               },
+             ],
+-            model: 'gpt-test',
+-          } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-          ctx,
+-        );
+-
+-        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+-      });
+-
+-      expect(emitted).toEqual([
+-        'Here',
+-        ' is a Flowchart Syntax Reference:',
+-        '\n| `flowchart TD` | Direction |',
+-        '\n| `A[Text]` | Node |',
+-      ]);
+-      expect(emitted.join('')).toBe(chunks[chunks.length - 1]);
++          } as unknown as OpenAI.Chat.ChatCompletion,
++          requestContext,
++        ),
++      ).toThrow('malformed tool arguments');
+     });
+ 
+-    it('should ignore repeated cumulative chunks with no new suffix', () => {
+-      const ctx = withStreamParser();
+-      // Must be ≥ CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH (64 chars) so the
+-      // exact-repeat branch enters cumulative mode rather than treating this
+-      // as a short legitimate repeat. Realistic cumulative providers replay
+-      // buffers of hundreds of bytes, so this length is representative.
+-      const content =
+-        'The following section starts with more than enough text for cumulative-mode detection.';
+-      const emitted = [content, content].map((chunkContent, index) => {
+-        const chunk = converter.convertOpenAIChunkToGemini(
 +    describe('strict batch tool-call validation', () => {
 +      function convertBatch(toolCalls: unknown, finishReason = 'tool_calls') {
 +        return converter.convertOpenAIResponseToGemini(
            {
 -            object: 'chat.completion.chunk',
--            id: `chunk-cumulative-${index}`,
+-            id: `chunk-cumulative-repeat-${index}`,
 -            created: 456 + index,
 +            object: 'chat.completion',
 +            id: 'batch-tool-test',
@@ -273705,7 +273761,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              choices: [
                {
                  index: 0,
--                delta: { content },
+-                delta: { content: chunkContent },
 -                finish_reason: null,
 +                message: {
 +                  role: 'assistant',
@@ -273733,13 +273789,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        expect(() => convertBatch(calls)).toThrow('without a tool call');
        });
  
--      expect(emitted).toEqual([
--        'Here',
--        ' is a Flowchart Syntax Reference:',
--        '\n| `flowchart TD` | Direction |',
--        '\n| `A[Text]` | Node |',
--      ]);
--      expect(emitted.join('')).toBe(chunks[chunks.length - 1]);
+-      expect(emitted).toEqual([content, '']);
 -    });
 +      it.each([
 +        ['missing', undefined],
@@ -273750,19 +273800,13 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        ).toThrow('without a function');
 +      });
  
--    it('should ignore repeated cumulative chunks with no new suffix', () => {
+-    it('should preserve repeated short incremental content chunks', () => {
 -      const ctx = withStreamParser();
--      // Must be ≥ CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH (64 chars) so the
--      // exact-repeat branch enters cumulative mode rather than treating this
--      // as a short legitimate repeat. Realistic cumulative providers replay
--      // buffers of hundreds of bytes, so this length is representative.
--      const content =
--        'The following section starts with more than enough text for cumulative-mode detection.';
--      const emitted = [content, content].map((chunkContent, index) => {
+-      const emitted = ['ha', 'ha'].map((content, index) => {
 -        const chunk = converter.convertOpenAIChunkToGemini(
 -          {
 -            object: 'chat.completion.chunk',
--            id: `chunk-cumulative-repeat-${index}`,
+-            id: `chunk-repeat-${index}`,
 -            created: 456 + index,
 -            choices: [
 +      const invalidArgumentFields: Array<[string, Record<string, unknown>]> = [
@@ -273787,7 +273831,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +            convertBatch([
                {
 -                index: 0,
--                delta: { content: chunkContent },
+-                delta: { content },
 -                finish_reason: null,
 -                logprobs: null,
 +                id: 'call_1',
@@ -273818,7 +273862,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        ]);
        });
  
--      expect(emitted).toEqual([content, '']);
+-      expect(emitted).toEqual(['ha', 'ha']);
+-    });
 +      it('refuses the whole batch when a later call has no serialized arguments', () => {
 +        expect(() =>
 +          convertBatch([
@@ -273835,7 +273880,14 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          ]),
 +        ).toThrow('malformed tool arguments');
 +      });
-+
+ 
+-    it('should normalize cumulative streaming reasoning_content deltas to suffixes', () => {
+-      const ctx = withStreamParser();
+-      const chunks = [
+-        'Let me think',
+-        'Let me think about the request carefully.',
+-        'Let me think about the request carefully.\nFirst, identify the table format.',
+-      ];
 +      it.each([
 +        ['missing function', {}, { name: null, arguments: '' }],
 +        [
@@ -273871,18 +273923,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          expect(getIncompleteToolCalls(response)).toEqual([carried]);
 +        },
 +      );
-     });
++    });
  
--    it('should preserve repeated short incremental content chunks', () => {
--      const ctx = withStreamParser();
--      const emitted = ['ha', 'ha'].map((content, index) => {
+-      const emitted = chunks.map((reasoning_content, index) => {
 -        const chunk = converter.convertOpenAIChunkToGemini(
 +    it('refuses a usage that reports only total tokens', () => {
 +      expect(() =>
 +        converter.convertOpenAIResponseToGemini(
            {
 -            object: 'chat.completion.chunk',
--            id: `chunk-repeat-${index}`,
+-            id: `chunk-reasoning-cumulative-${index}`,
 -            created: 456 + index,
 +            object: 'chat.completion',
 +            id: 'chatcmpl-usage',
@@ -273891,7 +273941,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              choices: [
                {
                  index: 0,
--                delta: { content },
+-                delta: { reasoning_content },
 -                finish_reason: null,
 +                message: { role: 'assistant', content: 'hi' },
 +                finish_reason: 'stop',
@@ -273902,56 +273952,27 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -          } as unknown as OpenAI.Chat.ChatCompletionChunk,
 -          ctx,
 -        );
--
--        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
--      });
--
--      expect(emitted).toEqual(['ha', 'ha']);
 +            usage: { total_tokens: 5 },
 +          } as unknown as OpenAI.Chat.ChatCompletion,
 +          requestContext,
 +        ),
 +      ).toThrow('invalid served usage (promptTokenCount)');
-     });
++    });
  
--    it('should normalize cumulative streaming reasoning_content deltas to suffixes', () => {
--      const ctx = withStreamParser();
--      const chunks = [
--        'Let me think',
--        'Let me think about the request carefully.',
--        'Let me think about the request carefully.\nFirst, identify the table format.',
--      ];
--
--      const emitted = chunks.map((reasoning_content, index) => {
--        const chunk = converter.convertOpenAIChunkToGemini(
+-        const part = chunk.candidates?.[0]?.content?.parts?.[0];
+-        return { text: part?.text ?? '', thought: part?.thought ?? false };
+-      });
 +    it('refuses a streaming usage that reports only total tokens', () => {
 +      expect(() =>
 +        converter.convertOpenAIChunkToGemini(
-           {
-             object: 'chat.completion.chunk',
--            id: `chunk-reasoning-cumulative-${index}`,
--            created: 456 + index,
--            choices: [
--              {
--                index: 0,
--                delta: { reasoning_content },
--                finish_reason: null,
--                logprobs: null,
--              },
--            ],
--            model: 'gpt-test',
++          {
++            object: 'chat.completion.chunk',
 +            id: 'chunk-usage',
 +            created: 123,
 +            model: 'test-model',
 +            choices: [],
 +            usage: { total_tokens: 5 },
-           } as unknown as OpenAI.Chat.ChatCompletionChunk,
--          ctx,
--        );
--
--        const part = chunk.candidates?.[0]?.content?.parts?.[0];
--        return { text: part?.text ?? '', thought: part?.thought ?? false };
--      });
++          } as unknown as OpenAI.Chat.ChatCompletionChunk,
 +          withStreamParser(),
 +        ),
 +      ).toThrow('invalid served usage (promptTokenCount)');
@@ -274085,7 +274106,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      const emitted = chunks.map(
 -        (content, index) =>
 -          converter.convertOpenAIChunkToGemini(
--            {
++    it('[served-usage] reports exactly the served non-streaming counts under exactTokenCounting=vllm', () => {
++      const response = converter.convertOpenAIResponseToGemini(
++        {
++          object: 'chat.completion',
++          id: 'chatcmpl-served-usage',
++          created: 123,
++          model: 'test-model',
++          choices: [
+             {
 -              object: 'chat.completion.chunk',
 -              id: `chunk-reentry-${index}`,
 -              created: 456 + index,
@@ -274101,15 +274130,6 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -            } as unknown as OpenAI.Chat.ChatCompletionChunk,
 -            ctx,
 -          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
-+    it('[served-usage] reports exactly the served non-streaming counts under exactTokenCounting=vllm', () => {
-+      const response = converter.convertOpenAIResponseToGemini(
-+        {
-+          object: 'chat.completion',
-+          id: 'chatcmpl-served-usage',
-+          created: 123,
-+          model: 'test-model',
-+          choices: [
-+            {
 +              index: 0,
 +              message: {
 +                role: 'assistant',
@@ -275115,10 +275135,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
                  finish_reason: null,
                  logprobs: null,
                },
--            ],
--            model: 'gpt-test',
--          } as unknown as OpenAI.Chat.ChatCompletionChunk,
--          ctx,
+             ],
+             model: 'gpt-test',
+           } as unknown as OpenAI.Chat.ChatCompletionChunk,
+           ctx,
 -        ).candidates?.[0]?.content?.parts?.[0]?.text ?? '';
 -
 -      // Incremental phase: every chunk passes through verbatim.
@@ -275131,12 +275151,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      expect(userVisible).toBe(cumulativeChunk);
 -      expect(userVisible.length).toBe(1614);
 -    });
--
++        );
+ 
 -    it('should suppress cumulative rewind (provider re-sends shorter accumulated string)', () => {
 -      const ctx = withStreamParser();
 -      // Scenario: provider sends Hello → Hello World (extension) → Hello (rewind) → Hello World! (extension again)
 -      const chunks = ['Hello', 'Hello World', 'Hello', 'Hello World!'];
--
++        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
++      });
+ 
 -      const emitted = chunks.map(
 -        (content, index) =>
 -          converter.convertOpenAIChunkToGemini(
@@ -275157,14 +275180,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -            ctx,
 -          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
 -      );
-+            ],
-+            model: 'gpt-test',
-+          } as unknown as OpenAI.Chat.ChatCompletionChunk,
-+          ctx,
-+        );
-+
-+        return chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
-+      });
++      expect(emitted).toEqual(['ha', 'ha']);
++    });
  
 -      // Chunk 1: initial passthrough
 -      expect(emitted[0]).toBe('Hello');
@@ -275174,9 +275191,6 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      expect(emitted[2]).toBe('');
 -      // Chunk 4: extension resumes from 'Hello World' → emits '!'
 -      expect(emitted[3]).toBe('!');
-+      expect(emitted).toEqual(['ha', 'ha']);
-+    });
-+
 +    it('keeps interleaved reasoning and content deltas on their own channels, each as served', () => {
 +      const emitted = streamDeltas([
 +        { reasoning_content: 'Let me think about this carefully.' },
@@ -275220,7 +275234,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
                index: 0,
                delta: { content: 'Answer: forty-two' },
                finish_reason: null,
-@@ -5122,69 +3909,40 @@
+@@ -5122,69 +3960,40 @@
              },
            ],
            model: 'gpt-test',
@@ -275293,7 +275307,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              object: 'chat.completion.chunk',
              id: 'chunk-dual-1',
              created: 456,
-@@ -5215,12 +3973,13 @@
+@@ -5215,12 +4024,13 @@
    describe('OpenAI -> Gemini tagged thinking content', () => {
      it('should convert MiniMax <think> content to thought parts for non-streaming responses', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -275307,7 +275321,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5243,12 +4002,13 @@
+@@ -5243,12 +4053,13 @@
  
      it('should preserve ordering around <thinking> blocks', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -275321,7 +275335,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5272,12 +4032,13 @@
+@@ -5272,12 +4083,13 @@
  
      it('should parse multiple tagged thinking blocks case-insensitively', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -275335,7 +275349,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5301,12 +4062,13 @@
+@@ -5301,12 +4113,13 @@
  
      it('should leave tags visible when tagged thinking parsing is disabled', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -275349,7 +275363,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -5317,13 +4079,13 @@
+@@ -5317,13 +4130,13 @@
                logprobs: null,
              },
            ],
@@ -275364,7 +275378,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        expect(response.candidates?.[0]?.content?.parts).toEqual([
          { text: '<think>visible xml example</think>' },
        ]);
-@@ -5331,12 +4093,13 @@
+@@ -5331,12 +4144,13 @@
  
      it('should preserve incomplete tags as visible text on final non-streaming parse', () => {
        const response = converter.convertOpenAIResponseToGemini(
@@ -275378,7 +275392,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -6237,103 +5000,106 @@
+@@ -6237,103 +5051,106 @@
        converter.convertGeminiToolParametersToOpenAI(original);
  
        expect(original).toEqual(originalCopy);
@@ -275539,7 +275553,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [
-@@ -6385,26 +5151,23 @@
+@@ -6385,26 +5202,23 @@
          ],
        };
  
@@ -275567,7 +275581,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [{ text: 'First assistant' }],
-@@ -6427,65 +5190,12 @@
+@@ -6427,65 +5241,12 @@
  
        expect(messages).toHaveLength(3);
        expect(messages[0].role).toBe('assistant');
@@ -275633,7 +275647,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  describe('MCP tool result end-to-end through OpenAI converter (issue #1520)', () => {
    /**
     * End-to-end regression tests for https://github.com/QwenLM/qwen-code/issues/1520
-@@ -6822,15 +5532,19 @@
+@@ -6822,15 +5583,19 @@
        index: number;
        id?: string;
        name?: string;
@@ -275654,7 +275668,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7249,86 +5963,255 @@
+@@ -7249,86 +6014,274 @@
        'stop',
      );
  
@@ -275749,7 +275763,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
    });
  
 -  it('should preserve finishReason MAX_TOKENS when provider already reports "length"', () => {
-+  it('does not expose a truncated function call in strict mode', () => {
++  it('carries the name a stopped call was streamed with exactly, its surrounding whitespace too', () => {
      const result = feedToolCallChunks(
        converter,
        [
@@ -275758,6 +275772,25 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            id: 'call_1',
 -          name: 'write_file',
 -          arguments: '{"file_path": "/tmp/test.cpp"',
++          name: ' write_file\n',
++          arguments: '{"file_path": "/tmp/a"',
++        },
++      ],
++      'length',
++    );
++
++    expect(getIncompleteToolCalls(result)).toEqual([
++      { name: ' write_file\n', arguments: '{"file_path": "/tmp/a"' },
++    ]);
++  });
++
++  it('does not expose a truncated function call in strict mode', () => {
++    const result = feedToolCallChunks(
++      converter,
++      [
++        {
++          index: 0,
++          id: 'call_1',
 +          name: 'run_shell_command',
 +          arguments: '{"command":"printf unsafe-prefix',
          },
@@ -275931,7 +275964,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      // Feed arguments in multiple small chunks like real streaming
      const conv = OpenAIContentConverter;
      const ctx = createStreamingRequestContext();
-@@ -7420,14 +6303,14 @@
+@@ -7420,14 +6373,14 @@
      [FinishReason.PROHIBITED_CONTENT, 'content_filter'],
      [FinishReason.SPII, 'content_filter'],
      [FinishReason.IMAGE_SAFETY, 'content_filter'],
@@ -275948,7 +275981,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          candidates: [{ finishReason: geminiReason, content: { parts: [] } }],
        } as unknown as GenerateContentResponse,
        {
-@@ -7494,30 +6377,25 @@
+@@ -7494,30 +6447,25 @@
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -276467,7 +276500,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  function processContents(
    contents: ContentListUnion,
    messages: ExtendedChatCompletionMessageParam[],
-@@ -570,13 +547,16 @@
+@@ -570,43 +547,63 @@
  
    if (!isContentObject(content)) return;
    const parts = content.parts || [];
@@ -276484,7 +276517,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    const emittedFunctionResponseIds = new Set<string>();
    // New history is normalized before reaching this converter. These local
    // guards only keep already-corrupted or programmatic duplicate parts from
-@@ -590,23 +570,33 @@
+-  // leaking duplicate IDs into OpenAI payloads.
++  // leaking duplicate IDs into OpenAI payloads. No history this client builds
++  // reaches them: every generation crosses GenerationObservationNormalizer
++  // before its turn joins history, which gives each call of the turn its own
++  // id, and each result carries the id of the one call it answers. vLLM mints
++  // a call's id once per call, from a random UUID rather than from anything
++  // the model generates, so the normalizer meets no repeated id to drop
++  // either. The backend refuses an assistant message that repeats a call id,
++  // naming it.
+   // When `splitToolMedia` is enabled, media stripped from tool messages is
+   // accumulated here and emitted as a single follow-up user message after
+   // ALL tool messages in this group have been pushed. OpenAI Chat
+   // Completions requires every `role: "tool"` response for a given assistant
+   // turn to appear contiguously before any non-tool message; emitting the
+   // user message inline (after each tool message) would interleave and
    // break that contract when multiple parallel tool calls return media.
    const accumulatedSplitMedia: OpenAIContentPart[] = [];
  
@@ -276519,7 +276566,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      if (mediaPart && role === 'user') {
        contentParts.push(mediaPart);
      }
-@@ -623,16 +613,16 @@
+@@ -623,16 +620,16 @@
          emittedFunctionCallIds.add(callId);
        }
  
@@ -276538,7 +276585,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      if (part.functionResponse && role === 'user') {
        const responseId = part.functionResponse.id;
-@@ -644,12 +634,13 @@
+@@ -644,12 +641,13 @@
        }
  
        // Create tool message for the function response (with embedded media)
@@ -276552,7 +276599,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          // resolved in pipeline.ts). OpenAI spec only permits string / text-part
          // content on `role: "tool"` messages. Strict OpenAI-compatible servers
          // (e.g. doubao / new-api / LM Studio) silently drop or reject tool
-@@ -682,12 +673,17 @@
+@@ -682,12 +680,17 @@
              }
            }
            if (mediaParts.length > 0) {
@@ -276570,7 +276617,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          if (
            requestContext.toolResultContentFormat === 'string' &&
            Array.isArray(toolMessage.content)
-@@ -697,12 +693,13 @@
+@@ -697,12 +700,13 @@
              toolContent.every(
                (cp): cp is OpenAI.Chat.ChatCompletionContentPartText =>
                  cp?.type === 'text',
@@ -276584,7 +276631,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
    }
-@@ -711,53 +708,62 @@
+@@ -711,53 +715,62 @@
    // tool messages in this group. Runs after the parts loop so all tool
    // messages remain contiguous (OpenAI requirement for parallel tool calls).
    if (accumulatedSplitMedia.length > 0) {
@@ -276664,7 +276711,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      return;
    }
  
-@@ -767,74 +773,112 @@
+@@ -767,74 +780,112 @@
        content:
          contentParts as unknown as OpenAI.Chat.ChatCompletionContentPart[],
      });
@@ -276809,7 +276856,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    }
  
    // IMPORTANT: Always return a tool message, even if content is empty
-@@ -856,17 +900,73 @@
+@@ -856,17 +907,73 @@
      content: contentParts as unknown as
        | string
        | OpenAI.Chat.ChatCompletionContentPartText[],
@@ -276884,7 +276931,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    const { modalities } = requestContext;
  
    if (part.inlineData?.mimeType && part.inlineData?.data) {
-@@ -879,12 +979,17 @@
+@@ -879,12 +986,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -276902,7 +276949,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1065,15 @@
+@@ -960,16 +1072,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -276922,7 +276969,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,106 +1212,27 @@
+@@ -1108,106 +1219,27 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -277042,7 +277089,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * Convert OpenAI response to Gemini format.
   */
  export function convertOpenAIResponseToGemini(
-@@ -1233,107 +1258,172 @@
+@@ -1233,107 +1265,174 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -277121,9 +277168,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +    // A generation its limit stopped makes none of its calls, and what the
 +    // provider served of them is still what the model wrote: it goes on the
 +    // response as served, for every record of this generation. A call is a
-+    // diagnostic here and never refused for its shape: one that came without
-+    // a function carries no name and no text, and arguments served as
-+    // anything but text are carried as that value's JSON text.
++    // diagnostic here and never refused for its shape: its name is the one
++    // served, exactly, and one that came without a function or with an empty
++    // name carries none; one without a function carries no text either, and
++    // arguments served as anything but text are carried as that value's JSON
++    // text.
 +    if (
 +      choice.finish_reason === 'length' &&
 +      choice.message.tool_calls?.length
@@ -277132,7 +277181,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +      for (const toolCall of choice.message.tool_calls) {
 +        const served: unknown = toolCall.function?.arguments;
 +        incomplete.push({
-+          name: toolCall.function?.name?.trim() || null,
++          name: toolCall.function?.name || null,
 +          arguments:
 +            typeof served === 'string'
 +              ? served
@@ -277168,7 +277217,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +            ),
 +          );
          }
-+        if (!toolCall.id || !toolCall.function.name?.trim()) {
++        if (!toolCall.id || !toolCall.function.name) {
 +          throw new ResponseObservationError(
 +            response,
 +            new InvalidStreamError(
@@ -277285,7 +277334,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1364,27 +1454,21 @@
+@@ -1364,27 +1463,21 @@
  
      // Handle reasoning content (thoughts).
      const reasoningText =
@@ -277318,7 +277367,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      } else if (choice.finish_reason) {
        // Flush any buffered tagged-thinking content on stream end
-@@ -1408,41 +1492,17 @@
+@@ -1408,41 +1501,17 @@
  
      if (
        reasoningText &&
@@ -277364,7 +277413,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
  
-@@ -1482,12 +1542,25 @@
+@@ -1482,12 +1551,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -277390,7 +277439,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,241 +1588,118 @@
+@@ -1515,241 +1597,118 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -277701,7 +277750,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          parts,
          role: 'model' as const,
        },
-@@ -1764,70 +1714,26 @@
+@@ -1764,70 +1723,26 @@
      response.candidates = [candidate];
    } else {
      response.candidates = [];
@@ -277780,7 +277829,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1753,19 @@
+@@ -1847,17 +1762,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -277805,7 +277854,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,323 +1775,17 @@
+@@ -1867,323 +1784,17 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:
@@ -292180,9 +292229,43 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
        });
        expect(parser.getCompletedToolCalls()).toEqual([
          {
-@@ -781,57 +686,62 @@
+@@ -764,74 +669,94 @@
+           args: { file_path: 'a.ts' },
+           index: 0,
+         },
+       ]);
      });
  
+-    it('should normalize a tool call name before storing it', () => {
++    it('carries a tool call name exactly as it was served', () => {
+       parser.addChunk(0, '{}', 'call_1', ' read_file ');
++      parser.addChunk(1, '{"cut":', 'call_2', '\twrite_file');
+ 
++      expect(parser.getToolCallMeta(0).name).toBe(' read_file ');
++      expect(parser.getBufferedToolCalls()).toEqual([
++        { name: ' read_file ', arguments: '{}' },
++        { name: '\twrite_file', arguments: '{"cut":' },
++      ]);
++      parser.resetIndex(1);
+       expect(parser.getCompletedToolCalls()).toEqual([
+         {
+           id: 'call_1',
+-          name: 'read_file',
++          name: ' read_file ',
+           args: {},
+           index: 0,
+         },
+       ]);
+     });
+ 
++    it('reads an empty name as no name', () => {
++      parser.addChunk(0, '{', 'call_1', 'read_file');
++      parser.addChunk(0, '}', undefined, '');
++
++      expect(parser.getToolCallMeta(0).name).toBe('read_file');
++      expect(parser.hasConflictingToolCallIdentity()).toBe(false);
++    });
++
      it('should preserve the first non-empty name for a tool call ID', () => {
        parser.addChunk(0, '{"file_path":', 'call_1', 'read_file');
        parser.addChunk(0, '"a.ts"}', 'call_1', 'shell');
@@ -292258,7 +292341,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
          name: 'function1',
        });
      });
-@@ -841,17 +751,16 @@
+@@ -841,17 +766,16 @@
        parser.addChunk(0, '{"param1": "complete"}', 'call_1', 'function1');
        parser.addChunk(1, '{"param2":', 'call_2', 'function2');
        parser.addChunk(2, '{"param3":', 'call_3', 'function3');
@@ -292279,7 +292362,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
    describe('Index management and reset functionality', () => {
      it('should reset individual index correctly', () => {
        // Set up some state at index 0
-@@ -886,108 +795,52 @@
+@@ -886,108 +810,52 @@
        const result = parser.addChunk(
          0,
          '{"param3": "value3"}',
@@ -292397,7 +292480,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
        expect(continuation.actualIndex).not.toBe(remapped.actualIndex);
        expect(parser.getBuffer(remapped.actualIndex!)).toBe('{"second":true}');
      });
-@@ -1073,16 +926,18 @@
+@@ -1073,16 +941,18 @@
        parser.addChunk(0, '{"b":2}');
  
        const third = parser.addChunk(0, '{"c":3}', 'call_3', 'function3');
@@ -292420,7 +292503,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
        // Three tool calls reuse provider index 0 in sequence, each opener remapping
        // to a fresh slot. An id-less continuation after the third opener must land on
        // the third call's slot. Guarding the remap overwrite to keep the *first*
-@@ -1094,16 +949,16 @@
+@@ -1094,16 +964,16 @@
        expect(opener3.actualIndex).toBe(2);
  
        const continuation = parser.addChunk(0, '{"c":3}'); // id-less -> must be call_3's slot
@@ -292439,7 +292522,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
  
      it('should handle rapid tool call switching at same index', () => {
        // Rapid switching between different tool calls at index 0
-@@ -1114,14 +969,14 @@
+@@ -1114,14 +984,14 @@
        parser.addChunk(0, '{"step2":', 'call_2', 'function2');
        parser.addChunk(0, ' "done"}', 'call_2', 'function2');
  
@@ -292456,7 +292539,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
  
      it('should handle interleaved chunks from multiple tool calls with ID mapping', () => {
        // Start tool call 1 at index 0
-@@ -1129,23 +984,23 @@
+@@ -1129,23 +999,23 @@
  
        // Start tool call 2 at index 1 (different index to avoid collision)
        parser.addChunk(1, '{"param2":', 'call_2', 'function2');
@@ -292484,7 +292567,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
    });
  
    describe('hasIncompleteToolCalls', () => {
-@@ -1216,21 +1071,37 @@
+@@ -1216,21 +1086,37 @@
        );
        expect(parser.hasIncompleteToolCalls()).toBe(true);
        expect(parser.getState(0).depth).toBe(1);
@@ -292595,7 +292678,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
   * StreamingToolCallParser - Handles streaming tool call objects with inconsistent chunk formats
   *
   * Problems this parser addresses:
-@@ -65,41 +78,39 @@
+@@ -65,51 +78,51 @@
     * Processes a new chunk of tool call data and attempts to parse complete JSON objects
     *
     * Handles the core problems of streaming tool call parsing:
@@ -292611,8 +292694,9 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
     * @param index - Tool call index from streaming response (may collide with existing calls)
     * @param chunk - String chunk that may be empty, partial JSON, or complete data
     * @param id - Optional tool call ID for collision detection and chunk routing
-    * @param name - Optional function name stored as metadata
+-   * @param name - Optional function name stored as metadata
 -   * @returns ToolCallParseResult with completion status, parsed value, and repair info
++   * @param name - Optional function name, stored as metadata exactly as served
 +   * @returns The index the chunk was stored at
     */
    addChunk(
@@ -292621,7 +292705,10 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
      id?: string,
      name?: string,
    ): ToolCallParseResult {
-     const validName = name?.trim() || undefined;
+-    const validName = name?.trim() || undefined;
++    // The name is kept exactly as the provider served it, which is what the
++    // model wrote; an empty one names nothing, as on a continuation delta.
++    const servedName = name || undefined;
      if (!Number.isSafeInteger(index) || index < 0) {
        this.conflictingToolCallIdentity = true;
        this.invalidToolCallIndex = true;
@@ -292631,7 +292718,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
 -      };
 +      return {};
      }
-     if (!id && !validName && !chunk.trim()) {
+-    if (!id && !validName && !chunk.trim()) {
++    if (!id && !servedName && !chunk.trim()) {
        const depth = this.depths.get(index) ?? 0;
        const inString = this.inStrings.get(index) ?? false;
        if (!this.buffers.has(index) || (depth === 0 && !inString)) {
@@ -292643,7 +292731,32 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
      let actualIndex = index;
      const isKnownId = Boolean(id && this.idToIndexMap.has(id));
      const existingName = this.toolCallMeta.get(index)?.name;
-@@ -219,23 +230,23 @@
+     const isNameOnlyDelta = Boolean(
+-      validName &&
++      servedName &&
+         chunk.length === 0 &&
+-        (!existingName || existingName === validName),
++        (!existingName || existingName === servedName),
+     );
+ 
+     // Handle tool call ID mapping for collision detection
+     if (id) {
+       // This is the start of a new tool call with an ID
+       if (this.idToIndexMap.has(id)) {
+@@ -208,48 +221,48 @@
+       this.toolCallMeta.set(actualIndex, {});
+     }
+ 
+     const currentBuffer = this.buffers.get(actualIndex)!;
+     const currentDepth = this.depths.get(actualIndex)!;
+     const meta = this.toolCallMeta.get(actualIndex)!;
+-    if (chunk.length === 0 && (id || validName)) {
++    if (chunk.length === 0 && (id || servedName)) {
+       if (id) meta.id = id;
+-      if (validName && !meta.name) meta.name = validName;
++      if (servedName && !meta.name) meta.name = servedName;
+       if (!meta.name && meta.id) {
+         this.namelessToolCallIndices.add(actualIndex);
        } else {
          this.namelessToolCallIndices.delete(actualIndex);
        }
@@ -292669,7 +292782,24 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
        }
      }
  
-@@ -287,43 +298,13 @@
+     // Update metadata
+     const identityChanged = Boolean(id && meta.id && meta.id !== id);
+     if (id) meta.id = id;
+-    if (validName) {
+-      if (!identityChanged && meta.name && meta.name !== validName) {
++    if (servedName) {
++      if (!identityChanged && meta.name && meta.name !== servedName) {
+         this.conflictingToolCallIdentity = true;
+       } else {
+-        meta.name = validName;
++        meta.name = servedName;
+       }
+     }
+     if (actualIndex !== index) {
+       this.pendingIndexRemaps.set(index, actualIndex);
+     }
+ 
+@@ -287,43 +300,13 @@
  
      // Update state
      this.depths.set(actualIndex, depth);
@@ -292714,7 +292844,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
     * Gets the current tool call metadata for a specific index
     *
     * @param index - The tool call index
-@@ -342,149 +323,104 @@
+@@ -342,149 +325,104 @@
    }
  
    hasInvalidToolCallIndex(): boolean {
@@ -292914,7 +293044,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/streamingToolCallPars
          } catch {
            // If parsing fails, this index is available for reuse
            return this.nextAvailableIndex;
-@@ -511,14 +447,14 @@
+@@ -511,14 +449,14 @@
      let maxIndex = -1;
      for (const [index, buffer] of this.buffers.entries()) {
        const depth = this.depths.get(index)!;

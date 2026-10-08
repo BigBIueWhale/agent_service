@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `337ce8938a6ae472005c4219edba0cb561fb2c67ae78a6211a394aa752b07e37`
+- Review-diff SHA-256: `a0be6c2209cb3feb4144a83059a5d860bc4b630a757e85ff19694c2db16d91be`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `bcfbe57ef70b45ccbe42d994308228941f50eaf63a095e1ed848c671f944ae8a`
+- Transformer-manifest SHA-256: `84cc140161c1d5bd5ae5a1ac96af5de875bcd0fb40bd0bd6655faf5ef60def41`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -92,7 +92,13 @@ the scheduler answers every call by its id -- and a history that did pair a call
 with no result is refused by the backend, naming the message, before the model
 reads it. The one place a result is written for a call is session recovery's
 declared repair of a crashed session's unanswered call, and the service has no
-resume.
+resume. The converter keeps upstream's guard that drops a second call or result
+with one id from a message, and no history this client builds reaches it: each
+generation's calls are given distinct ids before its turn joins history
+(`GenerationObservationNormalizer`), and each result carries the id of the one
+call it answers. vLLM mints a call's id once per call, from a random UUID and
+never from the model's tokens, so the normalizer, which would drop a call that
+repeated an id within its turn and record that it had, meets no repeat either.
 
 A refused turn is drawn again, told why, as the next turn, in the headless
 session and every subagent alike, the way a refused compaction draw is drawn
