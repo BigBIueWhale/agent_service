@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `a0be6c2209cb3feb4144a83059a5d860bc4b630a757e85ff19694c2db16d91be`
+- Review-diff SHA-256: `28f7dde16d8ee1f5e028eaa2bc4cfd27c9385a6603668285e111ec51f548dc74`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `84cc140161c1d5bd5ae5a1ac96af5de875bcd0fb40bd0bd6655faf5ef60def41`
+- Transformer-manifest SHA-256: `ea0f6b33733d28451532e8afb174169528aba7b294caa46ac7449403ce47b23c`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -849,7 +849,9 @@ Range bounds are explicit query facts. Text paging uses UTF-8 bytes and returns
 the next line offset without consuming a line it did not return. Text decoding
 follows a Unicode BOM or UTF-8 when absent; large streaming reads require UTF-8.
 Invalid encoding, unreadable oversized lines, and unsupported media fail
-explicitly.
+explicitly. A search shows a matched line that is not UTF-8 -- ripgrep
+reports it as bytes -- as a line with no text to show, saying how to read it,
+never as an empty line.
 
 ## Tool and deployment contracts
 

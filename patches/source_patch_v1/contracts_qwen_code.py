@@ -3624,6 +3624,27 @@ def _validate_text_read_fidelity_after(state: State) -> None:
         "[encoding-contract] refuses bytes that are not valid UTF-8 instead of decoding them as something else",
         label=label,
     )
+    # A search reads the same files. ripgrep reports a matched line that is
+    # not UTF-8 as its bytes, and that line has no text form either: the
+    # result says so, in the harness's words, with the moves that read it,
+    # rather than showing the line empty as though the file held nothing
+    # there. A match ripgrep wrote without its line states no authors.
+    grep = "packages/core/src/tools/ripGrep.ts"
+    _require_all(state, grep, (
+        "const NON_UTF8_LINE =",
+        "lines?: { text?: string; bytes?: string };",
+        "const { text, bytes } = parsed.data.lines ?? {};",
+        "if (typeof bytes === 'string') {",
+        "harnessText(`:${NON_UTF8_LINE}`),",
+        "return [{ rawLine: `${filePath}:${lineNumber}:`, filePath, key }];",
+    ), label=label)
+    forbid_text(state, grep, "lines?.text ?? ''", label=label)
+    require_text(
+        state,
+        "packages/core/src/tools/ripGrep.test.ts",
+        "says, as the harness, that a matched line that is not UTF-8 has no text to show, instead of showing it empty",
+        label=label,
+    )
 
 
 def _validate_literal_response_before(state: State) -> None:

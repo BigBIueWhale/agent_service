@@ -403184,7 +403184,7 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
      it('should pass useBuiltinRipgrep setting to ripgrep execution', async () => {
        const systemOnlyConfig = {
          ...mockConfig,
-@@ -1567,12 +1507,200 @@
+@@ -1567,12 +1507,241 @@
  
        expect(result.llmContent).toContain('main.ts');
        expect(result.llmContent).not.toContain('other.ts');
@@ -403266,6 +403266,47 @@ diff --git a/packages/core/src/tools/ripGrep.test.ts b/packages/core/src/tools/r
 +        { author: 'harness', text: ':' },
 +        { author: 'world', text: 'world again' },
 +      ]);
++    });
++
++    it('says, as the harness, that a matched line that is not UTF-8 has no text to show, instead of showing it empty', async () => {
++      // ripgrep reports a line that is not UTF-8 as its bytes.
++      const latin1 = Buffer.from([
++        0x63, 0x61, 0x66, 0xe9, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x0a,
++      ]);
++      (runRipgrep as Mock).mockResolvedValue({
++        stdout: `${match('fileA.txt', 1, 'hello world\n')}${EOL}${JSON.stringify({ type: 'match', data: { path: { text: 'latin1.txt' }, lines: { bytes: latin1.toString('base64') }, line_number: 4 } })}${EOL}`,
++        incomplete: false,
++      });
++
++      const result = await runAsCall({ pattern: 'world' });
++
++      const notice =
++        " [this line is not valid UTF-8, so it has no text to show here; read its bytes with a shell command, or convert the file with 'iconv -f SOURCE_ENCODING -t UTF-8' and search the converted file]";
++      expect(result.llmContent).toBe(
++        `Found 2 matches for pattern "world" in the workspace directory:\n---\nfileA.txt:1:hello world\nlatin1.txt:4:${notice}`,
++      );
++      expect(
++        spellRuns(result.llmContent as string, result.llmContentAuthors!).slice(
++          -4,
++        ),
++      ).toEqual([
++        { author: 'world', text: 'latin1.txt' },
++        { author: 'harness', text: ':' },
++        { author: 'world', text: '4' },
++        { author: 'harness', text: `:${notice}` },
++      ]);
++    });
++
++    it('states no authors for a match ripgrep wrote without its line', async () => {
++      (runRipgrep as Mock).mockResolvedValue({
++        stdout: `${JSON.stringify({ type: 'match', data: { path: { text: 'fileA.txt' }, line_number: 1 } })}${EOL}`,
++        incomplete: false,
++      });
++
++      const result = await runAsCall({ pattern: 'hello' });
++
++      // A request carrying the result is refused, naming where it is.
++      expect(result.llmContentAuthors).toBeNull();
 +    });
 +
 +    it('leads a result the caller limited with the harness notice', async () => {
@@ -403422,7 +403463,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
    resolvePath,
    unescapePath,
  } from '../utils/paths.js';
-@@ -27,29 +43,45 @@
+@@ -27,57 +43,91 @@
    getQwenIgnoreFileNames,
    QwenIgnoreParser,
  } from '../utils/qwenIgnoreParser.js';
@@ -403451,11 +403492,21 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
    type: 'match';
    data: {
      path: { text?: string; bytes?: string };
-     lines?: { text?: string };
+-    lines?: { text?: string };
++    lines?: { text?: string; bytes?: string };
      line_number: number;
    };
  }
  
++/**
++ * What a matched line that is not UTF-8 shows in place of its text. ripgrep
++ * reports such a line as its bytes; text is never decoded as something it
++ * does not encode, so the line has no text to show, and the model is told so
++ * and how to read it rather than shown an empty line.
++ */
++const NON_UTF8_LINE =
++  " [this line is not valid UTF-8, so it has no text to show here; read its bytes with a shell command, or convert the file with 'iconv -f SOURCE_ENCODING -t UTF-8' and search the converted file]";
++
  interface RipgrepMatchLine {
    rawLine: string;
 +  /**
@@ -403471,7 +403522,17 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
  
  function isRipgrepJsonMatch(value: unknown): value is RipgrepJsonMatch {
    if (typeof value !== 'object' || value === null) return false;
-@@ -66,18 +98,27 @@
+   const candidate = value as {
+     type?: unknown;
+     data?: {
+       path?: { text?: unknown; bytes?: unknown };
+-      lines?: { text?: unknown };
++      lines?: { text?: unknown; bytes?: unknown };
+       line_number?: unknown;
+     };
+   };
+   return (
+     candidate.type === 'match' &&
      (typeof candidate.data?.path?.text === 'string' ||
        typeof candidate.data?.path?.bytes === 'string') &&
      typeof candidate.data?.line_number === 'number'
@@ -403502,7 +403563,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
  
  /**
   * Per-process cache for AI ignore-file discovery. The same directories show
-@@ -166,13 +207,13 @@
+@@ -166,13 +216,13 @@
     */
    limit?: number;
  }
@@ -403517,7 +403578,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
      params: RipGrepToolParams,
    ) {
      super(params);
-@@ -194,34 +235,36 @@
+@@ -194,34 +244,36 @@
      if (workspaceContext.isPathWithinWorkspace(resolvedPath)) {
        return 'allow';
      }
@@ -403558,7 +403619,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        const searchResult = await this.performRipgrepSearch({
          pattern: this.params.pattern,
          paths: searchPaths,
-@@ -229,55 +272,83 @@
+@@ -229,59 +281,108 @@
          signal,
        });
        const rawOutput = searchResult.stdout;
@@ -403633,28 +403694,60 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
 +              if (shownPath === undefined) return [];
 +              const filePath = shownPath.text;
                const lineNumber = String(parsed.data.line_number);
-               const content = parsed.data.lines?.text ?? '';
-+              // The line as the file holds it, less the line break ripgrep
-+              // reports it with.
-+              const lineText = content.replace(/\r?\n$/, '');
-               return [
-                 {
+-              const content = parsed.data.lines?.text ?? '';
+-              return [
+-                {
 -                  rawLine: `${filePath}:${lineNumber}:${content.replace(/\r?\n$/, '')}`,
-+                  rawLine: `${filePath}:${lineNumber}:${lineText}`,
-+                  authored: authored(
-+                    shownPath,
-+                    harnessText(':'),
-+                    worldText(lineNumber),
-+                    harnessText(':'),
-+                    worldText(lineText),
-+                  ),
-                   filePath,
-                   key: `${filePath}:${lineNumber}`,
-                 },
-               ];
+-                  filePath,
+-                  key: `${filePath}:${lineNumber}`,
+-                },
+-              ];
++              const key = `${filePath}:${lineNumber}`;
++              const { text, bytes } = parsed.data.lines ?? {};
++              if (typeof text === 'string') {
++                // The line as the file holds it, less the line break ripgrep
++                // reports it with.
++                const lineText = text.replace(/\r?\n$/, '');
++                return [
++                  {
++                    rawLine: `${filePath}:${lineNumber}:${lineText}`,
++                    authored: authored(
++                      shownPath,
++                      harnessText(':'),
++                      worldText(lineNumber),
++                      harnessText(':'),
++                      worldText(lineText),
++                    ),
++                    filePath,
++                    key,
++                  },
++                ];
++              }
++              if (typeof bytes === 'string') {
++                return [
++                  {
++                    rawLine: `${filePath}:${lineNumber}:${NON_UTF8_LINE}`,
++                    authored: authored(
++                      shownPath,
++                      harnessText(':'),
++                      worldText(lineNumber),
++                      harnessText(`:${NON_UTF8_LINE}`),
++                    ),
++                    filePath,
++                    key,
++                  },
++                ];
++              }
++              // ripgrep writes every match with its line, as text or as
++              // bytes; a match without one states no authors.
++              return [{ rawLine: `${filePath}:${lineNumber}:`, filePath, key }];
              } catch {
                return [];
-@@ -339,89 +410,98 @@
+             }
+           }
+ 
+           const fields = line.split(RIPGREP_FIELD_SEPARATOR);
+@@ -339,89 +440,98 @@
            const incompleteMsg = this.buildIncompleteSearchMessage(
              searchLocationDescription,
              filterDescription,
@@ -403808,7 +403901,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
          displayTags.push('incomplete');
        }
        if (displayTags.length > 0) {
-@@ -435,22 +515,33 @@
+@@ -435,22 +545,33 @@
            ),
          ),
        );
@@ -403844,7 +403937,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
  
    private filterQwenIgnoredMatches(
      lines: RipgrepMatchLine[],
-@@ -569,20 +660,49 @@
+@@ -569,20 +690,49 @@
      }
  
      return result;
@@ -403901,7 +403994,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
      const { recovery } = result;
      if (recovery === undefined) {
        return;
-@@ -670,20 +790,16 @@
+@@ -670,20 +820,16 @@
  
  /**
   * Implementation of the Grep tool logic
@@ -403923,7 +404016,7 @@ diff --git a/packages/core/src/tools/ripGrep.ts b/packages/core/src/tools/ripGre
        'Grep',
        'A powerful search tool built on ripgrep\n\n  Usage:\n  - ALWAYS use Grep for search tasks. NEVER invoke `grep` or `rg` as a Bash command. The Grep tool has been optimized for correct permissions and access.\n  - Supports full regex syntax (e.g., "log.*Error", "function\\s+\\w+")\n  - Filter files with glob parameter (e.g., "*.js", "**/*.tsx")\n  - Use Agent tool for open-ended searches requiring multiple rounds\n  - Pattern syntax: Uses ripgrep (not grep) - special regex characters need escaping (use `interface\\{\\}` to find `interface{}` in Go code)\n',
        Kind.Search,
-@@ -709,63 +825,83 @@
+@@ -709,63 +855,83 @@
              minimum: 1,
              description:
                'Limit output to first N lines/entries. Must be a positive integer. Optional - shows all matches if not specified.',
