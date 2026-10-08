@@ -424,6 +424,32 @@ def _validate_locked_boundary_after(state: State) -> None:
         ),
         label=label,
     )
+    # The locked run is one decision, the launcher's, stated twice: the flag
+    # every behavioural gate reads through Config and the environment the
+    # prompt composer and authentication read without one. A run that states
+    # one without the other is refused where a Config is made, so the two
+    # cannot disagree in any running process.
+    require_text(
+        state,
+        "packages/cli/src/config/config.ts",
+        "  if (\n"
+        "    !lockedAgentServiceMode &&\n"
+        "    process.env['QWEN38_AGENT_SERVICE_LOCKED'] !== undefined\n"
+        "  ) {",
+        label=label,
+    )
+    require_text(
+        state,
+        "packages/cli/src/config/config.test.ts",
+        "refuses the locked runtime environment in a run not started locked",
+        label=label,
+    )
+    forbid_text(
+        state,
+        "packages/core/src/tools/agent/agent.ts",
+        "reached an unlocked agent dispatcher",
+        label=label,
+    )
     # The locked run's stdin is the operator's task, which its launcher writes
     # and closes, so it is read to its end rather than given up on after
     # upstream's half second: a slow start cannot read the task as none.

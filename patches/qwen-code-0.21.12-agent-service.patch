@@ -52520,7 +52520,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
      const sourceData = {
        conversation: { sessionId: sourceSessionId, messages: [] },
        uiHistory: [],
-@@ -3052,12 +2927,196 @@
+@@ -3052,12 +2927,208 @@
      process.argv = ['node', 'script.js'];
      const argv = await parseArguments();
      const config = await loadCliConfig(baseSettings, argv, undefined, []);
@@ -52678,6 +52678,18 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
 +    );
 +  });
 +
++  it('refuses the locked runtime environment in a run not started locked', async () => {
++    vi.stubEnv('QWEN38_AGENT_SERVICE_LOCKED', '1');
++    process.argv = ['node', 'script.js'];
++    const argv = await parseArguments();
++    await expect(
++      loadCliConfig(baseSettings, argv, undefined, []),
++    ).rejects.toThrow(
++      'QWEN38_AGENT_SERVICE_LOCKED is set ("1") and --foreground-agents-only is not',
++    );
++    vi.unstubAllEnvs();
++  });
++
 +  it('fails closed when the foreground-only deployment prompt paths are not sealed', async () => {
 +    process.argv = ['node', 'script.js', '--foreground-agents-only'];
 +    const argv = await parseArguments();
@@ -52717,7 +52729,7 @@ diff --git a/packages/cli/src/config/config.test.ts b/packages/cli/src/config/co
        'script.js',
        '--allowed-mcp-server-names',
        'server1',
-@@ -3923,20 +3982,20 @@
+@@ -3923,20 +3994,20 @@
      process.argv = ['node', 'script.js'];
      const argv = await parseArguments();
      const settings: Settings = {
@@ -53048,14 +53060,29 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
   * else undefined (Config applies the default of 5).
   *
   * Yargs accepts `NaN` from non-numeric flag values, and Config's clamp
-@@ -1570,12 +1468,59 @@
+@@ -1570,12 +1468,74 @@
    if (debugMode && process.env['QWEN_DEBUG_LOG_FILE'] === undefined) {
      process.env['QWEN_DEBUG_LOG_FILE'] = '1';
    }
    const bareMode = isBareMode(argv.bare);
    const safeMode =
      argv.safeMode !== undefined ? argv.safeMode : isSafeModeEnv();
++  // The locked agent-service run is one decision, the launcher's, which it
++  // states twice: --foreground-agents-only, which every behavioural gate
++  // reads through Config, and QWEN38_AGENT_SERVICE_LOCKED=1, which the code
++  // that composes the deployment prompt and validates authentication reads
++  // without one. A run is admitted only when both state it or neither does,
++  // so no process can hold the locked prompt without the locked behaviour, or
++  // the behaviour without the prompt.
 +  const lockedAgentServiceMode = argv.foregroundAgentsOnly === true;
++  if (
++    !lockedAgentServiceMode &&
++    process.env['QWEN38_AGENT_SERVICE_LOCKED'] !== undefined
++  ) {
++    throw new Error(
++      `QWEN38_AGENT_SERVICE_LOCKED is set (${JSON.stringify(process.env['QWEN38_AGENT_SERVICE_LOCKED'])}) and --foreground-agents-only is not: the locked agent-service run is started with both, and any other run with neither. Unset QWEN38_AGENT_SERVICE_LOCKED, or start the locked run as its launcher does.`,
++    );
++  }
 +  if (lockedAgentServiceMode) {
 +    const requiredEnvironment: Record<string, string> = {
 +      QWEN38_AGENT_SERVICE_LOCKED: '1',
@@ -53108,7 +53135,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    // every content generator and the preconnect path. Resolution there ORs this
    // with QWEN_TLS_INSECURE / NODE_TLS_REJECT_UNAUTHORIZED=0.
    if (argv.insecure) {
-@@ -1635,13 +1580,26 @@
+@@ -1635,13 +1595,26 @@
    const globalOutputLanguagePath = path.join(
      Storage.getGlobalQwenDir(),
      'output-language.md',
@@ -53136,7 +53163,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
        outputLanguageFilePath = globalOutputLanguagePath;
      }
    }
-@@ -1649,16 +1607,22 @@
+@@ -1649,16 +1622,22 @@
    const fileService = new FileDiscoveryService(
      cwd,
      settings.context?.fileFiltering?.customIgnoreFiles,
@@ -53161,7 +53188,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
    let lspClient: LspClient | undefined;
    const question = argv.promptInteractive || argv.prompt || '';
    const inputFormat: InputFormat =
-@@ -1979,16 +1943,14 @@
+@@ -1979,16 +1958,14 @@
      argv.screenReader !== undefined
        ? argv.screenReader
        : (settings.ui?.accessibility?.screenReader ?? false);
@@ -53178,7 +53205,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      if (argv.continue) {
        sessionData = await sessionService.loadLastSession();
        if (sessionData) {
-@@ -2003,27 +1965,13 @@
+@@ -2003,27 +1980,13 @@
  
      if (argv.resume) {
        // By the time we get here, argv.resume has been resolved to a valid
@@ -53207,7 +53234,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          const message = `No saved session found with ID ${argv.resume}. Run \`qwen --resume\` without an ID to choose from existing sessions.`;
          writeStderrLine(message);
          process.exit(1);
-@@ -2041,20 +1989,12 @@
+@@ -2041,20 +2004,12 @@
          );
          process.exit(1);
        }
@@ -53228,7 +53255,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
            writeStderrLine(`Failed to load forked session ${forkedSessionId}.`);
            process.exit(1);
          }
-@@ -2097,59 +2037,69 @@
+@@ -2097,59 +2052,69 @@
    // and compute which gated (project/workspace) servers are still pending
    // approval (#4615), so the discovery layer can skip them with no connection
    // side effect. Loading `.mcp.json` is a pure read.
@@ -53303,7 +53330,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          : argv.allowedTools || settings.tools?.allowed || undefined,
      excludeTools: mergedDeny,
      disabledSlashCommands:
-@@ -2190,25 +2140,30 @@
+@@ -2190,25 +2155,30 @@
        deny: mergedDeny.length > 0 ? mergedDeny : undefined,
        autoMode:
          bareMode || safeMode ? undefined : settings.permissions?.autoMode,
@@ -53347,7 +53374,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
        bareMode || safeMode ? undefined : settings.tools?.callCommand,
      mcpServerCommand:
        bareMode || safeMode ? undefined : settings.mcp?.serverCommand,
-@@ -2229,26 +2184,23 @@
+@@ -2229,26 +2199,23 @@
        : undefined,
      approvalMode,
      accessibility: {
@@ -53374,7 +53401,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
        argv.proxy ||
        settings.proxy ||
        process.env['HTTPS_PROXY'] ||
-@@ -2257,22 +2209,17 @@
+@@ -2257,22 +2224,17 @@
        process.env['http_proxy'],
      cwd,
      fileDiscoveryService: fileService,
@@ -53397,7 +53424,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
      artifactEnabled: settings.experimental?.artifact ?? true,
      artifactAutoOpen: settings.artifact?.autoOpen ?? true,
      artifactPublisher: settings.artifact?.publisher ?? 'local',
-@@ -2336,72 +2283,61 @@
+@@ -2336,72 +2298,61 @@
        bareMode || safeMode
          ? false
          : (settings.security?.allowPrivateNetworkHooks ?? false),
@@ -53476,7 +53503,7 @@ diff --git a/packages/cli/src/config/config.ts b/packages/cli/src/config/config.
          ? undefined
          : (hooksConfig?.userHooks ?? settings.hooks),
      projectHooks: bareMode || safeMode ? undefined : hooksConfig?.projectHooks,
-@@ -2416,17 +2352,12 @@
+@@ -2416,17 +2367,12 @@
      // `--input-file` fall back to settings.dualOutput.* when the flag is
      // absent.
      jsonFd: argv.jsonFd,
@@ -389546,19 +389573,16 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Parent abort still propagates down (so ESC at the parent kills
        // the subagent), but child abort does NOT propagate up.
        const fgAbortController = new AbortController();
-@@ -3941,28 +4134,67 @@
+@@ -3941,28 +4134,64 @@
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
        }
  
        const fgHookOpts = { ...hookOpts, signal: fgAbortController.signal };
++      // The locked runtime's environment and its flag are admitted only
++      // together (loadCliConfig), so either names this dispatcher's mode.
 +      const qwen38LockedRuntime = isQwen38LockedAgentServiceRuntime();
-+      if (qwen38LockedRuntime && !this.config.getForegroundAgentsOnly()) {
-+        throw new Error(
-+          'locked Qwen3.8 agent-service runtime reached an unlocked agent dispatcher',
-+        );
-+      }
 +      let qwen38Execution:
 +        | {
 +            scratchDir: string;
@@ -389621,7 +389645,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // the gating logic).
        //
        // Persistence wiring mirrors the background path so foreground
-@@ -3970,32 +4202,18 @@
+@@ -3970,32 +4199,18 @@
        // as their backgrounded counterparts. Without this, post-mortem of a
        // cancelled / crashed foreground subagent has no on-disk evidence
        // beyond what made it into the parent's tool result.
@@ -389655,7 +389679,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            (input) => registry.queueExternalInput(hookOpts.agentId, input),
            () => registry.wakeExternalInputWaiters(hookOpts.agentId),
          );
-@@ -4024,14 +4242,13 @@
+@@ -4024,14 +4239,13 @@
        let fgLiveToolCallCount = 0;
        const refreshFgLiveStats = () => {
          const entry = registry.get(hookOpts.agentId);
@@ -389671,7 +389695,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        };
        const onFgToolCall = (...args: unknown[]) => {
          const event = args[0] as AgentToolCallEvent;
-@@ -4046,191 +4263,262 @@
+@@ -4046,191 +4260,262 @@
        const onFgUsageMetadata = () => {
          refreshFgLiveStats();
        };
@@ -390100,7 +390124,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // happened between provisioning and the inner try (e.g. inside
        // `createApprovalModeOverride`, the agent constructor, or
        // anywhere else upstream of the foreground/background try blocks
-@@ -4257,21 +4545,38 @@
+@@ -4257,21 +4542,38 @@
        } catch (restoreError) {
          debugLogger.warn(
            `[AgentTool] restoreParentPM after error failed: ${restoreError}`,
