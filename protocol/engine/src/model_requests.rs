@@ -205,23 +205,8 @@ fn project_decoded_draw(
             }
         }
         if !observations.is_empty() {
-            if part_calls.len() == 2 {
-                let first = part_calls[0].as_object();
-                let second = part_calls[1].as_object();
-                if let (Some(first), Some(second)) = (first, second) {
-                    let first_args = first.get("args").and_then(serde_json::Value::as_object);
-                    let second_args = second.get("args").and_then(serde_json::Value::as_object);
-                    if first.get("name").is_some_and(js_truthy)
-                        && first_args.is_none_or(|args| args.is_empty())
-                        && second.get("name").is_none_or(|name| !js_truthy(name))
-                        && second_args.is_some_and(|args| !args.is_empty())
-                    {
-                        part_calls = vec![serde_json::json!({
-                            "name": first.get("name"), "args": second.get("args")
-                        })];
-                    }
-                }
-            }
+            // Each call as it was served: two calls stay two, whatever either
+            // holds, as the client reads them.
             calls.extend(part_calls);
             incomplete.extend(
                 item.get("incomplete_tool_calls")
@@ -2849,6 +2834,25 @@ mod tests {
             SNAPSHOT_ELEMENTS[6..].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
         );
         assert_eq!(snapshot_bytes(&calls), Some(expected.len()));
+    }
+
+    /// Two calls a draw was served are projected as two -- a call with a name
+    /// and no arguments beside one with arguments and no name included -- so
+    /// the record is believed only when it carries what was served, and such
+    /// a draw declares no snapshot.
+    #[test]
+    fn a_draw_s_calls_are_projected_as_they_were_served() {
+        let named = json!({"name":"state_snapshot","args":{}});
+        let unnamed = json!({"args":{"current_work":"x"}});
+        let observation = json!({
+            "response": {"candidates":[{"content":{"parts":[
+                {"functionCall": named}, {"functionCall": unnamed}
+            ]},"finishReason":"STOP"}]},
+            "incomplete_tool_calls": [],
+        });
+        let projection = project_decoded_draw(&[observation], None).unwrap();
+        assert_eq!(projection["functionCalls"], json!([named, unnamed]));
+        assert_eq!(projection["snapshotBytes"], serde_json::Value::Null);
     }
 
     /// A declaration is measured by its shape alone, whatever its sections

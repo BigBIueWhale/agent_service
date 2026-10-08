@@ -430856,6 +430856,31 @@ new file mode 100644
 +    return String(response);
 +  }
 +}
+diff --git a/packages/core/src/utils/generateContentResponseUtilities.test.ts b/packages/core/src/utils/generateContentResponseUtilities.test.ts
+--- a/packages/core/src/utils/generateContentResponseUtilities.test.ts
++++ b/packages/core/src/utils/generateContentResponseUtilities.test.ts
+@@ -119,12 +119,21 @@
+       const func = { name: 'testFunc', args: { a: 1 } };
+       const response = mockResponse([
+         mockFunctionCallPart(func.name, func.args),
+       ]);
+       expect(getFunctionCalls(response)).toEqual([func]);
+     });
++    it('keeps a call with a name and no arguments, and one with arguments and no name, as the two calls they were served as', () => {
++      const named = { name: 'state_snapshot', args: {} };
++      const unnamed = { args: { current_work: 'x' } };
++      const response = mockResponse([
++        { functionCall: named },
++        { functionCall: unnamed },
++      ]);
++      expect(getFunctionCalls(response)).toEqual([named, unnamed]);
++    });
+     it('should extract multiple function calls', () => {
+       const func1 = { name: 'testFunc1', args: { a: 1 } };
+       const func2 = { name: 'testFunc2', args: { b: 2 } };
+       const response = mockResponse([
+         mockFunctionCallPart(func1.name, func1.args),
+         mockFunctionCallPart(func2.name, func2.args),
 diff --git a/packages/core/src/utils/generateContentResponseUtilities.ts b/packages/core/src/utils/generateContentResponseUtilities.ts
 --- a/packages/core/src/utils/generateContentResponseUtilities.ts
 +++ b/packages/core/src/utils/generateContentResponseUtilities.ts
@@ -430876,6 +430901,56 @@ diff --git a/packages/core/src/utils/generateContentResponseUtilities.ts b/packa
  ): string | undefined {
    if (!parts || parts.length === 0) {
      return undefined;
+@@ -125,42 +125,29 @@
+   if (segments.length === 0) {
+     return undefined;
+   }
+   return segments.join('\n');
+ }
+ 
++/**
++ * The calls a response carries, each as it was served. Two calls are two
++ * calls, whatever either holds: one with a name and no arguments beside one
++ * with arguments and no name is what the provider served, and the reader
++ * that asked for one call refuses it as two, rather than this joining them
++ * into a call nobody made.
++ */
+ export function getFunctionCalls(
+   response: GenerateContentResponse,
+ ): FunctionCall[] | undefined {
+   const parts = response.candidates?.[0]?.content?.parts;
+   if (!parts) {
+     return undefined;
+   }
+   const functionCallParts = parts
+     .filter((part) => !!part.functionCall)
+     .map((part) => part.functionCall as FunctionCall);
+-
+-  // Handle special case: model returns two tool_calls where first has name but no args,
+-  // and second has no name but has args. Merge them together.
+-  if (functionCallParts.length === 2) {
+-    const [first, second] = functionCallParts;
+-    const firstHasNameOnly =
+-      first.name && (!first.args || Object.keys(first.args).length === 0);
+-    const secondHasArgsOnly =
+-      !second.name && second.args && Object.keys(second.args).length > 0;
+-
+-    if (firstHasNameOnly && secondHasArgsOnly) {
+-      return [
+-        {
+-          name: first.name,
+-          args: second.args,
+-        },
+-      ];
+-    }
+-  }
+-
+   return functionCallParts.length > 0 ? functionCallParts : undefined;
+ }
+ 
+ export function getFunctionCallsFromParts(
+   parts: Part[],
+ ): FunctionCall[] | undefined {
 diff --git a/packages/core/src/utils/getFolderStructure.test.ts b/packages/core/src/utils/getFolderStructure.test.ts
 --- a/packages/core/src/utils/getFolderStructure.test.ts
 +++ b/packages/core/src/utils/getFolderStructure.test.ts

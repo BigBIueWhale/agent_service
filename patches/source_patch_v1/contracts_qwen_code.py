@@ -3824,6 +3824,20 @@ def _validate_no_repair_validation_after(state: State) -> None:
         "Four-pass coercion",
     ):
         forbid_text(state, validator, needle, label=label)
+    # A response's calls are read as they were served. Upstream joins a call
+    # with a name and no arguments to one with arguments and no name; that
+    # call was never made, and the compaction draw that carried two calls is
+    # refused as two, so the client and both certifiers read two.
+    calls = "packages/core/src/utils/generateContentResponseUtilities.ts"
+    for needle in ("firstHasNameOnly", "secondHasArgsOnly", "Merge them together"):
+        forbid_text(state, calls, needle, label=label)
+    require_text(
+        state,
+        "packages/core/src/utils/generateContentResponseUtilities.test.ts",
+        "keeps a call with a name and no arguments, and one with arguments and no name, "
+        "as the two calls they were served as",
+        label=label,
+    )
     # A schema that cannot be compiled cannot be checked, and an unchecked
     # call is not a safe call. The guard no longer switches itself off.
     forbid_text(state, validator, "Skipping parameter validation.", label=label)
@@ -12808,7 +12822,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
         name="validation-refuses-rather-than-repairs",
         rationale=(
             "Schema validation leaves supplied arguments unchanged. A constraint violation or "
-            "uncompilable schema refuses execution and identifies the error."
+            "uncompilable schema refuses execution and identifies the error. A response's calls "
+            "are read as they were served: two calls are never joined into one nobody made."
         ),
         removal_condition=(
             "Upstream refuses invalid and uncompilable schemas without coercion or skipped validation."
