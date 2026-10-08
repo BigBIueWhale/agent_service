@@ -144715,7 +144715,7 @@ new file mode 100644
 diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/src/agents/agent-transcript.test.ts
 --- a/packages/core/src/agents/agent-transcript.test.ts
 +++ b/packages/core/src/agents/agent-transcript.test.ts
-@@ -10,41 +10,100 @@
+@@ -10,41 +10,101 @@
  import * as os from 'node:os';
  import {
    getSubagentSessionDir,
@@ -144748,6 +144748,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +import { GenerateContentResponse, type Content, type Part } from '@google/genai';
 +import { FinishReason } from '../core/genai-compat.js';
 +import { committedModelParts } from '../test-utils/authored-text.js';
++import { authoredTextPart, harnessText } from '../core/text-authorship.js';
 +import {
 +  freezeModelGeneration,
 +  generationIncompleteCalls,
@@ -144819,7 +144820,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
          path.join('/proj', 'subagents', 'sess-1'),
        );
      });
-@@ -96,47 +155,51 @@
+@@ -96,47 +156,51 @@
  
      function makeConfig(cliVersion: string): Config {
        return {
@@ -144873,7 +144874,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
        expect(options.sessionId).toBe('launch-session');
        expect(jsonlPath).toBe(
          getAgentJsonlPath('/proj/dir', 'launch-session', 'agent-1'),
-@@ -160,13 +223,15 @@
+@@ -160,13 +224,15 @@
          tempDir,
          'subagents',
          's1',
@@ -144889,7 +144890,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
          parentAgentId: null,
          createdAt: '2026-04-20T00:00:00.000Z',
        };
-@@ -181,13 +246,15 @@
+@@ -181,13 +247,15 @@
          'a',
          'deeply',
          'nested',
@@ -144905,7 +144906,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
          parentAgentId: null,
          createdAt: 'now',
        });
-@@ -199,13 +266,15 @@
+@@ -199,13 +267,15 @@
          tempDir,
          'subagents',
          's1',
@@ -144921,7 +144922,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
          parentAgentId: null,
          createdAt: 'now',
          status: 'running',
-@@ -220,662 +289,1323 @@
+@@ -220,662 +290,1341 @@
          subagentName: 'explore',
          executionAllowedTools: [],
        });
@@ -145153,6 +145154,30 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 -        ],
 -        initialUserPrompt: 'visible launch prompt',
 -        launchTaskPrompt: 'Begin.',
++    it('keeps the authors each part of a user message states, and states no provenance', async () => {
++      const f = makeWriter({
++        initialUserMessage: {
++          role: 'user',
++          parts: [authoredTextPart(harnessText('a notice the harness wrote'))],
++        },
+       });
++      await f.recorder.flush();
++      const [record] = f.read();
++      expect(record).not.toHaveProperty('provenance');
++      expect(record?.message?.parts).toEqual([
++        {
++          text: 'a notice the harness wrote',
++          authors: [{ author: 'harness', length: 26 }],
++        },
++      ]);
++    });
+ 
+-      emitter.emit(AgentEventType.ROUND_TEXT, {
+-        subagentId: 'agent-x',
+-        round: 1,
+-        text: 'started',
+-        thoughtText: '',
+-        timestamp: Date.now(),
 +    it('requires an actual attached writer and forgets it after cleanup', async () => {
 +      const emitter = new AgentEventEmitter();
 +      expect(() => requireAgentTranscriptRecorder(emitter)).toThrow(
@@ -145187,25 +145212,6 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +        generation: draw({ parts: [{ text: 'owned' }] }).generation,
 +        historyLength: 0,
        });
--
--      emitter.emit(AgentEventType.ROUND_TEXT, {
--        subagentId: 'agent-x',
--        round: 1,
--        text: 'started',
--        thoughtText: '',
--        timestamp: Date.now(),
-+      f.cleanup();
-+      expect(f.read()).toHaveLength(1);
-+      expect(fs.existsSync(path.join(tempDir, 'other.jsonl'))).toBe(false);
-+    });
-+    it('[stopped-call] keeps a call the output limit stopped in the refused draw\'s generation evidence, outside history', async () => {
-+      const f = makeWriter();
-+      const stopped = { name: 'write_file', arguments: '{"content": "cut' };
-+      const cutDraw = draw({
-+        parts: [{ text: 'thinking', thought: true }],
-+        finishReason: FinishReason.MAX_TOKENS,
-+        incompleteToolCalls: [stopped],
-       });
 -      cleanup();
 -
 -      const records = readJsonl(jsonlPath);
@@ -145221,16 +145227,24 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 -          { role: 'user', parts: [{ text: 'bootstrap env' }] },
 -          { role: 'model', parts: [{ text: 'bootstrap ack' }] },
 -        ],
++      f.cleanup();
++      expect(f.read()).toHaveLength(1);
++      expect(fs.existsSync(path.join(tempDir, 'other.jsonl'))).toBe(false);
++    });
++    it('[stopped-call] keeps a call the output limit stopped in the refused draw\'s generation evidence, outside history', async () => {
++      const f = makeWriter();
++      const stopped = { name: 'write_file', arguments: '{"content": "cut' };
++      const cutDraw = draw({
++        parts: [{ text: 'thinking', thought: true }],
++        finishReason: FinishReason.MAX_TOKENS,
++        incompleteToolCalls: [stopped],
+       });
+-      expect(records[2]?.systemPayload).toMatchObject({
+-        displayText: 'Begin.',
 +      const wholeDraw = draw({ parts: [{ text: 'next' }] });
 +      await f.recorder.recordGeneration({
 +        generation: cutDraw.generation,
 +        historyLength: null,
-       });
--      expect(records[2]?.systemPayload).toMatchObject({
--        displayText: 'Begin.',
-+      await f.recorder.recordGeneration({
-+        generation: wholeDraw.generation,
-+        historyLength: 0,
        });
 -    });
 -
@@ -145239,12 +145253,9 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 -      const { cleanup } = makeWriter(jsonlPath, {
 -        bootstrapHistory: [],
 -        launchTaskPrompt: 'Begin.',
-+      f.cleanup();
-+      const [cut, whole] = f.read();
-+      expect(cut).toMatchObject({
-+        type: 'model_generation',
-+        historyDisposition: 'abandoned',
-+        generation: cutDraw.generation,
++      await f.recorder.recordGeneration({
++        generation: wholeDraw.generation,
++        historyLength: 0,
        });
 -
 -      cleanup();
@@ -145253,6 +145264,13 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 -      expect(records.map((record) => [record.type, record.subtype])).toEqual([
 -        ['system', 'agent_bootstrap'],
 -        ['system', 'agent_launch_prompt'],
++      f.cleanup();
++      const [cut, whole] = f.read();
++      expect(cut).toMatchObject({
++        type: 'model_generation',
++        historyDisposition: 'abandoned',
++        generation: cutDraw.generation,
++      });
 +      expect(cut).not.toHaveProperty('message');
 +      const cutEnvelope = readModelGeneration(cut.generation);
 +      expect(generationParts(cutEnvelope)).toEqual([
@@ -145779,7 +145797,9 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +      expect(records[1].message).toEqual(initialUserMessage);
 +      const admitted = f.admit();
 +      expect(admitted.diagnostics).toEqual([]);
-+      expect(
+       expect(
+-        JSON.parse(
+-          fs.readFileSync(`${jsonlPath}.stream`, 'utf8').trim().split('\n')[0]!,
 +        buildApiHistoryFromConversation({
 +          messages: admitted.records as ChatRecord[],
 +        }),
@@ -145803,9 +145823,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +      }
 +      expect(failure).toBeInstanceOf(Error);
 +      expect(String(failure)).toContain('invalid Content entries');
-       expect(
--        JSON.parse(
--          fs.readFileSync(`${jsonlPath}.stream`, 'utf8').trim().split('\n')[0]!,
++      expect(
 +        thrownBy(() =>
 +          f.recorder.recordRuntimeHistory({
 +            kind: 'checkpoint',
@@ -145974,7 +145992,9 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +      f.recorder.recordRuntimeHistory({
 +        kind: 'checkpoint',
 +        state: { history: [], imagePayloads: [] },
-+      });
+       });
+-      cleanup();
+-      expect(fs.existsSync(`${jsonlPath}.stream`)).toBe(false);
 +      const parts = [
 +        { text: ' raw answer\r\n' },
 +        { text: ' reasoning ', thought: true },
@@ -145987,9 +146007,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +        type: 'model_generation',
 +        historyDisposition: 'abandoned',
 +        generation: refusedDraw.generation,
-       });
--      cleanup();
--      expect(fs.existsSync(`${jsonlPath}.stream`)).toBe(false);
++      });
 +      expect(evidence.message).toBeUndefined();
 +      const envelope = readModelGeneration(evidence.generation);
 +      expect(generationParts(envelope)).toEqual(parts);
@@ -146454,13 +146472,13 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
 +      f.recorder.recordRuntimeHistory({
 +        kind: 'checkpoint',
 +        state: { history: [{ role: 'user', parts }], imagePayloads: [] },
-       });
--      expect(records[0].externalInputKind).toBe('notification');
++      });
 +      f.cleanup();
 +      expect(f.read()[0]).toMatchObject({
 +        message: { role: 'user', parts },
 +        externalInputKind: 'notification',
-+      });
+       });
+-      expect(records[0].externalInputKind).toBe('notification');
 +      expect(buildApiHistoryFromConversation({ messages: f.read() })).toEqual([
 +        { role: 'user', parts },
 +      ]);
@@ -146780,7 +146798,7 @@ diff --git a/packages/core/src/agents/agent-transcript.test.ts b/packages/core/s
    describe('normalizeResumedAgentDepth', () => {
      it('passes through valid persisted depths and absent values', () => {
        expect(normalizeResumedAgentDepth(undefined)).toBeUndefined();
-@@ -898,6 +1628,11 @@
+@@ -898,6 +1647,11 @@
        expect(normalizeResumedAgentDepth(null as unknown as number)).toBe(
          undefined,
        );
@@ -147020,7 +147038,7 @@ diff --git a/packages/core/src/agents/agent-transcript.ts b/packages/core/src/ag
  export interface AgentTranscriptAttachTarget {
    jsonlPath: string;
    options: AttachJsonlOptions;
-@@ -350,93 +352,158 @@
+@@ -350,93 +352,164 @@
   * The path follows the merged `sessionId` — the live session by default;
   * background resume overrides it with the persisted parent session.
   */
@@ -147193,6 +147211,12 @@ diff --git a/packages/core/src/agents/agent-transcript.ts b/packages/core/src/ag
    };
  
 -  const baseFields = (type: ChatRecord['type']) => ({
++  // A child's record states no provenance. Its parts keep the authors they
++  // were composed with, which every request that carries them states; a root
++  // record's provenance is the one determination between the operator's text
++  // and the runtime's read from those authors, and a child is given no
++  // operator text -- its first message is the parent model's prompt -- so
++  // the field could only say `system`, and say it of the parent model's words.
 +  const baseFields = <T extends ChatRecord['type']>(type: T) => ({
 +    recordingVersion: CHAT_RECORDING_VERSION as typeof CHAT_RECORDING_VERSION,
      uuid: randomUUID(),
@@ -147201,7 +147225,7 @@ diff --git a/packages/core/src/agents/agent-transcript.ts b/packages/core/src/ag
      timestamp: new Date().toISOString(),
      type,
      cwd: options.cwd,
-@@ -445,210 +512,426 @@
+@@ -445,210 +518,426 @@
      agentId: options.agentId,
      agentName: options.agentName,
      agentColor: options.agentColor,

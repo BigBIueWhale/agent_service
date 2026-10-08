@@ -12816,6 +12816,25 @@ def _validate_text_authorship_after(state: State) -> None:
             case,
             label=label,
         )
+    # A subagent's transcript keeps the authors its records' parts were
+    # composed with and states no record provenance: that field is the root's
+    # one determination between the operator's text and the runtime's, and a
+    # child is given no operator text, so it could only call the parent
+    # model's prompt the runtime's. Every byte the child model received is
+    # authored in the request evidence the root recording carries.
+    transcript = "packages/core/src/agents/agent-transcript.ts"
+    require_text(state, transcript, "  // A child's record states no provenance. Its parts keep the authors they", label=label)
+    child_fields = _source(state, transcript, label=label)
+    child_fields = child_fields[child_fields.index("  const baseFields = <T extends ChatRecord['type']>(type: T) => ({"):]
+    child_fields = child_fields[: child_fields.index("  });")]
+    _require("provenance" not in child_fields,
+             f"{label}: {transcript} states a provenance on a child record")
+    require_text(
+        state,
+        "packages/core/src/agents/agent-transcript.test.ts",
+        "keeps the authors each part of a user message states, and states no provenance",
+        label=label,
+    )
 
 
 CONCERNS: tuple[SemanticConcern, ...] = (

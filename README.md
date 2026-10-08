@@ -902,7 +902,14 @@ prompt record at its offset -- the service reads that record from
 the client's own claims, a stated limit like `is_error`. The canonical
 recording stores the same request evidence and the same authored parts, and
 a recorded user message's provenance is read from its parts' authors, so
-the stream and the transcript read one determination.
+the stream and the transcript read one determination. A subagent's
+transcript keeps its records' parts with the authors they were composed with
+and states no record provenance, by design: that field says whether a message
+carries the operator's text or only the runtime's, and a child is given no
+operator text -- its first message is the parent model's prompt, the model's
+-- so it could only call the parent model's words the runtime's. Every byte
+the child model received is authored in the request evidence the root
+recording carries.
 
 The certifier refuses a chat request sent while
 a call an accepted generation issued in that scope has no row reporting its
