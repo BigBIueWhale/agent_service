@@ -307,7 +307,7 @@ def _validate_locked_boundary_after(state: State) -> None:
         label=label,
     )
     _require(
-        core_source.count("getForegroundAgentsOnly()") >= 13,
+        core_source.count("getForegroundAgentsOnly()") >= 14,
         f"{label}: the mode no longer dominates every initialization/getter gate",
     )
     # Upstream's headless runner starts the cron scheduler after the final
@@ -324,10 +324,26 @@ def _validate_locked_boundary_after(state: State) -> None:
         "    return this.cronEnabled;\n",
         label=label,
     )
+    # Upstream rewrites the model's `git commit` with a co-author trailer, its
+    # `gh pr create` with attribution, and writes attribution notes beside its
+    # commits, all on unless a setting turns them off. The locked run does
+    # none of these, whatever its settings say: the shell runs the command the
+    # model wrote, and the repository it reads back holds only what it wrote.
+    require_text(
+        state,
+        core,
+        "  getGitCoAuthor(): GitCoAuthorSettings {\n"
+        "    if (this.getForegroundAgentsOnly()) {\n"
+        "      return { ...this.gitCoAuthor, commit: false, pr: false };\n"
+        "    }\n",
+        label=label,
+    )
     _require_all(
         state,
         "packages/core/src/config/config.test.ts",
         (
+            "rewrites no commit and writes no attribution in a locked agent-service run, "
+            "whatever its settings say",
             "has no scheduled tasks in a locked agent-service run, whatever its settings "
             "and environment say",
             "registers no scheduling tool in a locked agent-service run, whatever its "
@@ -12617,6 +12633,8 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "it, and no workspace file enters the operator's turn. A compaction carries forward "
             "the same bytes. The run has no scheduled tasks: it ends with its final answer, and "
             "neither a tool nor a tasks file on disk, whoever wrote it, starts a turn after it. "
+            "The shell runs the commands the model wrote: no commit is given a co-author "
+            "trailer, no pull request attribution, and no attribution note is written. "
             "Subagent definitions come from the built-ins alone, and one offered by the "
             "workspace is refused by path rather than skipped, so the work cannot choose the agent "
             "that works on it."

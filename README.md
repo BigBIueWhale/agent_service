@@ -1252,7 +1252,9 @@ also disables managed memory, auto-memory/dream, team memory/synchronization,
 auto-skill, custom slash commands, workflows, include directories, and
 permission-rule persistence, and it has no scheduled tasks: a run ends with its
 final answer, and no tool and no tasks file on disk, the model's included,
-starts a turn after it. The submitted prompt is literal task text: a
+starts a turn after it. The shell runs the command the model wrote: upstream's
+commit co-author trailer, pull-request attribution and attribution notes are
+off in the locked run whatever its settings say. The submitted prompt is literal task text: a
 leading slash and an `@path` in it are ordinary text, no file it names is read
 into it, and the model's first message carries it as written, followed by the
 blank line the client puts after it, as does every compaction after. Init
