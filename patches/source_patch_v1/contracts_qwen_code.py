@@ -3183,6 +3183,16 @@ def _validate_param_contract_before(state: State) -> None:
     # Upstream validates against the schema and nothing more, so a name the
     # schema does not declare is accepted and then dropped.
     forbid_text(state, tools, "undeclaredToolParamsError", label=label)
+    # And its OpenAI converter sends another schema than the one declared: it
+    # opens every closed level that has an optional property and drops
+    # `$schema` and `$id` (#7315), so the grammar the backend compiles from
+    # the wire admits names, repeats and orders the declaration refuses.
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.ts",
+        "            parameters = relaxSchemaForFunctionCalling(parameters);",
+        label=label,
+    )
     require_text(
         state,
         tools,
@@ -3279,6 +3289,21 @@ def _validate_param_contract_after(state: State) -> None:
             "additionalProperties: false" in _source(state, path, label=label),
             f"{label}: {path} must declare its parameter schema closed",
         )
+        # No declaration states the draft the validator reads by default, a
+        # keyword the model would read in every request for nothing.
+        forbid_text(state, path, "json-schema.org/draft-07", label=label)
+    # And reaches the backend as declared: the grammar a call is generated
+    # under is compiled from the wire schema, so a schema opened there would
+    # let the model write what the declaration it reads refuses.
+    converter = "packages/core/src/core/openaiContentGenerator/converter.ts"
+    for path in (converter, "packages/core/src/utils/schemaConverter.ts"):
+        forbid_text(state, path, "relaxSchemaForFunctionCalling", label=label)
+    require_text(
+        state,
+        "packages/core/src/core/openaiContentGenerator/converter.test.ts",
+        "hands a declared schema to the wire as declared, every level it closes closed",
+        label=label,
+    )
 
     _require_all(
         state,
@@ -13272,14 +13297,16 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "JSON-Schema string constraint, because the served engine compiles the declaration "
             "into its generation grammar and refuses a bounded string there; each bound is "
             "enforced in the tool, which names the parameter and the limit when it refuses. "
+            "Every schema reaches the backend exactly as declared, so a closed level is "
+            "generated closed: each declared name once, in declared order, no other. "
             "External schemas retain their declared openness and pattern rules. Authenticated "
             "editor changes travel through private object provenance preserved by scheduler "
             "cloning, never hidden model parameter names."
         ),
         removal_condition=(
-            "Upstream validates each schema as written, declares no string constraint the served "
-            "grammar cannot express, preserves trusted editor provenance outside model JSON, and "
-            "refuses unsupported file ranges."
+            "Upstream validates each schema as written, sends it to the backend as declared, "
+            "declares no string constraint the served grammar cannot express, preserves trusted "
+            "editor provenance outside model JSON, and refuses unsupported file ranges."
         ),
         validate_before=_validate_param_contract_before,
         validate_after=_validate_param_contract_after,

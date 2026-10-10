@@ -249,8 +249,8 @@ startup; a deployment whose own preamble does not fit is refused at startup
 rather than part-way through a session, and a preamble that grows past it is
 refused at the turn that would send it. It is charged in the fit, which bounds
 what a compaction leaves standing. The proof counts this deployment's turn preamble with the Git
-snapshot's repository values and the turn budget's number left out — 7,308 tokens, rendered by the served template and counted by the
-served tokenizer — the startup context that opens every history with its
+snapshot's repository values and the turn budget's number left out — 7,409 tokens, rendered by the served template and counted by the
+served tokenizer, each tool declaration as it is declared — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
 around its blocks — the snapshot's resume trailer — with the blocks left out,
 41 more, and the todo
@@ -260,9 +260,9 @@ may hold, capped in the NFC form the tokenizer reads, as the most tokens they
 can cost: 1,936 for the snapshot's branch line, status and commits, 1,280 for the
 startup context's environment lines and folder listing, 16 for the turn
 budget, the widest a safe integer renders to, and 812 for the todo reminder's
-list and truncation mark. That is a bound of 11,490, the same for every
+list and truncation mark. That is a bound of 11,591, the same for every
 repository, every workspace, every budget and every todo list, so none of them
-can make a deployment refuse to start, with 798 left for the prompt and the
+can make a deployment refuse to start, with 697 left for the prompt and the
 declarations to grow into. Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
@@ -714,8 +714,8 @@ A terminal conversation and a headless conversation share the same obligations:
   await its obligations. Output flush joins actual write callbacks before orderly
   exit. Abrupt failure can still leave an incomplete captured JSONL tail, whose
   earlier valid observations remain available without certifying a complete result.
-- Native schemas remain closed; external schemas retain their advertised JSON
-  Schema semantics. Trusted editor metadata lives outside model arguments. Text
+- Native schemas remain closed, and every schema reaches the backend as it is
+  declared; external schemas retain their advertised JSON Schema semantics. Trusted editor metadata lives outside model arguments. Text
   reads preserve decoded content, and original validated PNG parts retain their
   chronology within the tool response.
 
@@ -1161,7 +1161,10 @@ budget, billed, and recorded as it was served, the refused one with its
 the backend refuses is drawn again the same way, on the same bound. The backend
 refuses a turn whose call names one parameter twice, which a call's arguments
 cannot hold, with a typed 422 inside the stream, `RepeatedToolParameterError`,
-naming the call and the parameter; it publishes no call and serves no usage, so
+naming the call and the parameter. Only a schema that leaves a level open can be
+written that way: a level declared closed reaches the backend closed, and its
+grammar admits each of its names once, in declared order, so in the locked run,
+whose tools are all closed, the refusal cannot come; it publishes no call and serves no usage, so
 nothing of the turn is made or billed, and the redraw is told, in the same
 envelope and voice, that a tool call in its answer named one parameter more than
 once and to name each once. The notice names neither, so it carries no text the

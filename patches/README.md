@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `cb03c7d079a60c656bfe9479a136410227ee14f0f998884c9d357bfcb412efea`
+- Review-diff SHA-256: `c62bfe5a33774884a7e39f65e3c45aedd39b8f7fcffc18ec947d52a1f31009ee`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `d33320ad6181347df2b40cc5c6a79de9e3a3485710210a137271cca3a3b91dd8`
+- Transformer-manifest SHA-256: `6285efa515ca7ce579262c70ee78d2d510be7e1761fe897d458989580ba664fd`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -111,7 +111,10 @@ session and every subagent alike, the way a refused compaction draw is drawn
 again. A turn is refused for reaching its limit, or because the backend refused
 it: a call that names one parameter twice is answered with the backend's typed
 refusal, `RepeatedToolParameterError`, inside the stream, which publishes no
-call and serves no usage. The chat names the message the refused draw answered,
+call and serves no usage. Only a schema that leaves a level open can be written
+that way -- an MCP server's, or a tool here that does not close its own --
+since a closed level reaches the backend closed and its grammar admits each name
+once; the locked run declares only closed tools, so there it cannot come. The chat names the message the refused draw answered,
 and why it was refused, and admits one kind of send against it,
 `redrawRefusedTurn`: its whole message is the refusal notice for that cause, in
 upstream's `<system-reminder>` envelope and in the voice a refused compaction
@@ -913,9 +916,22 @@ never as an empty line.
 
 ## Tool and deployment contracts
 
-Native tool schemas are closed. External tool schemas retain their actual JSON
-Schema semantics, including open objects, pattern properties, and reject-all
-schemas. Trusted editor modifications live outside model JSON and survive the
+Native tool schemas are closed, and every schema reaches the backend as it is
+declared, byte for byte: the backend compiles it into the grammar the call is
+generated under, so a closed level admits each of its names once, in declared
+order, and no name it does not declare, and the declaration the model reads is
+the one its call is held to. Upstream's OpenAI converter dropped
+`additionalProperties: false` from every level with an optional property, and
+`$schema` and `$id` from every level, for gateways that promote every property
+of a closed level to required (#7315); the one route this client admits, vLLM
+with strict tool calling, renders an optional property as optional, so the
+relaxation only opened the grammar to undeclared names, repeats and orders the
+declaration refuses. No native declaration states `$schema` for the draft the
+validator uses anyway, draft-07, so the wire carries no metadata the model
+would read for nothing; the one that states 2020-12, which selects that
+validator, carries it as declared. External tool schemas retain their actual
+JSON Schema semantics, including open objects, pattern properties, and
+reject-all schemas. Trusted editor modifications live outside model JSON and survive the
 scheduler's clone by explicit provenance. Lookalike model parameters cannot
 acquire editor authority.
 

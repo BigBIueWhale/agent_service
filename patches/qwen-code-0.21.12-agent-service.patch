@@ -254673,7 +254673,7 @@ diff --git a/packages/core/src/core/generation-refusal.ts b/packages/core/src/co
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/core/generation-refusal.ts
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,215 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -254706,7 +254706,13 @@ new file mode 100644
 + * length-stopped one as text, which is never made. Or the backend refused
 + * it: the model wrote a call that names one parameter twice, which a call's
 + * arguments cannot hold, so the backend published no call and answered with
-+ * its typed refusal instead. Every draw of a turn is a turn, charged to the
++ * its typed refusal instead. Only a schema that leaves a level open can be
++ * written that way -- an MCP server's that does not close its parameters, or
++ * a tool here that leaves its own open: a declaration reaches the backend as
++ * it is declared, and a level declared closed is generated under a grammar
++ * that admits each of its names once, in the order it declares them. The
++ * locked run declares only closed tools, so there the refusal cannot come.
++ * Every draw of a turn is a turn, charged to the
 + * turn budget like any other and billed in the record with the usage its
 + * response served -- a refused response serves none -- so it is decided
 + * where turns are decided, in the reasoning loops, each by the rule here. A
@@ -272744,7 +272750,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const request: GenerateContentParameters = {
          model: 'models/test',
          contents: [
-@@ -2668,2453 +2342,1617 @@
+@@ -2668,2523 +2342,1658 @@
          role: 'tool',
          tool_call_id: 'call_1',
          content: '',
@@ -274675,28 +274681,44 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -
 -  describe('OpenAI -> Gemini reasoning content', () => {
 -    it('should convert reasoning_content to a thought part for non-streaming responses', () => {
--      const response = converter.convertOpenAIResponseToGemini(
--        {
--          object: 'chat.completion',
++    it('carries no stopped call when the generation made its call', () => {
+       const response = converter.convertOpenAIResponseToGemini(
+         {
+           object: 'chat.completion',
 -          id: 'chatcmpl-1',
--          created: 123,
++          id: 'chatcmpl-complete-tool',
++          usage: SERVED_USAGE,
+           created: 123,
 -          model: 'gpt-test',
--          choices: [
--            {
--              index: 0,
--              message: {
--                role: 'assistant',
++          model: 'test-model',
+           choices: [
+             {
+               index: 0,
+               message: {
+                 role: 'assistant',
 -                content: 'final answer',
 -                reasoning_content: 'chain-of-thought',
--              },
++                content: null,
++                tool_calls: [
++                  {
++                    id: 'call_1',
++                    type: 'function',
++                    function: {
++                      name: 'read_file',
++                      arguments: '{"file_path":"README.md"}',
++                    },
++                  },
++                ],
+               },
 -              finish_reason: 'stop',
--              logprobs: null,
--            },
--          ],
--        } as unknown as OpenAI.Chat.ChatCompletion,
--        requestContext,
--      );
--
++              finish_reason: 'tool_calls',
+               logprobs: null,
+             },
+           ],
+         } as unknown as OpenAI.Chat.ChatCompletion,
+         requestContext,
+       );
+ 
 -      const parts = response.candidates?.[0]?.content?.parts;
 -      expect(parts?.[0]).toEqual(
 -        expect.objectContaining({ thought: true, text: 'chain-of-thought' }),
@@ -274705,15 +274727,17 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      expect(parts?.[1]).toEqual(
 -        expect.objectContaining({ text: 'final answer' }),
 -      );
--    });
--
++      expect(response.functionCalls).toHaveLength(1);
++      expect(getIncompleteToolCalls(response)).toEqual([]);
+     });
+ 
 -    it('should convert reasoning to a thought part for non-streaming responses', () => {
-+    it('carries no stopped call when the generation made its call', () => {
++    it('carries arguments a length-stopped call served as a non-text value as that value’s JSON text', () => {
        const response = converter.convertOpenAIResponseToGemini(
          {
            object: 'chat.completion',
 -          id: 'chatcmpl-2',
-+          id: 'chatcmpl-complete-tool',
++          id: 'chatcmpl-truncated-object-arguments',
 +          usage: SERVED_USAGE,
            created: 123,
 -          model: 'gpt-test',
@@ -274788,31 +274812,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -              delta: {
 -                content: 'visible text',
 -                reasoning: 'thinking...',
-+                content: null,
-+                tool_calls: [
-+                  {
-+                    id: 'call_1',
-+                    type: 'function',
-+                    function: {
-+                      name: 'read_file',
-+                      arguments: '{"file_path":"README.md"}',
-+                    },
-+                  },
-+                ],
-               },
+-              },
 -              finish_reason: 'stop',
-+              finish_reason: 'tool_calls',
-               logprobs: null,
-             },
+-              logprobs: null,
+-            },
 -          ],
 -          model: 'gpt-test',
 -        } as unknown as OpenAI.Chat.ChatCompletionChunk,
 -        withStreamParser(new StreamingToolCallParser()),
-+          ],
-+        } as unknown as OpenAI.Chat.ChatCompletion,
-+        requestContext,
-       );
- 
+-      );
+-
 -      const parts = chunk.candidates?.[0]?.content?.parts;
 -      expect(parts?.[0]).toEqual(
 -        expect.objectContaining({ thought: true, text: 'thinking...' }),
@@ -274820,31 +274829,20 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      expect(parts?.[1]).toEqual(
 -        expect.objectContaining({ text: 'visible text' }),
 -      );
-+      expect(response.functionCalls).toHaveLength(1);
-+      expect(getIncompleteToolCalls(response)).toEqual([]);
-     });
- 
+-    });
+-
 -    it('should not throw when streaming chunk has no delta', () => {
 -      const chunk = converter.convertOpenAIChunkToGemini(
-+    it('carries arguments a length-stopped call served as a non-text value as that value’s JSON text', () => {
-+      const response = converter.convertOpenAIResponseToGemini(
-         {
+-        {
 -          object: 'chat.completion.chunk',
 -          id: 'chunk-2',
 -          created: 456,
-+          object: 'chat.completion',
-+          id: 'chatcmpl-truncated-object-arguments',
-+          usage: SERVED_USAGE,
-+          created: 123,
-+          model: 'test-model',
-           choices: [
-             {
-               index: 0,
+-          choices: [
+-            {
+-              index: 0,
 -              // Some OpenAI-compatible providers may omit delta entirely.
 -              delta: undefined,
 -              finish_reason: null,
-+              message: {
-+                role: 'assistant',
 +                content: null,
 +                tool_calls: [
 +                  {
@@ -275795,9 +275793,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -        ).candidates?.[0]?.content?.parts?.[0];
 -        return { text: part?.text ?? '', thought: part?.thought ?? false };
 -      });
-+          context,
-+        );
- 
+-
 -      expect(emitted[0]).toEqual({
 -        text: 'Step one of my reasoning is to gather inputs.',
 -        thought: true,
@@ -275817,37 +275813,8 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -        thought: true,
 -      });
 -    });
-+        expect(response.usageMetadata?.thoughtsTokenCount).toBe(
-+          reasoningTokens,
++          context,
 +        );
-+      },
-+    );
-+  });
-+
-+  describe('OpenAI -> Gemini reasoning content', () => {
-+    it('should convert reasoning_content to a thought part for non-streaming responses', () => {
-+      const response = converter.convertOpenAIResponseToGemini(
-+        {
-+          object: 'chat.completion',
-+          id: 'chatcmpl-1',
-+          usage: SERVED_USAGE,
-+          created: 123,
-+          model: 'gpt-test',
-+          choices: [
-+            {
-+              index: 0,
-+              message: {
-+                role: 'assistant',
-+                content: 'final answer',
-+                reasoning_content: 'chain-of-thought',
-+              },
-+              finish_reason: 'stop',
-+              logprobs: null,
-+            },
-+          ],
-+        } as unknown as OpenAI.Chat.ChatCompletion,
-+        requestContext,
-+      );
  
 -    it('should deduplicate interleaved reasoning_content and content channels independently', () => {
 -      const ctx = withStreamParser();
@@ -275859,24 +275826,22 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -        { reasoning_content: 'Let me think about this carefully.\nStep two.' },
 -        { content: 'Here is the answer.' },
 -      ];
-+      const parts = response.candidates?.[0]?.content?.parts;
-+      expect(parts?.[0]).toEqual(
-+        expect.objectContaining({ thought: true, text: 'chain-of-thought' }),
-+      );
-+      expect(isOpenAIReasoningThoughtPart(parts?.[0] as Part)).toBe(true);
-+      expect(parts?.[1]).toEqual(
-+        expect.objectContaining({ text: 'final answer' }),
-+      );
-+    });
++        expect(response.usageMetadata?.thoughtsTokenCount).toBe(
++          reasoningTokens,
++        );
++      },
++    );
++  });
  
 -      const emitted = chunks.map(
 -        (delta, index) =>
 -          converter.convertOpenAIChunkToGemini(
-+    it('should convert reasoning to a thought part for non-streaming responses', () => {
++  describe('OpenAI -> Gemini reasoning content', () => {
++    it('should convert reasoning_content to a thought part for non-streaming responses', () => {
 +      const response = converter.convertOpenAIResponseToGemini(
 +        {
 +          object: 'chat.completion',
-+          id: 'chatcmpl-2',
++          id: 'chatcmpl-1',
 +          usage: SERVED_USAGE,
 +          created: 123,
 +          model: 'gpt-test',
@@ -275901,7 +275866,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +              message: {
 +                role: 'assistant',
 +                content: 'final answer',
-+                reasoning: 'chain-of-thought',
++                reasoning_content: 'chain-of-thought',
 +              },
 +              finish_reason: 'stop',
 +              logprobs: null,
@@ -275909,8 +275874,17 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          ],
 +        } as unknown as OpenAI.Chat.ChatCompletion,
 +        requestContext,
++      );
++
++      const parts = response.candidates?.[0]?.content?.parts;
++      expect(parts?.[0]).toEqual(
++        expect.objectContaining({ thought: true, text: 'chain-of-thought' }),
++      );
++      expect(isOpenAIReasoningThoughtPart(parts?.[0] as Part)).toBe(true);
++      expect(parts?.[1]).toEqual(
++        expect.objectContaining({ text: 'final answer' }),
        );
- 
+-
 -      // Reasoning chunk 1: emits as thought
 -      expect(emitted[0]).toEqual([
 -        { text: 'Let me think about this carefully.', thought: true },
@@ -275921,14 +275895,6 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      expect(emitted[2]).toEqual([{ text: '\nStep two.', thought: true }]);
 -      // Content chunk 2: cumulative extension of content channel
 -      expect(emitted[3]).toEqual([{ text: ' is the answer.' }]);
-+      const parts = response.candidates?.[0]?.content?.parts;
-+      expect(parts?.[0]).toEqual(
-+        expect.objectContaining({ thought: true, text: 'chain-of-thought' }),
-+      );
-+      expect(isOpenAIReasoningThoughtPart(parts?.[0] as Part)).toBe(true);
-+      expect(parts?.[1]).toEqual(
-+        expect.objectContaining({ text: 'final answer' }),
-+      );
      });
  
 -    it('should enter cumulative mode on exact 64-char repeat (at threshold)', () => {
@@ -275943,6 +275909,74 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      const emitted = chunks.map(
 -        (content, index) =>
 -          converter.convertOpenAIChunkToGemini(
++    it('should convert reasoning to a thought part for non-streaming responses', () => {
++      const response = converter.convertOpenAIResponseToGemini(
++        {
++          object: 'chat.completion',
++          id: 'chatcmpl-2',
++          usage: SERVED_USAGE,
++          created: 123,
++          model: 'gpt-test',
++          choices: [
+             {
+-              object: 'chat.completion.chunk',
+-              id: `chunk-threshold64-${index}`,
+-              created: 456 + index,
+-              choices: [
+-                {
+-                  index: 0,
+-                  delta: { content },
+-                  finish_reason: null,
+-                  logprobs: null,
+-                },
+-              ],
+-              model: 'gpt-test',
+-            } as unknown as OpenAI.Chat.ChatCompletionChunk,
+-            ctx,
+-          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
++              index: 0,
++              message: {
++                role: 'assistant',
++                content: 'final answer',
++                reasoning: 'chain-of-thought',
++              },
++              finish_reason: 'stop',
++              logprobs: null,
++            },
++          ],
++        } as unknown as OpenAI.Chat.ChatCompletion,
++        requestContext,
+       );
+ 
+-      // Chunk 1: initial passthrough
+-      expect(emitted[0]).toBe(atThreshold);
+-      // Chunk 2: exact 64-char repeat — enters cumulative mode, suppressed
+-      expect(emitted[1]).toBe('');
+-      // Chunk 3: cumulative extension — emits suffix only
+-      expect(emitted[2]).toBe(' and more');
++      const parts = response.candidates?.[0]?.content?.parts;
++      expect(parts?.[0]).toEqual(
++        expect.objectContaining({ thought: true, text: 'chain-of-thought' }),
++      );
++      expect(isOpenAIReasoningThoughtPart(parts?.[0] as Part)).toBe(true);
++      expect(parts?.[1]).toEqual(
++        expect.objectContaining({ text: 'final answer' }),
++      );
+     });
+ 
+-    it('should pass through 63-char exact repeat without entering cumulative mode (below threshold)', () => {
+-      const ctx = withStreamParser();
+-      // 63 chars — one short of CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH
+-      const belowThreshold = 'A'.repeat(63);
+-      const chunks = [
+-        belowThreshold,
+-        belowThreshold,
+-        belowThreshold + ' extra',
+-      ];
+-
+-      const emitted = chunks.map(
+-        (content, index) =>
+-          converter.convertOpenAIChunkToGemini(
 +    it('should convert streaming reasoning_content delta to a thought part', () => {
 +      const chunk = converter.convertOpenAIChunkToGemini(
 +        {
@@ -275952,7 +275986,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          choices: [
              {
 -              object: 'chat.completion.chunk',
--              id: `chunk-threshold64-${index}`,
+-              id: `chunk-threshold63-${index}`,
 -              created: 456 + index,
 -              choices: [
 -                {
@@ -275981,11 +276015,11 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        );
  
 -      // Chunk 1: initial passthrough
--      expect(emitted[0]).toBe(atThreshold);
--      // Chunk 2: exact 64-char repeat — enters cumulative mode, suppressed
--      expect(emitted[1]).toBe('');
--      // Chunk 3: cumulative extension — emits suffix only
--      expect(emitted[2]).toBe(' and more');
+-      expect(emitted[0]).toBe(belowThreshold);
+-      // Chunk 2: 63-char repeat — below threshold, passes through unchanged
+-      expect(emitted[1]).toBe(belowThreshold);
+-      // Chunk 3: prefix-extends prior — enters cumulative, emits suffix only
+-      expect(emitted[2]).toBe(' extra');
 +      const parts = chunk.candidates?.[0]?.content?.parts;
 +      expect(parts?.[0]).toEqual(
 +        expect.objectContaining({ thought: true, text: 'thinking...' }),
@@ -275996,15 +276030,16 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +      );
      });
  
--    it('should pass through 63-char exact repeat without entering cumulative mode (below threshold)', () => {
+-    it('should preserve legitimate duplicate import-line chunks (regression: silent data loss)', () => {
+-      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review
+-      // (wenshao, 2026-05-13 CHANGES_REQUESTED, finding #1). Realistic
+-      // incremental streams emit duplicate import/boilerplate lines and the
+-      // exact-repeat threshold must be high enough that those legitimate
+-      // repeats are NOT silently suppressed. A duplicate ~31-char import is
+-      // the canonical motivating case.
 -      const ctx = withStreamParser();
--      // 63 chars — one short of CUMULATIVE_DELTA_EXACT_REPEAT_MIN_LENGTH
--      const belowThreshold = 'A'.repeat(63);
--      const chunks = [
--        belowThreshold,
--        belowThreshold,
--        belowThreshold + ' extra',
--      ];
+-      const importLine = "import { foo } from './module';"; // 31 chars
+-      const chunks = [importLine, importLine, '\nconst x = 1;'];
 -
 -      const emitted = chunks.map(
 -        (content, index) =>
@@ -276018,7 +276053,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          choices: [
              {
 -              object: 'chat.completion.chunk',
--              id: `chunk-threshold63-${index}`,
+-              id: `chunk-import-${index}`,
 -              created: 456 + index,
 -              choices: [
 -                {
@@ -276046,12 +276081,12 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        withStreamParser(new StreamingToolCallParser()),
        );
  
--      // Chunk 1: initial passthrough
--      expect(emitted[0]).toBe(belowThreshold);
--      // Chunk 2: 63-char repeat — below threshold, passes through unchanged
--      expect(emitted[1]).toBe(belowThreshold);
--      // Chunk 3: prefix-extends prior — enters cumulative, emits suffix only
--      expect(emitted[2]).toBe(' extra');
+-      // All three chunks must reach the user — no suppression.
+-      expect(emitted[0]).toBe(importLine);
+-      expect(emitted[1]).toBe(importLine);
+-      expect(emitted[2]).toBe('\nconst x = 1;');
+-      // Sanity: the reassembled stream equals the user-visible total.
+-      expect(emitted.join('')).toBe(importLine + importLine + '\nconst x = 1;');
 +      const parts = chunk.candidates?.[0]?.content?.parts;
 +      expect(parts?.[0]).toEqual(
 +        expect.objectContaining({ thought: true, text: 'thinking...' }),
@@ -276061,18 +276096,28 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +      );
      });
  
--    it('should preserve legitimate duplicate import-line chunks (regression: silent data loss)', () => {
--      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review
--      // (wenshao, 2026-05-13 CHANGES_REQUESTED, finding #1). Realistic
--      // incremental streams emit duplicate import/boilerplate lines and the
--      // exact-repeat threshold must be high enough that those legitimate
--      // repeats are NOT silently suppressed. A duplicate ~31-char import is
--      // the canonical motivating case.
+-    it('should pass incremental chunks through verbatim past the detection window cap (none of them overlap)', () => {
+-      // Incremental providers send fresh, non-overlapping chunks. Even after
+-      // emittedText growth exceeds CUMULATIVE_DETECTION_WINDOW_BYTES (1024)
+-      // and the baseline stops growing, every subsequent chunk that lacks
+-      // prefix overlap with the frozen baseline must still be emitted
+-      // verbatim (i.e., it must fall through to the final passthrough
+-      // branch). This guards against any future regression that would, e.g.,
+-      // wrongly short-circuit the passthrough path once the cap is reached.
+-      //
+-      // Note: this test does NOT cover the (currently unhandled) case where a
+-      // later chunk happens to start with the frozen baseline — that chunk
+-      // would still trigger prefix-overlap detection against a stale
+-      // baseline. Such a chunk is vanishingly unlikely on a true incremental
+-      // stream (≥1024 bytes of exact-prefix coincidence) but is not
+-      // explicitly defended against here.
 -      const ctx = withStreamParser();
--      const importLine = "import { foo } from './module';"; // 31 chars
--      const chunks = [importLine, importLine, '\nconst x = 1;'];
--
--      const emitted = chunks.map(
+-      // 100 distinct incremental chunks of 20 chars = 2000 chars, well past the cap.
+-      const incrementalChunks = Array.from(
+-        { length: 100 },
+-        (_, i) => `chunk${String(i).padStart(3, '0')}-payload__`,
+-      );
+-      const allEmitted = incrementalChunks.map(
 -        (content, index) =>
 -          converter.convertOpenAIChunkToGemini(
 +    it('should not throw when streaming chunk has no delta', () => {
@@ -276084,7 +276129,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          choices: [
              {
 -              object: 'chat.completion.chunk',
--              id: `chunk-import-${index}`,
+-              id: `chunk-cap-${index}`,
 -              created: 456 + index,
 -              choices: [
 -                {
@@ -276110,31 +276155,20 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +        withStreamParser(new StreamingToolCallParser()),
        );
  
--      // All three chunks must reach the user — no suppression.
--      expect(emitted[0]).toBe(importLine);
--      expect(emitted[1]).toBe(importLine);
--      expect(emitted[2]).toBe('\nconst x = 1;');
--      // Sanity: the reassembled stream equals the user-visible total.
--      expect(emitted.join('')).toBe(importLine + importLine + '\nconst x = 1;');
+-      // Every chunk should pass through verbatim — none of them overlap
+-      // with prior emittedText, so prefix/exact-repeat detection never fires.
+-      expect(allEmitted).toEqual(incrementalChunks);
 +      const parts = chunk.candidates?.[0]?.content?.parts;
 +      expect(parts).toEqual([]);
      });
  
--    it('should pass incremental chunks through verbatim past the detection window cap (none of them overlap)', () => {
--      // Incremental providers send fresh, non-overlapping chunks. Even after
--      // emittedText growth exceeds CUMULATIVE_DETECTION_WINDOW_BYTES (1024)
--      // and the baseline stops growing, every subsequent chunk that lacks
--      // prefix overlap with the frozen baseline must still be emitted
--      // verbatim (i.e., it must fall through to the final passthrough
--      // branch). This guards against any future regression that would, e.g.,
--      // wrongly short-circuit the passthrough path once the cap is reached.
--      //
--      // Note: this test does NOT cover the (currently unhandled) case where a
--      // later chunk happens to start with the frozen baseline — that chunk
--      // would still trigger prefix-overlap detection against a stale
--      // baseline. Such a chunk is vanishingly unlikely on a true incremental
--      // stream (≥1024 bytes of exact-prefix coincidence) but is not
--      // explicitly defended against here.
+-    it('should detect cumulative mode even when the first chunk exceeds the detection window cap', () => {
+-      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review:
+-      // Some cumulative providers ship a large initial chunk (>1024 chars)
+-      // and then accumulate more text on subsequent chunks. The detection
+-      // window cap must not short-circuit prefix-overlap detection before the
+-      // second chunk gets a chance to be classified, otherwise the entire
+-      // first chunk gets duplicated.
 +    // A streamed delta is the text generated since the previous one. Each is
 +    // appended as it was served, whatever it has in common with the text
 +    // before it: these are streams a model generates token by token.
@@ -276146,21 +276180,21 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +      }>,
 +    ): Part[][] {
        const ctx = withStreamParser();
--      // 100 distinct incremental chunks of 20 chars = 2000 chars, well past the cap.
--      const incrementalChunks = Array.from(
--        { length: 100 },
--        (_, i) => `chunk${String(i).padStart(3, '0')}-payload__`,
--      );
--      const allEmitted = incrementalChunks.map(
+-      const firstChunk = 'A'.repeat(1500); // well past CUMULATIVE_DETECTION_WINDOW_BYTES (1024)
+-      const secondChunk = firstChunk + 'B'.repeat(200); // cumulative extension
+-      const thirdChunk = secondChunk + 'C'.repeat(50); // further cumulative extension
+-
+-      const emitted = [firstChunk, secondChunk, thirdChunk].map(
 -        (content, index) =>
 +      return deltas.map(
 +        (delta, index) =>
            converter.convertOpenAIChunkToGemini(
              {
                object: 'chat.completion.chunk',
--              id: `chunk-cap-${index}`,
+-              id: `chunk-large-first-${index}`,
+-              created: 789 + index,
 +              id: `chunk-served-${index}`,
-               created: 456 + index,
++              created: 456 + index,
                choices: [
 -                {
 -                  index: 0,
@@ -276177,11 +276211,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +          ).candidates?.[0]?.content?.parts ?? [],
        );
 +    }
- 
--      // Every chunk should pass through verbatim — none of them overlap
--      // with prior emittedText, so prefix/exact-repeat detection never fires.
--      expect(allEmitted).toEqual(incrementalChunks);
--    });
++
 +    const servedSequences: ReadonlyArray<readonly string[]> = [
 +      ['a', 'ab', 'c'],
 +      ['-', '--', '- item'],
@@ -276197,83 +276227,17 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 +      ],
 +    ];
  
--    it('should detect cumulative mode even when the first chunk exceeds the detection window cap', () => {
--      // Regression for https://github.com/QwenLM/qwen-code/pull/3896 review:
--      // Some cumulative providers ship a large initial chunk (>1024 chars)
--      // and then accumulate more text on subsequent chunks. The detection
--      // window cap must not short-circuit prefix-overlap detection before the
--      // second chunk gets a chance to be classified, otherwise the entire
--      // first chunk gets duplicated.
--      const ctx = withStreamParser();
--      const firstChunk = 'A'.repeat(1500); // well past CUMULATIVE_DETECTION_WINDOW_BYTES (1024)
--      const secondChunk = firstChunk + 'B'.repeat(200); // cumulative extension
--      const thirdChunk = secondChunk + 'C'.repeat(50); // further cumulative extension
-+    it('appends every streamed content delta exactly as it was served', () => {
-+      for (const sequence of servedSequences) {
-+        const emitted = streamDeltas(sequence.map((content) => ({ content })));
-+        expect(emitted).toEqual(sequence.map((text) => [{ text }]));
-+      }
-+    });
- 
--      const emitted = [firstChunk, secondChunk, thirdChunk].map(
--        (content, index) =>
--          converter.convertOpenAIChunkToGemini(
--            {
--              object: 'chat.completion.chunk',
--              id: `chunk-large-first-${index}`,
--              created: 789 + index,
--              choices: [
--                {
--                  index: 0,
--                  delta: { content },
--                  finish_reason: null,
--                  logprobs: null,
--                },
--              ],
--              model: 'gpt-test',
--            } as unknown as OpenAI.Chat.ChatCompletionChunk,
--            ctx,
--          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
--      );
-+    it('appends every streamed reasoning delta exactly as it was served', () => {
-+      for (const field of ['reasoning', 'reasoning_content'] as const) {
-+        for (const sequence of servedSequences) {
-+          const emitted = streamDeltas(
-+            sequence.map((text) => ({ [field]: text })),
-+          );
-+          expect(emitted).toEqual(
-+            sequence.map((text) => [{ text, thought: true }]),
-+          );
-+        }
-+      }
-+    });
- 
 -      // Chunk 1: initial passthrough.
 -      expect(emitted[0]).toBe(firstChunk);
 -      // Chunk 2: prefix-extends → cumulative mode, emits the 200-char suffix only.
 -      expect(emitted[1]).toBe('B'.repeat(200));
 -      // Chunk 3: continues in cumulative mode, emits only the new 50-char suffix.
 -      expect(emitted[2]).toBe('C'.repeat(50));
-+    it('keeps a delta that repeats everything streamed before it, however long', () => {
-+      const line = 'x'.repeat(64);
-+      const content = streamDeltas([
-+        { content: line },
-+        { content: line },
-+        { content: 'y' },
-+      ]);
-+      expect(content).toEqual([
-+        [{ text: line }],
-+        [{ text: line }],
-+        [{ text: 'y' }],
-+      ]);
-+      const reasoning = streamDeltas([
-+        { reasoning: line },
-+        { reasoning: line },
-+      ]);
-+      expect(reasoning).toEqual([
-+        [{ text: line, thought: true }],
-+        [{ text: line, thought: true }],
-+      ]);
++    it('appends every streamed content delta exactly as it was served', () => {
++      for (const sequence of servedSequences) {
++        const emitted = streamDeltas(sequence.map((content) => ({ content })));
++        expect(emitted).toEqual(sequence.map((text) => [{ text }]));
++      }
      });
  
 -    it('should not duplicate emitted bytes when an incremental stream transitions into cumulative mode past the window cap', () => {
@@ -276289,8 +276253,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      // separately so the slice starts from the real user-visible boundary
 -      // (1600). The chunks must be DISTINCT (otherwise the short-exact-repeat
 -      // branch keeps emittedText pinned and the cap is never reached).
-+    it('should preserve repeated short incremental content chunks', () => {
-       const ctx = withStreamParser();
+-      const ctx = withStreamParser();
 -      const incremental = Array.from(
 -        { length: 200 },
 -        (_, i) => `c${String(i).padStart(3, '0')}=AB_`, // 8 bytes, distinct per chunk
@@ -276298,7 +276261,19 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -      const accumulated = incremental.join(''); // 1600 bytes
 -      const tail = '|CONTINUATION|'; // 14 bytes
 -      const cumulativeChunk = accumulated + tail; // 1614 bytes
--
++    it('appends every streamed reasoning delta exactly as it was served', () => {
++      for (const field of ['reasoning', 'reasoning_content'] as const) {
++        for (const sequence of servedSequences) {
++          const emitted = streamDeltas(
++            sequence.map((text) => ({ [field]: text })),
++          );
++          expect(emitted).toEqual(
++            sequence.map((text) => [{ text, thought: true }]),
++          );
++        }
++      }
++    });
+ 
 -      const incrementalEmitted = incremental.map(
 -        (content, index) =>
 -          converter.convertOpenAIChunkToGemini(
@@ -276319,9 +276294,32 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -            ctx,
 -          ).candidates?.[0]?.content?.parts?.[0]?.text ?? '',
 -      );
--
++    it('keeps a delta that repeats everything streamed before it, however long', () => {
++      const line = 'x'.repeat(64);
++      const content = streamDeltas([
++        { content: line },
++        { content: line },
++        { content: 'y' },
++      ]);
++      expect(content).toEqual([
++        [{ text: line }],
++        [{ text: line }],
++        [{ text: 'y' }],
++      ]);
++      const reasoning = streamDeltas([
++        { reasoning: line },
++        { reasoning: line },
++      ]);
++      expect(reasoning).toEqual([
++        [{ text: line, thought: true }],
++        [{ text: line, thought: true }],
++      ]);
++    });
+ 
 -      const cumulativeEmitted =
 -        converter.convertOpenAIChunkToGemini(
++    it('should preserve repeated short incremental content chunks', () => {
++      const ctx = withStreamParser();
 +      const emitted = ['ha', 'ha'].map((content, index) => {
 +        const chunk = converter.convertOpenAIChunkToGemini(
            {
@@ -276426,33 +276424,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        const ctx = withStreamParser();
 -      // 1) Prefix-extension chunk pair establishes cumulative mode and primes
 -      //    `emittedText` so the next exact-repeat is the cumulative branch.
-       converter.convertOpenAIChunkToGemini(
-         {
-           object: 'chat.completion.chunk',
--          id: 'chunk-cum-empty-finish-0',
-+          id: 'chunk-empty-finish-0',
-           created: 456,
-           choices: [
-             {
-               index: 0,
-               delta: { content: 'Answer: forty-two' },
-               finish_reason: null,
-@@ -5122,69 +3960,40 @@
-             },
-           ],
-           model: 'gpt-test',
-         } as unknown as OpenAI.Chat.ChatCompletionChunk,
-         ctx,
-       );
 -      converter.convertOpenAIChunkToGemini(
 -        {
 -          object: 'chat.completion.chunk',
--          id: 'chunk-cum-empty-finish-1',
--          created: 457,
+-          id: 'chunk-cum-empty-finish-0',
+-          created: 456,
 -          choices: [
 -            {
 -              index: 0,
--              delta: { content: 'Answer: forty-two and more.' },
+-              delta: { content: 'Answer: forty-two' },
 -              finish_reason: null,
 -              logprobs: null,
 -            },
@@ -276461,6 +276441,26 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
 -        } as unknown as OpenAI.Chat.ChatCompletionChunk,
 -        ctx,
 -      );
+       converter.convertOpenAIChunkToGemini(
+         {
+           object: 'chat.completion.chunk',
+-          id: 'chunk-cum-empty-finish-1',
+-          created: 457,
++          id: 'chunk-empty-finish-0',
++          created: 456,
+           choices: [
+             {
+               index: 0,
+-              delta: { content: 'Answer: forty-two and more.' },
++              delta: { content: 'Answer: forty-two' },
+               finish_reason: null,
+               logprobs: null,
+             },
+           ],
+           model: 'gpt-test',
+         } as unknown as OpenAI.Chat.ChatCompletionChunk,
+         ctx,
+       );
 -
 -      // 2) Final chunk: re-sends the accumulated string verbatim along with
 -      //    `finish_reason: 'stop'`. The normalized delta is '' (cumulative
@@ -276595,7 +276595,122 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
              {
                index: 0,
                message: {
-@@ -6237,103 +5051,106 @@
+@@ -5818,70 +4632,72 @@
+             required: ['location'],
+           },
+         },
+       });
+     });
+ 
+-    // Regression for #7315: the wire schema must not carry
+-    // additionalProperties:false on levels with optional properties —
+-    // OpenAI-compatible gateways promote every property to required,
+-    // forcing mutually exclusive optional fields (Agent working_dir vs
+-    // isolation) into every call.
+-    it('relaxes additionalProperties:false for schemas with optional fields', async () => {
+-      const agentLikeTools = [
++    it('hands a declared schema to the wire as declared, every level it closes closed', async () => {
++      // Shaped as list_directory declares itself: optional properties at
++      // both levels, both levels closed. The backend compiles the wire
++      // schema into the grammar the call is generated under, so a level
++      // left open there admits a name the declaration refuses, a name
++      // written twice and a declared name out of order.
++      const declared = {
++        type: 'object',
++        properties: {
++          path: { type: 'string', description: 'The directory to list.' },
++          ignore: { type: 'array', items: { type: 'string' } },
++          file_filtering_options: {
++            type: 'object',
++            properties: {
++              respect_git_ignore: { type: 'boolean' },
++              respect_qwen_ignore: { type: 'boolean' },
++            },
++            additionalProperties: false,
++          },
++        },
++        required: ['path'],
++        additionalProperties: false,
++      };
++      const result = await converter.convertGeminiToolsToOpenAI([
+         {
+           functionDeclarations: [
+             {
+-              name: 'agent',
+-              description: 'Launch a new agent',
+-              parametersJsonSchema: {
+-                $schema: 'http://json-schema.org/draft-07/schema#',
+-                type: 'object',
+-                properties: {
+-                  description: { type: 'string' },
+-                  prompt: { type: 'string' },
+-                  working_dir: { type: 'string' },
+-                  isolation: { type: 'string', enum: ['worktree'] },
+-                },
+-                required: ['description', 'prompt'],
+-                additionalProperties: false,
+-              },
++              name: 'list_directory',
++              description: 'Lists a directory.',
++              parametersJsonSchema: structuredClone(declared),
+             },
+           ],
+         },
+-      ] as Tool[];
++      ] as Tool[]);
+ 
+-      const result = await converter.convertGeminiToolsToOpenAI(agentLikeTools);
+-      const params = result[0]!.function.parameters as Record<string, unknown>;
+-      expect(params['additionalProperties']).toBeUndefined();
+-      expect(params['$schema']).toBeUndefined();
+-      // Required stays exactly as authored — optional fields remain optional.
+-      expect(params['required']).toEqual(['description', 'prompt']);
++      expect(result[0]!.function.parameters).toEqual(declared);
+     });
+ 
+-    it('keeps additionalProperties:false when every property is required', async () => {
+-      const strictTools = [
++    it("keeps a declarer's own keywords, $schema and $id included", async () => {
++      const declared = {
++        $schema: 'https://json-schema.org/draft/2020-12/schema',
++        $id: 'https://example.com/lookup.schema.json',
++        type: 'object',
++        properties: { key: { type: 'string' }, limit: { type: 'integer' } },
++        required: ['key'],
++        additionalProperties: false,
++      };
++      const result = await converter.convertGeminiToolsToOpenAI([
+         {
+           functionDeclarations: [
+             {
+-              name: 'strict_tool',
+-              description: 'All fields required',
+-              parametersJsonSchema: {
+-                type: 'object',
+-                properties: { path: { type: 'string' } },
+-                required: ['path'],
+-                additionalProperties: false,
+-              },
++              name: 'lookup',
++              description: 'Looks a key up.',
++              parametersJsonSchema: structuredClone(declared),
+             },
+           ],
+         },
+-      ] as Tool[];
++      ] as Tool[]);
+ 
+-      const result = await converter.convertGeminiToolsToOpenAI(strictTools);
+-      const params = result[0]!.function.parameters as Record<string, unknown>;
+-      expect(params['additionalProperties']).toBe(false);
++      expect(result[0]!.function.parameters).toEqual(declared);
+     });
+ 
+     it('should convert MCP tools with parametersJsonSchema field', async () => {
+       // MCP tools use parametersJsonSchema which contains plain JSON schema (not Gemini types)
+       const mcpTools = [
+         {
+@@ -6237,103 +5053,106 @@
        converter.convertGeminiToolParametersToOpenAI(original);
  
        expect(original).toEqual(originalCopy);
@@ -276756,7 +276871,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [
-@@ -6385,26 +5202,23 @@
+@@ -6385,26 +5204,23 @@
          ],
        };
  
@@ -276784,7 +276899,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
            {
              role: 'model',
              parts: [{ text: 'First assistant' }],
-@@ -6427,65 +5241,12 @@
+@@ -6427,65 +5243,12 @@
  
        expect(messages).toHaveLength(3);
        expect(messages[0].role).toBe('assistant');
@@ -276850,7 +276965,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
  describe('MCP tool result end-to-end through OpenAI converter (issue #1520)', () => {
    /**
     * End-to-end regression tests for https://github.com/QwenLM/qwen-code/issues/1520
-@@ -6822,15 +5583,19 @@
+@@ -6822,15 +5585,19 @@
        index: number;
        id?: string;
        name?: string;
@@ -276871,7 +276986,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
        conv.convertOpenAIChunkToGemini(
          {
            object: 'chat.completion.chunk',
-@@ -7249,86 +6014,274 @@
+@@ -7249,86 +6016,274 @@
        'stop',
      );
  
@@ -277167,7 +277282,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
      // Feed arguments in multiple small chunks like real streaming
      const conv = OpenAIContentConverter;
      const ctx = createStreamingRequestContext();
-@@ -7420,14 +6373,14 @@
+@@ -7420,14 +6375,14 @@
      [FinishReason.PROHIBITED_CONTENT, 'content_filter'],
      [FinishReason.SPII, 'content_filter'],
      [FinishReason.IMAGE_SAFETY, 'content_filter'],
@@ -277184,7 +277299,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.test.ts b/p
          candidates: [{ finishReason: geminiReason, content: { parts: [] } }],
        } as unknown as GenerateContentResponse,
        {
-@@ -7494,30 +6447,25 @@
+@@ -7494,30 +6449,25 @@
      expect(parts).toHaveLength(1);
      expect(parts[0].type).toBe('text');
      expect(parts[0].text).toContain('image file');
@@ -277237,7 +277352,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * SPDX-License-Identifier: Apache-2.0
   */
  
-@@ -16,44 +21,85 @@
+@@ -16,44 +21,84 @@
    ContentUnion,
    PartUnion,
    Candidate,
@@ -277259,7 +277374,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
 +import { parseToolCallArguments } from './streamingToolCallParser.js';
  import {
    convertSchema,
-   relaxSchemaForFunctionCalling,
+-  relaxSchemaForFunctionCalling,
    type SchemaComplianceMode,
  } from '../../utils/schemaConverter.js';
  import {
@@ -277336,7 +277451,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    extends OpenAI.Chat.ChatCompletionAssistantMessageParam {
    reasoning_content?: string | null;
  }
-@@ -71,155 +117,12 @@
+@@ -71,155 +116,12 @@
  export interface ExtendedCompletionChunkDelta
    extends OpenAI.Chat.ChatCompletionChunk.Choice.Delta {
    reasoning_content?: string | null;
@@ -277492,11 +277607,28 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  export interface ToolCallAccumulator {
    id?: string;
    name?: string;
-@@ -377,19 +280,27 @@
-             // mutually exclusive optional fields (Agent working_dir vs
-             // isolation). Relax the wire schema; client-side
-             // validateToolParams still enforces the source schema.
-             parameters = relaxSchemaForFunctionCalling(parameters);
+@@ -366,30 +268,37 @@
+             // Gemini tool format - convert parameters to OpenAI format
+             parameters = convertGeminiToolParametersToOpenAI(
+               func.parameters as Record<string, unknown>,
+             );
+           }
+ 
++          // The schema reaches the wire as its declarer wrote it. The served
++          // backend compiles it into the grammar the call is generated
++          // under, so a level declared closed is generated closed -- each
++          // declared name at most once, in declared order, and no name the
++          // level does not declare -- and the declaration the model reads
++          // is the one its call is held to.
+           if (parameters) {
+             parameters = convertSchema(parameters, schemaCompliance);
+-            // #7315: gateways enforcing OpenAI's structured-output contract
+-            // promote every property to required when an object level has
+-            // `additionalProperties: false` — forcing the model to emit
+-            // mutually exclusive optional fields (Agent working_dir vs
+-            // isolation). Relax the wire schema; client-side
+-            // validateToolParams still enforces the source schema.
+-            parameters = relaxSchemaForFunctionCalling(parameters);
            }
  
 +          // A declaration's description and schema are its declarer's
@@ -277525,7 +277657,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      }
    }
  
-@@ -399,38 +310,38 @@
+@@ -399,38 +308,38 @@
  /**
   * Convert Gemini request to OpenAI message format.
   */
@@ -277573,7 +277705,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    // Parse parts inline
    const thoughtParts: string[] = [];
    const contentParts: string[] = [];
-@@ -474,27 +385,25 @@
+@@ -474,27 +383,25 @@
      message.tool_calls = toolCalls;
    }
  
@@ -277613,7 +277745,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      : Date.now();
    const createdSeconds = Number.isFinite(createdMs)
      ? Math.floor(createdMs / 1000)
-@@ -528,19 +437,87 @@
+@@ -528,19 +435,87 @@
  
    const systemText = extractTextFromContentUnion(
      request.config.systemInstruction,
@@ -277703,7 +277835,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  function processContents(
    contents: ContentListUnion,
    messages: ExtendedChatCompletionMessageParam[],
-@@ -570,43 +547,63 @@
+@@ -570,43 +545,63 @@
  
    if (!isContentObject(content)) return;
    const parts = content.parts || [];
@@ -277769,7 +277901,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      if (mediaPart && role === 'user') {
        contentParts.push(mediaPart);
      }
-@@ -623,16 +620,16 @@
+@@ -623,16 +618,16 @@
          emittedFunctionCallIds.add(callId);
        }
  
@@ -277788,7 +277920,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  
      if (part.functionResponse && role === 'user') {
        const responseId = part.functionResponse.id;
-@@ -644,12 +641,13 @@
+@@ -644,12 +639,13 @@
        }
  
        // Create tool message for the function response (with embedded media)
@@ -277802,7 +277934,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          // resolved in pipeline.ts). OpenAI spec only permits string / text-part
          // content on `role: "tool"` messages. Strict OpenAI-compatible servers
          // (e.g. doubao / new-api / LM Studio) silently drop or reject tool
-@@ -682,12 +680,17 @@
+@@ -682,12 +678,17 @@
              }
            }
            if (mediaParts.length > 0) {
@@ -277820,7 +277952,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          if (
            requestContext.toolResultContentFormat === 'string' &&
            Array.isArray(toolMessage.content)
-@@ -697,12 +700,13 @@
+@@ -697,12 +698,13 @@
              toolContent.every(
                (cp): cp is OpenAI.Chat.ChatCompletionContentPartText =>
                  cp?.type === 'text',
@@ -277834,7 +277966,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
    }
-@@ -711,53 +715,62 @@
+@@ -711,53 +713,62 @@
    // tool messages in this group. Runs after the parts loop so all tool
    // messages remain contiguous (OpenAI requirement for parallel tool calls).
    if (accumulatedSplitMedia.length > 0) {
@@ -277914,7 +278046,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      return;
    }
  
-@@ -767,74 +780,112 @@
+@@ -767,74 +778,112 @@
        content:
          contentParts as unknown as OpenAI.Chat.ChatCompletionContentPart[],
      });
@@ -278059,7 +278191,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    }
  
    // IMPORTANT: Always return a tool message, even if content is empty
-@@ -856,17 +907,73 @@
+@@ -856,17 +905,73 @@
      content: contentParts as unknown as
        | string
        | OpenAI.Chat.ChatCompletionContentPartText[],
@@ -278134,7 +278266,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
    const { modalities } = requestContext;
  
    if (part.inlineData?.mimeType && part.inlineData?.data) {
-@@ -879,12 +986,17 @@
+@@ -879,12 +984,17 @@
          return unsupportedModalityPlaceholder(
            'image',
            displayName,
@@ -278152,7 +278284,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          image_url: { url: dataUrl },
        };
      }
-@@ -960,16 +1072,15 @@
+@@ -960,16 +1070,15 @@
          return unsupportedModalityPlaceholder(
            'image',
            filename,
@@ -278172,7 +278304,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        if (!modalities.pdf) {
          return unsupportedModalityPlaceholder('pdf', filename, requestContext);
        }
-@@ -1108,106 +1219,27 @@
+@@ -1108,106 +1217,27 @@
  }
  
  function hasThoughtPart(parts: Part[]): boolean {
@@ -278292,7 +278424,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
   * Convert OpenAI response to Gemini format.
   */
  export function convertOpenAIResponseToGemini(
-@@ -1233,107 +1265,174 @@
+@@ -1233,107 +1263,174 @@
        parts.push(createOpenAIReasoningThoughtPart(reasoningText));
      }
  
@@ -278537,7 +278669,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
  }
  
  /**
-@@ -1364,27 +1463,21 @@
+@@ -1364,27 +1461,21 @@
  
      // Handle reasoning content (thoughts).
      const reasoningText =
@@ -278570,7 +278702,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      } else if (choice.finish_reason) {
        // Flush any buffered tagged-thinking content on stream end
-@@ -1408,41 +1501,17 @@
+@@ -1408,41 +1499,17 @@
  
      if (
        reasoningText &&
@@ -278616,7 +278748,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
        }
      }
  
-@@ -1482,12 +1551,25 @@
+@@ -1482,12 +1549,25 @@
        );
        parts.push(...requestContext.pendingContentParts);
        requestContext.pendingContentParts = undefined;
@@ -278642,7 +278774,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          const index = toolCall.index ?? 0;
  
          // Process the tool call chunk through the streaming parser
-@@ -1515,241 +1597,118 @@
+@@ -1515,241 +1595,118 @@
              preparations.push({ callId, toolName });
            }
          }
@@ -278953,7 +279085,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
          parts,
          role: 'model' as const,
        },
-@@ -1764,70 +1723,26 @@
+@@ -1764,70 +1721,26 @@
      response.candidates = [candidate];
    } else {
      response.candidates = [];
@@ -279032,7 +279164,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      setToolCallPreparations(response, preparations);
    }
  
-@@ -1847,17 +1762,19 @@
+@@ -1847,17 +1760,19 @@
    };
    return mapping[openaiReason] || FinishReason.FINISH_REASON_UNSPECIFIED;
  }
@@ -279057,7 +279189,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/converter.ts b/packag
      case FinishReason.MAX_TOKENS:
        return 'length';
      case FinishReason.SAFETY:
-@@ -1867,323 +1784,17 @@
+@@ -1867,323 +1782,17 @@
      case FinishReason.SPII:
      case FinishReason.IMAGE_SAFETY:
      case FinishReason.IMAGE_RECITATION:
@@ -300222,7 +300354,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
  /**
   * Token limit types for different use cases.
   * - 'input': Maximum input context window size
-@@ -8,88 +16,842 @@
+@@ -8,88 +16,838 @@
   */
  export type TokenLimitType = 'input' | 'output';
  
@@ -300450,19 +300582,15 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * The startup proof counts this deployment's own preamble -- the served
 + * template's rendering of the system message, the ten tool declarations and
 + * the generation prompt -- with the Git snapshot's repository values and the
-+ * turn budget's number left out, at 7,359 tokens, counted whole by the served
-+ * tokenizer. By where each token starts, that is 2,277 of system message,
-+ * 4,836 of tool declarations (each from the first character of its line to
-+ * the last) and 246 of the template's own text. Counting
-+ * each token once, in the piece it starts in, is what makes the parts sum to
-+ * the whole: a token can span two pieces, so pieces counted one at a time
-+ * need not add up to the count that governs. The startup context opens every
-+ * history, so it is counted too, with its workspace data left out: 46 more,
-+ * its template framing included. So is the frame every compacted history
-+ * holds around its blocks -- the snapshot's resume trailer, with the blocks
-+ * left out: 41 more; and so is the todo reminder, of which at most one
-+ * stands in the request a compaction leaves, with one character for its
-+ * list: 51 more, for 7,497.
++ * turn budget's number left out, at 7,409 tokens, counted whole by the served
++ * tokenizer: 2,368 without the declarations, and 5,041 that the ten add, each
++ * as it is declared, every object level of it closed. The startup context
++ * opens every history, so it is counted too, with its workspace data left
++ * out: 46 more, its template framing included. So is the frame every
++ * compacted history holds around its blocks -- the snapshot's resume
++ * trailer, with the blocks left out: 41 more; and so is the todo reminder, of
++ * which at most one stands in the request a compaction leaves, with one
++ * character for its list: 51 more, for 7,547.
 + *
 + * The proof then adds the most bytes the data left out can hold, as the most
 + * tokens it can cost: the Git snapshot's branch line, status and commits,
@@ -300472,13 +300600,13 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * digits of one token each (`QWEN38_TURN_BUDGET_BYTES`), and the todo
 + * reminder's list and truncation mark, 800 + 12 = 812
 + * (`activeTodoReminderBound`). That is a bound of
-+ * 11,541 that no repository, workspace, budget or todo list changes. The 747
++ * 11,591 that no repository, workspace, budget or todo list changes. The 697
 + * tokens left are headroom for the prompt and the declarations to grow into
 + * -- less than one more declaration the size of `run_shell_command`, the
-+ * largest at 1,456. Exceeding it is a startup refusal, not a silent overrun.
++ * largest at 1,462. Exceeding it is a startup refusal, not a silent overrun.
 + *
 + * `D` scales with the window and the preamble does not: `floor(3W/64)` first
-+ * reaches 11,541 at a 246,208-token window, so no smaller window holds this
++ * reaches 11,591 at a 247,275-token window, so no smaller window holds this
 + * preamble. A 131,072-token deployment of this same preamble refuses at
 + * startup, which is the check working rather than the partition failing.
 + */
@@ -301118,7 +301246,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
   * Accurate numeric limits:
   * - power-of-two approximations (128K -> 131072, 256K -> 262144, etc.)
   * - vendor-declared exact values (e.g., 200k -> 200000, 1m -> 1000000) are
-@@ -150,14 +912,14 @@
+@@ -150,14 +908,14 @@
    // 128K carve-outs for Opus 4.6+. Rewrite the dotted minor to hyphenated
    // up front so every downstream regex sees the canonical form regardless
    // of which alias the proxy exposed.
@@ -301135,7 +301263,7 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
    // the version parser and the limit tables agree on every alias shape.
    s = s.replace(/^(claude-[a-z]+-\d+(?:-\d+)?)\.(\d+)(?:\.\d+)*/, '$1-$2');
  
-@@ -392,18 +1154,19 @@
+@@ -392,18 +1150,19 @@
    }
    return Math.min(outputLimit, OUTPUT_TOKEN_CEILING);
  }
@@ -391831,7 +391959,20 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                name: TEAM_AGENT_NAME_PROPERTY,
                plan_mode_required: TEAM_AGENT_PLAN_REQUIRED_PROPERTY,
                read_only: TEAM_AGENT_READ_ONLY_PROPERTY,
-@@ -859,12 +836,36 @@
+@@ -846,25 +823,48 @@
+           description:
+             "Pin a sub-agent or named teammate to an EXISTING, caller-owned git worktree of this repo (absolute path, or relative to the current directory). Unlike 'isolation', the worktree is NOT created or cleaned up by Agent. Relative file, shell, and search operations resolve inside it. This is a cwd pin, not a filesystem sandbox: explicit absolute paths can still reach outside. The path must be a registered linked worktree of this repository. If both working_dir and isolation are provided, isolation is ignored.",
+         },
+       },
+       required: ['description', 'prompt'],
+       additionalProperties: false,
+-      $schema: 'http://json-schema.org/draft-07/schema#',
+     };
+ 
+     super(
+       AgentTool.Name,
+       ToolDisplayNames.AGENT,
+       'Launch a new agent to handle complex, multi-step tasks autonomously.\n\nThe Agent tool launches specialized agents (subprocesses) that autonomously handle complex tasks. Each agent type has specific capabilities and tools available to it.\n\nAvailable agent types and the tools they have access to:\n',
        Kind.Agent,
        initialSchema,
        true, // isOutputMarkdown
@@ -391868,7 +392009,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      });
  
      // Initialize the tool asynchronously
-@@ -949,13 +950,13 @@
+@@ -949,13 +949,13 @@
  - If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
  - If the user asks for agents "in parallel", group independent launches in a single message with multiple Agent tool use content blocks. Do not parallelize overlapping code changes.
  - Top-level regular subagents run in the background by default. Set \`run_in_background: false\` when the current turn must wait for the result before continuing. Nested agent launches run in the foreground and return to their direct parent; an explicit \`run_in_background: true\` request is rejected because nested agents cannot receive background completion notifications. Unnamed caller-owned \`working_dir\` launches default to foreground and cannot run in the background; named teammates may use one, but must be shut down before it is removed.
@@ -391883,7 +392024,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  Forks are cheap because they share your prompt cache. Don't set \`model\` on a fork — a different model can't reuse the parent's cache. Pass a short \`name\` (one or two words, lowercase) so the user can track the fork.
  
  **Don't peek.** For a background fork, do not read or tail its output unless the user explicitly asks for a progress check. You get a completion notification; trust it. Reading the transcript mid-flight pulls the fork's tool noise into your context, which defeats the point of forking.
-@@ -1001,14 +1002,52 @@
+@@ -1001,14 +1001,52 @@
  Since a significant piece of code was written and the task was completed, now use the test-runner agent to run the tests
  </commentary>
  assistant: Uses the ${ToolNames.AGENT} tool to launch the test-runner agent
@@ -391938,7 +392079,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        properties?: {
          model?: {
            type: string;
-@@ -1032,58 +1071,114 @@
+@@ -1032,58 +1070,114 @@
          delete schema.properties.read_only;
        }
  
@@ -392059,7 +392200,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        const lowerType = params.subagent_type.toLowerCase();
        if (lowerType !== FORK_SUBAGENT_TYPE) {
          const subagentExists = this.availableSubagents.some(
-@@ -1101,30 +1196,40 @@
+@@ -1101,30 +1195,40 @@
          }
        }
      }
@@ -392106,7 +392247,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // Some models emit an empty placeholder for the unused optional field.
      // With isolation selected, normalize it away before downstream routing.
      if (
-@@ -1139,75 +1244,97 @@
+@@ -1139,75 +1243,97 @@
        if (
          typeof params.fork_turns !== 'string' ||
          !(
@@ -392218,7 +392359,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      if (
        params.isolation === 'worktree' &&
        typeof params.working_dir === 'string' &&
-@@ -1218,18 +1345,22 @@
+@@ -1218,18 +1344,22 @@
  
      if (params.working_dir !== undefined) {
        if (
@@ -392243,7 +392384,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // the optional `isolation: "worktree"` alongside it. Accept that
        // redundant combination; createInvocation drops isolation so the
        // caller-owned worktree is reused rather than provisioning another one.
-@@ -1238,56 +1369,84 @@
+@@ -1238,56 +1368,84 @@
        // a different directory; and the pin is only meaningful for an
        // explicit subagent_type.
        if (
@@ -392337,7 +392478,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const invocationParams = params.working_dir
        ? { ...params, isolation: undefined }
        : params;
-@@ -1372,22 +1531,12 @@
+@@ -1372,22 +1530,12 @@
      return {
        status: 'cancelled',
        terminateReason: signalAborted ? 'signal_aborted' : 'subagent_cancelled',
@@ -392360,7 +392501,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // Non-throwing failure paths (ERROR / MAX_TURNS / TIMEOUT) — populate
    // `error`/`errorType` so endSubagentSpan sets standard OTel exception
    // attributes instead of a generic `'subagent failed'` placeholder.
-@@ -1421,41 +1570,95 @@
+@@ -1421,41 +1569,95 @@
    };
  }
  
@@ -392457,7 +392598,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        updateOutput(this.currentDisplay);
      }
    }
-@@ -1484,25 +1687,25 @@
+@@ -1484,25 +1686,25 @@
     * Sets up event listeners for real-time subagent progress updates
     */
    private setupEventListeners(
@@ -392485,7 +392626,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        this.updateDisplay(
          {
-@@ -1519,13 +1722,13 @@
+@@ -1519,13 +1721,13 @@
        );
        if (toolCallIndex >= 0) {
          this.currentToolCalls![toolCallIndex] = {
@@ -392500,7 +392641,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
              ? { resultDisplay: event.resultDisplay }
              : {}),
          };
-@@ -1549,54 +1752,83 @@
+@@ -1549,54 +1751,83 @@
            },
            updateOutput,
          );
@@ -392606,7 +392747,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        (...args: unknown[]) => {
          const event = args[0] as AgentApprovalRequestEvent;
          const idx = this.currentToolCalls!.findIndex(
-@@ -1605,18 +1837,15 @@
+@@ -1605,18 +1836,15 @@
          if (idx >= 0) {
            this.currentToolCalls![idx] = {
              ...this.currentToolCalls![idx],
@@ -392628,7 +392769,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          pendingConfirmationCallId = event.callId;
          const details: ToolCallConfirmationDetails = {
            ...(event.confirmationDetails as Omit<
-@@ -1702,12 +1931,13 @@
+@@ -1702,12 +1930,13 @@
      agentConfig: Config,
      eventEmitter: AgentEventEmitter = this.eventEmitter,
    ): Promise<{
@@ -392642,7 +392783,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      const generationConfig = geminiClient?.getChat().getGenerationConfig();
      const parentToolNames = generationConfig?.systemInstruction
        ? extractParentToolNames(generationConfig)
-@@ -1762,17 +1992,16 @@
+@@ -1762,17 +1991,16 @@
              forkTurns,
            ),
          ];
@@ -392662,7 +392803,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          const forkedMessages = buildForkedMessages(
            this.params.prompt,
            lastMessage,
-@@ -1789,22 +2018,20 @@
+@@ -1789,22 +2017,20 @@
                role: 'model' as const,
                parts: [{ text: 'Understood. Executing directive now.' }],
              },
@@ -392687,7 +392828,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
      // Default: directive with fork boilerplate as task_prompt
      if (!taskPrompt) {
        taskPrompt = buildChildMessage(
-@@ -1840,12 +2067,13 @@
+@@ -1840,12 +2066,13 @@
  
        promptConfig = {
          renderedSystemPrompt: generationConfig.systemInstruction as
@@ -392701,7 +392842,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          executionAllowedTools: resolveForkExecutionAllowedTools(
            parentToolNames,
            buildForkExecutionAllowlist(
-@@ -1859,33 +2087,41 @@
+@@ -1859,33 +2086,41 @@
          .getToolRegistry()
          .getAllToolNames()
          .filter((toolName) => !EXCLUDED_TOOLS_FOR_SUBAGENTS.has(toolName));
@@ -392744,7 +392885,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
    // the reason back and re-executes until the configured cap prevents a
    // misconfigured hook from looping forever.
    private async runSubagentStopHookLoop(
-@@ -2171,17 +2407,22 @@
+@@ -2171,17 +2406,22 @@
        }
  
        // Get the results
@@ -392769,7 +392910,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // still reach telemetry instead of being clobbered by the catch
        // branch's exception derivation. Review wenshao @ #4410.
        //
-@@ -2196,28 +2437,40 @@
+@@ -2196,28 +2436,40 @@
            resultSummaryPresent: Boolean(
              subagentRawText && subagentRawText.length > 0,
            ),
@@ -392815,7 +392956,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        }
        return stopHookWarning;
      } catch (error) {
-@@ -2230,13 +2483,16 @@
+@@ -2230,13 +2482,16 @@
          error instanceof Error ? error.message : String(error);
        debugLogger.error(
          `[AgentTool] Error inside subagent background task: ${errorMessage}`,
@@ -392833,7 +392974,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        );
        return undefined;
      }
-@@ -2256,16 +2512,16 @@
+@@ -2256,16 +2511,16 @@
        // `error` marks the call failed in the scheduler, so tool-usage stats
        // record a failure — a blocked spawn must not count as a spawned
        // sub-agent (the scrollback summary derives its sub-agent count from
@@ -392854,7 +392995,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentName:
            this.params.subagent_type ?? DEFAULT_BUILTIN_SUBAGENT_TYPE,
          taskDescription: this.params.description,
-@@ -2273,16 +2529,46 @@
+@@ -2273,16 +2528,46 @@
          status: 'failed' as const,
          terminateReason,
        },
@@ -392902,7 +393043,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          this.params.name.trim() === '' ||
          isSubagentLikeExecutionContext()
        ) {
-@@ -2557,28 +2843,44 @@
+@@ -2557,28 +2842,44 @@
      // Hoisted so the outer catch can restore parent PermissionManager
      // state when an exception lands between `createApprovalModeOverride`
      // and the fg / bg / fork inner finallys (e.g. worktree provisioning
@@ -392947,7 +393088,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // (general-purpose by default). Its execution mode is decided separately
        // below; a fork is opt-in, never the default.
        const requestedType = this.params.subagent_type;
-@@ -2600,19 +2902,12 @@
+@@ -2600,19 +2901,12 @@
          return this.buildSpawnBlockedResult(
            'Error: run_in_background: true is not supported from within a sub-agent. Run this agent in the foreground by omitting run_in_background or setting it to false.',
            'Background execution is not supported from a nested sub-agent',
@@ -392967,7 +393108,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        let subagentConfig: SubagentConfig;
  
        if (isFork) {
-@@ -2654,62 +2949,28 @@
+@@ -2654,62 +2948,28 @@
          this.params.model,
          subagentConfig,
        );
@@ -393043,7 +393184,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // agent — the caller could reap the worktree while the detached agent
          // is still running in it. validateToolParams rejects an explicit
          // run_in_background up front; this covers the other route into the
-@@ -2738,13 +2999,13 @@
+@@ -2738,13 +2998,13 @@
            subagentConfig.model,
            buildModelIdContext(this.config),
          );
@@ -393058,7 +393199,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          subagentRuntimeAuthOverrides = authType
            ? {
                authType,
-@@ -3022,38 +3283,35 @@
+@@ -3022,38 +3282,35 @@
          updateOutput,
        };
  
@@ -393100,7 +393241,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Per-spawn cleanup the subagent manager returns. The caller MUST
        // invoke this in the same `finally` block that wraps `execute()` —
        // see SubagentManager.createAgentHeadless's JSDoc for the leak
-@@ -3066,33 +3324,56 @@
+@@ -3066,33 +3323,56 @@
          const fork = await this.createForkSubagent(
            subagentRuntimeConfig as Config,
            backgroundEventEmitter,
@@ -393159,7 +393300,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // above guarantees correctness; the notice reduces user-visible
        // surprises when the model summarises file paths.
        //
-@@ -3113,16 +3394,41 @@
+@@ -3113,16 +3393,41 @@
            ? buildPinnedWorktreeNotice(worktreeIsolation.path)
            : buildWorktreeNotice(
                this.config.getTargetDir(),
@@ -393201,7 +393342,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
  
        // ── Background (async) execution path ──────────────────────
        if (shouldRunInBackground) {
-@@ -3150,47 +3456,23 @@
+@@ -3150,47 +3455,23 @@
          }
  
          // Create an independent AbortController — background agents
@@ -393252,7 +393393,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            hookOpts.agentId,
          );
          try {
-@@ -3259,12 +3541,13 @@
+@@ -3259,12 +3540,13 @@
              );
            }
  
@@ -393266,7 +393407,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            );
            void agentConfig
              .getToolRegistry()
-@@ -3272,25 +3555,22 @@
+@@ -3272,25 +3554,22 @@
              .catch((stopError) => {
                debugLogger.warn(
                  `[Agent] ToolRegistry stop after background registration failure failed: ${stopError}`,
@@ -393295,7 +393436,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            toolUseId: this.callId,
            // Populated when a subagent (whose reasoning loop is wrapped in
            // runWithAgentContext below) launches a nested agent. Null at
-@@ -3341,14 +3621,13 @@
+@@ -3341,14 +3620,13 @@
          let liveToolCallCount = 0;
          const refreshLiveStats = () => {
            const entry = registry.get(hookOpts.agentId);
@@ -393311,7 +393452,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
          const onToolCall = (event: AgentToolCallEvent) => {
            liveToolCallCount += 1;
-@@ -3393,14 +3672,13 @@
+@@ -3393,14 +3671,13 @@
            this.config.getMonitorRegistry().hasRunningForOwner(hookOpts.agentId),
          );
  
@@ -393327,7 +393468,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          };
  
          // Some launch modes have resources whose lifecycle cannot safely span
-@@ -3422,43 +3700,47 @@
+@@ -3422,43 +3699,47 @@
          let currentAbortController: AbortController | undefined =
            bgAbortController;
          let currentTurnPromise: Promise<void> | undefined;
@@ -393394,7 +393535,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // Fire-and-forget: start the subagent without blocking the parent.
          // For forks, wrap the body in runInForkContext so the recursive-fork
          // guard in execute() fires if the fork child's model calls `agent`
-@@ -3533,15 +3815,14 @@
+@@ -3533,15 +3814,14 @@
                  );
                }
  
@@ -393412,7 +393553,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                const hadWorktreeIsolation = worktreeIsolation !== null;
                const recordTerminalOutcome = () =>
                  recordSpanOutcome(
-@@ -3617,21 +3898,13 @@
+@@ -3617,21 +3897,13 @@
                  patchAgentMeta(metaPath, {
                    status: 'completed',
                    lastUpdatedAt: new Date().toISOString(),
@@ -393435,7 +393576,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                    completionStats,
                  );
                  persistBackgroundCancellation(
-@@ -3711,16 +3984,19 @@
+@@ -3711,16 +3983,19 @@
                  lastUpdatedAt: new Date().toISOString(),
                  lastError: errorMsg,
                });
@@ -393459,7 +393600,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
          // frame. The depth override is load-bearing for hot continuations:
          // send_message runs from the top level, but the continued agent must
          // retain the nesting budget it had when it was created.
-@@ -3737,12 +4013,13 @@
+@@ -3737,12 +4012,13 @@
                  isFork ? 'fork' : 'background',
                ),
                turnAbortController.signal,
@@ -393473,7 +393614,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
                        turnAbortController,
                        recordOutcome,
                        fireStartHook,
-@@ -3825,12 +4102,13 @@
+@@ -3825,12 +4101,13 @@
            registry.registerResidentAgent(hookOpts.agentId, residentController);
            residentRegistered = true;
          }
@@ -393487,7 +393628,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            false,
          );
          currentTurnPromise.catch(reportUnexpectedBackgroundError);
-@@ -3850,89 +4128,12 @@
+@@ -3850,89 +4127,12 @@
        }
  
        // Same agent-identity frame as the background path: a foreground
@@ -393577,7 +393718,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // Parent abort still propagates down (so ESC at the parent kills
        // the subagent), but child abort does NOT propagate up.
        const fgAbortController = new AbortController();
-@@ -3941,28 +4142,64 @@
+@@ -3941,28 +4141,64 @@
          fgAbortController.abort();
        } else {
          signal?.addEventListener('abort', onParentAbort, { once: true });
@@ -393649,7 +393790,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // the gating logic).
        //
        // Persistence wiring mirrors the background path so foreground
-@@ -3970,32 +4207,18 @@
+@@ -3970,32 +4206,18 @@
        // as their backgrounded counterparts. Without this, post-mortem of a
        // cancelled / crashed foreground subagent has no on-disk evidence
        // beyond what made it into the parent's tool result.
@@ -393683,7 +393824,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
            (input) => registry.queueExternalInput(hookOpts.agentId, input),
            () => registry.wakeExternalInputWaiters(hookOpts.agentId),
          );
-@@ -4024,14 +4247,13 @@
+@@ -4024,14 +4246,13 @@
        let fgLiveToolCallCount = 0;
        const refreshFgLiveStats = () => {
          const entry = registry.get(hookOpts.agentId);
@@ -393699,7 +393840,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        };
        const onFgToolCall = (...args: unknown[]) => {
          const event = args[0] as AgentToolCallEvent;
-@@ -4046,191 +4268,262 @@
+@@ -4046,191 +4267,262 @@
        const onFgUsageMetadata = () => {
          refreshFgLiveStats();
        };
@@ -394128,7 +394269,7 @@ diff --git a/packages/core/src/tools/agent/agent.ts b/packages/core/src/tools/ag
        // happened between provisioning and the inner try (e.g. inside
        // `createApprovalModeOverride`, the agent constructor, or
        // anywhere else upstream of the foreground/background try blocks
-@@ -4257,21 +4550,38 @@
+@@ -4257,21 +4549,38 @@
        } catch (restoreError) {
          debugLogger.warn(
            `[AgentTool] restoreParentPM after error failed: ${restoreError}`,
@@ -397014,6 +397155,23 @@ diff --git a/packages/core/src/tools/edit.ts b/packages/core/src/tools/edit.ts
      };
    }
  }
+diff --git a/packages/core/src/tools/enter-worktree.ts b/packages/core/src/tools/enter-worktree.ts
+--- a/packages/core/src/tools/enter-worktree.ts
++++ b/packages/core/src/tools/enter-worktree.ts
+@@ -259,13 +259,12 @@
+             type: 'string',
+             description:
+               'Optional slug (letters, digits, dot, underscore, hyphen; max 64 chars). Auto-generated when omitted.',
+           },
+         },
+         additionalProperties: false,
+-        $schema: 'http://json-schema.org/draft-07/schema#',
+       },
+       true, // isOutputMarkdown
+       false, // canUpdateOutput
+       true, // shouldDefer — only invoked when the user explicitly asks for a worktree
+       false, // alwaysLoad
+       'worktree git isolated branch new',
 diff --git a/packages/core/src/tools/enterPlanMode.test.ts b/packages/core/src/tools/enterPlanMode.test.ts
 --- a/packages/core/src/tools/enterPlanMode.test.ts
 +++ b/packages/core/src/tools/enterPlanMode.test.ts
@@ -397031,7 +397189,7 @@ diff --git a/packages/core/src/tools/enterPlanMode.test.ts b/packages/core/src/t
  import { runWithAgentContext } from '../agents/runtime/agent-context.js';
  import { runWithTeammateIdentity } from '../agents/team/identity.js';
  import { getPlanModeSystemReminder } from '../core/prompts.js';
-@@ -66,16 +67,12 @@
+@@ -66,27 +67,22 @@
      });
  
      it('should not defer (always visible)', () => {
@@ -397048,7 +397206,18 @@ diff --git a/packages/core/src/tools/enterPlanMode.test.ts b/packages/core/src/t
          properties: {
            userRequested: {
              type: 'boolean',
-@@ -252,14 +249,19 @@
+             description: expect.stringContaining('ONLY when the user'),
+           },
+         },
+         additionalProperties: false,
+-        $schema: 'http://json-schema.org/draft-07/schema#',
+       });
+     });
+   });
+ 
+   describe('getDefaultPermission', () => {
+     it('should always return allow', async () => {
+@@ -252,14 +248,19 @@
      });
  
      it('rejects inside subagent context without changing approval mode', async () => {
@@ -397073,7 +397242,21 @@ diff --git a/packages/core/src/tools/enterPlanMode.test.ts b/packages/core/src/t
 diff --git a/packages/core/src/tools/enterPlanMode.ts b/packages/core/src/tools/enterPlanMode.ts
 --- a/packages/core/src/tools/enterPlanMode.ts
 +++ b/packages/core/src/tools/enterPlanMode.ts
-@@ -192,16 +192,12 @@
+@@ -52,13 +52,12 @@
+         type: 'boolean',
+         description:
+           'Set to true ONLY when the user explicitly asked for plan mode in this turn, or explicitly confirmed they want it. Leave unset (or false) when you are deciding to plan on your own without the user asking. In YOLO mode, an explicit user request will not take effect unless this is true.',
+       },
+     },
+     additionalProperties: false,
+-    $schema: 'http://json-schema.org/draft-07/schema#',
+   },
+ };
+ 
+ class EnterPlanModeToolInvocation extends BaseToolInvocation<
+   EnterPlanModeParams,
+   ToolResult
+@@ -192,16 +191,12 @@
  export class EnterPlanModeTool extends BaseDeclarativeTool<
    EnterPlanModeParams,
    ToolResult
@@ -397090,6 +397273,23 @@ diff --git a/packages/core/src/tools/enterPlanMode.ts b/packages/core/src/tools/
        ToolDisplayNames.ENTER_PLAN_MODE,
        enterPlanModeToolDescription,
        Kind.Think,
+diff --git a/packages/core/src/tools/exit-worktree.ts b/packages/core/src/tools/exit-worktree.ts
+--- a/packages/core/src/tools/exit-worktree.ts
++++ b/packages/core/src/tools/exit-worktree.ts
+@@ -576,13 +576,12 @@
+             description:
+               'When action="remove", must be true to delete a worktree with uncommitted changes.',
+           },
+         },
+         required: ['name', 'action'],
+         additionalProperties: false,
+-        $schema: 'http://json-schema.org/draft-07/schema#',
+       },
+       true, // isOutputMarkdown
+       false, // canUpdateOutput
+       true, // shouldDefer — only invoked when the user explicitly asks to leave a worktree
+       false, // alwaysLoad
+       'worktree exit leave remove keep cleanup',
 diff --git a/packages/core/src/tools/exitPlanMode.test.ts b/packages/core/src/tools/exitPlanMode.test.ts
 --- a/packages/core/src/tools/exitPlanMode.test.ts
 +++ b/packages/core/src/tools/exitPlanMode.test.ts
@@ -397155,10 +397355,14 @@ diff --git a/packages/core/src/tools/exitPlanMode.test.ts b/packages/core/src/to
 diff --git a/packages/core/src/tools/exitPlanMode.ts b/packages/core/src/tools/exitPlanMode.ts
 --- a/packages/core/src/tools/exitPlanMode.ts
 +++ b/packages/core/src/tools/exitPlanMode.ts
-@@ -85,24 +85,12 @@
+@@ -81,28 +81,15 @@
+         description:
+           'A brief summary of the investigation and key findings gathered during plan mode for a plan-required teammate leader.',
+       },
+     },
      required: ['plan'],
      additionalProperties: false,
-     $schema: 'http://json-schema.org/draft-07/schema#',
+-    $schema: 'http://json-schema.org/draft-07/schema#',
    },
  };
  
@@ -412117,6 +412321,20 @@ diff --git a/packages/core/src/tools/skill.ts b/packages/core/src/tools/skill.ts
    private availableSkills: SkillConfig[] = [];
    // Conditional skills (with `paths:`) that exist on disk but have not yet
    // been activated by a matching tool invocation. Tracked separately so
+@@ -118,13 +126,12 @@
+           type: 'string',
+           description: 'Optional arguments for model-invocable slash commands.',
+         },
+       },
+       required: ['skill'],
+       additionalProperties: false,
+-      $schema: 'http://json-schema.org/draft-07/schema#',
+     };
+ 
+     super(
+       SkillTool.Name,
+       ToolDisplayNames.SKILL,
+       SKILL_TOOL_DESCRIPTION, // Static; live skill list is injected via system-reminders.
 diff --git a/packages/core/src/tools/syntheticOutput.ts b/packages/core/src/tools/syntheticOutput.ts
 --- a/packages/core/src/tools/syntheticOutput.ts
 +++ b/packages/core/src/tools/syntheticOutput.ts
@@ -413001,7 +413219,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
      'Creates and manages a concise, user-visible task list for complex or multi-step work.',
    parametersJsonSchema: {
      type: 'object',
-@@ -43,36 +69,35 @@
+@@ -43,37 +69,35 @@
          type: 'array',
          items: {
            type: 'object',
@@ -413033,14 +413251,15 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
        },
      },
      required: ['todos'],
+-    $schema: 'http://json-schema.org/draft-07/schema#',
 +    additionalProperties: false,
-     $schema: 'http://json-schema.org/draft-07/schema#',
    },
  };
  
  const todoWriteToolDescription = `
  Use this tool to create and manage a user-visible task list when explicit progress tracking improves clarity.
-@@ -147,73 +172,109 @@
+ 
+@@ -147,73 +171,109 @@
  
    await atomicWriteFile(todoFilePath, JSON.stringify(data, null, 2), {
      encoding: 'utf-8',
@@ -413161,7 +413380,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
    const remainingDependencies = new Map<string, number>();
    const dependents = new Map<string, string[]>();
    for (const todo of todos) {
-@@ -232,35 +293,41 @@
+@@ -232,35 +292,41 @@
        const remaining = (remainingDependencies.get(dependent) ?? 1) - 1;
        remainingDependencies.set(dependent, remaining);
        if (remaining === 0) queue.push(dependent);
@@ -413208,7 +413427,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
    constructor(
      private readonly config: Config,
      params: TodoWriteParams,
-@@ -271,34 +338,25 @@
+@@ -271,34 +337,25 @@
    }
  
    getDescription(): string {
@@ -413247,7 +413466,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
        const changes = detectTodoChanges(oldTodos, finalTodos);
        const oldTodosMap = new Map(oldTodos.map((t) => [t.id, t]));
  
-@@ -384,26 +442,31 @@
+@@ -384,26 +441,31 @@
        await writeTodosToFile(finalTodos, activePlanId, sessionId);
        const unfinishedTodos = finalTodos.filter(
          (todo) => todo.status !== 'completed',
@@ -413291,7 +413510,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
        // 5. POST-WRITE PHASE: Execute hooks for side effects (logging, HTTP sync, etc.)
        // These hooks can now safely perform side effects knowing data is persisted
        // We don't check for blocking here since validation already passed.
-@@ -459,61 +522,76 @@
+@@ -459,61 +521,76 @@
          type: 'todo_list' as const,
          ...(resultPlanId ? { planId: resultPlanId } : {}),
          todos: finalTodos,
@@ -413381,7 +413600,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
    }
  }
  
-@@ -544,13 +622,13 @@
+@@ -544,13 +621,13 @@
      return [];
    }
  }
@@ -413396,7 +413615,7 @@ diff --git a/packages/core/src/tools/todoWrite.ts b/packages/core/src/tools/todo
    constructor(private readonly config: Config) {
      super(
        TodoWriteTool.Name,
-@@ -558,14 +636,25 @@
+@@ -558,14 +635,25 @@
        todoWriteToolDescription,
        Kind.Think,
        todoWriteToolSchemaData.parametersJsonSchema as Record<string, unknown>,
@@ -450874,6 +451093,298 @@ deleted file mode 100644
 -      return fallbackValue;
 -    }
 -  }
+-}
+diff --git a/packages/core/src/utils/schemaConverter.test.ts b/packages/core/src/utils/schemaConverter.test.ts
+--- a/packages/core/src/utils/schemaConverter.test.ts
++++ b/packages/core/src/utils/schemaConverter.test.ts
+@@ -2,16 +2,13 @@
+  * @license
+  * Copyright 2025 Google LLC
+  * SPDX-License-Identifier: Apache-2.0
+  */
+ 
+ import { describe, it, expect } from 'vitest';
+-import {
+-  convertSchema,
+-  relaxSchemaForFunctionCalling,
+-} from './schemaConverter.js';
++import { convertSchema } from './schemaConverter.js';
+ 
+ describe('convertSchema', () => {
+   describe('mode: auto (default)', () => {
+     it('should preserve type arrays', () => {
+       const input = { type: ['string', 'null'] };
+       expect(convertSchema(input, 'auto')).toEqual(input);
+@@ -286,171 +283,6 @@
+         properties: { $schema: { type: 'string' } },
+       };
+       expect(convertSchema(input, 'openapi_30')).toEqual(expected);
+     });
+   });
+ });
+-
+-// Regression for #7315: gateways enforcing OpenAI's structured-output
+-// contract promote every property to required when an object level carries
+-// `additionalProperties: false` — mutually exclusive optional tool fields
+-// (Agent working_dir vs isolation) become impossible to satisfy.
+-describe('relaxSchemaForFunctionCalling', () => {
+-  it('strips additionalProperties:false on levels with optional properties', () => {
+-    const agentLike = {
+-      $schema: 'http://json-schema.org/draft-07/schema#',
+-      type: 'object',
+-      properties: {
+-        description: { type: 'string' },
+-        prompt: { type: 'string' },
+-        working_dir: { type: 'string' },
+-        isolation: { type: 'string', enum: ['worktree'] },
+-      },
+-      required: ['description', 'prompt'],
+-      additionalProperties: false,
+-    };
+-    const relaxed = relaxSchemaForFunctionCalling(agentLike);
+-    expect(relaxed['additionalProperties']).toBeUndefined();
+-    expect(relaxed['$schema']).toBeUndefined();
+-    expect(relaxed['required']).toEqual(['description', 'prompt']);
+-    expect(Object.keys(relaxed['properties'] as object)).toEqual([
+-      'description',
+-      'prompt',
+-      'working_dir',
+-      'isolation',
+-    ]);
+-  });
+-
+-  it('keeps additionalProperties:false when every property is required', () => {
+-    const strictSchema = {
+-      type: 'object',
+-      properties: {
+-        a: { type: 'string' },
+-        b: { type: 'number' },
+-      },
+-      required: ['a', 'b'],
+-      additionalProperties: false,
+-    };
+-    expect(
+-      relaxSchemaForFunctionCalling(strictSchema)['additionalProperties'],
+-    ).toBe(false);
+-  });
+-
+-  it('keeps additionalProperties:false when there are no properties to promote', () => {
+-    const empty = { type: 'object', additionalProperties: false };
+-    expect(relaxSchemaForFunctionCalling(empty)['additionalProperties']).toBe(
+-      false,
+-    );
+-  });
+-
+-  it('relaxes nested object levels independently', () => {
+-    const nested = {
+-      type: 'object',
+-      properties: {
+-        outerRequired: {
+-          type: 'object',
+-          properties: {
+-            x: { type: 'string' },
+-            y: { type: 'string' },
+-          },
+-          required: ['x'],
+-          additionalProperties: false,
+-        },
+-        strictInner: {
+-          type: 'object',
+-          properties: { z: { type: 'string' } },
+-          required: ['z'],
+-          additionalProperties: false,
+-        },
+-      },
+-      required: ['outerRequired', 'strictInner'],
+-      additionalProperties: false,
+-    };
+-    const relaxed = relaxSchemaForFunctionCalling(nested) as {
+-      additionalProperties?: unknown;
+-      properties: Record<string, { additionalProperties?: unknown }>;
+-    };
+-    // Top level: all props required -> constraint kept.
+-    expect(relaxed.additionalProperties).toBe(false);
+-    // Inner with an optional property -> stripped.
+-    expect(
+-      relaxed.properties['outerRequired']!.additionalProperties,
+-    ).toBeUndefined();
+-    // Inner fully required -> kept.
+-    expect(relaxed.properties['strictInner']!.additionalProperties).toBe(false);
+-  });
+-
+-  it('preserves non-false additionalProperties forms and recurses into them', () => {
+-    const schema = {
+-      type: 'object',
+-      properties: { a: { type: 'string' } },
+-      additionalProperties: {
+-        type: 'object',
+-        properties: { inner: { type: 'string' } },
+-        required: [],
+-        additionalProperties: false,
+-      },
+-    };
+-    const relaxed = relaxSchemaForFunctionCalling(schema) as {
+-      additionalProperties: { additionalProperties?: unknown };
+-    };
+-    expect(typeof relaxed.additionalProperties).toBe('object');
+-    expect(relaxed.additionalProperties.additionalProperties).toBeUndefined();
+-  });
+-
+-  it('never treats property names as schema keywords', () => {
+-    // `properties` keys are names, not keywords: a property literally
+-    // called $schema / $id / additionalProperties must survive the walk.
+-    const schema = {
+-      $schema: 'http://json-schema.org/draft-07/schema#',
+-      $id: 'https://example.com/tool.schema.json',
+-      type: 'object',
+-      properties: {
+-        $schema: { type: 'string' },
+-        $id: { type: 'string' },
+-        additionalProperties: { type: 'boolean' },
+-      },
+-      required: ['$schema', '$id', 'additionalProperties'],
+-      additionalProperties: false,
+-      $defs: {
+-        $schema: { type: 'number' },
+-      },
+-    };
+-    const relaxed = relaxSchemaForFunctionCalling(schema) as {
+-      $schema?: unknown;
+-      $id?: unknown;
+-      properties: Record<string, unknown>;
+-      required: string[];
+-      additionalProperties?: unknown;
+-      $defs: Record<string, unknown>;
+-    };
+-    // Keyword-level $schema AND $id dropped; property-level names intact.
+-    expect(relaxed.$schema).toBeUndefined();
+-    expect(relaxed.$id).toBeUndefined();
+-    expect(Object.keys(relaxed.properties)).toEqual([
+-      '$schema',
+-      '$id',
+-      'additionalProperties',
+-    ]);
+-    expect(relaxed.required).toEqual([
+-      '$schema',
+-      '$id',
+-      'additionalProperties',
+-    ]);
+-    // All properties required -> the constraint keyword stays.
+-    expect(relaxed.additionalProperties).toBe(false);
+-    // $defs is a name map too.
+-    expect(Object.keys(relaxed.$defs)).toEqual(['$schema']);
+-  });
+-
+-  it('does not mutate the input schema', () => {
+-    const input = {
+-      type: 'object',
+-      properties: { a: { type: 'string' } },
+-      required: [],
+-      additionalProperties: false,
+-    };
+-    const snapshot = JSON.parse(JSON.stringify(input));
+-    relaxSchemaForFunctionCalling(input);
+-    expect(input).toEqual(snapshot);
+-  });
+-});
+diff --git a/packages/core/src/utils/schemaConverter.ts b/packages/core/src/utils/schemaConverter.ts
+--- a/packages/core/src/utils/schemaConverter.ts
++++ b/packages/core/src/utils/schemaConverter.ts
+@@ -173,95 +173,6 @@
+ 
+     return target;
+   };
+ 
+   return convert(schema) as Record<string, unknown>;
+ }
+-
+-/**
+- * Relaxes a tool-parameter JSON Schema for the OpenAI-compatible wire
+- * format (#7315).
+- *
+- * OpenAI's structured-output contract requires that when an object schema
+- * carries `additionalProperties: false`, every property must be listed in
+- * `required`; several OpenAI-compatible gateways enforce this server-side
+- * by silently promoting ALL properties to required. For tools with
+- * genuinely optional fields the model is then forced to emit every field
+- * on every call — the Agent tool's mutually exclusive `working_dir` and
+- * `isolation` become impossible to satisfy, and the model loops on the
+- * client-side validation error until loop detection kills the run.
+- *
+- * The relaxation is deliberately surgical:
+- * - `additionalProperties: false` is removed ONLY on object levels that
+- *   declare optional properties (some `properties` key missing from
+- *   `required`). Levels where every property is required keep the
+- *   constraint — there is nothing for a gateway to promote.
+- * - `$schema` / `$id` metadata is dropped at every level (some gateways
+- *   reject unknown keywords).
+- * - Everything else passes through untouched; client-side
+- *   `validateToolParams` still enforces the full source schema, so the
+- *   constraint is relaxed on the wire only.
+- *
+- * Pure: returns new objects, never mutates the input.
+- */
+-export function relaxSchemaForFunctionCalling(
+-  schema: Record<string, unknown>,
+-): Record<string, unknown> {
+-  const relax = (obj: unknown): unknown => {
+-    if (typeof obj !== 'object' || obj === null) {
+-      return obj;
+-    }
+-    if (Array.isArray(obj)) {
+-      return obj.map(relax);
+-    }
+-    const source = obj as Record<string, unknown>;
+-    const target: Record<string, unknown> = {};
+-
+-    const properties = source['properties'];
+-    const required = Array.isArray(source['required'])
+-      ? (source['required'] as unknown[]).filter(
+-          (r): r is string => typeof r === 'string',
+-        )
+-      : [];
+-    const hasOptionalProperties =
+-      typeof properties === 'object' &&
+-      properties !== null &&
+-      !Array.isArray(properties) &&
+-      Object.keys(properties).some((key) => !required.includes(key));
+-
+-    for (const [key, value] of Object.entries(source)) {
+-      if (key === '$schema' || key === '$id') {
+-        continue;
+-      }
+-      if (
+-        key === 'additionalProperties' &&
+-        value === false &&
+-        hasOptionalProperties
+-      ) {
+-        continue;
+-      }
+-      // `properties` / `$defs` / `definitions` are name->schema MAPS: their
+-      // keys are property/definition names, not JSON Schema keywords. A
+-      // property literally named `$schema` or `additionalProperties` must
+-      // survive — only the VALUES are schemas to relax.
+-      if (
+-        (key === 'properties' || key === '$defs' || key === 'definitions') &&
+-        typeof value === 'object' &&
+-        value !== null &&
+-        !Array.isArray(value)
+-      ) {
+-        const map: Record<string, unknown> = {};
+-        for (const [mapKey, mapValue] of Object.entries(
+-          value as Record<string, unknown>,
+-        )) {
+-          map[mapKey] = relax(mapValue);
+-        }
+-        target[key] = map;
+-        continue;
+-      }
+-      target[key] = relax(value);
+-    }
+-    return target;
+-  };
+-
+-  return relax(schema) as Record<string, unknown>;
 -}
 diff --git a/packages/core/src/utils/schemaValidator.test.ts b/packages/core/src/utils/schemaValidator.test.ts
 --- a/packages/core/src/utils/schemaValidator.test.ts
