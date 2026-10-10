@@ -177,6 +177,47 @@ class VerifyRuntimeContractTests(unittest.TestCase):
                 ):
                     MODULE.verify(paths)
 
+    # How grep_search and the shell run, each stated true in the sealed settings.
+    TOOL_MODES = (
+        ("tools", "useRipgrep"),
+        ("tools", "useBuiltinRipgrep"),
+        ("tools", "shell", "enableInteractiveShell"),
+    )
+
+    def test_rejects_a_sealed_settings_file_that_switches_a_tool_mode(self) -> None:
+        # The system rg, the JavaScript grep and child processes are each another
+        # tool behind the same name; resealing the file does not make one this
+        # deployment's.
+        for path in self.TOOL_MODES:
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+                node = settings
+                for key in path[:-1]:
+                    node = node[key]
+                node[path[-1]] = False
+                paths = self.resealed(root, settings)
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, f"settings {'.'.join(path)} drift"
+                ):
+                    MODULE.verify(paths)
+
+    def test_rejects_a_sealed_settings_file_that_omits_a_tool_mode(self) -> None:
+        # Stated, not left to the client's default.
+        for path in self.TOOL_MODES:
+            with self.subTest(path=path), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                settings = json.loads(self.paths[1].read_text(encoding="utf-8"))
+                node = settings
+                for key in path[:-1]:
+                    node = node[key]
+                del node[path[-1]]
+                paths = self.resealed(root, settings)
+                with self.assertRaisesRegex(
+                    MODULE.ContractError, f"settings must state {'.'.join(path)}:"
+                ):
+                    MODULE.verify(paths)
+
     def test_rejects_a_settings_context_section_even_if_resealed(self) -> None:
         # Compaction is the only thing that rewrites history here, and its size
         # is a share of the served window, so the settings carry no context

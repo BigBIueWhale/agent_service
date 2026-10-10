@@ -676,7 +676,10 @@ A terminal conversation and a headless conversation share the same obligations:
   hang-up, which closed over all but the first 4,095 bytes of a command that
   exited before it was read; it renders every row of a long output rather than
   the last 10,000; and it states binary output and output past its capture
-  limit, with the true total and the command to run instead.
+  limit, with the true total and the command to run instead. It reads the
+  output as UTF-8, the encoding of the terminal the command writes to, never as
+  an encoding guessed from the bytes, and states how many bytes were not UTF-8 —
+  each sequence shown as U+FFFD — and the command that shows them.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
   request advertises one function whose closed parameter schema is the sections
   of upstream's `<state_snapshot>` block but `all_user_messages`, which the
@@ -726,7 +729,14 @@ serves the session and everything in it, compaction included: the sealed setting
 state each per-purpose selector — fast, vision, image, voice — and the fallback
 list as empty, and the runtime-contract verifier refuses a settings file that sets
 one, resealed or not. It excludes forks, background work, teams, worktrees,
-alternate child models, and nesting.
+alternate child models, and nesting. The settings state how two tools run, too:
+grep_search searches with the bundled ripgrep, and each foreground command runs in
+a pseudo-terminal (`tools.useRipgrep`, `tools.useBuiltinRipgrep` and
+`tools.shell.enableInteractiveShell`, each true). The client registers that one
+engine for each and refuses to start when it cannot run it — ripgrep is run once
+and the pseudo-terminal loaded before the first call — rather than moving a
+search to another engine or a command out of its terminal, and the verifier
+refuses a settings file that leaves one out or switches it.
 Workspace environment/configuration discovery, ambient MCP, hooks, managed memory,
 custom workflows, and injected policy remain disabled through authentication;
 ordinary project `QWEN.md` and `AGENTS.md` instructions remain available. Leading

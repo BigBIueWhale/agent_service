@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `6b175c938e242f6992dc00f321b66d7e6b08b0b20c1f66d18cabe5de2d538c28`
+- Review-diff SHA-256: `e64aaa3936bf2ceef803a34832b85b36234534e5a49820c9c688769161c9fb31`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `4b7215ffb976e8c9e16fc3f90783b0e188cd12052381754ac8d2fe8ead2083cc`
+- Transformer-manifest SHA-256: `d9eb59169b0143a5f680e96e1ba0352fcb3f6790c46c5b07523b175805cafe64`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -366,11 +366,23 @@ the output in pieces no write can scroll past, so a long output keeps its
 start. A program's own erasures, and an alternate screen still shown at the
 end, render as upstream renders them; one sequence that scrolls past the whole
 window is refused rather than rendered short, and a result whose rendering the
-replay or the decoder refused states that refusal, in their words, in place of
-the output; none of the output is shown some other way instead, at an exit or
-in a promoted snapshot. Binary output, which is not shown, and output past the
-capture limit, which is discarded as it arrives, are stated through the same
-notice with the true total and the command to run instead.
+replay refused states that refusal, in its words, in place of the output; none
+of the output is shown some other way instead, at an exit or in a promoted
+snapshot. Binary output, which is not shown, and output past the capture limit,
+which is discarded as it arrives, are stated through the same notice with the
+true total and the command to run instead. The output is read as UTF-8, the
+encoding of the terminal the command writes to (the image declares C.UTF-8),
+known before the command runs. Upstream let node-pty decode a pty's bytes, so a
+byte that was not UTF-8 was already U+FFFD and uncounted, and decoded a child
+process's output -- every background command -- as the encoding chardet guessed
+from its first chunk, so one stray byte turned every later UTF-8 line into
+mojibake. The pty now hands the bytes over undecoded, and the bytes that are not
+UTF-8, each sequence shown as one U+FFFD, are counted and stated after the
+output with the command that shows them. A command the configuration runs in a
+pseudo-terminal runs in one or fails: a pty or terminal that cannot load, or a
+spawn that fails, is that call's error, and startup refuses a configuration
+whose pty cannot load, where upstream ran the command as a child process
+instead, without a terminal.
 
 Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
@@ -908,6 +920,22 @@ with explicit remedies for unsupported or overlarge input. Raster images must
 pass complete original-PNG validation: static 8-bit RGB/RGBA, at most 16,777,216
 pixels, 30:1 aspect ratio, and 100 MiB. The original image is not resized or
 transcoded. Tool text and image parts preserve chronological order.
+
+`edit` matches `old_string` in the text `read_file` shows -- each line in NFC,
+every line break as the file has it, a CRLF line ending in `\r` -- and writes
+`new_string` over the matched ranges only, every other byte of the file as it
+was. It takes one occurrence, or with `replace_all` every one when none
+overlap; any other count is refused with its cause. Upstream normalised the
+file to LF but not `old_string`, then fell through a cascade that folded
+look-alike punctuation, trailing whitespace and line breaks and counted the
+slice it chose, so an edit could succeed where the model's text did not match;
+such an edit is now refused, saying so when only line breaks or the whitespace
+ending lines differ. `grep_search` has one engine per configuration -- here the
+bundled ripgrep the sealed settings declare, run once at startup, which refuses
+to start when it cannot -- and a search whose binary fails is that search's
+error. Upstream replaced a ripgrep that failed its probe with the system rg, a
+different build, or with a grep that tried git grep, system grep and a
+JavaScript scan per search, each reading the pattern in another dialect.
 
 The sealed deployment has one tool allowlist and an explicit foreground child
 policy. It admits only the advertised general-purpose and Explore variants and

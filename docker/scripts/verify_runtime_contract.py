@@ -42,6 +42,14 @@ RETIRED_SETTINGS = (
     ("compactionModel",),
 )
 
+# The settings that choose how a tool runs, each stated true in the sealed file: the
+# bundled ripgrep for grep_search, and a pseudo-terminal for every foreground command.
+DECLARED_TOOL_MODES = (
+    ("tools", "useRipgrep"),
+    ("tools", "useBuiltinRipgrep"),
+    ("tools", "shell", "enableInteractiveShell"),
+)
+
 
 class ContractError(RuntimeError):
     pass
@@ -152,6 +160,23 @@ def verify_settings(contract: dict[str, Any], settings: dict[str, Any]) -> None:
             )
         require_equal(f"settings {key}", settings[key], "")
     require_equal("settings sandbox", settings["tools"]["sandbox"], False)
+    # How a search and a command run is the sealed file's statement, not the
+    # client's default: grep_search searches with the bundled ripgrep, and each
+    # foreground command runs in a pseudo-terminal. The client registers one
+    # engine for each and refuses to start when it cannot run it (ripgrep is
+    # run once, the pseudo-terminal loaded), so a mode left out would be a
+    # default a reader has to look up, and another one would put a different
+    # tool behind the same name.
+    for path in DECLARED_TOOL_MODES:
+        node: Any = settings
+        for key in path:
+            if not isinstance(node, dict) or key not in node:
+                raise ContractError(
+                    f"settings must state {'.'.join(path)}: the sealed file says how "
+                    "grep_search and the shell run rather than leaving it to a default"
+                )
+            node = node[key]
+        require_equal(f"settings {'.'.join(path)}", node, True)
     # Compaction is the only thing that rewrites history here, and the size it
     # is due at is a share of the served window rather than a setting, so the
     # settings carry no context section at all.

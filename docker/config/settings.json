@@ -61,7 +61,12 @@
   },
   "tools": {
     "approvalMode": "yolo",
-    "sandbox": false
+    "sandbox": false,
+    "useRipgrep": true,
+    "useBuiltinRipgrep": true,
+    "shell": {
+      "enableInteractiveShell": true
+    }
   },
   "env": {
     "QWEN38_LOCAL_API_KEY": "local-loopback-only"

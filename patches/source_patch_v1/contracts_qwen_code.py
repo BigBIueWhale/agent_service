@@ -12146,7 +12146,9 @@ def _validate_bounded_output_after(state: State) -> None:
             )
         require_text(state, path, "formatOutputBound(", count=1, label=label)
     # The capture-limit notice follows the output it describes, as upstream
-    # placed it; binary output, which is not shown, is the notice alone.
+    # placed it -- after all the result shows of it, the statement of its
+    # bytes that are not UTF-8 included; binary output, which is not shown,
+    # is the notice alone.
     _require_all(
         state,
         "packages/core/src/services/shellExecutionService.ts",
@@ -12154,7 +12156,7 @@ def _validate_bounded_output_after(state: State) -> None:
             "outputCaptureLimitExceeded?: boolean;",
             "unit: 'bytes of output',",
             "total: capture.totalBytesReceived,",
-            "  return capture.binary || !output\n    ? harnessText(notice)\n    : authored(worldText(output), harnessText(`\\n\\n${notice}`));",
+            "  return capture.binary || !shown.text\n    ? harnessText(notice)\n    : authored(shown, harnessText(`\\n\\n${notice}`));",
         ),
         label=label,
     )
@@ -12571,6 +12573,9 @@ _NODE_PTY_PATCH = "patches/@lydell+node-pty-linux-x64+1.2.0-beta.10.patch"
 _SHELL_SERVICE = "packages/core/src/services/shellExecutionService.ts"
 _TERMINAL_SERIALIZER = "packages/core/src/utils/terminalSerializer.ts"
 _SHELL_CAPTURE_TEST = "packages/core/src/services/shellExecutionService.capture.test.ts"
+_SHELL_ENCODING_TEST = "packages/core/src/services/shellExecutionService.encoding.test.ts"
+_UTF8_OUTPUT = "packages/core/src/utils/utf8-output.ts"
+_UTF8_OUTPUT_TEST = "packages/core/src/utils/utf8-output.test.ts"
 
 
 def _validate_shell_output_completeness_before(state: State) -> None:
@@ -12608,6 +12613,17 @@ def _validate_shell_output_completeness_before(state: State) -> None:
         ),
         label=label,
     )
+    # Upstream decodes a command's output with an encoding chardet guesses
+    # from its bytes -- on the child-process path, from the first chunk, for
+    # every chunk after it -- and says nothing of a byte it could not read.
+    require_text(
+        state,
+        _SHELL_SERVICE,
+        "const encoding = getCachedEncodingForBuffer(data);",
+        count=2,
+        label=label,
+    )
+    _require(_UTF8_OUTPUT not in state, f"{label}: {_UTF8_OUTPUT} already exists upstream")
     forbid_text(state, _TERMINAL_SERIALIZER, "appendTerminalRows", label=label)
 
 
@@ -12696,10 +12712,43 @@ def _validate_shell_output_completeness_after(state: State) -> None:
             "          continuation: { unretained: CAPTURE_LIMIT_DISCARDED },",
             "'that file with a command that prints bytes as text, such as `od -c`.';",
             "`with its output redirected to a file, then read that file with ${ToolNames.READ_FILE}.`;",
-            "  return capture.binary || !output\n    ? harnessText(notice)\n    : authored(worldText(output), harnessText(`\\n\\n${notice}`));",
+            "  return capture.binary || !shown.text\n    ? harnessText(notice)\n    : authored(shown, harnessText(`\\n\\n${notice}`));",
         ),
         label=label,
     )
+    # The output is read as UTF-8, the encoding of the terminal a command
+    # writes to, declared before the command runs rather than guessed from
+    # its first bytes, where one stray byte turned every later UTF-8 line
+    # into mojibake. The pty hands the bytes over undecoded, so the bytes
+    # that are not UTF-8 -- each sequence shown as U+FFFD -- are counted
+    # from what the command wrote, and the result says how many there were
+    # and how to see them, after the output, in the harness's words.
+    _require_all(
+        state,
+        _UTF8_OUTPUT,
+        (
+            "export function utf8OutputDecoder(): TextDecoder {\n"
+            "  return new TextDecoder('utf-8', { ignoreBOM: true });\n}",
+            "export class NonUtf8ByteCount {",
+            "export function countNonUtf8Bytes(bytes: Uint8Array): number {",
+        ),
+        label=label,
+    )
+    _require_all(
+        state,
+        _SHELL_SERVICE,
+        (
+            "function notUtf8Statement(bytes: number): string {",
+            "'a command that prints bytes as text, such as `od -c`.'",
+            "    const decoded = utf8OutputDecoder().decode(finalBuffer);",
+            "      notUtf8Bytes: countNonUtf8Bytes(finalBuffer),",
+            "          notUtf8Bytes = stdoutNotUtf8.end() + stderrNotUtf8.end();",
+            "        encoding: null,",
+        ),
+        label=label,
+    )
+    for retired in ("getCachedEncodingForBuffer", "new TextDecoder("):
+        forbid_text(state, _SHELL_SERVICE, retired, label=label)
     _require(
         service.count("binary: !isStreamingRawContent,") == 4,
         f"{label}: {_SHELL_SERVICE} finishes a result without stating binary output; "
@@ -12714,7 +12763,11 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         _SHELL_SERVICE,
         (
             "type RenderedOutput =\n"
-            "  | { readonly text: string }\n"
+            "  | {\n"
+            "      readonly text: string;\n"
+            "      /** The bytes of the output that were not UTF-8 (`NonUtf8ByteCount`). */\n"
+            "      readonly notUtf8Bytes: number;\n"
+            "    }\n"
             "  | { readonly refused: AuthoredText };",
             "async function renderCapturedOutput(",
             "    return { refused: caughtErrorText(error) };",
@@ -12741,6 +12794,14 @@ def _validate_shell_output_completeness_after(state: State) -> None:
         "refuses one sequence that scrolls past the whole window rather than render it short",
     ):
         require_text(state, _SHELL_CAPTURE_TEST, case, label=label)
+    for path, case in (
+        (_SHELL_ENCODING_TEST, "keeps every UTF-8 line of a child process and states the bytes that were not"),
+        (_SHELL_ENCODING_TEST, "decodes a pty command as UTF-8 and states the bytes that were not"),
+        (_SHELL_ENCODING_TEST, "states nothing for output that is UTF-8, a U+FFFD it holds included"),
+        (_UTF8_OUTPUT_TEST, "agrees with the decoder and with isUtf8 on every short byte string"),
+        (_UTF8_OUTPUT_TEST, "counts a sequence split across chunks once, as the whole stream counts it"),
+    ):
+        require_text(state, path, case, label=label)
     for case in (
         "states the refusal in place of the output, and shows none of it another way",
         "states a background-promote replay refusal in place of the output, as an exit does",
@@ -12757,8 +12818,12 @@ def _validate_shell_output_completeness_after(state: State) -> None:
 _TEXT_AUTHORSHIP_MODULE = "packages/core/src/core/text-authorship.ts"
 # The tools the launcher allows -- its `--strict-tools`, the runtime contract's
 # `native_tools`, to which check-documented-identifiers.sh holds these names --
-# each with the validation that refuses its calls. `grep_search` is ripgrep's,
-# or the built-in grep's where ripgrep cannot run.
+# each with the validation that refuses its calls. `grep_search` has one
+# engine per configuration, never one standing in for another: ripgrep's,
+# which the sealed settings declare and startup proves runs, or the built-in
+# grep's JavaScript scan where a configuration sets tools.useRipgrep false.
+# Both are held here, because either is the one whose refusals reach the
+# model wherever its configuration registers it.
 ALLOWED_TOOL_VALIDATIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "agent": (("packages/core/src/tools/agent/agent.ts", "validateToolParams"),),
     "edit": (("packages/core/src/tools/edit.ts", "validateToolParamValues"),),
@@ -13703,12 +13768,16 @@ CONCERNS: tuple[SemanticConcern, ...] = (
             "a program erased stay erased and the alternate screen at the end is the rendering, as "
             "upstream renders them. Binary output, which is not shown, and output past the capture "
             "limit, which is discarded as it arrives, are stated through the one notice with the "
-            "true total and the command to run instead."
+            "true total and the command to run instead. The output is decoded as UTF-8, the "
+            "encoding of the terminal it was written to, never as an encoding guessed from its "
+            "bytes; the pty hands the bytes over undecoded, and the bytes that are not UTF-8, each "
+            "sequence shown as U+FFFD, are counted and stated with the command that shows them."
         ),
         removal_condition=(
             "The pinned Node.js libuv reads a pty master to its end before reporting a hang-up as "
             "the end of the stream, node-pty reads the master to its end before closing it after "
-            "an exit, and upstream's replay keeps every row and states binary and capped output."
+            "an exit, and upstream's replay keeps every row and states binary and capped output, "
+            "and upstream decodes output as its terminal's encoding and states the bytes it cannot."
         ),
         validate_before=_validate_shell_output_completeness_before,
         validate_after=_validate_shell_output_completeness_after,
