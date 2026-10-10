@@ -212870,13 +212870,78 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        // Should be cancelled, not timed out
        expect(completedCall.status).toBe('cancelled');
      } finally {
-@@ -2330,874 +2579,187 @@
-   it('propagates a tool turn-termination boundary to the host', async () => {
-     const execute = vi.fn().mockResolvedValue({
-       llmContent: 'proposal recorded',
-       returnDisplay: 'proposal recorded',
-       terminateTurn: true,
-     });
+@@ -2274,100 +2523,64 @@
+       } else {
+         process.env['QWEN_CODE_TOOL_EXECUTION_TIMEOUT_MS'] = previousTimeout;
+       }
+     }
+   });
+ 
+-  it('executes only the first request for duplicate callIds in one batch', async () => {
+-    const execute = vi.fn().mockResolvedValue({
+-      llmContent: 'first result',
+-      returnDisplay: 'first result',
+-    });
++  it('states who wrote the error a tool throws, so the next request can carry it', async () => {
++    // A tool that throws -- here as a failed tokenizer count does, an
++    // APIError-shaped message the client's request code raised -- gives the
++    // model an error result whose text states its author. A result that
++    // stated none is refused by the request composer as a client defect, so
++    // a failed count ended the run naming authorship instead of the failure.
++    const thrown = new Error('500 "unknown raw prompt"');
+     const toolsByName = new Map<string, MockTool>([
+       [
+         'read_file',
+         new MockTool({
+           name: 'read_file',
+-          execute,
++          execute: vi.fn().mockRejectedValue(thrown),
+         }),
+       ],
+     ]);
+     const { scheduler, onAllToolCallsComplete } =
+       createSchedulerForLegacyToolTests({ toolsByName });
+ 
+     await scheduler.schedule(
+       [
+         {
+-          callId: 'dup_id_0001',
++          callId: 'thrown-1',
+           name: 'read_file',
+           args: { file_path: 'a.ts' },
+           isClientInitiated: false,
+-          prompt_id: 'prompt-dup',
+-        },
+-        {
+-          callId: 'dup_id_0001',
+-          name: 'read_file',
+-          args: { file_path: 'b.ts' },
+-          isClientInitiated: false,
+-          prompt_id: 'prompt-dup',
+-        },
+-      ],
+-      new AbortController().signal,
+-    );
+-
+-    expect(execute).toHaveBeenCalledOnce();
+-    expect(execute).toHaveBeenCalledWith(
+-      expect.objectContaining({ file_path: 'a.ts' }),
+-    );
+-
+-    const completedCalls = onAllToolCallsComplete.mock
+-      .calls[0][0] as ToolCall[];
+-    expect(completedCalls).toHaveLength(1);
+-    expect(completedCalls.map((call) => call.request.callId)).toEqual([
+-      'dup_id_0001',
+-    ]);
+-  });
+-
+-  it('propagates a tool turn-termination boundary to the host', async () => {
+-    const execute = vi.fn().mockResolvedValue({
+-      llmContent: 'proposal recorded',
+-      returnDisplay: 'proposal recorded',
+-      terminateTurn: true,
+-    });
 -    const toolsByName = new Map<string, MockTool>([
 -      ['update_goal', new MockTool({ name: 'update_goal', execute })],
 -    ]);
@@ -212891,69 +212956,87 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -          args: {},
 -          isClientInitiated: false,
 -          prompt_id: 'prompt-goal',
--        },
--      ],
--      new AbortController().signal,
--    );
--
--    const completedCall = (
--      onAllToolCallsComplete.mock.calls[0][0] as ToolCall[]
--    )[0];
++          prompt_id: 'prompt-thrown',
+         },
+       ],
+       new AbortController().signal,
+     );
+ 
+     const completedCall = (
+       onAllToolCallsComplete.mock.calls[0][0] as ToolCall[]
+     )[0];
 -    expect(completedCall.status).toBe('success');
 -    if (completedCall.status === 'success') {
 -      expect(completedCall.response.terminateTurn).toBe(true);
 -    }
--  });
--
++    expect(completedCall.status).toBe('error');
++    if (completedCall.status !== 'error') return;
++    const part = completedCall.response.responseParts[0] as Part & {
++      authors?: unknown;
++    };
++    expect(part.functionResponse?.response).toEqual({
++      error: '500 "unknown raw prompt"',
++    });
++    expect(part.authors).toEqual(
++      harnessText('500 "unknown raw prompt"').authors,
++    );
+   });
+ 
 -  it('does not dedupe requests with empty callIds in one batch', async () => {
--    const execute = vi.fn().mockResolvedValue({
++  it('executes only the first request for duplicate callIds in one batch', async () => {
+     const execute = vi.fn().mockResolvedValue({
 -      llmContent: 'result',
 -      returnDisplay: 'result',
--    });
--    const toolsByName = new Map<string, MockTool>([
--      [
--        'read_file',
--        new MockTool({
--          name: 'read_file',
--          execute,
--        }),
--      ],
--    ]);
--    const { scheduler, onAllToolCallsComplete } =
--      createSchedulerForLegacyToolTests({ toolsByName });
--
--    await scheduler.schedule(
--      [
--        {
++      llmContent: 'first result',
++      returnDisplay: 'first result',
+     });
+     const toolsByName = new Map<string, MockTool>([
+       [
+         'read_file',
+         new MockTool({
+           name: 'read_file',
+@@ -2378,826 +2591,223 @@
+     const { scheduler, onAllToolCallsComplete } =
+       createSchedulerForLegacyToolTests({ toolsByName });
+ 
+     await scheduler.schedule(
+       [
+         {
 -          callId: '',
--          name: 'read_file',
--          args: { file_path: 'a.ts' },
--          isClientInitiated: false,
++          callId: 'dup_id_0001',
+           name: 'read_file',
+           args: { file_path: 'a.ts' },
+           isClientInitiated: false,
 -          prompt_id: 'prompt-empty',
--        },
--        {
++          prompt_id: 'prompt-dup',
+         },
+         {
 -          callId: '',
--          name: 'read_file',
--          args: { file_path: 'b.ts' },
--          isClientInitiated: false,
++          callId: 'dup_id_0001',
+           name: 'read_file',
+           args: { file_path: 'b.ts' },
+           isClientInitiated: false,
 -          prompt_id: 'prompt-empty',
--        },
--      ],
--      new AbortController().signal,
--    );
--
++          prompt_id: 'prompt-dup',
+         },
+       ],
+       new AbortController().signal,
+     );
+ 
 -    expect(execute).toHaveBeenCalledTimes(2);
 -    expect(execute).toHaveBeenNthCalledWith(
 -      1,
--      expect.objectContaining({ file_path: 'a.ts' }),
--    );
++    expect(execute).toHaveBeenCalledOnce();
++    expect(execute).toHaveBeenCalledWith(
+       expect.objectContaining({ file_path: 'a.ts' }),
+     );
 -    expect(execute).toHaveBeenNthCalledWith(
 -      2,
 -      expect.objectContaining({ file_path: 'b.ts' }),
 -    );
--
--    const completedCalls = onAllToolCallsComplete.mock
--      .calls[0][0] as ToolCall[];
+ 
+     const completedCalls = onAllToolCallsComplete.mock
+       .calls[0][0] as ToolCall[];
 -    expect(completedCalls).toHaveLength(2);
 -  });
 -
@@ -212977,7 +213060,10 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -    });
 -    const toolsByName = new Map<string, MockTool>([
 -      ['bigTool', new MockTool({ name: 'bigTool', execute })],
--    ]);
++    expect(completedCalls).toHaveLength(1);
++    expect(completedCalls.map((call) => call.request.callId)).toEqual([
++      'dup_id_0001',
+     ]);
 -    const { scheduler, onAllToolCallsComplete } =
 -      createSchedulerForLegacyToolTests({ toolsByName });
 -
@@ -212999,10 +213085,11 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -      'Tool output was too large and has been truncated',
 -    );
 -    expect(output.length).toBeLessThan(200_000);
--  });
--
+   });
+ 
 -  it('leaves small model-facing output untouched', async () => {
--    const execute = vi.fn().mockResolvedValue({
++  it('propagates a tool turn-termination boundary to the host', async () => {
+     const execute = vi.fn().mockResolvedValue({
 -      llmContent: 'small output',
 -      returnDisplay: 'small',
 -    });
@@ -213494,7 +213581,10 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 -    const smallExecute = vi.fn().mockResolvedValue({
 -      llmContent: 'b'.repeat(3000),
 -      returnDisplay: 'small',
--    });
++      llmContent: 'proposal recorded',
++      returnDisplay: 'proposal recorded',
++      terminateTurn: true,
+     });
 -    const toolsByName = new Map<string, MockTool>([
 -      [
 -        'smallBatchTool',
@@ -213841,7 +213931,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const execute = vi.fn().mockResolvedValue({
        llmContent: 'ok',
        returnDisplay: 'ok',
-@@ -3264,13 +2826,13 @@
+@@ -3264,13 +2874,13 @@
            prompt_id: 'prompt-denied',
          },
        ],
@@ -213856,7 +213946,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(completedCall.status).toBe('error');
      if (completedCall.status === 'error') {
        expect(completedCall.response.errorType).toBe(
-@@ -4607,12 +4169,79 @@
+@@ -4607,12 +4217,79 @@
          },
        ],
      );
@@ -213936,7 +214026,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        llmContent: [
          { text: 'capture failure context' },
          {
-@@ -5626,12 +5255,13 @@
+@@ -5626,12 +5303,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -213950,7 +214040,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5642,21 +5272,20 @@
+@@ -5642,21 +5320,20 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -213974,7 +214064,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -5673,13 +5302,13 @@
+@@ -5673,13 +5350,13 @@
        prompt_id: 'prompt-id-1',
      };
  
@@ -213989,7 +214079,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(
        (completedCalls[0] as CompletedToolCall).response.executionStatus,
      ).toBe('not_started');
-@@ -5709,12 +5338,13 @@
+@@ -5709,12 +5386,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214003,7 +214093,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5725,21 +5355,20 @@
+@@ -5725,21 +5403,20 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214027,7 +214117,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -5754,13 +5383,13 @@
+@@ -5754,13 +5431,13 @@
        isClientInitiated: false,
        prompt_id: 'prompt-id-abort',
      };
@@ -214042,7 +214132,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const statuses = onToolCallsUpdate.mock.calls.flatMap((call) =>
        (call[0] as ToolCall[]).map((toolCall) => toolCall.status),
      );
-@@ -5796,12 +5425,13 @@
+@@ -5796,12 +5473,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214056,7 +214146,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -5812,21 +5442,20 @@
+@@ -5812,21 +5490,20 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214080,7 +214170,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -5841,13 +5470,13 @@
+@@ -5841,13 +5518,13 @@
        isClientInitiated: false,
        prompt_id: 'prompt-id-structured',
      };
@@ -214095,7 +214185,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const errored = completedCalls[0] as ToolCall & {
        response: { errorType?: ToolErrorType };
      };
-@@ -5884,12 +5513,14 @@
+@@ -5884,12 +5561,14 @@
          getRecentlyRemovedMcpServers: () => opts.removed ?? [],
          getMcpServerUnavailableReason: (name: string) => {
            if ((opts.removed ?? []).includes(name)) return 'removed';
@@ -214110,7 +214200,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getPreferredEditor: () => 'vscode',
          onEditorClose: vi.fn(),
        });
-@@ -6032,20 +5663,24 @@
+@@ -6032,20 +5711,24 @@
        const scheduler = makeScheduler({
          mcpServers: {},
          removed: ['pangu-server'],
@@ -214139,7 +214229,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    describe('getToolSuggestion', () => {
      it('should suggest the top N closest tool names for a typo', () => {
-@@ -6060,12 +5695,14 @@
+@@ -6060,12 +5743,14 @@
          getUseModelRouter: () => false,
          getGeminiClient: () => null, // No client needed for these tests
          getPermissionsDeny: () => undefined,
@@ -214154,7 +214244,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        const scheduler = new CoreToolScheduler({
          config: mockConfig,
          getPreferredEditor: () => 'vscode',
-@@ -6104,12 +5741,14 @@
+@@ -6104,12 +5789,14 @@
          getUseModelRouter: () => false,
          getGeminiClient: () => null,
          getPermissionsDeny: () => ['write_file', 'edit', 'run_shell_command'],
@@ -214169,7 +214259,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        const scheduler = new CoreToolScheduler({
          config: mockConfig,
          getPreferredEditor: () => 'vscode',
-@@ -6137,12 +5776,14 @@
+@@ -6137,12 +5824,14 @@
          getUseModelRouter: () => false,
          getGeminiClient: () => null,
          getPermissionsDeny: () => ['write_file', 'edit'],
@@ -214184,7 +214274,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        const scheduler = new CoreToolScheduler({
          config: mockConfig,
          getPreferredEditor: () => 'vscode',
-@@ -6182,40 +5823,49 @@
+@@ -6182,40 +5871,49 @@
          getUseModelRouter: () => false,
          getGeminiClient: () => null,
          getPermissionsDeny: () => undefined,
@@ -214237,7 +214327,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      });
    });
  
-@@ -6238,12 +5888,13 @@
+@@ -6238,12 +5936,13 @@
          discoverTools: async () => {},
          getAllTools: () => [],
          getToolsByServer: () => [],
@@ -214251,7 +214341,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.DEFAULT,
          getPermissionsAllow: () => [],
          getPermissionsDeny: () => ['write_file', 'edit', 'run_shell_command'],
-@@ -6254,25 +5905,21 @@
+@@ -6254,25 +5953,21 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -214279,7 +214369,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          config: mockConfig,
          onAllToolCallsComplete,
          onToolCallsUpdate,
-@@ -6330,12 +5977,13 @@
+@@ -6330,12 +6025,13 @@
          discoverTools: async () => {},
          getAllTools: () => [],
          getToolsByServer: () => [],
@@ -214293,7 +214383,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.DEFAULT,
          getPermissionsAllow: () => [],
          getPermissionsDeny: () => ['write_file', 'edit'], // Different excluded tools
-@@ -6346,25 +5994,21 @@
+@@ -6346,25 +6042,21 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -214321,7 +214411,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          config: mockConfig,
          onAllToolCallsComplete,
          onToolCallsUpdate,
-@@ -6426,12 +6070,13 @@
+@@ -6426,12 +6118,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214335,7 +214425,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6442,24 +6087,23 @@
+@@ -6442,24 +6135,23 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214362,7 +214452,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -6564,12 +6208,14 @@
+@@ -6564,12 +6256,14 @@
            id: callId,
            response: {
              output: '',
@@ -214377,7 +214467,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    it('should handle llmContent with fileData', () => {
      const llmContent: Part = {
-@@ -6587,12 +6233,13 @@
+@@ -6587,12 +6281,13 @@
            parts: [
              {
                fileData: { mimeType: 'application/pdf', fileUri: 'gs://...' },
@@ -214391,7 +214481,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    it('should handle llmContent as an array of multiple Parts (text and inlineData)', () => {
      const llmContent: PartListUnion = [
-@@ -6634,12 +6281,13 @@
+@@ -6634,12 +6329,13 @@
              output: '',
            },
            parts: [
@@ -214405,7 +214495,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    it('should handle llmContent as a generic Part (not text, inlineData, or fileData)', () => {
      const llmContent: Part = { functionCall: { name: 'test', args: {} } };
-@@ -6648,12 +6296,14 @@
+@@ -6648,12 +6344,14 @@
        {
          functionResponse: {
            name: toolName,
@@ -214420,7 +214510,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    it('should handle empty string llmContent', () => {
      const llmContent = '';
-@@ -6676,12 +6326,14 @@
+@@ -6676,12 +6374,14 @@
        {
          functionResponse: {
            name: toolName,
@@ -214435,7 +214525,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    it('should handle llmContent as a Part with undefined inlineData/fileData/text', () => {
      const llmContent: Part = {}; // An empty part object
-@@ -6690,17 +6342,26 @@
+@@ -6690,17 +6390,26 @@
        {
          functionResponse: {
            name: toolName,
@@ -214462,7 +214552,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
  
    it('moves converted text to error and removes output', () => {
      const [part] = convertToFunctionErrorResponse(
-@@ -6856,12 +6517,13 @@
+@@ -6856,12 +6565,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214476,7 +214566,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6881,12 +6543,14 @@
+@@ -6881,12 +6591,14 @@
        isInteractive: () => true, // Required to prevent auto-denial of tool calls
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -214491,7 +214581,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -6965,12 +6629,13 @@
+@@ -6965,12 +6677,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -214505,7 +214595,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -6979,22 +6644,22 @@
+@@ -6979,22 +6692,22 @@
        }),
        getToolRegistry: () => mockToolRegistry,
        getShellExecutionConfig: () => ({
@@ -214530,7 +214620,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -7082,12 +6747,13 @@
+@@ -7082,12 +6795,13 @@
  
      const onAllToolCallsComplete = vi.fn();
      const onToolCallsUpdate = vi.fn();
@@ -214544,7 +214634,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7099,20 +6765,19 @@
+@@ -7099,20 +6813,19 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -214567,7 +214657,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -7235,12 +6900,13 @@
+@@ -7235,12 +6948,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214581,7 +214671,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7252,12 +6918,14 @@
+@@ -7252,12 +6966,14 @@
          terminalHeight: 30,
        }),
        isInteractive: () => true,
@@ -214596,7 +214686,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -7389,12 +7057,13 @@
+@@ -7389,12 +7105,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214610,7 +214700,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7406,12 +7075,14 @@
+@@ -7406,12 +7123,14 @@
          terminalHeight: 30,
        }),
        isInteractive: () => true,
@@ -214625,7 +214715,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        outputUpdateHandler,
        onAllToolCallsComplete,
-@@ -7526,12 +7197,13 @@
+@@ -7526,12 +7245,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214639,7 +214729,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -7543,12 +7215,14 @@
+@@ -7543,12 +7263,14 @@
          terminalHeight: 30,
        }),
        isInteractive: () => true,
@@ -214654,7 +214744,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        outputUpdateHandler,
        onAllToolCallsComplete,
-@@ -7641,12 +7315,13 @@
+@@ -7641,12 +7363,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214668,7 +214758,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO, // Use YOLO to avoid confirmation prompts
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7657,21 +7332,20 @@
+@@ -7657,21 +7380,20 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214692,7 +214782,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -7767,12 +7441,13 @@
+@@ -7767,12 +7489,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
      const onAllToolCallsComplete = vi.fn();
@@ -214706,7 +214796,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -7783,21 +7458,20 @@
+@@ -7783,21 +7506,20 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214730,7 +214820,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -7843,12 +7517,13 @@
+@@ -7843,12 +7565,13 @@
      expect(onAllToolCallsComplete).toHaveBeenCalledTimes(2);
    });
  
@@ -214744,7 +214834,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => approvalMode,
        getPermissionsAllow: () => [],
        setApprovalMode: (mode: ApprovalMode) => {
-@@ -7858,23 +7533,22 @@
+@@ -7858,23 +7581,22 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214770,7 +214860,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const toolRegistry = {
        getTool: () => testTool,
        ensureTool: async () => testTool,
-@@ -8052,12 +7726,13 @@
+@@ -8052,12 +7774,13 @@
        findMatchingDenyRule: vi.fn(),
      };
      const toolRegistry = {
@@ -214784,7 +214874,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO,
        getTargetDir: () => cwd,
        getCwd: () => cwd,
-@@ -8071,12 +7746,14 @@
+@@ -8071,12 +7794,14 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getHookSystem: () => hookSystem,
@@ -214799,7 +214889,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
-@@ -8322,12 +7999,13 @@
+@@ -8322,12 +8047,13 @@
        getAllToolNames: () => toolNames,
        getFunctionDeclarations: () => [],
        tools: new Map(),
@@ -214813,7 +214903,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getPermissionsDeny: () => undefined,
-@@ -8339,22 +8017,21 @@
+@@ -8339,22 +8065,21 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -214838,7 +214928,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -8365,12 +8042,14 @@
+@@ -8365,12 +8090,14 @@
      return { scheduler, onAllToolCallsComplete };
    }
  
@@ -214853,7 +214943,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        [TestApprovalTool.Name],
      );
  
-@@ -8407,12 +8086,14 @@
+@@ -8407,12 +8134,14 @@
      }
    });
  
@@ -214868,7 +214958,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        [TestApprovalTool.Name],
      );
  
-@@ -8486,14 +8167,16 @@
+@@ -8486,14 +8215,16 @@
        getFileSystemService: () => ({
          readTextFile: vi.fn(),
          writeTextFile: vi.fn(),
@@ -214886,7 +214976,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      );
  
      await scheduler.schedule(
-@@ -8539,14 +8222,16 @@
+@@ -8539,14 +8270,16 @@
        getFileSystemService: () => ({
          readTextFile: vi.fn(),
          writeTextFile: vi.fn(),
@@ -214904,7 +214994,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      );
  
      const messages: string[] = [];
-@@ -8631,12 +8316,13 @@
+@@ -8631,12 +8364,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214918,7 +215008,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO, // Use YOLO to avoid confirmation prompts
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -8648,20 +8334,19 @@
+@@ -8648,20 +8382,19 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -214941,7 +215031,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -8754,12 +8439,13 @@
+@@ -8754,12 +8487,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -214955,7 +215045,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -8771,20 +8457,19 @@
+@@ -8771,20 +8505,19 @@
          terminalHeight: 30,
        }),
        storage: {
@@ -214978,7 +215068,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -8940,12 +8625,13 @@
+@@ -8940,12 +8673,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -214992,7 +215082,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.PLAN,
        getSdkMode: () => options.sdkMode ?? false,
        getPermissionsAllow: () => [],
-@@ -8957,15 +8643,12 @@
+@@ -8957,15 +8691,12 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -215008,7 +215098,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getSkillManager: () => undefined,
        getUseModelRouter: () => false,
        getGeminiClient: () => null,
-@@ -8975,12 +8658,14 @@
+@@ -8975,12 +8706,14 @@
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
@@ -215023,7 +215113,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -9144,13 +8829,20 @@
+@@ -9144,13 +8877,20 @@
  
    it.each([
      {
@@ -215045,7 +215135,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        promptId: 'prompt-plan-teammate-blocked',
        run: (schedule: () => Promise<void>) =>
          runWithTeammateIdentity(
-@@ -9764,12 +9456,13 @@
+@@ -9764,12 +9504,13 @@
        getAllTools: () => [...tools.values()],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -215059,7 +215149,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: options.mode ?? (() => ApprovalMode.PLAN),
        getApprovalModeRevision: options.revision ?? (() => 0),
        getSdkMode: () => false,
-@@ -9780,15 +9473,12 @@
+@@ -9780,15 +9521,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -215075,7 +215165,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getConditionalRulesRegistry: () => undefined,
        getSkillManager: () => undefined,
        getUseModelRouter: () => false,
-@@ -9801,12 +9491,14 @@
+@@ -9801,12 +9539,14 @@
        getMessageBus: () => options.messageBus,
        getDisableAllHooks: () => options.disableHooks ?? true,
        getShouldAvoidPermissionPrompts: () =>
@@ -215090,7 +215180,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        scheduler: new CoreToolScheduler({
          config,
          onAllToolCallsComplete,
-@@ -10602,12 +10294,13 @@
+@@ -10602,12 +10342,13 @@
        discoverTools: async () => {},
        getAllTools: () => tools,
        getToolsByServer: () => [],
@@ -215104,7 +215194,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -10616,15 +10309,12 @@
+@@ -10616,15 +10357,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -215120,7 +215210,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(options.messageBus),
        getDisableAllHooks: vi.fn().mockReturnValue(options.disableHooks ?? true),
-@@ -10637,12 +10327,14 @@
+@@ -10637,12 +10375,14 @@
        getShouldAvoidPermissionPrompts: () =>
          options.shouldAvoidPermissionPrompts ?? false,
        getTelemetryIncludeSensitiveSpanAttributes: () =>
@@ -215135,7 +215225,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const onToolCallsUpdate = options.onToolCallsUpdate ?? vi.fn();
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
-@@ -11058,18 +10750,29 @@
+@@ -11058,18 +10798,29 @@
        }),
      });
  
@@ -215166,7 +215256,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        },
      });
    });
-@@ -11620,18 +11323,17 @@
+@@ -11620,18 +11371,17 @@
        executionStatus: 'error',
        errorType: ToolErrorType.EXECUTION_TIMEOUT,
        cancelled: false,
@@ -215189,7 +215279,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        execute: vi.fn().mockImplementation(
          () =>
            new Promise<ToolResult>((_resolve, reject) => {
-@@ -11646,17 +11348,19 @@
+@@ -11646,17 +11396,19 @@
      });
  
      const completedCall = completedCalls[0] as CompletedToolCall;
@@ -215212,7 +215302,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        execute: vi.fn().mockImplementation(async () => {
          abortController.abort();
          return { llmContent: 'done', returnDisplay: 'done' };
-@@ -11664,14 +11368,14 @@
+@@ -11664,14 +11416,14 @@
      });
  
      const completedCall = completedCalls[0] as CompletedToolCall;
@@ -215229,7 +215319,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
    // references to files the tool already spilled to disk must survive —
    // otherwise nothing points at them and they are orphaned (#8180 review).
  
-@@ -12794,12 +12498,13 @@
+@@ -12794,12 +12546,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215243,7 +215333,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -12817,12 +12522,14 @@
+@@ -12817,12 +12570,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215258,7 +215348,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -13279,12 +12986,13 @@
+@@ -13279,12 +13034,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215272,7 +215362,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13302,12 +13010,14 @@
+@@ -13302,12 +13058,14 @@
        isInteractive: () => true,
        getIdeMode: overrides.getIdeMode ?? (() => false),
        getExperimentalZedIntegration: () => false,
@@ -215287,7 +215377,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -13382,12 +13092,13 @@
+@@ -13382,12 +13140,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215301,7 +215391,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -13396,24 +13107,23 @@
+@@ -13396,24 +13155,23 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -215328,7 +215418,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -13602,21 +13312,21 @@
+@@ -13602,21 +13360,21 @@
      expect(completedCalls[0].status).toBe('error');
      expect(
        (completedCalls[0] as CompletedToolCall).response.executionStatus,
@@ -215352,7 +215442,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(toolSpan?.spanAttributes['tool.failure_kind']).toBe(
        'tool_exception',
      );
-@@ -13665,12 +13375,13 @@
+@@ -13665,12 +13423,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215366,7 +215456,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13685,12 +13396,14 @@
+@@ -13685,12 +13444,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215381,7 +215471,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -13736,12 +13449,13 @@
+@@ -13736,12 +13497,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215395,7 +215485,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13757,12 +13471,14 @@
+@@ -13757,12 +13519,14 @@
        getInputFormat: () => undefined,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215410,7 +215500,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -13822,12 +13538,13 @@
+@@ -13822,12 +13586,13 @@
              decision: { behavior: 'deny', message: 'policy says no' },
            },
          },
@@ -215424,7 +215514,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13842,12 +13559,14 @@
+@@ -13842,12 +13607,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215439,7 +215529,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -13895,12 +13614,13 @@
+@@ -13895,12 +13662,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215453,7 +215543,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -13916,12 +13636,14 @@
+@@ -13916,12 +13684,14 @@
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
        getChatRecordingService: () => undefined,
@@ -215468,7 +215558,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -14026,12 +13748,13 @@
+@@ -14026,12 +13796,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215482,7 +215572,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -14046,12 +13769,14 @@
+@@ -14046,12 +13817,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215497,7 +215587,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -14133,34 +13858,34 @@
+@@ -14133,34 +13906,34 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
      // The auto-approve YOLO path doesn't call _schedule's getMessageBus
@@ -215535,7 +215625,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate: vi.fn(),
-@@ -14187,13 +13912,13 @@
+@@ -14187,13 +13960,13 @@
        ],
        new AbortController().signal,
      );
@@ -215550,7 +215640,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      expect(completedCalls.map((call) => call.status)).toEqual([
        'error',
        'error',
-@@ -14298,12 +14023,13 @@
+@@ -14298,12 +14071,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215564,7 +215654,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.PLAN,
        getSdkMode: () => false,
        getPermissionsAllow: () => [],
-@@ -14319,12 +14045,14 @@
+@@ -14319,12 +14093,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215579,7 +215669,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
        getPreferredEditor: () => 'vscode',
-@@ -14377,12 +14105,13 @@
+@@ -14377,12 +14153,13 @@
        abortController.signal,
      );
  
@@ -215593,7 +215683,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          response: expect.objectContaining({
            executionStatus: 'not_started',
          }),
-@@ -14485,20 +14214,20 @@
+@@ -14485,20 +14262,20 @@
          throwingOnConfirm,
          ToolConfirmationOutcome.ProceedOnce,
          abortController.signal,
@@ -215616,7 +215706,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        code: SpanStatusCode.UNSET,
      });
      expect(toolSpan?.spanAttributes['tool.failure_kind']).toBe('cancelled');
-@@ -14535,12 +14264,13 @@
+@@ -14535,12 +14312,13 @@
        getTools: () => [],
        discoverTools: async () => {},
        getAllTools: () => [],
@@ -215630,7 +215720,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({}),
-@@ -14555,12 +14285,14 @@
+@@ -14555,12 +14333,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -215645,7 +215735,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate,
-@@ -15173,12 +14905,13 @@
+@@ -15173,12 +14953,13 @@
          discoverTools: async () => {},
          getAllTools: () => [...tools.values()],
          getToolsByServer: () => [],
@@ -215659,7 +215749,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.AUTO_EDIT,
          getAllowedTools: () => [],
          getContentGeneratorConfig: () => ({
-@@ -15188,25 +14921,21 @@
+@@ -15188,25 +14969,21 @@
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
            terminalHeight: 30,
@@ -215687,7 +215777,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          config: mockConfig,
          onAllToolCallsComplete,
          onToolCallsUpdate,
-@@ -15266,14 +14995,15 @@
+@@ -15266,14 +15043,15 @@
            prompt_id: 'p1',
          },
        ];
@@ -215705,7 +215795,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        expect(completedCalls.every((c) => c.status === 'success')).toBe(true);
  
        // Verify concurrency: all agents should start before any finishes
-@@ -15481,13 +15211,13 @@
+@@ -15481,13 +15259,13 @@
            prompt_id: 'p1',
          },
        ];
@@ -215720,7 +215810,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        expect(completedCalls.every((c) => c.status === 'success')).toBe(true);
  
        // All 4 tools are concurrency-safe → they should all start
-@@ -15674,13 +15404,13 @@
+@@ -15674,13 +15452,13 @@
            prompt_id: 'p1',
          },
        ];
@@ -215735,7 +215825,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        expect(completedCalls.every((c) => c.status === 'success')).toBe(true);
  
        // Batch 1: Read₁ and Read₂ run in parallel (both start before either ends)
-@@ -15781,13 +15511,13 @@
+@@ -15781,13 +15559,13 @@
            prompt_id: 'p1',
          },
        ];
@@ -215750,7 +215840,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        const lsStart = executionLog.indexOf('shell:start:ls');
        const firstReadOnlyEnd = Math.min(
          executionLog.indexOf('shell:end:git log'),
-@@ -15852,12 +15582,13 @@
+@@ -15852,12 +15630,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -215764,7 +215854,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => overrides.approvalMode ?? ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -15868,25 +15599,24 @@
+@@ -15868,25 +15647,24 @@
          terminalWidth: 90,
          terminalHeight: 30,
        }),
@@ -215792,7 +215882,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
    }
  
    beforeEach(() => {
-@@ -16288,12 +16018,13 @@
+@@ -16288,12 +16066,13 @@
        getAllTools: () => [],
        getAllToolNames: () => [StrictStringTool.Name],
        getToolsByServer: () => [],
@@ -215806,7 +215896,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -16302,24 +16033,24 @@
+@@ -16302,24 +16081,24 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -215833,7 +215923,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const onToolCallsUpdate = vi.fn();
  
      const scheduler = new CoreToolScheduler({
-@@ -16370,13 +16101,13 @@
+@@ -16370,13 +16149,13 @@
    }
  
    it('should inject RETRY LOOP DETECTED directive after 3 consecutive validation failures', async () => {
@@ -215848,7 +215938,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      );
      let msg = getLastErrorMessage(onToolCallsUpdate);
      expect(msg).toBeDefined();
-@@ -16632,12 +16363,13 @@
+@@ -16632,12 +16411,13 @@
        getAllTools: () => [],
        getAllToolNames: () => [StrictStringTool.Name, StrictToolAlt.Name],
        getToolsByServer: () => [],
@@ -215862,7 +215952,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -16646,24 +16378,24 @@
+@@ -16646,24 +16426,24 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -215889,7 +215979,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
-@@ -17040,12 +16772,13 @@
+@@ -17040,12 +16820,13 @@
      } as unknown as ToolRegistry;
  
      const onAllToolCallsComplete = vi.fn();
@@ -215903,7 +215993,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17054,15 +16787,12 @@
+@@ -17054,15 +16835,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -215919,7 +216009,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -17083,12 +16813,14 @@
+@@ -17083,12 +16861,14 @@
            isSkillActive: vi.fn().mockReturnValue(true),
          };
        },
@@ -215934,7 +216024,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -17251,12 +16983,13 @@
+@@ -17251,12 +17031,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -215948,7 +216038,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
          getApprovalMode: () => ApprovalMode.YOLO,
          getPermissionsAllow: () => [],
          getContentGeneratorConfig: () => ({
-@@ -17265,23 +16998,22 @@
+@@ -17265,23 +17046,22 @@
          }),
          getShellExecutionConfig: () => ({
            terminalWidth: 90,
@@ -215974,7 +216064,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getPreferredEditor: () => 'vscode',
        onEditorClose: vi.fn(),
      });
-@@ -17368,12 +17100,13 @@
+@@ -17368,12 +17148,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -215988,7 +216078,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17382,15 +17115,12 @@
+@@ -17382,15 +17163,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -216004,7 +216094,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -17408,12 +17138,14 @@
+@@ -17408,12 +17186,14 @@
          ]),
          isSkillActive: vi.fn().mockReturnValue(true),
        }),
@@ -216019,7 +216109,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate: vi.fn(),
-@@ -17488,12 +17220,13 @@
+@@ -17488,12 +17268,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -216033,7 +216123,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17502,15 +17235,12 @@
+@@ -17502,15 +17283,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -216049,7 +216139,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -17520,12 +17250,14 @@
+@@ -17520,12 +17298,14 @@
          listSkills: vi.fn().mockResolvedValue([evilSkill]),
          isSkillActive: vi.fn().mockReturnValue(true),
        }),
@@ -216064,7 +216154,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate: vi.fn(),
-@@ -17583,12 +17315,13 @@
+@@ -17583,12 +17363,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -216078,7 +216168,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17597,15 +17330,12 @@
+@@ -17597,15 +17378,12 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -216094,7 +216184,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getChatRecordingService: () => undefined,
        getMessageBus: vi.fn().mockReturnValue(undefined),
        getDisableAllHooks: vi.fn().mockReturnValue(true),
-@@ -17615,12 +17345,14 @@
+@@ -17615,12 +17393,14 @@
          listSkills: vi.fn().mockRejectedValue(new Error('skill load failed')),
          isSkillActive: vi.fn().mockReturnValue(true),
        }),
@@ -216109,7 +216199,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate: vi.fn(),
-@@ -17679,12 +17411,13 @@
+@@ -17679,12 +17459,13 @@
        getAllTools: () => [],
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
@@ -216123,7 +216213,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -17693,25 +17426,24 @@
+@@ -17693,25 +17474,24 @@
        }),
        getShellExecutionConfig: () => ({
          terminalWidth: 90,
@@ -216151,7 +216241,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate: vi.fn(),
-@@ -17872,21 +17604,21 @@
+@@ -17872,21 +17652,21 @@
        override async execute(
          _signal: AbortSignal,
          _updateOutput?: (output: ToolResultDisplay) => void,
@@ -216175,7 +216265,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      class TestShellTool extends ShellTool {
        protected override createInvocation(params: ShellToolParams) {
          // Cast through unknown — the test invocation extends the real
-@@ -17895,19 +17627,27 @@
+@@ -17895,19 +17675,27 @@
          // the shell-tool-specific branch (which is the branch that
          // wires setPromoteAbortControllerCallback).
          return new TestShellInvocation(
@@ -216207,7 +216297,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getFunctionDeclarations: () => [],
        tools: new Map(),
        discovery: {},
-@@ -17920,12 +17660,13 @@
+@@ -17920,12 +17708,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -216221,7 +216311,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -17936,12 +17677,14 @@
+@@ -17936,12 +17725,14 @@
          terminalWidth: 80,
          terminalHeight: 24,
        }),
@@ -216236,7 +216326,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -18062,12 +17805,13 @@
+@@ -18062,12 +17853,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216250,7 +216340,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18087,12 +17831,14 @@
+@@ -18087,12 +17879,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216265,7 +216355,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -18144,12 +17890,13 @@
+@@ -18144,12 +17938,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216279,7 +216369,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18169,12 +17916,14 @@
+@@ -18169,12 +17964,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216294,7 +216384,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -18217,12 +17966,13 @@
+@@ -18217,12 +18014,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216308,7 +216398,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18242,12 +17992,14 @@
+@@ -18242,12 +18040,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216323,7 +216413,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -18273,12 +18025,14 @@
+@@ -18273,12 +18073,14 @@
    it('is a no-op when invocation does not expose setPromptId', async () => {
      // Reuses the existing TestApprovalTool which has no setPromptId.
      // The scheduler must not throw when the duck-type check fails.
@@ -216338,7 +216428,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getTool: () => tool,
        ensureTool: async () => tool,
        getFunctionDeclarations: () => [],
-@@ -18291,12 +18045,13 @@
+@@ -18291,12 +18093,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216352,7 +216442,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18316,12 +18071,14 @@
+@@ -18316,12 +18119,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216367,7 +216457,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -18348,6 +18105,65 @@
+@@ -18348,6 +18153,65 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -218407,7 +218497,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              new Set(errorPersistedOutputFiles),
            );
          }
-@@ -5557,23 +5716,52 @@
+@@ -5557,23 +5716,56 @@
            span,
            TOOL_FAILURE_KIND_TOOL_ERROR,
            TOOL_SPAN_STATUS_TOOL_ERROR,
@@ -218440,6 +218530,10 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
 +            error,
 +            ToolErrorType.UNHANDLED_EXCEPTION,
 +            'not_started',
++            undefined,
++            undefined,
++            // What the tool threw is a caught error, told in its own words.
++            caughtErrorText(executionError, error.message),
 +          ),
 +        );
 +        return;
@@ -218462,7 +218556,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        const executionTimedOut =
          executionThrew && explicitErrorType === ToolErrorType.EXECUTION_TIMEOUT;
        const aborted = signal.aborted && !executionTimedOut;
-@@ -5642,13 +5830,18 @@
+@@ -5642,13 +5834,18 @@
          }
          this.setStatusInternal(
            callId,
@@ -218482,7 +218576,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          );
          setToolSpanCancelled(span);
          return;
-@@ -5682,47 +5875,55 @@
+@@ -5682,47 +5879,59 @@
            if (failureHookResult.additionalContext) {
              exceptionErrorMessage += `\n\n${failureHookResult.additionalContext}`;
            }
@@ -218529,10 +218623,14 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              executionStatus,
              failureHookArtifacts,
 +            undefined,
-+            // What the tool threw states its authors when the tool composed
-+            // it with them; a hook's context joined to it states none.
++            // What the tool threw is a caught error, told in its own words
++            // (`caughtErrorText`): as the tool composed it when it stated its
++            // authors, the world's when the operating system reported it, and
++            // otherwise the client's, whose code raised it -- a request a tool
++            // made that failed included. A hook's context joined to it states
++            // none.
 +            exceptionErrorMessage === errorMessage
-+              ? errorAuthors(executionError)
++              ? caughtErrorText(executionError, errorMessage)
 +              : undefined,
            ),
          );
@@ -218547,7 +218645,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
        sleepInhibitorHandle.release();
      }
    }
-@@ -5757,19 +5958,20 @@
+@@ -5757,19 +5966,20 @@
          debugLogger.warn(
            `PostToolBatch hook setup failed: ${
              error instanceof Error ? error.message : String(error)
@@ -218574,7 +218672,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
              this.withHookSpan(
                { hookEvent: 'PostToolBatch', toolName: 'batch' },
                () =>
-@@ -5845,15 +6047,16 @@
+@@ -5845,15 +6055,16 @@
            completedCalls = withPostToolBatchArtifacts(
              completedCalls,
              batchHookResult.artifacts,
@@ -218594,7 +218692,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
          }
  
          for (const call of completedCalls) {
-@@ -5863,12 +6066,13 @@
+@@ -5863,12 +6074,13 @@
  
          this.recordToolResults(completedCalls);
  
@@ -218608,7 +218706,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.ts b/packages/core/src/cor
            // failure points. Never leave the one span deliberately deferred
            // for PostToolBatch open when one of them throws.
            for (const call of completedCalls) {
-@@ -5882,88 +6086,77 @@
+@@ -5882,88 +6094,77 @@
            this.drainRequestQueueIfIdle();
          }
        }
