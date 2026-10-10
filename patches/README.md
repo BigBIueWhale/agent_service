@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `c62bfe5a33774884a7e39f65e3c45aedd39b8f7fcffc18ec947d52a1f31009ee`
+- Review-diff SHA-256: `ab8988606b0aa9fe201436e813c1a6e70a0de0fa6f8e861026b1bb92f4ffc562`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `6285efa515ca7ce579262c70ee78d2d510be7e1761fe897d458989580ba664fd`
+- Transformer-manifest SHA-256: `7e312deb12bec1907a97eaf4ccedc2e5ae6caea244b2d928f2e3a1112f3c9fc6`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -132,9 +132,10 @@ message is exactly that -- the same text, the same stated author, the same shape
 The notice is recorded as the runtime's (`system`), which wrote it. Every draw
 is a turn, charged to the turn budget and billed in the record with the usage
 its response served, none for a refused response. `MAX_GENERATION_DRAWS`, the
-one bound every refused answer is drawn under, ends the run on the fourth
-refusal in a row, of either cause, as the incomplete-generation state, naming
-why the last was refused; a generation stopped for any other reason is not
+one bound every refused answer is drawn under, a cost bound declared with what
+four draws cost (`generation-refusal.ts`), ends the run on the fourth refusal
+in a row, of either cause, as the incomplete-generation state, naming why the
+last was refused; a generation stopped for any other reason is not
 drawn again and is that state at once. One predicate in core (`refusedTurn`)
 decides it for both reasoning loops.
 
@@ -182,27 +183,34 @@ that a declared path is the one the prompt names.
 
 ## Context and instructions
 
-The context partition spends the window exactly, from six declared quantities,
-all in tokens of the served tokenizer.
-`D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a declared
-capacity rather than a derivation: the system prompt and the tool declarations
-are texts this repo ships, so the turn preamble is counted exactly against it by
-the served tokenizer before the first turn, and again before any later turn
-whose preamble has changed, with the Git snapshot's repository values bounded by
-their byte caps rather than counted, and so is the startup context that opens
-every history, its environment lines and folder listing bounded the same way,
-and the turn budget the `## Context` section states, its number bounded by the
-sixteen digits a safe integer renders to; a preamble that does not fit is a
-startup refusal naming shorten-or-deploy-larger. The preamble is in every
-request the bounds are compared with, so `D` is charged in the fit, not held
-back from either bound. `A`, what a request adds to the prompt it was admitted
-at, is 3W/256 — 3,072 tokens — a declared capacity proved the same way: a
-refused turn's redraw adds its refusal notices to that prompt, and the request
-that compacts it adds the snapshot's declaration and the directive, counted by
-the startup proof in the shape every compaction request carries them with the
-directive stating the widest ceiling, and a redraw's notice; their sum, 2,897,
-is held within `A` before the first turn, and each compaction's preflight holds
-what its own request adds to the same share. Instructions a user's `/compress`
+The context partition spends the window exactly, from quantities declared in
+tokens of the served tokenizer, none of them a share of the window.
+`D`, the static preamble, is 28,672 tokens in two parts, each held to its own
+capacity. The client's own, 12,288, is the system prompt and the tool
+declarations this repo ships, with the Git snapshot's repository values bounded
+by their byte caps rather than counted, the startup context that opens every
+history, its environment lines and folder listing bounded the same way, and the
+turn budget the `## Context` section states, its number bounded by the sixteen
+digits a safe integer renders to: a fixed text, counted at 11,591 when the
+capacity was declared, which is that rounded up to the next multiple of 1,024.
+The workspace's instruction files -- its QWEN.md, AGENTS.md and QWEN.local.md,
+with what they import -- are the world's text, and what they add to the system
+prompt is held to `M`, one block placed inline. Both are counted exactly by the
+served tokenizer before the first turn, and again before any later turn whose
+preamble has changed: the instruction with the workspace's files and without
+them, the difference held to `M` and the rest to the client's part. A refusal
+names which: the client's text, with shorten-the-prompt-or-a-declaration, or
+each of the workspace's files with its tokens, with shorten, rename or remove
+them. The preamble is in every request the bounds are compared with, so `D` is
+charged in the fit, not held back from either bound. `A`, what a request adds
+to the prompt it was admitted at, is 3,072 tokens, a declared capacity proved
+the same way: a refused turn's redraw adds its refusal notices to that prompt,
+and the request that compacts it adds the snapshot's declaration and the
+directive, counted by the startup proof in the shape every compaction request
+carries them with the directive stating the widest ceiling, and a redraw's
+notice; their sum, 2,895 when `A` was declared at the next multiple of 1,024
+above it, is held within `A` before the first turn, and each compaction's
+preflight holds what its own request adds to the same capacity. Instructions a user's `/compress`
 text or a PreCompact hook would add, which no startup proof sees, state no
 author, so a request carrying them is refused before it is sent; the locked run
 reaches neither, since it interprets no slash command, its task included, takes
@@ -219,14 +227,20 @@ bound is applied, and anything larger is kept whole in a file and paged back
 rather than shortened. `S`, a compaction snapshot, is 32,768 tokens, counted
 the same way on the block as the model wrote it: the most an accepted snapshot
 may render to, declared from the snapshots the model was recorded writing
-rather than borrowed from `M` (`SNAPSHOT_TOKENS` says from what). `F`, the
+rather than borrowed from `M` (`SNAPSHOT_TOKENS` says from what). `I`, one
+image, is 16,386 tokens: the processor's pixel budget, which `read_file` admits
+no image past, at one token for every 32-by-32 block of pixels, with the two
+markers the template sets around it; so one result is at most its text's block
+or one image beside the sentence `read_file` says with it, 16,532 tokens, and a
+request carries at most `floor((W - 1) / I)` images, 15 at the served window,
+which is the count the backend is launched to accept. `F`, the
 per-message framing, is 61 tokens: the most the served template wraps around
 one message, with room for the 6 a text's own edges were measured to add where
 they meet it, declared here and verified against the template rather than
 copied from it. `R`, the reasoning a turn is given beside its block, is 24,576
 tokens, declared from the turns recorded (`TURN_REASONING_TOKENS` says what it
-rests on). `M`, `S`, `R` and `F` do not scale with the window: what they hold
-does not grow with it.
+rests on). No declared quantity scales with the window: what each holds does
+not grow with it.
 
 `C`, the room every turn is issued with, is sized for the largest thing a turn
 legitimately does, write one inline block after reasoning about it, so
@@ -240,11 +254,12 @@ the history as it stands, and the next send compacts again; only a request at
 `T` whose compaction failed, or left it there, ends the session. What stands in
 the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; every term but the
-turn is bounded before it exists, so `D + (S + F) + 2(M + F) + (C + F)`,
-119,028, must stand below `K`, and does, by 66,315 at the served window. All of
-it is asserted, not assumed: the fit, the no-overrun property and both draw
+turn is bounded before it exists, so `D + (S + F) + (M + F) + (P + F) + (C + F)`,
+with `P` what one result can be, 135,560, must stand below `K`, and does, by
+49,783 at the served window, 311,927 at 524,288 and 836,215 at 1,048,576. All
+of it is asserted, not assumed: the fit, the no-overrun property and both draw
 rooms are checked at every window the partition can be given, and a window
-where the fit fails -- every window below 191,700 -- is refused rather than
+where the fit fails -- every window below 212,361 -- is refused rather than
 partitioned. Every token of `C` or `A` is a token both bounds lack, and every
 token of `S` one more that `K` lacks; `D` is held back from neither, since the
 preamble is counted in every request. `C` is the output limit of every turn whatever its prompt,
@@ -411,7 +426,7 @@ request carries as its system prompt, and acceptance — not decoding — refuse
 a longer draw, which is redrawn whole rather than cut. A redraw carries one message more than the request it
 repeats: why the draw before it was refused and what to do instead, built from
 measured values and closed names rather than the draw's text, never the draw
-itself, and bounded at its widest inside the additions' share, `A`. Every
+itself, and bounded at its widest inside the additions' capacity, `A`. Every
 reader reads a draw's ceiling where its request states it -- the last message,
 or the one before a final notice, which opens as every refusal does -- and holds
 it to the request's `max_tokens`, the client's replay and the native certifier
@@ -495,7 +510,7 @@ declaration ends the turn's tool block differently, so the request does not
 reuse the turn's prompt-cache prefix past it; the conversation it carries is
 otherwise unchanged. What the request adds to the prompt it summarizes -- the
 declaration and the directive -- is measured against that prompt as it was
-issued and held to the additions' share, `A`.
+issued and held to the additions' capacity, `A`.
 
 How the snapshot is obtained is ours; how the history it becomes is rendered is
 upstream's, but for what upstream adds in the model's voice. The accepted

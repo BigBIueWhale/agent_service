@@ -1478,6 +1478,82 @@ mod tests {
         assert_eq!(super::MAX_PROMPT_BYTES, tokens);
     }
 
+    /// The backend accepts as many images in one request as the client's
+    /// partition derives: as many images at the processor's pixel budget as
+    /// the served window holds with a token beside them, `floor((W - 1) / I)`.
+    /// `I` and the derivation are read from the client's reviewed source, and
+    /// the window and the count from the lock -- its vision limit and the
+    /// `--limit-mm-per-prompt` it launches with -- so a window, a pixel budget
+    /// or a launch count that moves without the others fails here.
+    #[test]
+    fn the_image_limit_is_the_images_the_window_holds() {
+        let patch = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/patches/qwen-code-0.21.12-agent-service.patch"
+        ))
+        .expect("the reviewed client patch is part of this repository");
+        let section = |path: &str| -> String {
+            let sections: Vec<&str> = patch
+                .split("\ndiff --git ")
+                .map(|section| section.strip_prefix("diff --git ").unwrap_or(section))
+                .filter(|section| {
+                    section.lines().next() == Some(&format!("a/{path} b/{path}"))
+                })
+                .collect();
+            assert_eq!(sections.len(), 1, "the review diff changes {path} once");
+            sections[0].to_string()
+        };
+        let partition = section("packages/core/src/core/tokenLimits.ts");
+        assert_eq!(
+            partition
+                .lines()
+                .filter(|line| *line
+                    == "+export const IMAGE_TOKENS = QWEN38_IMAGE_MAX_PIXELS / (32 * 32) + 2;")
+                .count(),
+            1,
+            "the partition derives one image's tokens from the pixel budget once"
+        );
+        assert_eq!(
+            partition
+                .lines()
+                .filter(|line| *line
+                    == "+  const imagesPerRequest = Math.floor((contextWindowSize - 1) / IMAGE_TOKENS);")
+                .count(),
+            1,
+            "the partition derives the images one request carries once"
+        );
+        let view = section("packages/core/src/utils/image-view.ts");
+        let declared: Vec<&str> = view
+            .lines()
+            .filter_map(|line| {
+                line.strip_prefix(" export const QWEN38_IMAGE_MAX_PIXELS = ")
+                    .or_else(|| line.strip_prefix("+export const QWEN38_IMAGE_MAX_PIXELS = "))
+            })
+            .collect();
+        assert_eq!(declared.len(), 1, "the client declares its pixel budget once: {declared:?}");
+        let pixels: u64 = declared[0]
+            .strip_suffix(';')
+            .expect("a declaration ends its line")
+            .replace('_', "")
+            .parse()
+            .expect("the pixel budget is a whole number");
+        let lock = checked_in_lock();
+        assert_eq!(lock.backend.vision.max_source_pixels, pixels);
+        let image_tokens = pixels / (32 * 32) + 2;
+        let derived = (lock.backend.max_model_len - 1) / image_tokens;
+        assert_eq!(u64::from(lock.backend.vision.max_images), derived);
+        let flag = lock
+            .backend
+            .command
+            .iter()
+            .position(|argument| argument == "--limit-mm-per-prompt")
+            .and_then(|at| lock.backend.command.get(at + 1))
+            .expect("the backend launches with a per-request media limit");
+        let limit: serde_json::Value =
+            serde_json::from_str(flag).expect("the media limit is JSON");
+        assert_eq!(limit["image"]["count"].as_u64(), Some(derived));
+    }
+
     #[test]
     fn limits_drift_is_rejected() {
         // Every numeric workspace/transport cap the shell harness reads from the

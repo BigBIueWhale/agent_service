@@ -4715,15 +4715,16 @@ def _validate_compaction_budget_before(state: State) -> None:
     )
 
 
-# The quantities the partition declares. `D` and `A` are shares of the window;
-# `M`, `S`, `R` and `F` are counts of the served tokenizer's tokens that do not
-# scale with the window, and so is what a text's edges may add to `F`. They are
-# read out of the post-patch source rather than restated here, so the
-# arithmetic below is a check on the tree and not a copy of it.
+# The quantities the partition declares, every one a count of the served
+# tokenizer's tokens that does not scale with the window: the client's part of
+# `D`, `A`, `M`, `S`, `R`, `F` and what a text's edges may add to `F`. `D` is
+# the client's part and one inline block for the workspace's instruction
+# files; `I`, one image, follows from the image pixel budget `read_file`
+# admits. They are read out of the post-patch source rather than restated
+# here, so the arithmetic below is a check on the tree and not a copy of it.
 _PARTITION_DECLARED_NAMES = (
-    "WINDOW_SHARES",
-    "STATIC_PREAMBLE_SHARES",
-    "PROMPT_ADDITIONS_SHARES",
+    "CLIENT_PREAMBLE_TOKENS",
+    "PROMPT_ADDITIONS_TOKENS",
     "INLINE_BLOCK_TOKENS",
     "SNAPSHOT_TOKENS",
     "TURN_REASONING_TOKENS",
@@ -4734,11 +4735,14 @@ _PARTITION_DECLARED_NAMES = (
 # The served deployment, and the partition its window must yield.
 _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
-    "staticPreamble": 12_288,
+    "staticPreamble": 28_672,
+    "clientPreamble": 12_288,
     "promptAdditions": 3_072,
     "inlineBlockTokens": 16_384,
     "snapshotTokens": 32_768,
     "messageFraming": 61,
+    "resultTokens": 16_532,
+    "imagesPerRequest": 15,
     "turnGeneration": 40_960,
     "drawGeneration": 73_728,
     "compactionTrigger": 185_344,
@@ -4746,7 +4750,7 @@ _SERVED_PARTITION = {
 }
 
 # The least window whose partition holds what a compaction leaves standing.
-_LEAST_PARTITIONED_WINDOW = 191_700
+_LEAST_PARTITIONED_WINDOW = 212_361
 
 # Partition numbers of no deployment this repository describes. A literal in
 # the tree that matches one is a copy of a partition that is not the one the
@@ -4754,7 +4758,8 @@ _LEAST_PARTITIONED_WINDOW = 191_700
 _RETIRED_PARTITION_NUMBERS = re.compile(
     r"(?<!\w)(?<!\d,)(?<!\d\.)"
     r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215|57[_,]?099|151[_,]?796"
-    r"|208[_,]?896|24[_,]?331|135[_,]?046|33[_,]?547)"
+    r"|208[_,]?896|24[_,]?331|135[_,]?046|33[_,]?547|66[_,]?315|119[_,]?028"
+    r"|191[_,]?700)"
     r"(?!\w|,\d|\.\d)"
 )
 
@@ -4773,29 +4778,83 @@ def _read_partition_declarations(source: str, *, label: str) -> dict[str, int]:
     return declared
 
 
-def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
+def _read_image_declarations(state: State, *, label: str) -> dict[str, int]:
+    """`I`, the most tokens one image renders to, and the widest sentence a
+    `read_file` result says beside its image, read from where each is
+    declared: the pixel budget `read_file` admits, at one token for every
+    32-by-32 block of pixels and two markers, and the statement's own text
+    with both of its dimensions at the most digits a safe integer has."""
+    view = "packages/core/src/utils/image-view.ts"
+    source = _source(state, view, label=label)
+    match = re.search(
+        r"^export const QWEN38_IMAGE_MAX_PIXELS = (\d[\d_]*);$",
+        source,
+        re.MULTILINE,
+    )
+    _require(match is not None, f"{label}: {view} declares no image pixel budget")
+    pixels = int(match.group(1).replace("_", ""))
+    require_text(
+        state,
+        "packages/core/src/core/tokenLimits.ts",
+        "export const IMAGE_TOKENS = QWEN38_IMAGE_MAX_PIXELS / (32 * 32) + 2;",
+        label=label,
+    )
+    body = source.split("export function imageResultStatement(", 1)
+    _require(len(body) == 2, f"{label}: {view} declares no image result statement")
+    statement = body[1].split("\n}\n", 1)[0]
+    pieces = re.findall(r"harnessText\(\s*'([^']*)',?\s*\)", statement)
+    _require(
+        len(pieces) == 3
+        and statement.count("worldText(`${width}`)") == 1
+        and statement.count("worldText(`${height}`)") == 1,
+        f"{label}: {view} states its image result sentence in another shape",
+    )
+    require_text(
+        state,
+        view,
+        "  imageResultStatement(Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER).text,",
+        label=label,
+    )
+    digits = len(str(2**53 - 1))
+    return {
+        "imageTokens": pixels // (32 * 32) + 2,
+        "imageStatementBytes": sum(len(piece.encode("utf-8")) for piece in pieces)
+        + 2 * digits,
+    }
+
+
+def _partition(
+    window: int, declared: dict[str, int], image: dict[str, int]
+) -> dict[str, int]:
     """The partition a window yields, written from the declarations.
 
+    `D` is the client's part and one inline block for the workspace's
+    instruction files. One result is its text, at most one block, or one
+    image beside its sentence, whichever is larger; a request carries as many
+    images of the largest size as the window holds with a token beside them.
     `C` is one inline block and the reasoning beside it, and `Q` a snapshot
     at its bound beside a whole turn. `T` is what the window has left once
     `C` and `A` are held back, `K` what it has left once `Q` and `A` are. The
     preamble is in every request the bounds are compared with, so `D` is
     charged in the fit and held back from nothing.
     """
-    total = declared["WINDOW_SHARES"]
-    share = lambda shares: (window * shares) // total  # noqa: E731
-    preamble = share(declared["STATIC_PREAMBLE_SHARES"])
-    additions = share(declared["PROMPT_ADDITIONS_SHARES"])
+    client = declared["CLIENT_PREAMBLE_TOKENS"]
+    additions = declared["PROMPT_ADDITIONS_TOKENS"]
     block = declared["INLINE_BLOCK_TOKENS"]
     snapshot = declared["SNAPSHOT_TOKENS"]
     turn = block + declared["TURN_REASONING_TOKENS"]
     draw = snapshot + turn
     return {
-        "staticPreamble": preamble,
+        "staticPreamble": client + block,
+        "clientPreamble": client,
         "promptAdditions": additions,
         "inlineBlockTokens": block,
         "snapshotTokens": snapshot,
         "messageFraming": declared["MESSAGE_FRAMING_TOKENS"],
+        "resultTokens": max(
+            block, image["imageTokens"] + image["imageStatementBytes"]
+        ),
+        "imagesPerRequest": (window - 1) // image["imageTokens"],
         "turnGeneration": turn,
         "drawGeneration": draw,
         "compactionTrigger": window - draw - additions,
@@ -4805,44 +4864,52 @@ def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
 
 def _surviving(part: dict[str, int]) -> int:
     """What a compaction leaves standing: the static preamble, then the
-    snapshot, framed and at most `S`, the authored input and one result --
-    each at most one framed inline block -- and the carried turn, framed like
-    any other message."""
+    snapshot, framed and at most `S`, the authored input, at most one framed
+    inline block, one result, framed and at most what a result can be, and
+    the carried turn, framed like any other message."""
     framing = part["messageFraming"]
     return (
         part["staticPreamble"]
         + (part["snapshotTokens"] + framing)
-        + 2 * (part["inlineBlockTokens"] + framing)
+        + (part["inlineBlockTokens"] + framing)
+        + (part["resultTokens"] + framing)
         + (part["turnGeneration"] + framing)
     )
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget follows from seven declared quantities, all in
-    tokens of the served tokenizer, and what a compaction can leave standing
-    stands below the trigger.
+    """Every context budget follows from quantities declared in tokens of the
+    served tokenizer, none a share of the window, and what a compaction can
+    leave standing stands below the trigger.
 
     The safety argument: what stands in the window after a compaction is the
     static preamble plus a snapshot, the authored input, one tool result and
-    the turn carried behind them. Three of those four are bounded before they
-    exist, counted by the served tokenizer -- the snapshot by `S`, the others
-    by `M` -- and the fourth is a turn, bounded by `C`, so the whole of it is
-    known before any of it is generated. `C` is sized for the largest thing a
-    turn legitimately does, one inline block and the reasoning beside it; `Q`
-    holds a snapshot at its bound beside a whole turn. Two bounds follow: no
-    turn is issued at or above `T`, and the send at or above `K` compacts
-    first, so the first draw at a trigger has `Q + 1` and an attempt after a
-    failed one `C + 1`. At every window the deployment can be given, the fit
-    holds below `K`, a turn issued at the largest admitted prompt cannot reach
-    the end of the window, and `K` is below `T`; a window where the fit fails
-    is refused. `F` is held to the template's framing plus what a text's edges
-    may add, which the startup proof measures. No literal in the tree states a
-    partition number the source does not derive.
+    the turn carried behind them. The preamble is the client's own text,
+    counted against its declared part of `D` by the startup proof, and the
+    workspace's instruction files, counted against `M`. Three of the four
+    after it are bounded before they exist, counted by the served tokenizer
+    -- the snapshot by `S`, the input by `M`, the result by its text's `M` or
+    one image beside its sentence -- and the fourth is a turn, bounded by
+    `C`, so the whole of it is known before any of it is generated. `C` is
+    sized for the largest thing a turn legitimately does, one inline block
+    and the reasoning beside it; `Q` holds a snapshot at its bound beside a
+    whole turn. Two bounds follow: no turn is issued at or above `T`, and the
+    send at or above `K` compacts first, so the first draw at a trigger has
+    `Q + 1` and an attempt after a failed one `C + 1`. At every window the
+    deployment can be given, the fit holds below `K`, a turn issued at the
+    largest admitted prompt cannot reach the end of the window, and `K` is
+    below `T`; a window where the fit fails is refused. `F` is held to the
+    template's framing plus what a text's edges may add, which the startup
+    proof measures. A request carries no more images than the window holds
+    at their largest. No literal in the tree states a partition number the
+    source does not derive.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
+    chat = "packages/core/src/core/geminiChat.ts"
     source = _source(state, limits, label=label)
     declared = _read_partition_declarations(source, label=label)
+    image = _read_image_declarations(state, label=label)
     _require(
         all(value > 0 for value in declared.values()),
         f"{label}: every declared quantity must be a positive integer",
@@ -4851,45 +4918,56 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         declared["FRAMING_BOUNDARY_TOKENS"] < declared["MESSAGE_FRAMING_TOKENS"],
         f"{label}: the allowance for a text's edges leaves F no framing to hold",
     )
-    _require(
-        declared["PROMPT_ADDITIONS_SHARES"] < declared["WINDOW_SHARES"],
-        f"{label}: the declared shares leave no window for a bound",
-    )
+    # No quantity is a share of the window any longer.
+    for retired in ("WINDOW_SHARES", "STATIC_PREAMBLE_SHARES", "PROMPT_ADDITIONS_SHARES"):
+        forbid_text(state, limits, retired, label=label)
     # `C` is a block and the reasoning beside it, `Q` a snapshot beside `C`;
     # `T` and `K` are what the window has left once a turn's or a draw's room
     # and `A` are held back, so each pair spends the window exactly and no
     # third budget exists; the preamble is inside the requests the bounds are
     # compared with, and charged in the fit. The startup proof holds each
-    # framing it measures, with the edges' allowance, to `F`.
+    # framing it measures, with the edges' allowance, to `F`, the client's
+    # preamble to its part of `D` and the workspace's files to `M`.
     _require_all(
         state,
         limits,
         (
+            "  const staticPreamble = clientPreamble + inlineBlockTokens;",
+            "  const resultTokens = Math.max(\n    inlineBlockTokens,\n    IMAGE_TOKENS + IMAGE_RESULT_STATEMENT_MAX_BYTES,\n  );",
+            "  const imagesPerRequest = Math.floor((contextWindowSize - 1) / IMAGE_TOKENS);",
             "  const turnGeneration = inlineBlockTokens + TURN_REASONING_TOKENS;",
             "  const drawGeneration = snapshotTokens + turnGeneration;",
             "  const admissionLimit = contextWindowSize - turnGeneration - promptAdditions;",
             "  const compactionTrigger =\n    contextWindowSize - drawGeneration - promptAdditions;",
+            "    (resultTokens + messageFraming) +",
             "  if (surviving > compactionTrigger - 1) {",
             "this deployment needs a larger window.",
             "  if (compactionTrigger > admissionLimit) {",
         ),
         label=label,
     )
+    _require_all(
+        state,
+        chat,
+        (
+            "      if (framing + FRAMING_BOUNDARY_TOKENS > partition.messageFraming) {",
+            "    if (project && projectTokens > partition.inlineBlockTokens) {",
+            "    if (preamble > partition.clientPreamble) {",
+            "    if (imagesPerRequest !== undefined && images > imagesPerRequest) {",
+        ),
+        label=label,
+    )
     require_text(
         state,
-        "packages/core/src/core/geminiChat.ts",
-        "      if (framing + FRAMING_BOUNDARY_TOKENS > partition.messageFraming) {",
+        "packages/core/src/core/toolResultBound.ts",
+        "    if (images === 1 && text.bytes > IMAGE_RESULT_STATEMENT_MAX_BYTES) {",
         label=label,
     )
     # Every window this partition can be asked to describe: the served one,
-    # 524,288 as the next served tier, the tiers the model table can select
-    # that hold the fit, the least window that does, and two off a share
-    # boundary so the rounding is covered.
+    # one token past it, 524,288 as the next served tier, the tiers the model
+    # table can select that hold the fit, and the least window that does.
     for window in (
         _LEAST_PARTITIONED_WINDOW,
-        196_608,
-        200_000,
-        202_752,
         _SERVED_WINDOW,
         _SERVED_WINDOW + 1,
         272_000,
@@ -4897,7 +4975,7 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         1_000_000,
         1_048_576,
     ):
-        part = _partition(window, declared)
+        part = _partition(window, declared, image)
         _require(
             all(value > 0 for value in part.values()),
             f"{label}: a {window}-token window yields a non-positive budget {part!r}",
@@ -4924,6 +5002,11 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"{part['compactionTrigger']}-token trigger",
         )
         _require(
+            part["imagesPerRequest"] * image["imageTokens"] < window,
+            f"{label}: at a {window}-token window {part['imagesPerRequest']} "
+            "images at their largest do not fit in one request",
+        )
+        _require(
             part["admissionLimit"] - 1 + part["turnGeneration"] < window,
             f"{label}: at a {window}-token window a turn issued at the largest "
             f"admitted prompt ({part['admissionLimit'] - 1}) with its "
@@ -4947,14 +5030,14 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         )
     # A window too small to hold what a compaction leaves standing is refused
     # rather than partitioned into something unusable.
-    for tiny in (256, 4_096, 32_768, 131_072, _LEAST_PARTITIONED_WINDOW - 1):
-        part = _partition(tiny, declared)
+    for tiny in (256, 4_096, 32_768, 131_072, 200_000, _LEAST_PARTITIONED_WINDOW - 1):
+        part = _partition(tiny, declared, image)
         _require(
             _surviving(part) > part["compactionTrigger"] - 1,
             f"{label}: a {tiny}-token window must fail the fit, so the partition "
             f"refuses it instead of deriving one",
         )
-    served = _partition(_SERVED_WINDOW, declared)
+    served = _partition(_SERVED_WINDOW, declared, image)
     _require(
         served == _SERVED_PARTITION,
         f"{label}: the served {_SERVED_WINDOW}-token window yields {served!r}, "
@@ -5146,7 +5229,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     prompts = "packages/core/src/core/prompts.ts"
     prompts_test = "packages/core/src/core/prompts.test.ts"
 
-    # The arithmetic itself, evaluated against the shares the tree declares.
+    # The arithmetic itself, evaluated against the quantities the tree declares.
     _validate_context_partition(state, label=label)
     # The fit charges a retained input one inline block. The service holds the
     # operator's task to one; the agent tool holds a subagent's delegated
@@ -5189,7 +5272,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             # A block is `M` tokens of the served tokenizer, counted where the
             # bound is applied, and the fit charges each it carries the
             # template's `F` around it.
-            "  const block = inlineBlockTokens + messageFraming;",
+            "    (inlineBlockTokens + messageFraming) +",
             # A text's tokens are at most the UTF-8 bytes of its NFC form, not
             # of the text as written, and this is the one place either is
             # measured: every byte bound that stands in for tokens takes its
@@ -5288,7 +5371,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            # `D` and `F` are declared rather than derived, so they are proved
+            # `D`, `A` and `F` are declared rather than derived, so they are proved
             # against the served tokenizer before this chat issues anything --
             # through the turn's own counter, so the route that will serve the
             # turn is the route they are proved against. Each framing is the
@@ -5298,12 +5381,17 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const declared = this.preambleDeclaration;",
             "count(contents, declared?.systemInstruction);",
             "const bare = await counted([]);",
+            # The workspace's instruction files cost the instruction counted
+            # with them less the instruction counted without them, held to
+            # `M`; the rest of the preamble is the client's, held to its part.
+            "? bare - (await count([], project.systemInstructionWithout))",
+            "if (project && projectTokens > partition.inlineBlockTokens) {",
             "const withStartup = await counted([\n      ...(startup ? [startup.counted] : []),\n      ...frame,\n    ]);",
             "const repositoryData = declared?.repositoryDataBytes ?? 0;",
             "const turnBudget = declared?.turnBudgetBytes ?? 0;",
             "const workspaceData = startup?.workspaceDataBytes ?? 0;",
-            "    const todoList = reminder.listBytes;\n    const preamble =\n      withStartup + repositoryData + turnBudget + workspaceData + todoList;",
-            "if (preamble > partition.staticPreamble) {",
+            "    const todoList = reminder.listBytes;\n    const preamble =\n      withStartup -\n      projectTokens +\n      repositoryData +\n      turnBudget +\n      workspaceData +\n      todoList;",
+            "if (preamble > partition.clientPreamble) {",
             "`room for ${turnBudget} bytes of turn budget`",
             "const probe = await countText(FRAMING_PROBE_TEXT);",
             "const withMessage = await counted([message]);",
@@ -5435,18 +5523,30 @@ def _validate_compaction_budget_after(state: State) -> None:
         "adds nothing to a redraw of a refused turn and draws it through the turn",
         label=label,
     )
-    # Both refusals name a move the operator has. A preamble already written
-    # into history cannot be shortened after the fact, which is why every
-    # value the preamble renders is bounded before it is counted.
+    # Every refusal names its real cause and a move the operator has: the
+    # client's own text past its part, the workspace's files past `M` -- each
+    # named with its tokens -- or a framing past `F`. None names a larger
+    # window, which raises no capacity. A preamble already written into
+    # history cannot be shortened after the fact, which is why every value
+    # the preamble renders is bounded before it is counted.
     _require_all(
         state,
         chat,
         (
-            "Shorten the system prompt or a tool description, or deploy on a larger window.",
+            "past the ${partition.clientPreamble} the partition declares for the client's own. Shorten the system prompt or a tool description.",
+            "The workspace's instruction files -- ${each.join('; ')} -- add ${projectTokens} tokens to the system prompt, past the ${partition.inlineBlockTokens} one block placed inline may be.",
             "Raise the declared framing to match the template, or serve the template the partition was written for.",
         ),
         label=label,
     )
+    forbid_text(state, chat, "or deploy on a larger window", label=label)
+    for case in (
+        "holds the workspace's instruction files to one inline block and the client's text to its own capacity",
+        "refuses workspace instruction files past one inline block, naming each file and its tokens",
+        "refuses the client's own text past its capacity whatever the workspace's files leave",
+        "refuses a request whose own message carries more images than a request may",
+    ):
+        require_text(state, chat_test, case, label=label)
     # The framing proof once counted an empty message, which the converter
     # drops before the request is sent, so it measured nothing and could not
     # fail. The probe carries content, the text count takes it back out, and
@@ -5709,7 +5809,8 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "declares D and A as shares of the window, and M, S, R and F in tokens that do not scale",
+        "declares D, A, M, S, R and F in tokens that do not scale with the window",
+        "holds one result to its text or one image beside its sentence, and a request to the images the window holds",
         "gives a turn one inline block and R beside it, and the first draw a snapshot beside a turn",
         "spends the whole window twice over: a turn below T, a draw below K",
         "leaves what a compaction can leave standing below the trigger, at every window",

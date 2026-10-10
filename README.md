@@ -201,17 +201,21 @@ the model was never trained on. Qwen3.8-27B was trained with preserved thinking,
 as nearly all current models are, and there is no correct off switch for it,
 which is why the served template offers none.
 
-The served context window is spent exactly, from six declared quantities, all
-in tokens of the served tokenizer, and four derived from them:
+The served context window is spent exactly, from quantities declared in tokens
+of the served tokenizer, none of them a share of the window, and those derived
+from them:
 
 | quantity | what it is | at 262,144 |
 | --- | --- | --- |
-| `D`, the static preamble | 3W/64, a declared capacity | 12,288 tokens |
-| `A`, what a request adds to the prompt it was admitted at | 3W/256, a declared capacity | 3,072 tokens |
+| `D`, the static preamble | the client's own text's measured worst case rounded up to 1,024s, plus `M` for the workspace's instruction files | 12,288 + 16,384 = 28,672 tokens |
+| `A`, what a request adds to the prompt it was admitted at | the measured additions rounded up to 1,024s | 3,072 tokens |
 | `M`, one inline block | a declared page size, counted by the served tokenizer | 16,384 tokens |
 | `S`, one compaction snapshot | declared from the snapshots the model was recorded writing, counted the same way | 32,768 tokens |
 | `F`, the per-message framing | the served template's widest, with room for what a text's own edges add where they meet it | 61 tokens |
 | `R`, a turn's reasoning beside one block | declared from the turns recorded | 24,576 tokens |
+| `I`, one image | the processor's pixel budget at one token per 32×32 pixels, and its two markers | 16,386 tokens |
+| `P`, one tool result | its text's `M`, or one image beside the sentence `read_file` says with it | 16,532 tokens |
+| images in one request | `floor((W − 1) / I)`, what the backend is launched to accept | 15 |
 | `C`, a turn's generation room | `M + R` | 40,960 tokens |
 | `Q`, the least room the first draw of a compaction has | `S + C` | 73,728 tokens |
 | `T`, the admission limit: no turn is issued at or above it | `W − C − A` | 218,112 tokens |
@@ -228,27 +232,35 @@ first turn's prompt is about 8,400 tokens, so the first segment works for about
 176,900 tokens before its compaction, and every later segment runs from what the
 compaction left to `K`. The fit that keeps a compacted history from being
 compacted again by its very next send has a margin of its own,
-`K − 1 − (D + (S + F) + 2(M + F) + (C + F))`, which is
-`W − 2S − 4M − 2R − D − A − 4F − 1`, 66,315 tokens at the served window: a
-token of `M` costs it four, since `M` is both the two blocks a compaction
-carries beside the snapshot and the block a turn writes, and `K` holds back a
-turn's room; a token of `S` or `R` costs it two, a token of `D` or `A` one and a
-token of `F` four. `M`, `S`, `R` and `F` hold what they hold whatever the
-window, so a window below 191,700 tokens has a negative margin, and a
-partition whose margin would fall below zero is refused rather than derived. A
+`K − 1 − (D + (S + F) + (M + F) + (P + F) + (C + F))`, which is
+`W − 2S − 4M − 2R − P − D′ − A − 4F − 1` with `D′` the client's part of `D`,
+49,783 tokens at the served window, 311,927 at 524,288 and 836,215 at
+1,048,576: a token of `M` costs it four, since `M` is the workspace's
+instruction files, the input a compaction carries and the block a turn writes,
+and `K` holds back a turn's room; a token of `S` or `R` costs it two, a token of
+`P`, `D′` or `A` one and a token of `F` four. Every declared quantity holds what
+it holds whatever the window, so a window below 212,361 tokens has a negative
+margin, and a partition whose margin would fall below zero is refused rather
+than derived; `T` and `K` are 480,256 and 447,488 at 524,288 and 1,004,544 and
+971,776 at 1,048,576, where nothing more is held back for the preamble or the
+additions. A
 larger `C` buys a turn more room before it is refused and asked for again; a
 smaller one buys every segment more room before it compacts, and makes a turn
 that runs away cost less before it is refused.
 
-`D` is a capacity, not a derivation: the system prompt and the tool declarations
-are texts this repo ships, and they render into every request before any
-conversation does. It is chosen here and then proved — the real turn preamble is
-counted by the served tokenizer before the first turn, and again before any
-later turn whose preamble has changed, as when a tool is re-declared after
-startup; a deployment whose own preamble does not fit is refused at startup
-rather than part-way through a session, and a preamble that grows past it is
-refused at the turn that would send it. It is charged in the fit, which bounds
-what a compaction leaves standing. The proof counts this deployment's turn preamble with the Git
+`D` holds what renders into every request before any conversation does, in two
+parts, each a capacity proved against the real preamble — counted by the served
+tokenizer before the first turn, and again before any later turn whose preamble
+has changed, as when a tool is re-declared after startup; a preamble past
+either is refused at startup rather than part-way through a session, or at the
+turn that would send it, naming which part and why. It is charged in the fit,
+which bounds what a compaction leaves standing.
+
+The client's part, 12,288 tokens, is the system prompt and the tool
+declarations this repo ships, with the data they carry bounded by bytes: a
+fixed text, so its capacity is its measured worst case, 11,591, rounded up to
+the next multiple of 1,024, and the 697 left are what the text may grow by
+before the proof refuses it. The proof counts this deployment's turn preamble with the Git
 snapshot's repository values and the turn budget's number left out — 7,409 tokens, rendered by the served template and counted by the
 served tokenizer, each tool declaration as it is declared — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
@@ -263,7 +275,28 @@ budget, the widest a safe integer renders to, and 812 for the todo reminder's
 list and truncation mark. That is a bound of 11,591, the same for every
 repository, every workspace, every budget and every todo list, so none of them
 can make a deployment refuse to start, with 697 left for the prompt and the
-declarations to grow into. Each run of data sits between fixed lines at a boundary no token
+declarations to grow into.
+
+The workspace's part is its instruction files — a QWEN.md, AGENTS.md or
+QWEN.local.md the workspace holds from its root down to where the agent starts,
+with what they import, and an extension's context file — which the system prompt
+carries whole in every request and which the world, not this repo, writes. What
+they cost is the instruction counted with them less the instruction counted
+without them, and that is held to `M`, the bound on any block placed inline: the
+real cost, whatever the files' boundaries do to the tokens beside them. Past
+it the proof refuses before the first turn, naming each file with its tokens
+counted alone, the total they add and `M`, and the operator's move: shorten
+them, or rename or remove them, which keeps a renamed file there to read with
+`read_file`. Of the 111 local benchmark images, 60 carry an AGENTS.md at their
+workspace's root; the largest is 7,916 tokens, all are within `M`, and 48 were
+past the 697 tokens a preamble sized as a share of the window left beside the
+client's text, where they made the client refuse before its first turn as if
+its own prompt had outgrown the window — with a next action, deploy on a larger
+window, that no operator of this deployment has. (Those are the files
+themselves, counted by the served tokenizer; the kueue and kestra files import
+further files from their repositories, which were not counted.)
+
+Each run of data sits between fixed lines at a boundary no token
 spans, so the context costs its fixed text plus each run's own tokens exactly;
 counted through the served path, it does, and the budget's number costs one
 token a digit. The startup context is kept whole at the head of every history a
@@ -285,16 +318,17 @@ it, and it is a capacity proved the same way. Two requests stand on an admitted
 prompt. A refused turn is drawn again on it with the notice of each refusal
 added: three notices at most, each at most 343 bytes framed in 61, 1,212. The
 request that compacts it carries that prompt, those notices included, with the
-snapshot's declaration after the turn's tools, 736, and the directive, 677 —
-1,413, as the served template and tokenizer render them in the shape every
+snapshot's declaration after the turn's tools, 734, and the directive, 677 —
+1,411, as the served template and tokenizer render them in the shape every
 compaction request carries them, with the directive stating the widest ceiling
 it can, and counted again by the startup proof before the first turn — and on a
 redraw the notice of why the draw before it was refused, at most 211 bytes
-framed in 61, 272. That is 2,897, and three shares of the window, 3,072, is the
-least that holds it: 175 tokens are left for the directive, the declaration and
-the notices to grow into before the startup proof refuses, naming one more
-share as the move. `floor(3W/256)` first reaches 2,897 at a 247,211-token
-window. Each
+framed in 61, 272. That is 2,895, and `A` is the next multiple of 1,024 above
+it, 3,072, at every window: 177 tokens are left for the directive, the
+declaration and the notices to grow into before the startup proof refuses,
+naming them. Unlike `D`, `A` is held back from both bounds, so it is the
+measured sum rounded up and no more, and a larger window holds back nothing
+more for it. Each
 compaction's preflight holds what its own request adds to the same share. The
 startup proof cannot see instructions a user's `/compress` text or a PreCompact
 hook would add to that request, but they state no author, so a request carrying
@@ -377,24 +411,27 @@ again told why, and redrawn at 26,679. `T` is what the window has left once a
 turn's room and the additions are held back, and `K` what it has left once a
 draw's room and the additions are. What stands in the window after a
 compaction is the preamble plus `snapshot + authored input + carried turn + one
-result`; three of those four are bounded before they exist, the snapshot by `S`
-and the input and the result by `M` -- the input where it is submitted: the
-operator's task by the service, which holds it to `M` bytes of NFC because it
-admits a prompt before any tokenizer is reached and every token covers at least
-a byte, and a subagent's delegated task by the agent tool, which counts it --
-and the fourth is the turn, bounded by `C`. So the largest request a compaction
-can leave behind is `D + (S + F) + 2(M + F) + (C + F)`, 119,028 at the served
-window, and it stands below the trigger by the margin above; a window where it
-would not is refused rather than partitioned. All of it is asserted rather than
-assumed.
+result`; three of those four are bounded before they exist, the snapshot by `S`,
+the input by `M` -- where it is submitted: the operator's task by the service,
+which holds it to `M` bytes of NFC because it admits a prompt before any
+tokenizer is reached and every token covers at least a byte, and a subagent's
+delegated task by the agent tool, which counts it -- and the result by `P`: its
+text is held to `M`, and the one result that carries an image, `read_file`'s,
+carries one beside the sentence it says, which the conversation holds every
+result to before it receives it. The fourth is the turn, bounded by `C`. So
+the largest request a compaction can leave behind is
+`D + (S + F) + (M + F) + (P + F) + (C + F)`, 135,560 at the served window, and
+it stands below the trigger by the margin above; a window where it would not is
+refused rather than partitioned. All of it is asserted rather than assumed.
 
 A turn is issued with `C` whatever its prompt, reasoning included, and nothing
 else bounds it: the route refuses a configured `max_tokens`,
 `max_completion_tokens`, `max_new_tokens` or `QWEN_CODE_MAX_OUTPUT_TOKENS` at
 configuration. A turn that reaches `C` is refused rather than truncated and
 asked for again, told why, as the next turn (see below). Raising
-`max_model_len` re-derives `D`, `A`, `T` and `K`; `M`, `S`, `R` and `F` hold what
-they hold whatever the window, and do not move. New authored input, retained instructions, tools,
+`max_model_len` re-derives `T`, `K` and the images one request may carry; `D`,
+`A`, `M`, `S`, `R`, `F` and `I` hold what they hold whatever the window, and do
+not move. New authored input, retained instructions, tools,
 and the compaction directive still require exact recounting at admission; the
 partition does not guarantee that arbitrary new content will fit.
 
@@ -553,7 +590,11 @@ be read back to see the bound it actually ran under. Tool calls have no
 separate cutoff of their own: a bound on how much work a run may do is a budget,
 and this deployment has one. What still halts a run is repetition — the same
 call with identical arguments, or the same shell inspection command, repeated
-with nothing changing — reported as the loop it is. Auto-compaction is due when the rendered request
+with nothing changing — reported as the loop it is. Five identical calls in a
+row end it: three run, the fourth is answered with why it was not run, and a
+fifth, a repeat after being told, ends the run. That tolerance is declared for
+a call made to wait — polling a background command's output, re-running a check
+while something settles — and is no limit any backend this client admits sets. Auto-compaction is due when the rendered request
 reaches the compaction trigger `K`, and no turn is issued once it reaches the
 admission limit `T`.
 Subagents run
@@ -837,9 +878,22 @@ turns' hidden thinking is not carried into it, because the turns themselves are
 gone.
 
 The limit is fifteen images in one rendered request, not fifteen over the lifetime
-of a session. Their visual expansion counts inside the same native 262,144
-total-token window and against the same shares of it as text; the exact tokenizer
-reports what a rendered request costs, whatever it is made of.
+of a session: as many images at the processor's pixel budget, 16,386 tokens each
+with their markers, as the 262,144-token window holds with a token beside them,
+`floor((W − 1) / I)`. The client derives that count in its partition, and a
+service test holds the backend's `--limit-mm-per-prompt` and the lock's vision
+limit to it, so neither can move without the other. A request never carries
+more inline: once a history holds one image more, its earlier images are sent
+as references, each stating the image's id and size (`imagePayloadThreshold` is
+the count plus one, and a configured threshold past that is refused), and a
+request whose own
+message would still carry more — which no tool here produces, since `read_file`
+returns one image a result — is refused before it is sent, naming the count,
+rather than refused by the backend whole. Upstream's threshold, 20, sent
+sixteen to nineteen images in one request, which the backend refuses with a 400.
+Their visual expansion counts inside the same native 262,144 total-token window
+as text; the exact tokenizer reports what a rendered request costs, whatever it
+is made of.
 
 ## Tool-call and streaming correctness
 
@@ -1173,7 +1227,13 @@ every refused answer is drawn under, a compaction's snapshot draws included --
 end the run as `error_incomplete_generation`: a limit that keeps being reached is
 a turn that will not fit, or reasoning that has degenerated, a repeat that keeps
 being written is a call the model will not write once, and the run says so
-loudly rather than drawing again. The record names why the last draw was
+loudly rather than drawing again. Four is a cost bound, declared, not a
+measured rate: four draws of a turn generate at most 4 × 40,960 = 163,840
+tokens, at most 3,413 seconds each at the decode floor below, and their three
+notices hold 1,212 tokens of `A` back from both bounds, 404 for each draw
+allowed beyond the first; a compaction's draws carry one notice whatever their
+count, and below `T` a compaction whose draws are all refused is attempted again
+on the next send. The record names why the last draw was
 refused: the limit, the prompt it was issued at and what it generated, reasoning
 included, or the backend's refusal as served; a generation stopped for any
 other reason ends the run at once, with its reason. Either says what the stop
