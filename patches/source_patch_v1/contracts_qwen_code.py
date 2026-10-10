@@ -1400,21 +1400,19 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         (
             "const STATED_QUANTITY = /\\b(\\d[\\d,]*) (bytes|tokens|turns)\\b/g;",
             "export function refuseRestatedQuantities(",
-            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n      snapshot,\n      admission,\n    ],",
+            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n      snapshot,\n    ],",
             "refuseRestatedQuantities(prompt, context.quantities);",
             "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
             "'- A `read_file` page and the statement that leads it are one inline block together.',",
             # Every bound the model is told is in tokens, the unit the window
-            # is spent in: one inline block, a snapshot, the trigger at which
-            # the next send compacts and the limit at which a failed
-            # compaction ends the session.
+            # is spent in: one inline block, a snapshot and the trigger at
+            # which the next send compacts.
             "  const block = `${partition.inlineBlockTokens} tokens`;",
             "  const snapshot = `${partition.snapshotTokens} tokens`;",
             "  const trigger = `${partition.compactionTrigger} tokens`;",
-            "  const admission = `${partition.admissionLimit} tokens`;",
             # What a compaction is, the model is told before its first turn,
             # from the one statement of the frame it will read.
-            "    `- ${compactionDeclaration(trigger, admission, snapshot)}`,",
+            "    `- ${compactionDeclaration(trigger, snapshot)}`,",
             # The model is told what happens at the turn's limit: the turn is
             # refused rather than truncated, kept nowhere and run in no part,
             # asked for again as the next turn, and how many refusals in a
@@ -1908,7 +1906,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "refuses a draw its limit stopped: publishes its terminal, keeps none of it and issues nothing more",
             "draws a refused turn again on its request with the refusal notice added and nothing else",
             "draws one turn at most ${MAX_GENERATION_DRAWS} times, each redraw carrying the notice of every refusal before it",
-            "issues a redraw above the admission limit by no more than its notices, and refuses one past them",
+            "issues a redraw above the prompt it redraws by no more than its notices, and refuses one past them",
             "literal response preservation",
             "maps maxRetries zero to one outer establishment attempt",
             "literal-with-structure",
@@ -5377,10 +5375,10 @@ def _validate_compaction_budget_after(state: State) -> None:
         )
 
     # A turn is issued below the admission limit or it is not issued, and
-    # what it is issued with is the remainder. A compaction that fails below
-    # that limit leaves the turn to be issued, and the next send compacts
-    # again. Nothing in the send path consults a ceiling: not a configured one,
-    # not the model's, not an environment variable.
+    # what it is issued with is the remainder. A compaction is one attempt: one
+    # that fails ends the send that attempted it, so no turn follows it.
+    # Nothing in the send path consults a ceiling: not a configured one, not
+    # the model's, not an environment variable.
     chat_source = _source(state, chat, label=label)
     _require_ordered(
         chat_source,
@@ -5418,13 +5416,13 @@ def _validate_compaction_budget_after(state: State) -> None:
             "if (framing + FRAMING_BOUNDARY_TOKENS > partition.messageFraming) {",
             "await this.verifyDeclarations(",
             "countExactTextTokens,",
+            # A compaction that failed ends the send, naming why: the failure
+            # carried beside its accounting.
+            "if (compaction.failure !== null) {",
+            "and its compaction failed: ${compaction.failure.replace(",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "if (promptTokensForClamp >= partition.admissionLimit) {",
             "throw new Error(",
-            # A request at the admission limit that its compaction did not
-            # reduce ends the session there, and the ending names why: the
-            # failure carried beside its accounting.
-            "Its compaction failed: ${compaction.failure.replace(",
             "maxOutputTokens: turnOutputLimit(partition),",
         ),
         label=label,
@@ -5815,8 +5813,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         "gives every turn the same room, whatever its prompt",
         "sends no output limit but the turn's room, whatever the request asked for",
         "issues no turn once the rendered prompt reaches the admission limit",
-        "ends at the admission limit naming why its compaction failed",
-        "issues a turn after a compaction fails below the admission limit, and compacts again on that turn's history",
+        "ends the session when a compaction %s fails, naming why, and issues no turn",
         "issues the turn at the last prompt below the admission limit",
         "refuses when the tokenizer reports another window",
         "refuses when the provider declares no context window",
@@ -5904,11 +5901,11 @@ def _validate_compaction_budget_after(state: State) -> None:
     ):
         forbid_text(state, service, absent, label=label)
     # The snapshot is issued at the room the window actually has, less the
-    # widest redraw notice, and that room is never less than a turn's: the
-    # prompt this request extends was issued below the admission limit, with
-    # at most its refusal notices more, so the request and a redraw's notice
-    # are at most T - 1 + A, leaving at least C + 1, and the first attempt at
-    # a trigger summarises a prompt issued below K, leaving at least Q + 1. The
+    # widest redraw notice, and that room is never less than a turn's: a
+    # prompt issued below the admission limit, with at most its refusal
+    # notices more, leaves at least C + 1 beside the request's additions, and
+    # one issued below K -- every turn of a compacting conversation, since a
+    # compaction that fails ends it -- at least Q + 1. The
     # floor is asserted in the service so a broken partition fails loudly,
     # rather than clamped so it silently shrinks the snapshot -- a clamp is
     # what hands a summary a few thousand tokens and truncates it.
@@ -6303,8 +6300,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "your answer may generate at most ${maxOutputTokens} tokens, reasoning included. ",
             "An answer that reaches that limit is refused, "
             "and the request is made again, told why, up to ${MAX_GENERATION_DRAWS} answers in all. ",
-            "If all ${MAX_GENERATION_DRAWS} are refused, this conversation is not "
-            "compacted.`",
+            "If all ${MAX_GENERATION_DRAWS} are refused, the session ends.`",
         ),
         label=label,
     )
@@ -6460,12 +6456,10 @@ def _validate_compaction_budget_after(state: State) -> None:
             "      authoredTextPart(opening),\n      ...inputs,\n      authoredTextPart(authored(closing, harnessText(`\\n\\n${RESUME_TRAILER}`))),",
             "  const snapshot = snapshotMessage(\n    declared,\n    retainedInstructionParts(history),\n    draw,\n  );",
             "export function compactionDeclaration(",
-            # The model is told when a compaction is attempted and when its
-            # failure ends the session: a failed compaction leaves the
-            # conversation to continue, and the next send compacts again,
-            # until a request reaches the admission limit.
-            "  trigger: string,\n  admission: string,\n  snapshot: string,\n): string {",
-            "    `If a compaction fails, the conversation continues as it stands and the next send compacts again, until a request reaches ${admission}: a compaction that fails there ends the session.`",
+            # The model is told when a compaction is attempted and that its
+            # failure ends the session: a compaction is one attempt.
+            "  trigger: string,\n  snapshot: string,\n): string {",
+            "    'A compaction that fails ends the session.'",
             "const BLOCK_SEPARATOR = '\\n\\n';",
             "    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],",
             "  turn?: Content[];",

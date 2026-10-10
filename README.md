@@ -443,13 +443,16 @@ below `K` -- otherwise that turn's own send would have compacted -- so the
 request that summarises it, the prompt plus the snapshot's declaration and one
 directive, additions held within `A`, leaves a draw at least `Q + 1`: a snapshot
 at its bound after reasoning as long as a whole turn may generate. A compaction
-that fails is not the end of the session while the request is below `T`: the
-turn is issued on the history as it stands, the failure is in the stream as
-every compaction's outcome is, and the next send, whose request is at or above
-`K` too, compacts again on that turn's history. Each such attempt summarises a
-prompt admitted below `T`, so its draw has at least `C + 1`. `T − K = S`,
-32,768 tokens, is the room those later attempts are made in; a turn that grows
-the request past it in one step leaves the first attempt the only one. A draw
+is one attempt: its draws are all issued on that prompt, each with at least
+`Q + 1` and each told why the draw before it was refused, and a compaction that
+fails ends the session in the send that attempted it, so every turn is issued
+below `K`. A later attempt on the next turn's history would be a weaker
+experiment than another draw -- a prompt admitted at or above `K` leaves only
+`C + 1`, the history is larger, and it is told nothing of what this one's draws
+were refused for -- so there is none. `T` binds no turn on that route; it
+bounds a turn routed past compaction. What is left is the chance that all of one
+compaction's draws are refused, each with `Q + 1` and each told why; nothing
+measures that rate, so none is stated. A draw
 that reaches its room is refused as truncated and drawn again, told why. The
 turn itself, reasoning included, is
 carried behind the snapshot verbatim, followed by the tool result it was
@@ -467,12 +470,11 @@ was just counted, and less the most a redraw's notice can add — and a request
 that would leave less than `C` is refused instead of quietly shrinking the
 snapshot. The draw is told that room as its own limit. The request carries the
 session's system prompt, which states a turn's limit, and a draw's room is what
-the request leaves, never less than `C + 1`, which is not that number; so the
+the request leaves, at least `Q + 1`, which is not that number; so the
 directive says the request is not a turn, states the number the request's
 `max_tokens` is set to, and says that an answer reaching it is refused and asked
-for again, told why, up to the draw limit, after which the conversation is not
-compacted. Below `T` the turn is issued on the history as it stands and the
-next send compacts again; at `T` no turn is issued, the run ends as
+for again, told why, up to the draw limit, after which the session ends. When a
+compaction fails no turn is issued, the run ends as
 `error_during_execution`, and its message names why the compaction failed -- every draw's refusal, in the clause
 each redraw was told it in, or the fault outside the model's answer that its
 last draw ended on, or what its preflight refused -- beside the compaction
@@ -1250,8 +1252,8 @@ measured rate: four draws of a turn generate at most 4 × 40,960 = 163,840
 tokens, at most 3,413 seconds each at the decode floor below, and their three
 notices hold 1,212 tokens of `A` back from both bounds, 404 for each draw
 allowed beyond the first; a compaction's draws carry one notice whatever their
-count, and below `T` a compaction whose draws are all refused is attempted again
-on the next send. The record names why the last draw was
+count, and a compaction whose draws are all refused ends the session, as four
+refused draws of a turn do. The record names why the last draw was
 refused: the limit, the prompt it was issued at and what it generated, reasoning
 included, or the backend's refusal as served; a generation stopped for any
 other reason ends the run at once, with its reason. Either says what the stop

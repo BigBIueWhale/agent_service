@@ -750,6 +750,8 @@ struct AdmissionPlan {
     /// The scope a committed compaction replaced the history of, and the
     /// draw whose snapshot replaced it.
     compaction_commit: Option<(String, String)>,
+    /// The scope whose compaction failed, which ends its conversation.
+    compaction_failed: Option<String>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -786,6 +788,11 @@ pub struct RuntimeContract {
     observed_journal: Option<String>,
     observed_requests: BTreeMap<String, bool>,
     observed_utility_requests: BTreeSet<String>,
+    /// Every scope whose compaction failed. A compaction is one attempt, and
+    /// one that fails ends its conversation: the client issues no turn and no
+    /// further compaction in that scope after it, so a stream that does is
+    /// refused rather than certified.
+    failed_compaction_scopes: BTreeSet<String>,
     records_seen: u64,
     prefix: u64,
     first_refusal: Option<ContractError>,
@@ -817,6 +824,7 @@ impl RuntimeContract {
             observed_journal: None,
             observed_requests: BTreeMap::new(),
             observed_utility_requests: BTreeSet::new(),
+            failed_compaction_scopes: BTreeSet::new(),
             records_seen: 0,
             prefix: 0,
             first_refusal: None,
@@ -1117,6 +1125,9 @@ impl RuntimeContract {
         if let Some((scope, draw)) = plan.compaction_commit {
             self.requests.commit_compaction(&scope, draw);
         }
+        if let Some(scope) = plan.compaction_failed {
+            self.failed_compaction_scopes.insert(scope);
+        }
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -1251,6 +1262,7 @@ impl RuntimeContract {
         let mut completion = None;
         let mut compaction_claims = Vec::new();
         let mut compaction_commit = None;
+        let mut compaction_failed = None;
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         let mut runtime_operation_id = None;
@@ -1270,6 +1282,11 @@ impl RuntimeContract {
                     // the session's own scope, a subagent scope for the call that
                     // spawned it; any other scope is internal and shows nothing.
                     let kv_scope = admission.scope();
+                    if self.failed_compaction_scopes.contains(kv_scope) {
+                        return Err(ContractError::InvalidRecord(format!(
+                            "events.jsonl line {line} issues a chat request in scope {kv_scope:?} after its compaction failed; a compaction that fails ends its conversation, so no turn follows it; inspect the client"
+                        )));
+                    }
                     let display = if Some(kv_scope) == self.session_id.as_deref() {
                         Some(None)
                     } else if self.tool_uses.contains_key(kv_scope) {
@@ -1502,10 +1519,22 @@ impl RuntimeContract {
                         let kv_scope = scope.or(self.session_id.as_deref()).ok_or_else(|| {
                             ContractError::InvalidRecord(format!("events.jsonl line {line} has no compaction request scope; retain the complete stream_start and request evidence"))
                         })?;
+                        if self.failed_compaction_scopes.contains(kv_scope) {
+                            return Err(ContractError::InvalidRecord(format!(
+                                "events.jsonl line {line} records a compaction in {} after its compaction failed; a compaction that fails ends its conversation, so nothing follows it there; inspect the compaction producer",
+                                scope_display(scope)
+                            )));
+                        }
                         let (claims, committed) = validate_compaction_event(
                             object, line, scope, self.limits.json, &self.requests, kv_scope,
                         )?;
                         compaction_claims = claims;
+                        // A record that committed nothing is a failed
+                        // compaction (validate_compaction_event refuses a
+                        // successful one that commits no snapshot).
+                        if committed.is_none() {
+                            compaction_failed = Some(kv_scope.to_string());
+                        }
                         compaction_commit = committed.map(|draw| (kv_scope.to_string(), draw));
                     },
                     SystemKind::RuntimeOperation => {
@@ -1649,6 +1678,7 @@ impl RuntimeContract {
             completion,
             compaction_claims,
             compaction_commit,
+            compaction_failed,
             row,
             state,
             additions,
@@ -2546,19 +2576,42 @@ mod tests {
             .contains("cites an operation without its count"));
     }
 
-    /// A failed compaction is not an end: the conversation goes on, and the
-    /// next send compacts again, so a stream holds a failed compaction and
-    /// the attempts after it, and each certifies on its own.
+    /// A compaction is one attempt, and one that fails ends its conversation:
+    /// a stream that records another compaction of that scope after it is
+    /// refused, whether that one failed or succeeded.
     #[test]
-    fn a_failed_compaction_is_followed_by_the_next_attempt() {
+    fn nothing_compacts_a_scope_again_after_its_compaction_failed() {
+        for again in [compaction_failed(), compaction_success()] {
+            let mut owner = with_compaction_transport();
+            admit(&mut owner, &compaction_failed().to_string()).unwrap();
+            let mut again = again;
+            again["uuid"] = serde_json::json!("compaction-again");
+            assert!(admit(&mut owner, &again.to_string())
+                .unwrap_err()
+                .to_string()
+                .contains("after its compaction failed"));
+        }
+        // A compaction that succeeded ends nothing.
         let mut owner = with_compaction_transport();
-        admit(&mut owner, &compaction_failed().to_string()).unwrap();
-        let mut again = compaction_failed();
-        again["uuid"] = serde_json::json!("compaction-again");
-        admit(&mut owner, &again.to_string()).unwrap();
-        let mut success = compaction_success();
-        success["uuid"] = serde_json::json!("compaction-accepted");
-        admit(&mut owner, &success.to_string()).unwrap();
+        admit(&mut owner, &compaction_success().to_string()).unwrap();
+    }
+
+    /// No turn follows a failed compaction in its scope: the chat request the
+    /// client would have issued after it is refused, naming why.
+    #[test]
+    fn no_chat_request_follows_a_failed_compaction_in_its_scope() {
+        let rows = fixture();
+        let mut reader = owner();
+        for row in rows.iter().take(2) {
+            admit(&mut reader, &row.to_string()).unwrap();
+        }
+        let mut failed = compaction_failed();
+        failed["session_id"] = rows[0]["session_id"].clone();
+        admit(&mut reader, &failed.to_string()).unwrap();
+        assert!(admit(&mut reader, &rows[2].to_string())
+            .unwrap_err()
+            .to_string()
+            .contains("chat request in scope"));
     }
 
     #[test]

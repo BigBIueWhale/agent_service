@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `8f2c46fc98c95b13732904a014d46005d242815781b05eae0c9cdd83741bf8ec`
+- Review-diff SHA-256: `28fc9d4995a163f1cc5db63a9449185d06376fa4b9972e8e52ac3398c5a28e3d`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `0604a3cf60824482e0f2dcbca210624e3360dac5a423b6df9db1c8c8f1455f70`
+- Transformer-manifest SHA-256: `bc7973a77f65147310ca226b3a222563b1de378765b32487599dafbc056509e7`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -261,9 +261,9 @@ snapshot at its bound after a whole turn's reasoning. Two bounds follow. `T`,
 the admission limit, `T = W - C - A`: no turn is issued at or above it. `K`, the
 compaction trigger, `K = W - Q - A`: a send whose request reaches it compacts
 first. At the served window `C`, `Q`, `T` and `K` are 40,960, 73,728, 218,112
-and 185,344. A compaction that fails below `T` leaves the turn to be issued on
-the history as it stands, and the next send compacts again; only a request at
-`T` whose compaction failed, or left it there, ends the session. What stands in
+and 185,344. A compaction is one attempt, and one that fails ends the session,
+so every turn is issued below `K` and `T` binds only a turn routed past
+compaction. What stands in
 the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; every term but the
 turn is bounded before it exists, so `D + (S + F) + (M + F) + (P + F) + (C + F)`,
@@ -426,7 +426,7 @@ carries the session's system prompt, which states a turn's limit, and a draw's
 room is what the request leaves, which is not that number, so its directive
 says the request is not a turn, states the number the request's `max_tokens` is
 set to, and says that an answer reaching it is refused and asked for again, told
-why, up to the draw limit, after which the conversation is not compacted. A
+why, up to the draw limit, after which the session ends. A
 turn's room is what the fit charges for the turn a
 compaction carries; a draw's answer is never carried, only the snapshot it
 declares, so it can be given whatever the window has left. The request is counted with that number at its widest, the
@@ -459,10 +459,9 @@ a turn's broken stream is issued again under, by the one transport test
 request that fails the same way ends the compaction with that status, naming
 both faults. Every reader holds each draw to what its status names: a refused
 or accepted answer claims a final request that completed and delivered it, and
-a transport fault one that did not complete. A compaction that fails below the
-admission limit leaves the turn to be issued on the history as it stands, and
-the next send compacts again; a request at or above it whose compaction failed,
-or left it there, ends the session, and the ending names why.
+a transport fault one that did not complete. A compaction that fails ends the
+session in the send that attempted it, issuing no turn, and the ending names
+why.
 There is no separate
 reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
 what the model can quote, not what it has seen: it disarms every file-read

@@ -479,7 +479,6 @@ fn a_measurement_cites_the_operation_that_counted_its_body_whenever_it_ran() {
     let turn = trace.tokenizer("a", "original", original);
     let cited = [("original", turn.as_str()), ("prompt_only", prompt_only.as_str())];
     trace.compaction_citing(None, first, &cited);
-    trace.compaction_citing(None, record(output(), json!([])), &cited);
     trace.terminal(None, 0, None);
     trace.certify();
     assert_eq!(
@@ -489,7 +488,7 @@ fn a_measurement_cites_the_operation_that_counted_its_body_whenever_it_ran() {
             .filter(|row| row["subtype"] == "compaction")
             .map(|row| row["data"]["tokenMeasurements"][0]["operationId"].clone())
             .collect::<Vec<_>>(),
-        vec![json!(turn), json!(turn)]
+        vec![json!(turn)]
     );
 }
 
@@ -521,63 +520,50 @@ fn last_generation(trace: &Trace) -> String {
         .to_string()
 }
 
-/// A compaction that failed replaced nothing, so the turns its conversation
-/// accepted are owed by every request after it, as they were before; one
-/// that committed left the snapshot its accepted draw declared and the turn
-/// it carried, and those are what every later request owes.
+/// A compaction that committed left the snapshot its accepted draw declared
+/// and the turn it carried, and those are what every later request owes. A
+/// compaction is one attempt, and one that failed ends its conversation: a
+/// request after it is refused, naming why.
 #[test]
-fn a_failed_compaction_keeps_what_its_conversation_owes_and_a_committed_one_resets_it() {
+fn a_committed_compaction_resets_what_its_conversation_owes_and_a_failed_one_ends_it() {
     let history = json!([{"role":"user","parts":[{"text":"retained input"}]}]);
-    // The first turn, a compaction that failed below the admission limit,
-    // the turn issued on the history as it stands, then a compaction that
-    // committed, and the next turn on what it left.
-    let build = |keep_first: bool, compacted: bool, carry_second: bool| {
+    // The first turn, a compaction that committed, and the next turn on what
+    // it left.
+    let build = |compacted: bool, carry: bool| {
         let mut trace = Trace::new();
         trace.chat(None, "first");
         trace.tool_result(None, "first", "done");
-        trace.compaction(None, record(output(), json!([])));
-        if !keep_first {
-            let dropped = json!({"role":"user","content":"continue"}).to_string();
-            let invocation = trace.chats.get_mut("a").unwrap();
-            invocation.turn_authors = harness_authors(&dropped);
-            invocation.turn = dropped;
-        }
-        trace.chat(None, "second");
-        trace.tool_result(None, "second", "done");
         trace.compaction(None, committed(history.clone()));
         if compacted {
             trace.compacted("a");
         }
-        if !carry_second {
+        if !carry {
             let dropped = json!({"role":"user","content":"continue"}).to_string();
             let invocation = trace.chats.get_mut("a").unwrap();
             invocation.turn_authors = harness_authors(&dropped);
             invocation.turn = dropped;
         }
         trace.answer(None, false);
-        trace.terminal(None, 3, None);
+        trace.terminal(None, 2, None);
         trace
     };
-    build(true, true, true).certify();
-    // The turn the failed compaction left in place, dropped from the next.
-    let mut first = Trace::new();
-    first.chat(None, "first");
-    let generation = last_generation(&first);
-    assert_refused_at(&build(false, true, true), &format!("does not carry generation {generation:?}'s turn"));
+    build(true, true).certify();
     // After the commit, the history as it stood before it, or the snapshot
     // without the turn it carried.
-    assert_refused_at(&build(true, false, true), "does not carry the snapshot compaction draw");
-    let trace = build(true, true, true);
-    let second = trace
-        .rows
-        .iter()
-        .filter(|row| row["type"] == "model_attempt_completion")
-        .nth(1)
-        .unwrap()["completion"]["generation_id"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    assert_refused_at(&build(true, true, false), &format!("does not carry generation {second:?}'s turn"));
+    assert_refused_at(&build(false, true), "does not carry the snapshot compaction draw");
+    // The first turn's generation, as a trace with only that turn names it.
+    let mut only_first = Trace::new();
+    only_first.chat(None, "first");
+    let first = last_generation(&only_first);
+    assert_refused_at(&build(true, false), &format!("does not carry generation {first:?}'s turn"));
+    // A compaction that failed, and a turn issued after it anyway.
+    let mut failed = Trace::new();
+    failed.chat(None, "first");
+    failed.tool_result(None, "first", "done");
+    failed.compaction(None, record(output(), json!([])));
+    failed.answer(None, false);
+    failed.terminal(None, 2, None);
+    assert_refused_at(&failed, "after its compaction failed");
 }
 
 /// A compaction commits the snapshot its accepted draw declared, and that is
