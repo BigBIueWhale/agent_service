@@ -102,6 +102,9 @@ pub struct RequestScope {
 /// generated. Each carries the accounting `output` carries, minus the
 /// transition-wide budget, plus the rule it failed or the transport fault it
 /// ended on, and its physical request is held to which of the two it names.
+///
+/// Returns every draw the record claims, and, for a compaction that
+/// committed, the draw whose snapshot replaced the scope's history.
 fn validate_compaction_event(
     object: Value<'_>,
     line: usize,
@@ -109,7 +112,7 @@ fn validate_compaction_event(
     json_limits: Limits,
     requests: &crate::model_requests::ModelRequests,
     kv_scope: &str,
-) -> ContractResult<Vec<(String, crate::authorship::DrawOutput)>> {
+) -> ContractResult<(Vec<(String, crate::authorship::DrawOutput)>, Option<String>)> {
     let refuse = |what: &str| {
         ContractError::InvalidRecord(format!(
             "events.jsonl line {line} carries a compaction record in {} {what}",
@@ -511,7 +514,24 @@ fn validate_compaction_event(
             previous = last;
         }
     }
-    Ok(claims)
+    // A committed compaction replaced its scope's history with the snapshot
+    // its accepted draw declared: the draw `output` describes, the last one.
+    // What every later request of that conversation owes is that snapshot,
+    // so a draw that declared none committed nothing a request could carry.
+    let committed = match (succeeded, claims.last()) {
+        (false, _) => None,
+        (true, Some((id, output)))
+            if crate::model_requests::snapshot_sections(&output.calls).is_some() =>
+        {
+            Some(id.clone())
+        }
+        (true, _) => {
+            return Err(refuse(
+                "whose committed replacement was accepted from a draw that declared no complete snapshot; inspect the compaction producer",
+            ))
+        }
+    };
+    Ok((claims, committed))
 }
 
 /// What a compaction's draw was, read from the status that names it: an
@@ -727,6 +747,9 @@ struct AdmissionPlan {
     generation: Option<crate::model_requests::GenerationAdmission>,
     completion: Option<crate::model_requests::CompletionAdmission>,
     compaction_claims: Vec<(String, crate::authorship::DrawOutput)>,
+    /// The scope a committed compaction replaced the history of, and the
+    /// draw whose snapshot replaced it.
+    compaction_commit: Option<(String, String)>,
     row: usize,
     state: ScopeState,
     additions: BTreeMap<String, ToolUse>,
@@ -1091,6 +1114,9 @@ impl RuntimeContract {
         }
         self.requests
             .commit_compaction_claims(plan.compaction_claims);
+        if let Some((scope, draw)) = plan.compaction_commit {
+            self.requests.commit_compaction(&scope, draw);
+        }
         if plan.row == self.scope_states.len() {
             let id = plan
                 .state
@@ -1224,6 +1250,7 @@ impl RuntimeContract {
         let mut generation = None;
         let mut completion = None;
         let mut compaction_claims = Vec::new();
+        let mut compaction_commit = None;
         let mut additions = BTreeMap::new();
         let mut returns = BTreeSet::new();
         let mut runtime_operation_id = None;
@@ -1475,9 +1502,11 @@ impl RuntimeContract {
                         let kv_scope = scope.or(self.session_id.as_deref()).ok_or_else(|| {
                             ContractError::InvalidRecord(format!("events.jsonl line {line} has no compaction request scope; retain the complete stream_start and request evidence"))
                         })?;
-                        compaction_claims = validate_compaction_event(
+                        let (claims, committed) = validate_compaction_event(
                             object, line, scope, self.limits.json, &self.requests, kv_scope,
                         )?;
+                        compaction_claims = claims;
+                        compaction_commit = committed.map(|draw| (kv_scope.to_string(), draw));
                     },
                     SystemKind::RuntimeOperation => {
                         let data = field(object, "data", line)?;
@@ -1619,6 +1648,7 @@ impl RuntimeContract {
             generation,
             completion,
             compaction_claims,
+            compaction_commit,
             row,
             state,
             additions,

@@ -10,6 +10,11 @@
 //! output it names, and a run the operator wrote is byte for byte the task at
 //! the offset it names. Nothing here knows how a client composes its
 //! messages: the rules are about bytes, strings and the outputs they cite.
+//!
+//! The runs of model text a request carries are returned as citations, so
+//! the request can be held to the outputs its conversation owes it: whether
+//! one message's runs copy an output's string in full is a question about
+//! bytes too (`copies_in_full`), and it is answered here.
 use crate::{
     generation::Generation,
     json::{Document, Kind, Value},
@@ -294,7 +299,8 @@ pub(crate) fn check(
     outputs: &ModelOutputs<'_>,
     operator: &OperatorTask,
     line: usize,
-) -> ContractResult<()> {
+) -> ContractResult<Vec<Citation>> {
+    let mut citations = Vec::new();
     let authors = field(body, "authors", line)?;
     let segments = match text(body, "kind", line)? {
         "full" => vec![Segment {
@@ -354,7 +360,7 @@ pub(crate) fn check(
                 .filter(|end| *end <= segment.start + segment.len)
                 .ok_or_else(|| refusal("has runs that reach past the bytes they describe"))?;
             at = end;
-            let written = match run.claim {
+            let (written, string, place) = match run.claim {
                 Claim::Harness => {
                     if matches!(previous, Some((Claim::Harness, _))) {
                         return Err(refusal("splits one author's bytes into adjacent runs"));
@@ -380,7 +386,7 @@ pub(crate) fn check(
                         return Err(refusal("starts or ends a run inside a character"));
                     };
                     debug_assert!(value.content.start <= start);
-                    &value.decoded.as_bytes()[from..to]
+                    (&value.decoded.as_bytes()[from..to], content_start, from)
                 }
             };
             let contiguous = |offset: u64| {
@@ -426,6 +432,16 @@ pub(crate) fn check(
                             written.len()
                         )));
                     }
+                    citations.push(Citation {
+                        stored: start,
+                        string,
+                        place,
+                        kind: kind.to_string(),
+                        id: id.to_string(),
+                        field: field.to_string(),
+                        from,
+                        to: from + written.len(),
+                    });
                 }
             }
             previous = Some((&run.claim, written.len()));
@@ -437,7 +453,90 @@ pub(crate) fn check(
             )));
         }
     }
-    Ok(())
+    Ok(citations)
+}
+
+/// One run of model text a request carries: the stored byte it starts at,
+/// and the bytes of the output field it is a copy of.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Citation {
+    /// Where the run starts among the stored bytes it was read from.
+    pub stored: usize,
+    /// Where the content of the string value it lies in starts, among the
+    /// same bytes, and the byte of that string's decoded text it starts at.
+    pub string: usize,
+    pub place: usize,
+    pub kind: String,
+    pub id: String,
+    pub field: String,
+    /// The bytes of the field the run copies: `from..to`.
+    pub from: usize,
+    pub to: usize,
+}
+
+/// Every string of `value` by its JSON pointer below `pointer`, in document
+/// order: what a call's arguments hold that a run of model text can copy.
+/// Keys, numbers, literals and the structure are no string of the model's a
+/// run could cite, so a copy of them is held by its value, not here.
+pub(crate) fn string_leaves(value: &serde_json::Value, pointer: String, leaves: &mut Vec<(String, String)>) {
+    match value {
+        serde_json::Value::String(text) => leaves.push((pointer, text.clone())),
+        serde_json::Value::Array(items) => {
+            for (index, item) in items.iter().enumerate() {
+                string_leaves(item, format!("{pointer}/{index}"), leaves);
+            }
+        }
+        serde_json::Value::Object(members) => {
+            for (key, member) in members {
+                let step = key.replace('~', "~0").replace('/', "~1");
+                string_leaves(member, format!("{pointer}/{step}"), leaves);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Whether JSON writes `character` as an escape inside a string: the
+/// characters `JSON.stringify` does not write as themselves.
+fn escaped(character: char) -> bool {
+    character < '\u{20}' || character == '"' || character == '\\'
+}
+
+/// Whether `citations` -- the runs one place of a request carries -- copy
+/// `text`, the field `field` of output `kind` `id`, in full: every byte of it
+/// once, in order, and nothing twice. A text carried inside JSON text -- a
+/// call's arguments, which a request carries re-serialized -- may leave out
+/// exactly the characters JSON writes as escapes (`escapes`): those are the
+/// harness's serialization of the model's characters, and the value the
+/// arguments decode to holds them. Bytes are compared as written: a copy
+/// that normalized, trimmed or re-cut a character leaves a gap, and is no
+/// copy in full.
+pub(crate) fn copies_in_full<'a>(
+    citations: impl IntoIterator<Item = &'a Citation>,
+    kind: &str,
+    id: &str,
+    field: &str,
+    text: &str,
+    escapes: bool,
+) -> bool {
+    let mut spans: Vec<(usize, usize)> = citations
+        .into_iter()
+        .filter(|citation| citation.kind == kind && citation.id == id && citation.field == field)
+        .map(|citation| (citation.from, citation.to))
+        .collect();
+    spans.sort_unstable();
+    let gap = |from: usize, to: usize| {
+        from == to
+            || escapes && text.get(from..to).is_some_and(|gap| gap.chars().all(escaped))
+    };
+    let mut at = 0;
+    for (from, to) in spans {
+        if from < at || !gap(at, from) {
+            return false;
+        }
+        at = to;
+    }
+    gap(at, text.len())
 }
 
 #[cfg(test)]
@@ -482,6 +581,7 @@ mod tests {
             &OperatorTask::new(task),
             1,
         )
+        .map(|_| ())
     }
 
     fn harness(bytes: usize) -> serde_json::Value {
@@ -623,6 +723,7 @@ mod tests {
                 &OperatorTask::new(b"Fix it."),
                 1,
             )
+            .map(|_| ())
         };
         check_delta(json!([[harness(task), {"author":"operator","bytes":7,"offset":0}, harness(second.len() - task - 7)]])).unwrap();
         // The operator run held to the bytes where the added message really is.
@@ -630,5 +731,47 @@ mod tests {
         assert!(error.to_string().contains("outside a string value"), "{error}");
         let error = check_delta(json!([])).unwrap_err();
         assert!(error.to_string().contains("one table to every message"), "{error}");
+    }
+
+    /// A copy in full is every byte of the field once, in order. Inside a
+    /// call's arguments -- JSON text the request carries in a string -- the
+    /// characters JSON writes as escapes are the serialization's, and only
+    /// they may be left out; anywhere else, nothing may.
+    #[test]
+    fn a_copy_in_full_leaves_out_only_the_escapes_of_json_text() {
+        let text = "a\nb\"c\u{301}";
+        let field = "/calls/0/args/content";
+        let cite = |spans: &[(usize, usize)]| -> Vec<Citation> {
+            spans
+                .iter()
+                .map(|&(from, to)| Citation {
+                    stored: 0,
+                    string: 0,
+                    place: from,
+                    kind: "generation".into(),
+                    id: "g".into(),
+                    field: field.into(),
+                    from,
+                    to,
+                })
+                .collect()
+        };
+        let copies = |spans: &[(usize, usize)], escapes: bool| {
+            copies_in_full(&cite(spans), "generation", "g", field, text, escapes)
+        };
+        let end = text.len();
+        assert!(copies(&[(0, end)], false));
+        assert!(copies(&[(0, 1), (2, 3), (4, end)], true));
+        // The same gaps where nothing is JSON text, or gaps of other text.
+        assert!(!copies(&[(0, 1), (2, 3), (4, end)], false));
+        assert!(!copies(&[(0, 1), (4, end)], true));
+        // A character left out at the end -- the combining mark a
+        // normalization folds -- and a byte cited twice.
+        assert!(!copies(&[(0, 5)], true));
+        assert!(!copies(&[(0, 1), (0, 1), (2, 3), (4, end)], true));
+        // Runs of another output or field copy nothing of this one.
+        assert!(!copies_in_full(&cite(&[(0, end)]), "generation", "h", field, text, true));
+        assert!(!copies_in_full(&cite(&[(0, end)]), "generation", "g", "/text", text, false));
+        assert!(copies_in_full(&[], "generation", "g", field, "", false));
     }
 }

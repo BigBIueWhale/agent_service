@@ -258741,7 +258741,7 @@ new file mode 100644
 +  compactionRequestDirective,
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  STATE_SNAPSHOT_SECTIONS,
-+  stateSnapshotRawText,
++  stateSnapshotText,
 +} from '../services/state-snapshot.js';
 +import { drawRefusalNotice } from '../services/chatCompressionService.js';
 +import type {
@@ -258771,7 +258771,7 @@ new file mode 100644
 +  { id: 'snapshot-call', name: STATE_SNAPSHOT_FUNCTION_NAME, args: sections },
 +];
 +/** The block the draw's snapshot renders to as the model wrote it. */
-+const snapshotBlock = stateSnapshotRawText(sections as never);
++const snapshotBlock = stateSnapshotText(sections as never);
 +/** What the tokenizer counted that block at, in this fixture. */
 +const snapshotTokens = 37;
 +const completion = {
@@ -267820,7 +267820,7 @@ new file mode 100644
 +import { getFunctionCalls } from '../utils/generateContentResponseUtilities.js';
 +import {
 +  compactionRequestDirective,
-+  declaredSnapshotRawText,
++  declaredSnapshotText,
 +} from '../services/state-snapshot.js';
 +import { REFUSED_ANSWER } from './generation-refusal.js';
 +import { CompressionStatus, compactionDrawKind } from './compression-status.js';
@@ -268834,7 +268834,7 @@ new file mode 100644
 +    // none cites nothing. Only a draw its compaction ended on, for a cause
 +    // outside its answer -- the count itself failing among them -- may have
 +    // declared one and cite none.
-+    const rendering = declaredSnapshotRawText(
++    const rendering = declaredSnapshotText(
 +      functionCalls as Array<import('@google/genai').FunctionCall>,
 +    );
 +    if (
@@ -305934,7 +305934,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 -   * splitter). (R5.2)
 +   * The tokens the snapshot the draw declared renders to, counted by the
 +   * served tokenizer on its block as the model wrote it
-+   * (`declaredSnapshotRawText`), or null when the draw declared none whose
++   * (`declaredSnapshotText`), or null when the draw declared none whose
 +   * every section is a string, or its count failed and ended the compaction;
 +   * whether it was accepted is not this measure's.
     */
@@ -305983,7 +305983,7 @@ diff --git a/packages/core/src/core/turn.ts b/packages/core/src/core/turn.ts
 +  /**
 +   * The tokens the snapshot the draw declared renders to, counted by the
 +   * served tokenizer on its block as the model wrote it
-+   * (`declaredSnapshotRawText`), or null when the draw declared none whose
++   * (`declaredSnapshotText`), or null when the draw declared none whose
 +   * every section is a string, or its count failed and ended the compaction;
 +   * whether it was accepted is not this measure's.
 +   */
@@ -319939,7 +319939,7 @@ new file mode 100644
 diff --git a/packages/core/src/services/chatCompressionService.test.ts b/packages/core/src/services/chatCompressionService.test.ts
 --- a/packages/core/src/services/chatCompressionService.test.ts
 +++ b/packages/core/src/services/chatCompressionService.test.ts
-@@ -1,4405 +1,2290 @@
+@@ -1,4405 +1,2287 @@
 +import * as loggers from '../telemetry/loggers.js';
 +import { GenerationTextFailure } from '../core/baseLlmClient.js';
  /**
@@ -322371,10 +322371,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 -      consecutiveFailures: 0,
 -      originalTokenCount: 180_000,
 -    });
--
--    expect(generateText).toHaveBeenCalledTimes(1);
--    expect(coldSpy).not.toHaveBeenCalled();
--  });
 +import {
 +  AuthType,
 +  type ContentGenerator,
@@ -322403,7 +322399,6 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +  refusedTurnNoticeTokens,
 +} from '../core/generation-refusal.js';
 +import {
-+  stateSnapshotRawText,
 +  stateSnapshotText,
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  stateSnapshotTool,
@@ -322436,18 +322431,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 + */
 +const TURN_NOTICES_TOKENS = refusedTurnNoticeTokens(PARTITION);
  
--  it.each([
--    'https://api.openai.com/v1',
--    'https://api.deepseek.com/v1',
--    'https://proxy.example/v1',
--  ])(
--    'uses cache sharing for OpenAI-compatible endpoint %s',
--    async (baseUrl) => {
--      const { chat, config, generateText } = makeFixture({
--        authType: AuthType.USE_OPENAI,
--        baseUrl,
--      });
--      const coldSpy = vi.spyOn(sideQueryModule, 'runSideQuery');
+-    expect(generateText).toHaveBeenCalledTimes(1);
+-    expect(coldSpy).not.toHaveBeenCalled();
+-  });
 +/**
 + * A count as the vLLM tokenizer path returns it: the served totals and the
 + * completed physical tokenizer operation the utility journal recorded for it
@@ -322493,15 +322479,25 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    args: snapshotSections(body),
 +  };
 +}
-+
-+/** The block with all_user_messages empty, as the history carries it. */
+ 
+-  it.each([
+-    'https://api.openai.com/v1',
+-    'https://api.deepseek.com/v1',
+-    'https://proxy.example/v1',
+-  ])(
+-    'uses cache sharing for OpenAI-compatible endpoint %s',
+-    async (baseUrl) => {
+-      const { chat, config, generateText } = makeFixture({
+-        authType: AuthType.USE_OPENAI,
+-        baseUrl,
+-      });
+-      const coldSpy = vi.spyOn(sideQueryModule, 'runSideQuery');
++/**
++ * The block with all_user_messages empty, each section as the model wrote
++ * it: what a snapshot is counted as, and what the history carries.
++ */
 +function snapshot(body = 'complete state'): string {
 +  return stateSnapshotText(snapshotSections(body));
-+}
-+
-+/** The same block as the model wrote it: what a snapshot is counted as. */
-+function rawSnapshot(body = 'complete state'): string {
-+  return stateSnapshotRawText(snapshotSections(body));
 +}
  
 -      await new ChatCompressionService().compress(chat, {
@@ -324137,9 +324133,9 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    // The snapshot is counted in the same scope, as the block the model
 +    // wrote, and the accepted draw cites that count.
 +    expect(textScopes).toEqual([child.kvScope]);
-+    expect(countText.mock.calls[0][0].text).toBe(rawSnapshot());
++    expect(countText.mock.calls[0][0].text).toBe(snapshot());
 +    expect(result.info.output).toMatchObject({
-+      snapshotTokens: fourBytesPerToken(rawSnapshot()),
++      snapshotTokens: fourBytesPerToken(snapshot()),
 +      snapshotCountOperationId: 'owned-snapshot-count',
 +    });
 +    expect(stream.mock.calls[0][0].contents).toEqual(
@@ -324879,7 +324875,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        operationId: refused.operationId!,
 +        functionCalls: refused.functionCalls,
 +        newTokenCount: null,
-+        snapshotTokens: fourBytesPerToken(rawSnapshot(long)),
++        snapshotTokens: fourBytesPerToken(snapshot(long)),
 +        snapshotCountOperationId: 'snapshot-count-1',
 +        incompleteToolCalls: [],
 +        finishReason: FinishReason.STOP,
@@ -324953,7 +324949,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +        ),
 +      {
 +        kind: 'over_bound',
-+        tokens: fourBytesPerToken(rawSnapshot('x'.repeat(PAST_SNAPSHOT_BOUND))),
++        tokens: fourBytesPerToken(snapshot('x'.repeat(PAST_SNAPSHOT_BOUND))),
 +        maxTokens: PARTITION.snapshotTokens,
 +      },
 +    ],
@@ -325086,7 +325082,7 @@ diff --git a/packages/core/src/services/chatCompressionService.test.ts b/package
 +    expect(sent).not.toContain(long);
 +    expect(sent).not.toContain('the refused reasoning');
 +    expect(sent).toContain(
-+      `renders to ${fourBytesPerToken(rawSnapshot(long))} tokens, past the ${PARTITION.snapshotTokens}-token limit`,
++      `renders to ${fourBytesPerToken(snapshot(long))} tokens, past the ${PARTITION.snapshotTokens}-token limit`,
      );
 -    expect(
 -      inlineDataParts.map(
@@ -343696,7 +343692,7 @@ diff --git a/packages/core/src/services/post-compaction-request-authorship.test.
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/services/post-compaction-request-authorship.test.ts
-@@ -0,0 +1,212 @@
+@@ -0,0 +1,211 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen
@@ -343859,14 +343855,17 @@ new file mode 100644
 +    expect(runs.filter((run) => run.author === 'operator')).toEqual([
 +      { author: 'operator', text: task, offset: 0 },
 +    ]);
-+    // Each section the draw wrote, citing its argument; the character NFC
-+    // composed is the harness's, and the copy resumes after it.
++    // Each section the draw wrote, one run citing its argument, carried as
++    // the draw wrote it: the section NFC would change keeps its decomposed
++    // character, and every character of it is the model's.
 +    const drawRuns = runs.filter(
 +      (run) => run.author === 'model' && run.source.kind === 'compaction_draw',
 +    );
++    const changed = snapshot[STATE_SNAPSHOT_SECTIONS[0]];
++    expect(changed).not.toBe(changed.normalize('NFC'));
 +    expect(drawRuns[0]).toEqual({
 +      author: 'model',
-+      text: 'Fix the test in caf',
++      text: changed,
 +      source: {
 +        kind: 'compaction_draw',
 +        id: 'draw-op-1',
@@ -343874,13 +343873,9 @@ new file mode 100644
 +        offset: 0,
 +      },
 +    });
-+    expect(drawRuns[1]).toMatchObject({
-+      text: '.py.',
-+      source: { offset: Buffer.byteLength('Fix the test in café', 'utf8') },
-+    });
 +    expect(
 +      drawRuns
-+        .slice(2)
++        .slice(1)
 +        .map((run) => (run.author === 'model' ? run.source.field : '')),
 +    ).toEqual(
 +      STATE_SNAPSHOT_SECTIONS.slice(1).map(
@@ -343912,7 +343907,7 @@ new file mode 100644
 diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/packages/core/src/services/postCompactAttachments.test.ts
 --- a/packages/core/src/services/postCompactAttachments.test.ts
 +++ b/packages/core/src/services/postCompactAttachments.test.ts
-@@ -1,1235 +1,398 @@
+@@ -1,1235 +1,401 @@
 -import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 -import type { Content } from '@google/genai';
 -import { extractRecentFilePaths } from './postCompactAttachments.js';
@@ -344918,18 +344913,21 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
 -      { role: 'user', parts: [{ text: 'use the tool' }] },
 +  it('carries the model turn verbatim directly after the snapshot when nothing is attached', () => {
 +    // The turn itself answers the snapshot. Every part is model output, and
-+    // runtime context must not prefix it with words the model never produced.
++    // runtime context must not prefix it with words the model never produced,
++    // nor trim or normalize the ones it did: every later request carries the
++    // turn as the model wrote it, and the certifier refuses one that does not.
 +    const turn: Content[] = [
        {
          role: 'model',
          parts: [
-+          { text: 'next page', thought: true },
++          { text: '  next page\n', thought: true },
++          { text: ' then cafe\u0301 \n' },
            {
              functionCall: {
 +              id: 'read-2',
                name: 'read_file',
 -              args: { file_path: '/some/file.ts' },
-+              args: { file_path: '/some/file.ts', offset: 600 },
++              args: { file_path: ' /some/file.ts\n', offset: 600 },
              },
            },
          ],
@@ -345444,7 +345442,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        .flatMap((c) => c.parts ?? [])
        .map((p) => (p as { text?: string }).text ?? '')
        .join('\n');
-@@ -1246,13 +409,16 @@
+@@ -1246,13 +412,16 @@
    it('omits the plan-mode reminder when planModeActive is false or unset', async () => {
      const history: Content[] = [
        { role: 'user', parts: [{ text: 'u' }] },
@@ -345462,7 +345460,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
          .join('\n');
        expect(flat).not.toContain('<plan-mode-active>');
      }
-@@ -1262,13 +428,14 @@
+@@ -1262,13 +431,14 @@
  describe('composePostCompactHistory — subagent snapshot', () => {
    it('renders a <background-tasks> block listing running and paused tasks', async () => {
      const history: Content[] = [
@@ -345478,7 +345476,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
            description: 'Run the bookmark-app E2E',
            status: 'running',
            startTime: 1000,
-@@ -1296,16 +463,19 @@
+@@ -1296,16 +466,19 @@
  
    it('omits the snapshot block when runningSubagents is empty or undefined', async () => {
      const history: Content[] = [
@@ -345500,7 +345498,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
          .map((p) => (p as { text?: string }).text ?? '')
          .join('\n');
        expect(flat).not.toContain('<background-tasks>');
-@@ -1314,13 +484,14 @@
+@@ -1314,13 +487,14 @@
  
    it('truncates very long descriptions to keep the snapshot bounded', async () => {
      const history: Content[] = [
@@ -345516,7 +345514,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
            description: 'x'.repeat(1000),
            status: 'running',
            startTime: 1,
-@@ -1337,13 +508,14 @@
+@@ -1337,13 +511,14 @@
  
    it('flattens newlines/tabs in descriptions so each task stays on one bullet line', async () => {
      const history: Content[] = [
@@ -345532,7 +345530,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
            description: 'first line\nsecond line\r\nthird\twith\ttabs',
            status: 'running',
            startTime: 1,
-@@ -1374,13 +546,14 @@
+@@ -1374,13 +549,14 @@
  
    it('escapes XML-sensitive characters in descriptions to prevent injection', async () => {
      const history: Content[] = [
@@ -345548,7 +345546,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
            description: '</background-tasks><evil>injected</evil>',
            status: 'running',
            startTime: 1,
-@@ -1405,13 +578,14 @@
+@@ -1405,13 +581,14 @@
      // there must be escaped too — escaping only the description would still
      // let the id close the wrapper or forge markup.
      const history: Content[] = [
@@ -345564,7 +345562,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
            description: 'safe description',
            status: 'running',
            startTime: 1,
-@@ -1437,13 +611,14 @@
+@@ -1437,13 +614,14 @@
      const subs = Array.from({ length: 35 }, (_, i) => ({
        id: `agent-${i}`,
        description: `task ${i}`,
@@ -345580,7 +345578,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        .flatMap((c) => c.parts ?? [])
        .map((p) => (p as { text?: string }).text ?? '')
        .join('\n');
-@@ -1463,13 +638,14 @@
+@@ -1463,13 +641,14 @@
      const subs = Array.from({ length: 31 }, (_, i) => ({
        id: `agent-${i}`,
        description: `t`,
@@ -345596,7 +345594,7 @@ diff --git a/packages/core/src/services/postCompactAttachments.test.ts b/package
        .flatMap((c) => c.parts ?? [])
        .map((p) => (p as { text?: string }).text ?? '')
        .join('\n');
-@@ -1478,13 +654,14 @@
+@@ -1478,13 +657,14 @@
  
    it('sorts subagents by startTime ascending', async () => {
      const history: Content[] = [
@@ -349392,7 +349390,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +  compactionRequestDirective,
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  STATE_SNAPSHOT_SECTIONS,
-+  stateSnapshotRawText,
++  stateSnapshotText,
 +  type StateSnapshot,
 +} from './state-snapshot.js';
 +import { retainInput } from '../core/authored-instructions.js';
@@ -350010,7 +350008,7 @@ diff --git a/packages/core/src/services/session-transcript-reader.test.ts b/pack
 +      },
 +    ]);
 +    // The block the draw declared, counted as the model wrote it.
-+    const snapshotBlock = stateSnapshotRawText(snapshot);
++    const snapshotBlock = stateSnapshotText(snapshot);
 +    const snapshotTokens = Math.ceil(Buffer.byteLength(snapshotBlock) / 4);
 +    const snapshotCountOperationId = countText(snapshotBlock, snapshotTokens);
 +    tokenMeasurements.push(measure('candidate', options.newTokenCount));
@@ -366154,7 +366152,7 @@ diff --git a/packages/core/src/services/state-snapshot.test.ts b/packages/core/s
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.test.ts
-@@ -0,0 +1,477 @@
+@@ -0,0 +1,508 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -366166,7 +366164,7 @@ new file mode 100644
 +import { convertGeminiToolsToOpenAI } from '../core/openaiContentGenerator/converter.js';
 +import {
 +  acceptStateSnapshot,
-+  declaredSnapshotRawText,
++  declaredSnapshotText,
 +  renderAuthoredStateSnapshot,
 +  renderStateSnapshot,
 +  stateSnapshotSectionText,
@@ -366175,7 +366173,6 @@ new file mode 100644
 +  STATE_SNAPSHOT_FUNCTION_NAME,
 +  STATE_SNAPSHOT_PARAMETERS,
 +  STATE_SNAPSHOT_SECTIONS,
-+  stateSnapshotRawText,
 +  stateSnapshotText,
 +  stateSnapshotTool,
 +  type SnapshotTokenCounter,
@@ -366272,7 +366269,7 @@ new file mode 100644
 +    );
 +    expect(accepted.snapshot).toEqual(sections());
 +    expect(accepted.count).toEqual({
-+      tokens: fourBytesPerToken(stateSnapshotRawText(sections())),
++      tokens: fourBytesPerToken(stateSnapshotText(sections())),
 +      operationId: 'count-1',
 +    });
 +  });
@@ -366285,18 +366282,18 @@ new file mode 100644
 +    expect(accepted.snapshot).toBeUndefined();
 +    expect(accepted.refused).toBe('over_bound');
 +    expect(accepted.refusal).toBe(
-+      `snapshot renders to ${fourBytesPerToken(stateSnapshotRawText(oversized))} tokens, past the ${SNAPSHOT_TOKENS} a snapshot may render to; write the same state more briefly`,
++      `snapshot renders to ${fourBytesPerToken(stateSnapshotText(oversized))} tokens, past the ${SNAPSHOT_TOKENS} a snapshot may render to; write the same state more briefly`,
 +    );
 +    // The draw declared a complete snapshot and wrote too much of it. It is
 +    // kept with the refusal, as it was counted, because it is what the draw
 +    // produced -- a refusal for length is not a draw with no summary.
 +    expect(accepted.refused === 'over_bound' && accepted.rendered).toBe(
-+      stateSnapshotRawText(oversized),
++      stateSnapshotText(oversized),
 +    );
 +    // The count the bound refused travels with the refusal, so the next draw
 +    // can be told it, and the record cite it, without counting again.
 +    expect(accepted.count?.tokens).toBe(
-+      fourBytesPerToken(stateSnapshotRawText(oversized)),
++      fourBytesPerToken(stateSnapshotText(oversized)),
 +    );
 +  });
 +
@@ -366304,43 +366301,38 @@ new file mode 100644
 +    // A bound in bytes refused every snapshot this long; counted, it is a
 +    // snapshot like any other.
 +    const long = sections('state '.repeat(2_000));
-+    const raw = stateSnapshotRawText(long);
-+    expect(Buffer.byteLength(raw, 'utf8')).toBeGreaterThan(SNAPSHOT_TOKENS);
-+    expect(fourBytesPerToken(raw)).toBeLessThanOrEqual(SNAPSHOT_TOKENS);
++    const block = stateSnapshotText(long);
++    expect(Buffer.byteLength(block, 'utf8')).toBeGreaterThan(SNAPSHOT_TOKENS);
++    expect(fourBytesPerToken(block)).toBeLessThanOrEqual(SNAPSHOT_TOKENS);
 +    expect((await accept([call(long)])).snapshot).toEqual(long);
 +  });
 +
 +  it('counts the block exactly as the model wrote it, and leaves normalization to the tokenizer', async () => {
 +    // The served tokenizer normalizes to NFC before it splits anything, so
-+    // the block is counted as written, the text both certifiers recompute
-+    // from the decoded call; the history carries its NFC form.
++    // the block is counted as written: the text both certifiers recompute
++    // from the decoded call, and the text the history carries.
 +    const drawn = sections('cafe\u0301 \u{1D1C0}');
 +    const counter = snapshotCounter();
 +    await acceptStateSnapshot([call(drawn)], SNAPSHOT_TOKENS, counter.count);
-+    expect(counter.shown).toEqual([stateSnapshotRawText(drawn)]);
++    expect(counter.shown).toEqual([stateSnapshotText(drawn)]);
 +    expect(counter.shown[0]).toContain('cafe\u0301 \u{1D1C0}');
-+    expect(stateSnapshotRawText(drawn).normalize('NFC')).toBe(
-+      stateSnapshotText(drawn),
-+    );
-+    expect(stateSnapshotText(drawn)).not.toContain('\u{1D1C0}');
-+    // Text that is already NFC renders the same either way.
-+    expect(stateSnapshotRawText(sections())).toBe(
-+      stateSnapshotText(sections()),
-+    );
++    const { opening, closing } = renderStateSnapshot(drawn);
++    expect(`${opening}${closing}`).toBe(counter.shown[0]);
++    expect(`${opening}${closing}`).not.toBe(counter.shown[0].normalize('NFC'));
 +  });
 +
 +  it('accepts a draw that counts exactly its bound, and refuses one token more', async () => {
 +    // The bound is inclusive, so the largest accepted snapshot is built here
 +    // rather than approached: one section grown until its block counts S.
 +    const base = sections('y');
-+    const baseBytes = Buffer.byteLength(stateSnapshotRawText(base), 'utf8');
++    const baseBytes = Buffer.byteLength(stateSnapshotText(base), 'utf8');
 +    const [first] = STATE_SNAPSHOT_SECTIONS;
 +    const grown = (extra: number) =>
 +      ({
 +        ...base,
 +        [first]: 'y'.repeat(4 * SNAPSHOT_TOKENS - baseBytes + 1 + extra),
 +      }) as StateSnapshot;
-+    expect(fourBytesPerToken(stateSnapshotRawText(grown(0)))).toBe(
++    expect(fourBytesPerToken(stateSnapshotText(grown(0)))).toBe(
 +      SNAPSHOT_TOKENS,
 +    );
 +    expect((await accept([call(grown(0))])).refusal).toBeUndefined();
@@ -366362,12 +366354,12 @@ new file mode 100644
 +    'renders and accepts a declaration whose every section holds %s',
 +    async (_case, body, bytes) => {
 +      const declared = [call(sections(body))];
-+      expect(declaredSnapshotRawText(declared)).toBe(
-+        stateSnapshotRawText(sections(body)),
++      expect(declaredSnapshotText(declared)).toBe(
++        stateSnapshotText(sections(body)),
 +      );
-+      expect(
-+        Buffer.byteLength(declaredSnapshotRawText(declared)!, 'utf8'),
-+      ).toBe(bytes);
++      expect(Buffer.byteLength(declaredSnapshotText(declared)!, 'utf8')).toBe(
++        bytes,
++      );
 +      expect((await accept(declared)).snapshot).toEqual(sections(body));
 +    },
 +  );
@@ -366386,9 +366378,9 @@ new file mode 100644
 +  });
 +
 +  it('renders nothing where no snapshot was declared, and counts nothing', async () => {
-+    expect(declaredSnapshotRawText([])).toBeNull();
-+    expect(declaredSnapshotRawText([call(sections(), 'other')])).toBeNull();
-+    expect(declaredSnapshotRawText([call({ current_work: 'x' })])).toBeNull();
++    expect(declaredSnapshotText([])).toBeNull();
++    expect(declaredSnapshotText([call(sections(), 'other')])).toBeNull();
++    expect(declaredSnapshotText([call({ current_work: 'x' })])).toBeNull();
 +    const counter = snapshotCounter();
 +    const refused = await acceptStateSnapshot(
 +      [call({ current_work: 'x' })],
@@ -366586,10 +366578,9 @@ new file mode 100644
 +        '</state_snapshot>',
 +      ].join('\n'),
 +    );
-+    // The text form is the block with all_user_messages empty; acceptance
-+    // counts the same frame around the sections as written.
++    // The text form is the block with all_user_messages empty, which
++    // acceptance counts.
 +    expect(stateSnapshotText(snapshot)).toBe(`${opening}${closing}`);
-+    expect(stateSnapshotRawText(snapshot)).toBe(`${opening}${closing}`);
 +  });
 +});
 +
@@ -366631,12 +366622,50 @@ new file mode 100644
 +        ),
 +      ).toBe(true);
 +  });
++
++  it("carries a section NFC would change as the model wrote it, every character of it the model's", () => {
++    // The history is the model's own words: a combining mark NFC would fold
++    // into its letter, and a character NFC would expand, stand as written,
++    // and the section's run is one copy of the whole argument. A normalized
++    // section would leave a character the model did not write, stated the
++    // harness's, which the certifier refuses as a section not carried in
++    // full.
++    const written = 'cafe\u0301 \u{1D1C0}\n';
++    const drawn = { ...snapshot, current_work: written } as StateSnapshot;
++    const authoredBlock = renderAuthoredStateSnapshot(drawn, (section) =>
++      stateSnapshotSectionText(drawn, draw, section),
++    );
++    expect(authoredBlock.closing.text).toContain(
++      `    <current_work>\n${written}\n    </current_work>`,
++    );
++    expect(`${authoredBlock.opening.text}${authoredBlock.closing.text}`).toBe(
++      stateSnapshotText(drawn),
++    );
++    expect(
++      authoredBlock.closing.authors.filter(
++        (run) =>
++          run.author === 'model' &&
++          run.source.field === '/calls/0/args/current_work',
++      ),
++    ).toEqual([
++      {
++        author: 'model',
++        length: written.length,
++        source: {
++          kind: 'compaction_draw',
++          id: 'draw-op',
++          field: '/calls/0/args/current_work',
++          offset: 0,
++        },
++      },
++    ]);
++  });
 +});
 diff --git a/packages/core/src/services/state-snapshot.ts b/packages/core/src/services/state-snapshot.ts
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/services/state-snapshot.ts
-@@ -0,0 +1,484 @@
+@@ -0,0 +1,463 @@
 +/**
 + * @license
 + * Copyright 2026 Qwen Team
@@ -366645,7 +366674,6 @@ new file mode 100644
 +
 +import type { FunctionCall, Schema, Tool } from '@google/genai';
 +import { SchemaValidator } from '../utils/schemaValidator.js';
-+import { normalizeAuthored } from '../core/tokenLimits.js';
 +import {
 +  authored,
 +  declaredBy,
@@ -366924,18 +366952,18 @@ new file mode 100644
 +}
 +
 +/**
-+ * The block the snapshot a draw declared renders to, as the model wrote it
-+ * (`stateSnapshotRawText`), or null when the draw declared none. This is the
-+ * text a draw's snapshot is counted as, and both certifiers recompute it from
-+ * the decoded draw and hold the count the draw's record cites to it, byte
-+ * for byte: a rendering of the declaration's shape alone, with no
-+ * normalization any reader could implement differently.
++ * The block the snapshot a draw declared renders to (`stateSnapshotText`),
++ * or null when the draw declared none. This is the text a draw's snapshot is
++ * counted as, and both certifiers recompute it from the decoded draw and
++ * hold the count the draw's record cites to it, byte for byte: a rendering
++ * of the declaration's shape alone, with no normalization any reader could
++ * implement differently.
 + */
-+export function declaredSnapshotRawText(
++export function declaredSnapshotText(
 +  calls: readonly FunctionCall[],
 +): string | null {
 +  const declared = declaredStateSnapshot(calls);
-+  return declared.snapshot ? stateSnapshotRawText(declared.snapshot) : null;
++  return declared.snapshot ? stateSnapshotText(declared.snapshot) : null;
 +}
 +
 +/**
@@ -366943,16 +366971,14 @@ new file mode 100644
 + * so a response carrying anything else is a response to a different request.
 + *
 + * A complete snapshot is held to `maxTokens`, `S`, counted by the served
-+ * tokenizer as the text alone, on the block exactly as the model wrote it:
-+ * the tags and layout the history frames it in, with `all_user_messages`
-+ * left empty, since the inputs it will hold are bounded where they were
-+ * submitted. The tokenizer normalizes to NFC itself before it splits
-+ * anything, so the block needs no normalizing here to be counted as it will
-+ * be read. The history carries the block's NFC form, which counts the same,
-+ * except where this runtime's Unicode composes a pair the tokenizer's older
-+ * one leaves apart, which only makes the text shorter; the fit's margin holds
-+ * that. A draw that does not fit is refused and redrawn: the generation keeps
-+ * its whole room, and nothing is cut mid-sentence to make it fit.
++ * tokenizer as the text alone, on the block the history carries: each
++ * section exactly as the model wrote it, in the tags and layout the history
++ * frames it in, with `all_user_messages` left empty, since the inputs it
++ * will hold are bounded where they were submitted. The tokenizer normalizes
++ * to NFC itself before it splits anything, so the block is counted as it
++ * will be read without being normalized here. A draw that does not fit is
++ * refused and redrawn: the generation keeps its whole room, and nothing is
++ * cut mid-sentence to make it fit.
 + */
 +export async function acceptStateSnapshot(
 +  calls: readonly FunctionCall[],
@@ -366968,7 +366994,7 @@ new file mode 100644
 +    };
 +  }
 +  const { snapshot } = declared;
-+  const rendered = stateSnapshotRawText(snapshot);
++  const rendered = stateSnapshotText(snapshot);
 +  const counted = await count(rendered);
 +  if (counted.tokens > maxTokens) {
 +    return {
@@ -366989,12 +367015,15 @@ new file mode 100644
 + * indented four spaces, a blank line between elements.
 + *
 + * Each section's text stands between its element's tags exactly as the model
-+ * wrote it, in the NFC form the served tokenizer reads, which is the form
-+ * acceptance measured and the form the model's tokens already have. Nothing
-+ * is escaped, indented, trimmed or rejoined: the frame is fixed text around
-+ * each body, so a body re-enters as written whatever it holds -- whitespace
-+ * at either end, blank lines, a tag of its own -- and nothing reads the block
-+ * back to find where a body ends.
++ * wrote it, byte for byte: the text acceptance counted, which the served
++ * tokenizer normalizes to NFC itself, as it does the model's own output when
++ * a turn re-enters. Nothing is normalized, escaped, indented, trimmed or
++ * rejoined: the frame is fixed text around each body, so a body re-enters as
++ * written whatever it holds -- whitespace at either end, blank lines, a tag
++ * of its own, a character NFC would compose -- and nothing reads the block
++ * back to find where a body ends. Every later request carries each section
++ * as the model's, a copy in full, between its own tags, and the certifier
++ * refuses one that does not.
 + *
 + * The block is returned in two halves around the content of
 + * `all_user_messages`, which the runtime fills with the retained original
@@ -367051,9 +367080,8 @@ new file mode 100644
 +
 +/**
 + * `renderStateSnapshot` with the authors of every run: the tags, their
-+ * indentation and the line breaks around them are the harness's, each
-+ * section is the text `sectionText` states for it, and a character
-+ * normalization changed is the harness's.
++ * indentation and the line breaks around them are the harness's, and each
++ * section is the text `sectionText` states for it.
 + */
 +export function renderAuthoredStateSnapshot(
 +  snapshot: StateSnapshot,
@@ -367077,49 +367105,29 @@ new file mode 100644
 +  const before = elements(STATE_SNAPSHOT_SECTIONS.slice(0, at));
 +  const after = elements(STATE_SNAPSHOT_SECTIONS.slice(at));
 +  return {
-+    opening: normalizeAuthored(
-+      authored(
-+        harnessText('<state_snapshot>\n'),
-+        ...before,
-+        harnessText(`\n\n    <${RETAINED_INPUTS_ELEMENT}>\n`),
-+      ),
++    opening: authored(
++      harnessText('<state_snapshot>\n'),
++      ...before,
++      harnessText(`\n\n    <${RETAINED_INPUTS_ELEMENT}>\n`),
 +    ),
-+    closing: normalizeAuthored(
-+      authored(
-+        harnessText(`\n    </${RETAINED_INPUTS_ELEMENT}>\n\n`),
-+        ...after,
-+        harnessText('\n</state_snapshot>'),
-+      ),
++    closing: authored(
++      harnessText(`\n    </${RETAINED_INPUTS_ELEMENT}>\n\n`),
++      ...after,
++      harnessText('\n</state_snapshot>'),
 +    ),
 +  };
 +}
 +
 +/**
-+ * The block with `all_user_messages` left empty, in the NFC form the history
-+ * carries it in. Evidence retains the provider's output and the committed
-+ * composition as separate facts; this rendering is neither of them.
++ * The block with `all_user_messages` left empty: the history's frame around
++ * each section exactly as the model wrote it. This is what acceptance counts
++ * against `S`, the text the history carries around the retained inputs, and
++ * what both certifiers recompute from a draw's decoded call and compare,
++ * byte for byte, with the text its count was made of.
 + */
 +export function stateSnapshotText(snapshot: StateSnapshot): string {
 +  const { opening, closing } = renderStateSnapshot(snapshot);
 +  return `${opening}${closing}`;
-+}
-+
-+/**
-+ * `stateSnapshotText` before normalization: the same frame around each
-+ * section exactly as the model wrote it. This is what acceptance counts
-+ * against `S`, and what both certifiers recompute from a draw's decoded call
-+ * and compare, byte for byte, with the text its count was made of.
-+ */
-+export function stateSnapshotRawText(snapshot: StateSnapshot): string {
-+  const element = (section: StateSnapshotSection): string =>
-+    `    <${section}>\n${snapshot[section]}\n    </${section}>`;
-+  const at = STATE_SNAPSHOT_ELEMENTS.indexOf(RETAINED_INPUTS_ELEMENT);
-+  const before = STATE_SNAPSHOT_SECTIONS.slice(0, at).map(element).join('\n\n');
-+  const after = STATE_SNAPSHOT_SECTIONS.slice(at).map(element).join('\n\n');
-+  return (
-+    `<state_snapshot>\n${before}\n\n    <${RETAINED_INPUTS_ELEMENT}>\n` +
-+    `\n    </${RETAINED_INPUTS_ELEMENT}>\n\n${after}\n</state_snapshot>`
-+  );
 +}
 diff --git a/packages/core/src/services/tokenEstimation.test.ts b/packages/core/src/services/tokenEstimation.test.ts
 --- a/packages/core/src/services/tokenEstimation.test.ts

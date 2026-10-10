@@ -13,10 +13,11 @@ refused with their bytes retained.
 
 The service and `event_certifier` share one production Rust captured-stream
 owner. It owns initialization, identity, scope and tool ancestry, partial
-ordering, served accounting, terminal interpretation and the authors of every
-request byte, which it holds to the session's prompt record: the service reads
-it from `control/prompt.txt`, and `event_certifier` takes it as its second
-argument. The descriptor reader
+ordering, served accounting, terminal interpretation, the authors of every
+request byte, which it holds to the session's prompt record -- the service
+reads it from `control/prompt.txt`, and `event_certifier` takes it as its
+second argument -- and the turns and snapshot every request owes its
+conversation, as the model wrote them. The descriptor reader
 supplies exact LF-framed bytes and independently established capture facts.
 Native parsing retains exact JSON numbers and refuses duplicate keys and
 invalid Unicode before host conversion. After the native pass accepts a

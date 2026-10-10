@@ -12,10 +12,27 @@ mod evidence;
 mod framing;
 
 
-/// Every byte of a fixture body is the harness's: these streams test how a
-/// recording is certified, not who wrote what the model read.
+/// The runs of a text the harness wrote: the fixture's frames, inputs and
+/// envelopes. The session's task is the operator's (`chat_with`), and what
+/// the model wrote -- a settled turn the next request carries -- is the
+/// model's, citing its generation (`Invocation::turn`).
 pub(crate) fn harness_authors(text: &str) -> Value {
     json!([{"author":"harness","bytes":text.len()}])
+}
+
+/// Runs laid end to end over texts that follow each other, as one table:
+/// adjacent harness runs are one run, as a table states them.
+fn joined_runs(tables: &[Value]) -> Value {
+    let mut joined: Vec<Value> = Vec::new();
+    for run in tables.iter().flat_map(|table| table.as_array().unwrap().iter().cloned()) {
+        match joined.last_mut() {
+            Some(last) if run["author"] == "harness" && last["author"] == "harness" => {
+                last["bytes"] = json!(last["bytes"].as_u64().unwrap() + run["bytes"].as_u64().unwrap());
+            }
+            _ => joined.push(run),
+        }
+    }
+    Value::Array(joined)
 }
 
 /// The task a fixture session was started with: the shared wire stream's.
@@ -68,8 +85,14 @@ struct Invocation {
     request_id: String,
     segment_id: String,
     messages: Vec<String>,
-    /// The request message the model's settled turn becomes in the next request.
+    /// The runs of each of `messages`.
+    authors: Vec<Value>,
+    /// The request message the model's settled turn becomes in the next
+    /// request, and its runs: the turn as the model wrote it -- its
+    /// reasoning, its text and its call -- each string of it the model's,
+    /// citing the generation that wrote it.
     turn: String,
+    turn_authors: Value,
 }
 
 /// Explicit physical evidence. Mutations operate on finished rows; no helper
@@ -330,16 +353,27 @@ impl Trace {
             .remove(&parent.map(str::to_string))
             .unwrap_or_default();
         let previous = self.chats.get(scope).cloned();
-        let (base, retained) = match &previous {
+        let (base, retained, base_authors) = match &previous {
             Some(previous) => {
                 let mut messages = previous.messages.clone();
                 messages.push(previous.turn.clone());
-                (messages, previous.messages.len())
+                let mut authors = previous.authors.clone();
+                authors.push(previous.turn_authors.clone());
+                (messages, previous.messages.len(), authors)
             }
-            None => (vec![first.to_string()], 0),
+            None => {
+                // The session's task, as the operator submitted it.
+                let task = first.find("work").unwrap();
+                let authors = json!([{"author":"harness","bytes":task},
+                    {"author":"operator","bytes":4,"offset":0},
+                    {"author":"harness","bytes":first.len() - task - 4}]);
+                (vec![first.to_string()], 0, vec![authors])
+            }
         };
         let mut messages = base.clone();
         messages.extend(carried.iter().cloned());
+        let mut authors = base_authors;
+        authors.extend(carried.iter().map(|message| harness_authors(message)));
         let body_json = format!("{prefix}{}{suffix}", messages.join(","));
         let (body, segment_id) = if delta {
             let previous = previous.as_ref().expect("a delta continues its scope's chat");
@@ -354,14 +388,22 @@ impl Trace {
                 json!({"kind":"delta","base_request_id":previous.request_id,
                     "retain_messages":retained,"prefix":&prefix,"suffix":&suffix,
                     "authors":{"prefix":harness_authors(&prefix),
-                        "added_messages":added.iter().map(|message| harness_authors(message)).collect::<Vec<_>>(),
+                        "added_messages":&authors[retained..],
                         "suffix":harness_authors(&suffix)},
                     "added_messages":added}),
                 previous.segment_id.clone(),
             )
         } else {
+            let mut tables = vec![harness_authors(&prefix)];
+            for (index, table) in authors.iter().enumerate() {
+                if index > 0 {
+                    tables.push(harness_authors(","));
+                }
+                tables.push(table.clone());
+            }
+            tables.push(harness_authors(&suffix));
             (
-                json!({"kind":"full","json":body_json,"authors":harness_authors(&body_json)}),
+                json!({"kind":"full","json":body_json,"authors":joined_runs(&tables)}),
                 format!("segment-{sequence}"),
             )
         };
@@ -531,19 +573,47 @@ impl Trace {
         self.physical += 1;
         self.requests.push((scope.into(), usage));
         self.last_request.insert(scope.into(), request_id.clone());
+        // The captured turn as the model wrote it: its reasoning, its text
+        // and its call, and the runs that state each string the model's.
+        let (text, reasoning, name) = ("before  after", "  **raw thought**\n", "audit_probe");
+        let mut turn = json!({"role":"assistant","content":text,"reasoning_content":reasoning});
+        if let Some(call_id) = call {
+            turn["tool_calls"] = json!([{"id":call_id,"type":"function",
+                "function":{"name":name,"arguments":"{\"value\":1}"}}]);
+        }
+        let turn = turn.to_string();
+        let mut tables = Vec::new();
+        let mut at = 0;
+        let mut strings = vec![(json!(text).to_string(), "/text"), (json!(reasoning).to_string(), "/reasoning")];
+        if call.is_some() {
+            strings.push((json!(name).to_string(), "/calls/0/name"));
+        }
+        // Each string's stored bytes between its quotes, in the order the
+        // turn's members are written.
+        let mut places: Vec<(usize, usize, &str)> = strings
+            .iter()
+            .map(|(stored, field)| {
+                let start = turn.find(&format!(":{stored}")).unwrap() + 2;
+                (start, stored.len() - 2, *field)
+            })
+            .collect();
+        places.sort_unstable();
+        for (start, bytes, field) in places {
+            tables.push(harness_authors(&turn[at..start]));
+            tables.push(json!([{"author":"model","bytes":bytes,
+                "source":{"kind":"generation","id":generation_id,"field":field,"offset":0}}]));
+            at = start + bytes;
+        }
+        tables.push(harness_authors(&turn[at..]));
         self.chats.insert(
             scope.into(),
             Invocation {
                 request_id,
                 segment_id,
                 messages,
-                turn: match call {
-                    Some(call_id) => json!({"role":"assistant","content":"before  after",
-                        "tool_calls":[{"id":call_id,"type":"function",
-                            "function":{"name":"audit_probe","arguments":"{\"value\":1}"}}]}),
-                    None => json!({"role":"assistant","content":"before  after"}),
-                }
-                .to_string(),
+                authors,
+                turn_authors: joined_runs(&tables),
+                turn,
             },
         );
     }
@@ -630,10 +700,12 @@ impl Trace {
     /// The physical requests of one compaction draw: earlier retries deliver
     /// nothing; the final request streams exactly the draw's SDK values, and
     /// the client delivers the decoded observation its content projects from.
-    /// A redraw's request is its draw's request with the refusal notice for
-    /// the draw before it after the directive, as the client builds it; a
-    /// request issued again after a transport fault is the request it
-    /// replaces, notice and all.
+    /// A draw's request is the prompt the scope's last chat request was
+    /// issued with, its runs as that request stated them, and the directive
+    /// after it. A redraw's request is its draw's request with the refusal
+    /// notice for the draw before it after the directive, as the client
+    /// builds it; a request issued again after a transport fault is the
+    /// request it replaces, notice and all.
     fn compaction_draw(
         &mut self,
         kv: &str,
@@ -647,22 +719,42 @@ impl Trace {
             let last = attempt == requests;
             let sequence = self.next_sequence();
             let id = format!("request-{sequence}");
-            let mut messages = vec![json!({"role":"user","content":[{"type":"text","text":format!(
+            let (mut messages, mut tables) = match self.chats.get(kv) {
+                Some(issued) => (issued.messages.clone(), issued.authors.clone()),
+                None => (Vec::new(), Vec::new()),
+            };
+            let mut directives = vec![json!({"role":"user","content":[{"type":"text","text":format!(
                 "your answer may generate at most {budget} tokens, reasoning included. If all draws are refused, this conversation is not compacted."
             )}]})];
             if redrawn {
-                messages.push(json!({"role":"user","content":[{"type":"text","text":
+                directives.push(json!({"role":"user","content":[{"type":"text","text":
                     "Your previous answer to this request was refused because its snapshot renders to 40000 tokens, past the 32768-token limit. Write the same state more briefly."}]}));
             }
-            let body = json!({"kv_scope":kv,"model":COMPACTION_MODEL,"stream":true,
-                "max_tokens":budget,"messages":messages})
+            for directive in directives {
+                let directive = directive.to_string();
+                tables.push(harness_authors(&directive));
+                messages.push(directive);
+            }
+            let envelope = json!({"kv_scope":kv,"model":COMPACTION_MODEL,"stream":true,
+                "max_tokens":budget,"messages":[]})
             .to_string();
+            let open = envelope.find("\"messages\":[").unwrap() + "\"messages\":[".len();
+            let (prefix, suffix) = envelope.split_at(open);
+            let body = format!("{prefix}{}{suffix}", messages.join(","));
+            let mut runs = vec![harness_authors(prefix)];
+            for (index, table) in tables.iter().enumerate() {
+                if index > 0 {
+                    runs.push(harness_authors(","));
+                }
+                runs.push(table.clone());
+            }
+            runs.push(harness_authors(suffix));
             self.push(json!({"type":"model_request","request":{
                 "journal_id":"fixture","sequence":sequence,"request_id":id,"kv_scope":kv,
                 "segment_id":format!("segment-{sequence}"),"prompt_id":"compaction",
                 "owner":{"kind":"utility","operation_id":operation,"purpose":"compaction"},
                 "decode_policy":decode_policy("stream",COMPACTION_MODEL),
-                "body":{"kind":"full","json":body,"authors":harness_authors(&body)},"body_bytes":body.len(),
+                "body":{"kind":"full","json":body,"authors":joined_runs(&runs)},"body_bytes":body.len(),
                 "body_sha256":hash(body.as_bytes())}}));
             self.last_request.insert(kv.into(), id.clone());
             self.response(
@@ -807,6 +899,47 @@ impl Trace {
         record["data"]["tokenMeasurements"] = json!(measurements);
         record["parent_tool_use_id"] = json!(parent);
         self.push(record);
+    }
+
+    /// The history the last committed compaction of `scope` left, as the
+    /// client composes it: the snapshot its accepted draw declared, each
+    /// section the model's, a copy of the draw's call, between tags that are
+    /// the harness's; and behind it the turn the compaction carried. The
+    /// scope's next chat request starts a new segment with it.
+    fn compacted(&mut self, scope: &str) {
+        let output = &self
+            .rows
+            .iter()
+            .rev()
+            .find(|row| row["subtype"] == "compaction")
+            .expect("a committed compaction")["data"]["output"];
+        let draw = output["operationId"].as_str().unwrap().to_string();
+        let args = output["functionCalls"][0]["args"].clone();
+        let block = snapshot_block(&args);
+        let message = json!({"role":"user","content":[{"type":"text","text":block}]}).to_string();
+        let stored = |text: &str| json!(text).to_string().len() - 2;
+        let start = message.find(&json!(block).to_string()).unwrap() + 1;
+        let mut tables = Vec::new();
+        let mut at = 0;
+        for (section, text) in args.as_object().unwrap() {
+            let text = text.as_str().unwrap();
+            let tag = format!("    <{section}>\n");
+            let decoded = block.find(&tag).unwrap() + tag.len();
+            let from = start + stored(&block[..decoded]);
+            tables.push((from, stored(text), section.clone()));
+        }
+        tables.sort_unstable();
+        let mut runs = Vec::new();
+        for (from, bytes, section) in tables.into_iter().filter(|(_, bytes, _)| *bytes > 0) {
+            runs.push(harness_authors(&message[at..from]));
+            runs.push(json!([{"author":"model","bytes":bytes,"source":{"kind":"compaction_draw",
+                "id":draw,"field":format!("/calls/0/args/{section}"),"offset":0}}]));
+            at = from + bytes;
+        }
+        runs.push(harness_authors(&message[at..]));
+        let invocation = self.chats.get_mut(scope).expect("a compaction of a conversation");
+        invocation.messages = vec![message];
+        invocation.authors = vec![joined_runs(&runs)];
     }
 
     /// A runtime answer. Its only producer is the root: a runtime operation
@@ -987,7 +1120,7 @@ fn owned_event_file(bytes: &[u8]) -> std::path::PathBuf {
 /// the pure runtime contract, without the physical response replay that the
 /// service image's pinned verifier adds afterwards.
 /// The block a draw's snapshot call renders to as the model wrote it: the
-/// client's `stateSnapshotRawText`, the text its count is made of.
+/// client's `stateSnapshotText`, the text its count is made of.
 fn snapshot_block(args: &Value) -> String {
     const ELEMENTS: [&str; 9] = [
         "primary_request_and_intent",

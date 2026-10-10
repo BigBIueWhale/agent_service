@@ -507,8 +507,10 @@ fn malformed_parent_identity_is_never_a_scope() {
 #[test]
 fn request_usage_is_partitioned_by_kv_owner_without_billing_presentation() {
     let mut trace = Trace::new();
-    trace.chat(None, "child"); // Captured report: 7 output, 2 thoughts.
+    // A request in the session's scope before its first turn: once a turn is
+    // accepted there, every request in that scope carries it.
     trace.utility("a", served(100, 99, 73, 0));
+    trace.chat(None, "child"); // Captured report: 7 output, 2 thoughts.
     trace.utility("child", served(900, 40, 33, 896));
     // An event of the child scope that is not a request bills nothing.
     trace.task_started(Some("child"));

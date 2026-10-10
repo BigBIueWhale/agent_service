@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `e64aaa3936bf2ceef803a34832b85b36234534e5a49820c9c688769161c9fb31`
+- Review-diff SHA-256: `cb03c7d079a60c656bfe9479a136410227ee14f0f998884c9d357bfcb412efea`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `d9eb59169b0143a5f680e96e1ba0352fcb3f6790c46c5b07523b175805cafe64`
+- Transformer-manifest SHA-256: `d33320ad6181347df2b40cc5c6a79de9e3a3485710210a137271cca3a3b91dd8`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -450,9 +450,10 @@ bytes the provider sent. Every draw states its measured candidate token
 count, and its snapshot's token count with the `tokenize_text` operation, in
 the compaction's scope, that made it (`snapshotTokens`,
 `snapshotCountOperationId`), using null when that measurement was not reached.
-The snapshot counted is the declaration's raw rendering, made by its shape
-alone -- one call whose arguments are the sections, each a string -- whatever
-acceptance then makes of it (`declaredSnapshotRawText`), with no normalization:
+The snapshot counted is the block the history carries, rendered by the
+declaration's shape alone -- one call whose arguments are the sections, each a
+string -- whatever acceptance then makes of it (`declaredSnapshotText`), with
+no normalization:
 both certifiers recompute it from the draw's decoded call, hold the cited
 operation's text to it byte for byte and its count to the record's, so neither
 decides by its own normalizer or its own notion of whitespace what was
@@ -569,12 +570,16 @@ compose text that states no author and are refused if reached: authoring
 text nothing here can produce would be a claim nothing could check. A count
 request to `/tokenize` carries the same messages to the served tokenizer and
 asks for no generation; its body states no authors and is not recorded, and the
-record binds what it counted by its scope, window and model. What is checked is
-what is claimed: the engine holds every run stated as the model's or the
-operator's to the bytes it cites, and the client holds a text's runs to it by
-length; a run stated as the harness's or the world's is not checked against
-anything, so an under-claim -- the model's or the operator's bytes stated as
-another's -- passes both. One is known and stated: a refusal of undeclared
+record binds what it counted by its scope, window and model. What is checked:
+the engine holds every run stated as the model's or the operator's to the
+bytes it cites, and every request to carry what its conversation owes the
+model -- each turn it accepted since its last committed compaction, exactly as
+the model wrote it and stated the model's, and that compaction's snapshot,
+each section the model's between its own tags (`require_owed`); the client
+holds a text's runs to it by length. Anywhere else a run stated as the
+harness's or the world's is not checked against anything, so an under-claim
+there -- a quote of the model, or the operator's bytes, stated as another's --
+passes both. One is known and stated: a refusal of undeclared
 parameters names the parameters the model sent as the harness's, because no
 source a run can cite names an argument's key. A tool the
 launcher allows is not such a path: a call it refuses is answered with the

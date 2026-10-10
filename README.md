@@ -345,12 +345,12 @@ joins came to more is made again with less.
 accepted compaction snapshot may render to as the block the resuming agent
 reads, its retained inputs left out because they are bounded where they were
 submitted, counted on the block exactly as the model wrote it. The tokenizer
-normalizes to NFC itself, so the block needs no normalizing to be counted as it
-will be read; the history carries its NFC form, which counts the same except
-where the client's newer Unicode composes a pair the tokenizer's leaves apart,
-which only shortens it. A snapshot is the agent's whole memory of the history it
-replaces, and how much of that to keep is the model's choice, so `S` is declared
-from what the model was recorded choosing rather than borrowed from `M`. The
+normalizes to NFC itself, so the block is counted as it will be read without
+being normalized here, and the history carries it exactly as counted, each
+section byte for byte as the model wrote it. A snapshot is the agent's whole
+memory of the history it replaces, and how much of that to keep is the model's
+choice, so `S` is declared from what the model was recorded choosing rather
+than borrowed from `M`. The
 snapshots one long probe accepted ran from 9,894 to 27,142 bytes; the complete
 snapshots three runs refused at a bound of 32,768 bytes ran from 34,520 to
 59,739 bytes, and three more draws wrote complete snapshots of 75,472, 84,636
@@ -932,9 +932,12 @@ notice the client composed into them, however it composed them. A `user` row
 reports only that a tool returned a call -- `tool_use_id` and `is_error` -- and
 carries no copy of the result or of any other input, so nothing on the stream
 can disagree with the request. The certifier holds no rule about how the
-client composes its messages, with two narrow exceptions that belong to
-compaction: it reads a draw's output ceiling from the directive that states
-it, and it measures the snapshot frame it rebuilds.
+client composes its input -- tool messages, reminders, notices, frames. It
+holds three that are not about input: every request carries the turns its
+conversation accepted and the snapshot its last compaction committed, exactly
+as the model wrote them (below); a draw's output ceiling is read from the
+directive that states it; and the snapshot frame is rebuilt from the draw's
+call, to hold its count and its place in the history to.
 
 Every byte of a request body has a recorded author. Beside the bytes it
 stores, each `model_request` carries `authors`: runs that tile them -- the
@@ -960,7 +963,37 @@ value and starts and ends on whole characters, a model run is byte for byte
 the output it cites, and an operator run is byte for byte the session's
 prompt record at its offset -- the service reads that record from
 `control/prompt.txt` and the bundle carries it. World and harness runs are
-the client's own claims, a stated limit like `is_error`. The canonical
+the client's own claims, a stated limit like `is_error`.
+
+What the model wrote is owed, not only held when claimed. Every request in a
+conversation's `kv_scope` carries every turn that conversation accepted since
+its last committed compaction, and that compaction's snapshot before them.
+Its assistant messages are exactly those turns, one each, in the order they
+were accepted: each the generation's text as its `content`, its reasoning as
+its `reasoning_content` and its calls as its `tool_calls` -- each call's
+normalized identity, its name, and its arguments compared as the values the
+SDK parses, so a key, a number or a literal the model wrote is held too --
+and nothing else. Every string of a turn -- its reasoning, its text, each
+call's name and each string inside each call's arguments -- is stated the
+model's where the turn carries it, a copy in full; inside the arguments' JSON
+text the characters JSON writes as escapes are the serialization's, and only
+they may be the harness's. Each non-empty section of the snapshot is the
+model's, a copy in full of the draw's call, in one message before the turns,
+between its own element's tags. A refused or abandoned generation never
+entered history, and nothing owes it. A compaction that fails replaces
+nothing, so its conversation owes what it owed and the next attempt's draw
+carries it; one that commits leaves the snapshot and the turn carried behind
+it, and that is what every later request owes. A draw's request owes what
+the scope's last chat request carried -- that request's prompt is the one it
+summarises, and the turn after it is carried, not summarised. A side query
+owns a scope no conversation uses and owes nothing; any request in a
+conversation's scope, whoever issued it, continues that conversation. So a
+turn dropped, trimmed, re-sliced, normalized or rewritten -- its bytes stated
+the model's or the harness's -- carried twice or beside an assistant message
+the model never wrote is refused, naming the turn and what differs, and so is
+a snapshot section re-cut, normalized, misplaced or missing. A quote of the
+model's words anywhere else -- a tool echoing an argument, the todo reminder
+listing what `todo_write` set -- is the composer's, and is free. The canonical
 recording stores the same request evidence and the same authored parts, and
 a recorded user message's provenance is read from its parts' authors, so
 the stream and the transcript read one determination. A subagent's

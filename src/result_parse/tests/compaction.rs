@@ -47,8 +47,12 @@ fn snapshot_sections() -> Value {
 /// A committed replacement: the accepted draw is one complete state_snapshot
 /// call whose rendered size and measured count the transition reports.
 fn committed(history: Value) -> Value {
+    committed_with(history, snapshot_sections())
+}
+
+/// A committed replacement accepted from a draw whose call declared `sections`.
+fn committed_with(history: Value, sections: Value) -> Value {
     let usage = served(233926, 4, 0, 100);
-    let sections = snapshot_sections();
     let provider = json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":"snapshot-call",
         "type":"function","function":{"name":"state_snapshot","arguments":sections.to_string()}}]},
         "finish_reason":"tool_calls"}]})
@@ -503,4 +507,93 @@ fn a_measurement_cannot_cite_another_scopes_count() {
         &trace,
         "compaction measurement has no completed chat tokenizer operation in its scope",
     );
+}
+
+/// The generation the last chat in `trace` accepted.
+fn last_generation(trace: &Trace) -> String {
+    trace
+        .rows
+        .iter()
+        .rfind(|row| row["type"] == "model_attempt_completion")
+        .unwrap()["completion"]["generation_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+/// A compaction that failed replaced nothing, so the turns its conversation
+/// accepted are owed by every request after it, as they were before; one
+/// that committed left the snapshot its accepted draw declared and the turn
+/// it carried, and those are what every later request owes.
+#[test]
+fn a_failed_compaction_keeps_what_its_conversation_owes_and_a_committed_one_resets_it() {
+    let history = json!([{"role":"user","parts":[{"text":"retained input"}]}]);
+    // The first turn, a compaction that failed below the admission limit,
+    // the turn issued on the history as it stands, then a compaction that
+    // committed, and the next turn on what it left.
+    let build = |keep_first: bool, compacted: bool, carry_second: bool| {
+        let mut trace = Trace::new();
+        trace.chat(None, "first");
+        trace.tool_result(None, "first", "done");
+        trace.compaction(None, record(output(), json!([])));
+        if !keep_first {
+            let dropped = json!({"role":"user","content":"continue"}).to_string();
+            let invocation = trace.chats.get_mut("a").unwrap();
+            invocation.turn_authors = harness_authors(&dropped);
+            invocation.turn = dropped;
+        }
+        trace.chat(None, "second");
+        trace.tool_result(None, "second", "done");
+        trace.compaction(None, committed(history.clone()));
+        if compacted {
+            trace.compacted("a");
+        }
+        if !carry_second {
+            let dropped = json!({"role":"user","content":"continue"}).to_string();
+            let invocation = trace.chats.get_mut("a").unwrap();
+            invocation.turn_authors = harness_authors(&dropped);
+            invocation.turn = dropped;
+        }
+        trace.answer(None, false);
+        trace.terminal(None, 3, None);
+        trace
+    };
+    build(true, true, true).certify();
+    // The turn the failed compaction left in place, dropped from the next.
+    let mut first = Trace::new();
+    first.chat(None, "first");
+    let generation = last_generation(&first);
+    assert_refused_at(&build(false, true, true), &format!("does not carry generation {generation:?}'s turn"));
+    // After the commit, the history as it stood before it, or the snapshot
+    // without the turn it carried.
+    assert_refused_at(&build(true, false, true), "does not carry the snapshot compaction draw");
+    let trace = build(true, true, true);
+    let second = trace
+        .rows
+        .iter()
+        .filter(|row| row["type"] == "model_attempt_completion")
+        .nth(1)
+        .unwrap()["completion"]["generation_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert_refused_at(&build(true, true, false), &format!("does not carry generation {second:?}'s turn"));
+}
+
+/// A compaction commits the snapshot its accepted draw declared, and that is
+/// what every later request of its conversation carries. A draw that
+/// declared no complete snapshot commits nothing a request could carry.
+#[test]
+fn a_committed_compaction_was_accepted_from_a_draw_that_declared_a_snapshot() {
+    let history = json!([{"role":"user","parts":[{"text":"retained input"}]}]);
+    let mut sections = snapshot_sections();
+    sections.as_object_mut().unwrap().remove("next_step");
+    let mut record = committed_with(history.clone(), sections);
+    record["data"]["output"]["snapshotTokens"] = Value::Null;
+    record["data"]["output"]["snapshotCountOperationId"] = Value::Null;
+    assert_compaction_refusal(
+        &trace_with(record, false),
+        "whose committed replacement was accepted from a draw that declared no complete snapshot",
+    );
+    trace_with(committed(history), false).certify();
 }

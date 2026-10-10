@@ -5041,14 +5041,13 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export async function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxTokens: number,\n  count: SnapshotTokenCounter,\n): Promise<StateSnapshotAcceptance> {",
             # Counted with all_user_messages empty -- the inputs it will hold
             # are bounded on their own, and are not the draw's -- on the block
-            # exactly as the model wrote it, by the served tokenizer, which
-            # normalizes to NFC itself: the text both certifiers recompute
-            # from the decoded call and compare, byte for byte, with the text
-            # the cited count was made of.
-            "  const rendered = stateSnapshotRawText(snapshot);\n  const counted = await count(rendered);\n  if (counted.tokens > maxTokens) {",
-            "export function stateSnapshotRawText(snapshot: StateSnapshot): string {",
-            "    `    <${section}>\\n${snapshot[section]}\\n    </${section}>`;",
-            "    `<state_snapshot>\\n${before}\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n` +\n    `\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n${after}\\n</state_snapshot>`",
+            # the history carries, each section exactly as the model wrote
+            # it, by the served tokenizer, which normalizes to NFC itself: the
+            # text both certifiers recompute from the decoded call and compare,
+            # byte for byte, with the text the cited count was made of. One
+            # rendering makes the text counted and the text carried.
+            "  const rendered = stateSnapshotText(snapshot);\n  const counted = await count(rendered);\n  if (counted.tokens > maxTokens) {",
+            "export function stateSnapshotText(snapshot: StateSnapshot): string {\n  const { opening, closing } = renderStateSnapshot(snapshot);\n  return `${opening}${closing}`;\n}",
             # Rendered as upstream's block: one `<state_snapshot>` element, a
             # child per section, its tags laid out as upstream's compression
             # prompt lays them out, and each section's text between them
@@ -5060,17 +5059,16 @@ def _validate_compaction_budget_after(state: State) -> None:
             "      harnessText(`    <${section}>\\n`),\n      sectionText(section),\n      harnessText(`\\n    </${section}>`),",
             "        : [harnessText('\\n\\n'), element(section)],",
             "  const at = STATE_SNAPSHOT_ELEMENTS.indexOf(RETAINED_INPUTS_ELEMENT);",
-            "        harnessText('<state_snapshot>\\n'),\n        ...before,\n        harnessText(`\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n`),",
-            "        harnessText(`\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n`),\n        ...after,\n        harnessText('\\n</state_snapshot>'),",
+            "    opening: authored(\n      harnessText('<state_snapshot>\\n'),\n      ...before,\n      harnessText(`\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n`),\n    ),",
+            "    closing: authored(\n      harnessText(`\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n`),\n      ...after,\n      harnessText('\\n</state_snapshot>'),\n    ),",
             "const { opening, closing } = renderAuthoredStateSnapshot(",
-            "export function stateSnapshotText(snapshot: StateSnapshot): string {",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
             # A complete snapshot is the declaration's shape alone, as
             # upstream's block is any complete block: acceptance and the
             # rendering a draw's record is held to decide it the same way, and
             # no notion of whitespace decides whether a section holds text.
             "function declaredStateSnapshot(",
-            "export function declaredSnapshotRawText(",
+            "export function declaredSnapshotText(",
             "  const declared = declaredStateSnapshot(calls);\n  if (declared.lack) {",
             # A draw is refused for one of two things, and says which: it
             # declared no complete snapshot, or it declared one past the bound,
@@ -5084,6 +5082,18 @@ def _validate_compaction_budget_after(state: State) -> None:
         label="complete state snapshot",
     )
     forbid_text(state, snapshot_path, "SaxesParser", label="complete state snapshot")
+    # The history carries each section exactly as the model wrote it: the
+    # text acceptance counted, which the certifier holds every later request
+    # to carry in full, byte for byte, between its own tags. A normalized
+    # rendering would state characters the model did not write.
+    for retired in ("normalizeAuthored", "stateSnapshotRawText", "declaredSnapshotRawText"):
+        forbid_text(state, snapshot_path, retired, label="complete state snapshot")
+    require_text(
+        state,
+        "packages/core/src/services/state-snapshot.test.ts",
+        "carries a section NFC would change as the model wrote it, every character of it the model's",
+        label="complete state snapshot",
+    )
     # A rule stricter than upstream's -- a section that must hold text -- would
     # cost a draw to say nothing the block does not already say, and the bound
     # is no longer stated where the model is told it once.
@@ -6465,7 +6475,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         evidence,
         (
-            "    const rendering = declaredSnapshotRawText(",
+            "    const rendering = declaredSnapshotText(",
             "      const counted = counts.textCount(draw.snapshotCountOperationId, scope);\n      if (counted.prompt !== rendering)",
             "      if (counted.totalTokens !== draw.snapshotTokens)",
         ),

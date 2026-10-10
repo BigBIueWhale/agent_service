@@ -146,6 +146,50 @@ fn a_request_body_is_the_one_record_of_what_the_model_received() {
     assert_eq!(trace.certify().num_turns, 2);
 }
 
+/// What the model wrote is not input. Its turn rewritten in the next body,
+/// consistently rehashed and stated the harness's, is a record of words the
+/// model never wrote spoken in its role, and the certificate refuses it.
+#[test]
+fn a_request_carries_the_turn_the_model_wrote() {
+    for delta in [false, true] {
+        let mut trace = two_turns(delta);
+        let request = last_request(&trace);
+        assert_eq!(trace.rows[request]["request"]["owner"]["kind"], "chat");
+        let turn = trace.chats["a"].messages[1].clone();
+        assert!(turn.contains("\"role\":\"assistant\""));
+        let rewritten = turn.replace("before  after", "I changed nothing.");
+        let messages: Vec<String> = trace.chats["a"]
+            .messages
+            .iter()
+            .map(|message| if *message == turn { rewritten.clone() } else { message.clone() })
+            .collect();
+        let body = &mut trace.rows[request]["request"]["body"];
+        let full = if delta {
+            let added = body["added_messages"].as_array().unwrap().clone();
+            let index = added.iter().position(|message| *message == json!(turn)).unwrap();
+            body["added_messages"][index] = json!(rewritten);
+            body["authors"]["added_messages"][index] = harness_authors(&rewritten);
+            format!(
+                "{}{}{}",
+                body["prefix"].as_str().unwrap(),
+                messages.join(","),
+                body["suffix"].as_str().unwrap()
+            )
+        } else {
+            let full = body["json"].as_str().unwrap().replace(&turn, &rewritten);
+            body["json"] = json!(full);
+            body["authors"] = harness_authors(&full);
+            full
+        };
+        trace.rows[request]["request"]["body_bytes"] = json!(full.len());
+        trace.rows[request]["request"]["body_sha256"] = json!(hash(full.as_bytes()));
+        assert_refused_at(
+            &trace,
+            "carries generation \"generation-1\"'s turn, as message 1, other than the model wrote it -- content",
+        );
+    }
+}
+
 #[test]
 fn a_request_before_its_scope_reports_a_returned_call_is_refused() {
     for delta in [false, true] {
