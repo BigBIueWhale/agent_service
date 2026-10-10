@@ -1005,53 +1005,119 @@ async fn wait_for_completion_or_cancel(
     session_id: &str,
     cancel: &CancellationToken,
 ) -> (SessionStatus, Option<i32>, Vec<String>, bool) {
+    settle_running_agent(
+        docker_ops::wait_session(cfg, session_id),
+        docker_ops::wait_capture_complete(cfg, session_id),
+        || docker_ops::stop_session(cfg, session_id),
+        || docker_ops::remove_session(cfg, session_id),
+        cancel,
+    )
+    .await
+}
+
+/// What ends the wait on a running agent: its own exit, a cancellation, or
+/// its stream capture exiting before it. The capture is where every byte the
+/// agent writes is kept, so once it has exited without proving the stream
+/// complete nothing the agent writes after it can be recorded, and a run left
+/// to go on would work, for as long as its turns take, toward a record that
+/// cannot be certified. The agent is stopped then, and the capture's failure
+/// is the session's first diagnostic. A capture that proved the stream
+/// complete has every byte the agent wrote, which it writes only as it ends,
+/// so the agent is left to exit as it is; the same proof is read again once it
+/// has.
+async fn settle_running_agent<Wait, Capture, Stop, StopFuture, Remove, RemoveFuture>(
+    wait: Wait,
+    capture: Capture,
+    stop: Stop,
+    remove: Remove,
+    cancel: &CancellationToken,
+) -> (SessionStatus, Option<i32>, Vec<String>, bool)
+where
+    Wait: std::future::Future<Output = ServiceResult<i32>>,
+    Capture: std::future::Future<Output = ServiceResult<docker_ops::CaptureComplete>>,
+    Stop: Fn() -> StopFuture,
+    StopFuture: std::future::Future<Output = ServiceResult<docker_ops::SessionStopOutcome>>,
+    Remove: Fn() -> RemoveFuture,
+    RemoveFuture: std::future::Future<Output = ServiceResult<()>>,
+{
     let mut diagnostics = Vec::new();
-    let wait = docker_ops::wait_session(cfg, session_id);
     tokio::pin!(wait);
-    tokio::select! {
-        result = &mut wait => match result {
-            Ok(code) => (SessionStatus::Ended, Some(code), diagnostics, true),
-            Err(error) => {
-                diagnostics.push(format!("docker wait failed: {error}"));
-                let producer_stopped = match docker_ops::stop_session(cfg, session_id).await {
-                    Ok(outcome) => {
-                        record_escalated_stop(&mut diagnostics, outcome);
-                        true
+    tokio::pin!(capture);
+    let mut capture_proved_complete = false;
+    loop {
+        tokio::select! {
+            result = &mut wait => return match result {
+                Ok(code) => (SessionStatus::Ended, Some(code), diagnostics, true),
+                Err(error) => {
+                    diagnostics.push(format!("docker wait failed: {error}"));
+                    let producer_stopped = match stop().await {
+                        Ok(outcome) => {
+                            record_escalated_stop(&mut diagnostics, outcome);
+                            true
+                        }
+                        Err(stop_error) => {
+                            diagnostics.push(format!(
+                                "stop agent after failed Docker wait also failed: {stop_error}"
+                            ));
+                            false
+                        }
+                    };
+                    (SessionStatus::Ended, None, diagnostics, producer_stopped)
+                }
+            },
+            result = &mut capture, if !capture_proved_complete => match result {
+                Ok(_) => capture_proved_complete = true,
+                Err(error) => {
+                    diagnostics.push(format!(
+                        "the trusted stream capture exited before the agent did, so nothing the agent wrote after it could be recorded, and the agent was stopped: {error}"
+                    ));
+                    let producer_stopped = match stop().await {
+                        Ok(outcome) => {
+                            record_escalated_stop(&mut diagnostics, outcome);
+                            true
+                        }
+                        Err(stop_error) => {
+                            diagnostics.push(format!(
+                                "stop agent after its stream capture exited also failed: {stop_error}"
+                            ));
+                            false
+                        }
+                    };
+                    let code = match wait.await {
+                        Ok(value) => Some(value),
+                        Err(wait_error) => {
+                            diagnostics.push(format!(
+                                "docker wait after the stream capture exited failed: {wait_error}"
+                            ));
+                            None
+                        }
+                    };
+                    return (SessionStatus::Ended, code, diagnostics, producer_stopped);
+                }
+            },
+            () = cancel.cancelled() => {
+                let mut producer_stopped = true;
+                match stop().await {
+                    Ok(outcome) => record_escalated_stop(&mut diagnostics, outcome),
+                    Err(error) => {
+                        diagnostics.push(format!("graceful cancellation stop failed: {error}"));
+                        if let Err(remove_error) = remove().await {
+                            diagnostics.push(format!(
+                                "ownership-checked cancellation cleanup also failed: {remove_error}"
+                            ));
+                            producer_stopped = false;
+                        }
                     }
-                    Err(stop_error) => {
-                        diagnostics.push(format!(
-                            "stop agent after failed Docker wait also failed: {stop_error}"
-                        ));
-                        false
+                }
+                let code = match wait.await {
+                    Ok(value) => Some(value),
+                    Err(error) => {
+                        diagnostics.push(format!("docker wait after cancellation failed: {error}"));
+                        None
                     }
                 };
-                (SessionStatus::Ended, None, diagnostics, producer_stopped)
+                return (SessionStatus::Cancelled, code, diagnostics, producer_stopped);
             }
-        },
-        () = cancel.cancelled() => {
-            let mut producer_stopped = true;
-            match docker_ops::stop_session(cfg, session_id).await {
-                Ok(outcome) => record_escalated_stop(&mut diagnostics, outcome),
-                Err(error) => {
-                    diagnostics.push(format!("graceful cancellation stop failed: {error}"));
-                    if let Err(remove_error) =
-                        docker_ops::remove_session(cfg, session_id).await
-                    {
-                        diagnostics.push(format!(
-                            "ownership-checked cancellation cleanup also failed: {remove_error}"
-                        ));
-                        producer_stopped = false;
-                    }
-                }
-            }
-            let code = match wait.await {
-                Ok(value) => Some(value),
-                Err(error) => {
-                    diagnostics.push(format!("docker wait after cancellation failed: {error}"));
-                    None
-                }
-            };
-            (SessionStatus::Cancelled, code, diagnostics, producer_stopped)
         }
     }
 }
@@ -2345,6 +2411,126 @@ pub async fn sweep_orphans(cfg: &Config) -> ServiceResult<()> {
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::{symlink, PermissionsExt};
+
+    /// The agent's wait, which ends only once the agent is stopped, and the
+    /// stop that ends it, counting the stops asked for.
+    fn agent_until_stopped() -> (
+        std::sync::Arc<tokio::sync::Notify>,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        (
+            std::sync::Arc::new(tokio::sync::Notify::new()),
+            std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        )
+    }
+
+    #[tokio::test]
+    async fn an_agent_whose_stream_capture_exits_first_is_stopped_and_the_capture_named() {
+        use super::settle_running_agent;
+        use crate::docker_ops::{CaptureComplete, SessionStopOutcome};
+        use crate::error::ServiceError;
+        use crate::runtime::SessionStatus;
+        use std::sync::atomic::Ordering;
+        let (stopped, stops) = agent_until_stopped();
+        let wait = {
+            let stopped = stopped.clone();
+            async move {
+                stopped.notified().await;
+                Ok(143)
+            }
+        };
+        let capture = async {
+            Err::<CaptureComplete, _>(ServiceError::DockerCommand(
+                "container capture log stream ended before required event".into(),
+            ))
+        };
+        let settled = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            settle_running_agent(
+                wait,
+                capture,
+                || {
+                    stops.fetch_add(1, Ordering::SeqCst);
+                    let stopped = stopped.clone();
+                    async move {
+                        stopped.notify_one();
+                        Ok(SessionStopOutcome {
+                            escalated: false,
+                            grace_seconds: 60,
+                        })
+                    }
+                },
+                || async { Ok(()) },
+                &tokio_util::sync::CancellationToken::new(),
+            ),
+        )
+        .await
+        .expect("a capture that exits ends the wait on the agent");
+        let (status, code, diagnostics, producer_stopped) = settled;
+        assert_eq!(status, SessionStatus::Ended);
+        assert_eq!(code, Some(143));
+        assert!(producer_stopped);
+        assert_eq!(stops.load(Ordering::SeqCst), 1);
+        assert!(
+            diagnostics[0].starts_with(
+                "the trusted stream capture exited before the agent did, so nothing the agent wrote after it could be recorded, and the agent was stopped:"
+            ),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_agent_whose_capture_proved_its_stream_complete_is_left_to_exit() {
+        use super::settle_running_agent;
+        use crate::docker_ops::{CaptureComplete, SessionStopOutcome};
+        use crate::runtime::SessionStatus;
+        use std::sync::atomic::Ordering;
+        let (exited, stops) = agent_until_stopped();
+        let wait = {
+            let exited = exited.clone();
+            async move {
+                exited.notified().await;
+                Ok(0)
+            }
+        };
+        let capture = {
+            let exited = exited.clone();
+            async move {
+                // The capture proves the stream complete as the agent ends, a
+                // moment before Docker reports its exit.
+                exited.notify_one();
+                Ok(CaptureComplete {
+                    events_bytes: 10,
+                    stderr_bytes: 0,
+                })
+            }
+        };
+        let (status, code, diagnostics, producer_stopped) = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            settle_running_agent(
+                wait,
+                capture,
+                || {
+                    stops.fetch_add(1, Ordering::SeqCst);
+                    async {
+                        Ok(SessionStopOutcome {
+                            escalated: false,
+                            grace_seconds: 60,
+                        })
+                    }
+                },
+                || async { Ok(()) },
+                &tokio_util::sync::CancellationToken::new(),
+            ),
+        )
+        .await
+        .expect("the agent exits after its stream is complete");
+        assert_eq!(status, SessionStatus::Ended);
+        assert_eq!(code, Some(0));
+        assert!(producer_stopped);
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+        assert_eq!(stops.load(Ordering::SeqCst), 0);
+    }
 
     #[test]
     fn a_finished_process_is_a_process_error_exactly_when_its_exit_disagrees_with_its_record() {

@@ -258,10 +258,10 @@ which bounds what a compaction leaves standing.
 
 The client's part, 12,288 tokens, is the system prompt and the tool
 declarations this repo ships, with the data they carry bounded by bytes: a
-fixed text, so its capacity is its measured worst case, 11,591, rounded up to
-the next multiple of 1,024, and the 697 left are what the text may grow by
+fixed text, so its capacity is its measured worst case, 11,681, rounded up to
+the next multiple of 1,024, and the 607 left are what the text may grow by
 before the proof refuses it. The proof counts this deployment's turn preamble with the Git
-snapshot's repository values and the turn budget's number left out — 7,409 tokens, rendered by the served template and counted by the
+snapshot's repository values and the turn budget's number left out — 7,499 tokens, rendered by the served template and counted by the
 served tokenizer, each tool declaration as it is declared — the startup context that opens every history with its
 workspace data left out, 46 more, the frame every compacted history holds
 around its blocks — the snapshot's resume trailer — with the blocks left out,
@@ -272,9 +272,9 @@ may hold, capped in the NFC form the tokenizer reads, as the most tokens they
 can cost: 1,936 for the snapshot's branch line, status and commits, 1,280 for the
 startup context's environment lines and folder listing, 16 for the turn
 budget, the widest a safe integer renders to, and 812 for the todo reminder's
-list and truncation mark. That is a bound of 11,591, the same for every
+list and truncation mark. That is a bound of 11,681, the same for every
 repository, every workspace, every budget and every todo list, so none of them
-can make a deployment refuse to start, with 697 left for the prompt and the
+can make a deployment refuse to start, with 607 left for the prompt and the
 declarations to grow into.
 
 The workspace's part is its instruction files — a QWEN.md, AGENTS.md or
@@ -289,8 +289,9 @@ counted alone, the total they add and `M`, and the operator's move: shorten
 them, or rename or remove them, which keeps a renamed file there to read with
 `read_file`. Of the 111 local benchmark images, 60 carry an AGENTS.md at their
 workspace's root; the largest is 7,916 tokens, all are within `M`, and 48 were
-past the 697 tokens a preamble sized as a share of the window left beside the
-client's text, where they made the client refuse before its first turn as if
+past the 697 tokens that a preamble sized as a share of the window left beside
+the client's text when the shares were replaced, where they made the client
+refuse before its first turn as if
 its own prompt had outgrown the window — with a next action, deploy on a larger
 window, that no operator of this deployment has. (Those are the files
 themselves, counted by the served tokenizer; the kueue and kestra files import
@@ -720,7 +721,13 @@ A terminal conversation and a headless conversation share the same obligations:
   limit, with the true total and the command to run instead. It reads the
   output as UTF-8, the encoding of the terminal the command writes to, never as
   an encoding guessed from the bytes, and states how many bytes were not UTF-8 —
-  each sequence shown as U+FFFD — and the command that shows them.
+  each sequence shown as U+FFFD — and the command that shows them. What it
+  shows is the terminal's rendering, not the bytes: escape sequences applied,
+  tabs expanded to spaces, each line's trailing spaces dropped, a carriage
+  return letting later text overwrite its line, and anything the program
+  cleared gone. The shell tool's description tells the model so, and how to
+  see the exact bytes, so text it copies from a command's output into an
+  `edit` is not taken for the file's.
 - The snapshot is a declared tool call, not hand-written markup. The compaction
   request advertises one function whose closed parameter schema is the sections
   of upstream's `<state_snapshot>` block but `all_user_messages`, which the
@@ -1453,6 +1460,17 @@ forwards termination to that entire group. The requested exit code is synchronou
 recorded before forwarding, so cancellation cannot silently lose its bundle if a
 descendant delays shutdown. `util-linux=2.39.3-9ubuntu6.5`, which supplies `setsid`,
 is an explicit image input rather than an incidental base-image dependency.
+
+The capture is watched for the whole run, not only once the agent has exited.
+A capture that exits before the agent without proving its stream complete — a
+copy error, a full or read-only disk — leaves nothing the agent writes after it
+recordable, so the service stops the agent at once, and the capture's failure is
+the session's first diagnostic; the run is never left to work for hours toward a
+record that cannot be certified. A capture that proved its stream complete has
+every byte the agent wrote, and the agent is left to exit. The client holds the
+same line from its side: when its stdout fails, the run ends at once with that
+failure as its cause, stopping the generation or tool call under way, rather
+than ending only when it next writes.
 
 Production benchmarking exposed and repaired a separate late-subscriber race at
 the capture boundary. The broker formerly followed Docker logs with `--since 0s`.

@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `ab8988606b0aa9fe201436e813c1a6e70a0de0fa6f8e861026b1bb92f4ffc562`
+- Review-diff SHA-256: `b96f7e6f8c425a345d0a6c4dfe04ad969da10fabf8b8998a0c6b4beae00310ca`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `7e312deb12bec1907a97eaf4ccedc2e5ae6caea244b2d928f2e3a1112f3c9fc6`
+- Transformer-manifest SHA-256: `c2242d761450e422ae9440f18ecb0ec3df0418d9ff7325b50699a7f33352152b`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -191,8 +191,8 @@ declarations this repo ships, with the Git snapshot's repository values bounded
 by their byte caps rather than counted, the startup context that opens every
 history, its environment lines and folder listing bounded the same way, and the
 turn budget the `## Context` section states, its number bounded by the sixteen
-digits a safe integer renders to: a fixed text, counted at 11,591 when the
-capacity was declared, which is that rounded up to the next multiple of 1,024.
+digits a safe integer renders to: a fixed text, counted at 11,681, and the
+capacity is that rounded up to the next multiple of 1,024.
 The workspace's instruction files -- its QWEN.md, AGENTS.md and QWEN.local.md,
 with what they import -- are the world's text, and what they add to the system
 prompt is held to `M`, one block placed inline. Both are counted exactly by the
@@ -966,7 +966,13 @@ file to LF but not `old_string`, then fell through a cascade that folded
 look-alike punctuation, trailing whitespace and line breaks and counted the
 slice it chose, so an edit could succeed where the model's text did not match;
 such an edit is now refused, saying so when only line breaks or the whitespace
-ending lines differ. `grep_search` has one engine per configuration -- here the
+ending lines differ. `write_file` writes its content byte for byte, its line
+breaks included; upstream converted every line to CRLF when any line of the
+file it replaced ended so. `notebook_edit` splices its change into the
+notebook's text, every byte it does not change the file's; upstream
+re-serialized the whole notebook, rewriting numbers and layout in cells it never
+touched. Its description says that replacing a cell clears its outputs and
+execution count, which it always did. `grep_search` has one engine per configuration -- here the
 bundled ripgrep the sealed settings declare, run once at startup, which refuses
 to start when it cannot -- and a search whose binary fails is that search's
 error. Upstream replaced a ripgrep that failed its probe with the system rg, a

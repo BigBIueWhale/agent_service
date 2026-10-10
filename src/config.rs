@@ -1496,9 +1496,7 @@ mod tests {
             let sections: Vec<&str> = patch
                 .split("\ndiff --git ")
                 .map(|section| section.strip_prefix("diff --git ").unwrap_or(section))
-                .filter(|section| {
-                    section.lines().next() == Some(&format!("a/{path} b/{path}"))
-                })
+                .filter(|section| section.lines().next() == Some(&format!("a/{path} b/{path}")))
                 .collect();
             assert_eq!(sections.len(), 1, "the review diff changes {path} once");
             sections[0].to_string()
@@ -1530,7 +1528,11 @@ mod tests {
                     .or_else(|| line.strip_prefix("+export const QWEN38_IMAGE_MAX_PIXELS = "))
             })
             .collect();
-        assert_eq!(declared.len(), 1, "the client declares its pixel budget once: {declared:?}");
+        assert_eq!(
+            declared.len(),
+            1,
+            "the client declares its pixel budget once: {declared:?}"
+        );
         let pixels: u64 = declared[0]
             .strip_suffix(';')
             .expect("a declaration ends its line")
@@ -1549,8 +1551,7 @@ mod tests {
             .position(|argument| argument == "--limit-mm-per-prompt")
             .and_then(|at| lock.backend.command.get(at + 1))
             .expect("the backend launches with a per-request media limit");
-        let limit: serde_json::Value =
-            serde_json::from_str(flag).expect("the media limit is JSON");
+        let limit: serde_json::Value = serde_json::from_str(flag).expect("the media limit is JSON");
         assert_eq!(limit["image"]["count"].as_u64(), Some(derived));
     }
 

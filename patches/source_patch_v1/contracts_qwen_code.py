@@ -1477,10 +1477,17 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         state,
         shell_tool,
         (
-            "function getShellToolDescription(declaresTaskStop: boolean): string {",
+            "function getShellToolDescription(\n  declaresTaskStop: boolean,\n  runsInTerminal: boolean,\n): string {",
             "${declaresTaskStop ? `To stop a background command started by this tool, use \\`${ToolNames.TASK_STOP}\\` when a task id is available. ` : ''}",
             "export interface ShellToolSession {",
-            "      getShellToolDescription(session.declaredTools.has(ToolNames.TASK_STOP)),",
+            "      getShellToolDescription(\n        session.declaredTools.has(ToolNames.TASK_STOP),\n        config.getShouldUseNodePtyShell(),\n      ),",
+            # The result is the terminal's rendering of what a command wrote,
+            # not its bytes, and the description says so where the model
+            # reads it, as the configured shell shows it, with the way to see
+            # the bytes.
+            "its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops, each line's trailing spaces dropped, a carriage return letting later text overwrite its line, and anything the program cleared gone.",
+            "A command's output is shown with its escape sequences removed and the whitespace around it trimmed.",
+            "- ${outputRendering} To see the exact bytes, redirect the output to a file and read it with ${ToolNames.READ_FILE}.",
             "(this.session.declaredTools.has(ToolNames.MONITOR)\n"
             "                  ? 'For streaming events (watching logs, polling APIs), use the Monitor tool. '\n"
             "                  : '') +",

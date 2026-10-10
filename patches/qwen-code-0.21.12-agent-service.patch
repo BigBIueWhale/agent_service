@@ -5294,6 +5294,38 @@ diff --git a/docs/developers/qwen-serve-protocol.md b/docs/developers/qwen-serve
 diff --git a/docs/developers/tools/file-system.md b/docs/developers/tools/file-system.md
 --- a/docs/developers/tools/file-system.md
 +++ b/docs/developers/tools/file-system.md
+@@ -69,14 +69,14 @@
+   - `cell_type` (`code` or `markdown`, optional): The cell type for inserted cells, or the target type when replacing a cell.
+   - `edit_mode` (`replace`, `insert`, or `delete`, optional): The edit operation. Defaults to `replace`.
+ - **Behavior:**
+   - Requires the notebook to have been read first with `read_file` in the current session.
+   - Targets cells using the IDs rendered by `read_file`, including real notebook cell IDs and displayed `cell-N` fallback IDs.
+   - Rejects ambiguous rendered cell IDs instead of guessing.
+-  - For code cells, clears stale outputs and resets `execution_count` when source changes.
+-  - Preserves notebook JSON formatting, line endings, encoding, and BOM where possible.
++  - Replacing a cell clears its outputs and `execution_count` (a code cell keeps them as `[]` and `null`; a markdown cell has neither). The tool's description states this to the model.
++  - Writes only the values the edit changes, into the notebook's JSON text: every other byte -- other cells, numbers as written (`1.0`, `1e-05`, integers past 2^53), escapes, layout, line endings, encoding and BOM -- stays as the file has it. A changed value is laid out at its place as the file's indentation and line breaks lay it out.
+   - Invalidates the prior-read state after structural edits when displayed fallback IDs can shift, so the next notebook edit requires a fresh `read_file`.
+ - **Output (`llmContent`):** A success message describing the edited notebook cell and, for non-delete operations, the updated source.
+ - **Confirmation:** Yes. Shows a notebook JSON diff and asks for user approval before writing, unless the current permission mode or rules auto-approve edit tools.
+ 
+ ### `notebook_edit` examples
+ 
+@@ -120,13 +120,13 @@
+ - **Display name:** WriteFile
+ - **File:** `write-file.ts`
+ - **Parameters:**
+   - `file_path` (string, required): The absolute path to the file to write to.
+   - `content` (string, required): The content to write into the file.
+ - **Behavior:**
+-  - Writes the provided `content` to the `file_path`.
++  - Writes the provided `content` to the `file_path` exactly as given, every line break included; an existing file keeps its encoding and BOM (on Windows, `.bat` and `.cmd` files are written with CRLF line endings, as described below).
+   - Does not write raw Jupyter notebook JSON. Use `notebook_edit` for `.ipynb` cell edits.
+   - Creates parent directories if they don't exist.
+ - **Output (`llmContent`):** A success message, e.g., `Successfully overwrote file: /path/to/your/file.txt` or `Successfully created and wrote to new file: /path/to/new/file.txt`.
+ - **Confirmation:** Yes. Shows a diff of changes and asks for user approval before writing.
+ 
+ ## 5. `glob` (Glob)
 @@ -150,20 +150,20 @@
  ## 6. `grep_search` (Grep)
  
@@ -73840,6 +73872,19 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 -              title: 'Permission rule requires confirmation',
 -              prompt: 'Allow this operation?',
 -              hideAlwaysAllow: true,
+-            },
+-            respond,
+-            timestamp: Date.now(),
+-          });
+-        }
+-        yield {
+-          type: GeminiEventType.Finished,
+-          value: {
+-            reason: undefined,
+-            usageMetadata: { totalTokenCount: 0 },
+-          },
+-        };
+-      },
 +    mockGeminiClient.sendMessageStream.mockImplementation(() =>
 +      createStreamFromEvents(
 +        (async function* (): AsyncGenerator<ServerGeminiStreamEvent> {
@@ -73865,19 +73910,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +            value: {
 +              reason: FinishReason.STOP,
 +              usageMetadata: servedOutputTokens(1),
-             },
--            respond,
--            timestamp: Date.now(),
--          });
--        }
--        yield {
--          type: GeminiEventType.Finished,
--          value: {
--            reason: undefined,
--            usageMetadata: { totalTokenCount: 0 },
--          },
--        };
--      },
++            },
 +          };
 +        })(),
 +      ),
@@ -74108,7 +74141,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        ]);
      });
  
-@@ -1880,44 +2840,88 @@
+@@ -1880,44 +2840,155 @@
        });
  
        expect(mockGeminiClient.sendMessageStream).not.toHaveBeenCalled();
@@ -74208,13 +74241,80 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +    },
 +  );
 +
++  it.each([OutputFormat.TEXT, OutputFormat.STREAM_JSON])(
++    'ends a %s run at once when stdout breaks, stopping the call under way',
++    async (format) => {
++      // The pipe breaks while a tool runs, when nothing is being written: the
++      // run stops that call and ends there, as the failure, rather than going
++      // on with work whose output no one can read until something next writes.
++      setupMetricsMock();
++      vi.mocked(mockConfig.getOutputFormat).mockReturnValue(format);
++      const pipeFailure = Object.assign(new Error('EPIPE'), { code: 'EPIPE' });
++      vi.spyOn(process.stdout, 'destroy').mockReturnValue(process.stdout);
++      let toolStopped: boolean | undefined;
++      mockCoreExecuteToolCall.mockImplementation(
++        async (
++          _config: unknown,
++          request: ToolCallRequestInfo,
++          signal: AbortSignal,
++        ) => {
++          process.stdout.emit('error', pipeFailure);
++          // A call that would run for a while yet, unless it is stopped.
++          toolStopped = await new Promise<boolean>((resolve) => {
++            if (signal.aborted) return resolve(true);
++            const ranToItsEnd = setTimeout(() => resolve(false), 500);
++            signal.addEventListener(
++              'abort',
++              () => {
++                clearTimeout(ranToItsEnd);
++                resolve(true);
++              },
++              { once: true },
++            );
++          });
++          return scheduledResponse(request, 'tool response', {});
++        },
++      );
++      let requests = 0;
++      mockGeminiClient.sendMessageStream.mockImplementation(() => {
++        requests += 1;
++        return requests === 1
++          ? createStreamFromEvents(
++              toolTurn({
++                callId: 'pipe-tool-1',
++                name: 'testTool',
++                args: {},
++                isClientInitiated: false,
++                prompt_id: 'p-pipe-tool',
++              }),
++            )
++          : createStreamFromEvents([
++              { type: GeminiEventType.Content, value: 'Done.' },
++              {
++                type: GeminiEventType.Finished,
++                value: {
++                  reason: FinishReason.STOP,
++                  usageMetadata: servedOutputTokens(1),
++                },
++              },
++            ]);
++      });
++
++      await expect(
++        runNonInteractive(mockConfig, mockSettings, 'test', 'p-pipe-tool'),
++      ).rejects.toBe(pipeFailure);
++      expect(toolStopped).toBe(true);
++      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledOnce();
++    },
++  );
++
    it('returns non-zero and skips pending tool calls after loop detection', async () => {
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
        value: {
          callId: 'tool-1',
-@@ -1928,13 +2932,13 @@
+@@ -1928,13 +2999,13 @@
        },
      };
      const events: ServerGeminiStreamEvent[] = [
@@ -74229,7 +74329,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -1945,13 +2949,13 @@
+@@ -1945,13 +3016,13 @@
        'prompt-id-loop-detected',
      );
  
@@ -74244,7 +74344,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('shows the always-on hint (not the skipLoopDetection escape) for a consecutive-identical halt', async () => {
      setupMetricsMock();
-@@ -1984,18 +2988,20 @@
+@@ -1984,18 +3055,20 @@
      );
  
      expect(exitCode).toBe(1);
@@ -74267,7 +74367,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
    });
  
-@@ -2030,66 +3036,30 @@
+@@ -2030,66 +3103,30 @@
      );
  
      expect(exitCode).toBe(1);
@@ -74339,7 +74439,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -2105,125 +3075,2055 @@
+@@ -2105,125 +3142,2055 @@
        (call) => typeof call[0] === 'string',
      );
      const lastOutput = outputCalls.at(-1)?.[0];
@@ -74452,21 +74552,41 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 -          finalize: () => void;
 -          flush: () => Promise<void>;
 -        };
-+
+-      }
+-    ).getChatRecordingService = () => ({
+-      finalize: () => order.push('finalize'),
+-      flush: async () => {
+-        order.push('flush');
+-        recordingFailureListener?.({
+-          sessionId: 'affected-session',
+-          error: new Error('/private/transcript.jsonl: ENOSPC'),
+-        });
+-        throw new Error('write failed');
+-      },
+-    });
+ 
+-    await runNonInteractive(
 +    const exitCode = await runNonInteractive(
-+      mockConfig,
-+      mockSettings,
+       mockConfig,
+       mockSettings,
+-      'Test input',
+-      'prompt-recording-failure',
 +      'Summarize the corpus',
 +      'prompt-complete-generation',
-+    );
-+
+     );
+ 
 +    expect(exitCode).toBe(0);
-+    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
-+    const messages = JSON.parse(output) as Array<{
+     const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
+     const messages = JSON.parse(output) as Array<{
+-      type: string;
 +      type?: string;
-+      subtype?: string;
+       subtype?: string;
+-      session_id?: string;
+-      data?: { session_id?: string };
 +      is_error?: boolean;
-+    }>;
+     }>;
+-    const warningIndex = messages.findIndex(
+-      (message) => message.subtype === 'session_recording_degraded',
 +    const result = messages.find((message) => message.type === 'result');
 +    expect(result?.is_error).toBe(false);
 +    expect(result?.subtype).toBe('success');
@@ -74516,18 +74636,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +        expect(result?.['is_error']).toBe(false);
 +        expect(result).not.toHaveProperty('missing_deliverables');
 +        return;
-       }
--    ).getChatRecordingService = () => ({
--      finalize: () => order.push('finalize'),
--      flush: async () => {
--        order.push('flush');
--        recordingFailureListener?.({
--          sessionId: 'affected-session',
--          error: new Error('/private/transcript.jsonl: ENOSPC'),
--        });
--        throw new Error('write failed');
--      },
--    });
++      }
 +      expect(result?.['is_error']).toBe(true);
 +      expect(result?.['missing_deliverables']).toEqual(declared);
 +      expect((result?.['error'] as { message: string }).message).toBe(
@@ -74535,8 +74644,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      );
 +    },
 +  );
- 
--    await runNonInteractive(
++
 +  it('reads the last generation of the run, not an earlier completed one', async () => {
 +    (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
 +    setupMetricsMock();
@@ -74579,26 +74687,21 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      );
 +
 +    const exitCode = await runNonInteractive(
-       mockConfig,
-       mockSettings,
--      'Test input',
--      'prompt-recording-failure',
++      mockConfig,
++      mockSettings,
 +      'Summarize the corpus',
 +      'prompt-late-truncation',
      );
- 
+-    const resultIndex = messages.findIndex(
+-      (message) => message.type === 'result',
++
 +    expect(exitCode).toBe(1);
-     const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
-     const messages = JSON.parse(output) as Array<{
--      type: string;
++    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
++    const messages = JSON.parse(output) as Array<{
 +      type?: string;
-       subtype?: string;
--      session_id?: string;
--      data?: { session_id?: string };
++      subtype?: string;
 +      error?: { message?: string };
-     }>;
--    const warningIndex = messages.findIndex(
--      (message) => message.subtype === 'session_recording_degraded',
++    }>;
 +    const result = messages.find((message) => message.type === 'result');
 +    expect(result?.subtype).toBe('error_incomplete_generation');
 +    expect(result?.error?.message).toContain('turn 2');
@@ -74625,9 +74728,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
 +      mockSettings,
 +      'Summarize the corpus',
 +      'prompt-limit-numbers',
-     );
--    const resultIndex = messages.findIndex(
--      (message) => message.type === 'result',
++    );
 +
 +    expect(exitCode).toBe(1);
 +    const output = processStdoutSpy.mock.calls.at(-1)?.[0] as string;
@@ -76453,7 +76554,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Test input',
-@@ -2232,36 +5132,132 @@
+@@ -2232,36 +5199,132 @@
      );
  
      expect(flush).toHaveBeenCalledOnce();
@@ -76593,7 +76694,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -2291,21 +5287,24 @@
+@@ -2291,21 +5354,24 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -76621,7 +76722,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        { arg1: 'value1' },
      );
      // Verify consumePendingMemoryTaskPromises is called at the end of the session.
-@@ -2360,24 +5359,28 @@
+@@ -2360,24 +5426,28 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Image understood' },
@@ -76652,7 +76753,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        2,
        [{ text: 'Tool response with image' }, { text: 'Skill response' }],
        expect.any(AbortSignal),
-@@ -2438,24 +5441,28 @@
+@@ -2438,24 +5508,28 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Image understood' },
@@ -76683,7 +76784,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
-@@ -2530,14 +5537,14 @@
+@@ -2530,14 +5604,14 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Main done' },
@@ -76700,7 +76801,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        )
        .mockReturnValueOnce(
          createStreamFromEvents([
-@@ -2566,24 +5573,28 @@
+@@ -2566,24 +5640,28 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Drain done' },
@@ -76731,7 +76832,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(accepted['b']).toBe(false);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        4,
-@@ -2591,18 +5602,45 @@
+@@ -2591,18 +5669,45 @@
        expect.any(AbortSignal),
        'prompt-drain/automatic/3',
        { type: SendMessageType.ToolResult, modelOverride: first },
@@ -76779,7 +76880,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      function toolCallEvents(
        ids: string[],
        name: string,
-@@ -2617,29 +5655,29 @@
+@@ -2617,29 +5722,29 @@
            isClientInitiated: false,
            prompt_id: promptId,
          },
@@ -76812,7 +76913,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
              kind:
                name === ToolNames.READ_FILE
                  ? Kind.Read
-@@ -2665,13 +5703,13 @@
+@@ -2665,13 +5770,13 @@
            resultDisplay: 'entered plan mode',
          }),
        );
@@ -76827,7 +76928,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
                'p-plan-boundary',
              ),
              ...toolCallEvents(
-@@ -2683,19 +5721,20 @@
+@@ -2683,19 +5788,20 @@
                ['read-after-entry-1', 'read-after-entry-2'],
                ToolNames.READ_FILE,
                'p-plan-boundary',
@@ -76849,7 +76950,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall.mock.calls[0][1]).toMatchObject({
          callId: 'enter-plan',
          name: ToolNames.ENTER_PLAN_MODE,
-@@ -2758,23 +5797,25 @@
+@@ -2758,23 +5864,25 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -76878,7 +76979,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(total);
      });
  
-@@ -2802,19 +5843,19 @@
+@@ -2802,19 +5910,19 @@
                });
            }),
        );
@@ -76903,7 +77004,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
        resolvers['c']();
        resolvers['a']();
-@@ -2826,72 +5867,15 @@
+@@ -2826,72 +5934,15 @@
        const nextTurnParts = mockGeminiClient.sendMessageStream.mock
          .calls[1][0] as Part[];
        const ids = nextTurnParts
@@ -76979,7 +77080,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        setupMetricsMock();
        // Kind.Edit is a mutator: each unsafe call forms its own sequential
        // batch, so call #2 must not start until call #1 has settled.
-@@ -2910,17 +5894,19 @@
+@@ -2910,17 +5961,19 @@
              );
            }),
        );
@@ -77002,7 +77103,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['e1']);
        resolvers[0]();
-@@ -2928,53 +5914,12 @@
+@@ -2928,53 +5981,12 @@
        resolvers[1]();
        await run;
  
@@ -77056,7 +77157,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // [r1,r2,e1,r3,r4] partitions to [r1,r2](parallel), [e1](sequential),
        // [r3,r4](parallel).
        vi.mocked(mockToolRegistry.getTool).mockImplementation(
-@@ -2994,21 +5939,23 @@
+@@ -2994,21 +6006,23 @@
                resolve({ responseParts: [{ text: `resp-${req.callId}` }] });
            }),
        );
@@ -77083,7 +77184,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        await new Promise((resolve) => setImmediate(resolve));
        expect(startOrder).toEqual(['r1', 'r2']);
        resolvers['r1']();
-@@ -3056,19 +6003,21 @@
+@@ -3056,19 +6070,21 @@
                };
              }),
          );
@@ -77108,7 +77209,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          await new Promise((resolve) => setImmediate(resolve));
          expect(startOrder).toEqual(['c1', 'c2']);
          // Freeing one slot admits the next call, one at a time.
-@@ -3125,56 +6074,66 @@
+@@ -3125,56 +6141,66 @@
            return { responseParts: [{ text: `resp-${req.callId}` }] };
          },
        );
@@ -77185,7 +77286,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
  
      await runNonInteractive(
-@@ -3189,18 +6148,19 @@
+@@ -3189,18 +6215,19 @@
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledTimes(1);
  
      const duplicateParts = mockGeminiClient.sendMessageStream.mock.calls[2][0];
@@ -77207,7 +77308,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          callId: 'tool-1',
          providerCallId: 'tool-1',
          name: 'testTool',
-@@ -3228,40 +6188,41 @@
+@@ -3228,40 +6255,41 @@
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(createStreamFromEvents([toolCallEvent]))
        .mockReturnValueOnce(
@@ -77260,7 +77361,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should stop repeated duplicate provider tool-call responses from drain items', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3313,28 +6274,33 @@
+@@ -3313,28 +6341,33 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -77296,7 +77397,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(3);
      expect(mockCoreExecuteToolCall).not.toHaveBeenCalled();
      const drainPromptIds = mockGeminiClient.sendMessageStream.mock.calls
-@@ -3346,14 +6312,15 @@
+@@ -3346,14 +6379,15 @@
  
      const duplicateParts = mockGeminiClient.sendMessageStream.mock
        .calls[2][0] as Part[];
@@ -77314,7 +77415,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
    it('should ignore duplicate provider tool-call ids already present in chat history', async () => {
      setupMetricsMock();
      mockGeminiClient.getHistoryFunctionResponseIds.mockReturnValue(
-@@ -3367,23 +6334,27 @@
+@@ -3367,23 +6401,27 @@
          name: 'testTool',
          args: { arg1: 'value1' },
          isClientInitiated: false,
@@ -77345,7 +77446,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
  
      await runNonInteractive(
-@@ -3401,32 +6372,34 @@
+@@ -3401,32 +6439,34 @@
      expect(duplicateParts[0].functionResponse?.id).toBe(
        'tool-history__qwen_dup_2',
      );
@@ -77383,7 +77484,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          callId: 'tool-1',
          providerCallId: 'tool-1',
          name: 'testTool',
-@@ -3483,24 +6456,29 @@
+@@ -3483,24 +6523,29 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Final answer' },
@@ -77415,7 +77516,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
      expect(mockGeminiClient.recordCompletedToolCall).toHaveBeenCalledTimes(1);
  
-@@ -3515,13 +6493,16 @@
+@@ -3515,13 +6560,16 @@
        'success',
        'error',
      ]);
@@ -77433,7 +77534,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -3530,39 +6511,38 @@
+@@ -3530,39 +6578,38 @@
          name: 'errorTool',
          args: {},
          isClientInitiated: false,
@@ -77489,7 +77590,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger tool error',
-@@ -3573,41 +6553,46 @@
+@@ -3573,41 +6620,46 @@
      expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(2);
      expect(mockGeminiClient.sendMessageStream).toHaveBeenNthCalledWith(
        2,
@@ -77549,7 +77650,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const toolCallEvent: ServerGeminiStreamEvent = {
        type: GeminiEventType.ToolCallRequest,
-@@ -3616,57 +6601,115 @@
+@@ -3616,57 +6668,115 @@
          name: 'nonexistentTool',
          args: {},
          isClientInitiated: false,
@@ -77689,7 +77790,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      // 1. Mock the imported atCommandProcessor
      const { handleAtCommand } = await import(
-@@ -3691,13 +6734,16 @@
+@@ -3691,13 +6801,16 @@
  
      // Mock a simple stream response from the Gemini client
      const events: ServerGeminiStreamEvent[] = [
@@ -77707,7 +77808,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -3714,13 +6760,68 @@
+@@ -3714,13 +6827,68 @@
          modelOverride: undefined,
          submittedPrompt: 'Summarize @file.txt',
        },
@@ -77777,7 +77878,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      await mockHeadlessImageInput();
      const { resolveForModel, runtimeView } = configureHeadlessVisionModel({
-@@ -3738,28 +6839,31 @@
+@@ -3738,28 +6906,31 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -77814,7 +77915,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            ...finishedEvents,
          ]),
        );
-@@ -3768,15 +6872,13 @@
+@@ -3768,15 +6939,13 @@
        mockConfig,
        mockSettings,
        'inspect @image.png',
@@ -77831,7 +77932,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        1,
        headlessImageParts,
        expect.any(AbortSignal),
-@@ -3786,24 +6888,24 @@
+@@ -3786,24 +6955,24 @@
          modelOverride: selector,
          submittedPrompt: 'inspect @image.png',
        },
@@ -77858,7 +77959,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('does not leak a headless image route into a notification drain', async () => {
      setupMetricsMock();
-@@ -3828,18 +6930,22 @@
+@@ -3828,18 +6997,22 @@
          name: 'testTool',
          args: {},
          isClientInitiated: false,
@@ -77885,7 +77986,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'inspect @image.png',
-@@ -3855,13 +6961,17 @@
+@@ -3855,13 +7028,17 @@
          type: SendMessageType.Notification,
          modelOverride: undefined,
        }),
@@ -77904,7 +78005,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
-@@ -3908,13 +7018,13 @@
+@@ -3908,13 +7085,13 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -77919,7 +78020,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('emits a stream-json system message for headless vision bridge notices', async () => {
      setupMetricsMock();
-@@ -3934,18 +7044,22 @@
+@@ -3934,18 +7111,22 @@
        egressOccurred: true,
      });
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -77948,7 +78049,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'inspect @image.png',
        'prompt-vision-bridge-json',
-@@ -3989,13 +7103,13 @@
+@@ -3989,13 +7170,13 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -77963,7 +78064,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('strips headless images when a non-agent vision bridge is skipped', async () => {
      setupMetricsMock();
-@@ -4027,16 +7141,16 @@
+@@ -4027,16 +7208,16 @@
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
@@ -77982,7 +78083,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('does not select a headless image route after clamping removes the image', async () => {
      vi.stubEnv('QWEN_CODE_MAX_INLINE_MEDIA_BYTES', '1');
-@@ -4085,47 +7199,51 @@
+@@ -4085,47 +7266,51 @@
      const { resolveForModel } = configureHeadlessVisionModel({
        id: 'vision-agent',
        agentCapable: true,
@@ -78047,7 +78148,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        expect.any(AbortSignal),
        'prompt-id-1',
        {
-@@ -4150,52 +7268,74 @@
+@@ -4150,52 +7335,74 @@
          'type' in msg &&
          msg.type === 'result',
      );
@@ -78132,7 +78233,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        tools: {
          totalCalls: 1,
          totalSuccess: 1,
-@@ -4221,28 +7361,33 @@
+@@ -4221,28 +7428,33 @@
              },
            },
          },
@@ -78168,7 +78269,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (call) => typeof call[0] === 'string',
      );
      expect(outputCalls.length).toBeGreaterThan(0);
-@@ -4254,39 +7399,49 @@
+@@ -4254,39 +7466,49 @@
          typeof msg === 'object' &&
          msg !== null &&
          'type' in msg &&
@@ -78225,7 +78326,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        {
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
-@@ -4306,57 +7461,82 @@
+@@ -4306,57 +7528,82 @@
        (msg: unknown) =>
          typeof msg === 'object' &&
          msg !== null &&
@@ -78340,7 +78441,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.TEXT);
      setupMetricsMock();
  
-@@ -4372,62 +7552,50 @@
+@@ -4372,62 +7619,50 @@
      };
  
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -78417,7 +78518,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        value: {
          error: {
            message: '402 Model gpt-oss-120b is not available for billing.',
-@@ -4437,21 +7605,20 @@
+@@ -4437,21 +7672,20 @@
      };
  
      mockGeminiClient.sendMessageStream.mockReturnValue(
@@ -78446,7 +78547,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      const stderrOutput = processStderrSpy.mock.calls
        .map((call) => String(call[0]))
        .join('');
-@@ -4484,41 +7651,51 @@
+@@ -4484,41 +7718,51 @@
      const fatalError = new FatalInputError('Invalid command syntax provided');
  
      mockGeminiClient.sendMessageStream.mockImplementation(() => {
@@ -78525,7 +78626,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const mockCommand = {
        name: 'testcommand',
-@@ -4532,13 +7709,16 @@
+@@ -4532,13 +7776,16 @@
      mockGetCommands.mockReturnValue([mockCommand]);
  
      const events: ServerGeminiStreamEvent[] = [
@@ -78543,7 +78644,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -4558,13 +7738,15 @@
+@@ -4558,13 +7805,15 @@
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
          submittedPrompt: '/testcommand',
@@ -78560,7 +78661,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      const mockCommand = {
        name: 'confirm',
-@@ -4582,13 +7764,13 @@
+@@ -4582,13 +7831,13 @@
        mockSettings,
        '/confirm',
        'prompt-id-confirm',
@@ -78575,7 +78676,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should treat an unknown slash command as a regular prompt', async () => {
      setupMetricsMock();
-@@ -4596,13 +7778,16 @@
+@@ -4596,13 +7845,16 @@
      mockGetCommands.mockReturnValue([]);
  
      const events: ServerGeminiStreamEvent[] = [
@@ -78593,7 +78694,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -4622,13 +7807,15 @@
+@@ -4622,13 +7874,15 @@
          type: SendMessageType.UserQuery,
          modelOverride: undefined,
          submittedPrompt: '/unknowncommand',
@@ -78610,7 +78711,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      setupMetricsMock();
      // Mock a built-in command that exists but is not in the allowed list
      const mockHelpCommand = {
-@@ -4644,13 +7831,13 @@
+@@ -4644,13 +7898,13 @@
        mockSettings,
        '/help',
        'prompt-id-help',
@@ -78625,7 +78726,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should handle unhandled command result types by returning early with error', async () => {
      setupMetricsMock();
-@@ -4669,13 +7856,13 @@
+@@ -4669,13 +7923,13 @@
        mockSettings,
        '/noaction',
        'prompt-id-unhandled',
@@ -78640,7 +78741,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
    it('should pass arguments to the slash command action', async () => {
      setupMetricsMock();
-@@ -4692,13 +7879,16 @@
+@@ -4692,13 +7946,16 @@
      mockGetCommands.mockReturnValue([mockCommand]);
  
      const events: ServerGeminiStreamEvent[] = [
@@ -78658,7 +78759,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -4708,35 +7898,42 @@
+@@ -4708,35 +7965,42 @@
        '/testargs arg1 arg2',
        'prompt-id-args',
      );
@@ -78711,7 +78812,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -4750,75 +7947,87 @@
+@@ -4750,75 +8014,87 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -78825,7 +78926,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(endInteractionSpanSpy).toHaveBeenCalledWith('cancelled', {
        promptId: 'prompt-recoverable-interrupt',
      });
-@@ -4829,18 +8038,22 @@
+@@ -4829,18 +8105,22 @@
        OutputFormat.STREAM_JSON,
      );
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -78854,7 +78955,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
            agentId: 'fork-tool-fork-1',
            toolUseId: 'tool-fork-1',
            description: 'Inherit parent context',
-@@ -4851,14 +8064,14 @@
+@@ -4851,14 +8131,14 @@
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
          { type: GeminiEventType.Content, value: 'Fork launched.' },
@@ -78871,7 +78972,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
  
      await runNonInteractive(
-@@ -4891,20 +8104,22 @@
+@@ -4891,20 +8171,22 @@
        OutputFormat.STREAM_JSON,
      );
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -78902,7 +79003,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        '<task-id>mon_1</task-id>\n' +
        '<kind>monitor</kind>\n' +
        '<status>running</status>\n' +
-@@ -4960,26 +8175,26 @@
+@@ -4960,26 +8242,26 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -78933,7 +79034,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
  
      await runNonInteractive(
-@@ -5075,38 +8290,38 @@
+@@ -5075,38 +8357,38 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Started.' },
@@ -78978,7 +79079,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
  
      await runNonInteractive(
-@@ -5134,32 +8349,38 @@
+@@ -5134,32 +8416,38 @@
        expect.objectContaining({
          todoWorkChainId: 'chain-2',
        }),
@@ -79027,7 +79128,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      const userEnvelope = {
        type: 'user',
-@@ -5199,20 +8420,22 @@
+@@ -5199,20 +8487,22 @@
        OutputFormat.STREAM_JSON,
      );
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -79058,7 +79159,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        '<task-id>mon_1</task-id>\n' +
        '<kind>monitor</kind>\n' +
        '<status>running</status>\n' +
-@@ -5236,14 +8459,14 @@
+@@ -5236,14 +8526,14 @@
      mockGeminiClient.sendMessageStream.mockReturnValueOnce(
        createStreamFromEvents([
          { type: GeminiEventType.Content, value: 'Monitor stopped.' },
@@ -79075,7 +79176,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      );
  
      await runNonInteractive(
-@@ -5288,20 +8511,22 @@
+@@ -5288,20 +8578,22 @@
        OutputFormat.STREAM_JSON,
      );
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -79106,7 +79207,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        '<task-id>mon_1</task-id>\n' +
        '<kind>monitor</kind>\n' +
        '<status>running</status>\n' +
-@@ -5374,32 +8599,32 @@
+@@ -5374,32 +8666,32 @@
            eventCount: 2,
          },
        );
@@ -79144,7 +79245,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Watch the logs',
        'prompt-monitor-cutover',
-@@ -5435,20 +8660,22 @@
+@@ -5435,20 +8727,22 @@
        OutputFormat.STREAM_JSON,
      );
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -79175,7 +79276,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockBackgroundTaskRegistry.hasUnfinalizedTasks.mockImplementation(() => {
        if (keepBackgroundTaskOpen && !lateMonitorEventEmitted) {
          lateMonitorEventEmitted = true;
-@@ -5532,26 +8759,26 @@
+@@ -5532,26 +8826,26 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -79206,7 +79307,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        );
  
      const runPromise = runNonInteractive(
-@@ -5591,55 +8818,379 @@
+@@ -5591,55 +8885,379 @@
      expect(envelopes.at(-1)).toMatchObject({
        type: 'result',
        is_error: false,
@@ -79606,7 +79707,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      await runNonInteractive(
        mockConfig,
        mockSettings,
-@@ -5652,42 +9203,42 @@
+@@ -5652,42 +9270,42 @@
        .split('\n')
        .filter((line) => line.trim().length > 0)
        .map((line) => JSON.parse(line));
@@ -79664,7 +79765,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -5747,47 +9298,48 @@
+@@ -5747,47 +9365,48 @@
    it('should emit tool results as user messages in stream-json format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -79732,7 +79833,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      mockGeminiClient.sendMessageStream
        .mockReturnValueOnce(createStreamFromEvents(firstCallEvents))
        .mockReturnValueOnce(createStreamFromEvents(secondCallEvents));
-@@ -5802,24 +9354,36 @@
+@@ -5802,24 +9421,36 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -79780,7 +79881,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -5836,73 +9400,76 @@
+@@ -5836,73 +9467,76 @@
        (block: unknown) =>
          typeof block === 'object' &&
          block !== null &&
@@ -79883,7 +79984,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockConfig,
        mockSettings,
        'Trigger error',
-@@ -5934,39 +9501,47 @@
+@@ -5934,39 +9568,47 @@
        (block: unknown) =>
          typeof block === 'object' &&
          block !== null &&
@@ -79942,7 +80043,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -6003,30 +9578,39 @@
+@@ -6003,30 +9645,39 @@
    it('should handle thinking blocks in stream-json format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -79992,7 +80093,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -6040,41 +9624,43 @@
+@@ -6040,41 +9691,43 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -80058,7 +80159,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        value: {
          callId: 'tool-1',
          name: 'firstTool',
-@@ -6091,32 +9677,37 @@
+@@ -6091,32 +9744,37 @@
          args: { param: 'value2' },
          isClientInitiated: false,
          prompt_id: 'prompt-id-multi',
@@ -80107,7 +80208,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        mockSettings,
        'Multiple tools',
        'prompt-id-multi',
-@@ -6125,36 +9716,32 @@
+@@ -6125,36 +9783,32 @@
      const envelopes = writes
        .join('')
        .split('\n')
@@ -80163,7 +80264,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (env) =>
          env.type === 'user' &&
          Array.isArray(env.message?.content) &&
-@@ -6171,18 +9758,22 @@
+@@ -6171,18 +9825,22 @@
  
    it('should execute only the first duplicate tool call id in stream-json format', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
@@ -80192,7 +80293,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        value: {
          callId: 'dup_id_0001',
          name: 'read_file',
-@@ -6220,24 +9811,29 @@
+@@ -6220,24 +9878,29 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'done' },
@@ -80224,7 +80325,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenCalledWith(
        mockConfig,
        expect.objectContaining({
-@@ -6255,30 +9851,15 @@
+@@ -6255,30 +9918,15 @@
      );
      expect(toolResultParts[1].functionResponse?.id).toBe('dup_id_0001');
      expect(toolResultParts[1].functionResponse?.response?.['error']).toContain(
@@ -80258,7 +80359,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
      setupMetricsMock();
-@@ -6322,24 +9903,28 @@
+@@ -6322,24 +9970,28 @@
        .mockReturnValueOnce(
          createStreamFromEvents([
            { type: GeminiEventType.Content, value: 'done' },
@@ -80289,7 +80390,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      expect(mockCoreExecuteToolCall).toHaveBeenNthCalledWith(
        1,
        mockConfig,
-@@ -6365,26 +9950,31 @@
+@@ -6365,26 +10017,31 @@
    it('should handle userMessage with text content blocks in stream-json input mode', async () => {
      (mockConfig.getOutputFormat as Mock).mockReturnValue('stream-json');
      (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -80330,7 +80431,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        createStreamFromEvents(events),
      );
  
-@@ -6478,13 +10068,16 @@
+@@ -6478,13 +10135,16 @@
      mockConfig.getCronScheduler = vi.fn().mockReturnValue(scheduler);
      mockGeminiClient.sendMessageStream.mockReturnValue(
        createStreamFromEvents([
@@ -80348,7 +80449,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      await runNonInteractive(mockConfig, mockSettings, 'test', 'p-cron-wiring');
  
-@@ -6499,31 +10092,32 @@
+@@ -6499,31 +10159,32 @@
        true,
      );
      expect(predicate({ prompt: 'regular cron job' } as CronJob)).toBe(false);
@@ -80400,7 +80501,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          properties: { summary: { type: 'string' } },
        });
        (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
-@@ -6539,20 +10133,22 @@
+@@ -6539,20 +10200,22 @@
          getAll: vi.fn().mockReturnValue([]),
          hasUnfinalizedTasks: vi.fn().mockReturnValue(false),
          abortAll: abortAllSpy,
@@ -80431,7 +80532,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // second tool from running.
        const structuredArgs = { summary: 'done' };
        const structuredCall: ServerGeminiStreamEvent = {
-@@ -6573,25 +10169,28 @@
+@@ -6573,25 +10236,28 @@
            args: {},
            isClientInitiated: false,
            prompt_id: 'prompt-id-structured',
@@ -80463,7 +80564,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // should have been skipped because structured output ended the session.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const firstCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6615,44 +10214,25 @@
+@@ -6615,44 +10281,25 @@
          'tool_call',
        );
        expect(
@@ -80517,7 +80618,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6667,20 +10247,22 @@
+@@ -6667,20 +10314,22 @@
          getAll: vi.fn().mockReturnValue([]),
          hasUnfinalizedTasks: vi.fn().mockReturnValue(false),
          abortAll: abortAllSpy,
@@ -80548,7 +80649,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // side effect never runs — accepting the structured result while
        // having already executed write_file would violate the "structured
        // output is the terminal contract" guarantee.
-@@ -6703,25 +10285,28 @@
+@@ -6703,25 +10352,28 @@
            args: structuredArgs,
            isClientInitiated: false,
            prompt_id: 'prompt-id-leading',
@@ -80580,7 +80681,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // leading side-effect tool must have been suppressed by the pre-scan.
        expect(mockCoreExecuteToolCall).toHaveBeenCalledTimes(1);
        const onlyCallArg = mockCoreExecuteToolCall.mock.calls[0][1] as {
-@@ -6729,54 +10314,35 @@
+@@ -6729,54 +10381,35 @@
        };
        expect(onlyCallArg.name).toBe('structured_output');
        // No follow-up turn should have been issued.
@@ -80647,7 +80748,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
  
      it('tries multiple structured_output calls in the same turn until one succeeds', async () => {
        // Same-turn batch: [structured_output(bad), structured_output(good)].
-@@ -6799,20 +10365,22 @@
+@@ -6799,20 +10432,22 @@
          getAll: vi.fn().mockReturnValue([]),
          hasUnfinalizedTasks: vi.fn().mockReturnValue(false),
          abortAll: abortAllSpy,
@@ -80678,7 +80779,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          type: GeminiEventType.ToolCallRequest,
          value: {
            callId: 'tool-structured-bad',
-@@ -6850,21 +10418,24 @@
+@@ -6850,21 +10485,24 @@
                  name: 'structured_output',
                  response: { error: 'args invalid' },
                },
@@ -80706,7 +80807,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // order; the loop stops at the first success so no third execution.
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string; callId: string }).name,
-@@ -6881,27 +10452,17 @@
+@@ -6881,27 +10519,17 @@
        // No retry turn was needed.
        expect(mockGeminiClient.sendMessageStream).toHaveBeenCalledTimes(1);
        expect(abortAllSpy).toHaveBeenCalledTimes(1);
@@ -80739,7 +80840,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        (mockConfig.getJsonSchema as Mock).mockReturnValue({
          type: 'object',
          properties: { summary: { type: 'string' } },
-@@ -6933,28 +10494,35 @@
+@@ -6933,28 +10561,35 @@
            args: { summary: 'second try' },
            isClientInitiated: false,
            prompt_id: 'prompt-id-retry',
@@ -80785,7 +80886,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Emit structured output',
          'prompt-id-retry',
-@@ -6983,26 +10551,31 @@
+@@ -6983,26 +10618,31 @@
          properties: { summary: { type: 'string' } },
        });
        (mockConfig.getOutputFormat as Mock).mockReturnValue(OutputFormat.JSON);
@@ -80826,7 +80927,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          createStreamFromEvents(plainTextTurn),
        );
  
-@@ -7027,14 +10600,14 @@
+@@ -7027,14 +10667,14 @@
              (m as { type?: string }).type === 'result',
          );
        expect(result?.is_error).toBe(true);
@@ -80843,7 +80944,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
      it('synthesises tool_result for suppressed sibling calls when structured_output fails validation', async () => {
        // Same-turn batch: [side_effect_tool, structured_output(bad)]. The
        // pre-scan suppresses the side_effect_tool; structured_output then
-@@ -7104,17 +10677,22 @@
+@@ -7104,17 +10744,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -80866,7 +80967,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const executedNames = mockCoreExecuteToolCall.mock.calls.map(
          (call) => (call[1] as { name: string }).name,
        );
-@@ -7260,17 +10838,22 @@
+@@ -7260,17 +10905,22 @@
            ],
          })
          .mockResolvedValueOnce({
@@ -80889,7 +80990,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          (call) => (call[1] as { name: string }).name,
        );
        expect(executedNames).toEqual([
-@@ -7331,20 +10914,22 @@
+@@ -7331,20 +10981,22 @@
          OutputFormat.STREAM_JSON,
        );
        (mockConfig.getIncludePartialMessages as Mock).mockReturnValue(false);
@@ -80920,7 +81021,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        // enqueue a drain item before the first turn runs.
        const notificationXml =
          '<task-notification>\n' +
-@@ -7383,23 +10968,32 @@
+@@ -7383,23 +11035,32 @@
          .mockReturnValueOnce(
            createStreamFromEvents([
              { type: GeminiEventType.Content, value: 'Monitor launched.' },
@@ -80959,7 +81060,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockSettings,
          'Watch the logs',
          'prompt-drain-struct',
-@@ -7504,37 +11098,46 @@
+@@ -7504,37 +11165,46 @@
              },
            );
          }),
@@ -81018,7 +81119,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
        const exitCode = await runNonInteractive(
          mockConfig,
          mockSettings,
-@@ -7600,37 +11203,46 @@
+@@ -7600,37 +11270,46 @@
          getAll: vi.fn().mockReturnValue([]),
          hasUnfinalizedTasks: vi.fn().mockReturnValue(false),
          abortAll: vi.fn(),
@@ -81077,7 +81178,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          mockConfig,
          mockSettings,
          'Emit structured output (text mode)',
-@@ -7698,13 +11310,16 @@
+@@ -7698,13 +11377,16 @@
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -81095,7 +81196,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          createStreamFromEvents(events),
        );
  
-@@ -7739,13 +11354,16 @@
+@@ -7739,13 +11421,16 @@
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -81113,7 +81214,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          createStreamFromEvents(events),
        );
  
-@@ -7794,13 +11412,16 @@
+@@ -7794,13 +11479,16 @@
  
        setupMetricsMock();
        const events: ServerGeminiStreamEvent[] = [
@@ -81131,7 +81232,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.test.ts b/packages/cli/src/nonIn
          createStreamFromEvents(events),
        );
  
-@@ -7825,6 +11446,22 @@
+@@ -7825,6 +11513,22 @@
        } finally {
          await fs.rm(realTmpDir, { recursive: true, force: true });
        }
@@ -81966,7 +82067,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
      };
      const flushQueuedNotificationsToSdk = (queue: LocalQueueItem[]) => {
        while (queue.length > 0) {
-@@ -859,17 +906,156 @@
+@@ -859,24 +906,172 @@
        oneShotMonitorsFinalized = true;
        captureMonitorTurnsInLocalQueue = false;
        config.getMonitorRegistry().abortAll();
@@ -81978,6 +82079,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -    // stdout instead and let the natural return drive cleanup. (Aborting
 -    // is also wrong: the abort path runs handleCancellationError → exit
 -    // 130 and re-introduces the same bypass.)
+-    let pipeBroken = false;
 +    // The run's one terminal record. It is emitted at most once: a second
 +    // ending -- an emit that threw and then reached the catch -- reports a
 +    // failed exit and writes nothing more, because the stream's contract is
@@ -82061,6 +82163,9 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +
 +        const stoppedExitCode = await endIfRecordingStopped();
 +        if (stoppedExitCode !== undefined) return stoppedExitCode;
++        // Whatever ending the run reached after its output failed, it ends as
++        // that failure: nothing written after it arrives.
++        if (outputFailure) throw outputFailure;
 +
 +        // Text mode's terminal record is a line on stderr, so an ending whose
 +        // message is already there would print it a second time.
@@ -82118,17 +82223,34 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +      }
 +    };
 +
-+    // EPIPE: destroy stdout and let the natural return drive cleanup, so
-+    // the caller's runExitCleanup → flush() still runs and no queued JSONL
-+    // write is dropped. Aborting instead would report the broken pipe as a
-+    // cancellation, which is not what happened.
-     let pipeBroken = false;
++    // Stdout is where the run's output goes -- in the stream formats, its
++    // record -- and once it fails nothing written there arrives. So the run
++    // ends at once, with that failure as its cause, the way a write that
++    // finds the stream failed ends it: a run that went on would work, for as
++    // long as its next turns take, toward output no one can read. The run is
++    // stopped through its abort controller, which stops the generation or
++    // tool call under way, and every ending it then reaches is that failure
++    // (`finish`), never the cancellation an abort would otherwise report.
++    // Stdout is destroyed so nothing later waits on it, and the caller's
++    // runExitCleanup → flush() still runs.
++    let outputFailure: NodeJS.ErrnoException | undefined;
      let workflowApprovalChannelRegistered = false;
      const stdoutErrorHandler = (err: NodeJS.ErrnoException) => {
-       if (err.code === 'EPIPE' && !pipeBroken) {
-         pipeBroken = true;
-         process.stdout.destroy();
-@@ -993,2178 +1179,2335 @@
+-      if (err.code === 'EPIPE' && !pipeBroken) {
+-        pipeBroken = true;
+-        process.stdout.destroy();
+-      }
++      if (outputFailure) return;
++      outputFailure = err;
++      process.stdout.destroy();
++      abortController.abort(err);
+     };
+ 
+     // Setup signal handlers for graceful shutdown
+     const shutdownHandler = () => {
+       debugLogger.debug('[runNonInteractive] Shutdown signal received');
+       abortController.abort();
+@@ -993,2178 +1188,2335 @@
      };
  
      // First-turn SendMessageType override for continuation turns; null means
@@ -82459,15 +82581,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -                message: slashCommandResult.content,
 -                isError: slashCommandResult.messageType === 'error',
 -                adapter,
-+          }
-+
-+          if (!initialPartList) {
-+            let slashHandled = false;
-+            if (interpretsTaskCommands(config) && isSlashCommand(input)) {
-+              const slashCommandResult = await handleSlashCommand(
-+                input,
-+                abortController,
-                 config,
+-                config,
 -                startTimeMs: startTime,
 -                beforeEmit: settleBeforeTerminalOutput,
 -              });
@@ -82476,6 +82590,15 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -            case 'stream_messages':
 -              throw new FatalInputError(
 -                'Stream messages mode is not supported in non-interactive CLI',
++          }
++
++          if (!initialPartList) {
++            let slashHandled = false;
++            if (interpretsTaskCommands(config) && isSlashCommand(input)) {
++              const slashCommandResult = await handleSlashCommand(
++                input,
++                abortController,
++                config,
 +                settings,
                );
 -            case 'unsupported': {
@@ -82815,7 +82938,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -          debugLogger.warn(`worktree restore failed (non-fatal):`, error);
 -        }
 -      }
- 
+-
 -      const recoveredAgentsNotice =
 -        resumedSessionData &&
 -        !options.continueInterrupted &&
@@ -82825,7 +82948,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -      if (recoveredAgentsNotice) {
 -        initialPartList = withReminder(initialPartList, recoveredAgentsNotice);
 -      }
--
+ 
 -      let initialParts = normalizePartList(initialPartList);
 -      let fullTurnModelOverride: string | undefined;
 -      let fullTurnRuntimeView: RuntimeContentGeneratorView | undefined;
@@ -83569,7 +83692,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 +            });
            };
 -        }
--
+ 
 -        const respondedRequests = new Set<ToolCallRequestInfo>();
 -        const executableBatchRequests: ToolCallRequestInfo[] = [];
 -        for (const requestInfo of uniqueBatchRequests) {
@@ -83578,7 +83701,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -            executableBatchRequests.push(requestInfo);
 -            continue;
 -          }
- 
+-
 -          if (!handledProviderToolCallIds.has(providerCallId)) {
 -            handledProviderToolCallIds.add(providerCallId);
 -            executableBatchRequests.push(requestInfo);
@@ -84415,7 +84538,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
              }
 -          }
 -        }
--
+ 
 -        // Synthesise tool_result events + retry parts for every
 -        // tool_use block from the prior assistant message that we did
 -        // NOT actually execute — non-structured siblings that were
@@ -84454,7 +84577,7 @@ diff --git a/packages/cli/src/nonInteractiveCli.ts b/packages/cli/src/nonInterac
 -            responseByRequest.set(call, toolResponse);
 -          }
 -        }
- 
+-
 -        for (const requestInfo of duplicateBatchRequests) {
 -          const providerCallId = getProviderResponseId(requestInfo);
 -          if (!providerCallId) continue;
@@ -215992,7 +216115,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      class TestShellTool extends ShellTool {
        protected override createInvocation(params: ShellToolParams) {
          // Cast through unknown — the test invocation extends the real
-@@ -17895,19 +17627,26 @@
+@@ -17895,19 +17627,27 @@
          // the shell-tool-specific branch (which is the branch that
          // wires setPromoteAbortControllerCallback).
          return new TestShellInvocation(
@@ -216012,6 +216135,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
 +    const tool = new TestShellTool(
 +      {
 +        getShellDefaultTimeoutMs: () => undefined,
++        getShouldUseNodePtyShell: () => true,
 +        getInlineBlockTokens: () => INLINE_BLOCK_TOKENS,
 +        countInlineTokens: countFourBytesPerToken,
 +      } as unknown as Config,
@@ -216023,7 +216147,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getFunctionDeclarations: () => [],
        tools: new Map(),
        discovery: {},
-@@ -17920,12 +17659,13 @@
+@@ -17920,12 +17660,13 @@
        getToolsByServer: () => [],
      } as unknown as ToolRegistry;
  
@@ -216037,7 +216161,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.YOLO,
        getContentGeneratorConfig: () => ({
          model: 'test-model',
-@@ -17936,12 +17676,14 @@
+@@ -17936,12 +17677,14 @@
          terminalWidth: 80,
          terminalHeight: 24,
        }),
@@ -216052,7 +216176,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete,
        onToolCallsUpdate,
-@@ -18062,12 +17804,13 @@
+@@ -18062,12 +17805,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216066,7 +216190,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18087,12 +17830,14 @@
+@@ -18087,12 +17831,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216081,7 +216205,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -18144,12 +17889,13 @@
+@@ -18144,12 +17890,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216095,7 +216219,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18169,12 +17915,14 @@
+@@ -18169,12 +17916,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216110,7 +216234,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -18217,12 +17965,13 @@
+@@ -18217,12 +17966,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216124,7 +216248,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.DEFAULT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18242,12 +17991,14 @@
+@@ -18242,12 +17992,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216139,7 +216263,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        config: mockConfig,
        onAllToolCallsComplete: vi.fn(),
        onToolCallsUpdate: vi.fn(),
-@@ -18273,12 +18024,14 @@
+@@ -18273,12 +18025,14 @@
    it('is a no-op when invocation does not expose setPromptId', async () => {
      // Reuses the existing TestApprovalTool which has no setPromptId.
      // The scheduler must not throw when the duck-type check fails.
@@ -216154,7 +216278,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getTool: () => tool,
        ensureTool: async () => tool,
        getFunctionDeclarations: () => [],
-@@ -18291,12 +18044,13 @@
+@@ -18291,12 +18045,13 @@
        discoverTools: async () => {},
        getAllTools: () => [],
        getToolsByServer: () => [],
@@ -216168,7 +216292,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
        getApprovalMode: () => ApprovalMode.AUTO_EDIT,
        getPermissionsAllow: () => [],
        getContentGeneratorConfig: () => ({
-@@ -18316,12 +18070,14 @@
+@@ -18316,12 +18071,14 @@
        isInteractive: () => true,
        getIdeMode: () => false,
        getExperimentalZedIntegration: () => false,
@@ -216183,7 +216307,7 @@ diff --git a/packages/core/src/core/coreToolScheduler.test.ts b/packages/core/sr
      const scheduler = new CoreToolScheduler({
        config: mockConfig,
        onAllToolCallsComplete,
-@@ -18348,6 +18104,65 @@
+@@ -18348,6 +18105,65 @@
  
      await vi.waitFor(() => {
        expect(onAllToolCallsComplete).toHaveBeenCalled();
@@ -281074,7 +281198,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline-response-evi
 new file mode 100644
 --- /dev/null
 +++ b/packages/core/src/core/openaiContentGenerator/pipeline-response-evidence.test.ts
-@@ -0,0 +1,1127 @@
+@@ -0,0 +1,1177 @@
 +import { authoredTextPart, harnessText } from '../text-authorship.js';
 +import OpenAI from 'openai';
 +import type {
@@ -281110,6 +281234,7 @@ new file mode 100644
 +import { replayRecordedOpenAIObservations } from './recorded-response-replay.js';
 +import { RepeatedToolParameterRefusal } from '../generation-refusal.js';
 +import type { ErrorHandler } from './types.js';
++import { EnhancedErrorHandler } from './errorHandler.js';
 +import { STREAM_IDLE_TIMEOUT_MS } from './constants.js';
 +import { RECORDING_STALL_TIMEOUT_MS } from '../recording-stall.js';
 +
@@ -281124,6 +281249,12 @@ new file mode 100644
 +  fetch: NonNullable<ConstructorParameters<typeof OpenAI>[0]>['fetch'],
 +  persist: (record: ModelResponseEvidence) => Promise<void> = async () => {},
 +  providerModel?: string,
++  errorHandler: ErrorHandler = {
++    handle: (error: unknown) => {
++      throw error;
++    },
++    shouldSuppressErrorLogging: () => true,
++  } as ErrorHandler,
 +) {
 +  const requests: ModelRequestEvidence[] = [];
 +  const responses: ModelResponseEvidence[] = [];
@@ -281162,12 +281293,7 @@ new file mode 100644
 +    cliConfig: config,
 +    contentGeneratorConfig: profile,
 +    provider,
-+    errorHandler: {
-+      handle: (error: unknown) => {
-+        throw error;
-+      },
-+      shouldSuppressErrorLogging: () => true,
-+    } as ErrorHandler,
++    errorHandler,
 +  });
 +  const request = {
 +    chatAttempt: null,
@@ -281588,6 +281714,54 @@ new file mode 100644
 +      served_usage: null,
 +      sdk_values_seen: 1,
 +      pipeline_outputs_delivered: 1,
++    });
++    expect(raw(f.responses).toString()).toBe(body);
++    validate(f);
++  });
++
++  it('ends a stream on any error its backend served inside it as that error, never read by its text', async () => {
++    // The backend's own refusal of a call no reading of which validates: its
++    // text names the call, and a tool named for a timeout must not make the
++    // error a request timeout, whose outcome would lose the backend's words.
++    const served = {
++      message:
++        "The model's call to 'set_timeout' has argument text no typed reading of which validates against its schema. Generate the response again.",
++      type: 'UnprocessableEntityError',
++      param: null,
++      code: 422,
++    };
++    const body =
++      chunk(null, { content: 'planning' }) +
++      `data: ${JSON.stringify({ error: served })}\n\n` +
++      'data: [DONE]\n\n';
++    // Through the handler the client serves with, which classifies an error
++    // by its text.
++    const f = fixture(
++      async () => sse(body),
++      undefined,
++      undefined,
++      new EnhancedErrorHandler(() => true),
++    );
++    const run = async () => {
++      for await (const _ of await f.pipeline.executeStream(
++        f.request,
++        'served-error',
++      )) {
++        /* drain */
++      }
++    };
++    await expect(run()).rejects.toMatchObject({
++      message: served.message,
++      type: served.type,
++      status: undefined,
++    });
++    expect(
++      f.responses.find((record) => record.event.kind === 'outcome')?.event,
++    ).toMatchObject({
++      kind: 'outcome',
++      status: 'failed',
++      error: `Error: ${served.message}`,
++      served_usage: null,
 +    });
 +    expect(raw(f.responses).toString()).toBe(body);
 +    validate(f);
@@ -289087,7 +289261,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +import { refuseUnownedProviderRequest } from '../model-request-evidence.js';
 +import type { OwnedGenerationRequest as GenerateContentParameters } from '../generation-context.js';
  import type OpenAI from 'openai';
-+import { APIError } from 'openai';
++import { APIConnectionError, APIError } from 'openai';
  import {
 -  type GenerateContentParameters,
    GenerateContentResponse,
@@ -289340,7 +289514,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    return PROVIDER_OUTPUT_BUDGET_KEYS.some(
      (key) => samplingParams[key] !== undefined,
    );
-@@ -221,410 +318,870 @@
+@@ -221,410 +318,884 @@
      }
    }
    return samplingParams;
@@ -289792,6 +289966,20 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +    return attempt.recorder.capture(await fetchWithTimeout(...args));
 +  };
 +  recordedClients.add(client);
++}
++
++/**
++ * An error the backend served inside a stream it had begun: the OpenAI SDK
++ * raises it as an `APIError` with no HTTP status, carrying the served error
++ * object -- unlike a connection failure, which carries none.
++ */
++function isServedStreamError(error: unknown): error is APIError {
++  return (
++    error instanceof APIError &&
++    !(error instanceof APIConnectionError) &&
++    error.status === undefined &&
++    error.error !== undefined
++  );
 +}
 +
  export class ContentGenerationPipeline {
@@ -290457,7 +290645,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
  
    /**
     * Stage 2: Process OpenAI stream with conversion and logging
-@@ -635,222 +1192,103 @@
+@@ -635,222 +1206,112 @@
     * 4. Handle success/error logging
     */
    private async *processStreamWithLogging(
@@ -290696,6 +290884,15 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
 +      if (error instanceof RepeatedToolParameterRefusal) {
 +        throw error;
 +      }
++      // Any other error the backend served inside the stream is its own
++      // ending, typed and worded by it -- a call no reading of which
++      // validates, a call its grammar has no reading of -- and never a
++      // transport fault, so it is handed on as served rather than classified
++      // by its text, which names the call: a tool named for a timeout would
++      // make it a request timeout, worded over the backend's words.
++      if (isServedStreamError(error)) {
++        throw redactProxyError(error);
++      }
  
        // Re-throw StreamContentError directly so it can be handled by
        // the caller's retry logic (e.g., TPM throttling retry in sendMessageStream)
@@ -290740,7 +290937,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
                ? {
                    maxLifetimeMs: (error as StreamLifetimeExceededError)
                      .maxLifetimeMs,
-@@ -858,100 +1296,19 @@
+@@ -858,100 +1319,19 @@
                : { idleMs: (error as StreamInactivityTimeoutError).idleMs }),
            },
          );
@@ -290842,7 +291039,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    ): Promise<OpenAI.Chat.ChatCompletionCreateParams> {
      const messages = OpenAIContentConverter.convertGeminiRequestToOpenAI(
        request,
-@@ -988,19 +1345,18 @@
+@@ -988,19 +1368,18 @@
  
        // Map Gemini-style toolConfig.functionCallingConfig.mode to OpenAI's
        // tool_choice so structured side queries (e.g. the AUTO-mode
@@ -290867,7 +291064,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      // Let provider enhance the request (e.g., add metadata, cache control)
      let providerRequest = this.config.provider.buildRequest(
        baseRequest,
-@@ -1029,13 +1385,13 @@
+@@ -1029,13 +1408,13 @@
      // Exception: `thinkingMandatory` marks models that reject
      // `enable_thinking: false` with a 400 (e.g. qwen3.8-max-preview on
      // DashScope Token Plan gateways — set by the preset, or by users via
@@ -290882,7 +291079,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
      const thinkingMandatory = this.requiresThinking(model);
      const reasoningDisabled =
        request.config?.thinkingConfig?.includeThoughts === false ||
-@@ -1047,15 +1403,14 @@
+@@ -1047,15 +1426,14 @@
        // Hostname + model-name gate avoids leaking this qwen-specific field
        // to non-qwen routings on the same DashScope hostname (GLM uses
        // `extra_body.thinking.enabled`, DeepSeek-on-DashScope uses
@@ -290900,7 +291097,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        // model would miss the disable signal (the regression).
        if (!thinkingMandatory && isQwenFamilyWireModel(model)) {
          if (isDashScope) {
-@@ -1173,12 +1528,28 @@
+@@ -1173,12 +1551,28 @@
          'DashScope: dropping tool_choice=required while thinking is enabled',
          { model, reasoningEffort, thinkingBudget, thinkingMandatory },
        );
@@ -290929,7 +291126,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
    private requiresThinking(model: string): boolean {
      const normalizedModel = model.toLowerCase();
      return (
-@@ -1318,39 +1689,115 @@
+@@ -1318,39 +1712,115 @@
    }
  
    /**
@@ -291056,7 +291253,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
        return await executeAttempt();
      } catch (error) {
        const model = context.model.toLowerCase();
-@@ -1398,31 +1845,29 @@
+@@ -1398,31 +1868,29 @@
  
    /**
     * Create request context with common properties
@@ -291096,7 +291293,7 @@ diff --git a/packages/core/src/core/openaiContentGenerator/pipeline.ts b/package
          // Default true: the OpenAI Chat Completions spec only permits text on
          // `role: "tool"` messages, so tool-returned media (e.g. an image read
          // by read_file) embedded there is silently dropped or rejected by
-@@ -1432,12 +1877,10 @@
+@@ -1432,12 +1900,10 @@
          // Opt out via generationConfig.splitToolMedia = false.
          true,
        toolResultContentFormat:
@@ -301322,12 +301519,12 @@ diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/toke
 + * given -- its repository, its workspace, its budget, its todo list -- changes
 + * the bound, and the text it bounds changes only with the client.
 + *
-+ * The capacity is that text's measured worst case with room to grow. When it
-+ * was declared the proof counted the main session's to 11,591 through the
-+ * served template and tokenizer, and 12,288 is the next multiple of 1,024
-+ * above it: the room left is what the prompt and the declarations may grow
-+ * by before the proof refuses them at startup, naming them. Nothing in it
-+ * grows with the window, so no window holds back more for it.
++ * The capacity is that text's measured worst case with room to grow. The
++ * proof counts the main session's to 11,681 through the served template and
++ * tokenizer, and 12,288 is the next multiple of 1,024 above it: the 607 left
++ * are what the prompt and the declarations may grow by before the proof
++ * refuses them at startup, naming them. Nothing in it grows with the
++ * window, so no window holds back more for it.
 + */
 +const CLIENT_PREAMBLE_TOKENS = 12_288;
 +
@@ -385650,7 +385847,21 @@ new file mode 100644
 diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages/core/src/tools/__snapshots__/shell.test.ts.snap
 --- a/packages/core/src/tools/__snapshots__/shell.test.ts.snap
 +++ b/packages/core/src/tools/__snapshots__/shell.test.ts.snap
-@@ -27,13 +27,13 @@
+@@ -6,12 +6,13 @@
+ IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
+ 
+ **Usage notes**:
+ - The command argument is required.
+ - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
+ - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
++- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see the exact bytes, redirect the output to a file and read it with read_file.
+ 
+ - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
+   - File search: Use glob (NOT find or ls)
+   - Content search: Use grep_search (NOT grep or rg)
+   - Read files: Use read_file (NOT cat/head/tail)
+   - Edit files: Use edit (NOT sed/awk)
+@@ -27,13 +28,13 @@
      HEREDOC
      )"
      \`\`\`
@@ -385665,7 +385876,21 @@ diff --git a/packages/core/src/tools/__snapshots__/shell.test.ts.snap b/packages
  - Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of \`cd\`. You may use \`cd\` if the User explicitly requests it.
    <good-example>
    pytest /foo/bar/tests
-@@ -83,13 +83,13 @@
+@@ -68,12 +69,13 @@
+ IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
+ 
+ **Usage notes**:
+ - The command argument is required.
+ - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
+ - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
++- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see the exact bytes, redirect the output to a file and read it with read_file.
+ 
+ - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
+   - File search: Use glob (NOT find or ls)
+   - Content search: Use grep_search (NOT grep or rg)
+   - Read files: Use read_file (NOT cat/head/tail)
+   - Edit files: Use edit (NOT sed/awk)
+@@ -83,13 +85,13 @@
    - Use double quotes around arguments that contain spaces or metacharacters.
    - Escape literal cmd.exe metacharacters such as \`&\`, \`|\`, \`<\`, \`>\`, and \`^\` with caret (\`^\`).
    - Single quotes do not quote arguments in cmd.exe.
@@ -403635,7 +403860,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
  import path from 'node:path';
  import { execFileSync } from 'node:child_process';
  import type { Config } from '../config/config.js';
-@@ -14,14 +15,22 @@
+@@ -14,14 +15,23 @@
  import { FileDiscoveryService } from '../services/fileDiscoveryService.js';
  import { FileReadCache } from '../services/fileReadCache.js';
  import { StandardFileSystemService } from '../services/fileSystemService.js';
@@ -403649,6 +403874,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
 +  ToolResult,
 +} from './tools.js';
  import { applyNotebookEdit, NotebookEditTool } from './notebook-edit.js';
++import { NotebookText } from '../utils/notebook.js';
 +import type { NotebookEditToolParams } from './notebook-edit.js';
 +import { spellRuns } from '../test-utils/authored-runs.js';
 +import { runWithToolArguments } from '../core/tool-call-arguments.js';
@@ -403659,7 +403885,222 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
  }));
  
  describe('NotebookEditTool', () => {
-@@ -710,12 +719,16 @@
+@@ -432,12 +442,214 @@
+     });
+ 
+     expect(result.updatedContent).toContain('\n  "cells"');
+     expect(result.updatedContent.endsWith('\n')).toBe(false);
+   });
+ 
++  describe('the bytes an edit leaves', () => {
++    // A notebook as other writers lay it out: one cell per line, numbers as
++    // written (1.0, 1e-05, an integer past 2^53, 2.50) and an escaped
++    // character, none of which a JSON round trip keeps.
++    const quirky =
++      '{\n "cells": [\n  {"cell_type": "code", "id": "a1", "metadata": {"x": 1.0, "eps": 1e-05, "big": 12345678901234567890, "s": "caf\\u00e9", "f": 2.50}, "source": ["print(1)\\n"], "outputs": [], "execution_count": null},\n  {"cell_type": "markdown", "id": "b2", "metadata": {}, "source": ["old"]}\n ],\n "metadata": {}, "nbformat": 4, "nbformat_minor": 5\n}\n';
++
++    it('changes only the replaced source, every other byte as the file has it', () => {
++      const result = applyNotebookEdit(quirky, {
++        notebook_path: '/tmp/quirky.ipynb',
++        cell_id: 'b2',
++        new_source: 'new',
++      });
++      expect(result.updatedContent).toBe(
++        quirky.replace('"source": ["old"]', '"source": ["new"]'),
++      );
++    });
++
++    it('clears a replaced code cell in its own spans, leaving its neighbours', () => {
++      const result = applyNotebookEdit(
++        quirky.replace(
++          '"outputs": [], "execution_count": null',
++          '"outputs": [{"output_type": "stream", "name": "stdout", "text": ["1\\n"]}], "execution_count": 3',
++        ),
++        {
++          notebook_path: '/tmp/quirky.ipynb',
++          cell_id: 'a1',
++          new_source: 'print(2)\n',
++        },
++      );
++      expect(result.updatedContent).toBe(
++        quirky.replace('["print(1)\\n"]', '["print(2)\\n"]'),
++      );
++    });
++
++    it('inserts and deletes a cell without touching the others', () => {
++      const inserted = applyNotebookEdit(quirky, {
++        notebook_path: '/tmp/quirky.ipynb',
++        edit_mode: 'insert',
++        cell_id: 'a1',
++        cell_type: 'markdown',
++        new_source: 'mid',
++      });
++      const cell =
++        '{\n   "cell_type": "markdown",\n   "metadata": {},\n   "source": [\n    "mid"\n   ],\n   "id": "qwen-cell-1"\n  }';
++      expect(inserted.updatedContent).toBe(
++        quirky.replace(
++          'null},\n  {"cell_type": "markdown"',
++          `null},\n  ${cell},\n  {"cell_type": "markdown"`,
++        ),
++      );
++
++      const deleted = applyNotebookEdit(inserted.updatedContent, {
++        notebook_path: '/tmp/quirky.ipynb',
++        edit_mode: 'delete',
++        cell_id: 'qwen-cell-1',
++      });
++      expect(deleted.updatedContent).toBe(quirky);
++    });
++
++    it('splices a notebook laid out as JSON.stringify lays it out into the text JSON.stringify gives', () => {
++      const notebook = {
++        nbformat: 4,
++        nbformat_minor: 5,
++        cells: [
++          {
++            cell_type: 'markdown',
++            id: 'intro',
++            metadata: {},
++            source: ['# Intro'],
++          },
++          {
++            cell_type: 'code',
++            id: 'run',
++            metadata: {},
++            source: ['x = 1\n', 'x'],
++            execution_count: 2,
++            outputs: [{ output_type: 'execute_result', data: {} }],
++          },
++        ],
++        metadata: {},
++      };
++      const raw = `${JSON.stringify(notebook, null, 1)}\n`;
++
++      const converted = applyNotebookEdit(raw, {
++        notebook_path: '/tmp/layout.ipynb',
++        cell_id: 'run',
++        cell_type: 'markdown',
++        new_source: 'now prose',
++      });
++      const {
++        execution_count: _count,
++        outputs: _outputs,
++        ...run
++      } = notebook.cells[1]!;
++      expect(converted.updatedContent).toBe(
++        `${JSON.stringify(
++          {
++            ...notebook,
++            cells: [
++              notebook.cells[0],
++              { ...run, cell_type: 'markdown', source: ['now prose'] },
++            ],
++          },
++          null,
++          1,
++        )}\n`,
++      );
++
++      const deleted = applyNotebookEdit(raw, {
++        notebook_path: '/tmp/layout.ipynb',
++        edit_mode: 'delete',
++        cell_id: 'intro',
++      });
++      expect(deleted.updatedContent).toBe(
++        `${JSON.stringify({ ...notebook, cells: [notebook.cells[1]] }, null, 1)}\n`,
++      );
++    });
++
++    it('refuses a spliced text that does not read as the edited notebook', () => {
++      // The text and the parsed notebook describe one change; a splice that
++      // drifted from it is never handed on to be written.
++      vi.spyOn(NotebookText.prototype, 'setMember').mockImplementation(
++        () => undefined,
++      );
++      expect(() =>
++        applyNotebookEdit(quirky, {
++          notebook_path: '/tmp/quirky.ipynb',
++          cell_id: 'b2',
++          new_source: 'new',
++        }),
++      ).toThrow(/does not read as the edited notebook/);
++    });
++
++    it('writes a CRLF notebook with CRLF line breaks in the value it lays out', async () => {
++      const raw = `${JSON.stringify(
++        {
++          cells: [
++            { cell_type: 'markdown', id: 'm', metadata: {}, source: ['a'] },
++          ],
++          metadata: {},
++          nbformat: 4,
++          nbformat_minor: 5,
++        },
++        null,
++        1,
++      )}\n`.replace(/\n/g, '\r\n');
++      const filePath = path.join(tempDir, 'crlf.ipynb');
++      fs.writeFileSync(filePath, raw, 'utf-8');
++      seedNotebookRead(filePath);
++
++      const result = await buildInvocation({
++        notebook_path: filePath,
++        cell_id: 'm',
++        new_source: 'b\nc',
++      }).execute(abortSignal);
++
++      expect(result.error).toBeUndefined();
++      expect(fs.readFileSync(filePath, 'utf-8')).toBe(
++        raw.replace(
++          '"source": [\r\n    "a"\r\n   ]',
++          '"source": [\r\n    "b\\n",\r\n    "c"\r\n   ]',
++        ),
++      );
++    });
++
++    it('finds values past strings that hold brackets, quotes and escapes', () => {
++      const raw = JSON.stringify({
++        cells: [
++          {
++            cell_type: 'code',
++            id: 'tricky',
++            metadata: { note: 'a "quoted" } ] { [ \\ path\\' },
++            source: ['print("}]")\n'],
++            outputs: [{ output_type: 'stream', text: ['{"a": [1, 2]}\n'] }],
++            execution_count: 4,
++          },
++          { cell_type: 'markdown', id: 'after', metadata: {}, source: 'x' },
++        ],
++        metadata: {},
++        nbformat: 4,
++        nbformat_minor: 5,
++      });
++
++      const result = applyNotebookEdit(raw, {
++        notebook_path: '/tmp/tricky.ipynb',
++        cell_id: 'tricky',
++        new_source: 'pass',
++      });
++
++      expect(result.updatedContent).toBe(
++        raw
++          .replace('["print(\\"}]\\")\\n"]', '["pass"]')
++          .replace(
++            '[{"output_type":"stream","text":["{\\"a\\": [1, 2]}\\n"]}]',
++            '[]',
++          )
++          .replace('"execution_count":4', '"execution_count":null'),
++      );
++    });
++  });
++
+   it('rejects ambiguous fallback-like cell IDs', async () => {
+     const filePath = writeNotebook('ambiguous.ipynb', {
+       nbformat: 4,
+       nbformat_minor: 5,
+       cells: [
+         {
+@@ -710,12 +922,16 @@
      }
  
      expect(result?.error?.type).toBe(
@@ -403676,7 +404117,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
      'rejects non-regular notebook paths with a dedicated error type',
      async () => {
        const fifoPath = path.join(tempDir, 'notebook-fifo.ipynb');
-@@ -812,13 +825,13 @@
+@@ -812,13 +1028,13 @@
        originalParams,
      );
      fs.writeFileSync(invalidPath, 'not json', 'utf-8');
@@ -403691,7 +404132,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
    });
  
    it('rejects direct attempts to set internal modified notebook content params', () => {
-@@ -919,13 +932,13 @@
+@@ -919,13 +1135,13 @@
        currentContent,
        modifiedContent,
        originalParams,
@@ -403706,7 +404147,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
      const updated = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
      expect(updated.cells[0].source).toEqual(['x = 99']);
      expect(result.llmContent).toContain('modified by the user');
-@@ -1031,7 +1044,361 @@
+@@ -1031,7 +1247,361 @@
  
      expect(mockFileHistoryService.trackEdit).toHaveBeenCalledWith(filePath);
      expect(result.error?.type).toBe(ToolErrorType.FILE_CHANGED_SINCE_READ);
@@ -404071,7 +404512,7 @@ diff --git a/packages/core/src/tools/notebook-edit.test.ts b/packages/core/src/t
 diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/notebook-edit.ts
 --- a/packages/core/src/tools/notebook-edit.ts
 +++ b/packages/core/src/tools/notebook-edit.ts
-@@ -1,31 +1,50 @@
+@@ -1,31 +1,48 @@
  /**
   * @license
   * Copyright 2026 Qwen Team
@@ -404087,8 +404528,8 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  import * as path from 'node:path';
  import type { Config } from '../config/config.js';
  import { ApprovalMode } from '../config/config.js';
- import { detectLineEnding } from '../services/fileSystemService.js';
- import type { LineEnding } from '../services/fileSystemService.js';
+-import { detectLineEnding } from '../services/fileSystemService.js';
+-import type { LineEnding } from '../services/fileSystemService.js';
  import type {
 +  AuthoredToolResult,
    ToolCallConfirmationDetails,
@@ -404123,7 +404564,28 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  import { FileOperationEvent } from '../telemetry/types.js';
  import { logFileOperation } from '../telemetry/loggers.js';
  import { getSpecificMimeType } from '../utils/fileUtils.js';
-@@ -68,21 +87,21 @@
+@@ -33,19 +50,18 @@
+ import {
+   findCellIndex,
+   getCellDisplayId,
+   getNotebookLanguage,
+   hasStableCellIds,
+   inferInsertedCellSourceArrayStyle,
+-  inferNotebookJsonFormat,
+   isAmbiguousCellId,
+   makeCellId,
+   normalizeEditedCell,
+   normalizeSource,
++  NotebookText,
+   parseNotebook,
+-  serializeNotebook,
+   toNotebookSource,
+   type EditableNotebookCellType,
+   type NotebookCell,
+   type NotebookCellType,
+ } from '../utils/notebook.js';
+ import { ToolDisplayNames, ToolNames } from './tool-names.js';
+@@ -68,43 +84,64 @@
    cell_id?: string;
    new_source?: string;
    cell_type?: EditableNotebookCellType;
@@ -404151,7 +404613,12 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
    requiresReadAfterWrite: boolean;
  }
  
-@@ -95,16 +114,38 @@
+ interface PreparedNotebookEdit extends NotebookEditResult {
+   originalContent: string;
+   bom: boolean;
+   encoding: string | undefined;
+-  lineEnding: LineEnding;
+ }
  
  type NotebookPriorReadDecision =
    | { ok: true }
@@ -404191,7 +404658,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
    decision: Exclude<NotebookPriorReadDecision, { ok: true }>,
  ): NotebookPriorReadDecision {
    debugLogger.debug('prior-read-rejected', {
-@@ -115,66 +156,109 @@
+@@ -115,66 +152,109 @@
    });
    return decision;
  }
@@ -404307,7 +404774,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
    return index;
  }
  
-@@ -203,13 +287,13 @@
+@@ -203,34 +283,42 @@
  ): NotebookEditResult {
    let notebook: ReturnType<typeof parseNotebook>;
    try {
@@ -404322,13 +404789,45 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  
    const mode = params.edit_mode ?? 'replace';
    const source = requireNotebookSource(params.new_source, mode);
-@@ -242,78 +326,99 @@
+   const originalHasStableCellIds = hasStableCellIds(notebook);
+   const targetIndex = resolveTargetIndex(notebook, params.cell_id, mode);
+   const language = getNotebookLanguage(notebook);
+-  const jsonFormat = inferNotebookJsonFormat(rawContent);
++  // The edit is made twice, as one change: to the parsed notebook, which
++  // decides it, and to the file's text, value by value, which is what is
++  // written. Every byte no change names is the file's.
++  const text = new NotebookText(rawContent);
+   const buildResult = (
+     updatedNotebook: ReturnType<typeof parseNotebook>,
+     result: Omit<
+       NotebookEditResult,
+       'updatedContent' | 'requiresReadAfterWrite'
+     >,
+   ): NotebookEditResult => {
++    if (!sameJson(parseNotebook(text.text), updatedNotebook)) {
++      throw new Error(
++        'The notebook text this edit spliced does not read as the edited notebook, so it is not written; report this client defect with this message.',
++      );
++    }
+     const structuralEdit = mode === 'insert' || mode === 'delete';
+     return {
+       ...result,
+-      updatedContent: serializeNotebook(updatedNotebook, jsonFormat),
++      updatedContent: text.text,
+       requiresReadAfterWrite:
+         structuralEdit &&
+         !(originalHasStableCellIds && hasStableCellIds(updatedNotebook)),
+     };
+   };
+ 
+@@ -242,78 +330,155 @@
          notebook,
          cellType,
          source,
          inferInsertedCellSourceArrayStyle(notebook, insertAt),
        );
        notebook.cells.splice(insertAt, 0, newCell);
++      text.insertCell(insertAt, newCell);
 +      // The inserted cell's id is one the harness generated, or a `cell-N`
 +      // it rendered.
        return buildResult(notebook, {
@@ -404342,6 +404841,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  
      case 'delete': {
        const [removed] = notebook.cells.splice(targetIndex, 1);
++      text.deleteCell(targetIndex);
        return buildResult(notebook, {
          editedCellId: displayCellId(removed, targetIndex),
 +        editedCellIdAuthor: displayCellIdAuthor(removed, targetIndex),
@@ -404362,7 +404862,28 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        }
  
        const finalType = params.cell_type ?? target.cell_type;
-       target.source = toNotebookSource(source, Array.isArray(target.source));
+-      target.source = toNotebookSource(source, Array.isArray(target.source));
++      const newSource = toNotebookSource(source, Array.isArray(target.source));
++      // The values `normalizeEditedCell` changes, each where it is.
++      text.setMember(targetIndex, 'source', newSource);
++      if (finalType !== target.cell_type) {
++        text.setMember(targetIndex, 'cell_type', finalType);
++      }
++      if (target.metadata === undefined || target.metadata === null) {
++        text.setMember(targetIndex, 'metadata', {});
++      }
++      if (finalType === 'code') {
++        if (target.execution_count !== null) {
++          text.setMember(targetIndex, 'execution_count', null);
++        }
++        if (!Array.isArray(target.outputs) || target.outputs.length > 0) {
++          text.setMember(targetIndex, 'outputs', []);
++        }
++      } else {
++        text.deleteMember(targetIndex, 'execution_count');
++        text.deleteMember(targetIndex, 'outputs');
++      }
++      target.source = newSource;
        normalizeEditedCell(target, finalType);
        return buildResult(notebook, {
          editedCellId: displayCellId(target, targetIndex),
@@ -404385,6 +404906,40 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
    }
  }
  
++/**
++ * Whether two values are the same JSON: what JSON.parse reads from each
++ * one's serialization, a member whose value is `undefined` being one that
++ * serialization leaves out.
++ */
++function sameJson(a: unknown, b: unknown): boolean {
++  if (Array.isArray(a) || Array.isArray(b)) {
++    return (
++      Array.isArray(a) &&
++      Array.isArray(b) &&
++      a.length === b.length &&
++      a.every((item, i) => sameJson(item, b[i]))
++    );
++  }
++  if (
++    a !== null &&
++    b !== null &&
++    typeof a === 'object' &&
++    typeof b === 'object'
++  ) {
++    const members = (value: object) =>
++      Object.entries(value).filter(([, member]) => member !== undefined);
++    const left = members(a);
++    const right = new Map(members(b));
++    return (
++      left.length === right.size &&
++      left.every(
++        ([key, member]) => right.has(key) && sameJson(member, right.get(key)),
++      )
++    );
++  }
++  return Object.is(a, b);
++}
++
 +/**
 + * Why a notebook did not parse, with its authors: a JSON syntax error is
 + * the parser's report on the file's text (the world's), and the checks
@@ -404425,7 +404980,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      requiresReadAfterWrite:
        !hasStableCellIds(originalNotebook) || !hasStableCellIds(notebook),
    };
-@@ -335,41 +440,68 @@
+@@ -335,41 +500,68 @@
      const code = (error as NodeJS.ErrnoException | undefined)?.code;
      if (code === 'ENOENT') {
        if (options.expectExisting) {
@@ -404499,7 +405054,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  
    const status = config.getFileReadCache().check(stats);
    if (
-@@ -385,51 +517,67 @@
+@@ -385,51 +577,67 @@
      status.entry.lastReadAt !== undefined &&
      !status.entry.lastReadWasFull
    ) {
@@ -404573,7 +405128,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
  
    override toolLocations(): ToolLocation[] {
      return [{ path: this.params.notebook_path }];
-@@ -484,13 +632,13 @@
+@@ -484,125 +692,129 @@
    ): Promise<PreparedNotebookEdit> {
      const preDecision = await checkPriorNotebookRead(
        this.config,
@@ -404587,8 +405142,16 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      let originalContent: string;
      let bom = false;
      let encoding: string | undefined;
-     let lineEnding: LineEnding = 'lf';
-@@ -506,40 +654,43 @@
+-    let lineEnding: LineEnding = 'lf';
+     try {
+       const fileInfo = await this.config.getFileSystemService().readTextFile({
+         path: this.params.notebook_path,
+       });
+       originalContent = fileInfo.content;
+       bom = fileInfo._meta?.bom ?? false;
+       encoding = fileInfo._meta?.encoding;
+-      lineEnding =
+-        fileInfo._meta?.lineEnding ?? detectLineEnding(fileInfo.content);
      } catch (error) {
        if (abortSignal.aborted) {
          throw error;
@@ -404640,11 +405203,16 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
            originalContent,
            bom,
            encoding,
-           lineEnding,
-@@ -552,57 +703,63 @@
+-          lineEnding,
+         };
+       }
+ 
+       return {
+         ...applyNotebookEdit(originalContent, this.params),
+         originalContent,
          bom,
          encoding,
-         lineEnding,
+-        lineEnding,
        };
      } catch (error) {
        if (error instanceof NotebookEditError) {
@@ -404717,7 +405285,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      try {
        try {
          await this.config
-@@ -616,18 +773,15 @@
+@@ -616,33 +828,29 @@
          this.config,
          this.params.notebook_path,
          { expectExisting: true },
@@ -404738,10 +405306,11 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        await this.config.getFileSystemService().writeTextFile({
          path: this.params.notebook_path,
          content: prepared.updatedContent,
-@@ -636,13 +790,13 @@
+         toolWriteOrigin: 'notebook_edit',
+         _meta: {
            bom: prepared.bom,
            encoding: prepared.encoding,
-           lineEnding: prepared.lineEnding,
+-          lineEnding: prepared.lineEnding,
          },
        });
  
@@ -404753,7 +405322,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
            prepared.updatedContent,
          );
        }
-@@ -675,13 +829,13 @@
+@@ -675,13 +883,13 @@
          'Current',
          'Proposed',
        );
@@ -404768,7 +405337,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
        logFileOperation(
          this.config,
          new FileOperationEvent(
-@@ -699,53 +853,83 @@
+@@ -699,58 +907,88 @@
          fileName,
          originalContent: prepared.originalContent,
          newContent: prepared.updatedContent,
@@ -404874,9 +405443,15 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      super(
        NotebookEditTool.Name,
        ToolDisplayNames.NOTEBOOK_EDIT,
-       `Edits a Jupyter notebook (.ipynb) safely at the cell level. Use this instead of ${ToolNames.EDIT} or ${ToolNames.WRITE_FILE} for notebook cells. Supports replacing, inserting, and deleting cells. Always read the notebook first with ${ToolNames.READ_FILE}; then use the cell IDs shown in that output.`,
+-      `Edits a Jupyter notebook (.ipynb) safely at the cell level. Use this instead of ${ToolNames.EDIT} or ${ToolNames.WRITE_FILE} for notebook cells. Supports replacing, inserting, and deleting cells. Always read the notebook first with ${ToolNames.READ_FILE}; then use the cell IDs shown in that output.`,
++      `Edits a Jupyter notebook (.ipynb) safely at the cell level. Use this instead of ${ToolNames.EDIT} or ${ToolNames.WRITE_FILE} for notebook cells. Supports replacing, inserting, and deleting cells. Replacing a cell clears its outputs and execution count. Always read the notebook first with ${ToolNames.READ_FILE}; then use the cell IDs shown in that output.`,
        Kind.Edit,
-@@ -784,47 +968,85 @@
+       {
+         properties: {
+           notebook_path: {
+             description:
+               'Absolute path to the Jupyter notebook file to edit. Must end with .ipynb.',
+@@ -784,47 +1022,85 @@
        },
      );
    }
@@ -404971,7 +405546,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      // — so a team-memory write carrying a secret is rejected before scheduling.
      // execute() still scans the full serialized notebook, which catches secrets
      // split across cells that this single-cell check cannot.
-@@ -832,88 +1054,30 @@
+@@ -832,88 +1108,30 @@
        const teamMemoryError = checkTeamMemorySecrets(
          params.notebook_path,
          params.new_source,
@@ -405064,7 +405639,7 @@ diff --git a/packages/core/src/tools/notebook-edit.ts b/packages/core/src/tools/
      const currentContentSnapshots = new Map<string, string>();
      const readCurrentContentSnapshot = async (
        params: NotebookEditToolParams,
-@@ -935,39 +1099,28 @@
+@@ -935,39 +1153,28 @@
        getCurrentContent: async (
          params: NotebookEditToolParams,
        ): Promise<string> => readCurrentContentSnapshot(params),
@@ -410590,7 +411165,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
  import { ApprovalMode, type Config } from '../config/config.js';
  import {
    ToolConfirmationOutcome,
-@@ -58,16 +60,39 @@
+@@ -58,16 +60,40 @@
  } from '../services/shellExecutionService.js';
  import * as fs from 'node:fs';
  import * as os from 'node:os';
@@ -410609,6 +411184,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
  import { createMockWorkspaceContext } from '../test-utils/mockWorkspaceContext.js';
  import { PermissionManager } from '../permissions/permission-manager.js';
  import { CommitAttributionService } from '../services/commitAttribution.js';
++import { encodeTextFileContentAsync } from '../services/fileSystemService.js';
 +import {
 +  authored,
 +  errorAuthors,
@@ -410630,7 +411206,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      command: {
        description: string;
      };
-@@ -130,15 +155,12 @@
+@@ -130,15 +156,12 @@
          .mockReturnValue(createMockWorkspaceContext('/test/dir')),
        storage: {
          getUserSkillsDirs: vi.fn().mockReturnValue(['/test/dir/.qwen/skills']),
@@ -410646,7 +411222,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        getFileHistoryService: vi.fn().mockReturnValue(mockFileHistoryService),
        getFileReadCache: vi.fn().mockReturnValue(mockFileReadCache),
        getFileReadCacheDisabled: vi.fn().mockReturnValue(false),
-@@ -201,13 +223,13 @@
+@@ -201,13 +224,13 @@
      vi.mocked(os.platform).mockReturnValue('linux');
      vi.mocked(os.tmpdir).mockReturnValue('/tmp');
      (vi.mocked(crypto.randomBytes) as Mock).mockReturnValue(
@@ -410661,7 +411237,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        mockShellOutputCallback = callback;
        return {
          pid: 12345,
-@@ -437,48 +459,36 @@
+@@ -437,48 +460,36 @@
          command: 'npm test',
          is_background: false,
        });
@@ -410728,7 +411304,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
    describe('execute', () => {
      const mockAbortSignal = new AbortController().signal;
  
-@@ -493,15 +503,54 @@
+@@ -493,15 +504,54 @@
          error: null,
          aborted: false,
          pid: 12345,
@@ -410783,7 +411359,90 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        const confirmSedEdit = async (
          invocation: ToolInvocation<ShellToolParams, ToolResult>,
        ) => {
-@@ -938,12 +987,15 @@
+@@ -565,12 +615,37 @@
+         resolveShellExecution({ output: 'done' });
+         const result = await resultPromise;
+ 
+         expect(result.llmContent).toContain('Output: done');
+       });
+ 
++      it('writes the lines a sed edit does not change with their own line breaks', async () => {
++        // What the read reports of a file whose lines end in both ways.
++        mockFileSystemService.readTextFile.mockResolvedValue({
++          content: 'foo\r\nbar\n',
++          _meta: { bom: false, encoding: 'utf-8', lineEnding: 'crlf' },
++        });
++
++        const invocation = shellTool.build({
++          command: "sed -i 's/bar/baz/' file.txt",
++          directory: '/test/dir',
++          is_background: false,
++        });
++        await confirmSedEdit(invocation);
++        await invocation.execute(mockAbortSignal);
++
++        const [write] = mockFileSystemService.writeTextFile.mock.calls[0];
++        // The bytes the standard file system writes for that request.
++        const bytes = await encodeTextFileContentAsync(
++          write.path,
++          write.content,
++          write._meta,
++        );
++        expect(bytes).toEqual(Buffer.from('foo\r\nbaz\n', 'utf8'));
++      });
++
+       it('applies a qualifying sed -i command without spawning a shell after preview', async () => {
+         mockFileSystemService.readTextFile.mockResolvedValue({
+           content: 'foo foo\n',
+           _meta: { bom: false, encoding: 'utf-8', lineEnding: 'lf' },
+         });
+ 
+@@ -592,13 +667,13 @@
+           expectedSedFilePath,
+         );
+         expect(mockFileSystemService.writeTextFile).toHaveBeenCalledWith({
+           path: expectedSedFilePath,
+           content: 'bar bar\n',
+           toolWriteOrigin: 'shell_sed_edit',
+-          _meta: { bom: false, encoding: 'utf-8', lineEnding: 'lf' },
++          _meta: { bom: false, encoding: 'utf-8' },
+         });
+         expect(result.llmContent).toContain('sed edit applied');
+       });
+ 
+       it('does not write when a simulated sed edit makes no changes', async () => {
+         mockFileSystemService.readTextFile.mockResolvedValue({
+@@ -715,13 +790,13 @@
+           expect.stringContaining('file history trackEdit failed for sed edit'),
+         );
+         expect(mockFileSystemService.writeTextFile).toHaveBeenCalledWith({
+           path: expectedSedFilePath,
+           content: 'bar\n',
+           toolWriteOrigin: 'shell_sed_edit',
+-          _meta: { bom: false, encoding: 'utf-8', lineEnding: 'lf' },
++          _meta: { bom: false, encoding: 'utf-8' },
+         });
+         expect(result.llmContent).toContain('sed edit applied');
+       });
+ 
+       it('logs non-fatal sed attribution and read-cache failures', async () => {
+         mockFileSystemService.readTextFile.mockResolvedValue({
+@@ -789,13 +864,13 @@
+         expect(mockShellExecutionService).not.toHaveBeenCalled();
+         expect(recordEditSpy).not.toHaveBeenCalled();
+         expect(mockFileSystemService.writeTextFile).toHaveBeenCalledWith({
+           path: expectedSedFilePath,
+           content: 'baz\n',
+           toolWriteOrigin: 'shell_sed_edit',
+-          _meta: { bom: false, encoding: 'utf-8', lineEnding: 'lf' },
++          _meta: { bom: false, encoding: 'utf-8' },
+         });
+         expect(result.llmContent).toContain('sed edit applied');
+       });
+ 
+       it('does not write when sed execution is cancelled after reading', async () => {
+         const abortController = new AbortController();
+@@ -938,12 +1013,15 @@
            expect(result.returnDisplay).toBe(
              'Command timed out after 5000ms before it could complete. There was no output before it timed out.',
            );
@@ -410799,7 +411458,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          }
        });
  
-@@ -2877,13 +2929,16 @@
+@@ -2877,13 +2955,16 @@
        const result = await promise;
  
        expect(result.returnDisplay).toContain('failed output');
@@ -410816,7 +411475,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('reports a foreground signal termination as a tool error', async () => {
        const invocation = shellTool.build({
          command: 'signal-terminated-command',
-@@ -2900,13 +2955,15 @@
+@@ -2900,13 +2981,15 @@
  
        const result = await promise;
  
@@ -410832,7 +411491,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      });
  
      it('keeps a successful PTY exit code successful with signal 0 metadata', async () => {
-@@ -2944,12 +3001,360 @@
+@@ -2944,12 +3027,360 @@
  
        const result = await promise;
  
@@ -411193,7 +411852,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('does not report a user-cancelled signal as a tool error', async () => {
        const invocation = shellTool.build({
          command: 'cancelled-command',
-@@ -3062,191 +3467,12 @@
+@@ -3062,191 +3493,12 @@
  
        const result = await promise;
  
@@ -411385,7 +412044,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        // assume. Tests use vi fake timers to drive the wall-clock past
        // the threshold without actually sleeping. Hint must fire on
        // success AND error completions (advice is the same), suppress
-@@ -3281,12 +3507,24 @@
+@@ -3281,12 +3533,24 @@
          const result = await promise;
          expect(result.llmContent).toContain(
            'this foreground command ran for 60s',
@@ -411410,7 +412069,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // Empty-output success: write-only commands (e.g. `tar czf …`,
          // `cp -r large-dir/`, `dd if=…`) frequently produce no stdout
          // and exit 0. The non-debug `returnDisplayMessage` build leaves
-@@ -3485,116 +3723,12 @@
+@@ -3485,116 +3749,12 @@
          await vi.advanceTimersByTimeAsync(59_999);
          resolveShellExecution({ output: 'hi', exitCode: 0 });
          const result = await promise;
@@ -411527,7 +412186,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          // run should NOT trigger the advisory — the user already told
          // us this command is allowed to run long. Pins the per-
          // invocation coupling so a regression that goes back to the
-@@ -7473,13 +7607,13 @@
+@@ -7473,13 +7633,13 @@
  
      it('should return the windows description when on windows', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
@@ -411542,7 +412201,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
        expect(shellTool.description).toContain(
          "DO NOT use ';' or newlines to separate commands in cmd.exe.",
-@@ -7488,27 +7622,67 @@
+@@ -7488,27 +7648,85 @@
          'Exact cmd.exe command to execute as `cmd.exe /d /s /c <command>`',
        );
      });
@@ -411557,6 +412216,24 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
      });
  
++    it("tells the model how a command's output is shown, the way the configured shell shows it", () => {
++      // The result is a rendering, not the bytes: text copied from it into an
++      // edit matches only where the file holds what was shown.
++      vi.mocked(os.platform).mockReturnValue('linux');
++      vi.mocked(mockConfig.getShouldUseNodePtyShell).mockReturnValue(true);
++      expect(
++        new ShellTool(mockConfig, INTERACTIVE_SESSION).description,
++      ).toContain(
++        "- A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops, each line's trailing spaces dropped, a carriage return letting later text overwrite its line, and anything the program cleared gone. To see the exact bytes, redirect the output to a file and read it with read_file.",
++      );
++      vi.mocked(mockConfig.getShouldUseNodePtyShell).mockReturnValue(false);
++      expect(
++        new ShellTool(mockConfig, INTERACTIVE_SESSION).description,
++      ).toContain(
++        "- A command's output is shown with its escape sequences removed and the whitespace around it trimmed. To see the exact bytes, redirect the output to a file and read it with read_file.",
++      );
++    });
++
 +    it('names only the ways the session has of inspecting a long run in the background', () => {
 +      const interactive = buildLongRunningForegroundHint(60_000, 'interactive');
 +      expect(interactive).toMatch(
@@ -411612,7 +412289,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
        expect(shellTool.description).toContain(
          'The active shell is PowerShell.',
-@@ -7530,13 +7704,13 @@
+@@ -7530,13 +7748,13 @@
      it('should describe pwsh when ComSpec points to pwsh.exe', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
        process.env['ComSpec'] = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
@@ -411627,7 +412304,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        );
        expect(shellTool.description).toContain(
          "use a single run_shell_command call with '&&'",
-@@ -7549,13 +7723,13 @@
+@@ -7549,13 +7767,13 @@
      it('should describe bash when Windows is running in Git Bash', async () => {
        vi.mocked(os.platform).mockReturnValue('win32');
        process.env['ComSpec'] = 'C:\\WINDOWS\\System32\\cmd.exe';
@@ -411642,7 +412319,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
        expect(shellTool.description).toContain('ANSI-C quoting');
        expect(shellTool.description).not.toContain(
          'Command process group can be terminated',
-@@ -7750,12 +7924,13 @@
+@@ -7750,12 +7968,13 @@
          'Command timed out after 5000ms before it could complete.',
        );
        expect(result.returnDisplay).toContain('partial output');
@@ -411656,7 +412333,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
      it('returns a structured timeout when the command produced no output', async () => {
        const invocation = shellTool.build({
          command: 'long-running-command',
-@@ -7798,22 +7973,13 @@
+@@ -7798,22 +8017,13 @@
          expect(result.error?.type).toBe(ToolErrorType.EXECUTION_TIMEOUT);
        } finally {
          vi.stubGlobal('AbortSignal', originalAbortSignal);
@@ -411680,7 +412357,7 @@ diff --git a/packages/core/src/tools/shell.test.ts b/packages/core/src/tools/she
          timeout: 5000,
        });
        const mockCombinedSignal = {
-@@ -7828,33 +7994,36 @@
+@@ -7828,33 +8038,36 @@
          timeout: vi.fn().mockReturnValue(mockCombinedSignal),
          any: vi.fn().mockReturnValue(mockCombinedSignal),
        });
@@ -411775,7 +412452,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  } from '../services/commitAttribution.js';
  import { buildGitNotesCommand } from '../services/attributionTrailer.js';
  import type {
-@@ -68,13 +83,17 @@
+@@ -68,36 +83,30 @@
    type ShellType,
    splitCommands,
    stripShellWrapper,
@@ -411794,10 +412471,14 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  } from '../utils/shellAstParser.js';
  import {
    applySedSubstitution,
-@@ -85,19 +104,12 @@
-   detectLineEnding,
-   type ReadTextFileResponse,
- } from '../services/fileSystemService.js';
+   parseSedEditCommand,
+   type SedEditInfo,
+ } from '../utils/sedEditParser.js';
+-import {
+-  detectLineEnding,
+-  type ReadTextFileResponse,
+-} from '../services/fileSystemService.js';
++import type { ReadTextFileResponse } from '../services/fileSystemService.js';
  import { createPatchSmart, getDiffStat } from './diffOptions.js';
  
  const debugLogger = createDebugLogger('SHELL');
@@ -411814,7 +412495,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
   * launch paths (`executeBackground` and the foreground→background
   * promote), so the two copies cannot drift (#7626).
   */
-@@ -1197,41 +1209,77 @@
+@@ -1197,41 +1206,77 @@
          bg: '',
        },
      ],
@@ -411903,7 +412584,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
   * `sleep 5 && check`, `sleep 5; check`, `sleep 5 # wait` -- but not sleep
   * inside pipelines, subshells, backgrounded commands, or scripts (those are
   * fine).
-@@ -1239,12 +1287,16 @@
+@@ -1239,12 +1284,16 @@
  export function detectBlockedSleepPattern(command: string): string | null {
    return detectBlockedSleepPatternDetails(command)?.description ?? null;
  }
@@ -411920,7 +412601,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
  function detectBlockedSleepPatternDetails(
    command: string,
-@@ -1293,32 +1345,36 @@
+@@ -1293,32 +1342,36 @@
      trimmedComment?.startsWith(INTENTIONAL_SLEEP_COMMENT_PREFIX)
    ) {
      const reason = getIntentionalSleepReason(trimmedComment);
@@ -411958,7 +412639,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  const MAX_INTENTIONAL_SLEEP_SECONDS = 10 * 60;
  // Require a real reason, not a trivial opt-out like "wait".
  const MIN_INTENTIONAL_SLEEP_REASON_LENGTH = 8;
-@@ -1663,25 +1719,100 @@
+@@ -1663,25 +1716,100 @@
    ) {
      return reason.name;
    }
@@ -412060,7 +412741,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    private getSedEditInfo(): SedEditInfo | null {
      if (
-@@ -1702,21 +1833,28 @@
+@@ -1702,21 +1830,28 @@
        return filePath;
      }
      const cwd = this.params.directory || this.config.getTargetDir();
@@ -412096,7 +412777,28 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          priorReadResult.type,
        );
      }
-@@ -1772,43 +1910,48 @@
+@@ -1742,16 +1877,16 @@
+ 
+     return {
+       filePath,
+       fileName: path.basename(filePath),
+       originalContent: content,
+       newContent,
+-      meta: {
+-        ..._meta,
+-        lineEnding: _meta?.lineEnding ?? detectLineEnding(content),
+-      },
++      // The file keeps its encoding and BOM; its text is written as the
++      // substitution left it, every line it did not change with its own
++      // line break, as `sed -i` writes it.
++      meta: { bom: _meta?.bom, encoding: _meta?.encoding },
+     };
+   }
+ 
+   private makeSedEditDisplay(edit: PreparedSedEdit): FileDiff {
+     const diffStat = getDiffStat(
+       edit.fileName,
+@@ -1772,43 +1907,48 @@
        newContent: edit.newContent,
        diffStat,
      };
@@ -412156,7 +412858,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    private waitForSedOperation<T>(
      operation: () => Promise<T>,
-@@ -1844,17 +1987,21 @@
+@@ -1844,17 +1984,21 @@
            reject(err);
          },
        );
@@ -412179,7 +412881,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          () => this.prepareSedEdit(sedInfo),
          signal,
        );
-@@ -1863,34 +2010,36 @@
+@@ -1863,34 +2007,36 @@
        if (err instanceof SedEditCancelledError) {
          return this.sedEditCancelledResult(signal, effectiveTimeout);
        }
@@ -412220,7 +412922,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      if (
        this.preparedSedEdit?.filePath === edit.filePath &&
-@@ -1902,13 +2051,13 @@
+@@ -1902,13 +2048,13 @@
        };
      }
  
@@ -412235,7 +412937,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      const display = this.makeSedEditDisplay(edit);
      let fileHistoryBackupRecorded = false;
-@@ -1971,13 +2120,13 @@
+@@ -1971,13 +2117,13 @@
            `file read cache recordWrite failed for sed edit ${edit.filePath}: ${getErrorMessage(err)}`,
          );
          // Non-fatal: a future read can refresh the cache from disk.
@@ -412250,7 +412952,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        if (err instanceof SedEditCancelledError) {
          return this.sedEditCancelledResult(signal, effectiveTimeout);
        }
-@@ -1997,13 +2146,13 @@
+@@ -1997,13 +2143,13 @@
            message = `No space left on device while writing sed edit to file: ${edit.filePath} (${err.code})`;
          } else if (err.code === 'EISDIR') {
            type = ToolErrorType.TARGET_IS_DIRECTORY;
@@ -412265,7 +412967,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
    getDescription(): string {
      let description = `${this.params.command}`;
      // append optional [in directory]
-@@ -2209,18 +2358,23 @@
+@@ -2209,18 +2355,23 @@
      signal: AbortSignal,
      updateOutput?: (output: ToolResultDisplay) => void,
      shellExecutionConfig?: ShellExecutionConfig,
@@ -412291,7 +412993,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
      if (this.params.is_background) {
        return this.executeBackground(signal, shellExecutionConfig);
-@@ -2270,19 +2424,20 @@
+@@ -2270,19 +2421,20 @@
        if (this.preparedSedEdit) {
          debugLogger.debug('executing simulated sed edit', {
            command: this.params.command,
@@ -412319,7 +413021,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          { command: this.params.command },
        );
      }
-@@ -2726,68 +2881,97 @@
+@@ -2726,68 +2878,97 @@
        result.aborted &&
        getShellAbortReasonKind(combinedSignal.reason) === 'background';
      const timeoutSummary = wasTimeout
@@ -412446,7 +413148,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // span the entire amended commit (the amended commit's parent
        // is the original's parent, so diffing against it lumps both
        // commits' worth of changes). Detect the flag so
-@@ -2875,13 +3059,13 @@
+@@ -2875,13 +3056,13 @@
      // The pre-existing debug snapshot is captured here (pre-truncation,
      // pre-hint); both subsequent steps APPEND to it rather than
      // replacing, so all information accumulates rather than being lost
@@ -412461,7 +413163,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
            ? `${timeoutSummary}\n${result.output}`
            : result.output;
        } else {
-@@ -2902,106 +3086,51 @@
+@@ -2902,106 +3083,51 @@
          }
          // If output is empty and command succeeded (code 0, no error/signal/abort),
          // returnDisplayMessage will remain empty, which is fine.
@@ -412589,7 +413291,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // shellExecutionService.ts); non-zero exits leave it null. Real
      // spawn failures (ENOENT, permission denied) typically resolve in
      // <1s, so the elapsed >= threshold + spawn-error combination is
-@@ -3012,46 +3141,44 @@
+@@ -3012,46 +3138,44 @@
      //
      // Use a `---` divider line so downstream consumers of
      // `error.message` (firePostToolUseFailureHook, telemetry grouping,
@@ -412655,7 +413357,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Foreground → background promote handler. Called when the foreground
-@@ -3073,13 +3200,13 @@
+@@ -3073,13 +3197,13 @@
    private async handlePromotedForeground(
      result: ShellExecutionResult,
      cwd: string,
@@ -412670,7 +413372,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      const outputDir = path.join(
        this.config.storage.getProjectTempDir(),
        'background-shells',
-@@ -3548,14 +3675,16 @@
+@@ -3548,14 +3672,16 @@
      ].join('\n');
  
      debugLogger.debug(
@@ -412688,7 +413390,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Background-execution path: spawn the command into a managed registry
-@@ -3564,13 +3693,13 @@
+@@ -3564,13 +3690,13 @@
     * AbortController; the registry's terminal status is set when the process
     * exits. Returns immediately so the agent's turn isn't blocked.
     */
@@ -412703,7 +413405,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // the post-command attribution path — there's no clean place to
      // hook pre/post-HEAD comparison and `git notes` writes between
      // the early `Background shell started` return and the eventual
-@@ -3581,16 +3710,19 @@
+@@ -3581,16 +3707,19 @@
      //
      // Use the broader `hasCommit` flag rather than `attributableInCwd`:
      // `cd /elsewhere && git commit` should still be refused even
@@ -412727,7 +413429,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      }
      // Strip a single bare trailing `&` (the bash background operator) before
      // spawn: bash treats it as background-detach, exits the wrapper
-@@ -3764,21 +3896,30 @@
+@@ -3764,21 +3893,30 @@
          endStreamThenSettle(outputStream, 'background', shellId, () =>
            registry.fail(shellId, getErrorMessage(err), endTime),
          );
@@ -412766,7 +413468,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  
    /**
     * Count the commits between `preHead` (exclusive) and `postHead`
-@@ -3912,13 +4053,13 @@
+@@ -3912,13 +4050,13 @@
     * the Co-authored-by trailer and the git-notes payload).
     */
    private async attachCommitAttribution(
@@ -412781,7 +413483,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // analysis) drops the AI-attribution note. Returns null when the
      // skip is intentional / inherent to the situation (no commit
      // landed, multi-commit chain, attribution toggle off, no tracked
-@@ -4002,13 +4143,15 @@
+@@ -4002,13 +4140,15 @@
      // NOT also delete the per-file attribution data the user might
      // need to amend & retry. `shouldClear` flips to the partial-clear
      // set only on (a) note-write success, or (b) attribution toggle
@@ -412798,7 +413500,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // diff calls are SHA-pinned so a post-commit hook / chained
        // `git tag` / parallel git process moving HEAD between the
        // analysis phase and the note write can't leave the note
-@@ -4028,16 +4171,17 @@
+@@ -4028,16 +4168,17 @@
        // wholesale clear here, but that erased pending unstaged AI
        // edits for files outside the just-failed commit; the
        // smaller-evil trade-off is documented in the finally block.)
@@ -412819,7 +413521,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // Pass the actual model name (e.g. `qwen3-coder-plus`) rather than the
        // co-author display label so the note's `generator` field reflects
        // which model produced the changes — and so generateNotePayload's
-@@ -4179,16 +4323,17 @@
+@@ -4179,16 +4320,17 @@
        const notesCommand = buildGitNotesCommand(note, postHead);
  
        if (!notesCommand) {
@@ -412840,7 +413542,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          return warning;
        }
  
-@@ -4238,23 +4383,41 @@
+@@ -4238,23 +4380,41 @@
          child.on('error', () => {});
        });
  
@@ -412891,7 +413593,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
          // without losing attribution data they'd need to reproduce.
        } else {
          debugLogger.debug(
-@@ -4265,15 +4428,17 @@
+@@ -4265,15 +4425,17 @@
          shouldClear = committedAbsolutePaths;
        }
      } catch (err) {
@@ -412912,7 +413614,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        // user disabled the toggle). `shouldClear` stays null when the
        // note was skipped (oversized payload, non-zero exit, exception)
        // so the user can amend & retry without their per-file
-@@ -4923,14 +5088,19 @@
+@@ -4923,14 +5085,19 @@
  }
  
  function getShellCommandSequencingGuidance({
@@ -412933,7 +413635,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        return `- When issuing multiple commands:
    ${independentGuidance}
    - If the commands depend on each other and must run sequentially, use a single run_shell_command call with '&&' to chain them together (e.g., \`git add . && git commit -m "message" && git push\`). For instance, if one operation must complete before another starts (like mkdir before cp, Write before run_shell_command for git operations, or git add before git commit), run these operations sequentially instead.
-@@ -4963,21 +5133,26 @@
+@@ -4963,30 +5130,51 @@
        const _exhaustive: never = shell;
        return _exhaustive;
      }
@@ -412947,7 +413649,22 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
 + * that sends the model to a tool it was never given is a false statement in
 + * the one text it reads before it can call anything.
 + */
-+function getShellToolDescription(declaresTaskStop: boolean): string {
++/**
++ * The shell tool's description. It says how a command's output is shown,
++ * because the result is not the bytes the command wrote: a foreground
++ * command in a pseudo-terminal is replayed through a terminal and its rows
++ * read back (`replayTerminalOutput`), and a command run as a child process
++ * has its escape sequences stripped and its output trimmed. Text copied from
++ * either into an edit's `old_string` matches only where the file holds what
++ * was shown.
++ */
++function getShellToolDescription(
++  declaresTaskStop: boolean,
++  runsInTerminal: boolean,
++): string {
++  const outputRendering = runsInTerminal
++    ? "A foreground command runs in a terminal, and its output is shown as that terminal displays it: escape sequences applied, tabs expanded to spaces at the terminal's tab stops, each line's trailing spaces dropped, a carriage return letting later text overwrite its line, and anything the program cleared gone."
++    : "A command's output is shown with its escape sequences removed and the whitespace around it trimmed.";
    const shellConfiguration = getShellConfiguration();
    const executionWrapper = getShellExecutionWrapper(shellConfiguration);
    const isWindows = os.platform() === 'win32';
@@ -412963,7 +413680,17 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
  IMPORTANT: This tool is for terminal operations like git, npm, docker, etc. DO NOT use it for file operations (reading, writing, editing, searching, finding files) - use the specialized tools for this instead.
  
  **Usage notes**:
-@@ -5036,25 +5211,29 @@
+ - The command argument is required.
+ - You can specify an optional timeout in milliseconds (up to 600000ms / 10 minutes). If not specified, commands will timeout after 120000ms (2 minutes).
+ - It is very helpful if you write a clear, concise description of what this command does in 5-10 words.
++- ${outputRendering} To see the exact bytes, redirect the output to a file and read it with ${ToolNames.READ_FILE}.
+ 
+ - Avoid using run_shell_command with the \`find\`, \`grep\`, \`cat\`, \`head\`, \`tail\`, \`sed\`, \`awk\`, or \`echo\` commands, unless explicitly instructed or when these commands are truly necessary for the task. Instead, always prefer using the dedicated tools for these commands:
+   - File search: Use ${ToolNames.GLOB} (NOT find or ls)
+   - Content search: Use ${ToolNames.GREP} (NOT grep or rg)
+   - Read files: Use ${ToolNames.READ_FILE} (NOT cat/head/tail)
+   - Edit files: Use ${ToolNames.EDIT} (NOT sed/awk)
+@@ -5036,25 +5224,32 @@
      }
    }
  }
@@ -412993,14 +413720,17 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
        ShellTool.Name,
        ToolDisplayNames.SHELL,
 -      getShellToolDescription(),
-+      getShellToolDescription(session.declaredTools.has(ToolNames.TASK_STOP)),
++      getShellToolDescription(
++        session.declaredTools.has(ToolNames.TASK_STOP),
++        config.getShouldUseNodePtyShell(),
++      ),
        Kind.Execute,
        {
          type: 'object',
          properties: {
            command: {
              type: 'string',
-@@ -5078,76 +5257,97 @@
+@@ -5078,76 +5273,97 @@
              type: 'string',
              description:
                '(OPTIONAL) The absolute path of the directory to run the command in. If not provided, the project root directory is used. Must be a directory within the workspace and must already exist.',
@@ -413110,7 +413840,7 @@ diff --git a/packages/core/src/tools/shell.ts b/packages/core/src/tools/shell.ts
      // (directory, read-only, command-root extraction, etc.).
      if (!params.is_background) {
        const sleepPattern = detectBlockedSleepPatternDetails(strippedCommand);
-@@ -5155,27 +5355,49 @@
+@@ -5155,27 +5371,49 @@
          const intentionalSleepGuidance =
            sleepPattern.intentionalSleepRejection ??
            (sleepPattern.isStandalone
@@ -413289,7 +414019,15 @@ diff --git a/packages/core/src/tools/team-plan-approval.test.ts b/packages/core/
 diff --git a/packages/core/src/tools/toAutoClassifierInput.test.ts b/packages/core/src/tools/toAutoClassifierInput.test.ts
 --- a/packages/core/src/tools/toAutoClassifierInput.test.ts
 +++ b/packages/core/src/tools/toAutoClassifierInput.test.ts
-@@ -28,13 +28,13 @@
+@@ -21,20 +21,21 @@
+ 
+ function minimalConfig(over: Partial<Record<string, unknown>> = {}): Config {
+   return {
+     getTargetDir: () => '/Users/test/project',
+     getModelInvocableCommandsExecutor: () => undefined,
+     getShellDefaultTimeoutMs: () => undefined,
++    getShouldUseNodePtyShell: () => true,
+     ...over,
    } as unknown as Config;
  }
  
@@ -413304,7 +414042,7 @@ diff --git a/packages/core/src/tools/toAutoClassifierInput.test.ts b/packages/co
      // classifier has enough headroom to spot a malicious registry / shell
      // / env line hidden behind a benign-looking prefix for
      // out-of-workspace edits (in-workspace edits take the acceptEdits
-@@ -76,13 +76,13 @@
+@@ -76,13 +77,13 @@
    });
  });
  
@@ -413319,7 +414057,7 @@ diff --git a/packages/core/src/tools/toAutoClassifierInput.test.ts b/packages/co
      // rationale as EditTool: out-of-workspace writes need enough
      // headroom for the classifier to spot a hostile payload after a
      // benign prefix.
-@@ -109,13 +109,16 @@
+@@ -109,13 +110,16 @@
    });
  });
  
@@ -417242,7 +417980,74 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        const params = {
          file_path: filePath,
          content,
-@@ -1335,19 +1402,24 @@
+@@ -1140,12 +1207,36 @@
+         'Error writing to file: Plain object write error',
+       );
+       expect(result.llmContent).not.toContain('[object Object]');
+     });
+   });
+ 
++  describe('the bytes it writes', () => {
++    const abortSignal = new AbortController().signal;
++
++    it.each([
++      ['a CRLF file with LF content', 'a\r\nb\r\n', 'p\nq\n'],
++      ['an LF file with CRLF content', 'a\nb\n', 'p\r\nq\r\n'],
++      ['a file whose lines end in both ways', 'a\r\nb\n', 'p\r\nq\nr\r\n'],
++    ])(
++      'writes content byte for byte over %s',
++      async (_name, existing, content) => {
++        const filePath = path.join(rootDir, 'bytes.txt');
++        fs.writeFileSync(filePath, existing, 'utf8');
++        seedPriorRead(filePath);
++
++        const result = await tool
++          .build({ file_path: filePath, content })
++          .execute(abortSignal);
++
++        expect(result.error).toBeUndefined();
++        expect(fs.readFileSync(filePath)).toEqual(Buffer.from(content, 'utf8'));
++      },
++    );
++  });
++
+   describe('BOM preservation (Issue #1672)', () => {
+     const abortSignal = new AbortController().signal;
+ 
+     it('should preserve BOM when overwriting existing file with BOM', async () => {
+       const filePath = path.join(rootDir, 'bom_file.txt');
+       const originalContent = 'original content';
+@@ -1170,13 +1261,13 @@
+ 
+       // Verify writeTextFile was called with bom: true
+       expect(writeSpy).toHaveBeenCalledWith({
+         path: filePath,
+         content: newContent,
+         toolWriteOrigin: 'write_file',
+-        _meta: { bom: true, encoding: 'utf-8', lineEnding: 'lf' },
++        _meta: { bom: true, encoding: 'utf-8' },
+       });
+ 
+       // Cleanup
+       if (fs.existsSync(filePath)) {
+         fs.unlinkSync(filePath);
+       }
+@@ -1200,13 +1291,13 @@
+ 
+       // Verify writeTextFile was called with bom: false
+       expect(writeSpy).toHaveBeenCalledWith({
+         path: filePath,
+         content: newContent,
+         toolWriteOrigin: 'write_file',
+-        _meta: { bom: false, encoding: 'utf-8', lineEnding: 'lf' },
++        _meta: { bom: false, encoding: 'utf-8' },
+       });
+ 
+       // Cleanup
+       if (fs.existsSync(filePath)) {
+         fs.unlinkSync(filePath);
+       }
+@@ -1335,19 +1426,24 @@
        // session can be reconciled.
        expect(attribution!.aiCreated).toBe(true);
  
@@ -417273,7 +418078,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
          CommitAttributionService.getInstance().getFileAttribution(filePath),
        ).toBeUndefined();
  
-@@ -1486,15 +1558,14 @@
+@@ -1486,15 +1582,14 @@
        // `requireFullRead` (aligning with Claude Code), the truncated
        // read is enough to clear enforcement; the mtime/size drift
        // check remains the gate that distinguishes "model saw current
@@ -417291,7 +418096,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        // A future cache-entry schema change must update both halves to
        // keep the deadlock-free guarantee end-to-end.
        const filePath = path.join(rootDir, 'enforce-truncated-full.txt');
-@@ -1629,12 +1700,17 @@
+@@ -1629,12 +1724,17 @@
        // file — we just cannot verify because stat itself failed.
        // EDIT_REQUIRES_PRIOR_READ would imply "definitely not read".
        expect(result.error?.type).toBe(
@@ -417309,7 +418114,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
        statSpy.mockRestore();
        fs.unlinkSync(filePath);
      });
-@@ -1686,12 +1762,357 @@
+@@ -1686,12 +1786,357 @@
        } finally {
          mockConfigInternal.getFileReadCacheDisabled = original;
          fs.unlinkSync(filePath);
@@ -417670,7 +418475,7 @@ diff --git a/packages/core/src/tools/write-file.test.ts b/packages/core/src/tool
 diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/write-file.ts
 --- a/packages/core/src/tools/write-file.ts
 +++ b/packages/core/src/tools/write-file.ts
-@@ -1,47 +1,69 @@
+@@ -1,47 +1,64 @@
  /**
   * @license
   * Copyright 2025 Google LLC
@@ -417710,7 +418515,13 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
 +  unstatedToolContent,
 +  type StatedRefusal,
  } from './tools.js';
-+import {
+-import { ToolErrorType } from './tool-error.js';
+ import {
+-  FileEncoding,
+-  needsUtf8Bom,
+-  detectLineEnding,
+-} from '../services/fileSystemService.js';
+-import type { LineEnding } from '../services/fileSystemService.js';
 +  authored,
 +  harnessText,
 +  worldText,
@@ -417722,13 +418533,8 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
 +  priorReadRejectionText,
 +} from './file-edit-authorship.js';
 +import { caughtErrorText } from './caught-error-authorship.js';
- import { ToolErrorType } from './tool-error.js';
- import {
-   FileEncoding,
-   needsUtf8Bom,
-   detectLineEnding,
- } from '../services/fileSystemService.js';
- import type { LineEnding } from '../services/fileSystemService.js';
++import { ToolErrorType } from './tool-error.js';
++import { FileEncoding, needsUtf8Bom } from '../services/fileSystemService.js';
  import { makeRelative, shortenPath, unescapePath } from '../utils/paths.js';
  import { getErrorMessage, isNodeError } from '../utils/errors.js';
  import { createPatchSmart, getDiffStat } from './diffOptions.js';
@@ -417741,7 +418547,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  } from './modifiable-tool.js';
  import { logFileOperation } from '../telemetry/loggers.js';
  import { FileOperationEvent } from '../telemetry/types.js';
-@@ -88,27 +110,41 @@
+@@ -88,27 +105,41 @@
    file_path: string;
  
    /**
@@ -417792,7 +418598,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      params: WriteFileToolParams,
    ) {
      super(params);
-@@ -272,15 +308,15 @@
+@@ -272,37 +303,40 @@
          }
        },
      };
@@ -417810,8 +418616,11 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      let originalContent = '';
      let useBOM = false;
      let detectedEncoding: string | undefined;
-     let detectedLineEnding: LineEnding | undefined;
-@@ -291,18 +327,22 @@
+-    let detectedLineEnding: LineEnding | undefined;
+     const dirName = path.dirname(file_path);
+ 
+     const teamMemoryError = checkTeamMemorySecrets(
+       file_path,
        content,
        this.config.getProjectRoot(),
      );
@@ -417835,7 +418644,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  
      // Prior-read enforcement runs BEFORE we read the existing file:
      //  - rejecting a write should not first slurp the entire file
-@@ -318,22 +358,20 @@
+@@ -318,22 +352,20 @@
      // silently overwritten.
      if (!this.config.getFileReadCacheDisabled()) {
        const decision = await checkPriorRead(
@@ -417864,7 +418673,18 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      if (fileExists) {
        try {
          const fileInfo = await this.config
-@@ -355,23 +393,26 @@
+@@ -344,34 +376,36 @@
+         } else {
+           useBOM =
+             fileInfo.content.length > 0 &&
+             fileInfo.content.codePointAt(0) === 0xfeff;
+         }
+         detectedEncoding = fileInfo._meta?.encoding || 'utf-8';
+-        detectedLineEnding = detectLineEnding(fileInfo.content);
+         originalContent = fileInfo.content;
+         fileExists = true; // File exists and was read
+       } catch (err) {
+         if (isNodeError(err) && err.code === 'ENOENT') {
            fileExists = false;
          } else {
            const error = {
@@ -417901,7 +418721,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  
      // Post-read freshness re-check. Closes the TOCTOU window between
      // the pre-read checkPriorRead above and the readTextFile that
-@@ -381,27 +422,24 @@
+@@ -381,27 +415,24 @@
      // exactly that.
      if (fileExists && !this.config.getFileReadCacheDisabled()) {
        const postDecision = await checkPriorRead(
@@ -417935,7 +418755,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      if (!fileExists) {
        const userEncoding = this.config.getDefaultFileEncoding();
        if (userEncoding === FileEncoding.UTF8_BOM) {
-@@ -475,27 +513,27 @@
+@@ -475,27 +506,27 @@
          // true after readTextFile), ENOENT here means the original
          // target disappeared between the post-read check and now —
          // reject rather than fall through and silently re-create the
@@ -417972,7 +418792,24 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
      // Create parent directories AFTER the pre-write enforcement
      // check passes. Doing it before would leak intermediate
      // directories on the failure path (rejected new-file writes
-@@ -517,13 +555,13 @@
+@@ -503,27 +534,29 @@
+     // ancestors).
+     if (!fileExists) {
+       fs.mkdirSync(dirName, { recursive: true });
+     }
+ 
+     try {
++      // The content is the whole file, written as the call gave it: the
++      // file keeps its encoding and BOM, which no text can state, and every
++      // line break is the call's own.
+       await this.config.getFileSystemService().writeTextFile({
+         path: file_path,
+         content,
+         toolWriteOrigin: 'write_file',
+         _meta: {
+           bom: useBOM,
+           encoding: detectedEncoding,
+-          lineEnding: detectedLineEnding,
          },
        });
  
@@ -417987,7 +418824,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
            content,
          );
        }
-@@ -556,26 +594,32 @@
+@@ -556,26 +589,32 @@
          currentContentForDiff,
          content,
          'Original',
@@ -418027,7 +418864,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
        }
        const artifact = buildWorkspaceArtifactMetadata(
          this.config,
-@@ -614,54 +658,74 @@
+@@ -614,54 +653,74 @@
          fileName,
          originalContent,
          newContent: content,
@@ -418119,7 +418956,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
  
  /**
   * Kept for the cross-package contract test in `workspace-file-read.test.ts`:
-@@ -764,24 +828,37 @@
+@@ -764,24 +823,37 @@
  }
  
  /**
@@ -418161,7 +418998,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
            file_path: {
              description:
                "The absolute path to the file to write to (e.g., '/home/user/project/file.txt'). Relative paths are not supported.",
-@@ -790,61 +867,86 @@
+@@ -790,61 +862,86 @@
            content: {
              description: 'The content to write to the file.',
              type: 'string',
@@ -418257,7 +419094,7 @@ diff --git a/packages/core/src/tools/write-file.ts b/packages/core/src/tools/wri
    override toAutoClassifierInput(
      params: WriteFileToolParams,
    ): Record<string, unknown> {
-@@ -884,18 +986,16 @@
+@@ -884,18 +981,16 @@
        },
        getProposedContent: async (params: WriteFileToolParams) => params.content,
        createUpdatedParams: (
@@ -442712,8 +443549,15 @@ deleted file mode 100644
 diff --git a/packages/core/src/utils/notebook.test.ts b/packages/core/src/utils/notebook.test.ts
 --- a/packages/core/src/utils/notebook.test.ts
 +++ b/packages/core/src/utils/notebook.test.ts
-@@ -13,19 +13,22 @@
-   inferNotebookJsonFormat,
+@@ -7,25 +7,28 @@
+ import { describe, it, expect, afterEach } from 'vitest';
+ import {
+   findCellIndex,
+   getCellDisplayId,
+   hasStableCellIds,
+   inferInsertedCellSourceArrayStyle,
+-  inferNotebookJsonFormat,
++  inferNotebookIndent,
    isAmbiguousCellId,
    makeCellId,
    parseCellId,
@@ -442721,7 +443565,8 @@ diff --git a/packages/core/src/utils/notebook.test.ts b/packages/core/src/utils/
    readNotebook,
 +  readNotebookAuthored,
    readNotebookWithMetadata,
-   serializeNotebook,
+-  serializeNotebook,
++  NotebookText,
    toNotebookSource,
  } from './notebook.js';
  import path from 'node:path';
@@ -442735,7 +443580,174 @@ diff --git a/packages/core/src/utils/notebook.test.ts b/packages/core/src/utils/
  
    afterEach(async () => {
      if (tempDir) {
-@@ -638,7 +641,146 @@
+@@ -481,96 +484,87 @@
+     expect(toNotebookSource('a\nb\n', true)).toEqual(['a\n', 'b\n']);
+     expect(toNotebookSource('a\nb', true)).toEqual(['a\n', 'b']);
+     expect(toNotebookSource('', true)).toEqual([]);
+     expect(toNotebookSource('a\nb\n', false)).toBe('a\nb\n');
+   });
+ 
+-  it('should preserve notebook JSON indentation and trailing newline style', () => {
+-    const raw = JSON.stringify(
+-      {
+-        cells: [{ cell_type: 'markdown', source: '# Title', metadata: {} }],
+-        metadata: {},
+-      },
+-      null,
+-      2,
++  it('infers the indent one level of notebook JSON adds', () => {
++    const notebook = {
++      cells: [{ cell_type: 'markdown', source: '# Title', metadata: {} }],
++      metadata: {},
++    };
++    expect(inferNotebookIndent(JSON.stringify(notebook, null, 2))).toBe(2);
++    expect(inferNotebookIndent(JSON.stringify(notebook, null, '\t'))).toBe(
++      '\t',
+     );
+-    const notebook = parseNotebook(raw);
+-    notebook.cells[0]!.source = '# Updated';
+-
+-    const format = inferNotebookJsonFormat(raw);
+-    const serialized = serializeNotebook(notebook, format);
+-
+-    expect(format).toEqual({ indent: 2, trailingNewline: false });
+-    expect(serialized).toContain('\n  "cells"');
+-    expect(serialized.endsWith('\n')).toBe(false);
+-  });
+-
+-  it('should preserve tab-indented notebook JSON when serializing after edits', () => {
+-    const raw = [
+-      '{',
+-      '\t"cells": [',
+-      '\t\t{',
+-      '\t\t\t"cell_type": "markdown",',
+-      '\t\t\t"source": "# Title",',
+-      '\t\t\t"metadata": {}',
+-      '\t\t}',
+-      '\t],',
+-      '\t"metadata": {}',
+-      '}',
+-      '',
+-    ].join('\n');
+-    const notebook = parseNotebook(raw);
+-    notebook.cells[0]!.source = '# Updated';
+-
+-    const format = inferNotebookJsonFormat(raw);
+-    const serialized = serializeNotebook(notebook, format);
+-
+-    expect(format).toEqual({ indent: '\t', trailingNewline: true });
+-    expect(serialized).toContain('\n\t"cells"');
+-    expect(serialized.endsWith('\n')).toBe(true);
+-  });
+-
+-  it('should preserve mixed whitespace notebook JSON indentation after edits', () => {
+-    const indent = ' \t';
+-    const raw = [
+-      '{',
+-      `${indent}"cells": [`,
+-      `${indent}${indent}{`,
+-      `${indent}${indent}${indent}"cell_type": "markdown",`,
+-      `${indent}${indent}${indent}"source": "# Title",`,
+-      `${indent}${indent}${indent}"metadata": {}`,
+-      `${indent}${indent}}`,
+-      `${indent}],`,
+-      `${indent}"metadata": {}`,
+-      '}',
+-    ].join('\n');
+-    const notebook = parseNotebook(raw);
+-    notebook.cells[0]!.source = '# Updated';
+-
+-    const format = inferNotebookJsonFormat(raw);
+-    const serialized = serializeNotebook(notebook, format);
+-
+-    expect(format).toEqual({ indent, trailingNewline: false });
+-    expect(serialized).toContain(`\n${indent}"cells"`);
+-    expect(serialized).toContain(`\n${indent}${indent}{`);
+-    expect(serialized.endsWith('\n')).toBe(false);
+-  });
+-
+-  it('should preserve compact notebook JSON when serializing after edits', () => {
+-    const raw = JSON.stringify({
++    expect(inferNotebookIndent(JSON.stringify(notebook, null, ' \t'))).toBe(
++      ' \t',
++    );
++    expect(inferNotebookIndent(JSON.stringify(notebook))).toBeUndefined();
++  });
++
++  it('replaces a value in place, laid out as the notebook is', () => {
++    const notebook = {
+       cells: [{ cell_type: 'markdown', source: '# Title', metadata: {} }],
+       metadata: {},
+-    });
+-    const notebook = parseNotebook(raw);
+-    notebook.cells[0]!.source = '# Updated';
++    };
++    const spaced = new NotebookText(JSON.stringify(notebook, null, 2));
++    spaced.setMember(0, 'source', '# Updated');
++    expect(spaced.text).toBe(
++      JSON.stringify(notebook, null, 2).replace('# Title', '# Updated'),
++    );
++
++    const tabs = new NotebookText(JSON.stringify(notebook, null, '\t'));
++    tabs.setMember(0, 'source', ['a\n', 'b']);
++    expect(tabs.text).toBe(
++      JSON.stringify(notebook, null, '\t').replace(
++        '"# Title"',
++        '[\n\t\t\t\t"a\\n",\n\t\t\t\t"b"\n\t\t\t]',
++      ),
++    );
+ 
+-    const format = inferNotebookJsonFormat(raw);
+-    const serialized = serializeNotebook(notebook, format);
++    const compact = new NotebookText(JSON.stringify(notebook));
++    compact.setMember(0, 'source', ['x']);
++    expect(compact.text).toBe(
++      JSON.stringify(notebook).replace('"# Title"', '["x"]'),
++    );
++  });
++
++  it("adds a member after a cell's last, in the separators the cell uses", () => {
++    const notebook = {
++      cells: [{ cell_type: 'markdown', source: 'x', metadata: {} }],
++    };
++    const indented = new NotebookText(JSON.stringify(notebook, null, 1));
++    indented.setMember(0, 'outputs', []);
++    expect(indented.text).toBe(
++      JSON.stringify(
++        { cells: [{ ...notebook.cells[0], outputs: [] }] },
++        null,
++        1,
++      ),
++    );
+ 
+-    expect(format).toEqual({ indent: undefined, trailingNewline: false });
+-    expect(serialized).toBe(JSON.stringify(notebook));
++    const oneLine = new NotebookText(
++      '{"cells": [{"cell_type": "markdown", "source": "x"}]}',
++    );
++    oneLine.setMember(0, 'metadata', {});
++    expect(oneLine.text).toBe(
++      '{"cells": [{"cell_type": "markdown", "source": "x", "metadata": {}}]}',
++    );
++  });
++
++  it('inserts into an empty cell list and deletes its only cell', () => {
++    const empty = { cells: [], metadata: {} };
++    const cell = { cell_type: 'markdown' as const, metadata: {}, source: [] };
++    const text = new NotebookText(JSON.stringify(empty, null, 1));
++    text.insertCell(0, cell);
++    expect(text.text).toBe(
++      JSON.stringify({ cells: [cell], metadata: {} }, null, 1),
++    );
++    text.deleteCell(0);
++    expect(text.text).toBe(JSON.stringify(empty, null, 1));
+   });
+ 
+   it('should infer inserted source style from adjacent cells', () => {
+     const notebook = parseNotebook(
+       JSON.stringify({
+         cells: [
+@@ -638,7 +632,146 @@
        parseNotebook(JSON.stringify({ cells: [null], metadata: {} })),
      ).toThrow('cell at index 0 is not an object');
      expect(() =>
@@ -442938,26 +443950,24 @@ diff --git a/packages/core/src/utils/notebook.ts b/packages/core/src/utils/noteb
  // — which would let an attacker-authored notebook break out of the
  // `[non-text output: ...]` placeholder and inject prompt-shaped text).
  const MIME_TYPE_RE =
-@@ -82,12 +109,18 @@
+@@ -82,63 +109,362 @@
  
  export interface NotebookReadResult {
    content: string;
    isTruncated: boolean;
  }
  
+-export interface NotebookJsonFormat {
+-  indent?: number | string;
+-  trailingNewline: boolean;
 +/** A notebook's rendering, with who wrote each of its runs. */
 +export interface AuthoredNotebookReadResult {
 +  content: AuthoredText;
 +  isTruncated: boolean;
-+}
-+
- export interface NotebookJsonFormat {
-   indent?: number | string;
-   trailingNewline: boolean;
  }
  
  export function normalizeSource(source: string | string[]): string {
-@@ -95,25 +128,30 @@
+   return Array.isArray(source) ? source.join('') : source;
  }
  
  export function parseNotebook(content: string): NotebookContent {
@@ -442991,7 +444001,338 @@ diff --git a/packages/core/src/utils/notebook.ts b/packages/core/src/utils/noteb
    return notebook;
  }
  
-@@ -285,149 +323,262 @@
+-export function inferNotebookJsonFormat(content: string): NotebookJsonFormat {
+-  const lineMatch = content.match(/\n([ \t]+)"/);
+-  const indent = lineMatch?.[1];
+-  let inferredIndent: number | string | undefined;
+-  if (indent !== undefined) {
+-    inferredIndent = /^ +$/.test(indent) ? indent.length : indent;
++/**
++ * The indent one level of a notebook's JSON adds, as `JSON.stringify` takes
++ * it: the first indented line's leading whitespace, as a count of spaces when
++ * it is only spaces. A notebook with no indented line has none.
++ */
++export function inferNotebookIndent(
++  content: string,
++): number | string | undefined {
++  const indent = content.match(/\n([ \t]+)"/)?.[1];
++  if (indent === undefined) return undefined;
++  return /^ +$/.test(indent) ? indent.length : indent;
++}
++
++/** Where a JSON value is in a text: from its first character to past its last. */
++interface JsonSpan {
++  readonly start: number;
++  readonly end: number;
++}
++
++/** A member of a JSON object: from its key to past its value. */
++interface JsonMember extends JsonSpan {
++  readonly key: string;
++  readonly keyEnd: number;
++  readonly value: JsonSpan;
++}
++
++interface JsonObjectSpan extends JsonSpan {
++  readonly members: readonly JsonMember[];
++}
++
++/**
++ * Where a notebook's cells are in its JSON text: the `cells` member, and
++ * each cell object with its members. JSON.parse reads a repeated key as its
++ * last occurrence, and so does every lookup here.
++ */
++interface NotebookLayout {
++  readonly cells: JsonMember;
++  readonly elements: readonly JsonObjectSpan[];
++}
++
++/**
++ * A scan of JSON text that is known to parse, recording where values are.
++ * It reads no value it is not asked for; a value it skips is passed over as
++ * text.
++ */
++class JsonScanner {
++  private at: number;
++
++  constructor(private readonly text: string) {
++    this.at = text.charCodeAt(0) === 0xfeff ? 1 : 0;
++  }
++
++  private space(): void {
++    while (/[ \t\r\n]/.test(this.text[this.at] ?? '')) this.at++;
+   }
++
++  /** Past the string starting at the cursor. */
++  private skipString(): void {
++    this.at++;
++    while (this.text[this.at] !== '"') {
++      this.at += this.text[this.at] === '\\' ? 2 : 1;
++    }
++    this.at++;
++  }
++
++  /** The span of the value at the cursor, the cursor moved past it. */
++  value(): JsonSpan {
++    this.space();
++    const start = this.at;
++    const first = this.text[this.at];
++    if (first === '"') {
++      this.skipString();
++    } else if (first === '{' || first === '[') {
++      let depth = 0;
++      do {
++        const char = this.text[this.at];
++        if (char === '"') {
++          this.skipString();
++          continue;
++        }
++        if (char === '{' || char === '[') depth++;
++        else if (char === '}' || char === ']') depth--;
++        this.at++;
++      } while (depth > 0);
++    } else {
++      while (/[^,}\] \t\r\n]/.test(this.text[this.at] ?? ',')) this.at++;
++    }
++    return { start, end: this.at };
++  }
++
++  /** The object at the cursor, member by member. */
++  object(): JsonObjectSpan {
++    this.space();
++    const start = this.at++;
++    const members: JsonMember[] = [];
++    this.space();
++    while (this.text[this.at] !== '}') {
++      if (this.text[this.at] === ',') {
++        this.at++;
++        this.space();
++      }
++      const keyStart = this.at;
++      this.skipString();
++      const keyEnd = this.at;
++      this.space();
++      this.at++; // ':'
++      const value = this.value();
++      members.push({
++        key: JSON.parse(this.text.slice(keyStart, keyEnd)) as string,
++        start: keyStart,
++        keyEnd,
++        value,
++        end: value.end,
++      });
++      this.space();
++    }
++    this.at++;
++    return { start, end: this.at, members };
++  }
++
++  /** The elements of the array at the cursor, each scanned by `element`. */
++  array<T extends JsonSpan>(element: () => T): T[] {
++    this.space();
++    this.at++;
++    const elements: T[] = [];
++    this.space();
++    while (this.text[this.at] !== ']') {
++      if (this.text[this.at] === ',') this.at++;
++      elements.push(element());
++      this.space();
++    }
++    this.at++;
++    return elements;
++  }
++
++  moveTo(at: number): void {
++    this.at = at;
++  }
++}
++
++/** The member `key` of `object` as JSON.parse reads it: its last occurrence. */
++function memberOf(object: JsonObjectSpan, key: string): JsonMember | undefined {
++  return object.members.findLast((member) => member.key === key);
++}
++
++/** Where the cells of `text`, a notebook `parseNotebook` accepts, are. */
++function notebookLayout(text: string): NotebookLayout {
++  const scanner = new JsonScanner(text);
++  const cells = memberOf(scanner.object(), 'cells')!;
++  scanner.moveTo(cells.value.start);
++  return { cells, elements: scanner.array(() => scanner.object()) };
++}
++
++/**
++ * How the text at `at` is laid out: the line break before the line it
++ * starts and that line's indent, or nothing when it does not start a line.
++ */
++function lineAt(
++  text: string,
++  at: number,
++): { readonly lineBreak: string; readonly indent: string } | undefined {
++  let lineStart = at;
++  while (lineStart > 0 && /[ \t]/.test(text[lineStart - 1]!)) lineStart--;
++  if (lineStart === 0 || text[lineStart - 1] !== '\n') return undefined;
+   return {
+-    indent: inferredIndent,
+-    trailingNewline: content.endsWith('\n'),
++    lineBreak: text[lineStart - 2] === '\r' ? '\r\n' : '\n',
++    indent: text.slice(lineStart, at),
+   };
+ }
+ 
+-export function serializeNotebook(
+-  notebook: NotebookContent,
+-  format: NotebookJsonFormat = { indent: 1, trailingNewline: true },
++/**
++ * `value` as JSON written where the text at `at` is: on one line where that
++ * text shares its line, and otherwise indented as `JSON.stringify` indents a
++ * notebook, from the indent of that text's line, with the text's own line
++ * breaks.
++ */
++function jsonAt(text: string, at: number, value: unknown): string {
++  const line = lineAt(text, at);
++  const indent = inferNotebookIndent(text);
++  if (line === undefined || indent === undefined) return JSON.stringify(value);
++  return JSON.stringify(value, null, indent)
++    .split('\n')
++    .join(line.lineBreak + line.indent);
++}
++
++function splice(text: string, start: number, end: number, by: string): string {
++  return text.slice(0, start) + by + text.slice(end);
++}
++
++/**
++ * `text` without the item `items[index]` of the list they are in, and one
++ * separator beside it: the one after it, or, for the last, the one before.
++ * The only item takes nothing but itself and the space around it with it.
++ */
++function withoutItem(
++  text: string,
++  list: JsonSpan,
++  items: readonly JsonSpan[],
++  index: number,
++): string {
++  if (items.length === 1) return splice(text, list.start + 1, list.end - 1, '');
++  return index < items.length - 1
++    ? splice(text, items[index]!.start, items[index + 1]!.start, '')
++    : splice(text, items[index - 1]!.end, items[index]!.end, '');
++}
++
++/** The text between two adjacent items of a list, or one written for a list of one. */
++function separatorBeside(
++  text: string,
++  items: readonly JsonSpan[],
++  index: number,
+ ): string {
+-  const serialized = JSON.stringify(notebook, null, format.indent);
+-  return format.trailingNewline ? `${serialized}\n` : serialized;
++  if (items.length >= 2) {
++    const before = Math.max(0, Math.min(index, items.length - 1) - 1);
++    return text.slice(items[before]!.end, items[before + 1]!.start);
++  }
++  const line = lineAt(text, items[0]!.start);
++  return line === undefined ? ',' : `,${line.lineBreak}${line.indent}`;
++}
++
++/**
++ * A notebook's JSON text changed one value at a time, every byte no change
++ * names left as the file has it. JSON.parse would read the same notebook
++ * from the text a re-serialization writes, but not the same text: numbers
++ * are rewritten (1.0, 1e-05, an integer past 2^53), escapes are written
++ * out, and a cell laid out on one line is spread over many -- in cells the
++ * edit never touched.
++ */
++export class NotebookText {
++  constructor(private value: string) {}
++
++  get text(): string {
++    return this.value;
++  }
++
++  private cell(index: number): JsonObjectSpan {
++    return notebookLayout(this.value).elements[index]!;
++  }
++
++  /** Cell `index`'s member `key` set to `value`: its value replaced, or the member added after the cell's last. */
++  setMember(index: number, key: string, value: unknown): void {
++    const cell = this.cell(index);
++    const member = memberOf(cell, key);
++    if (member !== undefined) {
++      this.value = splice(
++        this.value,
++        member.value.start,
++        member.value.end,
++        jsonAt(this.value, member.start, value),
++      );
++      return;
++    }
++    const last = cell.members.at(-1);
++    if (last === undefined) {
++      this.value = splice(
++        this.value,
++        cell.start + 1,
++        cell.end - 1,
++        `${JSON.stringify(key)}:${JSON.stringify(value)}`,
++      );
++      return;
++    }
++    const separator = separatorBeside(
++      this.value,
++      cell.members,
++      cell.members.length,
++    );
++    const colon = this.value.slice(last.keyEnd, last.value.start);
++    this.value = splice(
++      this.value,
++      last.end,
++      last.end,
++      `${separator}${JSON.stringify(key)}${colon}${jsonAt(this.value, last.start, value)}`,
++    );
++  }
++
++  /** Cell `index` without any member `key`. */
++  deleteMember(index: number, key: string): void {
++    for (;;) {
++      const cell = this.cell(index);
++      const at = cell.members.findIndex((member) => member.key === key);
++      if (at === -1) return;
++      this.value = withoutItem(this.value, cell, cell.members, at);
++    }
++  }
++
++  /** `cell` inserted as cell `index`. */
++  insertCell(index: number, cell: NotebookCell): void {
++    const { cells, elements } = notebookLayout(this.value);
++    if (elements.length === 0) {
++      this.value = splice(
++        this.value,
++        cells.value.start,
++        cells.value.end,
++        jsonAt(this.value, cells.start, [cell]),
++      );
++      return;
++    }
++    const beside = elements[Math.min(index, elements.length - 1)]!;
++    const rendered = jsonAt(this.value, beside.start, cell);
++    const separator = separatorBeside(this.value, elements, index);
++    this.value =
++      index < elements.length
++        ? splice(this.value, beside.start, beside.start, rendered + separator)
++        : splice(this.value, beside.end, beside.end, separator + rendered);
++  }
++
++  /** The notebook without cell `index`. */
++  deleteCell(index: number): void {
++    const { cells, elements } = notebookLayout(this.value);
++    this.value = withoutItem(this.value, cells.value, elements, index);
++  }
+ }
+ 
+ export function parseCellId(cellId: string): number | undefined {
+   const match = cellId.match(/^cell-(\d+)$/);
+   if (!match?.[1]) {
+     return undefined;
+@@ -285,149 +611,262 @@
    }
  
    delete cell.execution_count;
@@ -443079,9 +444420,9 @@ diff --git a/packages/core/src/utils/notebook.ts b/packages/core/src/utils/noteb
      default:
 -      return '';
 +      return NO_TEXT;
-+  }
-+}
-+
+   }
+ }
+ 
 +/**
 + * The first `length` code units of `value`, as `String.prototype.substring`
 + * takes them. A cut through a character leaves its first half, which the
@@ -443102,20 +444443,20 @@ diff --git a/packages/core/src/utils/notebook.ts b/packages/core/src/utils/noteb
 +      sliceAuthored(value, 0, end - 1),
 +      harnessText(value.text.slice(end - 1, end)),
 +    );
-   }
++  }
 +  return sliceAuthored(value, 0, end);
- }
- 
- /**
-  * Format a single notebook cell into a readable text block.
-  */
++}
++
 +/**
 + * Format a single notebook cell into a readable text block.
++ */
+ /**
+  * Format a single notebook cell into a readable text block.
 + *
 + * The cell's id, source and execution count are the notebook's, read from
 + * the file; an id the cell lacks is the client's (`cell-<index>`), as is the
 + * frame around them and every notice.
-+ */
+  */
  function processCell(
    cell: NotebookCell,
    index: number,
