@@ -587,6 +587,46 @@ impl Trace {
         operation_id
     }
 
+    /// One completed count of a text alone, as the client journals the count
+    /// of a draw's snapshot block; returns the operation a draw cites.
+    fn text_tokenizer(&mut self, kv: &str, prompt: &str, count: u64) -> String {
+        let sequence = self.next_sequence();
+        let operation_id = format!("text-token-{sequence}");
+        let request_id = format!("text-tokenizer-{sequence}");
+        let body = json!({"model":COMPACTION_MODEL,"prompt":prompt,"add_special_tokens":false})
+            .to_string();
+        self.push(json!({"type":"model_utility_request","utility_request":{
+            "journal_id":"fixture","sequence":sequence,"request_id":request_id,
+            "operation_id":operation_id,"kv_scope":kv,"kind":"tokenize_text",
+            "requested_model":COMPACTION_MODEL,"requested_input_count":null,
+            "expected_max_model_len":TOKENIZER_WINDOW,
+            "request_url":"http://fixture.invalid/tokenize","body_json":body,
+            "body_bytes":body.len(),"body_sha256":hash(body.as_bytes())}}));
+        let result = json!({"count":count,"max_model_len":TOKENIZER_WINDOW}).to_string();
+        for (index, event) in [
+            json!({"kind":"http","status":200,"content_type":"application/json"}),
+            json!({"kind":"body","offset":0,"base64":STANDARD.encode(result.as_bytes())}),
+            json!({"kind":"end","termination":"eof","body_bytes":result.len(),
+                "body_sha256":hash(result.as_bytes()),"error":null}),
+            json!({"kind":"outcome","status":"completed","error":null,"served_usage":null,
+                "sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+            json!({"kind":"delivery","outputs_delivered":0}),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            self.response(&request_id, index as u64 + 1, event);
+        }
+        self.push(json!({"type":"model_utility_completion","utility_completion":{
+            "journal_id":"fixture","operation_id":operation_id,"kv_scope":kv,
+            "kind":"tokenize_text","requested_model":COMPACTION_MODEL,
+            "requested_input_count":null,"expected_max_model_len":TOKENIZER_WINDOW,
+            "request_ids":[request_id],
+            "result":{"kind":"token_count","total_tokens":count,"max_model_len":TOKENIZER_WINDOW},
+            "error":null}}));
+        operation_id
+    }
+
     /// The physical requests of one compaction draw: earlier retries deliver
     /// nothing; the final request streams exactly the draw's SDK values, and
     /// the client delivers the decoded observation its content projects from.
@@ -608,11 +648,11 @@ impl Trace {
             let sequence = self.next_sequence();
             let id = format!("request-{sequence}");
             let mut messages = vec![json!({"role":"user","content":[{"type":"text","text":format!(
-                "your answer may generate at most {budget} tokens, reasoning included. If all draws are refused, this conversation cannot continue."
+                "your answer may generate at most {budget} tokens, reasoning included. If all draws are refused, this conversation is not compacted."
             )}]})];
             if redrawn {
                 messages.push(json!({"role":"user","content":[{"type":"text","text":
-                    "Your previous answer to this request was refused because its snapshot renders to 38102 bytes, past the 32768-byte limit. Write the same state more briefly."}]}));
+                    "Your previous answer to this request was refused because its snapshot renders to 40000 tokens, past the 32768-token limit. Write the same state more briefly."}]}));
             }
             let body = json!({"kv_scope":kv,"model":COMPACTION_MODEL,"stream":true,
                 "max_tokens":budget,"messages":messages})
@@ -746,6 +786,19 @@ impl Trace {
             }
             self.compaction_draw(&kv, &operation, budget, &draw, told);
             told |= index.is_some() && draw["status"] != "COMPRESSION_FAILED_TRANSPORT_ERROR";
+            // A draw that declared a snapshot cites the count of its block,
+            // which the client makes after the draw and before its candidate.
+            if let Some(count) = draw["snapshotTokens"].as_u64() {
+                let block = snapshot_block(&draw["functionCalls"][0]["args"]);
+                let counted = self.text_tokenizer(&kv, &block, count);
+                match index {
+                    Some(index) => {
+                        record["data"]["rejectedAttempts"][index]["snapshotCountOperationId"] =
+                            json!(counted)
+                    }
+                    None => record["data"]["output"]["snapshotCountOperationId"] = json!(counted),
+                }
+            }
             if let Some(count) = draw["newTokenCount"].as_u64() {
                 let measured = self.tokenizer(&kv, "candidate", count);
                 measurements.push(json!({"role":"candidate","operationId":measured}));
@@ -933,6 +986,30 @@ fn owned_event_file(bytes: &[u8]) -> std::path::PathBuf {
 /// The native certification of one opened snapshot: descriptor framing and
 /// the pure runtime contract, without the physical response replay that the
 /// service image's pinned verifier adds afterwards.
+/// The block a draw's snapshot call renders to as the model wrote it: the
+/// client's `stateSnapshotRawText`, the text its count is made of.
+fn snapshot_block(args: &Value) -> String {
+    const ELEMENTS: [&str; 9] = [
+        "primary_request_and_intent",
+        "key_technical_concepts",
+        "files_and_code_sections",
+        "errors_and_fixes",
+        "problem_solving",
+        "all_user_messages",
+        "pending_tasks",
+        "current_work",
+        "next_step",
+    ];
+    let element =
+        |section: &str| format!("    <{section}>\n{}\n    </{section}>", args[section].as_str().unwrap());
+    let join = |sections: &[&str]| sections.iter().map(|section| element(section)).collect::<Vec<_>>().join("\n\n");
+    format!(
+        "<state_snapshot>\n{}\n\n    <all_user_messages>\n\n    </all_user_messages>\n\n{}\n</state_snapshot>",
+        join(&ELEMENTS[..5]),
+        join(&ELEMENTS[6..])
+    )
+}
+
 fn snapshot_bytes(bytes: &[u8]) -> ServiceResult<EventSnapshot> {
     let path = owned_event_file(bytes);
     let result = open_event_prefix(&path).and_then(|prefix| {

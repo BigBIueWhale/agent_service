@@ -19,29 +19,36 @@ pub const BROKER_POLICY_JSON: &str = include_str!("../config/broker-policy-v1.js
 pub const QWEN_CODE_VERSION: &str = "0.21.12";
 
 /// The served context window, in tokens. `validate_lock` refuses any backend
-/// that reports another, so every budget below is a share of this one number
-/// rather than a figure someone chose separately.
+/// that reports another, so the client's partition, which derives every token
+/// budget of a session from the window, describes the window that is served.
 pub const SERVED_CONTEXT_WINDOW: u64 = 262_144;
 
-/// `M`, in UTF-8 bytes of NFC: the most any one block placed inline may be.
+/// The most UTF-8 bytes of NFC a submitted prompt may be: `M`, the client's
+/// inline block, 16,384 tokens of the served tokenizer, held as that many
+/// bytes.
 ///
-/// Bytes bound tokens only in the form the served tokenizer counts, NFC, which
-/// can be up to three times longer than the text as written; so a prompt is
-/// admitted only in NFC, where its length is that measure (see
+/// A submitted prompt is one inline block. It is retained verbatim in every
+/// post-compaction history for the life of the session, and the client's
+/// partition charges it one block in what every compaction leaves standing,
+/// so a prompt past `M` tokens would break the fit the client proves. The
+/// client counts its blocks with the served tokenizer; the service admits a
+/// prompt before any backend is reached and has no tokenizer, so it holds the
+/// prompt to the bound it can apply without one: every token the tokenizer
+/// emits covers at least one byte of the NFC text it splits, so a prompt of
+/// at most `M` bytes in NFC is at most `M` tokens. Bytes bound tokens only in
+/// that form, which can be up to three times longer than the text as written,
+/// so a prompt is admitted only in NFC, where its length is that measure (see
 /// `validation.rs`).
 ///
-/// A submitted prompt is such a block. It is retained verbatim in every
-/// post-compaction history for the life of the session, so its size is not a
-/// transient cost: at a byte per token it would fill the window on its own
-/// and leave a history no compaction could shrink below it. An eighth of the
-/// window is what the client pages `read_file` and tool results in, and a
-/// prompt is held to the same magnitude so the three cannot drift apart.
-///
-/// It is a share and not a constant because 512K and 1M are the next served
-/// tiers; a constant would quietly stop describing them. The HTTP
-/// request-body limit from the lock bounds the envelope; this bounds the
-/// prompt inside it, which is what makes the error say something useful.
-pub const MAX_PROMPT_BYTES: usize = (SERVED_CONTEXT_WINDOW / 8) as usize;
+/// What that costs is plain: a prompt the tokenizer would count within `M`
+/// but that runs past `M` bytes -- most prose and code, at three to five
+/// bytes a token -- is refused, and its material belongs in the submitted
+/// workspace, where the agent reads it a page at a time. The number is the
+/// client's `M`, and a test reads it from the client's reviewed source, so the
+/// two cannot differ. The HTTP request-body limit from the lock bounds the
+/// envelope; this bounds the prompt inside it, which is what makes the error
+/// say something useful.
+pub const MAX_PROMPT_BYTES: usize = 16_384;
 // 200 GiB: the workspace-staging bound is disk accounting, not memory. The
 // archive is streamed to a disk spool and never buffered in RAM, and the staged
 // tree lives on ordinary disk-backed storage, so this caps the disk a single
@@ -1435,6 +1442,40 @@ mod tests {
     #[test]
     fn checked_in_lock_is_the_exact_supported_policy() {
         validate_lock(&checked_in_lock()).expect("checked-in stack lock must be accepted");
+    }
+
+    /// The service holds a prompt to the client's `M`, the inline block the
+    /// client's partition charges the operator's task, as that many bytes of
+    /// NFC. The number is read from the client's reviewed source -- the one
+    /// line of the review diff that declares it, in the partition's own file
+    /// -- so a change to either side that does not move the other fails here.
+    #[test]
+    fn the_prompt_bound_is_the_clients_inline_block() {
+        const PARTITION_FILE: &str =
+            "diff --git a/packages/core/src/core/tokenLimits.ts b/packages/core/src/core/tokenLimits.ts";
+        let patch = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/patches/qwen-code-0.21.12-agent-service.patch"
+        ))
+        .expect("the reviewed client patch is part of this repository");
+        let sections: Vec<&str> = patch
+            .split("\ndiff --git ")
+            .map(|section| section.strip_prefix("diff --git ").unwrap_or(section))
+            .filter(|section| section.lines().next() == PARTITION_FILE.strip_prefix("diff --git "))
+            .collect();
+        assert_eq!(sections.len(), 1, "the review diff changes the partition's file once");
+        let declared: Vec<&str> = sections[0]
+            .lines()
+            .filter_map(|line| line.strip_prefix("+const INLINE_BLOCK_TOKENS = "))
+            .collect();
+        assert_eq!(declared.len(), 1, "the partition declares M once: {declared:?}");
+        let tokens: usize = declared[0]
+            .strip_suffix(';')
+            .expect("a declaration ends its line")
+            .replace('_', "")
+            .parse()
+            .expect("M is a whole number of tokens");
+        assert_eq!(super::MAX_PROMPT_BYTES, tokens);
     }
 
     #[test]

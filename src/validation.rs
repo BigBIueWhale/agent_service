@@ -93,10 +93,13 @@ fn validate_prompt(prompt: &str) -> ServiceResult<String> {
     }
     if prompt.len() > MAX_PROMPT_BYTES {
         return Err(ServiceError::InvalidRequest(format!(
-            "field `prompt` is {} bytes, past the {MAX_PROMPT_BYTES}-byte limit \
-             on one block placed inline. The prompt is retained verbatim in \
-             every compaction for the life of the session, so put the material \
-             in the submitted workspace and refer to it by path instead.",
+            "field `prompt` is {} bytes, past the {MAX_PROMPT_BYTES}-byte limit: \
+             a prompt is one block placed inline, at most {MAX_PROMPT_BYTES} \
+             tokens, and with no tokenizer at admission the service holds it to \
+             as many bytes of NFC, since every token covers at least one. The \
+             prompt is retained verbatim in every compaction for the life of the \
+             session, so put the material in the submitted workspace and refer \
+             to it by path instead.",
             prompt.len()
         )));
     }

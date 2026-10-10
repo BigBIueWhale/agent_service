@@ -30,7 +30,7 @@ from request_evidence import require_request_evidence, require_response_evidence
 # The canonical recording format this release's client writes
 # (`CHAT_RECORDING_VERSION` in its transcript records); a recording of any
 # other version is one this client refuses to resume.
-CHAT_RECORDING_VERSION = 23
+CHAT_RECORDING_VERSION = 24
 WORKSPACE = Path("/workspace")
 # The client's own system-scope settings files. Production names no override for them and
 # the image carries neither, so the sealed settings are the one source; a host that had

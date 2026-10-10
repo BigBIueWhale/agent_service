@@ -1,7 +1,7 @@
 # Shared captured-stream gate and producer contract
 
 One versioned JSON definition, agent_service's
-`protocol/stream-contract-v20.json`, owns every accepted top-level and nested
+`protocol/stream-contract-v21.json`, owns every accepted top-level and nested
 record variant and its structural constraints. Build-time generators derive
 the Rust discriminators and the client's TypeScript validators from that exact
 definition, and producer and reader agree on the SHA-256 of its bytes. Every
@@ -50,7 +50,7 @@ full request starts each invocation and committed compaction segment;
 subsequent records retain an unchanged message prefix and carry the
 replacement suffix and exact envelope. The native reader and the client's
 record verifier validate physical order and reconstructed UTF-8 hashes.
-Canonical history uses `recordingVersion: 23` and its own structurally
+Canonical history uses `recordingVersion: 24` and its own structurally
 disjoint request record. Full and indexed restoration validate evidence before
 projecting history; `output/events.jsonl` is byte-exact stdout evidence.
 

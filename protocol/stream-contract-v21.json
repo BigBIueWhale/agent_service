@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:agent-service:stream-contract:20",
+  "$id": "urn:agent-service:stream-contract:21",
   "type": "object",
   "required": [
     "type",
@@ -2712,7 +2712,8 @@
         "sdkValuesJson",
         "functionCalls",
         "newTokenCount",
-        "snapshotBytes",
+        "snapshotTokens",
+        "snapshotCountOperationId",
         "text",
         "reasoning",
         "incompleteToolCalls",
@@ -2730,8 +2731,19 @@
         "newTokenCount": {
           "$ref": "#/definitions/nullableEvidenceCount"
         },
-        "snapshotBytes": {
+        "snapshotTokens": {
           "$ref": "#/definitions/nullableEvidenceCount"
+        },
+        "snapshotCountOperationId": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "minLength": 1
+            }
+          ]
         },
         "text": {
           "type": "string"

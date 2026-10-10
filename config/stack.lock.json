@@ -119,8 +119,8 @@
       "commit": "b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive": "https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38",
       "source_archive_sha256": "61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745",
-      "patch_sha256": "03075df9396988c0b19cf582b5f70f2c8bafc5814cab0c84edfad7420fa0e4ef",
-      "source_patch_manifest_sha256": "f0c40c5348646ec6c3d610412522212a5db34607da2b3bccea78504d0739c290"
+      "patch_sha256": "6b175c938e242f6992dc00f321b66d7e6b08b0b20c1f66d18cabe5de2d538c28",
+      "source_patch_manifest_sha256": "4b7215ffb976e8c9e16fc3f90783b0e188cd12052381754ac8d2fe8ead2083cc"
     }
   },
   "backend": {
@@ -277,7 +277,7 @@
     "docker_socket_gid": 984
   },
   "limits": {
-    "max_prompt_bytes": 32768,
+    "max_prompt_bytes": 16384,
     "max_staged_bytes": 214748364800,
     "max_staged_files": 200000,
     "max_staged_entries": 250000,

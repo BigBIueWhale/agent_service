@@ -233,10 +233,16 @@ fn validate_compaction_event(
                 return Err(refuse(&format!("whose {whose} lacks the {key} string")));
             }
         }
-        for key in ["newTokenCount", "snapshotBytes"] {
+        for key in ["newTokenCount", "snapshotTokens"] {
             if !field(holder, key, line)?.is_null() {
                 count(holder, key)?;
             }
+        }
+        let cited = field(holder, "snapshotCountOperationId", line)?;
+        if !cited.is_null() && cited.as_str().is_none_or(str::is_empty) {
+            return Err(refuse(&format!(
+                "whose {whose} cites a snapshot count by no operation identity"
+            )));
         }
         let responses = field(holder, "sdkValuesJson", line)?
             .elements()
@@ -269,7 +275,10 @@ fn validate_compaction_event(
                 || !holder.get("finishReason").is_some_and(Value::is_null)
                 || !holder.get("usage").is_some_and(Value::is_null)
                 || !holder.get("newTokenCount").is_some_and(Value::is_null)
-                || !holder.get("snapshotBytes").is_some_and(Value::is_null))
+                || !holder.get("snapshotTokens").is_some_and(Value::is_null)
+                || !holder
+                    .get("snapshotCountOperationId")
+                    .is_some_and(Value::is_null))
         {
             return Err(refuse(&format!(
                 "whose {whose} claims decoded output without an SDK value"
@@ -2033,6 +2042,56 @@ mod tests {
             admit(owner, &record).unwrap();
         }
     }
+    /// One completed count of a text alone: what a draw's snapshot cites.
+    fn record_text_count(
+        owner: &mut RuntimeContract,
+        operation_id: &str,
+        sequence: u64,
+        prompt: &str,
+        count: u64,
+    ) {
+        let request_id = format!("{operation_id}-request");
+        let body = serde_json::json!({"model":"fixture-model","prompt":prompt,
+            "add_special_tokens":false})
+        .to_string();
+        let request = serde_json::json!({"type":"model_utility_request","uuid":format!("{operation_id}-utility"),
+            "session_id":"session","parent_tool_use_id":null,
+            "utility_request":{"journal_id":"fixture","sequence":sequence,"request_id":request_id,
+                "operation_id":operation_id,"kv_scope":"session","kind":"tokenize_text",
+                "requested_model":"fixture-model","requested_input_count":null,"expected_max_model_len":100,
+                "request_url":"http://fixture.invalid/tokenize","body_json":body,
+                "body_bytes":body.len(),"body_sha256":crate::generation::sha256(body.as_bytes())}});
+        admit(owner, &request.to_string()).unwrap();
+        let result = serde_json::json!({"count":count,"max_model_len":100}).to_string();
+        let events = [
+            serde_json::json!({"kind":"http","status":200,"content_type":"application/json"}),
+            serde_json::json!({"kind":"body","offset":0,"base64":STANDARD.encode(result.as_bytes())}),
+            serde_json::json!({"kind":"end","termination":"eof","body_bytes":result.len(),
+                "body_sha256":crate::generation::sha256(result.as_bytes()),"error":null}),
+            serde_json::json!({"kind":"outcome","status":"completed","error":null,
+                "served_usage":null,"sdk_values_seen":1,"pipeline_outputs_delivered":0}),
+            serde_json::json!({"kind":"delivery","outputs_delivered":0}),
+        ];
+        for (index, event) in events.iter().enumerate() {
+            admit(owner, &response(&request_id, (index + 1) as u64, &event.to_string())).unwrap();
+        }
+        let completion = serde_json::json!({"type":"model_utility_completion",
+            "uuid":format!("{operation_id}-completion"),"session_id":"session","parent_tool_use_id":null,
+            "utility_completion":{"journal_id":"fixture","operation_id":operation_id,
+                "kv_scope":"session","kind":"tokenize_text","requested_model":"fixture-model",
+                "requested_input_count":null,"expected_max_model_len":100,"request_ids":[request_id],
+                "result":{"kind":"token_count","total_tokens":count,"max_model_len":100},"error":null}});
+        admit(owner, &completion.to_string()).unwrap();
+    }
+    /// The block the fixture's draw declares, as the model wrote it.
+    fn compaction_block() -> String {
+        crate::model_requests::snapshot_text(&[serde_json::json!({
+            "name":"state_snapshot","args":compaction_sections()
+        })])
+        .expect("a complete snapshot")
+    }
+    /// What the fixture's tokenizer counted that block at.
+    const COMPACTION_BLOCK_TOKENS: u64 = 131;
     fn with_compaction_transport() -> RuntimeContract {
         let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
         with_compaction_transport_response(bytes.as_bytes(), 1, true)
@@ -2065,6 +2124,26 @@ mod tests {
         delivered: u64,
         models: [&str; 4],
     ) -> RuntimeContract {
+        with_compaction_transport_counted(
+            bytes,
+            sdk_values_seen,
+            completed,
+            delivered,
+            models,
+            &compaction_block(),
+            COMPACTION_BLOCK_TOKENS,
+        )
+    }
+    /// The draw's transport, with its snapshot counted as `prompt` at `count`.
+    fn with_compaction_transport_counted(
+        bytes: &[u8],
+        sdk_values_seen: u64,
+        completed: bool,
+        delivered: u64,
+        models: [&str; 4],
+        prompt: &str,
+        count: u64,
+    ) -> RuntimeContract {
         let mut owner = initialized();
         record_compaction_tokenizer(&mut owner, "original", 1, 24, models[0]);
         record_compaction_tokenizer(&mut owner, "summary_request", 2, 20, models[1]);
@@ -2073,7 +2152,7 @@ mod tests {
             "kv_scope":"session", "model":"fixture-model", "stream":true,
             "max_tokens":8,
             "messages":[{"role":"user","content":
-                "your answer may generate at most 8 tokens, reasoning included. If all draws are refused, this conversation cannot continue."}]
+                "your answer may generate at most 8 tokens, reasoning included. If all draws are refused, this conversation is not compacted."}]
         }).to_string();
         let body_bytes = body.len();
         let body_hash = crate::generation::sha256(body.as_bytes());
@@ -2145,7 +2224,8 @@ mod tests {
             serde_json::json!({"kind":"delivery", "outputs_delivered":delivered}),
         );
         if completed {
-            record_compaction_tokenizer(&mut owner, "candidate", 5, 12, models[3]);
+            record_text_count(&mut owner, "snapshot-count", 5, prompt, count);
+            record_compaction_tokenizer(&mut owner, "candidate", 6, 12, models[3]);
         }
         owner
     }
@@ -2186,7 +2266,8 @@ mod tests {
             "operationId":"compaction-operation", "functionCalls":[{
                 "id":"snapshot-call","name":"state_snapshot","args":compaction_sections()}],
             "text":"", "reasoning":"", "sdkValuesJson":[compaction_provider_value()],
-            "newTokenCount":12, "snapshotBytes":524,
+            "newTokenCount":12, "snapshotTokens":COMPACTION_BLOCK_TOKENS,
+            "snapshotCountOperationId":"snapshot-count",
             "incompleteToolCalls":[], "finishReason":"STOP",
             "usage":{"promptTokenCount":24,"candidatesTokenCount":4,
                 "thoughtsTokenCount":0,"cachedContentTokenCount":0,
@@ -2322,7 +2403,8 @@ mod tests {
         draw["text"] = serde_json::json!("");
         draw["functionCalls"] = serde_json::json!([]);
         draw["newTokenCount"] = serde_json::Value::Null;
-        draw["snapshotBytes"] = serde_json::Value::Null;
+        draw["snapshotTokens"] = serde_json::Value::Null;
+        draw["snapshotCountOperationId"] = serde_json::Value::Null;
         draw["finishReason"] = serde_json::Value::Null;
         draw["usage"] = serde_json::Value::Null;
         admit(
@@ -2373,6 +2455,82 @@ mod tests {
         forged["data"]["rejectedAttempts"] = serde_json::json!([rejected]);
         assert!(admit(&mut initialized(), &forged.to_string()).is_err());
     }
+    /// A draw that declared a complete snapshot cites the count of its block
+    /// as the model wrote it: the engine recomputes the block from the
+    /// decoded call and holds the citation to the text the count was made of,
+    /// byte for byte, and to its count.
+    #[test]
+    fn a_draw_s_snapshot_count_is_held_to_its_decoded_block() {
+        let success = compaction_success();
+        assert_eq!(compaction_block().len(), 524);
+        let bytes = format!("data: {}\n\ndata: [DONE]\n\n", compaction_provider_value());
+        let counted = |prompt: &str, count: u64| {
+            with_compaction_transport_counted(
+                bytes.as_bytes(),
+                1,
+                true,
+                1,
+                ["fixture-model"; 4],
+                prompt,
+                count,
+            )
+        };
+        admit(
+            &mut counted(&compaction_block(), COMPACTION_BLOCK_TOKENS),
+            &success.to_string(),
+        )
+        .unwrap();
+        let refused = |owner: &mut RuntimeContract, record: &serde_json::Value| {
+            admit(owner, &record.to_string()).unwrap_err().to_string()
+        };
+        // A count of other text: here the same block with one more space.
+        assert!(refused(
+            &mut counted(&format!("{} ", compaction_block()), COMPACTION_BLOCK_TOKENS),
+            &success
+        )
+        .contains("made of other text than the decoded snapshot"));
+        // The count the record states is not the tokenizer's.
+        let mut forged = success.clone();
+        forged["data"]["output"]["snapshotTokens"] = serde_json::json!(COMPACTION_BLOCK_TOKENS + 1);
+        assert!(refused(&mut with_compaction_transport(), &forged)
+            .contains("differs from the served tokenizer response"));
+        // A citation of a count that is not a text count of this scope.
+        let mut foreign = success.clone();
+        foreign["data"]["output"]["snapshotCountOperationId"] = serde_json::json!("token-candidate");
+        assert!(refused(&mut with_compaction_transport(), &foreign)
+            .contains("no completed text tokenizer operation in its scope"));
+        // An answer that declared a snapshot and cites no count of it.
+        let mut uncounted = success.clone();
+        uncounted["data"]["output"]["snapshotTokens"] = serde_json::Value::Null;
+        uncounted["data"]["output"]["snapshotCountOperationId"] = serde_json::Value::Null;
+        assert!(refused(&mut with_compaction_transport(), &uncounted)
+            .contains("declared a snapshot its record cites no count of"));
+        // An operation without its count, and a count without its operation.
+        let mut half = success.clone();
+        half["data"]["output"]["snapshotTokens"] = serde_json::Value::Null;
+        assert!(refused(&mut with_compaction_transport(), &half)
+            .contains("cites an operation without its count"));
+        let mut other_half = success;
+        other_half["data"]["output"]["snapshotCountOperationId"] = serde_json::Value::Null;
+        assert!(refused(&mut with_compaction_transport(), &other_half)
+            .contains("cites an operation without its count"));
+    }
+
+    /// A failed compaction is not an end: the conversation goes on, and the
+    /// next send compacts again, so a stream holds a failed compaction and
+    /// the attempts after it, and each certifies on its own.
+    #[test]
+    fn a_failed_compaction_is_followed_by_the_next_attempt() {
+        let mut owner = with_compaction_transport();
+        admit(&mut owner, &compaction_failed().to_string()).unwrap();
+        let mut again = compaction_failed();
+        again["uuid"] = serde_json::json!("compaction-again");
+        admit(&mut owner, &again.to_string()).unwrap();
+        let mut success = compaction_success();
+        success["uuid"] = serde_json::json!("compaction-accepted");
+        admit(&mut owner, &success.to_string()).unwrap();
+    }
+
     #[test]
     fn a_stopped_recording_names_its_refusal_and_carries_the_record_it_refused() {
         // The recorder refused a record of its own: the stream carries it,

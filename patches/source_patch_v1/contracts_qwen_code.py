@@ -1399,14 +1399,21 @@ def _validate_deployment_prompt_scratch_after(state: State) -> None:
         (
             "const STATED_QUANTITY = /\\b(\\d[\\d,]*) (bytes|tokens|turns)\\b/g;",
             "export function refuseRestatedQuantities(",
-            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n      snapshot,\n    ],",
+            "    quantities: [\n      contextWindow,\n      turn,\n      ...(budget ? [turns] : []),\n      block,\n      trigger,\n      snapshot,\n      admission,\n    ],",
             "refuseRestatedQuantities(prompt, context.quantities);",
             "`- One inline block is at most ${block}. A tool result is held to one inline block. A longer one keeps its start and its end, and a notice where its middle was cut states its true total and the exact \\`read_file\\` call that returns the cut lines from a copy of the whole kept for the session, or why no copy could be kept.`,",
             "'- A `read_file` page and the statement that leads it are one inline block together.',",
-            "  const snapshot = `${partition.snapshotBytes} bytes`;",
+            # Every bound the model is told is in tokens, the unit the window
+            # is spent in: one inline block, a snapshot, the trigger at which
+            # the next send compacts and the limit at which a failed
+            # compaction ends the session.
+            "  const block = `${partition.inlineBlockTokens} tokens`;",
+            "  const snapshot = `${partition.snapshotTokens} tokens`;",
+            "  const trigger = `${partition.compactionTrigger} tokens`;",
+            "  const admission = `${partition.admissionLimit} tokens`;",
             # What a compaction is, the model is told before its first turn,
             # from the one statement of the frame it will read.
-            "    `- ${compactionDeclaration(trigger, snapshot)}`,",
+            "    `- ${compactionDeclaration(trigger, admission, snapshot)}`,",
             # The model is told what happens at the turn's limit: the turn is
             # refused rather than truncated, kept nowhere and run in no part,
             # asked for again as the next turn, and how many refusals in a
@@ -1893,7 +1900,7 @@ def _validate_behavioral_evidence_after(state: State) -> None:
             "refuses a draw its limit stopped: publishes its terminal, keeps none of it and issues nothing more",
             "draws a refused turn again on its request with the refusal notice added and nothing else",
             "draws one turn at most ${MAX_GENERATION_DRAWS} times, each redraw carrying the notice of every refusal before it",
-            "issues a redraw above the trigger by no more than its notices, and refuses one past them",
+            "issues a redraw above the admission limit by no more than its notices, and refuses one past them",
             "literal response preservation",
             "maps maxRetries zero to one outer establishment attempt",
             "literal-with-structure",
@@ -2438,7 +2445,10 @@ def _validate_compaction_event_after(state: State) -> None:
             "readonly compaction: SettledCompaction,",
             "sdkValuesJson: readonly string[];",
             "newTokenCount: number | null;",
-            "snapshotBytes: number | null;",
+            # A draw's snapshot is recorded as its count and the tokenizer
+            # operation that made it, both or neither.
+            "snapshotTokens: number | null;",
+            "snapshotCountOperationId: string | null;",
         ),
         label=label,
     )
@@ -2454,7 +2464,7 @@ def _validate_compaction_event_after(state: State) -> None:
         "sdkValuesJson: summaryResult.sdkValuesJson,",
         "sdkValuesJson: partial.sdkValuesJson,",
         "accounting.newTokenCount = newTokenCount;",
-        "snapshotBytes: declaredSnapshotBytes(summaryResult.functionCalls),",
+        "      snapshotTokens: attempt.snapshotTokens,\n      snapshotCountOperationId: attempt.snapshotCountOperationId,",
         "afterCommit: async () =>",
         "renderedSnapshot = composed[0]!",
     ), label=label)
@@ -4680,19 +4690,20 @@ def _validate_compaction_budget_before(state: State) -> None:
     )
 
 
-# The quantities the partition declares. `D`, `A`, `M`, `S` and `R` are shares
-# of the window; `F` is a byte count that belongs to the served chat template
-# and does not scale with the window. They are read out of the post-patch
-# source rather than restated here, so the arithmetic below is a check on the
-# tree and not a copy of it.
+# The quantities the partition declares. `D` and `A` are shares of the window;
+# `M`, `S`, `R` and `F` are counts of the served tokenizer's tokens that do not
+# scale with the window, and so is what a text's edges may add to `F`. They are
+# read out of the post-patch source rather than restated here, so the
+# arithmetic below is a check on the tree and not a copy of it.
 _PARTITION_DECLARED_NAMES = (
     "WINDOW_SHARES",
     "STATIC_PREAMBLE_SHARES",
     "PROMPT_ADDITIONS_SHARES",
-    "INLINE_BLOCK_SHARES",
-    "SNAPSHOT_SHARES",
-    "TURN_REASONING_SHARES",
-    "MESSAGE_FRAMING_BYTES",
+    "INLINE_BLOCK_TOKENS",
+    "SNAPSHOT_TOKENS",
+    "TURN_REASONING_TOKENS",
+    "MESSAGE_FRAMING_TOKENS",
+    "FRAMING_BOUNDARY_TOKENS",
 )
 
 # The served deployment, and the partition its window must yield.
@@ -4700,12 +4711,17 @@ _SERVED_WINDOW = 262_144
 _SERVED_PARTITION = {
     "staticPreamble": 12_288,
     "promptAdditions": 3_072,
-    "inlineBlockBytes": 32_768,
-    "snapshotBytes": 65_536,
+    "inlineBlockTokens": 16_384,
+    "snapshotTokens": 32_768,
     "messageFraming": 61,
     "turnGeneration": 40_960,
-    "compactionTrigger": 218_112,
+    "drawGeneration": 73_728,
+    "compactionTrigger": 185_344,
+    "admissionLimit": 218_112,
 }
+
+# The least window whose partition holds what a compaction leaves standing.
+_LEAST_PARTITIONED_WINDOW = 191_700
 
 # Partition numbers of no deployment this repository describes. A literal in
 # the tree that matches one is a copy of a partition that is not the one the
@@ -4713,7 +4729,7 @@ _SERVED_PARTITION = {
 _RETIRED_PARTITION_NUMBERS = re.compile(
     r"(?<!\w)(?<!\d,)(?<!\d\.)"
     r"(?:69[_,]?509|180[_,]?347|35[_,]?376|146[_,]?215|57[_,]?099|151[_,]?796"
-    r"|208[_,]?896|24[_,]?331|135[_,]?046)"
+    r"|208[_,]?896|24[_,]?331|135[_,]?046|33[_,]?547)"
     r"(?!\w|,\d|\.\d)"
 )
 
@@ -4721,37 +4737,44 @@ _RETIRED_PARTITION_NUMBERS = re.compile(
 def _read_partition_declarations(source: str, *, label: str) -> dict[str, int]:
     declared: dict[str, int] = {}
     for name in _PARTITION_DECLARED_NAMES:
-        match = re.search(rf"^const {name} = (\d+);$", source, re.MULTILINE)
+        match = re.search(
+            rf"^(?:export )?const {name} = (\d[\d_]*);$", source, re.MULTILINE
+        )
         _require(
             match is not None,
             f"{label}: tokenLimits.ts does not declare {name} as an integer",
         )
-        declared[name] = int(match.group(1))
+        declared[name] = int(match.group(1).replace("_", ""))
     return declared
 
 
 def _partition(window: int, declared: dict[str, int]) -> dict[str, int]:
     """The partition a window yields, written from the declarations.
 
-    `C` is one inline block at the most tokens it can be and the reasoning
-    share beside it; `T` is what the window has left once `C` and `A` are
-    held back. The preamble is in every request the trigger is compared with,
-    so `D` is charged in the fit and held back from nothing.
+    `C` is one inline block and the reasoning beside it, and `Q` a snapshot
+    at its bound beside a whole turn. `T` is what the window has left once
+    `C` and `A` are held back, `K` what it has left once `Q` and `A` are. The
+    preamble is in every request the bounds are compared with, so `D` is
+    charged in the fit and held back from nothing.
     """
     total = declared["WINDOW_SHARES"]
     share = lambda shares: (window * shares) // total  # noqa: E731
     preamble = share(declared["STATIC_PREAMBLE_SHARES"])
     additions = share(declared["PROMPT_ADDITIONS_SHARES"])
-    block = share(declared["INLINE_BLOCK_SHARES"])
-    turn = block + share(declared["TURN_REASONING_SHARES"])
+    block = declared["INLINE_BLOCK_TOKENS"]
+    snapshot = declared["SNAPSHOT_TOKENS"]
+    turn = block + declared["TURN_REASONING_TOKENS"]
+    draw = snapshot + turn
     return {
         "staticPreamble": preamble,
         "promptAdditions": additions,
-        "inlineBlockBytes": block,
-        "snapshotBytes": share(declared["SNAPSHOT_SHARES"]),
-        "messageFraming": declared["MESSAGE_FRAMING_BYTES"],
+        "inlineBlockTokens": block,
+        "snapshotTokens": snapshot,
+        "messageFraming": declared["MESSAGE_FRAMING_TOKENS"],
         "turnGeneration": turn,
-        "compactionTrigger": window - turn - additions,
+        "drawGeneration": draw,
+        "compactionTrigger": window - draw - additions,
+        "admissionLimit": window - turn - additions,
     }
 
 
@@ -4763,30 +4786,33 @@ def _surviving(part: dict[str, int]) -> int:
     framing = part["messageFraming"]
     return (
         part["staticPreamble"]
-        + (part["snapshotBytes"] + framing)
-        + 2 * (part["inlineBlockBytes"] + framing)
+        + (part["snapshotTokens"] + framing)
+        + 2 * (part["inlineBlockTokens"] + framing)
         + (part["turnGeneration"] + framing)
     )
 
 
 def _validate_context_partition(state: State, *, label: str) -> None:
-    """Every context budget follows from six declared quantities, and what a
-    compaction can leave standing stands below the trigger.
+    """Every context budget follows from seven declared quantities, all in
+    tokens of the served tokenizer, and what a compaction can leave standing
+    stands below the trigger.
 
     The safety argument: what stands in the window after a compaction is the
     static preamble plus a snapshot, the authored input, one tool result and
-    the turn carried behind them. Three of those four are bounded in bytes
-    before they exist, the snapshot by `S` and the others by `M`, and a
-    text's tokens are at most the UTF-8 bytes of its NFC form -- the served
-    tokenizer normalizes to NFC and then spends at least a byte per token --
-    so the whole of it is known before any of it is generated. `C` is sized for the largest thing a turn legitimately does,
-    one inline block at the most tokens it can be and the reasoning share
-    beside it, and `T` is what the window has left. At every window the
-    deployment can be given, the fit holds, a turn issued at the largest
-    admitted prompt cannot reach the end of the window, and the request that
-    later summarises that prompt is issued with at least `C + 1`; a window
-    where the fit fails is refused. No literal in the tree states a partition
-    number the source does not derive.
+    the turn carried behind them. Three of those four are bounded before they
+    exist, counted by the served tokenizer -- the snapshot by `S`, the others
+    by `M` -- and the fourth is a turn, bounded by `C`, so the whole of it is
+    known before any of it is generated. `C` is sized for the largest thing a
+    turn legitimately does, one inline block and the reasoning beside it; `Q`
+    holds a snapshot at its bound beside a whole turn. Two bounds follow: no
+    turn is issued at or above `T`, and the send at or above `K` compacts
+    first, so the first draw at a trigger has `Q + 1` and an attempt after a
+    failed one `C + 1`. At every window the deployment can be given, the fit
+    holds below `K`, a turn issued at the largest admitted prompt cannot reach
+    the end of the window, and `K` is below `T`; a window where the fit fails
+    is refused. `F` is held to the template's framing plus what a text's edges
+    may add, which the startup proof measures. No literal in the tree states a
+    partition number the source does not derive.
     """
 
     limits = "packages/core/src/core/tokenLimits.ts"
@@ -4797,33 +4823,45 @@ def _validate_context_partition(state: State, *, label: str) -> None:
         f"{label}: every declared quantity must be a positive integer",
     )
     _require(
-        declared["PROMPT_ADDITIONS_SHARES"]
-        + declared["INLINE_BLOCK_SHARES"]
-        + declared["TURN_REASONING_SHARES"]
-        < declared["WINDOW_SHARES"],
-        f"{label}: the declared shares leave no window for a trigger",
+        declared["FRAMING_BOUNDARY_TOKENS"] < declared["MESSAGE_FRAMING_TOKENS"],
+        f"{label}: the allowance for a text's edges leaves F no framing to hold",
     )
-    # `C` is a block and the reasoning beside it, and `T` is what the window
-    # has left once `C` and `A` are held back, so the three terms spend the
-    # window exactly and no fourth budget exists; the preamble is inside the
-    # requests the trigger is compared with, and charged in the fit.
+    _require(
+        declared["PROMPT_ADDITIONS_SHARES"] < declared["WINDOW_SHARES"],
+        f"{label}: the declared shares leave no window for a bound",
+    )
+    # `C` is a block and the reasoning beside it, `Q` a snapshot beside `C`;
+    # `T` and `K` are what the window has left once a turn's or a draw's room
+    # and `A` are held back, so each pair spends the window exactly and no
+    # third budget exists; the preamble is inside the requests the bounds are
+    # compared with, and charged in the fit. The startup proof holds each
+    # framing it measures, with the edges' allowance, to `F`.
     _require_all(
         state,
         limits,
         (
-            "  const turnGeneration = inlineBlockBytes + share(TURN_REASONING_SHARES);",
-            "  const compactionTrigger = contextWindowSize - turnGeneration - promptAdditions;",
+            "  const turnGeneration = inlineBlockTokens + TURN_REASONING_TOKENS;",
+            "  const drawGeneration = snapshotTokens + turnGeneration;",
+            "  const admissionLimit = contextWindowSize - turnGeneration - promptAdditions;",
+            "  const compactionTrigger =\n    contextWindowSize - drawGeneration - promptAdditions;",
             "  if (surviving > compactionTrigger - 1) {",
             "this deployment needs a larger window.",
+            "  if (compactionTrigger > admissionLimit) {",
         ),
         label=label,
     )
+    require_text(
+        state,
+        "packages/core/src/core/geminiChat.ts",
+        "      if (framing + FRAMING_BOUNDARY_TOKENS > partition.messageFraming) {",
+        label=label,
+    )
     # Every window this partition can be asked to describe: the served one,
-    # 524,288 as the next served tier, the tiers the model table can select,
-    # and two off a share boundary so the rounding is covered.
+    # 524,288 as the next served tier, the tiers the model table can select
+    # that hold the fit, the least window that does, and two off a share
+    # boundary so the rounding is covered.
     for window in (
-        4_096,
-        131_072,
+        _LEAST_PARTITIONED_WINDOW,
         196_608,
         200_000,
         202_752,
@@ -4840,15 +4878,19 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"{label}: a {window}-token window yields a non-positive budget {part!r}",
         )
         _require(
-            part["promptAdditions"] + part["turnGeneration"] + part["compactionTrigger"]
+            part["promptAdditions"] + part["turnGeneration"] + part["admissionLimit"]
+            == window
+            and part["promptAdditions"]
+            + part["drawGeneration"]
+            + part["compactionTrigger"]
             == window,
             f"{label}: a {window}-token window is not spent exactly by {part!r}",
         )
         _require(
-            part["turnGeneration"] > part["inlineBlockBytes"],
+            part["turnGeneration"] > part["inlineBlockTokens"],
             f"{label}: at a {window}-token window a turn's "
             f"{part['turnGeneration']} tokens cannot hold one inline block of "
-            f"{part['inlineBlockBytes']} bytes and reason beside it",
+            f"{part['inlineBlockTokens']} tokens and reason beside it",
         )
         _require(
             _surviving(part) <= part["compactionTrigger"] - 1,
@@ -4857,21 +4899,30 @@ def _validate_context_partition(state: State, *, label: str) -> None:
             f"{part['compactionTrigger']}-token trigger",
         )
         _require(
-            part["compactionTrigger"] - 1 + part["turnGeneration"] < window,
+            part["admissionLimit"] - 1 + part["turnGeneration"] < window,
             f"{label}: at a {window}-token window a turn issued at the largest "
-            f"admitted prompt ({part['compactionTrigger'] - 1}) with its "
+            f"admitted prompt ({part['admissionLimit'] - 1}) with its "
             f"{part['turnGeneration']}-token room reaches past the window",
         )
         _require(
+            part["compactionTrigger"] < part["admissionLimit"],
+            f"{label}: at a {window}-token window the {part['compactionTrigger']}"
+            f"-token trigger is not below the {part['admissionLimit']}-token "
+            "admission limit, so a history could reach a size where it can "
+            "neither be compacted nor continued",
+        )
+        _require(
             window - (part["compactionTrigger"] - 1)
+            == part["drawGeneration"] + part["promptAdditions"] + 1
+            and window - (part["admissionLimit"] - 1)
             == part["turnGeneration"] + part["promptAdditions"] + 1,
-            f"{label}: at a {window}-token window the request that summarises "
-            f"the largest admitted prompt is not issued with a whole turn's "
-            f"room plus what a request may add to it",
+            f"{label}: at a {window}-token window the first draw at the trigger "
+            "is not issued with a draw's room, or a later attempt with a turn's, "
+            "plus what a request may add to its prompt",
         )
     # A window too small to hold what a compaction leaves standing is refused
     # rather than partitioned into something unusable.
-    for tiny in (256, 257, 459, 1_086, 1_104, 1_846, 1_848, 1_888):
+    for tiny in (256, 4_096, 32_768, 131_072, _LEAST_PARTITIONED_WINDOW - 1):
         part = _partition(tiny, declared)
         _require(
             _surviving(part) > part["compactionTrigger"] - 1,
@@ -4980,18 +5031,24 @@ def _validate_compaction_budget_after(state: State) -> None:
         (
             "required: [...STATE_SNAPSHOT_SECTIONS],",
             "additionalProperties: false,",
-            # The bound travels with the declaration, so the model is told what
-            # a snapshot may render to before it composes one, and
+            # The declaration states no bound: the model is told `S` once,
+            # where every budget is told, the deployment prompt's `## Context`,
+            # which the compaction request carries as its system prompt; and
             # acceptance -- not decoding -- is where a longer draw is refused
             # and redrawn whole.
-            "export function stateSnapshotTool(maxBytes: number): Tool {",
-            "its all_user_messages element is filled by the runtime with the original inputs, verbatim.",
-            "`${maxBytes} bytes, including the tags that frame it; a longer snapshot is refused and redrawn.`,",
-            "export function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxBytes: number,\n): StateSnapshotAcceptance {",
-            # Measured with all_user_messages empty: the inputs it will hold
-            # are bounded on their own, and are not the draw's.
-            "const rendered = tokenizerText(stateSnapshotText(snapshot));",
-            "if (rendered.bytes > maxBytes) {",
+            "export function stateSnapshotTool(): Tool {",
+            "its all_user_messages element is filled by the runtime with the original inputs, verbatim. Every section is required.\",",
+            "export async function acceptStateSnapshot(\n  calls: readonly FunctionCall[],\n  maxTokens: number,\n  count: SnapshotTokenCounter,\n): Promise<StateSnapshotAcceptance> {",
+            # Counted with all_user_messages empty -- the inputs it will hold
+            # are bounded on their own, and are not the draw's -- on the block
+            # exactly as the model wrote it, by the served tokenizer, which
+            # normalizes to NFC itself: the text both certifiers recompute
+            # from the decoded call and compare, byte for byte, with the text
+            # the cited count was made of.
+            "  const rendered = stateSnapshotRawText(snapshot);\n  const counted = await count(rendered);\n  if (counted.tokens > maxTokens) {",
+            "export function stateSnapshotRawText(snapshot: StateSnapshot): string {",
+            "    `    <${section}>\\n${snapshot[section]}\\n    </${section}>`;",
+            "    `<state_snapshot>\\n${before}\\n\\n    <${RETAINED_INPUTS_ELEMENT}>\\n` +\n    `\\n    </${RETAINED_INPUTS_ELEMENT}>\\n\\n${after}\\n</state_snapshot>`",
             # Rendered as upstream's block: one `<state_snapshot>` element, a
             # child per section, its tags laid out as upstream's compression
             # prompt lays them out, and each section's text between them
@@ -5008,13 +5065,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const { opening, closing } = renderAuthoredStateSnapshot(",
             "export function stateSnapshotText(snapshot: StateSnapshot): string {",
             "SchemaValidator.validate(STATE_SNAPSHOT_PARAMETERS, args)",
-            # Whether a section holds text is decided once, in acceptance; the
-            # measure a draw's record carries reads the declaration's shape
-            # alone, so the native certifier that recomputes it never decides
-            # it again.
-            "    (section) => !snapshot[section].trim(),",
+            # A complete snapshot is the declaration's shape alone, as
+            # upstream's block is any complete block: acceptance and the
+            # rendering a draw's record is held to decide it the same way, and
+            # no notion of whitespace decides whether a section holds text.
             "function declaredStateSnapshot(",
-            "export function declaredSnapshotBytes(",
+            "export function declaredSnapshotRawText(",
             "  const declared = declaredStateSnapshot(calls);\n  if (declared.lack) {",
             # A draw is refused for one of two things, and says which: it
             # declared no complete snapshot, or it declared one past the bound,
@@ -5022,11 +5078,24 @@ def _validate_compaction_budget_after(state: State) -> None:
             "readonly refused: 'incomplete';",
             "readonly refused: 'over_bound';",
             "      refused: 'over_bound',",
-            "      rendered: rendered.text,",
+            "      rendered,\n      count: counted,",
+            "  return { snapshot, count: counted };",
         ),
         label="complete state snapshot",
     )
     forbid_text(state, snapshot_path, "SaxesParser", label="complete state snapshot")
+    # A rule stricter than upstream's -- a section that must hold text -- would
+    # cost a draw to say nothing the block does not already say, and the bound
+    # is no longer stated where the model is told it once.
+    for path in (snapshot_path, "packages/core/src/services/chatCompressionService.ts"):
+        for retired in ("empty_sections", "!snapshot[section].trim()", "write \"None\" for a section"):
+            forbid_text(state, path, retired, label="complete state snapshot")
+    forbid_text(
+        state,
+        snapshot_path,
+        "a longer snapshot is refused and redrawn",
+        label="complete state snapshot",
+    )
     label = "context-partition result"
     limits = "packages/core/src/core/tokenLimits.ts"
     limits_test = "packages/core/src/core/tokenLimits.test.ts"
@@ -5046,28 +5115,33 @@ def _validate_compaction_budget_after(state: State) -> None:
     _validate_context_partition(state, label=label)
     # The fit charges a retained input one inline block. The service holds the
     # operator's task to one; the agent tool holds a subagent's delegated
-    # task, its retained input, to one too, measured as every block is.
+    # task, its retained input, to one too, counted as every block is, by the
+    # served tokenizer, where its invocation runs.
     _require_all(
         state,
         "packages/core/src/tools/agent/agent.ts",
         (
-            "    const taskBytes = tokenizerText(params.prompt).bytes;\n"
-            "    const taskBound = this.config.getInlineBlockBytes();\n"
-            "    if (taskBytes > taskBound) {",
+            "    const taskBound = this.config.getInlineBlockTokens();\n"
+            "    const taskTokens = await this.config.countInlineTokens(\n"
+            "      tokenizerText(this.params.prompt).text,\n"
+            "      signal,\n"
+            "    );\n"
+            "    if (taskTokens > taskBound) {",
         ),
         label=label,
     )
     require_text(
         state,
         "packages/core/src/tools/agent/agent.test.ts",
-        "refuses a delegated task past one inline block, naming its size and the bound",
+        "refuses a delegated task past one inline block, counted in tokens, before any subagent runs",
         label=label,
     )
 
-    # One derivation, in one place, from five declared quantities. A turn's
-    # limit is one inline block and the reasoning share beside it, and nothing
+    # One derivation, in one place, from the declared quantities. A turn's
+    # limit is one inline block and the reasoning beside it, and nothing
     # else: not the prompt, not a model ceiling, not a clamp margin, not a
-    # floor. A compaction's draw is issued with at least that room.
+    # floor. A compaction's draw is issued with at least that room, and the
+    # first at a trigger with a snapshot's beside it.
     limits_source = _require_all(
         state,
         limits,
@@ -5075,12 +5149,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             "export interface ContextPartition {",
             "export function partitionContextWindow(",
             "export function turnOutputLimit(",
-            "    turnGeneration,\n    compactionTrigger,\n  };",
+            "    turnGeneration,\n    drawGeneration,\n    compactionTrigger,\n    admissionLimit,\n  };",
             "return partition.turnGeneration;",
-            # The one place bytes stand in for tokens: a block of `M` bytes of
-            # NFC is at most `M` tokens, spent in the block a turn writes and,
-            # framed with the template's `F`, in the blocks the fit carries.
-            "  const block = inlineBlockBytes + messageFraming;",
+            # A block is `M` tokens of the served tokenizer, counted where the
+            # bound is applied, and the fit charges each it carries the
+            # template's `F` around it.
+            "  const block = inlineBlockTokens + messageFraming;",
             # A text's tokens are at most the UTF-8 bytes of its NFC form, not
             # of the text as written, and this is the one place either is
             # measured: every byte bound that stands in for tokens takes its
@@ -5128,10 +5202,10 @@ def _validate_compaction_budget_after(state: State) -> None:
     for test_path, name in (
         (limits_test, "measures U+1D1C0 at the twelve bytes of its NFC form, not the four it is written in"),
         (limits_test, "bounds what U+1D1C0 normalizes to, not what it is written in"),
-        ("packages/core/src/core/toolResultBound.test.ts", "bounds U+1D1C0 by the twelve bytes it normalizes to, not the four it is written in"),
+        ("packages/core/src/core/toolResultBound.test.ts", "counts U+1D1C0 in the twelve bytes it normalizes to, not the four it is written in"),
         ("packages/core/src/core/toolResultBound.test.ts", "hands a result inside the bound on whole, in the NFC form it was measured in"),
-        ("packages/core/src/tools/read-file.test.ts", "pages by the bytes a line normalizes to, not the bytes it is written in"),
-        ("packages/core/src/services/state-snapshot.test.ts", "measures the rendered snapshot in the NFC bytes the tokenizer reads"),
+        ("packages/core/src/tools/read-file.test.ts", "pages by the tokens a line normalizes to, not the bytes it is written in"),
+        ("packages/core/src/services/state-snapshot.test.ts", "counts the block exactly as the model wrote it, and leaves normalization to the tokenizer"),
     ):
         require_text(state, test_path, name, label=label)
     limit_body = limits_source.split("export function turnOutputLimit(", 1)[1].split(
@@ -5170,10 +5244,11 @@ def _validate_compaction_budget_after(state: State) -> None:
             f"{label}: {limits} still carries the retired budget term '{absent}'",
         )
 
-    # A turn is issued below the compaction trigger or it is not issued, and
-    # what it is issued with is the remainder. Nothing in the send path
-    # consults a ceiling: not a configured one, not the model's, not an
-    # environment variable.
+    # A turn is issued below the admission limit or it is not issued, and
+    # what it is issued with is the remainder. A compaction that fails below
+    # that limit leaves the turn to be issued, and the next send compacts
+    # again. Nothing in the send path consults a ceiling: not a configured one,
+    # not the model's, not an environment variable.
     chat_source = _source(state, chat, label=label)
     _require_ordered(
         chat_source,
@@ -5202,14 +5277,16 @@ def _validate_compaction_budget_after(state: State) -> None:
             "['user message', withMessage - bare - probe],",
             "['assistant turn', withTurn - withMessage - 2 * probe],",
             "['tool result, with the call it answers', withResult - withTurn - probe],",
-            "if (framing > partition.messageFraming) {",
+            # `F` holds the framing and what a text's edges can add to it.
+            "if (framing + FRAMING_BOUNDARY_TOKENS > partition.messageFraming) {",
             "await this.verifyDeclarations(",
             "countExactTextTokens,",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
-            "if (promptTokensForClamp >= partition.compactionTrigger) {",
+            "if (promptTokensForClamp >= partition.admissionLimit) {",
             "throw new Error(",
-            # A compaction that reduced nothing ends the session there, and the
-            # ending names why: the failure carried beside its accounting.
+            # A request at the admission limit that its compaction did not
+            # reduce ends the session there, and the ending names why: the
+            # failure carried beside its accounting.
             "Its compaction failed: ${compaction.failure.replace(",
             "maxOutputTokens: turnOutputLimit(partition),",
         ),
@@ -5221,7 +5298,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     # message the refused draw answered, a redraw is admitted only against
     # that message, carries the notice and nothing else, is never compacted,
     # and is drawn at most MAX_GENERATION_DRAWS times. Its request stands
-    # above the trigger by no more than its notices, and the request that
+    # above the admission limit by no more than its notices, and the request that
     # compacts its prompt by those and what that request adds -- the
     # snapshot's declaration and the directive, counted in the shape every
     # compaction request carries them at the widest ceiling, and a redraw's
@@ -5234,7 +5311,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "const compactionAdded =",
             "buildCompressionSystemPrompt(undefined, ''),",
             "partition.window,",
-            "compactionRequestTools(rendered.tools ?? [], partition),",
+            "compactionRequestTools(rendered.tools ?? []),",
             ")) - bare;",
             "partition.messageFraming + DRAW_REFUSAL_NOTICE_MAX_BYTES;",
             "const turnNotices = refusedTurnNoticeTokens(partition);",
@@ -5264,7 +5341,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "requestContents = rendered.contents;",
             "promptTokensForClamp = await countExactRequestTokens(requestContents);",
             "            refusedBefore *\n            (partition.messageFraming + TURN_REFUSAL_NOTICE_MAX_BYTES);",
-            "            partition.compactionTrigger + noticesAdded",
+            "if (promptTokensForClamp >= partition.admissionLimit + noticesAdded) {",
             "            promptTokensForClamp + turnOutputLimit(partition) >\n            partition.window",
             "maxOutputTokens: turnOutputLimit(partition),",
             "} else {",
@@ -5313,7 +5390,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         "refuses a redraw once the conversation has changed since the refusal",
         "refuses a redraw that carries %s",
         "leaves a refused turn behind when a new message is sent",
-        "holds what a request may add to its prompt within the room above the trigger",
+        "holds what a request may add to its prompt within the room above the admission limit",
         "counts what a compaction request adds in the shape it carries it",
     ):
         require_text(state, chat_test, case, label=label)
@@ -5499,7 +5576,7 @@ def _validate_compaction_budget_after(state: State) -> None:
         state,
         "packages/core/src/core/geminiChat.test.ts",
         (
-            "'refuses a template that frames one %s past the declared framing',",
+            "'refuses a template that frames one %s past the declared framing less its edges',",
             "'shows why an empty probe measured nothing: the converter never sends it'",
             "'measures every framing from the wire requests the converter really sends'",
             "'counts the declared instruction and bounds its repository data by bytes'",
@@ -5577,6 +5654,9 @@ def _validate_compaction_budget_after(state: State) -> None:
     for case in (
         "refuses when what the request adds outgrows the room above the trigger for it",
         "gives the snapshot at least a turn's room at the largest prompt a turn can be issued against",
+        "gives the first draw at the trigger a snapshot at its bound beside a turn's room",
+        "compacts from the trigger K and not a token below it",
+        "accepts a snapshot with an empty section on its first draw, as upstream accepts any complete block",
         "sends the last issued prompt, and nothing after it, to one cache-preserving main-model request",
         "keeps the pending tool result out of the summary and in the turn's commit counts",
         "refuses to compact before any turn was issued",
@@ -5585,26 +5665,31 @@ def _validate_compaction_budget_after(state: State) -> None:
     for case in (
         "gives every turn the same room, whatever its prompt",
         "sends no output limit but the turn's room, whatever the request asked for",
-        "issues no turn once the rendered prompt reaches the compaction trigger",
-        "ends at the trigger naming why its compaction failed",
+        "issues no turn once the rendered prompt reaches the admission limit",
+        "ends at the admission limit naming why its compaction failed",
+        "issues a turn after a compaction fails below the admission limit, and compacts again on that turn's history",
+        "issues the turn at the last prompt below the admission limit",
         "refuses when the tokenizer reports another window",
         "refuses when the provider declares no context window",
     ):
         require_text(state, chat_test, case, label=label)
     for case in (
-        "declares D, A, M and S as shares of the window and F as a constant",
-        "gives a turn one inline block at its most tokens and the reasoning share beside it",
-        "spends the whole window and nothing more",
+        "declares D and A as shares of the window, and M, S, R and F in tokens that do not scale",
+        "gives a turn one inline block and R beside it, and the first draw a snapshot beside a turn",
+        "spends the whole window twice over: a turn below T, a draw below K",
         "leaves what a compaction can leave standing below the trigger, at every window",
         "cannot overrun the window from the largest admitted prompt",
-        "issues the compaction of any admitted prompt with a whole turn of room",
-        "takes every token of the turn room and the additions from the trigger, and none of the preamble",
+        "issues the first compaction at the trigger with a draw of room, and every later one with a turn",
+        "compacts a snapshot below the bound no turn is issued at",
+        "takes S, M, R and A from the trigger, M, R and A from the admission limit, and none of the preamble",
         "names the served partition and the least a segment after a compaction has",
         "refuses a window too small to hold what a compaction leaves standing",
         "refuses a window that is not a count of tokens",
         "is the turn generation room and nothing else",
         "gives a turn the same room whatever its prompt",
-        "spends the byte-to-token theorem in the partition alone, a block of M bytes as at most M tokens",
+        "charges each block its tokens and F, the framing with room for what its edges add",
+        "keep what the tokens hold, past the bound in bytes",
+        "counts a line longer than the room whole, once",
     ):
         require_text(state, limits_test, case, label=label)
     # A turn's room is sized, not maximised: nothing asserts it is the largest
@@ -5670,9 +5755,10 @@ def _validate_compaction_budget_after(state: State) -> None:
         forbid_text(state, service, absent, label=label)
     # The snapshot is issued at the room the window actually has, less the
     # widest redraw notice, and that room is never less than a turn's: the
-    # prompt this request extends was issued below the trigger, with at most
-    # its refusal notices more, so the request and a redraw's notice are at
-    # most T - 1 + D, leaving at least C + 1. The
+    # prompt this request extends was issued below the admission limit, with
+    # at most its refusal notices more, so the request and a redraw's notice
+    # are at most T - 1 + A, leaving at least C + 1, and the first attempt at
+    # a trigger summarises a prompt issued below K, leaving at least Q + 1. The
     # floor is asserted in the service so a broken partition fails loudly,
     # rather than clamped so it silently shrinks the snapshot -- a clamp is
     # what hands a summary a few thousand tokens and truncates it.
@@ -5869,8 +5955,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "      lack: { kind: 'other_function' },",
             "      lack: { kind: 'no_arguments' },",
             "      lack: { kind: 'schema' },",
-            "      lack: { kind: 'empty_sections', sections: empty },",
-            "      bytes: rendered.bytes,",
+            "      count: counted,",
         ),
         label=label,
     )
@@ -5990,7 +6075,7 @@ def _validate_compaction_budget_after(state: State) -> None:
             "An answer that reaches that limit is refused, "
             "and the request is made again, told why, up to ${MAX_GENERATION_DRAWS} answers in all. ",
             "If all ${MAX_GENERATION_DRAWS} are refused, this conversation is not "
-            "compacted and cannot continue.",
+            "compacted.`",
         ),
         label=label,
     )
@@ -6000,8 +6085,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         "const directive = `\\n\\n${compactionRequestDirective(maxOutputTokens)}`;",
         ": authoredTextPart(authored(instructions, harnessText(directive))),",
         "compactionDirectiveMessage(systemInstruction, maxOutputTokens),",
-        "  return [...turnTools, stateSnapshotTool(partition.snapshotBytes)];",
-        "tools: compactionRequestTools(turnTools, partition),",
+        "  return [...turnTools, stateSnapshotTool()];",
+        "tools: compactionRequestTools(turnTools),",
     ):
         require_text(state, service, construct, label=label)
     _require_ordered(
@@ -6070,7 +6155,11 @@ def _validate_compaction_budget_after(state: State) -> None:
         prompts,
         (
             "record the snapshot by calling state_snapshot, the one function this request lets you call; the conversation's other tools are declared because its turns called them.",
-            "there is no markup to produce and nothing to escape",
+            # Nothing is escaped, and the directive says truthfully what a
+            # section cannot hold: the served call grammar excludes the text
+            # that delimits a parameter from every string value.
+            "there is no markup to produce and nothing is escaped",
+            "The one exception: a section cannot contain <parameter= or </parameter>, which delimit a parameter; write those another way.",
             "exactly once",
             "The conversation above this message is the prompt the latest turn was issued against.",
             "follow your snapshot verbatim",
@@ -6085,6 +6174,8 @@ def _validate_compaction_budget_after(state: State) -> None:
         "<files_and_code_sections>",
         "CDATA",
         "<analysis>",
+        # A section holding a parameter delimiter would make it false.
+        "nothing to escape",
     ):
         forbid_text(state, prompts, retired, label=label)
     require_text(
@@ -6096,7 +6187,7 @@ def _validate_compaction_budget_after(state: State) -> None:
     require_text(
         state,
         prompts_test,
-        "asks for the declared call and describes no markup at all",
+        "asks for the declared call, describes no markup, and names the one text a section cannot hold",
         label=label,
     )
     require_text(
@@ -6140,6 +6231,12 @@ def _validate_compaction_budget_after(state: State) -> None:
             "      authoredTextPart(opening),\n      ...inputs,\n      authoredTextPart(authored(closing, harnessText(`\\n\\n${RESUME_TRAILER}`))),",
             "  const snapshot = snapshotMessage(\n    declared,\n    retainedInstructionParts(history),\n    draw,\n  );",
             "export function compactionDeclaration(",
+            # The model is told when a compaction is attempted and when its
+            # failure ends the session: a failed compaction leaves the
+            # conversation to continue, and the next send compacts again,
+            # until a request reaches the admission limit.
+            "  trigger: string,\n  admission: string,\n  snapshot: string,\n): string {",
+            "    `If a compaction fails, the conversation continues as it stands and the next send compacts again, until a request reaches ${admission}: a compaction that fails there ends the session.`",
             "const BLOCK_SEPARATOR = '\\n\\n';",
             "    index > 0 ? [{ text: BLOCK_SEPARATOR }, part] : [part],",
             "  turn?: Content[];",
@@ -6339,36 +6436,46 @@ def _validate_compaction_budget_after(state: State) -> None:
         service,
         (
             "const turnTools = generationConfig.tools ?? [];",
-            "  return [...turnTools, stateSnapshotTool(partition.snapshotBytes)];",
-            "tools: compactionRequestTools(turnTools, partition),",
+            "  return [...turnTools, stateSnapshotTool()];",
+            "tools: compactionRequestTools(turnTools),",
             "          functionCallingConfig: {\n            mode: FunctionCallingConfigMode.ANY,\n            allowedFunctionNames: [STATE_SNAPSHOT_FUNCTION_NAME],\n          },",
-            "acceptStateSnapshot(\n        summaryResult.functionCalls,\n        partition.snapshotBytes,\n      )",
-            "                  maxBytes: partition.snapshotBytes,",
+            "acceptance = await acceptStateSnapshot(\n          summaryResult.functionCalls,\n          partition.snapshotTokens,\n          countSnapshot,\n        );",
+            "                  tokens: acceptance.count.tokens,\n                  maxTokens: partition.snapshotTokens,",
             "if (!acceptance.snapshot) {",
             # A snapshot refused for its length keeps its raw provider output
-            # and the byte count that exceeded the bound, under its own status.
+            # and the count that exceeded the bound, under its own status.
             "  incomplete: CompressionStatus.COMPRESSION_FAILED_EMPTY_SUMMARY,",
             "  over_bound: CompressionStatus.COMPRESSION_FAILED_SUMMARY_OVER_BOUND,",
             "status: SNAPSHOT_REFUSAL_STATUS[acceptance.refused],",
             "sdkValuesJson: summaryResult.sdkValuesJson,",
-            "        snapshotBytes: declaredSnapshotBytes(summaryResult.functionCalls),",
+            # Every complete snapshot a draw declares is counted through the
+            # session's content generator in the compaction's own scope, and
+            # the draw's record cites the `tokenize_text` operation that
+            # counted it beside the count.
+            "      const result = await config\n        .getContentGenerator()\n        .countTextTokens(\n          { model: sessionModel, text, abortSignal },\n          `${promptId}:snapshot`,\n        );",
+            "        accounting.snapshotTokens = acceptance.count.tokens;\n        accounting.snapshotCountOperationId = acceptance.count.operationId;",
         ),
         label=label,
     )
-    # The client's replay measures a draw as its record does, by the
-    # declaration's shape, and decides nothing about its sections.
+    # The client's replay recomputes a draw's block as its record does, by
+    # the declaration's shape, decides nothing about its sections, and holds
+    # the cited count to that block, byte for byte.
     evidence = "packages/core/src/core/model-response-evidence.ts"
-    require_text(
+    _require_all(
         state,
         evidence,
-        "    const snapshotBytes = declaredSnapshotBytes(",
+        (
+            "    const rendering = declaredSnapshotRawText(",
+            "      const counted = counts.textCount(draw.snapshotCountOperationId, scope);\n      if (counted.prompt !== rendering)",
+            "      if (counted.totalTokens !== draw.snapshotTokens)",
+        ),
         label=label,
     )
     forbid_text(state, evidence, "acceptStateSnapshot(", label=label)
     require_text(
         state,
         "packages/core/src/services/state-snapshot.test.ts",
-        "measures a declaration whose every section holds %s, whatever acceptance makes of it",
+        "renders and accepts a declaration whose every section holds %s",
         label=label,
     )
     for retired in (
@@ -6668,8 +6775,13 @@ def _validate_compaction_accounting_after(state: State) -> None:
                 "compactionTokenEvidenceContext", label=label)
     _require_all(state, "packages/core/src/core/model-response-evidence.ts", (
         "claimCompactionRecord(",
-        "tokenCount(measurement.operationId, scope)",
-        "...counts.slice(0, 3).map((count) => count.lastSequence),",
+        "counts.tokenCount(measurement.operationId, scope)",
+        "...measured.slice(0, 3).map((count) => count.lastSequence),",
+        # A draw's cited snapshot count is a completed count of a text alone
+        # in its scope, made of the block its decoded call renders to.
+        "const counted = counts.textCount(draw.snapshotCountOperationId, scope);",
+        "compaction snapshot count was made of other text than the decoded snapshot",
+        "compaction draw declared a snapshot its record cites no count of",
         "compaction preflight or draw reorders physical requests",
         "compaction tokenizer measurements use different models",
         "compaction tokenizer model differs from physical draw model",
@@ -6682,6 +6794,9 @@ def _validate_compaction_accounting_after(state: State) -> None:
         "this.completedTokenCounts.set(completion.operation_id,",
         "tokenCount(operationId: string, scope: string): CompletedTokenizerCount",
         "'compaction measurement has no completed tokenizer operation in its scope'",
+        "this.completedTextCounts.set(completion.operation_id, {",
+        "textCount(operationId: string, scope: string): CompletedTextCount {",
+        "'compaction snapshot count has no completed text tokenizer operation in its scope',",
     ), label=label)
     forbid_text(state, "packages/core/src/core/model-utility-replay.ts",
                 "claimedTokenCounts", label=label)
@@ -8631,21 +8746,26 @@ def _validate_tool_result_bound_after(state: State) -> None:
     #
     # What the model reads of a call is one text: the output or the failure,
     # with every hook, rule and skill reminder that joined it. That text is
-    # held to one inline block in the bytes of its NFC form, whole, once,
-    # after everything has joined it. A text past it keeps its start and its
-    # end, cut on line boundaries before anything is retained, so retention
-    # decides nothing about them; the whole is retained and one notice stands
-    # in the cut.
+    # held to one inline block, in tokens of the served tokenizer counted in
+    # the NFC form it is handed on in, whole, once, after everything has
+    # joined it. A text within `M` bytes needs no count, since every token
+    # covers at least a byte; past that it is decided by its line prefixes,
+    # all of them. A text past the bound keeps its start and its end, cut on
+    # line boundaries before anything is retained, so retention decides
+    # nothing about them; the whole is retained and one notice stands in the
+    # cut, and the three are counted together as the model will read them.
     seam_path = "packages/core/src/core/toolResultBound.ts"
     seam = _require_all(
         state,
         seam_path,
         (
             "export async function boundToolResponseParts(",
-            "const maxBytes = config.getInlineBlockBytes();",
+            "const maxTokens = config.getInlineBlockTokens();",
+            "config.countInlineTokens(text, abortSignal);",
             "function withNestedTextJoined(",
-            "export function assertToolResponsesBounded(",
-            "  keepLeadingLines,\n  keepTrailingLines,\n  normalizeAuthored,\n  SLICED_LINE_MARK,\n  tokenizerText,\n  type KeptLines,\n} from './tokenLimits.js';",
+            "export async function assertToolResponsesBounded(",
+            "  if (bytes <= maxTokens) return true;\n  const lines = text.split('\\n');\n  return (await wholeLinesWithin(lines, maxTokens, count)) === lines.length;",
+            "  FRAMING_BOUNDARY_TOKENS,\n  keepLeadingLines,\n  keepTrailingLines,\n  normalizeAuthored,\n  SLICED_LINE_MARK,\n  tokenizerText,\n  wholeLinesWithin,\n  type KeptLines,\n  type TextTokenCounter,\n} from './tokenLimits.js';",
             # The cut with its authors is the same layout, and is held to be
             # the text the bound emitted.
             "import {\n  authoredMiddleCutContent,\n  middleCutContent,\n  type OutputBound,\n} from '../tools/tools.js';",
@@ -8663,15 +8783,18 @@ def _validate_tool_result_bound_after(state: State) -> None:
             # The store names the artifact when it keeps it, so the notice is
             # sized with the longest name it can take.
             "widestSessionArtifactPath(config, 'txt'),",
-            "if (widest > maxBytes) {",
+            # Each end meets the notice at a line break, and may add there what
+            # any text's edge adds where it meets another.
+            "const joins = 2 * FRAMING_BOUNDARY_TOKENS;",
+            "if (widest + joins > maxTokens) {",
+            "const retention = await persistSessionArtifact(config, bytes, 'txt');",
             # Upstream's split: one fifth of the room to the start, and the
             # rest to the end, so what a result says last is what it keeps;
             # and upstream's cut: each end on line boundaries, a line only
             # part of which fits sliced and marked.
-            "const room = maxBytes - widest;",
-            "const head = keepLeadingLines(whole.text, Math.floor(room / 5));",
-            "const tail = keepTrailingLines(whole.text, room - head.bytes);",
-            "const retention = await persistSessionArtifact(config, bytes, 'txt');",
+            "let room = maxTokens - widest - joins;",
+            "    const head = await keepLeadingLines(\n      whole.text,\n      Math.floor(room / 5),\n      count,\n    );",
+            "const tail = await keepTrailingLines(whole.text, room - head.tokens, count);",
             # The read back starts at the first line the start does not hold
             # whole, ends at the last line the end does not, and never asks
             # past the text's last line.
@@ -8679,16 +8802,19 @@ def _validate_tool_result_bound_after(state: State) -> None:
             "const firstCut = head.whole;",
             "const lastCut = Math.min(lastLine - tail.whole, lastTextLine);",
             "if (lastCut < firstCut) {",
-            "middleCutContent(\n      head.text,",
-            # What it says it returned is the part of the result it shows.
-            "shownBytes(head) + shownBytes(tail),",
             "? readBack(retention.filepath, firstCut, lastCut - firstCut + 1)",
-            "if (emitted.bytes > maxBytes) {",
+            "      middleCutContent(\n        head.text,",
+            # What it says it returned is the lines it holds whole, the unit
+            # the read that returns the cut takes.
+            "bound(head.whole + tail.whole, continuation),",
+            # The cut is counted as composed, and made again with that much
+            # less room when its joins put it past the bound.
+            "    const tokens = await count(emitted.text);\n    if (tokens > maxTokens) {\n      room -= tokens - maxTokens;\n      continue;\n    }",
             "async function boundedPart(",
             "  const joined = withNestedTextJoined(part);\n  const functionResponse = joined.functionResponse!;",
             "const whole = tokenizerText(text);",
-            "if (whole.bytes <= maxBytes) {",
-            "handedOn = await boundedText(config, maxBytes, text, whole, wholeAuthored);",
+            "if (await withinTokens(whole.text, whole.bytes, maxTokens, count)) {",
+            "    handedOn = await boundedText(\n      config,\n      maxTokens,\n      text,\n      whole,\n      wholeAuthored,\n      count,\n    );",
         ),
         label=label,
         location=seam_path,
@@ -8724,38 +8850,42 @@ def _validate_tool_result_bound_after(state: State) -> None:
         label=label,
     )
     # Each end is cut on line boundaries, as upstream's truncation cut it:
-    # whole lines while the next one fits, then the next one sliced and marked
-    # with upstream's ellipsis if any of it fits beside the mark, and never a
-    # blank line where the end meets the cut. The end is measured again whole,
-    # and one past its bound is an error rather than a result.
+    # whole lines while the next one fits, counted by the served tokenizer,
+    # then the next one sliced and marked with upstream's ellipsis if any of it
+    # fits beside the mark, never splitting a character, and never a blank
+    # line where the end meets the cut. The end is counted again whole, and
+    # one past its bound is an error rather than a result.
     cutter = _require_all(
         state,
         "packages/core/src/core/tokenLimits.ts",
         (
             "export const SLICED_LINE_MARK = '...';",
             "export interface KeptLines {",
+            "export type TextTokenCounter = (text: string) => Promise<number>;",
+            "async function largestWithin(",
+            "export function wholeLinesWithin(",
             "function partOfLine(",
-            "while (end > 0 && continuation(end)) end--;",
-            "while (continuation(start)) start++;",
-            "export function keepLeadingLines(text: string, maxBytes: number): KeptLines {",
-            "export function keepTrailingLines(text: string, maxBytes: number): KeptLines {",
+            "if (end > 0 && end < line.length && isLow(end)) end--;",
+            "if (start > 0 && start < line.length && isLow(start)) start++;",
+            "export function keepLeadingLines(\n  text: string,\n  maxTokens: number,\n  count: TextTokenCounter,\n): Promise<KeptLines> {",
+            "export function keepTrailingLines(\n  text: string,\n  maxTokens: number,\n  count: TextTokenCounter,\n): Promise<KeptLines> {",
         ),
         label=label,
     )
     _require_ordered(
         cutter,
         (
-            "function keepLines(",
-            "if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {",
+            "async function keepLines(",
+            "if (!Number.isSafeInteger(maxTokens) || maxTokens < 0) {",
             "const lines = tokenizerText(text).text.split('\\n');",
-            "if (used + separator + lineBytes <= maxBytes) {",
-            "const part = partOfLine(line, maxBytes - used - separator - markBytes, from);",
+            "await wholeLinesWithin(lines, maxTokens, count)",
+            "const units = await largestWithin(",
             "if (part.length > 0) {",
             "? `${part}${SLICED_LINE_MARK}`",
             ": `${SLICED_LINE_MARK}${part}`,",
             "if (!sliced) {",
             "while (kept.length > 0 && isBlankLine(kept[kept.length - 1])) kept.pop();",
-            "if (measured.text !== joined || measured.bytes > maxBytes) {",
+            "if (measured.text !== handedOn || tokens > maxTokens) {",
             "whole: kept.length - (sliced ? 1 : 0),",
         ),
         label=label,
@@ -8814,7 +8944,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
     _require_ordered(
         chat_source,
         (
-            "assertToolResponsesBounded(\n            userContent.parts ?? [],\n            partition.inlineBlockBytes,\n          );",
+            "await assertToolResponsesBounded(\n            userContent.parts ?? [],\n            partition.inlineBlockTokens,\n            countExactTextTokens,\n          );",
             "const effectiveTokens = await countExactRequestTokens(",
             "compaction = await this.tryCompress(",
         ),
@@ -8956,10 +9086,15 @@ def _validate_tool_result_bound_after(state: State) -> None:
     client = _source(state, "packages/core/src/core/client.ts", label=label)
     adopt = client.split("async adoptHistory(contents: readonly Content[]): Promise<void> {", 1)
     _require(len(adopt) == 2, f"{label}: adoptHistory is missing from client.ts")
+    # What is adopted is copied before anything is awaited, so nothing the
+    # caller does to its own objects after handing them in reaches the record
+    # or the history; each copy is held to the bound, then recorded, then
+    # admitted.
     _require_ordered(
         adopt[1],
         (
-            "assertToolResponsesBounded(content.parts ?? [], maxBytes);",
+            "const snapshots = contents.map((content) => structuredClone(content));",
+            "      await assertToolResponsesBounded(\n        snapshot.parts ?? [],\n        maxTokens,\n        (text) => this.config.countInlineTokens(text),\n      );",
             "await recorder.recordAdoptedMessage(snapshot);",
         ),
         label=label,
@@ -8994,9 +9129,12 @@ def _validate_tool_result_bound_after(state: State) -> None:
     # is given is the subagent's retained input, which the partition's fit
     # charges one inline block.
     for path in _UNBOUNDED_PRODUCERS:
+        producer = _source(state, path, label=label)
+        reads = 1 if path == "packages/core/src/tools/agent/agent.ts" else 0
         _require(
-            _source(state, path, label=label).count("getInlineBlockBytes")
-            == (1 if path == "packages/core/src/tools/agent/agent.ts" else 0),
+            producer.count("getInlineBlockTokens") == reads
+            and producer.count("countInlineTokens") == reads
+            and "getInlineBlockBytes" not in producer,
             f"{label}: {path} asks the session for an inline block; a tool's output "
             "is bounded where the session bounds every result, not by the tool",
         )
@@ -9007,7 +9145,7 @@ def _validate_tool_result_bound_after(state: State) -> None:
     require_text(
         state,
         "packages/core/src/tools/agent/agent.ts",
-        "    const taskBound = this.config.getInlineBlockBytes();",
+        "    const taskBound = this.config.getInlineBlockTokens();",
         label=label,
     )
     require_text(
@@ -9058,13 +9196,19 @@ def _validate_tool_result_bound_after(state: State) -> None:
         ("packages/core/src/core/tokenLimits.test.ts", "slice the first line that does not fit and mark it as upstream marks a sliced line"),
         ("packages/core/src/core/tokenLimits.test.ts", "mark no slice that would hold none of the line"),
         ("packages/core/src/core/tokenLimits.test.ts", "never meet the cut on a blank line, which is left to the cut"),
-        ("packages/core/src/core/tokenLimits.test.ts", "measure and hand on the NFC form, and slice on a code-point boundary"),
+        ("packages/core/src/core/tokenLimits.test.ts", "count and hand on the NFC form, and slice on a code-point boundary"),
+        ("packages/core/src/core/tokenLimits.test.ts", "keep what the tokens hold, past the bound in bytes"),
+        ("packages/core/src/core/tokenLimits.test.ts", "refuse what the counts say does not fit, rather than hand it on"),
+        ("packages/core/src/core/tokenLimits.test.ts", "needs no count for lines within the bound in bytes, and counts text about the size of what fits"),
         ("packages/core/src/tools/tools.test.ts", "stands in the cut between the start and the end of a result cut in the middle"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the joined text, not the tool output alone"),
         ("packages/core/src/core/toolResultBound.test.ts", "says the rest was not retained when the store is full, with what to do instead, and does not throw"),
         ("packages/core/src/core/toolResultBound.test.ts", "throws when the store holds something it did not keep, because that is a defect and not a capacity"),
         ("packages/core/src/core/toolResultBound.test.ts", "joins text nested beside media to the response text, and bounds the joined text"),
-        ("packages/core/src/core/toolResultBound.test.ts", "refuses a result that skipped the bound, naming the call, in the bytes the tokenizer reads"),
+        ("packages/core/src/core/toolResultBound.test.ts", "refuses a result that skipped the bound, naming the call, counted in the form the tokenizer reads"),
+        ("packages/core/src/core/toolResultBound.test.ts", "hands on whole a result past M bytes that is within M tokens"),
+        ("packages/core/src/core/toolResultBound.test.ts", "judges a result that ends with a line break by all of its lines"),
+        ("packages/core/src/core/toolResultBound.test.ts", "counts the composed cut and cuts again with less room when its joins put it past the bound"),
         ("packages/core/src/core/toolResultBound.test.ts", "keeps the start and the end of a long result and retains the whole"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the text a hook joined to the output, not the output alone"),
         ("packages/core/src/core/toolResultBound.test.ts", "bounds the text a batch hook joined after every call finished"),
@@ -9485,7 +9629,7 @@ def _validate_served_accounting_after(state: State) -> None:
         state,
         core + "utils/transcript-records.ts",
         (
-            "export const CHAT_RECORDING_VERSION = 23;",
+            "export const CHAT_RECORDING_VERSION = 24;",
             "readonly recordingVersion: typeof CHAT_RECORDING_VERSION;",
             "value['recordingVersion'] !== CHAT_RECORDING_VERSION",
             "'unsupported_recording_version'",
@@ -9514,7 +9658,7 @@ def _validate_served_accounting_after(state: State) -> None:
         "claimCompactionSystemRecord(record: Record<string, unknown>): void",
         "refusal('compaction system record has no scope or object data')",
         "this.claimCompaction(data as CompactionRecord, scope);",
-        "this.utilities.tokenCount(id, owner)",
+        "this.responses.claimCompactionRecord(record, scope, this.utilities);",
     ), label=label)
     # The closed record shape, with the decode policy it was dispatched under,
     # is read by the pure record module that browser bundles share.
@@ -11553,16 +11697,22 @@ def _validate_bounded_output_after(state: State) -> None:
     ):
         forbid_text(state, tools_ts, retired, label=label)
 
-    # `M` is a share of the served window, so the session is what knows it.
-    # The window is the one place it is derived, and a provider that declares
-    # none has no share to take and is refused instead of given a default.
+    # `M` is a count of the served tokenizer's tokens, derived with the
+    # partition from the served window, so the session is what knows it and
+    # what counts a block: through the backend's own tokenizer, on the route it
+    # generates on, against the window the bound was derived from. A provider
+    # that declares no window has no partition and is refused instead of given
+    # a default.
     _require_all(
         state,
         "packages/core/src/config/config.ts",
         (
-            "  getInlineBlockBytes(): number {",
-            "return partitionContextWindow(contextWindowSize).inlineBlockBytes;",
-            "The inline-block bound is a share of the served context window, and this provider declares none.",
+            "  getInlineBlockTokens(): number {",
+            "return partitionContextWindow(contextWindowSize).inlineBlockTokens;",
+            "The inline-block bound is derived from the served context window, and this provider declares none.",
+            "  async countInlineTokens(",
+            "    const result = await this.getContentGenerator().countTextTokens(\n      { model: this.getModel(), text, abortSignal },\n      'inline-block',\n    );",
+            "    if (result.maxModelLen !== contextWindowSize) {",
         ),
         label=label,
     )
@@ -11576,7 +11726,9 @@ def _validate_bounded_output_after(state: State) -> None:
     # by it. Every other tool returns its whole result, and the one bound is
     # taken where the model's copy is made.
     askers = sorted(
-        path for path, text in sources.items() if "getInlineBlockBytes" in text
+        path
+        for path, text in sources.items()
+        if "getInlineBlockTokens" in text or "getInlineBlockBytes" in text
     )
     _require(
         askers == ["packages/core/src/tools/read-file.ts"],
@@ -11612,16 +11764,18 @@ def _validate_bounded_output_after(state: State) -> None:
     # that reads on, or ends with it. It states no bound: a page that met the
     # caller's own limit was not cut, and saying it was is false. The call
     # asks for the caller's own limit, never the size of the page that fit.
-    # The room a page has is one inline block less the widest statement that
-    # can lead it, every number at its most digits at once, so the page and
-    # its statement are one inline block by construction. The description
-    # quotes the statement in the same words.
+    # A page starts from one inline block less the widest statement that can
+    # lead it, every number at its most digits at once, counted by the served
+    # tokenizer; the page and its statement are then counted together where
+    # the read composes them, and a page that comes to more is read again with
+    # that much less room, so what is handed on is always the count of what is
+    # handed on. The description quotes the statement in the same words.
     read_file_tool = "packages/core/src/tools/read-file.ts"
     _require_all(
         state,
         read_file_tool,
         (
-            "export function readPageBytes(",
+            "export async function readPageTokens(",
             "type PageTotal =",
             "  | { readonly lines: number; readonly remaining: number }",
             "  | { readonly atLeast: number };",
@@ -11635,11 +11789,11 @@ def _validate_bounded_output_after(state: State) -> None:
             "? `Showing no lines: the file has ${total} total lines and ends before line ${first}.`",
             ": `${showingLines(first, last, { lines: total, remaining: 0 })} The file ends here.`;",
             "    ...[{ lines: most, remaining: most }, { atLeast: most }].map(",
-            "tokenizerText(`${pageEnds(most, most, most)}${PAGE_STATEMENT_BREAK}`)",
-            "tokenizerText(`${pageEnds(most, 0, most)}${PAGE_STATEMENT_BREAK}`).bytes,",
+            "    `${pageEnds(most, most, most)}${PAGE_STATEMENT_BREAK}`,\n    `${pageEnds(most, 0, most)}${PAGE_STATEMENT_BREAK}`,",
+            "      await count(tokenizerText(statement).text),",
             "if (result.nextRead && result.linesShown && trueTotal !== undefined) {",
             "            : { lines: trueTotal, remaining: trueTotal - last },",
-            "          nextOffset: result.nextRead.offset,\n          limit: this.params.limit,\n        }),\n        harnessText(PAGE_STATEMENT_BREAK),\n        page,\n      );",
+            "            nextOffset: result.nextRead.offset,\n            limit: this.params.limit,\n          }),\n          harnessText(PAGE_STATEMENT_BREAK),\n          page,\n        );",
             "    const trueTotal = result.fileLineCount;",
             "import { countTextLines } from '../utils/lineCount.js';",
             "      const last = this.params.offset + countTextLines(page.text);",
@@ -11777,13 +11931,17 @@ def _validate_bounded_output_after(state: State) -> None:
             "  fileLineCount?: number;",
             "          fileLineCount: originalLineCountExact ? fileLines : originalLineCount,",
             "          truncatedByBytes,",
-            # A page is budgeted in the NFC form it is handed on in, which the
-            # range reader's count of the file's own bytes is not; its size is
-            # the caller's, and no line count the deployment never chose
-            # shortens it.
-            "const maxOutputBytes = options.pageBytes ?? DEFAULT_RANGE_READ_BYTES;",
+            # A page is counted in the NFC form it is handed on in, which the
+            # range reader's count of the file's own bytes is not: a page in
+            # tokens keeps the whole lines the counts say fit, read through a
+            # byte window that widens while every line of it fits; a page in
+            # bytes, the `@`-reference readers', keeps the lines whose NFC bytes
+            # fit. Its size is the caller's, and no line count the deployment
+            # never chose shortens it.
+            "        let maxOutputBytes =\n          options.pageTokens !== undefined\n            ? 8 * options.pageTokens.max\n            : (options.pageBytes ?? DEFAULT_RANGE_READ_BYTES);",
+            "            tokenFit = await wholeLinesWithin(\n              window.lines.map((line) => tokenizerText(line).text),\n              options.pageTokens.max,\n              options.pageTokens.count,\n            );",
             "const normalized = tokenizerText(line);",
-            "if (pageBytes + separator + normalized.bytes > maxOutputBytes) break;",
+            "if (pageBytes + separator + normalized.bytes > maxOutputBytes)\n              break;",
             "const page = tokenizerText(\n          pageLines.map((line) => line.text).join('\\n'),\n        );",
         ),
         label=label,
@@ -11794,7 +11952,8 @@ def _validate_bounded_output_after(state: State) -> None:
         (
             "if (isReadText(llmContent) && result.linesShown !== undefined) {",
             "const block = tokenizerText(llmContent.text);",
-            "const maxBytes = this.config.getInlineBlockBytes();",
+            "const maxTokens = this.config.getInlineBlockTokens();",
+            "        const tokens = await count(block.text);\n        if (tokens > maxTokens) {\n          pageTokens -= tokens - maxTokens;\n          continue;\n        }",
         ),
         label=label,
     )

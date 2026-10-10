@@ -13,7 +13,7 @@ fn output() -> Value {
         "operationId":"named-when-recorded","functionCalls":[],
         "text":"  partial snapshot","reasoning":"Observed reasoning.  ",
         "sdkValuesJson":["{\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"name\":\"state_snapshot\",\"arguments\":\"{\\\"intent\\\":\"}}]}}]}", usage_chunk(&usage)],
-        "newTokenCount":null,"snapshotBytes":null,
+        "newTokenCount":null,"snapshotTokens":null,"snapshotCountOperationId":null,
         "incompleteToolCalls":[{"name":"state_snapshot","arguments":"{\"intent\": \"Summarise the corpus \\u2014 cut"}],
         "finishReason":"MAX_TOKENS","usage":usage})
 }
@@ -24,7 +24,7 @@ fn rejected() -> Value {
         "operationId":"named-when-recorded","functionCalls":[],
         "text":"","reasoning":"Reasoning that produced nothing.",
         "sdkValuesJson":["{\"choices\":[{\"delta\":{\"reasoning_content\":\"Reasoning that produced nothing.\"}}]}", usage_chunk(&usage)],
-        "newTokenCount":null,"snapshotBytes":null,"incompleteToolCalls":[],
+        "newTokenCount":null,"snapshotTokens":null,"snapshotCountOperationId":null,"incompleteToolCalls":[],
         "finishReason":"STOP","usage":usage})
 }
 
@@ -57,7 +57,7 @@ fn committed(history: Value) -> Value {
         "operationId":"named-when-recorded",
         "functionCalls":[{"id":"snapshot-call","name":"state_snapshot","args":sections}],
         "text":"","reasoning":"","sdkValuesJson":[provider, usage_chunk(&usage)],
-        "newTokenCount":12,"snapshotBytes":524,"incompleteToolCalls":[],
+        "newTokenCount":12,"snapshotTokens":131,"snapshotCountOperationId":"named-when-recorded","incompleteToolCalls":[],
         "finishReason":"STOP","usage":usage});
     let mut record = record(draw, json!([]));
     record["data"]["status"] = json!("COMPRESSED");
@@ -214,7 +214,8 @@ fn compaction_draws_require_content_measurements_and_decodable_provider_values()
         "sdkValuesJson",
         "text",
         "newTokenCount",
-        "snapshotBytes",
+        "snapshotTokens",
+        "snapshotCountOperationId",
         "usage",
         "physicalRequests",
         "finishReason",

@@ -14,7 +14,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
 };
-use unicode_normalization::UnicodeNormalization;
 
 fn sha256(json: &str) -> String {
     Sha256::digest(json.as_bytes())
@@ -80,14 +79,16 @@ const SNAPSHOT_ELEMENTS: [&str; 9] = [
     "next_step",
 ];
 
-/// The bytes the snapshot a draw declared renders to, in NFC, or None when it
-/// declared none: one `state_snapshot` call whose arguments are exactly the
-/// sections, each a string. This is the client's `declaredSnapshotBytes`, a
-/// measure of the declaration's shape alone. Whether a section holds text is
-/// the client's acceptance rule, decided there once, and nothing here
-/// restates it, so no notion of whitespace this engine and the client could
-/// read differently decides whether a draw's record is believed.
-fn snapshot_bytes(calls: &[serde_json::Value]) -> Option<usize> {
+/// The block the snapshot a draw declared renders to, as the model wrote it,
+/// or None when it declared none: one `state_snapshot` call whose arguments
+/// are exactly the sections, each a string. This is the client's
+/// `declaredSnapshotRawText`: the frame the history gives the block around
+/// each section byte for byte, `all_user_messages` empty, and no
+/// normalization, so the text a draw's cited count was made of is compared
+/// with it byte for byte and no Unicode table this engine and the client
+/// could hold at different versions decides whether a record is believed.
+/// The declaration's shape alone decides it, as it decides acceptance.
+pub(crate) fn snapshot_text(calls: &[serde_json::Value]) -> Option<String> {
     let call = calls.first()?.as_object()?;
     if calls.len() != 1 || call.get("name")?.as_str()? != "state_snapshot" {
         return None;
@@ -122,13 +123,9 @@ fn snapshot_bytes(calls: &[serde_json::Value]) -> Option<usize> {
         .map(|section| element(section))
         .collect::<Vec<_>>()
         .join("\n\n");
-    let opening = format!("<state_snapshot>\n{before}\n\n    <all_user_messages>\n")
-        .nfc()
-        .collect::<String>();
-    let closing = format!("\n    </all_user_messages>\n\n{after}\n</state_snapshot>")
-        .nfc()
-        .collect::<String>();
-    Some(opening.len() + closing.len())
+    Some(format!(
+        "<state_snapshot>\n{before}\n\n    <all_user_messages>\n\n    </all_user_messages>\n\n{after}\n</state_snapshot>"
+    ))
 }
 
 fn decoded_usage(value: Option<&serde_json::Value>) -> Option<serde_json::Value> {
@@ -229,12 +226,10 @@ fn project_decoded_draw(
             usage = decoded_usage(Some(metadata));
         }
     }
-    let snapshot_bytes = snapshot_bytes(&calls);
     Ok(serde_json::json!({
         "text": text, "reasoning": reasoning,
         "functionCalls": calls, "incompleteToolCalls": incomplete,
         "finishReason": finish_reason, "usage": usage,
-        "snapshotBytes": snapshot_bytes,
     }))
 }
 
@@ -363,7 +358,7 @@ fn compaction_request_budget(body: Value<'_>, line: usize) -> ContractResult<u64
         .map_err(|_| refusal("compaction directive has no valid output ceiling"))?;
     if stated != budget
         || !claimed[digits..].starts_with(" tokens, reasoning included.")
-        || !directive.ends_with("cannot continue.")
+        || !directive.ends_with("this conversation is not compacted.")
     {
         return Err(refusal(
             "compaction directive differs from its physical output ceiling",
@@ -777,6 +772,9 @@ struct CompletedTokenCount {
     count: u64,
     window: u64,
     model: String,
+    /// The text a `tokenize_text` count was made of, exactly as its request
+    /// carried it; None for a count of a rendered chat request.
+    prompt: Option<String>,
 }
 
 pub(crate) struct UtilityRequestAdmission {
@@ -1377,10 +1375,27 @@ impl ModelRequests {
                 }
             }
         }
+        // A count of a text alone is kept with the text it counted, which its
+        // admitted request carried as a string `prompt`: a draw cites it for
+        // its snapshot block, and the citation is held to that text.
+        let prompt = if operation.kind == "tokenize_text" && !result.is_null() {
+            let body: serde_json::Value = serde_json::from_str(&operation.body)
+                .map_err(|_| refusal("text tokenizer request body is not JSON"))?;
+            Some(
+                body.get("prompt")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| refusal("text tokenizer has no rendered text input"))?
+                    .to_string(),
+            )
+        } else {
+            None
+        };
         Ok(UtilityCompletionAdmission {
             operation_id: operation_id.to_string(),
             request_ids: ids,
-            token_count: if operation.kind == "tokenize_chat" && !result.is_null() {
+            token_count: if matches!(operation.kind.as_str(), "tokenize_chat" | "tokenize_text")
+                && !result.is_null()
+            {
                 Some(CompletedTokenCount {
                     scope: operation.scope.clone(),
                     first_sequence: operation.first_sequence,
@@ -1396,6 +1411,7 @@ impl ModelRequests {
                         SAFE_INTEGER,
                     )?,
                     model: operation.model.clone(),
+                    prompt,
                 })
             } else {
                 None
@@ -1421,7 +1437,7 @@ impl ModelRequests {
         scope: &str,
     ) -> ContractResult<(u64, u64, String, u64, u64)> {
         let count = self.completed_token_counts.get(operation_id)
-            .filter(|count| count.scope == scope)
+            .filter(|count| count.scope == scope && count.prompt.is_none())
             .ok_or_else(|| refusal("compaction measurement has no completed chat tokenizer operation in its scope"))?;
         Ok((
             count.count,
@@ -2709,7 +2725,6 @@ impl ModelRequests {
             "incompleteToolCalls",
             "finishReason",
             "usage",
-            "snapshotBytes",
         ] {
             if !projection
                 .get(key)
@@ -2718,6 +2733,65 @@ impl ModelRequests {
             {
                 return Err(refusal(
                     "compaction draw differs from its recorded delivered output",
+                ));
+            }
+        }
+        // A draw that declared a complete snapshot cites the count of its
+        // block as the model wrote it, recomputed here from the decoded calls
+        // and held to the text the count was made of, byte for byte; one that
+        // declared none cites nothing. Only a draw its compaction ended on, for
+        // a cause outside its answer -- the count itself failing among them --
+        // may have declared one and cite none.
+        let block = snapshot_text(
+            projection
+                .get("functionCalls")
+                .and_then(serde_json::Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+        );
+        match (
+            claimed_draw.get("snapshotTokens"),
+            claimed_draw.get("snapshotCountOperationId"),
+        ) {
+            (Some(serde_json::Value::Null), Some(serde_json::Value::Null)) => {
+                if block.is_some() && kind != DrawKind::Ended {
+                    return Err(refusal(
+                        "compaction draw declared a snapshot its record cites no count of",
+                    ));
+                }
+            }
+            (Some(tokens), Some(serde_json::Value::String(cited))) if !tokens.is_null() => {
+                let block = block.ok_or_else(|| {
+                    refusal("compaction draw cites a snapshot count but declared no snapshot")
+                })?;
+                let count = self
+                    .completed_token_counts
+                    .get(cited.as_str())
+                    .filter(|count| count.scope == scope && count.prompt.is_some())
+                    .ok_or_else(|| {
+                        refusal(
+                            "compaction snapshot count has no completed text tokenizer operation in its scope",
+                        )
+                    })?;
+                if count.prompt.as_deref() != Some(block.as_str()) {
+                    return Err(refusal(
+                        "compaction snapshot count was made of other text than the decoded snapshot",
+                    ));
+                }
+                if tokens.as_u64() != Some(count.count) {
+                    return Err(refusal(
+                        "compaction snapshot count differs from the served tokenizer response",
+                    ));
+                }
+                if count.model != operation.model {
+                    return Err(refusal(
+                        "compaction snapshot count uses a different model than its draw",
+                    ));
+                }
+            }
+            _ => {
+                return Err(refusal(
+                    "compaction snapshot count cites an operation without its count, or a count without its operation",
                 ));
             }
         }
@@ -2816,11 +2890,12 @@ mod tests {
         depth: 100,
     };
 
-    /// A section is measured between its tags exactly as the model wrote it:
-    /// whitespace at either end, blank lines and a tag of its own included.
+    /// A section stands between its tags exactly as the model wrote it:
+    /// whitespace at either end, blank lines and a tag of its own included,
+    /// and a character NFC would compose left as it was written.
     #[test]
-    fn a_snapshot_is_measured_with_each_section_as_written() {
-        let body = "  leading\n\n</state_snapshot>\ttrailing \n";
+    fn a_snapshot_is_rendered_with_each_section_as_written() {
+        let body = "  leading\n\n</state_snapshot>\tcafe\u{301} trailing \n";
         let sections = SNAPSHOT_ELEMENTS
             .iter()
             .filter(|section| **section != "all_user_messages")
@@ -2833,7 +2908,7 @@ mod tests {
             SNAPSHOT_ELEMENTS[..5].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
             SNAPSHOT_ELEMENTS[6..].iter().map(|s| element(s)).collect::<Vec<_>>().join("\n\n"),
         );
-        assert_eq!(snapshot_bytes(&calls), Some(expected.len()));
+        assert_eq!(snapshot_text(&calls), Some(expected));
     }
 
     /// Two calls a draw was served are projected as two -- a call with a name
@@ -2852,16 +2927,18 @@ mod tests {
         });
         let projection = project_decoded_draw(&[observation], None).unwrap();
         assert_eq!(projection["functionCalls"], json!([named, unnamed]));
-        assert_eq!(projection["snapshotBytes"], serde_json::Value::Null);
+        assert_eq!(
+            snapshot_text(projection["functionCalls"].as_array().unwrap()),
+            None
+        );
     }
 
-    /// A declaration is measured by its shape alone, whatever its sections
+    /// A declaration is rendered by its shape alone, whatever its sections
     /// hold: nothing, a space, or a character the client's and this engine's
     /// notions of whitespace disagree on. The bytes are the client's own for
-    /// the same declarations (state-snapshot.test.ts), so a draw the client
-    /// refused for an empty section is believed as it was recorded.
+    /// the same declarations (state-snapshot.test.ts).
     #[test]
-    fn a_snapshot_is_measured_by_its_shape_whatever_its_sections_hold() {
+    fn a_snapshot_is_rendered_by_its_shape_whatever_its_sections_hold() {
         for (body, bytes) in [("", 492), (" ", 500), ("\u{85}", 508), ("\u{feff}", 516)] {
             let sections = SNAPSHOT_ELEMENTS
                 .iter()
@@ -2869,10 +2946,14 @@ mod tests {
                 .map(|section| (section.to_string(), json!(body)))
                 .collect::<serde_json::Map<_, _>>();
             let calls = [json!({"name":"state_snapshot","args":sections})];
-            assert_eq!(snapshot_bytes(&calls), Some(bytes), "{body:?}");
+            assert_eq!(
+                snapshot_text(&calls).map(|text| text.len()),
+                Some(bytes),
+                "{body:?}"
+            );
         }
         let missing = json!({"name":"state_snapshot","args":{"current_work":"x"}});
-        assert_eq!(snapshot_bytes(&[missing]), None);
+        assert_eq!(snapshot_text(&[missing]), None);
     }
     /// A full body whose every byte the fixture attributes to the harness.
     fn harness_full(json: &str) -> serde_json::Value {
@@ -2893,9 +2974,9 @@ mod tests {
     #[test]
     fn a_redraw_ceiling_is_read_from_the_directive_its_notice_follows() {
         let directive = json!({"role":"user","content":[{"type":"text","text":
-            "system\n\nyour answer may generate at most 52102 tokens, reasoning included. If all 4 are refused, this conversation is not compacted and cannot continue."}]});
+            "system\n\nyour answer may generate at most 52102 tokens, reasoning included. If all 4 are refused, this conversation is not compacted."}]});
         let notice = json!({"role":"user","content":[{"type":"text","text":
-            "Your previous answer to this request was refused because its snapshot renders to 38102 bytes, past the 32768-byte limit. Write the same state more briefly."}]});
+            "Your previous answer to this request was refused because its snapshot renders to 40000 tokens, past the 32768-token limit. Write the same state more briefly."}]});
         let other = json!({"role":"user","content":"more"});
         let budget = |messages: serde_json::Value, max_tokens: u64| {
             let json = json!({"max_tokens":max_tokens,"messages":messages}).to_string();
@@ -2931,7 +3012,7 @@ mod tests {
         });
         let body = json!({"kv_scope":"owner","model":"fixture-model","stream":true,"max_tokens":8,
             "messages":[{"role":"user","content":
-                "your answer may generate at most 8 tokens, reasoning included. If all draws are refused, this conversation cannot continue."}]})
+                "your answer may generate at most 8 tokens, reasoning included. If all draws are refused, this conversation is not compacted."}]})
         .to_string();
         let request = json!({"request":{"journal_id":"j","sequence":1,"request_id":"draw",
             "owner":{"kind":"utility","operation_id":"compaction","purpose":"compaction"},

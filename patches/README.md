@@ -12,9 +12,9 @@ ambiguous landmarks, intermediate patch states, output drift, or partial writes.
 - Commit archive: `https://codeload.github.com/QwenLM/qwen-code/tar.gz/b965d5f8c24f48e65fb0b17c7d45f34ca4ce8f38`
 - Commit archive SHA-256: `61beddff8bde1dd2654c8714f927b46ab7cf9822b8561d11e3a2b8e085b5e745`
 - Patch: `qwen-code-0.21.12-agent-service.patch`
-- Review-diff SHA-256: `03075df9396988c0b19cf582b5f70f2c8bafc5814cab0c84edfad7420fa0e4ef`
+- Review-diff SHA-256: `6b175c938e242f6992dc00f321b66d7e6b08b0b20c1f66d18cabe5de2d538c28`
 - Semantic transformer: `source_patch_v1/`
-- Transformer-manifest SHA-256: `f0c40c5348646ec6c3d610412522212a5db34607da2b3bccea78504d0739c290`
+- Transformer-manifest SHA-256: `4b7215ffb976e8c9e16fc3f90783b0e188cd12052381754ac8d2fe8ead2083cc`
 - Official npm package: `@qwen-code/qwen-code@0.21.12`, which this build does not fetch; it builds the commit archive above
 - Pinned Node build/runtime image (linux/amd64 manifest): `node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436`
 
@@ -179,7 +179,8 @@ that a declared path is the one the prompt names.
 
 ## Context and instructions
 
-The context partition spends the window exactly, from six declared quantities.
+The context partition spends the window exactly, from six declared quantities,
+all in tokens of the served tokenizer.
 `D`, the static preamble, is 3W/64 — 12,288 tokens at 262,144 — a declared
 capacity rather than a derivation: the system prompt and the tool declarations
 are texts this repo ships, so the turn preamble is counted exactly against it by
@@ -190,13 +191,13 @@ every history, its environment lines and folder listing bounded the same way,
 and the turn budget the `## Context` section states, its number bounded by the
 sixteen digits a safe integer renders to; a preamble that does not fit is a
 startup refusal naming shorten-or-deploy-larger. The preamble is in every
-request the trigger is compared with, so `D` is charged in the fit, not held
-back from the trigger. `A`, what a request adds to the prompt it was admitted
+request the bounds are compared with, so `D` is charged in the fit, not held
+back from either bound. `A`, what a request adds to the prompt it was admitted
 at, is 3W/256 — 3,072 tokens — a declared capacity proved the same way: a
 refused turn's redraw adds its refusal notices to that prompt, and the request
 that compacts it adds the snapshot's declaration and the directive, counted by
 the startup proof in the shape every compaction request carries them with the
-directive stating the widest ceiling, and a redraw's notice; their sum, 3,026,
+directive stating the widest ceiling, and a redraw's notice; their sum, 2,897,
 is held within `A` before the first turn, and each compaction's preflight holds
 what its own request adds to the same share. Instructions a user's `/compress`
 text or a PreCompact hook would add, which no startup proof sees, state no
@@ -208,36 +209,43 @@ rather than rebuilt after it, so it is in the candidate the compaction counts
 and cannot go missing, and the proof bounds the frame around a compacted
 history's blocks -- the resume trailer -- with it, the blocks left out, and one
 todo reminder
-with its list bounded by bytes. `M`, one inline block, is W/8 bytes — 32,768 — a
+with its list bounded by bytes. `M`, one inline block, is 16,384 tokens, a
 declared magnitude and openly a policy: it is the most any single block placed
-inline may be, and anything larger is kept whole in a file and paged back rather
-than shortened. `S`, a compaction snapshot, is W/4 bytes — 65,536 — in the same
-measure: the most an accepted snapshot may render to, declared from the
-snapshots the model was recorded writing rather than borrowed from `M`
-(`SNAPSHOT_SHARES` says from what). `F`, the per-message framing, is the 61 bytes the served
-template wraps around one message at its widest, declared here and verified
-against the template rather than copied from it. `R`, the reasoning a turn is
-given beside its block, is W/32 tokens — 8,192 — a declared share, a quarter of
-`M`, which is a policy rather than a measurement (`TURN_REASONING_SHARES` says
-what it rests on and what recorded turns show).
+inline may be, counted as the text alone by the served tokenizer where the
+bound is applied, and anything larger is kept whole in a file and paged back
+rather than shortened. `S`, a compaction snapshot, is 32,768 tokens, counted
+the same way on the block as the model wrote it: the most an accepted snapshot
+may render to, declared from the snapshots the model was recorded writing
+rather than borrowed from `M` (`SNAPSHOT_TOKENS` says from what). `F`, the
+per-message framing, is 61 tokens: the most the served template wraps around
+one message, with room for the 6 a text's own edges were measured to add where
+they meet it, declared here and verified against the template rather than
+copied from it. `R`, the reasoning a turn is given beside its block, is 24,576
+tokens, declared from the turns recorded (`TURN_REASONING_TOKENS` says what it
+rests on). `M`, `S`, `R` and `F` do not scale with the window: what they hold
+does not grow with it.
 
-`C`, the room every generation is issued with, is sized for the largest thing
-a turn legitimately does, write one inline block after reasoning about it: the
-block is at most `M` tokens whatever it holds, because a text's tokens are at
-most the UTF-8 bytes of its NFC form, the form the served tokenizer splits, so
-`C = M + R`. `T`, the compaction trigger, is what the window has left,
-`T = W - C - A`. At the served window they are 40,960 and 218,112. What stands
-in the window after a compaction is the preamble plus
+`C`, the room every turn is issued with, is sized for the largest thing a turn
+legitimately does, write one inline block after reasoning about it, so
+`C = M + R`; `Q = S + C` is the room the first draw at a trigger has at least, a
+snapshot at its bound after a whole turn's reasoning. Two bounds follow. `T`,
+the admission limit, `T = W - C - A`: no turn is issued at or above it. `K`, the
+compaction trigger, `K = W - Q - A`: a send whose request reaches it compacts
+first. At the served window `C`, `Q`, `T` and `K` are 40,960, 73,728, 218,112
+and 185,344. A compaction that fails below `T` leaves the turn to be issued on
+the history as it stands, and the next send compacts again; only a request at
+`T` whose compaction failed, or left it there, ends the session. What stands in
+the window after a compaction is the preamble plus
 `snapshot + authored input + carried turn + one result`; every term but the
-turn is bounded in bytes before it exists, so `D + (S + F) + 2(M + F) + (C + F)`
-must stand below the trigger, and does, by 33,547 at the served window. All of it is
-asserted, not assumed: the fit, the no-overrun property and the compaction room
-are checked at every window the partition can be given, and a window where the
-fit fails is refused rather than partitioned. Every token of `C` or `A`, and
-every byte of `M`, is a token `T` does not have; `D` and `S` are not in `T`,
-since the preamble is counted in every request and a snapshot is never
-generated as a turn. `C` is the output limit of every turn
-whatever its prompt, and the least a compaction's draw is issued with. The route refuses a configured ceiling, including
+turn is bounded before it exists, so `D + (S + F) + 2(M + F) + (C + F)`,
+119,028, must stand below `K`, and does, by 66,315 at the served window. All of
+it is asserted, not assumed: the fit, the no-overrun property and both draw
+rooms are checked at every window the partition can be given, and a window
+where the fit fails -- every window below 191,700 -- is refused rather than
+partitioned. Every token of `C` or `A` is a token both bounds lack, and every
+token of `S` one more that `K` lacks; `D` is held back from neither, since the
+preamble is counted in every request. `C` is the output limit of every turn whatever its prompt,
+and the least any compaction's draw is issued with. The route refuses a configured ceiling, including
 `QWEN_CODE_MAX_OUTPUT_TOKENS`. Input, directive and candidate histories are
 counted using the actual rendered request, and a body is shown to the
 tokenizer once: its answer is a function of what it is shown, so the client
@@ -305,24 +313,31 @@ or a test summary, stays last and survives because the end does. Tools do not
 bound themselves: how much a command prints, a page holds or a server replies
 is not the tool's to decide, and a bound applied inside a tool was one more rule
 a result could be cut by, and one more place for text joined after it to pass
-it. `M` is a share of the served window, so the session is what knows it; a
-provider that declares no window has no share to take and is refused. That a
-bound exists is required: the window is guarded in exact tokens by the
-compaction trigger, which refuses a request that no longer fits, and this bound
+it. `M` is held by the session, which has the partition its served window
+gives; a provider that declares no window has no partition and is refused.
+That a bound exists is required: the window is guarded in exact tokens by the
+admission limit, which refuses a request that no longer fits, and this bound
 is what keeps that refusal unreachable in ordinary work. Its magnitude is a
-declared policy, not a derivation. Bytes stand in for tokens in exactly one
-place and one direction — the partition's framed block, `M + F`, where a block
-of `M` bytes of NFC cannot exceed `M` tokens, because the tokenizer normalizes
-to NFC and then spends at least a byte per token — and nothing else converts
-between the two units. The bytes a text is written in are not that bound: NFC
-can make a text three times longer, and U+1D1C0, four bytes, normalizes to
-twelve. So one function, `tokenizerText`, measures every such bound in NFC, and
-a bounded text is cut in that form -- a sliced line on a character boundary --
-measured again whole, and handed on in the form measured; its notice is inside
-the bound, not on top of it. A send, and the adoption of a speculated turn, refuse a result
-past the bound as a defect of the path that made it rather than repairing it.
-The service refuses a prompt not in NFC, and the suite materializer excludes
-one on the same terms with the same Unicode version.
+declared policy, not a derivation. A block is counted by the served
+tokenizer, as the text alone, on the route and in the scope the session
+generates in, and only where a count is needed: every token covers at least
+one byte of the NFC text the tokenizer splits, so a text within `M` bytes of
+its NFC form is within `M` tokens and is not counted; past that, a text is
+decided by its line prefixes, searched by widening and then halving the extent
+counted (`wholeLinesWithin`), so deciding or cutting a result of any size
+counts text about the size of the bound, and a line longer than the room is
+counted whole, once. That is a test, never a conversion: nothing converts a
+count into bytes, or bytes into a count. The bytes a text is written in are
+not its NFC bytes: NFC can make a text three times longer, and U+1D1C0, four
+bytes, normalizes to twelve. So one function, `tokenizerText`, gives every
+bounded text its NFC form, and a bounded text is cut in that form -- a sliced
+line on a character boundary -- counted again whole, and handed on in the
+form counted; its notice is inside the bound, not on top of it. A send, and
+the adoption of a speculated turn, refuse a result past the bound as a defect
+of the path that made it rather than repairing it. The service refuses a
+prompt not in NFC, and the suite materializer excludes one on the same terms
+with the same Unicode version; the service also refuses one past 16,384 bytes,
+which holds every prompt it admits within `M` tokens without a count.
 
 A failed call's model-facing text is held to the same bound by the same step,
 and stays a failure. A failure message is the one place a tool writes
@@ -361,7 +376,7 @@ Compaction summarises the prompt the last turn was issued against and carries
 that turn, reasoning included, verbatim behind the snapshot, so the summary
 request never holds what the turn generated. Upstream's request holds the whole
 history; with the turn and its result in it, a request on a prompt just below
-the trigger could pass the window before the draw had a token, and the
+the admission limit could pass the window before the draw had a token, and the
 partition's comment gives the arithmetic. It requests the room left by that
 exact input and by the widest notice a redraw may add, which is never below
 `C`, and refuses insufficient space. It tells the draw that room: the request
@@ -369,15 +384,16 @@ carries the session's system prompt, which states a turn's limit, and a draw's
 room is what the request leaves, which is not that number, so its directive
 says the request is not a turn, states the number the request's `max_tokens` is
 set to, and says that an answer reaching it is refused and asked for again, told
-why, up to the draw limit, after which the conversation is not compacted and
-cannot continue. A turn's room is what the fit charges for the turn a
+why, up to the draw limit, after which the conversation is not compacted. A
+turn's room is what the fit charges for the turn a
 compaction carries; a draw's answer is never carried, only the snapshot it
 declares, so it can be given whatever the window has left. The request is counted with that number at its widest, the
 window, and the served tokenizer spends one token per digit, so the room it
-states is the room it is issued with. The accepted snapshot is bounded by `S`:
-the bound is stated in the declaration the model is given, and
-acceptance — not decoding — refuses a longer draw, which is redrawn whole
-rather than cut. A redraw carries one message more than the request it
+states is the room it is issued with. The accepted snapshot is bounded by `S`,
+counted by the served tokenizer on the block as the model wrote it: the bound
+is stated once, in the deployment prompt's `## Context`, which the draw's
+request carries as its system prompt, and acceptance — not decoding — refuses
+a longer draw, which is redrawn whole rather than cut. A redraw carries one message more than the request it
 repeats: why the draw before it was refused and what to do instead, built from
 measured values and closed names rather than the draw's text, never the draw
 itself, and bounded at its widest inside the additions' share, `A`. Every
@@ -401,8 +417,11 @@ a turn's broken stream is issued again under, by the one transport test
 request that fails the same way ends the compaction with that status, naming
 both faults. Every reader holds each draw to what its status names: a refused
 or accepted answer claims a final request that completed and delivered it, and
-a transport fault one that did not complete. A conversation still at or above the trigger after a
-failed compaction ends there, and the ending names that failure. There is no separate
+a transport fault one that did not complete. A compaction that fails below the
+admission limit leaves the turn to be issued on the history as it stands, and
+the next send compacts again; a request at or above it whose compaction failed,
+or left it there, ends the session, and the ending names why.
+There is no separate
 reasoning-phase limit or forced reasoning-end marker. Compaction invalidates
 what the model can quote, not what it has seen: it disarms every file-read
 entry's history residency and leaves the read and write evidence in place, so a
@@ -416,12 +435,16 @@ Each draw names the utility operation that produced it and states its physical
 request count; its `sdkValuesJson` must equal the values decoded from that
 operation's recorded response bodies, in order, so the draw is bound to the
 bytes the provider sent. Every draw states its measured candidate token
-count and snapshot byte count, using null when that measurement was not reached.
-The snapshot byte count is the declaration's, measured by its shape alone -- one
-call whose arguments are the sections, each a string -- whatever acceptance
-then makes of it (`declaredSnapshotBytes`): whether a section holds text is
-decided once, in acceptance, so neither certifier decides it again by its own
-notion of whitespace. Rejected draws retain these fields alongside the final draw. The committed
+count, and its snapshot's token count with the `tokenize_text` operation, in
+the compaction's scope, that made it (`snapshotTokens`,
+`snapshotCountOperationId`), using null when that measurement was not reached.
+The snapshot counted is the declaration's raw rendering, made by its shape
+alone -- one call whose arguments are the sections, each a string -- whatever
+acceptance then makes of it (`declaredSnapshotRawText`), with no normalization:
+both certifiers recompute it from the draw's decoded call, hold the cited
+operation's text to it byte for byte and its count to the record's, so neither
+decides by its own normalizer or its own notion of whitespace what was
+counted. Rejected draws retain these fields alongside the final draw. The committed
 post-compaction history has exact part boundaries and filled retained inputs.
 The runtime installs that history and stores it once, as the canonical chat
 checkpoint's `compressedHistory`; a canonical compaction record that also
@@ -464,8 +487,9 @@ sections are rendered as upstream's `<state_snapshot>` block, one element per
 section, its tags laid out as upstream's compression prompt lays them out, and
 each section's text between its tags exactly as the model wrote it -- not
 indented, trimmed or escaped, so whatever a section holds re-enters as written
--- in the NFC form the served tokenizer reads, which is the form acceptance
-measured; a character NFC changed is the harness's.
+-- in the client's NFC form, which the served tokenizer reads as it is;
+acceptance counted the block as the model wrote it, which the tokenizer
+normalizes itself, and a character NFC changed is the harness's.
 Its `all_user_messages` holds the retained original inputs verbatim, as the
 parts they are, so their provenance survives the next compaction. The block is
 bounded at acceptance with that element empty; the inputs are bounded where
@@ -565,7 +589,7 @@ change. Session replacement closes the outgoing writer, acquires and restores
 the incoming canonical state, and only then publishes the new owner. Failed
 replacement restores the prior owner; failed restoration refuses admission.
 
-Every physical canonical chat record carries `recordingVersion: 23`, independently
+Every physical canonical chat record carries `recordingVersion: 24`, independently
 of the client release string. A record with any other version, or none, is
 refused with the file location, what the record declares (a version, or no
 version), and the action: open it with the client release that wrote it, or
@@ -597,7 +621,7 @@ payload store, and both ordinary and indexed readers preserve exact Content
 boundaries and saved startup context. Current startup guidance is admitted as
 new input when continuation begins. Older canonical formats cannot establish
 this state and are refused with the action above. They are not promoted into
-complete version 23 histories.
+complete version 24 histories.
 The complete-record evidence replay and the resume reader use the same
 projection for runtime checkpoints, compaction, and rewind.
 Adopted and realtime conversation records must carry content with the role
@@ -680,7 +704,7 @@ recent message slices per invocation, with no output queue when no renderer need
 one. Each active renderer owns a queue and releases it on closure. An ordinary
 multi-turn renderer keeps its delta base across turn results.
 
-Stream contract v20 exposes these same request records, declares the journal
+Stream contract v21 exposes these same request records, declares the journal
 origin in `system/stream_start`, and accounts for the output window at every root result.
 Complete `system/init` runtime metadata has its own owner and does not reset that
 journal. Each checkpoint lists open response and logical attempt identities.
@@ -755,7 +779,7 @@ after one minute without progress
 Synchronous child-transcript file I/O cannot be preempted by that budget and is
 unbounded.
 
-Canonical recording version 23 structurally excludes response evidence from
+Canonical recording version 24 structurally excludes response evidence from
 messages, conversation branches and the active parent chain. Full, indexed and live readers
 validate physical response sequence, ownership, byte offsets and terminal hashes.
 They can inspect an explicitly open live prefix; they do not certify that prefix
